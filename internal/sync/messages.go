@@ -905,6 +905,26 @@ func (e *Engine) fetchMessageHeaders(ctx context.Context, client *imapclient.Cli
 	var savedMessages []*message.Message
 	fetchedCount := 0
 
+	// The new-message handler must only fire for UIDs that were not already
+	// local (this batch also re-fetches unclassified messages for inbox
+	// classification). If the existing-UID snapshot cannot be loaded, disable
+	// the handler for this batch: firing it for a message that already existed
+	// could re-route a message that was already handled.
+	newMessageHandler := e.newMessageHandler
+	var existingUIDs map[uint32]bool
+	if newMessageHandler != nil {
+		localUIDs, uidErr := e.messageStore.GetAllUIDs(folderID)
+		if uidErr != nil {
+			e.log.Warn().Err(uidErr).Str("folder", folderID).Msg("Failed to load existing UIDs; new-message handler disabled for this batch")
+			newMessageHandler = nil
+		} else {
+			existingUIDs = make(map[uint32]bool, len(localUIDs))
+			for _, uid := range localUIDs {
+				existingUIDs[uid] = true
+			}
+		}
+	}
+
 	for {
 		// Check for cancellation between messages
 		if ctx.Err() != nil {
@@ -1005,6 +1025,22 @@ func (e *Engine) fetchMessageHeaders(ctx context.Context, client *imapclient.Cli
 		}
 		savedMessages = append(savedMessages, m)
 		fetchedCount++
+
+		// Run the handler off the fetch loop so routing side effects (e.g. a
+		// cross-account filter move) never block the remaining header batch.
+		if newMessageHandler != nil && !existingUIDs[m.UID] {
+			go func(msg *message.Message) {
+				defer func() {
+					if r := recover(); r != nil {
+						e.log.Error().Interface("panic", r).
+							Str("account_id", accountID).
+							Str("folder_id", folderID).
+							Msg("New-message handler panicked")
+					}
+				}()
+				newMessageHandler(accountID, folderID, msg)
+			}(m)
+		}
 	}
 
 	if err := fetchCmd.Close(); err != nil {

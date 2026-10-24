@@ -1476,4 +1476,30 @@ var migrations = []Migration{
 			CREATE INDEX idx_virtual_folder_members_folder ON virtual_folder_members(folder_id);
 		`,
 	},
+	{
+		Version: 51,
+		SQL: `
+			-- Local cross-account filter rules: match incoming messages and
+			-- route them to a folder on another account. Criteria lists are
+			-- stored as JSON arrays of case-insensitive substring patterns.
+			-- The destination is intentionally not foreign-key constrained:
+			-- deleting a folder should leave the user's rule in place (it is
+			-- skipped at runtime until the destination exists again), rather
+			-- than silently dropping the configuration.
+			CREATE TABLE IF NOT EXISTS mail_filter_rules (
+				id TEXT PRIMARY KEY,
+				name TEXT NOT NULL,
+				enabled INTEGER NOT NULL DEFAULT 1,
+				order_index INTEGER NOT NULL DEFAULT 0,
+				account_id TEXT NOT NULL DEFAULT '',
+				folder_ids TEXT NOT NULL DEFAULT '[]',
+				from_contains TEXT NOT NULL DEFAULT '[]',
+				to_contains TEXT NOT NULL DEFAULT '[]',
+				subject_contains TEXT NOT NULL DEFAULT '[]',
+				dest_folder_id TEXT NOT NULL DEFAULT '',
+				created_at DATETIME NOT NULL,
+				updated_at DATETIME NOT NULL
+			);
+		`,
+	},
 }

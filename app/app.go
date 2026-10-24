@@ -33,9 +33,9 @@ import (
 	"github.com/hkdb/aerion/internal/ipc"
 	"github.com/hkdb/aerion/internal/kit/davutil"
 	"github.com/hkdb/aerion/internal/logging"
+	"github.com/hkdb/aerion/internal/mailfilter"
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/notification"
-	"github.com/hkdb/aerion/internal/virtualfolder"
 	"github.com/hkdb/aerion/internal/oauth2"
 	"github.com/hkdb/aerion/internal/pgp"
 	"github.com/hkdb/aerion/internal/platform"
@@ -43,6 +43,7 @@ import (
 	"github.com/hkdb/aerion/internal/smime"
 	"github.com/hkdb/aerion/internal/sync"
 	"github.com/hkdb/aerion/internal/undo"
+	"github.com/hkdb/aerion/internal/virtualfolder"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -217,6 +218,7 @@ type App struct {
 	folderStore         *folder.Store
 	messageStore        *message.Store
 	virtualFolderStore  *virtualfolder.Store
+	filterStore         *mailfilter.Store
 	attachmentStore     *message.AttachmentStore
 	contactStore        *contact.Store
 	draftStore          *draft.Store
@@ -579,6 +581,7 @@ func (a *App) Startup(ctx context.Context) {
 	a.folderStore = folder.NewStore(db)
 	a.messageStore = message.NewStore(db)
 	a.virtualFolderStore = virtualfolder.NewStore(db)
+	a.filterStore = mailfilter.NewStore(db)
 	a.attachmentStore = message.NewAttachmentStore(db)
 	a.contactStore = contact.NewStore(db.DB)
 	a.draftStore = draft.NewStore(db)
@@ -645,6 +648,9 @@ func (a *App) Startup(ctx context.Context) {
 	// Wire S/MIME and PGP verifiers into sync engine for signature verification during body parsing
 	a.syncEngine.SetSMIMEVerifier(a.smimeVerifier)
 	a.syncEngine.SetPGPVerifier(a.pgpVerifier)
+
+	// Route newly synced messages through local cross-account filters.
+	a.syncEngine.SetNewMessageHandler(a.handleNewMessageForFilters)
 
 	// Set up sync progress callback to emit events to frontend
 	a.syncEngine.SetProgressCallback(func(progress sync.SyncProgress) {
