@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## Postilaatikko — v0.3.11
+
+- Added macOS DMG installers with an Applications shortcut for drag-and-drop installation.
+
 ## Postilaatikko — v0.3.10
 
 - Added unified virtual folders: save, edit, reorder, and delete sets of folders across accounts; show unread conversations and counts in the sidebar; search within a virtual folder.

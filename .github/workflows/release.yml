@@ -172,13 +172,22 @@ jobs:
               --generate-notes
           fi
 
-          # Upload all release artifacts (binaries and tarballs)
-          gh release upload "$TAG_NAME" \
-            eterno-mail-*/build/bin/* \
-            eterno-mail-*/*.tar.gz \
-            --clobber
+          # Artifact path layout varies by platform; collect release files recursively.
+          mapfile -d '' RELEASE_ASSETS < <(
+            find eterno-mail-* -type f \
+              \( -name 'eterno-mail-*' -o -name 'Eterno-Mail-*' -o -name 'Postilaatikko-*' -o -name '*.tar.gz' \) \
+              -print0
+          )
+          if (( ${#RELEASE_ASSETS[@]} == 0 )); then
+            echo "No release assets were downloaded" >&2
+            exit 1
+          fi
+          gh release upload "$TAG_NAME" "${RELEASE_ASSETS[@]}" --clobber
 
   update-manifest:
+    # The Flatpak source tag and hosting belong to the upstream repository.
+    # Fork releases publish their binaries and DMGs to their own GitHub Release.
+    if: ${{ github.repository_owner == 'wesleiaqui' }}
     needs: publish
     runs-on: ubuntu-24.04
     steps:
