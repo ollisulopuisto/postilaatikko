@@ -36,13 +36,23 @@ jobs:
       - name: Build macOS app
         run: make build
 
-      - name: Package app
-        run: ditto -c -k --sequesterRsrc --keepParent build/bin/postilaatikko.app build/bin/Postilaatikko-macos-arm64.zip
+      - name: Create drag-and-drop DMG
+        run: |
+          mkdir -p build/bin/dmg-staging
+          cp -R build/bin/postilaatikko.app build/bin/dmg-staging/Postilaatikko.app
+          ln -s /Applications build/bin/dmg-staging/Applications
+          hdiutil create \
+            -volname "Postilaatikko" \
+            -srcfolder build/bin/dmg-staging \
+            -ov \
+            -format UDZO \
+            build/bin/Postilaatikko-macos-arm64.dmg
+          rm -rf build/bin/dmg-staging
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
         with:
-          name: Postilaatikko-macos-arm64-${{ github.sha }}
-          path: build/bin/Postilaatikko-macos-arm64.zip
+          name: Postilaatikko-macos-arm64-dmg-${{ github.sha }}
+          path: build/bin/Postilaatikko-macos-arm64.dmg
           if-no-files-found: error
           retention-days: 14
