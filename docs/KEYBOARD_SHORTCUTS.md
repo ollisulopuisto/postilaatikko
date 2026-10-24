@@ -35,7 +35,7 @@ These shortcuts work anywhere in the application (unless in composer).
 | `Alt+G` | Jump to top of sidebar (All Inboxes when present) |
 | `Alt+Shift+G` | Jump to last visible folder (last account header if all trees are collapsed) |
 | `Alt+Enter` | Expand/collapse focused account folder tree |
-| `Alt(L)+Alt(R)` | Brings up context menu for the focused folder |
+| `Alt(Left) + Alt(Right) / ContextMenu` | Brings up context menu for the focused folder |
 
 ### Message Actions (when message is selected/focused)
 
@@ -50,7 +50,7 @@ These shortcuts work anywhere in the application (unless in composer).
 | `Ctrl+J` | Mark as spam (keyboard-focused or checked messages) |
 | `Ctrl+L` | Load remote images in viewed message |
 | `Ctrl+Shift+L` | Open "Always Load Images" dropdown |
-| `Shift+F` | Toggle focus mode for the message |
+| `Shift+F` | Toggle focus mode for the currently Tab-focused message (or last message if none) |
 
 ---
 
@@ -66,7 +66,7 @@ These shortcuts depend on which pane is focused. They are disabled when typing i
 | `Down` / `J` | Navigate to next folder |
 | `Alt+G` / `Alt+Shift+G` | Jump to top of sidebar / last visible folder |
 | `Alt + Enter` / `Space` | Expand/collapse account (when account header is focused) |
-| `Alt(L) + Alt(R)` | Brings up context menu for the focused folder |
+| `Alt(Left) + Alt(Right) / ContextMenu` | Brings up context menu for the focused folder |
 
 ### Message List
 
@@ -84,7 +84,7 @@ These shortcuts depend on which pane is focused. They are disabled when typing i
 | `CTRL+A` | Select all messages in folder |
 | `Alt+M` | Toggle "Move to folder" dialog for the focused message |
 | `Alt+C` | Toggle "Copy to folder" dialog for the focused message |
-| `Alt(R)` | Brings up context menu for the selected message(s) |
+| `ContextMenu / Alt(Right)` | Brings up context menu for the selected message(s) |
 
 `G` / `Shift+G` / `V` also work in extension list panes (e.g., Contacts list, Calendar agenda).
 
@@ -97,7 +97,7 @@ These shortcuts depend on which pane is focused. They are disabled when typing i
 | `Tab` | Cycle through messages when focused on conversation viewer |
 | `Delete` / `Backspace` | Delete focused message when focused on conversation viewer |
 | `Ctrl + A` | Select all text of message in viewport |
-| `Alt(R)` | Brings up context menu for the message focused |
+| `ContextMenu / Alt(Right)` | Brings up context menu for the message focused |
 | `F` | Toggles focus mode on the current thread (conversation) |
 
 ---
@@ -150,7 +150,7 @@ NAVIGATION
   Alt + H/J/K/L       Vim-style: pane (H/L) or folder (J/K)
   Alt + G             Jump to top of sidebar (All Inboxes)
   Alt + Shift + G     Jump to last visible folder
-  Alt(L) + Alt(R)     Brings context menu up for the focused folder
+  Alt(Left) + Alt(Right) / ContextMenu     Brings context menu up for the focused folder
   Alt + Enter         Expand/collapse account
   Ctrl + Tab          Switch to next extension on rail
   Ctrl + `            Switch to previous extension on rail
@@ -185,7 +185,7 @@ MESSAGE ACTIONS
   Alt + C             Copy to folder
   Delete / D          Trash
   Shift + Delete      Permanent delete
-  Alt(R)              Context Menu
+  ContextMenu / Alt(Right)              Context Menu
 
 OTHER
   Ctrl + Shift + A    Sync all accounts
@@ -265,8 +265,8 @@ Pane-local navigation (Up/Down/J/K, Enter, Space, Alt+H/L for pane cycling, Alt+
 
 | Shortcut | Action |
 |----------|--------|
-| `Alt+Left` / `Alt+H` | Focus previous pane |
-| `Alt+Right` / `Alt+L` | Focus next pane |
+| `Alt+Left` / `Alt+H` | Focus previous pane (detail -> list -> sidebar) |
+| `Alt+Right` / `Alt+L` | Focus next pane (sidebar -> list -> detail) |
 
 **Date / view navigation**
 
