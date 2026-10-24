@@ -19,10 +19,39 @@ type Store struct {
 
 // NewStore creates a new virtual folder store
 func NewStore(db *database.DB) *Store {
-	return &Store{
+	s := &Store{
 		db:  db,
 		log: logging.WithComponent("virtualfolder-store"),
 	}
+	if err := s.ensureTables(); err != nil {
+		// Table creation is idempotent; a failure here is fatal because every
+		// virtual folder operation depends on the schema. Surface it at startup
+		// rather than failing with a confusing "no such table" on first use.
+		panic(fmt.Errorf("virtualfolder store: ensure tables: %w", err))
+	}
+	return s
+}
+
+// ensureTables creates the virtual_folders schema if it is not already present.
+// This is intentionally lazy (not a numbered migration) so it does not disturb
+// the existing migration sequence; see the contact store's ensureTable for the
+// same pattern.
+func (s *Store) ensureTables() error {
+	_, err := s.db.Exec(`
+		CREATE TABLE IF NOT EXISTS virtual_folders (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			order_index INTEGER NOT NULL DEFAULT 0,
+			created_at DATETIME NOT NULL,
+			updated_at DATETIME NOT NULL
+		);
+		CREATE TABLE IF NOT EXISTS virtual_folder_members (
+			virtual_folder_id TEXT NOT NULL,
+			folder_id TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+			PRIMARY KEY (virtual_folder_id, folder_id)
+		);
+	`)
+	return err
 }
 
 // Create inserts a new virtual folder and its folder members

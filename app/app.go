@@ -35,6 +35,7 @@ import (
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/notification"
+	"github.com/hkdb/aerion/internal/virtualfolder"
 	"github.com/hkdb/aerion/internal/oauth2"
 	"github.com/hkdb/aerion/internal/pgp"
 	"github.com/hkdb/aerion/internal/platform"
@@ -215,6 +216,7 @@ type App struct {
 	accountStore        *account.Store
 	folderStore         *folder.Store
 	messageStore        *message.Store
+	virtualFolderStore  *virtualfolder.Store
 	attachmentStore     *message.AttachmentStore
 	contactStore        *contact.Store
 	draftStore          *draft.Store
@@ -576,6 +578,7 @@ func (a *App) Startup(ctx context.Context) {
 	a.accountStore = account.NewStore(db)
 	a.folderStore = folder.NewStore(db)
 	a.messageStore = message.NewStore(db)
+	a.virtualFolderStore = virtualfolder.NewStore(db)
 	a.attachmentStore = message.NewAttachmentStore(db)
 	a.contactStore = contact.NewStore(db.DB)
 	a.draftStore = draft.NewStore(db)

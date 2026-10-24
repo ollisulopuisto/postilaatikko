@@ -114,7 +114,20 @@ jobs:
           make build
           cd build/bin
           zip -r Eterno-Mail-darwin-${{ matrix.arch }}.zip eterno-mail.app
-          rm -rf eterno-mail.app
+
+          # Also produce a DMG: users download, mount, and drag Eterno Mail.app
+          # into /Applications — the standard macOS "download and run" format.
+          APP_NAME="Eterno Mail"
+          VOL_NAME="Eterno Mail"
+          DMG_NAME="Eterno-Mail-${{ github.ref_name }}-${{ matrix.arch }}.dmg"
+          mkdir -p dmg-staging
+          cp -R eterno-mail.app "dmg-staging/${APP_NAME}.app"
+          # Ad-hoc sign the staged bundle so Gatekeeper allows "download and run".
+          codesign --force --deep --sign - "dmg-staging/${APP_NAME}.app" || true
+          hdiutil create -volname "${VOL_NAME}" -srcfolder dmg-staging \
+            -ov -format UDZO -o "${DMG_NAME}"
+          rm -rf dmg-staging eterno-mail.app
+          ls -lh "${DMG_NAME}" "Eterno-Mail-darwin-${{ matrix.arch }}.zip"
 
       - name: Build (Windows)
         if: matrix.platform == 'windows'
