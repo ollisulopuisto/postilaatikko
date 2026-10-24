@@ -411,7 +411,7 @@
 </script>
 
 <Dialog.Root bind:open onOpenChange={handleOpenChange}>
-  <Dialog.Content class="max-w-xl max-h-[90vh] overflow-hidden flex flex-col" style="height: min(680px, 90vh);" preventCloseAutoFocus onInteractOutside={(e) => e.preventDefault()}>
+  <Dialog.Content class="max-w-xl max-h-[90vh] overflow-hidden flex flex-col h-[min(680px,90vh)]" preventCloseAutoFocus onInteractOutside={(e) => e.preventDefault()}>
     <Dialog.Header>
       <Dialog.Title>
         {editAccount?.sharedMailboxParentId ? $_('account.editSharedMailboxTitle') : editAccount ? $_('account.editTitle') : $_('account.addTitle')}
