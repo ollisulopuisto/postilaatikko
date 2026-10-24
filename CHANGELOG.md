@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## Postilaatikko — v0.3.12
+
+- Routine IMAP sync now fetches headers and flags only; full conversation content loads when opened.
+- Added Finnish interface translations, including the Calendar and Contacts extensions.
+- Added the macOS `⌘,` Preferences shortcut and double-click title-bar maximize/restore.
+- Updated visible window branding and release-note lookup to use Postilaatikko.
+- Kept the Edit Account dialog size and action buttons stable when switching tabs.
+- Show configured account names under Inbox and in account rows, falling back to the email address.
+
 ## Postilaatikko — v0.3.11
 
 - Added macOS DMG installers with an Applications shortcut for drag-and-drop installation.

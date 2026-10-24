@@ -102,7 +102,8 @@ func runAccountSyncs(
 // Sync API - Exposed to frontend via Wails bindings
 // ============================================================================
 
-// SyncFolder synchronizes messages for a folder with the IMAP server
+// SyncFolder synchronizes message headers and flags for a folder. Message
+// bodies and attachment metadata are fetched on demand when a message is opened.
 func (a *App) SyncFolder(accountID, folderID string) error {
 	const debounceMs = 500
 	log := logging.WithComponent("app")
@@ -138,8 +139,14 @@ func (a *App) SyncFolder(accountID, folderID string) error {
 
 	a.syncMu.Unlock()
 
-	// NOTE: Don't cleanup syncContexts here - body sync runs in goroutine
-	// and needs the context to remain cancellable. Cleanup happens in the goroutine.
+	defer cancel()
+	defer func() {
+		a.syncMu.Lock()
+		if currentCancel, exists := a.syncContexts[syncKey]; exists && fmt.Sprintf("%p", currentCancel) == fmt.Sprintf("%p", cancel) {
+			delete(a.syncContexts, syncKey)
+		}
+		a.syncMu.Unlock()
+	}()
 
 	// Get account to determine sync period
 	acc, err := a.accountStore.Get(accountID)
@@ -196,65 +203,19 @@ func (a *App) SyncFolder(accountID, folderID string) error {
 		})
 	}
 
-	// Start background body fetching (emits progress events for "bodies" phase)
-	// Pass ctx so body fetch can also be cancelled
-	go func(syncCtx context.Context, syncDays int, cancelFn context.CancelFunc, key string) {
-		// Cleanup sync context when goroutine completes
-		defer func() {
-			a.syncMu.Lock()
-			// Only delete if it's still our cancel function (not replaced by newer sync)
-			if currentCancel, exists := a.syncContexts[key]; exists && fmt.Sprintf("%p", currentCancel) == fmt.Sprintf("%p", cancelFn) {
-				delete(a.syncContexts, key)
-			}
-			a.syncMu.Unlock()
-		}()
-
-		// Panic recovery - ensure we always emit an event so UI doesn't get stuck
-		defer func() {
-			if r := recover(); r != nil {
-				log.Error().Interface("panic", r).Str("folder", folderID).Msg("Body fetch goroutine panicked")
-				wailsRuntime.EventsEmit(a.ctx, "folder:syncError", map[string]interface{}{
-					"accountId": accountID,
-					"folderId":  folderID,
-					"error":     fmt.Sprintf("body fetch panic: %v", r),
-				})
-			}
-		}()
-
-		bodyErr := a.syncEngine.FetchBodiesInBackground(syncCtx, accountID, folderID, syncDays)
-
-		if bodyErr != nil {
-			if syncCtx.Err() != nil {
-				// Cancelled - not an error, still emit synced so spinner stops
-				log.Debug().Str("folder", folderID).Msg("Background body fetch cancelled")
-				wailsRuntime.EventsEmit(a.ctx, "folder:synced", map[string]interface{}{
-					"accountId": accountID,
-					"folderId":  folderID,
-				})
-			} else {
-				// Actual error - emit error event instead of synced
-				log.Error().Err(bodyErr).Str("folder", folderID).Msg("Background body fetch failed")
-				wailsRuntime.EventsEmit(a.ctx, "folder:syncError", map[string]interface{}{
-					"accountId": accountID,
-					"folderId":  folderID,
-					"error":     bodyErr.Error(),
-				})
-			}
-		} else {
-			// Success
-			wailsRuntime.EventsEmit(a.ctx, "folder:synced", map[string]interface{}{
-				"accountId": accountID,
-				"folderId":  folderID,
-			})
-		}
-	}(ctx, syncPeriodDays, cancel, syncKey)
+	// Header and flag sync is complete. Full content stays on the server until
+	// a conversation is opened and FetchMessageBody is requested.
+	wailsRuntime.EventsEmit(a.ctx, "folder:synced", map[string]interface{}{
+		"accountId": accountID,
+		"folderId":  folderID,
+	})
 
 	return nil
 }
 
-// ForceSyncFolder clears body content and attachments for a folder, then re-syncs.
-// This is useful when attachments weren't extracted properly (e.g., after a fix)
-// or when message content needs to be re-parsed.
+// ForceSyncFolder clears cached body content and attachment metadata for a
+// folder, then re-syncs headers. Bodies are fetched again only as messages are
+// opened.
 func (a *App) ForceSyncFolder(accountID, folderID string) error {
 	log := logging.WithComponent("app")
 	log.Info().Str("accountID", accountID).Str("folderID", folderID).Msg("Starting force re-sync of folder")
@@ -273,7 +234,7 @@ func (a *App) ForceSyncFolder(accountID, folderID string) error {
 	}
 	log.Info().Int64("attachmentsDeleted", attachmentsDeleted).Msg("Deleted attachments")
 
-	// Step 3: Trigger normal folder sync (which will re-fetch bodies and extract attachments)
+	// Step 3: Refresh headers. Opening a message will fetch its body again.
 	return a.SyncFolder(accountID, folderID)
 }
 
@@ -448,8 +409,7 @@ func (a *App) SyncAllComplete() error {
 	}
 
 	// Email account syncs are bounded independently from the existing
-	// per-account folder concurrency. Background body fetches remain outside
-	// this barrier, matching SyncFolder's pre-existing asynchronous behavior.
+	// per-account folder concurrency. Routine account syncs fetch headers only.
 	isCancelled := func() bool {
 		a.syncMu.Lock()
 		defer a.syncMu.Unlock()

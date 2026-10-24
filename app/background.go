@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"errors"
-	"fmt"
 	goSync "sync"
 	"time"
 
@@ -260,91 +259,18 @@ func (a *App) handleIdleNewMail(event imap.MailEvent) {
 		return
 	}
 
-	// Fetch bodies in background (same as SyncFolder does)
+	// The IDLE path refreshed headers and flags. Complete the visible sync and
+	// update unread badges without downloading message bodies.
 	if folderID != "" {
-		// Get account's sync period
-		syncPeriodDays := 30 // default
-		if acc, accErr := a.accountStore.Get(event.AccountID); accErr == nil && acc != nil {
-			syncPeriodDays = acc.SyncPeriodDays
+		wailsRuntime.EventsEmit(a.ctx, "folder:synced", map[string]interface{}{
+			"accountId": event.AccountID,
+			"folderId":  folderID,
+		})
+		if updatedFolder, err := a.folderStore.Get(folderID); err == nil && updatedFolder != nil {
+			wailsRuntime.EventsEmit(a.ctx, "folders:countsChanged", map[string]int{
+				folderID: updatedFolder.UnreadCount,
+			})
 		}
-
-		// Register IDLE sync context so manual sync can cancel it
-		a.syncMu.Lock()
-		// Double-check no sync started while we were processing
-		if _, exists := a.syncContexts[syncKey]; exists {
-			a.syncMu.Unlock()
-			log.Debug().Str("syncKey", syncKey).Msg("Skipping IDLE body fetch - sync started during processing")
-			return
-		}
-		ctx, cancel := context.WithCancel(a.ctx)
-		a.syncContexts[syncKey] = cancel
-		a.syncMu.Unlock()
-
-		go func(syncCtx context.Context, syncDays int, fID string, key string) {
-			var folderSynced bool // Track whether folder:synced was emitted (to avoid duplicate messages:updated)
-
-			// Cleanup context on completion
-			defer func() {
-				a.syncMu.Lock()
-				delete(a.syncContexts, key)
-				a.syncMu.Unlock()
-
-				// Only emit messages:updated if folder:synced wasn't already emitted
-				// (both trigger identical reloads in MessageList and ConversationViewer)
-				if !folderSynced {
-					wailsRuntime.EventsEmit(a.ctx, "messages:updated", map[string]interface{}{
-						"accountId": event.AccountID,
-						"folderId":  fID,
-					})
-				}
-				// Emit folder counts changed so sidebar unread badge updates
-				if updatedFolder, err := a.folderStore.Get(fID); err == nil && updatedFolder != nil {
-					wailsRuntime.EventsEmit(a.ctx, "folders:countsChanged", map[string]int{
-						fID: updatedFolder.UnreadCount,
-					})
-				}
-			}()
-
-			// Panic recovery - ensure we always emit an event so UI doesn't get stuck
-			defer func() {
-				if r := recover(); r != nil {
-					log.Error().Interface("panic", r).Str("folder", fID).Msg("IDLE body fetch goroutine panicked")
-					wailsRuntime.EventsEmit(a.ctx, "folder:syncError", map[string]interface{}{
-						"accountId": event.AccountID,
-						"folderId":  fID,
-						"error":     fmt.Sprintf("body fetch panic: %v", r),
-					})
-				}
-			}()
-
-			bodyErr := a.syncEngine.FetchBodiesInBackground(syncCtx, event.AccountID, fID, syncDays)
-			if bodyErr != nil {
-				if syncCtx.Err() != nil {
-					// Cancelled - not an error, emit synced
-					log.Debug().Str("folder", fID).Msg("IDLE body fetch cancelled")
-					folderSynced = true
-					wailsRuntime.EventsEmit(a.ctx, "folder:synced", map[string]interface{}{
-						"accountId": event.AccountID,
-						"folderId":  fID,
-					})
-				} else {
-					// Actual error - emit error event
-					log.Error().Err(bodyErr).Str("folder", fID).Msg("Background body fetch failed after IDLE sync")
-					wailsRuntime.EventsEmit(a.ctx, "folder:syncError", map[string]interface{}{
-						"accountId": event.AccountID,
-						"folderId":  fID,
-						"error":     bodyErr.Error(),
-					})
-				}
-			} else {
-				// Success
-				folderSynced = true
-				wailsRuntime.EventsEmit(a.ctx, "folder:synced", map[string]interface{}{
-					"accountId": event.AccountID,
-					"folderId":  fID,
-				})
-			}
-		}(ctx, syncPeriodDays, folderID, syncKey)
 	}
 
 	// Notify about new mail if any
@@ -915,9 +841,8 @@ func (a *App) syncAfterWake() {
 
 	// Trigger master sync for all accounts, then restart IDLE after.
 	// IDLE is restarted AFTER sync completes to avoid pool contention:
-	// IDLE detects new mail immediately and triggers its own SyncMessages +
-	// FetchBodiesInBackground, consuming pool connections that SyncAllComplete
-	// also needs (max 3 per account), causing 2+ minute waiter timeouts.
+	// IDLE detects new mail immediately and triggers its own header sync, which
+	// would otherwise compete with SyncAllComplete for pooled connections.
 	go func() {
 		defer recoverPanic("app.wake", "post-wake sync")
 		defer func() {

@@ -992,6 +992,14 @@
     // (especially Ctrl+A) should target dialog inputs, not the background.
     if (isDialogGuardActive()) return
 
+    // macOS-standard Preferences shortcut. Allow this even when an input has
+    // focus so users can reach settings from anywhere in the main window.
+    if (e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && e.code === 'Comma') {
+      e.preventDefault()
+      sidebarRef?.openSettings()
+      return
+    }
+
     // Extension shortcut dispatch: when the active rail pane is NOT mail, let
     // the extension's registered shortcuts run first. dispatchExtensionShortcut
     // returns true when a handler matched — in that case we treat the event as

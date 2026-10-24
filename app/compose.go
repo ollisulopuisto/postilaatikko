@@ -613,11 +613,6 @@ func (a *App) syncSentFolder(accountID string) error {
 		log.Warn().Err(err).Str("folderID", sentFolder.ID).Msg("Failed to sync Sent folder")
 	}
 
-	// Also fetch bodies
-	if err := a.syncEngine.FetchBodiesInBackground(a.ctx, accountID, sentFolder.ID, syncPeriodDays); err != nil {
-		log.Warn().Err(err).Str("folderID", sentFolder.ID).Msg("Failed to fetch bodies for Sent folder")
-	}
-
 	// Emit synced event
 	wailsRuntime.EventsEmit(a.ctx, "folder:synced", map[string]interface{}{
 		"accountId": accountID,

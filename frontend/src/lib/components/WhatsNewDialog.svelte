@@ -1,6 +1,6 @@
 <script lang="ts">
   // Per-version release announcement. Shown once after the user upgrades
-  // to a new Eterno Mail version. The runtime version is supplied by App.svelte
+  // to a new Postilaatikko version. The runtime version is supplied by App.svelte
   // from GetAppInfo(), whose source of truth is the repository VERSION file.
   // Only the explicit OK click records acknowledgement.
   import { Dialog as DialogPrimitive } from 'bits-ui'
@@ -21,7 +21,7 @@
 
   // Share the documentation source while showing only the runtime version.
   const releaseNotes = $derived.by(() => {
-    const heading = `Eterno Mail — v${version.replace(/^v/, '')}\n`
+    const heading = `Postilaatikko — v${version.replace(/^v/, '')}\n`
     const section = changelog.split(/^## /m).find(entry => entry.startsWith(heading))
     return section?.split('\n').filter(line => line.startsWith('- ')).map(line => line.slice(2)) ?? []
   })

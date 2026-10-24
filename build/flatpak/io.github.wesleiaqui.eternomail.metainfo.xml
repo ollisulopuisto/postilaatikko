@@ -309,6 +309,15 @@
   </provides>
 
   <releases>
+    <release version="0.3.12" date="2026-10-24">
+      <description>
+        <ul>
+          <li>Routine IMAP sync now fetches headers and flags only; conversation content loads when opened.</li>
+          <li>Added Finnish interface translations, including the Calendar and Contacts extensions.</li>
+          <li>Added macOS Preferences and title-bar maximize shortcuts and kept Edit Account controls in a stable position.</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.3.11" date="2026-10-24">
       <description>
         <ul>

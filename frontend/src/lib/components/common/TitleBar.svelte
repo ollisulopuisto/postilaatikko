@@ -22,6 +22,11 @@
     isMaximized = !isMaximized
   }
 
+  function handleTitlebarDoubleClick(event: MouseEvent) {
+    event.preventDefault()
+    void toggleMaximize()
+  }
+
   function close() {
     if (onClose) {
       onClose()
@@ -34,9 +39,9 @@
 
 <header class="h-10 flex items-center justify-between bg-muted/50 border-b border-border select-none shrink-0">
   <!-- Drag region - left side with app title -->
-  <div class="flex-1 flex items-center gap-2 px-3 h-full" style="--wails-draggable: drag">
+  <div class="flex-1 flex items-center gap-2 px-3 h-full" style="--wails-draggable: drag" ondblclick={handleTitlebarDoubleClick}>
     <img src={logo} alt="" class="w-5 h-5 rounded object-contain" />
-    <span class="text-sm font-medium text-foreground">Eterno Mail</span>
+    <span class="text-sm font-medium text-foreground">Postilaatikko</span>
   </div>
 
   <!-- Mac-style traffic light controls -->

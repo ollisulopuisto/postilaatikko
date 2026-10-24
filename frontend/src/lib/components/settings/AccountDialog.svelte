@@ -411,7 +411,7 @@
 </script>
 
 <Dialog.Root bind:open onOpenChange={handleOpenChange}>
-  <Dialog.Content class="max-w-xl max-h-[90vh] overflow-hidden flex flex-col" preventCloseAutoFocus onInteractOutside={(e) => e.preventDefault()}>
+  <Dialog.Content class="max-w-xl max-h-[90vh] overflow-hidden flex flex-col" style="height: min(680px, 90vh);" preventCloseAutoFocus onInteractOutside={(e) => e.preventDefault()}>
     <Dialog.Header>
       <Dialog.Title>
         {editAccount?.sharedMailboxParentId ? $_('account.editSharedMailboxTitle') : editAccount ? $_('account.editTitle') : $_('account.addTitle')}
@@ -425,7 +425,7 @@
 
     {#if editAccount}
       <!-- Edit Mode: Tabbed Interface -->
-      <Tabs.Root bind:value={activeTab} class="flex-1 flex flex-col overflow-hidden">
+      <Tabs.Root bind:value={activeTab} class="flex-1 min-h-0 flex flex-col overflow-hidden">
         <Tabs.List class="grid w-full grid-cols-4">
           <Tabs.Trigger value="general" class="flex items-center gap-2">
             <Icon icon="mdi:cog" class="w-4 h-4" />
@@ -445,7 +445,7 @@
           </Tabs.Trigger>
         </Tabs.List>
 
-        <div class="flex-1 overflow-y-auto mt-4 pl-1 pr-3" style="max-height: calc(90vh - 220px);">
+        <div class="flex-1 min-h-0 overflow-y-auto mt-4 pl-1 pr-3">
           <Tabs.Content value="general" class="mt-0">
             <AccountGeneralTab
               {editAccount}
@@ -542,13 +542,13 @@
 
         <!-- Actions for General/Server tabs (not Identity - it has its own save) -->
         {#if activeTab === 'identity' || activeTab === 'security'}
-          <div class="flex items-center justify-end gap-2 pt-4 border-t border-border mt-4">
+          <div class="flex shrink-0 items-center justify-end gap-2 pt-4 border-t border-border mt-4">
             <Button variant="ghost" onclick={handleCancel}>
               {$_('common.close')}
             </Button>
           </div>
         {:else}
-          <div class="flex items-center justify-end gap-2 pt-4 border-t border-border mt-4">
+          <div class="flex shrink-0 items-center justify-end gap-2 pt-4 border-t border-border mt-4">
             <Button variant="ghost" onclick={handleCancel} disabled={saving}>
               {$_('common.cancel')}
             </Button>

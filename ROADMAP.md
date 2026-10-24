@@ -9,7 +9,7 @@ The goal is a strong personal email client for people who use several accounts. 
 ### Priorities
 
 1. **Scheduled send — critical.** Compose now, choose a delivery time, and have Postilaatikko send it reliably.
-2. **Gmail API integration.** Add Gmail-native capabilities for Gmail accounts, starting with spam actions and efficient mailbox updates; keep IMAP support for other providers.
+2. **Gmail API integration.** Add server-side Gmail search and Gmail-native capabilities for Gmail accounts, starting with spam actions and efficient mailbox updates; keep IMAP support for other providers.
 3. **Calendar from email:** recognize date/time mentions and offer links that open or create events in installed calendar applications.
 4. **Fast everyday mail:** Gmail-style keyboard bindings, quick reply templates, and full email templates.
 5. **Better compose controls:** use existing cross-account sender identities with signatures selected from sender, recipient, and other available context.
@@ -26,7 +26,7 @@ The goal is a strong personal email client for people who use several accounts. 
 ### Recommended implementation order
 
 1. **Scheduled send.** The user has identified this as critical; use a small local helper on their always-on Mac Studio for the initial personal setup.
-2. **Gmail API integration.** Establish the Gmail-specific authorization and provider path, then use it for Gmail-native capabilities. Keep the existing IMAP path for non-Gmail accounts and use the least-permissive scopes that cover each operation.
+2. **Gmail API integration.** Establish the Gmail-specific authorization and provider path, then use it for server-side search and Gmail-native capabilities. Keep the existing IMAP path for non-Gmail accounts and use the least-permissive scopes that cover each operation.
 3. **Calendar recognition.** Add date/time links to messages and connect them to the calendar extension or installed calendar applications.
 4. **Gmail-native spam actions.** Mark as spam and undo/report as not spam using Gmail's own mailbox labels and behavior, through the Gmail API.
 5. **Gmail-style keyboard bindings.** A contained, independent improvement to everyday navigation.
@@ -49,11 +49,40 @@ Read this before writing code in this repo. Full contributor rules are in `CONTR
 - **Commit messages** use the `feat:`, `fix:`, `docs:`, `refactor:`, `test:` or `chore:` prefixes from `CONTRIBUTING.md`. Commit locally; push only when asked.
 - **Ask before deciding things that are the user's to decide** (e.g. the open questions below). Choose sensible defaults for everything else and say what you chose.
 
+## PR-sized tasks
+
+These are deliberately small, reviewable candidates that can be offered upstream independently. The current in-flight fixes are not complete until their changes are verified and recorded here.
+
+### Easy
+
+- **Finnish UI localization.** Add the core and extension `fi` dictionaries, register the locale, and verify key and placeholder parity. In progress via AGY CLI.
+- **Use account display names in the sidebar.** Prefer the configured name under Inbox and in account rows, falling back to the email address. In progress.
+- **Keep Edit Account dialog geometry stable.** Anchor the footer and keep tab content in a bounded scrolling region so changing tabs cannot move the Save/Close controls. In progress.
+- **macOS window conventions.** Add `⌘,` for Preferences and title-bar double-click maximize/restore. In progress; the Postilaatikko title string itself is fork-specific.
+
+### Medium
+
+- **Header-only routine sync.** Stop automatic full-body and attachment downloads; fetch content when a message is opened. In progress after user confirmation.
+- **Sidebar folder access.** Keep the all-folder browser directly reachable and add pinned folders, then persist item order and visibility.
+- **Virtual-folder criteria.** Add include/exclude folders, read/unread and replied/unreplied status, and 7-day / 30-day / all-time windows.
+- **macOS Contacts source.** Add native Contacts lookup and recipient autocomplete after the read/write scope is settled.
+
+### Large
+
+- **Gmail API search.** Search Gmail online with Gmail's query syntax while preserving the existing IMAP path for other accounts.
+- **Scheduled send.** Durable queue plus the always-on Mac Studio helper, retries, cancellation, and delivery status.
+- **Calendar links from email.** Recognize dates and times, then open or create events in an installed calendar app.
+- **Multiple mail windows.** Support independent mail views and navigation state beyond the existing detached composer.
+
 ## Must have
 
-- **Gmail API integration.** Not started. Use Gmail's API for Gmail-specific capabilities such as native spam actions, filters, aliases/signatures, and mailbox change notifications. Preserve IMAP support for non-Gmail providers and avoid replacing working provider-neutral paths without a clear benefit. Request only the OAuth scopes needed for enabled features. See the [Gmail API overview](https://developers.google.com/workspace/gmail/api/guides) and [scope guide](https://developers.google.com/workspace/gmail/api/auth/scopes).
+- **Gmail API integration.** Not started. Use Gmail's API for server-side search and Gmail-specific capabilities such as native spam actions, filters, aliases/signatures, and mailbox change notifications. Preserve IMAP support for non-Gmail providers and avoid replacing working provider-neutral paths without a clear benefit. Request only the OAuth scopes needed for enabled features. See the [Gmail API overview](https://developers.google.com/workspace/gmail/api/guides) and [scope guide](https://developers.google.com/workspace/gmail/api/auth/scopes).
 - **Scheduled send (critical).** Compose now and send at a chosen time. Not implemented. Initial personal setup: a durable local queue and small helper on the user's always-on Mac Studio. Gmail's documented API has immediate send methods, not a scheduled-delivery endpoint, so the helper must be running with network access at the due time and call Gmail to send then. Recover missed sends after interruption. This avoids requiring a Postilaatikko hosted sending service for this setup.
-- **Unified virtual folders.** Saved sets of real folders across accounts, shown in the sidebar and filtered to unread mail for a lightweight to-do list. Implemented in Postilaatikko v0.3.10.
+- **Unified virtual folders.** Saved sets of real folders across accounts, shown in the sidebar. The current view lists all messages from included folders and shows an unread count; it does not filter the list to unread messages. Base folder-set behavior is implemented in Postilaatikko v0.3.10.
+- **Virtual-folder criteria.** Expand the current saved folder sets into fast cross-account views with include/exclude folder selection (including all folders except selected ones), read/unread and replied/unreplied status criteria, and a 7-day, 30-day, or all-time date window. The current implementation saves only included folder IDs; it has no persisted status/date criteria. Define whether dates apply to each message or the latest message in a conversation before implementing.
+- **Fast folder browser and pins.** Keep a fast browser for all account folders available from the sidebar and let users pin selected folders for one-click access. The current full folder tree is in the temporary More panel; there is no pinned-folder list.
+- **Sidebar customization.** Let users rearrange sidebar items and hide selected items, persisting the layout across launches. Virtual folders can currently be reordered among themselves; other sidebar sections and folders cannot be rearranged or hidden (collapsing a tree is not the same as hiding it).
+- **Header-only bulk sync.** Make “Sync all” fetch folder/message headers without downloading message bodies or attachments. Fetch full content on demand when a message is opened. Current `SyncAllComplete` calls `SyncFolder`, which starts a background body-and-attachment fetch for missing bodies in each account's sync window.
 - **Cross-account message moves.** Already supported. Preserve the safety rule: confirm the destination copy before removing the source.
 - **Multiple sender identities across accounts.** Already supported in the composer. Improve it with contextual signature selection (sender, recipient, and message type); signatures can already be configured per identity.
 - **Local cross-account filters.** Not started. Build on the existing cross-account move action; match incoming messages and route them to a folder in another account.
@@ -65,6 +94,7 @@ Read this before writing code in this repo. Full contributor rules are in `CONTR
 
 ## Planned
 
+- **macOS Contacts integration.** Add the system address book as a contact source, with macOS privacy authorization. Scope the initial path around recipient lookup/autocomplete and browsing; confirm whether changes should write back to Contacts or remain app-local before implementing edits.
 - **Smart notifications.** Per-sender and rule-based controls for deciding which messages produce notifications. Not started; lower priority.
 - **Snooze and reminders.** Hide or remind about a conversation at a chosen time. Not started and lower priority than the core items above.
 
@@ -80,5 +110,6 @@ Read this before writing code in this repo. Full contributor rules are in `CONTR
 
 ## Done
 
-- **Unified virtual folders (v0.3.10).** Saved unread views across selected folders and accounts, including sidebar management and search.
+- **Unified virtual folders (v0.3.10).** Saved views across selected folders and accounts, including sidebar management, message listing, and unread counts. Search exists but its virtual-folder query is currently hard-coded to unread messages.
+- **Virtual-folder criteria (planned).** Current virtual folders save an included set of real folder IDs across accounts, show messages from those folders, provide an unread badge, and support search. They do not yet filter by read/unread or replied/unreplied status, time window, or excluded folders. The target editor should make include/exclude folder mode, status selection, and 7 days / 30 days / always easy to set without making common configurations slow to edit.
 - **Postilaatikko product naming (v0.3.10).** Updated visible product branding while retaining compatibility-sensitive app identifiers.

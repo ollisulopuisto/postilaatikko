@@ -161,6 +161,10 @@
   let editingAccount = $state<account.Account | null>(null)
   let deletingAccount = $state<account.Account | null>(null)
 
+  export function openSettings() {
+    showSettingsDialog = true
+  }
+
   $effect(() => {
     const emails = accountStore.accounts.map(item => item.account.email).filter(Boolean)
     if (emails.length) void contactPhotos.ensure(emails)
@@ -781,7 +785,7 @@
                   {@const avatarPhoto = contactPhotos.get(entry.account.email)}
                   <button type="button" class="sidebar-folder-account" onclick={() => selectFolderGroupAccount(entry.account.id, item.type)}>
                     <Avatar email={entry.account.email} name={entry.account.name} size={16} photoData={avatarPhoto?.data} photoMediaType={avatarPhoto?.mediaType} />
-                    <span class="truncate">{entry.account.email || entry.account.name}</span>
+                    <span class="truncate">{entry.account.name || entry.account.email}</span>
                   </button>
                 {/each}
               </div>
@@ -808,7 +812,7 @@
                     {@const avatarPhoto = contactPhotos.get(entry.account.email)}
                     <button type="button" class="sidebar-folder-account" onclick={() => selectFolderGroupAccount(entry.account.id, item.type)}>
                       <Avatar email={entry.account.email} name={entry.account.name} size={16} photoData={avatarPhoto?.data} photoMediaType={avatarPhoto?.mediaType} />
-                      <span class="truncate">{entry.account.email || entry.account.name}</span>
+                      <span class="truncate">{entry.account.name || entry.account.email}</span>
                     </button>
                   {/each}
                 </div>

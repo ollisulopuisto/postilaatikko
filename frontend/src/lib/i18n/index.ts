@@ -7,6 +7,7 @@ register('en', () => import('./locales/en.json'))
 register('pt-BR', () => import('./locales/pt-BR.json'))
 register('cs', () => import('./locales/cs.json'))
 register('de', () => import('./locales/de.json'))
+register('fi', () => import('./locales/fi.json'))
 register('fr', () => import('./locales/fr.json'))
 register('it', () => import('./locales/it.json'))
 register('nb', () => import('./locales/nb.json'))
@@ -32,6 +33,7 @@ export const supportedLocales = [
   { code: 'pt-BR', name: 'Portugues (Brasil)' },
   { code: 'cs', name: 'Čeština' },
   { code: 'de', name: 'Deutsch' },
+  { code: 'fi', name: 'Suomi' },
   { code: 'fr', name: 'Français' },
   { code: 'it', name: 'Italiano' },
   { code: 'nb', name: 'Norsk Bokmål' },

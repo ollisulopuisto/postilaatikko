@@ -1,6 +1,6 @@
-# Eterno Mail Keyboard Shortcuts
+# Postilaatikko Keyboard Shortcuts
 
-Complete reference of all keyboard shortcuts in Eterno Mail.
+Complete reference of all keyboard shortcuts in Postilaatikko. Existing upstream shortcuts are retained; macOS also supports the standard Preferences shortcut below.
 
 ## Global Shortcuts
 
@@ -10,6 +10,7 @@ These shortcuts work anywhere in the application (unless in composer).
 
 | Shortcut | Action |
 |----------|--------|
+| `⌘+,` (macOS) | Open Preferences |
 | `Ctrl+Q` | Quit application |
 | `Ctrl+N` | Compose new message |
 | `Ctrl+S` | Focus search bar |
@@ -158,6 +159,7 @@ NAVIGATION
   Space               Toggle checkbox / Expand account
 
 COMPOSE & REPLY
+  ⌘ + ,             Preferences (macOS)
   Ctrl + N            New message
   Ctrl + R            Reply
   Ctrl + Shift + R    Reply All

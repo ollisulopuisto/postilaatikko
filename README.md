@@ -41,6 +41,7 @@ Postilaatikko keeps compatibility-sensitive Go module and desktop application id
 - Unified inbox and aggregate special-folder views across enabled accounts.
 - Message search, conversation views, attachments, drafts, and common mail actions.
 - Contacts and calendar extensions, with local data and account integrations.
+- Routine IMAP sync fetches headers and flags; conversation content is fetched when opened.
 - Linux, macOS, and Windows desktop builds through Wails.
 
 The fork is actively changing. Check the roadmap before relying on a feature described as planned or in progress. **Scheduled send (“send later”) is not implemented.**

@@ -134,7 +134,7 @@
                   photoData={avatarPhoto?.data}
                   photoMediaType={avatarPhoto?.mediaType}
                 />
-                <span data-sidebar-label class="flex-1 text-left truncate">{acc.account.email || acc.account.name}</span>
+                <span data-sidebar-label class="flex-1 text-left truncate">{acc.account.name || acc.account.email}</span>
                 {#if acc.inbox.unreadCount > 0}
                   <span data-sidebar-badge class="px-1.5 py-0.5 text-xs font-medium bg-muted text-muted-foreground rounded-full">
                     {acc.inbox.unreadCount}

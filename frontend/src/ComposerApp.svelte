@@ -162,6 +162,11 @@
     isMaximized = !isMaximized
   }
 
+  function handleTitlebarDoubleClick(event: MouseEvent) {
+    event.preventDefault()
+    void toggleMaximize()
+  }
+
   // Request close - triggers Composer's close confirmation dialog
   function requestClose() {
     closeRequested = true
@@ -192,7 +197,7 @@
   {#if getShowTitleBar() && !getNativeTitleBar() && effectiveTitleBarMode === 'custom'}
     <header class="h-10 flex items-center justify-between bg-muted/50 border-b border-border select-none shrink-0">
       <!-- Drag region - left side with title -->
-      <div class="flex-1 flex items-center gap-2 px-3 h-full" style="--wails-draggable: drag">
+      <div class="flex-1 flex items-center gap-2 px-3 h-full" style="--wails-draggable: drag" ondblclick={handleTitlebarDoubleClick}>
         <Icon icon="mdi:email-edit-outline" class="w-5 h-5 text-primary" />
         <span class="text-sm font-medium text-foreground">{windowTitle()}</span>
       </div>
