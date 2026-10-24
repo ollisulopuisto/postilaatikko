@@ -113,21 +113,21 @@ jobs:
         run: |
           make build
           cd build/bin
-          zip -r Eterno-Mail-darwin-${{ matrix.arch }}.zip eterno-mail.app
+          APP_BUNDLE="postilaatikko.app"
+          APP_NAME="Postilaatikko"
+          ZIP_NAME="Postilaatikko-darwin-${{ matrix.arch }}.zip"
+          zip -r "${ZIP_NAME}" "${APP_BUNDLE}"
 
-          # Also produce a DMG: users download, mount, and drag Eterno Mail.app
-          # into /Applications — the standard macOS "download and run" format.
-          APP_NAME="Eterno Mail"
-          VOL_NAME="Eterno Mail"
-          DMG_NAME="Eterno-Mail-${{ github.ref_name }}-${{ matrix.arch }}.dmg"
+          # Include an Applications alias for the standard drag-and-drop install flow.
+          VOL_NAME="Postilaatikko"
+          DMG_NAME="Postilaatikko-${{ github.ref_name }}-darwin-${{ matrix.arch }}.dmg"
           mkdir -p dmg-staging
-          cp -R eterno-mail.app "dmg-staging/${APP_NAME}.app"
-          # Ad-hoc sign the staged bundle so Gatekeeper allows "download and run".
-          codesign --force --deep --sign - "dmg-staging/${APP_NAME}.app" || true
+          cp -R "${APP_BUNDLE}" "dmg-staging/${APP_NAME}.app"
+          ln -s /Applications dmg-staging/Applications
           hdiutil create -volname "${VOL_NAME}" -srcfolder dmg-staging \
             -ov -format UDZO -o "${DMG_NAME}"
-          rm -rf dmg-staging eterno-mail.app
-          ls -lh "${DMG_NAME}" "Eterno-Mail-darwin-${{ matrix.arch }}.zip"
+          rm -rf dmg-staging "${APP_BUNDLE}"
+          ls -lh "${DMG_NAME}" "${ZIP_NAME}"
 
       - name: Build (Windows)
         if: matrix.platform == 'windows'
@@ -145,6 +145,7 @@ jobs:
           path: |
             build/bin/eterno-mail-*
             build/bin/Eterno-Mail-*
+            build/bin/Postilaatikko-*
             eterno-mail-*.tar.gz
           retention-days: 1
 
@@ -167,7 +168,7 @@ jobs:
 
           if ! gh release view "$TAG_NAME" >/dev/null 2>&1; then
             gh release create "$TAG_NAME" \
-              --title "Eterno Mail $TAG_NAME" \
+              --title "Postilaatikko $TAG_NAME" \
               --generate-notes
           fi
 
