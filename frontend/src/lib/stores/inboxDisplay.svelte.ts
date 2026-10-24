@@ -25,7 +25,7 @@ let displayMode = $state<InboxDisplayMode>('categories')
 let peopleGrouping = $state<PeopleGrouping>('per-account')
 let peopleVisibleCount = $state(0)
 let hiddenPeopleAccounts = $state<string[]>([])
-let cardPreferences = $state<Record<InboxCardID, InboxCardPreferences>>({
+const cardPreferences = $state<Record<InboxCardID, InboxCardPreferences>>({
   people: { grouping: 'per-account', visibleCount: 0, hiddenAccounts: [] },
   notifications: { grouping: 'unified', visibleCount: 0, hiddenAccounts: [] },
   news: { grouping: 'unified', visibleCount: 0, hiddenAccounts: [] },

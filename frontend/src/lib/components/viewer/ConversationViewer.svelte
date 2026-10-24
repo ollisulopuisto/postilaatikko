@@ -492,18 +492,20 @@
       console.error('Failed to load conversation:', err)
       if (generation === viewGeneration) error = $_('viewer.failedToLoad')
     } finally {
-      if (generation !== viewGeneration) return
-      loading = false
-      // Scroll to bottom to show the latest message
-      await tick()
-      if (contentContainerRef) {
-        contentContainerRef.scrollTop = contentContainerRef.scrollHeight
-      }
-      // Capture only after the conversation is actually rendered and still
-      // visible. A restored selection that is replaced during startup never
-      // becomes a pending read operation merely because it mounted briefly.
-      if (threadId === tid && folderId === fid && isViewerVisible && conversation?.messages) {
-        pendingReadOnLeave.capture(conversation.messages)
+      // A newer load owns the loading state; leave it alone.
+      if (generation === viewGeneration) {
+        loading = false
+        // Scroll to bottom to show the latest message
+        await tick()
+        if (contentContainerRef) {
+          contentContainerRef.scrollTop = contentContainerRef.scrollHeight
+        }
+        // Capture only after the conversation is actually rendered and still
+        // visible. A restored selection that is replaced during startup never
+        // becomes a pending read operation merely because it mounted briefly.
+        if (threadId === tid && folderId === fid && isViewerVisible && conversation?.messages) {
+          pendingReadOnLeave.capture(conversation.messages)
+        }
       }
     }
   }
@@ -1060,7 +1062,7 @@
   // Delete the currently focused message (via keyboard)
   async function handleDeleteFocusedMessage() {
     if (!focusedMessageId) return
-	const messageID = focusedMessageId
+    const messageID = focusedMessageId
 
     if (isTrashFolder) {
       // Permanent delete from trash

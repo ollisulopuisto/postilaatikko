@@ -459,7 +459,7 @@ ${processedHtml}
           console.error('[EmailBody] BrowserOpenURL also failed:', err2)
         }
       }
-    } catch (e) {
+    } catch {
       console.error('[EmailBody] Invalid URL')
     }
   }

@@ -4,7 +4,6 @@
   import { clearCache as clearInlineAttachmentCache } from './lib/stores/inlineAttachmentCache'
 
   import { onMount, tick, untrack } from 'svelte'
-  import Icon from '@iconify/svelte'
   import TitleBar from './lib/components/common/TitleBar.svelte'
   import Sidebar from './lib/components/sidebar/Sidebar.svelte'
   import MessageList from './lib/components/list/MessageList.svelte'
