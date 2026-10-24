@@ -72,10 +72,20 @@ func (s *UnixServer) Stop() error {
 }
 
 // createSocketPath creates the socket directory and returns the socket path.
+// On macOS the Unix domain socket path is limited to ~104 bytes (108 on
+// Linux). Deep temp dirs (e.g. go test TMPDIR) can exceed that, in which case
+// we fall back to a short path in the system temp root.
 func (s *UnixServer) createSocketPath() (string, error) {
-	// Use /tmp/aerion-{uid}/ directory
 	uid := os.Getuid()
 	socketDir := filepath.Join(os.TempDir(), fmt.Sprintf("aerion-%d", uid))
+	socketPath := filepath.Join(socketDir, "ipc.sock")
+
+	if len(socketPath) > maxSocketPathLen {
+		// Deep temp dirs exceed the OS socket path limit. Fall back to a
+		// short path in the system temp root that stays within limits.
+		socketDir = filepath.Join("/tmp", fmt.Sprintf("aerion-%d", uid))
+		socketPath = filepath.Join(socketDir, "ipc.sock")
+	}
 
 	// Create directory with restrictive permissions (0700)
 	if err := os.MkdirAll(socketDir, 0700); err != nil {
@@ -94,8 +104,10 @@ func (s *UnixServer) createSocketPath() (string, error) {
 		}
 	}
 
-	return filepath.Join(socketDir, "ipc.sock"), nil
+	return socketPath, nil
 }
+
+const maxSocketPathLen = 100 // Unix domain socket path limit (104 macOS, 108 Linux)
 
 // NewServer creates a new platform-appropriate IPC server.
 // On Unix systems (Linux/macOS), this returns a UnixServer.
