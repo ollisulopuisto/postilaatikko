@@ -9,13 +9,14 @@ The goal is a strong personal email client for people who use several accounts. 
 ### Priorities
 
 1. **Scheduled send — critical.** Compose now, choose a delivery time, and have Postilaatikko send it reliably.
-2. **Gmail API integration.** Add server-side Gmail search and Gmail-native capabilities for Gmail accounts, starting with spam actions and efficient mailbox updates; keep IMAP support for other providers.
-3. **Calendar from email:** recognize date/time mentions and offer links that open or create events in installed calendar applications.
-4. **Fast everyday mail:** Gmail-style keyboard bindings, quick reply templates, and full email templates.
-5. **Better compose controls:** use existing cross-account sender identities with signatures selected from sender, recipient, and other available context.
-6. **Cross-account automation:** local rules can route incoming mail across accounts when provider-side filters cannot.
-7. **Multiple mail windows:** keep several mail views open for parallel reading and searching. A detached compose window already exists; this goal is multiple mail windows.
-8. **Smart notifications:** optional sender- and rule-based controls. Useful, but lower priority than the items above.
+2. **Virtual-folder criteria — high user priority.** Make folder selection, read/unread and replied/unreplied status, and date windows apply consistently to both the conversation list and in-folder search.
+3. **Gmail API integration.** Add server-side Gmail search and Gmail-native capabilities for Gmail accounts, starting with spam actions and efficient mailbox updates; keep IMAP support for other providers.
+4. **Calendar from email:** recognize date/time mentions and offer links that open or create events in installed calendar applications.
+5. **Fast everyday mail:** Gmail-style keyboard bindings, quick reply templates, and full email templates.
+6. **Better compose controls:** use existing cross-account sender identities with signatures selected from sender, recipient, and other available context.
+7. **Cross-account automation:** local rules can route incoming mail across accounts when provider-side filters cannot.
+8. **Multiple mail windows:** keep several mail views open for parallel reading and searching. A detached compose window already exists; this goal is multiple mail windows.
+9. **Smart notifications:** optional sender- and rule-based controls. Useful, but lower priority than the items above.
 
 ### Product boundaries
 
@@ -25,16 +26,18 @@ The goal is a strong personal email client for people who use several accounts. 
 
 ### Recommended implementation order
 
-1. **Scheduled send.** The user has identified this as critical; use a small local helper on their always-on Mac Studio for the initial personal setup.
-2. **Gmail API integration.** Establish the Gmail-specific authorization and provider path, then use it for server-side search and Gmail-native capabilities. Keep the existing IMAP path for non-Gmail accounts and use the least-permissive scopes that cover each operation.
-3. **Calendar recognition.** Add date/time links to messages and connect them to the calendar extension or installed calendar applications.
-4. **Gmail-native spam actions.** Mark as spam and undo/report as not spam using Gmail's own mailbox labels and behavior, through the Gmail API.
-5. **Gmail-style keyboard bindings.** A contained, independent improvement to everyday navigation.
-6. **Local cross-account filters.** The cross-account move action already exists, so rules can build on it without inventing a second move path.
-7. **Contextual signatures.** Extend the existing cross-account identities and per-identity signatures with sender/recipient/message-type rules.
-8. **Reply and email templates.** Build these on top of the compose identity and signature behavior.
-9. **Multiple mail windows.** Plan around the existing detached composer, but support multiple mail views and their separate navigation state.
-10. **Smart notifications.** Add optional per-sender and rule-based notification controls after the core workflows.
+1. **ICS event handoff (quick win).** Given a structured event, create a standard ICS file and open it for review/import in the user's calendar application.
+2. **Virtual-folder criteria (high user priority).** Add include/exclude folders, status filters, and date windows; make the list and search honor the same saved criteria, with no hard-coded unread-only behavior.
+3. **Scheduled send (critical).** Start with the local helper on the always-on Mac Studio. Build end-to-end encryption into the first version: devices encrypt queued messages for the paired helper, and any relay stores only ciphertext. The helper decrypts locally at send time; its private key and account credentials stay on the Studio. A future paid hosted sender would be a separate trust mode, not E2EE.
+4. **Gmail API integration.** Establish the Gmail-specific authorization and provider path, then use it for server-side search and Gmail-native capabilities. Keep the existing IMAP path for non-Gmail accounts and use the least-permissive scopes that cover each operation.
+5. **Date/time recognition in email.** Detect likely event times and connect them to the ICS event handoff, asking for confirmation when timezone or event details are ambiguous.
+6. **Gmail-native spam actions.** Mark as spam and undo/report as not spam using Gmail's own mailbox labels and behavior, through the Gmail API.
+7. **Gmail-style keyboard bindings.** Add Gmail-like message-list and message-reading actions. Keep single-key bindings inactive while composing or typing in other editable fields.
+8. **Local cross-account filters.** The cross-account move action already exists, so rules can build on it without inventing a second move path.
+9. **Contextual signatures.** Extend the existing cross-account identities and per-identity signatures with sender/recipient/message-type rules.
+10. **Reply and email templates.** Build these on top of the compose identity and signature behavior.
+11. **Multiple mail windows.** Plan around the existing detached composer, but support multiple mail views and their separate navigation state.
+12. **Smart notifications.** Add optional per-sender and rule-based notification controls after the core workflows.
 
 ## Guidance for agents
 
@@ -65,44 +68,43 @@ These are deliberately small, reviewable candidates that can be offered upstream
 - **Header-only routine sync.** Stop automatic full-body and attachment downloads; fetch content when a message is opened. In progress after user confirmation.
 - **Sidebar folder access.** Keep the all-folder browser directly reachable and add pinned folders, then persist item order and visibility.
 - **Virtual-folder criteria.** Add include/exclude folders, read/unread and replied/unreplied status, and 7-day / 30-day / all-time windows.
-- **macOS Contacts source.** Add native Contacts lookup and recipient autocomplete after the read/write scope is settled.
+- **macOS Contacts source.** Start with read-only browsing and recipient autocomplete. Offer a link/action to open the selected person in Apple's Contacts app for modifications; Postilaatikko will not write contact changes in the first version.
 
 ### Large
 
 - **Gmail API search.** Search Gmail online with Gmail's query syntax while preserving the existing IMAP path for other accounts.
-- **Scheduled send.** Durable queue plus the always-on Mac Studio helper, retries, cancellation, and delivery status.
-- **Calendar links from email.** Recognize dates and times, then open or create events in an installed calendar app.
+- **Scheduled send.** Durable E2EE queue plus the always-on Mac Studio helper, retries, cancellation, and delivery status. The helper is the trusted endpoint; a future paid hosted sender needs a separate, clearly disclosed trust model.
+- **Calendar links from email.** Create a standard ICS event from a structured time, then recognize dates and times in email and offer the event for review/import in the installed calendar app.
 - **Multiple mail windows.** Support independent mail views and navigation state beyond the existing detached composer.
 
 ## Must have
 
 - **Gmail API integration.** Not started. Use Gmail's API for server-side search and Gmail-specific capabilities such as native spam actions, filters, aliases/signatures, and mailbox change notifications. Preserve IMAP support for non-Gmail providers and avoid replacing working provider-neutral paths without a clear benefit. Request only the OAuth scopes needed for enabled features. See the [Gmail API overview](https://developers.google.com/workspace/gmail/api/guides) and [scope guide](https://developers.google.com/workspace/gmail/api/auth/scopes).
-- **Scheduled send (critical).** Compose now and send at a chosen time. Not implemented. Initial personal setup: a durable local queue and small helper on the user's always-on Mac Studio. Gmail's documented API has immediate send methods, not a scheduled-delivery endpoint, so the helper must be running with network access at the due time and call Gmail to send then. Recover missed sends after interruption. This avoids requiring a Postilaatikko hosted sending service for this setup.
+- **Scheduled send (critical).** Compose now and send at a chosen time. Not implemented. Start with a durable queue and helper on the user's always-on Mac Studio, and build E2EE from the first version. Paired client devices encrypt each queued message to the helper's public key; any relay must be unable to read message content or account credentials. The helper keeps its private key and sending credentials locally, decrypts at due time, and sends. Gmail's API sends immediately when called, so the helper must be running with network access at the due time; recover missed sends after interruption. A future paid hosted sender is a separate mode and cannot be represented as E2EE if the service must decrypt and send.
 - **Unified virtual folders.** Saved sets of real folders across accounts, shown in the sidebar. The current view lists all messages from included folders and shows an unread count; it does not filter the list to unread messages. Base folder-set behavior is implemented in Postilaatikko v0.3.10.
-- **Virtual-folder criteria.** Expand the current saved folder sets into fast cross-account views with include/exclude folder selection (including all folders except selected ones), read/unread and replied/unreplied status criteria, and a 7-day, 30-day, or all-time date window. The current implementation saves only included folder IDs; it has no persisted status/date criteria. Define whether dates apply to each message or the latest message in a conversation before implementing.
+- **Virtual-folder criteria (high user priority).** Expand the current saved folder sets into fast cross-account views with include/exclude folder selection (including all folders except selected ones), read/unread and replied/unreplied status criteria, and a 7-day, 30-day, or all-time date window. The current implementation saves only included folder IDs; it has no persisted status/date criteria, and virtual-folder search has hard-coded unread behavior. A selected status must consistently filter both the list and in-folder search; if no status is selected, include all statuses. Define whether dates apply to each message or the latest message in a conversation before implementing.
 - **Fast folder browser and pins.** Keep a fast browser for all account folders available from the sidebar and let users pin selected folders for one-click access. The current full folder tree is in the temporary More panel; there is no pinned-folder list.
 - **Sidebar customization.** Let users rearrange sidebar items and hide selected items, persisting the layout across launches. Virtual folders can currently be reordered among themselves; other sidebar sections and folders cannot be rearranged or hidden (collapsing a tree is not the same as hiding it).
 - **Header-only bulk sync.** Make “Sync all” fetch folder/message headers without downloading message bodies or attachments. Fetch full content on demand when a message is opened. Current `SyncAllComplete` calls `SyncFolder`, which starts a background body-and-attachment fetch for missing bodies in each account's sync window.
 - **Cross-account message moves.** Already supported. Preserve the safety rule: confirm the destination copy before removing the source.
 - **Multiple sender identities across accounts.** Already supported in the composer. Improve it with contextual signature selection (sender, recipient, and message type); signatures can already be configured per identity.
 - **Local cross-account filters.** Not started. Build on the existing cross-account move action; match incoming messages and route them to a folder in another account.
-- **Gmail-style keyboard bindings.** Fast list navigation and common mail actions, safe while typing and documented in `docs/KEYBOARD_SHORTCUTS.md`. Not started.
+- **Gmail-style keyboard bindings.** Fast list navigation and common message actions while browsing lists and reading messages, documented in `docs/KEYBOARD_SHORTCUTS.md`. Disable single-key bindings in compose and other editable fields; keep standard macOS editing shortcuts working. Not started.
 - **Gmail-native spam actions.** Let users mark messages as spam and undo that action for Gmail accounts, invoking Gmail's native spam classification/disposition rather than only moving mail to a local folder. The Gmail API supports applying/removing the `SPAM` system label; confirm the exact classifier-training behavior during implementation. Not started.
-- **Reply and email templates.** Save reusable short replies and complete message templates. Not started; use the existing identity and signature setup.
-- **Calendar recognition.** Turn recognized date/time mentions in message content into links that can open or create events in installed calendar applications. Not started; build on `extensions/calendar`.
+- **Quick replies and email templates.** Save reusable short replies and complete message templates as separate composer tools. Preserve the current sender identity and draft fields when inserting either. Not started.
+- **Calendar recognition.** Turn recognized date/time mentions in message content into an “Add to Calendar” action using the standard ICS event handoff. Open it for review/import and handle timezone ambiguity conservatively. Not started; build on `extensions/calendar`.
 - **Multiple mail windows.** Keep more than one mail window open for parallel reading and searching. Not started; the detached compose window already exists.
 
 ## Planned
 
-- **macOS Contacts integration.** Add the system address book as a contact source, with macOS privacy authorization. Scope the initial path around recipient lookup/autocomplete and browsing; confirm whether changes should write back to Contacts or remain app-local before implementing edits.
+- **macOS Contacts integration.** Start with read-only address book browsing and recipient lookup/autocomplete, with macOS privacy authorization. For edits, link to the selected person in Apple's Contacts app; do not write contact changes from Postilaatikko in the initial version.
 - **Smart notifications.** Per-sender and rule-based controls for deciding which messages produce notifications. Not started; lower priority.
 - **Snooze and reminders.** Hide or remind about a conversation at a chosen time. Not started and lower priority than the core items above.
 
 ## Open questions
 
-- **Scheduled send from other devices / for other users.** The initial personal setup uses a local Mac Studio helper. Decide later how other Postilaatikko clients securely deliver queued messages to that helper, and whether a hosted service is needed for users without an always-on machine. Gmail's public API does not expose a scheduled-send endpoint; sends happen immediately when the helper calls the API.
-- **Gmail-style key map.** Choose which Gmail bindings to support and make sure they do not fire while typing in inputs.
-- **Calendar link format.** `webcal:`/ICS download, a Google Calendar template URL, or the OS default calendar.
+- **Paid hosted scheduled send.** It may serve users without an always-on computer, but the service would have to access message content and sending credentials at delivery time. Decide whether to offer this separate, non-E2EE trust mode; keep the initial Mac Studio helper mode E2EE.
+- **Gmail-style key map.** Start with message-list and reading actions (navigation, archive, select, star, move, delete, spam, reply/forward, undo); single-key shortcuts are inactive in compose/editable fields. Refine exact bindings during implementation.
 
 ## Parked
 

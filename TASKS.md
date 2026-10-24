@@ -35,18 +35,34 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 | ID | Effort | Task | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
 | P-014 | Medium | Add local cross-account filters for routing incoming messages. | opencode (Qwen3.8-27B) / `feat/p014-cross-account-filters` / `../postilaatikko-p014` | In progress |
+| P-006 | Medium | **High user priority:** persist include/exclude folders, read/unread, replied/unreplied, and 7-day / 30-day / all-time criteria across accounts. Apply identical criteria to the conversation list and virtual-folder search; remove hard-coded unread-only behavior, and include all statuses when no status is selected. | GPT-6-Luna (high) / `agent/p006-virtual-folder-criteria` / `/private/tmp/postilaatikko-p006` | In progress |
+| P-011 | Large | Critical E2EE Send Later: durable queue, pair clients with the Mac Studio helper, encrypt queued messages to the helper public key, and keep the private key and sending credentials on the helper. Relay stores ciphertext only; helper decrypts at delivery time. Include retry/recovery, cancellation, status, and missed due-time handling. Hosted decryption/sending is out of scope. | GPT-6.1-Sol (medium) / `agent/p011-e2ee-scheduled-send` / `/private/tmp/postilaatikko-p011` | In progress |
+
+## Queued for OpenCode
+
+P-012 is assigned to OpenCode after it finishes P-014. Keep it in a fresh worktree based on the latest `main`; do not overlap tasks in the P-014 worktree.
+
+1. **P-012 — ICS event handoff (Easy):** create an ICS event from structured date/time details and open it for review/import.
+
+## Next priority after the active tasks
+
+1. **P-017 then P-010 — Gmail API (Medium + Large):** establish the OAuth/provider contract, then implement Gmail server-side search.
 
 ## Unclaimed
 
 | ID | Effort | Task | Dependencies / acceptance criteria |
 | --- | --- | --- | --- |
-| P-006 | Medium | Virtual-folder include/exclude folders, read/unread and replied/unreplied status, and 7-day / 30-day / all-time windows. | Persist criteria and query them across accounts; virtual-folder search must honor the selected criteria. |
 | P-007 | Medium | Keep the all-folder browser directly accessible from the sidebar and let users pin folders for one-click access. | Persist pins and support folders across accounts. |
 | P-008 | Medium | Let users reorder sidebar items and hide selected items. | Persist order and visibility; keep hidden items recoverable in sidebar settings. |
-| P-009 | Medium | Integrate macOS Contacts as a source for browsing and recipient lookup/autocomplete. | Requires macOS Contacts permission; write-back vs read-only scope still needs a product decision. |
-| P-010 | Large | Add Gmail server-side search while retaining the IMAP search path for other providers. | Use Gmail's `messages.list` query support; handle OAuth scope and result paging. The `q` parameter is not available with `gmail.metadata`. |
-| P-011 | Large | Implement reliable scheduled send with the always-on Mac Studio helper. | Durable queue, due-time delivery, retry/recovery, cancellation, and delivery status. |
-| P-012 | Medium | Recognize dates and times in email and link them to installed calendar apps. | Build on the Calendar extension; agree on event/open behavior before UI work. |
+| P-009 | Medium | Integrate macOS Contacts as a read-only source for browsing and recipient lookup/autocomplete. | Request Contacts permission when needed. Provide an action to open the selected person in Contacts for edits; do not write contact changes from Postilaatikko. |
+| P-010 | Large | Add Gmail server-side search while retaining the IMAP search path for other providers. | Depends on P-017. Use Gmail's `messages.list` query support; handle OAuth scope and result paging. The `q` parameter is not available with `gmail.metadata`. |
+| P-012 | Easy | Add the ICS event handoff to the Calendar extension. | Given structured event details, create a standard ICS file and open it for review/import in the user's calendar application. Do not add email timestamp detection in this task. |
 | P-013 | Large | Support multiple independent mail windows. | Preserve per-window navigation and selection state; detached compose already exists. |
-| P-015 | Medium | Add contextual signatures, quick replies, and full email templates. | Reuse existing sender identities and per-identity signatures. |
+| P-015 | Medium | Select signatures using sender, recipient, and message type. | Reuse configured sender identities and signatures; keep a manual override in the composer. |
 | P-016 | Medium | Add optional per-sender and rule-based notification controls. | Keep configurable and lower priority than core mail workflows. |
+| P-017 | Medium | Prepare the Gmail API integration contract and OAuth scope plan. | Inspect current account/token storage and provider interfaces; document the smallest scopes needed for search and Gmail-specific actions, token refresh/error handling, and an IMAP fallback. No credential migration or broad auth rewrite in this task. Unblocks P-010 and P-019. |
+| P-018 | Easy | Add reusable quick-reply snippets to the composer. | Create, edit, delete, and insert plain-text replies without losing the draft or current sender identity. Keep the first version local to this installation. |
+| P-019 | Medium | Add Gmail-native mark-as-spam and undo actions. | Depends on P-017. Use Gmail's native spam label/action for Gmail accounts, preserve the existing provider-neutral path, and expose undo with clear success/failure feedback. |
+| P-020 | Medium | Add full email templates to the composer. | Save and insert reusable subject/body templates; preserve recipient, sender identity, and unsaved draft fields when inserting. Keep separate from short quick replies in P-018. |
+| P-021 | Medium | Add Gmail-style keyboard actions for message lists and reading. | Start with navigation, selection, archive, star, move, delete, spam, reply/forward, and undo. Support actions in the open-message view too. Disable single-key bindings in compose and other editable fields; retain standard macOS text-editing shortcuts. |
+| P-022 | Medium | Recognize date/time mentions in email and offer an “Add to Calendar” action. | Depends on P-012. Parse only when confidence is sufficient, handle timezone ambiguity conservatively, and open the resulting ICS event for review/import rather than silently adding it. |
