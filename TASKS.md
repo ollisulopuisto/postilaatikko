@@ -36,19 +36,13 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 | --- | --- | --- | --- | --- |
 | P-014 | Medium | Add local cross-account filters for routing incoming messages. | opencode (Qwen3.8-27B) / `feat/p014-cross-account-filters` / `../postilaatikko-p014` | Review |
 | P-011 | Large | Critical E2EE Send Later: durable queue, pair clients with the Mac Studio helper, encrypt queued messages to the helper public key, and keep the private key and sending credentials on the helper. Relay stores ciphertext only; helper decrypts at delivery time. Include retry/recovery, cancellation, status, and missed due-time handling. Hosted decryption/sending is out of scope. | GPT-6.1-Sol (medium) / `agent/p011-e2ee-scheduled-send` / `/private/tmp/postilaatikko-p011` | In progress; checkpoint `7be5fe3` |
-| P-012 | Easy | ICS event handoff (Easy): create an ICS event from structured date/time details and open it for review/import. | OpenCode / `agent/p012-ics-event-handoff` / worktree `../postilaatikko-p012` | In progress |
+| P-012 | Easy | ICS event handoff (Easy): create an ICS event from structured date/time details and open it for review/import. | OpenCode / `agent/p012-ics-event-handoff` / worktree `../postilaatikko-p012` | Review |
 
 ## Queued sequential follow-up
 
 | ID | Effort | Task | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
 | P-006 | Medium | **High user priority:** persist include/exclude folders, read/unread, replied/unreplied, and 7-day / 30-day / all-time criteria across accounts. Apply identical criteria to the conversation list and virtual-folder search; remove hard-coded unread-only behavior, and include all statuses when no status is selected. | GPT-6.1-Sol (medium), after P-011 / `agent/p006-virtual-folder-criteria` / `/private/tmp/postilaatikko-p006` | Queued; checkpoint `65019b0` |
-
-## Queued for OpenCode
-
-P-012 is assigned to OpenCode after it finishes P-014. Keep it in a fresh worktree based on the latest `main`; do not overlap tasks in the P-014 worktree.
-
-1. **P-012 — ICS event handoff (Easy):** create an ICS event from structured date/time details and open it for review/import.
 
 ## Next priority after the active tasks
 
