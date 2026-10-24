@@ -241,7 +241,9 @@
     "focusMessage": "Kohdista viestiin",
     "exitFocus": "Poistu kohdistustilasta",
     "darkMailToLight": "Näytä tämä sähköposti ilman tummaa suodatinta",
-    "darkMailToDark": "Käytä tummaa suodatinta tähän sähköpostiin"
+    "darkMailToDark": "Käytä tummaa suodatinta tähän sähköpostiin",
+    "addToCalendar": "Lisää kalenteriin",
+    "addToCalendarFailed": "Kalenteritapahtumaa ei voitu luoda"
   },
   "composer": {
     "newMessage": "Uusi viesti",

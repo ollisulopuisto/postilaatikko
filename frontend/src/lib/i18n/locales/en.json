@@ -241,7 +241,9 @@
     "focusMessage": "Focus message",
     "exitFocus": "Exit focus mode",
     "darkMailToLight": "Show this email without dark filter",
-    "darkMailToDark": "Apply dark filter to this email"
+    "darkMailToDark": "Apply dark filter to this email",
+    "addToCalendar": "Add to Calendar",
+    "addToCalendarFailed": "Could not create the calendar event"
   },
   "composer": {
     "newMessage": "New Message",

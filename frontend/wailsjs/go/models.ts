@@ -794,11 +794,11 @@ export namespace app {
 	    movedToSpam: boolean;
 	    operationId: string;
 	    coalesced: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new SpamUndoResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.movedToSpam = source["movedToSpam"];
@@ -810,11 +810,11 @@ export namespace app {
 	    movedToTrash: boolean;
 	    operationId: string;
 	    coalesced: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new TrashUndoResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.movedToTrash = source["movedToTrash"];
@@ -825,11 +825,11 @@ export namespace app {
 	export class UndoLatestResult {
 	    operationId: string;
 	    description: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new UndoLatestResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.operationId = source["operationId"];
@@ -839,11 +839,11 @@ export namespace app {
 	export class UndoableActionResult {
 	    operationId: string;
 	    coalesced: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new UndoableActionResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.operationId = source["operationId"];
@@ -978,6 +978,24 @@ export namespace backend {
 	        this.ctag = source["ctag"];
 	        this.lastSyncedAt = source["lastSyncedAt"];
 	        this.createdAt = source["createdAt"];
+	    }
+	}
+	export class DateTimeMention {
+	    startUnix: number;
+	    endUnix: number;
+	    isAllDay: boolean;
+	    rawText: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DateTimeMention(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.startUnix = source["startUnix"];
+	        this.endUnix = source["endUnix"];
+	        this.isAllDay = source["isAllDay"];
+	        this.rawText = source["rawText"];
 	    }
 	}
 	export class Organizer {
@@ -3285,7 +3303,7 @@ export namespace v1 {
 }
 
 export namespace virtualfolder {
-
+	
 	export class VirtualFolder {
 	    id: string;
 	    name: string;
@@ -3295,11 +3313,11 @@ export namespace virtualfolder {
 	    createdAt: any;
 	    // Go type: time
 	    updatedAt: any;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new VirtualFolder(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -3309,7 +3327,7 @@ export namespace virtualfolder {
 	        this.createdAt = this.convertValues(source["createdAt"], null);
 	        this.updatedAt = this.convertValues(source["updatedAt"], null);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -3328,4 +3346,6 @@ export namespace virtualfolder {
 		    return a;
 		}
 	}
+
 }
+

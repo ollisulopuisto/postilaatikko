@@ -56,11 +56,15 @@ export function Calendar_AddMicrosoftSource(arg1:string,arg2:string,arg3:string,
 
 export function Calendar_CreateEvent(arg1:backend.EventInput):Promise<string>;
 
+export function Calendar_CreateICSFromDetails(arg1:backend.EventInput):Promise<string>;
+
 export function Calendar_DeleteCalendar(arg1:string):Promise<void>;
 
 export function Calendar_DeleteEvent(arg1:string,arg2:string):Promise<void>;
 
 export function Calendar_DeleteSource(arg1:string):Promise<void>;
+
+export function Calendar_DetectDateTimes(arg1:string):Promise<Array<backend.DateTimeMention>>;
 
 export function Calendar_DismissAlarm(arg1:string):Promise<void>;
 
