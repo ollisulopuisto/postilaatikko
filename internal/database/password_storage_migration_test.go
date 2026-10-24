@@ -31,8 +31,20 @@ func TestMigrationV49PasswordStorageRollback(t *testing.T) {
 	}
 	v48Schema := schemaSignature(t, db)
 
-	if err := db.Migrate(); err != nil {
-		t.Fatalf("migrate v48 to v49: %v", err)
+	// Apply only v49: db.Migrate() would also run every later migration, whose
+	// tables the v49 rollback script (and the v48 signature) know nothing about.
+	applied := false
+	for _, migration := range migrations {
+		if migration.Version != 49 {
+			continue
+		}
+		if err := db.applyMigration(migration); err != nil {
+			t.Fatalf("migrate v48 to v49: %v", err)
+		}
+		applied = true
+	}
+	if !applied {
+		t.Fatal("migration v49 not found")
 	}
 	for _, column := range []struct {
 		table string
