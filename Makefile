@@ -62,8 +62,8 @@ build:
 	@echo "Building Postilaatikko..."
 	wails build -tags $(BUILD_TAGS)
 ifeq ($(UNAME_S),Darwin)
-	@echo "Ad-hoc signing eterno-mail.app (required for macOS notifications)..."
-	codesign --force --deep --sign - build/bin/eterno-mail.app
+	@echo "Ad-hoc signing postilaatikko.app (required for macOS notifications)..."
+	codesign --force --deep --sign - build/bin/postilaatikko.app
 endif
 
 # Build for Linux specifically

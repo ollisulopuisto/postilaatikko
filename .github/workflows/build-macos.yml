@@ -37,7 +37,7 @@ jobs:
         run: make build
 
       - name: Package app
-        run: ditto -c -k --sequesterRsrc --keepParent build/bin/eterno-mail.app build/bin/Postilaatikko-macos-arm64.zip
+        run: ditto -c -k --sequesterRsrc --keepParent build/bin/postilaatikko.app build/bin/Postilaatikko-macos-arm64.zip
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
