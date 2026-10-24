@@ -39,6 +39,7 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 | P-012 | Easy | ICS event handoff (Easy): create an ICS event from structured date/time details and open it for review/import. | OpenCode / `agent/p012-ics-event-handoff` / worktree `../postilaatikko-p012` | Review |
 | P-022 | Medium | Recognize date/time mentions in email and offer an "Add to Calendar" action. | OpenCode / `agent/p022-datetime-recognition` / worktree `../postilaatikko-p022` | Review; based on `agent/p012-ics-event-handoff` |
 | P-023 | Easy | Add accessible names to icon-only controls in the Contacts list. | OpenCode / `agent/p023-contacts-aria-labels` / worktree `../postilaatikko-p023` | Review |
+| P-024 | Easy | Localize hard-coded accessibility labels in the shared UI kit. | OpenCode / `agent/p024-kit-a11y-i18n` / worktree `../postilaatikko-p024` | Review |
 | P-022 | Medium | Recognize date/time mentions in email and offer an "Add to Calendar" action. | OpenCode / `agent/p022-datetime-recognition` / worktree `../postilaatikko-p022` | In progress |
 
 ## Queued sequential follow-up
