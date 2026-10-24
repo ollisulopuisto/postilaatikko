@@ -12,6 +12,7 @@
 ## Postilaatikko — v0.3.11
 
 - Added macOS DMG installers with an Applications shortcut for drag-and-drop installation.
+- Added local cross-account filters: match incoming messages by sender, recipient, or subject and route them to a folder on another account. Reuses the safe cross-account move path (copy confirmed before source deletion).
 
 ## Postilaatikko — v0.3.10
 
