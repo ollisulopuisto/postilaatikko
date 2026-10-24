@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## Eterno Mail — v0.3.9
+
+- feat: Added Virtual Folders, allowing a saved set of folders across accounts to be filtered to unread and listed in the sidebar. Unread mail in these folders can be used as a to-do list.
+
 ## Eterno Mail — v0.3.6
 
 - Improved expanded and compact sidebar sizing, icon alignment, tooltips and the Compose button for clearer navigation.
