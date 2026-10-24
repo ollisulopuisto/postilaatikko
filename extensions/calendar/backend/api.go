@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -763,4 +765,42 @@ func (a *API) AddGoogleSource(accountID, name, accountEmail string, selections [
 		return "", fmt.Errorf("persist google source: %w", err)
 	}
 	return sourceID, nil
+}
+
+// CreateICSFromDetails serializes structured event details to an ICS file
+// written to a temp location, for the user to open/import into their
+// calendar application. The caller is responsible for opening the returned
+// path (e.g. via coreapi.UI().OpenURL("file://...")). No email timestamp
+// detection happens here — that is P-022. This method only converts
+// structured details into an ICS handoff file.
+func (a *API) CreateICSFromDetails(details EventInput) (string, error) {
+	if details.Summary == "" {
+		return "", errors.New("calendar: summary required")
+	}
+	if details.DTStartUnix == 0 {
+		return "", errors.New("calendar: dtstart required")
+	}
+	if details.DTEndUnix == 0 {
+		return "", errors.New("calendar: dtend required")
+	}
+	if details.DTEndUnix < details.DTStartUnix {
+		return "", errors.New("calendar: dtend must be >= dtstart")
+	}
+
+	uid := uuid.NewString() + "@aerion-local"
+	icsBlob, err := serializeVEVENT(uid, details)
+	if err != nil {
+		return "", fmt.Errorf("serialize event: %w", err)
+	}
+
+	dir, err := os.MkdirTemp("", "aerion-ics-*")
+	if err != nil {
+		return "", fmt.Errorf("create temp dir: %w", err)
+	}
+	path := filepath.Join(dir, "event.ics")
+	if err := os.WriteFile(path, []byte(icsBlob), 0644); err != nil {
+		os.RemoveAll(dir)
+		return "", fmt.Errorf("write ics file: %w", err)
+	}
+	return path, nil
 }
