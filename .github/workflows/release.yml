@@ -137,7 +137,6 @@ jobs:
         run: |
           make build-windows-installer
           Move-Item build/bin/eterno-mail.exe build/bin/Eterno-Mail-windows-${{ matrix.arch }}.exe
-          Move-Item build/bin/eterno-mail-${{ matrix.arch }}-installer.exe build/bin/Eterno-Mail-windows-setup-${{ matrix.arch }}.exe
 
       - uses: actions/upload-artifact@v7
         with:
