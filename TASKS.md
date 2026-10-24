@@ -34,8 +34,9 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 
 | ID | Effort | Task | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
-| P-014 | Medium | Add local cross-account filters for routing incoming messages. | opencode (Qwen3.8-27B) / `feat/p014-cross-account-filters` / `../postilaatikko-p014` | In progress |
+| P-014 | Medium | Add local cross-account filters for routing incoming messages. | opencode (Qwen3.8-27B) / `feat/p014-cross-account-filters` / `../postilaatikko-p014` | Review |
 | P-011 | Large | Critical E2EE Send Later: durable queue, pair clients with the Mac Studio helper, encrypt queued messages to the helper public key, and keep the private key and sending credentials on the helper. Relay stores ciphertext only; helper decrypts at delivery time. Include retry/recovery, cancellation, status, and missed due-time handling. Hosted decryption/sending is out of scope. | GPT-6.1-Sol (medium) / `agent/p011-e2ee-scheduled-send` / `/private/tmp/postilaatikko-p011` | In progress; checkpoint `7be5fe3` |
+| P-012 | Easy | ICS event handoff (Easy): create an ICS event from structured date/time details and open it for review/import. | OpenCode / `agent/p012-ics-event-handoff` / worktree `../postilaatikko-p012` | In progress |
 
 ## Queued sequential follow-up
 
@@ -61,7 +62,6 @@ P-012 is assigned to OpenCode after it finishes P-014. Keep it in a fresh worktr
 | P-008 | Medium | Let users reorder sidebar items and hide selected items. | Persist order and visibility; keep hidden items recoverable in sidebar settings. |
 | P-009 | Medium | Integrate macOS Contacts as a read-only source for browsing and recipient lookup/autocomplete. | Request Contacts permission when needed. Provide an action to open the selected person in Contacts for edits; do not write contact changes from Postilaatikko. |
 | P-010 | Large | Add Gmail server-side search while retaining the IMAP search path for other providers. | Depends on P-017. Use Gmail's `messages.list` query support; handle OAuth scope and result paging. The `q` parameter is not available with `gmail.metadata`. |
-| P-012 | Easy | Add the ICS event handoff to the Calendar extension. | Given structured event details, create a standard ICS file and open it for review/import in the user's calendar application. Do not add email timestamp detection in this task. |
 | P-013 | Large | Support multiple independent mail windows. | Preserve per-window navigation and selection state; detached compose already exists. |
 | P-015 | Medium | Select signatures using sender, recipient, and message type. | Reuse configured sender identities and signatures; keep a manual override in the composer. |
 | P-016 | Medium | Add optional per-sender and rule-based notification controls. | Keep configurable and lower priority than core mail workflows. |
