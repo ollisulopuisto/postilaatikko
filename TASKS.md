@@ -38,6 +38,7 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 | P-011 | Large | Critical E2EE Send Later: durable queue, pair clients with the Mac Studio helper, encrypt queued messages to the helper public key, and keep the private key and sending credentials on the helper. Relay stores ciphertext only; helper decrypts at delivery time. Include retry/recovery, cancellation, status, and missed due-time handling. Hosted decryption/sending is out of scope. | GPT-6.1-Sol (medium) / `agent/p011-e2ee-scheduled-send` / `/private/tmp/postilaatikko-p011` | In progress; checkpoint `7be5fe3` |
 | P-012 | Easy | ICS event handoff (Easy): create an ICS event from structured date/time details and open it for review/import. | OpenCode / `agent/p012-ics-event-handoff` / worktree `../postilaatikko-p012` | Review |
 | P-022 | Medium | Recognize date/time mentions in email and offer an "Add to Calendar" action. | OpenCode / `agent/p022-datetime-recognition` / worktree `../postilaatikko-p022` | Review; based on `agent/p012-ics-event-handoff` |
+| P-023 | Easy | Add accessible names to icon-only controls in the Contacts list. | OpenCode / `agent/p023-contacts-aria-labels` / worktree `../postilaatikko-p023` | Review |
 | P-022 | Medium | Recognize date/time mentions in email and offer an "Add to Calendar" action. | OpenCode / `agent/p022-datetime-recognition` / worktree `../postilaatikko-p022` | In progress |
 
 ## Queued sequential follow-up
