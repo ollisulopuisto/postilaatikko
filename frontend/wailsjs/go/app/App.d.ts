@@ -188,6 +188,8 @@ export function DeletePGPSenderKey(arg1:string):Promise<void>;
 
 export function DeletePermanently(arg1:Array<string>):Promise<void>;
 
+export function DeleteQuickReply(arg1:string):Promise<void>;
+
 export function DeleteSMIMECertificate(arg1:string):Promise<void>;
 
 export function DeleteSenderCert(arg1:string):Promise<void>;
@@ -486,6 +488,8 @@ export function ListPGPKeys(arg1:string):Promise<Array<pgp.Key>>;
 
 export function ListPGPSenderKeys():Promise<Array<pgp.SenderKey>>;
 
+export function ListQuickReplies():Promise<Array<settings.QuickReply>>;
+
 export function ListSMIMECertificates(arg1:string):Promise<Array<smime.Certificate>>;
 
 export function ListSenderCerts():Promise<Array<smime.SenderCert>>;
@@ -599,6 +603,8 @@ export function SaveDraft(arg1:string,arg2:smtp.ComposeMessage,arg3:string):Prom
 export function SaveEncryptedAttachmentAs(arg1:string,arg2:string):Promise<string>;
 
 export function SavePendingOAuthTokens(arg1:string):Promise<void>;
+
+export function SaveQuickReply(arg1:settings.QuickReply):Promise<settings.QuickReply>;
 
 export function SaveUIState(arg1:appstate.UIState):Promise<void>;
 

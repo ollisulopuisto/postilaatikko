@@ -102,6 +102,11 @@
   export function focus(): void {
     editor?.commands.focus('start')
   }
+
+  /** Insert text at the cursor, one paragraph per line (the doc <-> value mapping). */
+  export function insertText(text: string): void {
+    editor?.chain().focus().insertContent(valueToDoc(text).content).run()
+  }
 </script>
 
 <div bind:this={element} class="h-full"></div>
