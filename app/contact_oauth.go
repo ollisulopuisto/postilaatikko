@@ -343,9 +343,10 @@ func (a *App) saveContactAuthorization(session *pendingContactOAuth, sourceID, a
 	}
 	source.Username, source.Writable = session.email, false
 	if a.carddavSyncer != nil {
+		log := logging.WithComponent("app")
 		go func(id string) {
 			if err := a.carddavSyncer.SyncSource(id); err != nil {
-				logging.WithComponent("app").Warn().Err(err).Str("source_id", id).Msg("Background contact source sync failed")
+				log.Warn().Err(err).Str("source_id", id).Msg("Background contact source sync failed")
 			}
 		}(source.ID)
 	}
