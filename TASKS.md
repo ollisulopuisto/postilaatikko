@@ -34,24 +34,15 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 
 | ID | Effort | Task | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
-| P-014 | Medium | Add local cross-account filters for routing incoming messages. | opencode (Qwen3.8-27B) / `feat/p014-cross-account-filters` / `../postilaatikko-p014` | Done |
+| P-014 | Medium | Add local cross-account filters for routing incoming messages. | opencode (Qwen3.8-27B) / `feat/p014-cross-account-filters` / `../postilaatikko-p014` | Review |
 | P-011 | Large | Critical E2EE Send Later: durable queue, pair clients with the Mac Studio helper, encrypt queued messages to the helper public key, and keep the private key and sending credentials on the helper. Relay stores ciphertext only; helper decrypts at delivery time. Include retry/recovery, cancellation, status, and missed due-time handling. Hosted decryption/sending is out of scope. | GPT-6.1-Sol (medium) / `agent/p011-e2ee-scheduled-send` / `/private/tmp/postilaatikko-p011` | In progress; checkpoint `7be5fe3` |
 | P-012 | Easy | ICS event handoff (Easy): create an ICS event from structured date/time details and open it for review/import. | OpenCode / `agent/p012-ics-event-handoff` / worktree `../postilaatikko-p012` | Review |
-| P-022 | Medium | Recognize date/time mentions in email and offer an "Add to Calendar" action. | OpenCode / `agent/p022-datetime-recognition` / worktree `../postilaatikko-p022` | Review; based on `agent/p012-ics-event-handoff` |
-| P-023 | Easy | Add accessible names to icon-only controls in the Contacts list. | OpenCode / `agent/p023-contacts-aria-labels` / worktree `../postilaatikko-p023` | Review |
-| P-024 | Easy | Localize hard-coded accessibility labels in the shared UI kit. | OpenCode / `agent/p024-kit-a11y-i18n` / worktree `../postilaatikko-p024` | Review |
-| P-025 | Easy | Audit the keyboard shortcut reference against current behavior. | OpenCode / `agent/p025-shortcuts-audit` / worktree `../postilaatikko-p025` | In progress |
-| P-022 | Medium | Recognize date/time mentions in email and offer an "Add to Calendar" action. | OpenCode / `agent/p022-datetime-recognition` / worktree `../postilaatikko-p022` | In progress |
 
 ## Queued sequential follow-up
 
 | ID | Effort | Task | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
 | P-006 | Medium | **High user priority:** persist include/exclude folders, read/unread, replied/unreplied, and 7-day / 30-day / all-time criteria across accounts. Apply identical criteria to the conversation list and virtual-folder search; remove hard-coded unread-only behavior, and include all statuses when no status is selected. | GPT-6.1-Sol (medium), after P-011 / `agent/p006-virtual-folder-criteria` / `/private/tmp/postilaatikko-p006` | Queued; checkpoint `65019b0` |
-
-## Queued for OpenCode
-
-After P-022 (in progress in `../postilaatikko-p022`, based on `agent/p012-ics-event-handoff`), OpenCode proceeds in order in fresh worktrees based on the latest `main`: **P-023** (Contacts list aria-labels), **P-024** (kit accessibility-label localization), **P-025** (keyboard shortcut reference audit). Do not claim these in another checkout.
 
 ## Next priority after the active tasks
 
@@ -72,7 +63,8 @@ After P-022 (in progress in `../postilaatikko-p022`, based on `agent/p012-ics-ev
 | P-018 | Easy | Add reusable quick-reply snippets to the composer. | Create, edit, delete, and insert plain-text replies without losing the draft or current sender identity. Keep the first version local to this installation. |
 | P-019 | Medium | Add Gmail-native mark-as-spam and undo actions. | Depends on P-017. Use Gmail's native spam label/action for Gmail accounts, preserve the existing provider-neutral path, and expose undo with clear success/failure feedback. |
 | P-020 | Medium | Add full email templates to the composer. | Save and insert reusable subject/body templates; preserve recipient, sender identity, and unsaved draft fields when inserting. Keep separate from short quick replies in P-018. |
-| P-021 | Medium | Add Gmail-style keyboard actions for message lists and reading. | Start with navigation, selection, archive, star, move, delete, spam, reply/forward, and undo. Support actions in the open-message view too. Disable single-key bindings in compose and other editable fields; retain standard macOS text-editing shortcuts. Constraint (user decision): chords must stay Finnish/Nordic keyboard-layout friendly — no keys that move or require AltGr on Finnish layouts (no `[`, `]`, `{`, `}`, `#`); letters and number-row digits are fine. |
+| P-021 | Medium | Add Gmail-style keyboard actions for message lists and reading. | Start with navigation, selection, archive, star, move, delete, spam, reply/forward, and undo. Support actions in the open-message view too. Disable single-key bindings in compose and other editable fields; retain standard macOS text-editing shortcuts. |
+| P-022 | Medium | Recognize date/time mentions in email and offer an “Add to Calendar” action. | Depends on P-012. Parse only when confidence is sufficient, handle timezone ambiguity conservatively, and open the resulting ICS event for review/import rather than silently adding it. |
 | P-023 | Easy | Add accessible names to icon-only controls in the Contacts list. | In `extensions/contacts/frontend/components/ContactList.svelte`, add `aria-label` values to search-clear, search-toggle, sort, and add-contact buttons, reusing their existing localized title strings. No behavior changes. |
 | P-024 | Easy | Localize hard-coded accessibility labels in the shared UI kit. | Replace English-only labels in `kit/DetailOverlay.svelte` and `kit/RichTextEditor.svelte` with i18n keys, adding translations while preserving locale key parity. Keep the change scoped to labels and help text. |
 | P-025 | Easy | Audit the keyboard shortcut reference against current behavior. | Compare `docs/KEYBOARD_SHORTCUTS.md` with the existing shortcut definitions and correct stale or platform-inaccurate descriptions. Documentation only; do not add or change key bindings. |

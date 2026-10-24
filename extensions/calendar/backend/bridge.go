@@ -304,6 +304,31 @@ func (b *CalendarBridge) Calendar_CreateEvent(in EventCreateInput) (string, erro
 	return eventID, nil
 }
 
+// Calendar_CreateICSFromDetails creates an ICS file from structured event
+// details and opens it in the user's default calendar application for
+// review/import. Returns the temp file path so the frontend can surface it
+// even if the OpenURL call fails. No email timestamp detection happens here
+// — that is P-022.
+func (b *CalendarBridge) Calendar_CreateICSFromDetails(details EventInput) (string, error) {
+	if !b.gateEnabled() {
+		return "", errors.New("calendar: extension disabled")
+	}
+	if err := b.ensureInit(); err != nil {
+		return "", err
+	}
+	path, err := b.api.CreateICSFromDetails(details)
+	if err != nil {
+		return "", err
+	}
+	if b.deps.Core == nil {
+		return path, nil
+	}
+	if err := b.deps.Core.UI().OpenURL("file://" + path); err != nil {
+		return path, err
+	}
+	return path, nil
+}
+
 // Calendar_UpdateEvent updates an existing locally-composed event.
 // Scope controls recurring semantics: "this" | "this-and-future" | "all".
 // Non-recurring events ignore the scope argument.
