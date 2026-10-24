@@ -68,7 +68,7 @@ func (s *Store) Create(vf *VirtualFolder) error {
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Insert virtual folder
 	_, err = tx.Exec(`
@@ -232,7 +232,7 @@ func (s *Store) Reorder(ids []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to begin virtual folder reorder: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	for index, id := range ids {
 		result, err := tx.Exec(`UPDATE virtual_folders SET order_index = ?, updated_at = ? WHERE id = ?`, index, time.Now().UTC(), id)
 		if err != nil {
@@ -270,7 +270,7 @@ func (s *Store) Update(vf *VirtualFolder) error {
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	result, err := tx.Exec(`
 		UPDATE virtual_folders

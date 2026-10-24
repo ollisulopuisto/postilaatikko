@@ -2189,7 +2189,7 @@ func (s *Store) RestoreUnstartedMove(destinationFolderID string, states []MoveSo
 	if err != nil {
 		return fmt.Errorf("failed to begin unstarted move compensation: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	for _, state := range states {
 		result, err := tx.Exec(`
@@ -2256,7 +2256,7 @@ func (s *Store) ReconcileMovedMessageUIDs(destinationFolderID string, uidsByLoca
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin moved UID reconcile: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	results := make([]MovedUIDReconcileResult, 0, len(uidsByLocalID))
 	for movingLocalID, uid := range uidsByLocalID {
 		if uid == 0 {

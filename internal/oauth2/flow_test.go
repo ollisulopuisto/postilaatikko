@@ -27,7 +27,7 @@ func TestManagerConcurrentSessionAccess(t *testing.T) {
 				manager.HasActiveSession()
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
-				manager.WaitForCallback(ctx)
+				_, _, _ = manager.WaitForCallback(ctx)
 				manager.CancelAuthFlow()
 			}
 		}()
@@ -48,7 +48,7 @@ func TestManagerOldCallbackPreservesNewSession(t *testing.T) {
 		close(tokenStarted)
 		<-releaseToken
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"access_token":"test"}`))
+		_, _ = w.Write([]byte(`{"access_token":"test"}`))
 	}))
 	defer tokenServer.Close()
 	defer release()

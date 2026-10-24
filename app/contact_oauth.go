@@ -342,7 +342,7 @@ func (a *App) saveContactAuthorization(session *pendingContactOAuth, sourceID, a
 	}
 	source.Username, source.Writable = session.email, false
 	if a.carddavSyncer != nil {
-		go a.carddavSyncer.SyncSource(source.ID)
+		go _ = a.carddavSyncer.SyncSource(source.ID)
 	}
 	return source, nil
 }

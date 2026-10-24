@@ -151,7 +151,7 @@ func TestStore_Delete(t *testing.T) {
 		OrderIndex: 0,
 		FolderIDs:  []string{"folder1"},
 	}
-	store.Create(vf)
+	_ = store.Create(vf)
 
 	err := store.Delete(vf.ID)
 	if err != nil {
@@ -177,7 +177,7 @@ func TestStore_CascadingDelete(t *testing.T) {
 		OrderIndex: 0,
 		FolderIDs:  []string{"folder1", "folder2"},
 	}
-	store.Create(vf)
+	_ = store.Create(vf)
 
 	// Delete physical folder 1
 	_, err := db.Exec(`DELETE FROM folders WHERE id = 'folder1'`)

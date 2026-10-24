@@ -32,14 +32,14 @@ func TestServerRejectsPreAuthAndPreservesPipelinedPing(t *testing.T) {
 		s := NewBaseServer(tm)
 		s.ctx = context.Background()
 		server, client := net.Pipe()
-		client.SetDeadline(time.Now().Add(2 * time.Second))
+		_ = client.SetDeadline(time.Now().Add(2 * time.Second))
 		done := make(chan struct{})
 		go func() { s.handleConnection(server); close(done) }()
 		payload := `{"type":"ping"}`
 		if authenticate {
 			payload = `{"type":"auth","payload":{"token":"` + tm.GetToken() + `"}}` + payload
 		}
-		go func() { client.Write([]byte(payload)) }()
+		go func() { _, _ = client.Write([]byte(payload)) }()
 		dec := json.NewDecoder(client)
 		var response Message
 		if err := dec.Decode(&response); err != nil {
