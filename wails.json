@@ -1,17 +1,17 @@
 {
   "$schema": "https://wails.io/schemas/config.v2.json",
-  "name": "eterno-mail",
+  "name": "postilaatikko",
   "outputfilename": "eterno-mail",
   "frontend:install": "npm install",
   "frontend:build": "npm run build",
   "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "auto",
   "info": {
-    "companyName": "Eterno Mail",
-    "productName": "Eterno Mail",
+    "companyName": "Postilaatikko",
+    "productName": "Postilaatikko",
     "productVersion": "0.3.10",
     "copyright": "Copyright 2024-2025",
-    "comments": "A modern, cross-platform email client",
+    "comments": "A personal desktop email client for multiple accounts",
     "protocols": [
       {
         "scheme": "mailto",
@@ -20,7 +20,7 @@
     ]
   },
   "author": {
-    "name": "Weslei",
+    "name": "Postilaatikko contributors",
     "email": ""
   }
 }

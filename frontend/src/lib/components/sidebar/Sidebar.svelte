@@ -6,6 +6,7 @@
   import AccountDialog from '$lib/components/settings/AccountDialog.svelte'
   import DeleteAccountDialog from '$lib/components/settings/DeleteAccountDialog.svelte'
   import SettingsDialog from '$lib/components/settings/SettingsDialog.svelte'
+  import VirtualFolderDialog from './VirtualFolderDialog.svelte'
   import { Button } from '$lib/components/ui/button'
   import Avatar from '$lib/components/kit/Avatar.svelte'
   import { accountStore } from '$lib/stores/accounts.svelte'
@@ -20,6 +21,8 @@
   import { formatDistanceToNow } from 'date-fns'
   import { getCurrentDateFnsLocale } from '$lib/stores/settings.svelte'
   import { getSidebarWidth } from '$lib/stores/uiState.svelte'
+  import { virtualFoldersStore } from '$lib/stores/virtualFolders.svelte'
+  import type { virtualfolder } from '../../../../wailsjs/go/models'
 
   // Folder item type for flat navigation list
   interface FolderNavItem {
@@ -147,6 +150,8 @@
   let showDeleteDialog = $state(false)
   let showSettingsDialog = $state(false)
   let showAllFolders = $state(false)
+  let showVirtualFolderDialog = $state(false)
+  let editingVirtualFolder = $state<virtualfolder.VirtualFolder | null>(null)
   let expandedFolderGroups = $state<Record<string, boolean>>({})
   // Presets use the saved expanded width as their durable value. This keeps
   // manual resizing and the Settings selector in one source of truth.
@@ -173,7 +178,27 @@
     })
 
     contactSourcesStore.load()
+    void virtualFoldersStore.load()
   })
+
+  function selectVirtualFolder(item: virtualfolder.VirtualFolder) {
+    onFolderSelect?.('virtual', item.id, '', item.name, 'virtual')
+  }
+
+  function openVirtualFolderDialog(item: virtualfolder.VirtualFolder | null = null) {
+    editingVirtualFolder = item
+    showVirtualFolderDialog = true
+  }
+
+  async function deleteVirtualFolder(item: virtualfolder.VirtualFolder) {
+    if (!window.confirm(`Delete virtual folder “${item.name}”?`)) return
+    try {
+      await virtualFoldersStore.remove(item.id)
+      if (selectedAccountId === 'virtual' && selectedFolderId === item.id) onUnifiedInboxSelect?.()
+    } catch (error) {
+      console.error('Failed to delete virtual folder:', error)
+    }
+  }
 
   // Get accounts with their inbox folders for unified inbox section
   function getAccountsWithInbox() {
@@ -701,6 +726,38 @@
           onSelectAccountInbox={handleAccountInboxSelect}
         />
 
+        <section class="mt-3" aria-label="Virtual folders">
+          <div class="flex items-center justify-between px-3 py-1">
+            <span class="sidebar-primary-heading">Virtual folders</span>
+            <button type="button" class="sidebar-toolbar-button" onclick={() => openVirtualFolderDialog()} title="Create virtual folder" aria-label="Create virtual folder">
+              <Icon icon="mdi:plus" class="h-4 w-4" />
+            </button>
+          </div>
+          {#each virtualFoldersStore.folders as item, index (item.id)}
+            <div class="group flex min-h-9 items-center gap-1 px-2">
+              <button type="button" class="sidebar-primary-link min-w-0 flex-1 {selectedAccountId === 'virtual' && selectedFolderId === item.id ? 'sidebar-primary-link-selected' : ''}" onclick={() => selectVirtualFolder(item)} title={item.name}>
+                <Icon icon="mdi:folder-multiple-outline" class="h-5 w-5 shrink-0" />
+                <span data-sidebar-label class="truncate">{item.name}</span>
+                {#if (virtualFoldersStore.unreadCounts[item.id] ?? 0) > 0}
+                  <span class="ml-auto text-xs tabular-nums text-muted-foreground">{virtualFoldersStore.unreadCounts[item.id]}</span>
+                {/if}
+              </button>
+              <button type="button" class="hidden h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-muted group-hover:flex" onclick={() => openVirtualFolderDialog(item)} aria-label={`Edit ${item.name}`} title="Edit">
+                <Icon icon="mdi:pencil-outline" class="h-4 w-4" />
+              </button>
+              <button type="button" class="hidden h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-muted group-hover:flex disabled:opacity-40" onclick={() => void virtualFoldersStore.move(item.id, -1)} disabled={index === 0} aria-label={`Move ${item.name} up`} title="Move up">
+                <Icon icon="mdi:chevron-up" class="h-4 w-4" />
+              </button>
+              <button type="button" class="hidden h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-muted group-hover:flex disabled:opacity-40" onclick={() => void virtualFoldersStore.move(item.id, 1)} disabled={index === virtualFoldersStore.folders.length - 1} aria-label={`Move ${item.name} down`} title="Move down">
+                <Icon icon="mdi:chevron-down" class="h-4 w-4" />
+              </button>
+              <button type="button" class="hidden h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-muted group-hover:flex" onclick={() => void deleteVirtualFolder(item)} aria-label={`Delete ${item.name}`} title="Delete">
+                <Icon icon="mdi:delete-outline" class="h-4 w-4" />
+              </button>
+            </div>
+          {/each}
+        </section>
+
         <button type="button" class="sidebar-primary-link" onclick={() => setActiveExtension('calendar')}>
           <Icon icon="mdi:calendar-blank-outline" class="h-6 w-6" />
           <span data-sidebar-label>{$_('sidebar.calendar')}</span>
@@ -857,4 +914,11 @@
     showSettingsDialog = false
     setFocusedPane('messageList')
   }}
+/>
+
+<VirtualFolderDialog
+  bind:open={showVirtualFolderDialog}
+  virtualFolder={editingVirtualFolder}
+  accounts={accountStore.accounts}
+  onSave={(value) => virtualFoldersStore.save(value as virtualfolder.VirtualFolder)}
 />

@@ -537,7 +537,8 @@
     if (uiState.selectedAccountId && uiState.selectedFolderId) {
       // Validate account still exists (unless unified inbox)
       const isUnified = uiState.selectedAccountId === 'unified'
-      const accountExists = isUnified || accountStore.accounts.some(
+      const isVirtualFolder = uiState.selectedAccountId === 'virtual'
+      const accountExists = isUnified || isVirtualFolder || accountStore.accounts.some(
         a => a.account.id === uiState.selectedAccountId
       )
 

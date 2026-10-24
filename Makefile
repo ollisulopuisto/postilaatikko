@@ -1,4 +1,4 @@
-# Aerion Email Client - Build System
+# Postilaatikko - Build System
 # 
 # Usage:
 #   make build    - Build production binary
@@ -59,7 +59,7 @@ all: build
 
 # Build production binary
 build:
-	@echo "Building Aerion..."
+	@echo "Building Postilaatikko..."
 	wails build -tags $(BUILD_TAGS)
 ifeq ($(UNAME_S),Darwin)
 	@echo "Ad-hoc signing eterno-mail.app (required for macOS notifications)..."
@@ -68,7 +68,7 @@ endif
 
 # Build for Linux specifically
 build-linux:
-	@echo "Building Aerion for Linux..."
+	@echo "Building Postilaatikko for Linux..."
 	wails build -tags $(BUILD_TAGS),linux,production
 
 # Build Flatpak (recommended for Linux distribution)
@@ -83,7 +83,7 @@ flatpak-dev:
 
 # Run in development mode with hot reload
 dev:
-	@echo "Starting Aerion in development mode..."
+	@echo "Starting Postilaatikko in development mode..."
 	wails dev -tags $(BUILD_TAGS)
 
 # Run in development mode with Go's race detector enabled. Builds significantly
@@ -92,7 +92,7 @@ dev:
 # shared-memory access. Use this when chasing a suspected data race —
 # reproduce the crash and the detector report points right at it.
 dev-race:
-	@echo "Starting Aerion in development mode with -race..."
+	@echo "Starting Postilaatikko in development mode with -race..."
 	wails dev -tags $(BUILD_TAGS) -race
 
 # Generate Wails TypeScript bindings

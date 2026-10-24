@@ -1442,4 +1442,38 @@ var migrations = []Migration{
 				WHERE encrypted_password IS NOT NULL AND encrypted_password != '';
 		`,
 	},
+	{
+		Version: 50,
+		SQL: `
+			CREATE TABLE IF NOT EXISTS virtual_folders (
+				id TEXT PRIMARY KEY,
+				name TEXT NOT NULL,
+				order_index INTEGER NOT NULL DEFAULT 0,
+				created_at DATETIME NOT NULL,
+				updated_at DATETIME NOT NULL
+			);
+			CREATE TABLE IF NOT EXISTS virtual_folder_members (
+				virtual_folder_id TEXT NOT NULL REFERENCES virtual_folders(id) ON DELETE CASCADE,
+				folder_id TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+				PRIMARY KEY (virtual_folder_id, folder_id)
+			);
+
+			-- Rebuild this table so both sides of membership are cleaned up by FK
+			-- cascades. Older development builds created it lazily without the
+			-- virtual-folder foreign key.
+			CREATE TABLE virtual_folder_members_new (
+				virtual_folder_id TEXT NOT NULL REFERENCES virtual_folders(id) ON DELETE CASCADE,
+				folder_id TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+				PRIMARY KEY (virtual_folder_id, folder_id)
+			);
+			INSERT OR IGNORE INTO virtual_folder_members_new (virtual_folder_id, folder_id)
+			SELECT m.virtual_folder_id, m.folder_id
+			FROM virtual_folder_members m
+			JOIN virtual_folders v ON v.id = m.virtual_folder_id
+			JOIN folders f ON f.id = m.folder_id;
+			DROP TABLE IF EXISTS virtual_folder_members;
+			ALTER TABLE virtual_folder_members_new RENAME TO virtual_folder_members;
+			CREATE INDEX idx_virtual_folder_members_folder ON virtual_folder_members(folder_id);
+		`,
+	},
 }

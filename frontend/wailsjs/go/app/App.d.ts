@@ -6,6 +6,7 @@ import {carddav} from '../models';
 import {app} from '../models';
 import {backend} from '../models';
 import {v1} from '../models';
+import {virtualfolder} from '../models';
 import {message} from '../models';
 import {folder} from '../models';
 import {contact} from '../models';
@@ -169,6 +170,8 @@ export function CopyToFolder(arg1:Array<string>,arg2:string):Promise<void>;
 
 export function CreateIdentity(arg1:string,arg2:account.IdentityConfig):Promise<account.Identity>;
 
+export function CreateVirtualFolder(arg1:virtualfolder.VirtualFolder):Promise<void>;
+
 export function DeleteContact(arg1:string):Promise<void>;
 
 export function DeleteContactSource(arg1:string):Promise<void>;
@@ -188,6 +191,8 @@ export function DeletePermanently(arg1:Array<string>):Promise<void>;
 export function DeleteSMIMECertificate(arg1:string):Promise<void>;
 
 export function DeleteSenderCert(arg1:string):Promise<void>;
+
+export function DeleteVirtualFolder(arg1:string):Promise<void>;
 
 export function DiscoverCardDAVAddressbooks(arg1:string,arg2:string,arg3:string):Promise<Array<carddav.AddressbookInfo>>;
 
@@ -413,6 +418,16 @@ export function GetUnifiedInboxCount(arg1:string):Promise<number>;
 
 export function GetUnifiedInboxUnreadCount():Promise<number>;
 
+export function GetVirtualFolderConversations(arg1:string,arg2:number,arg3:number,arg4:string):Promise<Array<message.Conversation>>;
+
+export function GetVirtualFolderCount(arg1:string):Promise<number>;
+
+export function GetVirtualFolderSearchCount(arg1:string,arg2:string,arg3:string):Promise<number>;
+
+export function GetVirtualFolderUnreadCounts():Promise<Record<string, number>>;
+
+export function GetVirtualFolders():Promise<Array<virtualfolder.VirtualFolder>>;
+
 export function GetWindowDecorationStatus():Promise<platform.WindowDecorationStatus>;
 
 export function HasPGPKey(arg1:string):Promise<boolean>;
@@ -571,6 +586,8 @@ export function RemoveTrustedCertificate(arg1:string):Promise<void>;
 
 export function ReorderAccounts(arg1:Array<string>):Promise<void>;
 
+export function ReorderVirtualFolders(arg1:Array<string>):Promise<void>;
+
 export function SaveAllAttachments(arg1:string):Promise<string>;
 
 export function SaveAllEncryptedAttachments(arg1:string):Promise<string>;
@@ -592,6 +609,8 @@ export function SearchConversations(arg1:string,arg2:string,arg3:string,arg4:num
 export function SearchUnifiedFolder(arg1:string,arg2:string,arg3:number,arg4:number,arg5:string):Promise<Array<message.ConversationSearchResult>>;
 
 export function SearchUnifiedInbox(arg1:string,arg2:number,arg3:number,arg4:string):Promise<Array<message.ConversationSearchResult>>;
+
+export function SearchVirtualFolder(arg1:string,arg2:string,arg3:number,arg4:number,arg5:string):Promise<Array<message.ConversationSearchResult>>;
 
 export function SendMessage(arg1:string,arg2:smtp.ComposeMessage):Promise<void>;
 
@@ -742,3 +761,5 @@ export function UpdateContactSource(arg1:string,arg2:carddav.SourceConfig):Promi
 export function UpdateIdentity(arg1:string,arg2:account.IdentityConfig):Promise<account.Identity>;
 
 export function UpdateLocalFlags(arg1:Array<string>,arg2:any,arg3:any):Promise<void>;
+
+export function UpdateVirtualFolder(arg1:virtualfolder.VirtualFolder):Promise<void>;

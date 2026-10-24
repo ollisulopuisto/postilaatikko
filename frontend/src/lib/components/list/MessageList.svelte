@@ -18,12 +18,12 @@
   import { cn } from '$lib/utils'
   import { Button } from '$lib/components/ui/button'
   // @ts-ignore - wailsjs bindings
-  import { MoveToInboxWithUndo, GetConversations, GetConversationCount, SyncFolder, ForceSyncFolder, CancelFolderSync, SetMessageListSortOrder, GetUnifiedFolderConversations, GetUnifiedFolderCount, SearchConversations, SearchUnifiedFolder, GetSearchCount, GetSearchCountUnifiedFolder, SyncUnifiedFolder, EmptyUnifiedTrash, GetFTSIndexStatus, IsFTSIndexing, TrashWithUndo, DeletePermanently, EmptyTrash, UndoOperation, IMAPSearchFolder, IMAPSearchUnifiedInbox, FetchServerMessage } from '../../../../wailsjs/go/app/App'
+  import { MoveToInboxWithUndo, GetConversations, GetConversationCount, SyncFolder, ForceSyncFolder, CancelFolderSync, SetMessageListSortOrder, GetUnifiedFolderConversations, GetUnifiedFolderCount, SearchConversations, SearchUnifiedFolder, GetSearchCount, GetSearchCountUnifiedFolder, SyncUnifiedFolder, EmptyUnifiedTrash, GetFTSIndexStatus, IsFTSIndexing, TrashWithUndo, DeletePermanently, EmptyTrash, UndoOperation, IMAPSearchFolder, IMAPSearchUnifiedInbox, FetchServerMessage, GetVirtualFolderConversations, GetVirtualFolderCount, SearchVirtualFolder, GetVirtualFolderSearchCount } from '../../../../wailsjs/go/app/App'
   import { toasts } from '$lib/stores/toast'
   import { _ } from '$lib/i18n'
   import { ConfirmDialog } from '$lib/components/ui/confirm-dialog'
   // @ts-ignore - wailsjs path
-  import { message } from '../../../../wailsjs/go/models'
+  import { folder, message } from '../../../../wailsjs/go/models'
   // @ts-ignore - wailsjs runtime
   import { EventsOn, EventsOff } from '../../../../wailsjs/runtime/runtime'
   import { getLanguage, getMessageListDensity, getMessageListSortOrder, setMessageListSortOrder, getShowMessageListProfilePics } from '$lib/stores/settings.svelte'
@@ -31,6 +31,7 @@
   import { contactPhotos } from '$lib/stores/contactPhotos.svelte'
   import { domainFromEmail, senderLogos } from '$lib/stores/senderLogos.svelte'
   import { accountStore } from '$lib/stores/accounts.svelte'
+  import { virtualFoldersStore } from '$lib/stores/virtualFolders.svelte'
   import { getLayoutMode, hideViewer } from '$lib/stores/layout.svelte'
   import { isDialogGuardActive } from '$lib/stores/dialogGuard'
   import { captureAutoSelectNext, findAutoSelectNext, flattenVisibleInboxGroups } from './autoSelectNext'
@@ -86,6 +87,7 @@
   let selectedThreadId = $state<string | null>(null)
   let lastLoadedFolderId = $state<string | null>(null) // Track folder changes
   let loadGeneration = $state(0) // Invalidates stale async results when folder changes mid-load (#200)
+  let countRequestSequence = 0
 
   // Derived: check if this folder is currently syncing (from account store's progress tracking)
   const syncing = $derived(
@@ -481,9 +483,10 @@
 
   // Listen for folder sync events from backend
   onMount(() => {
+    void virtualFoldersStore.load()
     EventsOn('folder:synced', (data: { accountId: string; folderId: string }) => {
       // Reload if this is the current folder, or unified inbox when an inbox folder synced
-      if ((isUnifiedView && isUnifiedSpecialFolder(data.accountId, data.folderId)) || (!isUnifiedView && accountId && folderId && data.accountId === accountId && data.folderId === folderId)) {
+      if ((isUnifiedView && isUnifiedSpecialFolder(data.accountId, data.folderId)) || (isVirtualFolderView && virtualFolderContains(data.folderId)) || (!isUnifiedView && !isVirtualFolderView && accountId && folderId && data.accountId === accountId && data.folderId === folderId)) {
         scheduleReload()
       }
     })
@@ -491,7 +494,7 @@
     // Listen for messages:updated events (e.g., from IDLE push notifications)
     EventsOn('messages:updated', (data: { accountId: string; folderId: string }) => {
       // Reload if this is the current folder, or unified inbox when an inbox folder updated
-      if ((isUnifiedView && isUnifiedSpecialFolder(data.accountId, data.folderId)) || (!isUnifiedView && accountId && folderId && data.accountId === accountId && data.folderId === folderId)) {
+      if ((isUnifiedView && isUnifiedSpecialFolder(data.accountId, data.folderId)) || (isVirtualFolderView && virtualFolderContains(data.folderId)) || (!isUnifiedView && !isVirtualFolderView && accountId && folderId && data.accountId === accountId && data.folderId === folderId)) {
         scheduleReload()
       }
     })
@@ -511,6 +514,7 @@
       }
       if (anyUpdated) {
         conversations = conversations
+        if (isVirtualFolderView) scheduleReload()
         return
       }
       // loadConversations() is in-flight — the new array isn't ready yet.
@@ -597,7 +601,7 @@
 
   // Check FTS index status for current folder
   async function checkFTSIndexStatus() {
-    if (!folderId) return
+    if (!folderId || isVirtualFolderView) return
     try {
       const status = await GetFTSIndexStatus(folderId)
       if (status) {
@@ -724,6 +728,35 @@
 
   // Check if viewing unified inbox
   const isUnifiedView = $derived(accountId === 'unified' && !!folderId)
+  const isVirtualFolderView = $derived(folderType === 'virtual' && !!folderId)
+
+  function virtualFolderContains(realFolderId: string): boolean {
+    return virtualFoldersStore.folders.find((item) => item.id === folderId)?.folderIds.includes(realFolderId) ?? false
+  }
+
+  const folderTypesByID = $derived.by(() => {
+    const result: Record<string, string> = {}
+    const visit = (trees: folder.FolderTree[]) => {
+      for (const tree of trees || []) {
+        if (tree.folder) result[tree.folder.id] = tree.folder.type
+        if (tree.children?.length) visit(tree.children)
+      }
+    }
+    for (const account of accountStore.accounts) visit(account.folders)
+    return result
+  })
+  let previousVirtualFolderID = ''
+  let previousVirtualFolderMembers = ''
+  $effect(() => {
+    const current = isVirtualFolderView
+      ? virtualFoldersStore.folders.find((item) => item.id === folderId)
+      : undefined
+    const currentID = current?.id || ''
+    const members = current?.folderIds.join('\u001f') || ''
+    if (currentID && currentID === previousVirtualFolderID && members !== previousVirtualFolderMembers) scheduleReload()
+    previousVirtualFolderID = currentID
+    previousVirtualFolderMembers = members
+  })
 
   // Unified sync fans out to real accounts, so accountStore.isAnySyncing is
   // also part of the busy state. This keeps Sync now disabled until the
@@ -751,7 +784,7 @@
 
   async function loadConversations(customLimit?: number) {
     // For unified view, we don't need accountId/folderId
-    if (!isUnifiedView && (!accountId || !folderId)) return
+    if (!isUnifiedView && !isVirtualFolderView && (!accountId || !folderId)) return
 
     // A normal folder query has no ownership of an active Local or Server
     // Search pane. Suppress it before setting loading or touching SQLite;
@@ -774,29 +807,38 @@
     const currentOffset = offset
     const limit = customLimit ?? PAGE_SIZE
     const generation = loadGeneration
+    const countRequest = ++countRequestSequence
 
     try {
-      // Render conversations as soon as their query completes. Counting is
-      // useful for pagination, but must never hold the whole inbox hostage.
+      let resolvedCount: number | null = null
+      let listRendered = false
+      const countPromise = withLoadTimeout(
+        isVirtualFolderView
+          ? GetVirtualFolderCount(folderId!)
+          : isUnifiedView
+          ? GetUnifiedFolderCount(folderId!, filterMode)
+          : GetConversationCount(accountId!, folderId!, filterMode),
+        'conversation count',
+        4_000,
+      ).catch((countError) => {
+        console.warn('Failed to count conversations; rendering loaded results:', countError)
+        return null
+      })
+      void countPromise.then((count) => {
+        if (count === null || generation !== loadGeneration || countRequest !== countRequestSequence) return
+        resolvedCount = count
+        if (listRendered) {
+          totalCount = count
+        }
+      })
       const convList = await withLoadTimeout(
-        isUnifiedView
+        isVirtualFolderView
+          ? GetVirtualFolderConversations(folderId!, currentOffset, limit, getMessageListSortOrder())
+          : isUnifiedView
           ? GetUnifiedFolderConversations(folderId!, currentOffset, limit, getMessageListSortOrder(), filterMode)
           : GetConversations(accountId!, folderId!, currentOffset, limit, getMessageListSortOrder(), filterMode),
         'conversation list',
       )
-      let count = convList?.length ?? 0
-      try {
-        count = await withLoadTimeout(
-          isUnifiedView
-            ? GetUnifiedFolderCount(folderId!, filterMode)
-            : GetConversationCount(accountId!, folderId!, filterMode),
-          'conversation count',
-          4_000,
-        )
-      } catch (countError) {
-        console.warn('Failed to count conversations; rendering loaded results:', countError)
-      }
-
       // Discard stale result — folder was switched while this load was in-flight (#200)
       if (generation !== loadGeneration || isSearchMode) {
         return
@@ -804,11 +846,16 @@
 
       if (currentOffset !== 0) {
         conversations = [...conversations, ...(convList || [])]
-        totalCount = count
+        totalCount = Math.max(totalCount, currentOffset + (convList?.length ?? 0))
+        listRendered = true
+        if (resolvedCount !== null) totalCount = resolvedCount
         return
       }
 
       conversations = convList || []
+      totalCount = conversations.length
+      listRendered = true
+      if (resolvedCount !== null) totalCount = resolvedCount
 
       // Apply any flag changes that arrived while we were loading.
       // This fixes the race where MarkAsRead fires before the new array is ready.
@@ -834,14 +881,12 @@
       // Auto-select first message on folder navigation or initial load
       if (conversations.length === 0) {
         selectedThreadId = null
-        totalCount = count
         return
       }
 
       if (folderChanged || !selectedThreadId) {
         selectedThreadId = conversations[0].threadId
       }
-      totalCount = count
     } catch (err) {
       // Discard stale error — folder was switched while this load was in-flight (#200)
       if (generation !== loadGeneration || isSearchMode) {
@@ -868,6 +913,11 @@
     // virtual:archive is derived from All Mail; it is never a valid IMAP
     // folder ID and must not reach SyncFolder.
     if (!isUnifiedView && folderId === 'virtual:archive') {
+      await loadConversations(Math.max(conversations.length, PAGE_SIZE))
+      return
+    }
+
+    if (isVirtualFolderView) {
       await loadConversations(Math.max(conversations.length, PAGE_SIZE))
       return
     }
@@ -905,7 +955,7 @@
 
   // Cancel folder sync
   export async function cancelFolderSync() {
-    if (isUnifiedView || !accountId || !folderId) return
+    if (isUnifiedView || isVirtualFolderView || !accountId || !folderId) return
 
     try {
       await CancelFolderSync(accountId, folderId)
@@ -925,7 +975,7 @@
 
   // Force re-sync folder (clears bodies & attachments, then re-fetches)
   async function forceSyncFolder() {
-    if (isUnifiedView || !accountId || !folderId) return
+    if (isUnifiedView || isVirtualFolderView || !accountId || !folderId) return
 
     listError = null
 
@@ -992,7 +1042,12 @@
       let results: any[] = []
       let count = 0
 
-      if (isUnifiedView) {
+      if (isVirtualFolderView) {
+        ;[results, count] = await Promise.all([
+          SearchVirtualFolder(folderId!, query, 0, PAGE_SIZE, 'unread'),
+          GetVirtualFolderSearchCount(folderId!, query, 'unread'),
+        ])
+      } else if (isUnifiedView) {
         ;[results, count] = await Promise.all([
           SearchUnifiedFolder(folderId!, query, 0, PAGE_SIZE, filterMode),
           GetSearchCountUnifiedFolder(folderId!, query, filterMode),
@@ -1042,7 +1097,9 @@
 
     try {
       let results: any[] = []
-      if (isUnifiedView) {
+      if (isVirtualFolderView) {
+        results = await SearchVirtualFolder(folderId!, query, newOffset, PAGE_SIZE, 'unread')
+      } else if (isUnifiedView) {
         results = await SearchUnifiedFolder(folderId!, query, newOffset, PAGE_SIZE, filterMode)
       } else if (accountId && folderId) {
         results = await SearchConversations(accountId, folderId, query, newOffset, PAGE_SIZE, filterMode)
@@ -1144,7 +1201,7 @@
   // Perform IMAP server-side search. limit=0 means no limit (show all).
   async function performServerSearch(limit: number = SERVER_SEARCH_LIMIT, preserveSelection: boolean = false) {
     const query = searchQuery.trim()
-    if (!query || (!isUnifiedView && (!accountId || !folderId))) return
+    if (!query || isVirtualFolderView || (!isUnifiedView && (!accountId || !folderId))) return
 
     // Unified IMAP search is scoped to Inbox; startServerSearch keeps the
     // visible source local for unsupported unified folders.
@@ -1317,8 +1374,8 @@
 
     // For unified view or search, use real folderId and accountId from conversation data
     const conversation = activeList[index] as any
-    const realFolderId = (isUnifiedView || isSearchMode) && conversation.folderId ? conversation.folderId : folderId!
-    const realAccountId = (isUnifiedView || isSearchMode) && conversation.accountId ? conversation.accountId : accountId!
+    const realFolderId = (isUnifiedView || isVirtualFolderView || isSearchMode) && conversation.folderId ? conversation.folderId : folderId!
+    const realAccountId = (isUnifiedView || isVirtualFolderView || isSearchMode) && conversation.accountId ? conversation.accountId : accountId!
 
     // If this is a non-local server result, fetch it first
     if (searchSource === 'server' && conversation._isLocal === false && conversation._uid) {
@@ -2133,7 +2190,7 @@
       {/if}
     </div>
     <div class="flex items-center gap-1">
-      {#if !isSearchMode && syncing}
+      {#if !isVirtualFolderView && !isSearchMode && syncing}
         <!-- While syncing, show spinning icon that cancels on click -->
         <button
           class="p-2 rounded-md hover:bg-muted transition-colors"
@@ -2145,7 +2202,7 @@
             class="w-5 h-5 text-muted-foreground animate-spin"
           />
         </button>
-      {:else if !isSearchMode}
+      {:else if !isVirtualFolderView && !isSearchMode}
         <!-- Dropdown menu for sync options -->
         <DropdownMenu.Root>
           <DropdownMenu.Trigger
@@ -2197,6 +2254,7 @@
       >
         <Icon icon={showSearch ? 'mdi:close' : 'mdi:magnify'} class="w-5 h-5 text-muted-foreground" />
       </button>
+      {#if !isVirtualFolderView}
       <DropdownMenu.Root>
         <DropdownMenu.Trigger
           class="p-2 rounded-md hover:bg-muted transition-colors {filterMode ? 'bg-muted' : ''}"
@@ -2235,6 +2293,7 @@
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
+      {/if}
       <button
         class="p-2 rounded-md hover:bg-muted transition-colors"
         title={getMessageListSortOrder() === 'newest' ? $_('messageList.showingNewest') : $_('messageList.showingOldest')}
@@ -2421,7 +2480,7 @@
           {$_('messageList.tryAgain')}
         </button>
       </div>
-    {:else if !isUnifiedView && (!accountId || !folderId)}
+    {:else if !isUnifiedView && !isVirtualFolderView && (!accountId || !folderId)}
       <div class="flex flex-col items-center justify-center h-full text-muted-foreground">
         <Icon icon="mdi:email-outline" class="w-12 h-12 mb-2" />
         <p>{$_('messageList.selectFolder')}</p>
@@ -2506,7 +2565,7 @@
           {#if !indexComplete}
             <p class="text-xs mt-1">{$_('messageList.indexBuilding')}</p>
           {/if}
-          {#if isUnifiedView || (accountId && folderId)}
+          {#if !isVirtualFolderView && (isUnifiedView || (accountId && folderId))}
             <button
               class="mt-2 text-sm text-primary hover:underline"
               onclick={startServerSearch}
@@ -2519,7 +2578,7 @@
         <!-- Local search results header -->
         <div class="flex items-center justify-between px-4 py-2 bg-muted/30 border-b border-border text-sm text-muted-foreground">
           <span>{$_('messageList.foundResults', { values: { count: searchTotalCount, query: searchQuery } })}</span>
-          {#if isUnifiedView || (accountId && folderId)}
+          {#if !isVirtualFolderView && (isUnifiedView || (accountId && folderId))}
             <button
               class="text-xs text-primary hover:underline"
               onclick={startServerSearch}
@@ -2537,9 +2596,9 @@
             density={getMessageListDensity()}
             selected={selectedThreadId === result.threadId}
             checked={checkedThreadIds.has(result.threadId)}
-            accountId={isUnifiedView ? resultAccountId : accountId!}
-            folderId={isUnifiedView ? resultFolderId : folderId!}
-            {folderType}
+            accountId={isUnifiedView || isVirtualFolderView ? resultAccountId : accountId!}
+            folderId={isUnifiedView || isVirtualFolderView ? resultFolderId : folderId!}
+            folderType={isVirtualFolderView ? result.folderType || 'folder' : folderType}
             {selectedMessageIds}
             selectedIsStarred={!selectedHasUnstarred}
             selectedIsRead={!selectedHasUnread}
@@ -2640,9 +2699,9 @@
                   density={getMessageListDensity()}
                   selected={selectedThreadId === conv.threadId}
                   checked={checkedThreadIds.has(conv.threadId)}
-                  accountId={isUnifiedView ? convAccountId : accountId!}
-                  folderId={isUnifiedView ? convFolderId : folderId!}
-                  {folderType}
+                  accountId={isUnifiedView || isVirtualFolderView ? convAccountId : accountId!}
+                  folderId={isUnifiedView || isVirtualFolderView ? convFolderId : folderId!}
+                  folderType={isVirtualFolderView ? folderTypesByID[convFolderId] || 'folder' : folderType}
                   {selectedMessageIds}
                   selectedIsStarred={!selectedHasUnstarred}
                   selectedIsRead={!selectedHasUnread}
@@ -2682,9 +2741,9 @@
           density={getMessageListDensity()}
           selected={selectedThreadId === conv.threadId}
           checked={checkedThreadIds.has(conv.threadId)}
-          accountId={isUnifiedView ? convAccountId : accountId!}
-          folderId={isUnifiedView ? convFolderId : folderId!}
-          {folderType}
+          accountId={isUnifiedView || isVirtualFolderView ? convAccountId : accountId!}
+          folderId={isUnifiedView || isVirtualFolderView ? convFolderId : folderId!}
+          folderType={isVirtualFolderView ? folderTypesByID[convFolderId] || 'folder' : folderType}
           {selectedMessageIds}
           selectedIsStarred={!selectedHasUnstarred}
           selectedIsRead={!selectedHasUnread}

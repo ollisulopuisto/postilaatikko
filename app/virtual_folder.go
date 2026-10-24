@@ -16,6 +16,11 @@ func (a *App) GetVirtualFolders() ([]*virtualfolder.VirtualFolder, error) {
 	return a.virtualFolderStore.List()
 }
 
+// GetVirtualFolderUnreadCounts returns unread conversation counts for all virtual folders.
+func (a *App) GetVirtualFolderUnreadCounts() (map[string]int, error) {
+	return a.virtualFolderStore.UnreadCounts()
+}
+
 // CreateVirtualFolder creates a new virtual folder
 func (a *App) CreateVirtualFolder(vf *virtualfolder.VirtualFolder) error {
 	if vf == nil {
@@ -33,6 +38,11 @@ func (a *App) UpdateVirtualFolder(vf *virtualfolder.VirtualFolder) error {
 		return fmt.Errorf("virtual folder ID cannot be empty")
 	}
 	return a.virtualFolderStore.Update(vf)
+}
+
+// ReorderVirtualFolders saves the sidebar order of virtual folders.
+func (a *App) ReorderVirtualFolders(ids []string) error {
+	return a.virtualFolderStore.Reorder(ids)
 }
 
 // DeleteVirtualFolder deletes a virtual folder
@@ -78,4 +88,30 @@ func (a *App) GetVirtualFolderCount(virtualFolderID string) (int, error) {
 
 	// Always use the "unread" filter for virtual folders
 	return a.messageStore.CountConversationsByFolderIDs(vf.FolderIDs, "unread")
+}
+
+// SearchVirtualFolder searches messages in a virtual folder's member folders.
+func (a *App) SearchVirtualFolder(virtualFolderID, query string, offset, limit int, filter string) ([]*message.ConversationSearchResult, error) {
+	vf, err := a.virtualFolderStore.Get(virtualFolderID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get virtual folder: %w", err)
+	}
+	if vf == nil {
+		return nil, fmt.Errorf("virtual folder not found: %s", virtualFolderID)
+	}
+	results, _, err := a.messageStore.SearchConversationsByFolderIDs(vf.FolderIDs, query, offset, limit, filter)
+	return results, err
+}
+
+// GetVirtualFolderSearchCount returns the matching message-search count.
+func (a *App) GetVirtualFolderSearchCount(virtualFolderID, query, filter string) (int, error) {
+	vf, err := a.virtualFolderStore.Get(virtualFolderID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get virtual folder: %w", err)
+	}
+	if vf == nil {
+		return 0, fmt.Errorf("virtual folder not found: %s", virtualFolderID)
+	}
+	_, count, err := a.messageStore.SearchConversationsByFolderIDs(vf.FolderIDs, query, 0, 0, filter)
+	return count, err
 }

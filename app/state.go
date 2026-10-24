@@ -23,7 +23,7 @@ func (a *App) SaveUIState(state *appstate.UIState) error {
 // App Info API - Exposed to frontend via Wails bindings
 // ============================================================================
 
-// Version is the runtime Eterno Mail release version. main.go initializes it
+// Version is the runtime Postilaatikko release version. main.go initializes it
 // from the repository's embedded VERSION file, which is the single source of
 // truth for the running app, About dialog, CLI --version and update checker.
 var Version = "development"
@@ -40,10 +40,10 @@ type AppInfo struct {
 // GetAppInfo returns application metadata for the About dialog
 func (a *App) GetAppInfo() AppInfo {
 	return AppInfo{
-		Name:        "Eterno Mail",
+		Name:        "Postilaatikko",
 		Version:     Version,
-		Description: "An Open Source Lightweight E-Mail Client",
-		Website:     "https://github.com/wesleiaqui/eternomail",
+		Description: "A personal desktop email client for multiple accounts",
+		Website:     "https://github.com/ollisulopuisto/postilaatikko",
 		License:     "Apache 2.0",
 	}
 }

@@ -3,6 +3,7 @@ package virtualfolder
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,30 +33,27 @@ func NewStore(db *database.DB) *Store {
 	return s
 }
 
-// ensureTables creates the virtual_folders schema if it is not already present.
-// This is intentionally lazy (not a numbered migration) so it does not disturb
-// the existing migration sequence; see the contact store's ensureTable for the
-// same pattern.
+// ensureTables confirms the migration-created virtual-folder schema is present.
 func (s *Store) ensureTables() error {
-	_, err := s.db.Exec(`
-		CREATE TABLE IF NOT EXISTS virtual_folders (
-			id TEXT PRIMARY KEY,
-			name TEXT NOT NULL,
-			order_index INTEGER NOT NULL DEFAULT 0,
-			created_at DATETIME NOT NULL,
-			updated_at DATETIME NOT NULL
-		);
-		CREATE TABLE IF NOT EXISTS virtual_folder_members (
-			virtual_folder_id TEXT NOT NULL,
-			folder_id TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
-			PRIMARY KEY (virtual_folder_id, folder_id)
-		);
-	`)
-	return err
+	var tableCount int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='virtual_folder_members'`).Scan(&tableCount); err != nil {
+		return err
+	}
+	if tableCount == 0 {
+		return fmt.Errorf("virtual folder schema is missing; run database migrations")
+	}
+	return nil
 }
 
 // Create inserts a new virtual folder and its folder members
 func (s *Store) Create(vf *VirtualFolder) error {
+	if vf == nil {
+		return fmt.Errorf("virtual folder cannot be nil")
+	}
+	vf.Name = strings.TrimSpace(vf.Name)
+	if vf.Name == "" {
+		return fmt.Errorf("virtual folder name cannot be empty")
+	}
 	if vf.ID == "" {
 		vf.ID = uuid.New().String()
 	}
@@ -137,9 +135,9 @@ func (s *Store) Get(id string) (*VirtualFolder, error) {
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("rows error: %w", err)
 	}
-    if vf.FolderIDs == nil {
-        vf.FolderIDs = []string{}
-    }
+	if vf.FolderIDs == nil {
+		vf.FolderIDs = []string{}
+	}
 
 	return vf, nil
 }
@@ -195,8 +193,77 @@ func (s *Store) List() ([]*VirtualFolder, error) {
 	return orderedList, nil
 }
 
+// UnreadCounts returns unread conversation counts for every virtual folder in one query.
+func (s *Store) UnreadCounts() (map[string]int, error) {
+	rows, err := s.db.Query(`
+		SELECT v.id,
+			COUNT(DISTINCT CASE WHEN m.id IS NOT NULL
+				THEN COALESCE(m.thread_id, m.id) || ':' || a.id END)
+		FROM virtual_folders v
+		LEFT JOIN virtual_folder_members vm ON vm.virtual_folder_id = v.id
+		LEFT JOIN folders f ON f.id = vm.folder_id
+		LEFT JOIN accounts a ON a.id = f.account_id AND a.enabled = 1
+		LEFT JOIN messages m ON m.folder_id = f.id AND m.is_read = 0 AND a.id IS NOT NULL
+		GROUP BY v.id
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query virtual folder unread counts: %w", err)
+	}
+	defer rows.Close()
+
+	counts := make(map[string]int)
+	for rows.Next() {
+		var id string
+		var count int
+		if err := rows.Scan(&id, &count); err != nil {
+			return nil, fmt.Errorf("failed to scan virtual folder unread count: %w", err)
+		}
+		counts[id] = count
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to read virtual folder unread counts: %w", err)
+	}
+	return counts, nil
+}
+
+// Reorder assigns each virtual folder its position in the supplied ID list.
+func (s *Store) Reorder(ids []string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin virtual folder reorder: %w", err)
+	}
+	defer tx.Rollback()
+	for index, id := range ids {
+		result, err := tx.Exec(`UPDATE virtual_folders SET order_index = ?, updated_at = ? WHERE id = ?`, index, time.Now().UTC(), id)
+		if err != nil {
+			return fmt.Errorf("failed to reorder virtual folder %s: %w", id, err)
+		}
+		rows, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("failed to confirm virtual folder reorder: %w", err)
+		}
+		if rows == 0 {
+			return fmt.Errorf("virtual folder not found: %s", id)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit virtual folder reorder: %w", err)
+	}
+	return nil
+}
+
 // Update modifies an existing virtual folder and its folder members
 func (s *Store) Update(vf *VirtualFolder) error {
+	if vf == nil {
+		return fmt.Errorf("virtual folder cannot be nil")
+	}
+	vf.Name = strings.TrimSpace(vf.Name)
+	if vf.ID == "" {
+		return fmt.Errorf("virtual folder ID cannot be empty")
+	}
+	if vf.Name == "" {
+		return fmt.Errorf("virtual folder name cannot be empty")
+	}
 	vf.UpdatedAt = time.Now().UTC()
 
 	tx, err := s.db.Begin()
@@ -205,13 +272,20 @@ func (s *Store) Update(vf *VirtualFolder) error {
 	}
 	defer tx.Rollback()
 
-	_, err = tx.Exec(`
+	result, err := tx.Exec(`
 		UPDATE virtual_folders
 		SET name = ?, order_index = ?, updated_at = ?
 		WHERE id = ?
 	`, vf.Name, vf.OrderIndex, vf.UpdatedAt, vf.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update virtual folder: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to confirm virtual folder update: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("virtual folder not found: %s", vf.ID)
 	}
 
 	// Recreate members: delete existing and insert new
@@ -237,8 +311,11 @@ func (s *Store) Update(vf *VirtualFolder) error {
 	return nil
 }
 
-// Delete removes a virtual folder (members are cascaded)
+// Delete removes a virtual folder and its members.
 func (s *Store) Delete(id string) error {
+	if id == "" {
+		return fmt.Errorf("virtual folder ID cannot be empty")
+	}
 	_, err := s.db.Exec(`DELETE FROM virtual_folders WHERE id = ?`, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete virtual folder: %w", err)

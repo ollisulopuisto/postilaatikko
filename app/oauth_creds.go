@@ -154,7 +154,7 @@ func (a *App) GetOAuthCredsChoices(configID, extensionID string) (OAuthCredsChoi
 		})
 	}
 
-	// Mail-reuse option ("Aerion - Google"): use Aerion's mail client
+	// Mail-reuse option ("Postilaatikko - Google"): use this app's mail client
 	// id/secret for THIS extension slot (via the slot alias). This is purely
 	// about which client app mints the slot's tokens — the tokens still live
 	// in the extension's own slot and need their own consent. It is therefore
@@ -175,7 +175,7 @@ func (a *App) GetOAuthCredsChoices(configID, extensionID string) (OAuthCredsChoi
 		if mailSlot != configID && mailHasShipped {
 			out.Choices = append(out.Choices, OAuthCredsChoice{
 				ID:    "aerion-mail",
-				Label: "Aerion - Google",
+				Label: "Postilaatikko - Google",
 			})
 		}
 	}
@@ -294,13 +294,13 @@ func providerFromConfigID(configID string) string {
 func shippedLabelForSlot(configID string) string {
 	switch configID {
 	case "google-contacts", "google-calendar":
-		return "Aerion - Google (Testing)"
+		return "Postilaatikko - Google (Testing)"
 	case "google-mail":
-		return "Aerion - Google"
+		return "Postilaatikko - Google"
 	case "microsoft-mail", "microsoft-contacts", "microsoft-calendar":
-		return "Aerion - Microsoft"
+		return "Postilaatikko - Microsoft"
 	}
-	return "Aerion - Default"
+	return "Postilaatikko - Default"
 }
 
 // SetOAuthCreds saves user-supplied OAuth client credentials for the given

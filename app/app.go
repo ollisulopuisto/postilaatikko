@@ -415,9 +415,9 @@ func StartupDialogInfoFor(err error) StartupDialogInfo {
 	var schemaTooNew *database.ErrSchemaTooNew
 	if errors.As(err, &schemaTooNew) {
 		text := fmt.Sprintf(
-			"Aerion cannot open your database because its schema (version %d) is newer "+
-				"than this build of Aerion supports (max version %d).\n\n"+
-				"This usually means you downgraded Aerion. To recover, either reinstall "+
+			"Postilaatikko cannot open your database because its schema (version %d) is newer "+
+				"than this build of Postilaatikko supports (max version %d).\n\n"+
+				"This usually means you downgraded Postilaatikko. To recover, either reinstall "+
 				"the newer version, or follow the rollback instructions to bring your "+
 				"database back to version %d:\n\n"+
 				"%s",
@@ -425,15 +425,15 @@ func StartupDialogInfoFor(err error) StartupDialogInfo {
 			docsRollbackURL,
 		)
 		return StartupDialogInfo{
-			Title:       "Aerion could not start",
+			Title:       "Postilaatikko could not start",
 			Text:        text,
 			ActionLabel: "Open Docs",
 			ActionURL:   docsRollbackURL,
 		}
 	}
 	return StartupDialogInfo{
-		Title: "Aerion could not start",
-		Text:  fmt.Sprintf("Aerion could not start.\n\nDetails: %v", err),
+		Title: "Postilaatikko could not start",
+		Text:  fmt.Sprintf("Postilaatikko could not start.\n\nDetails: %v", err),
 	}
 }
 

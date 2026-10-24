@@ -298,6 +298,10 @@ export function CreateIdentity(arg1, arg2) {
   return window['go']['app']['App']['CreateIdentity'](arg1, arg2);
 }
 
+export function CreateVirtualFolder(arg1) {
+  return window['go']['app']['App']['CreateVirtualFolder'](arg1);
+}
+
 export function DeleteContact(arg1) {
   return window['go']['app']['App']['DeleteContact'](arg1);
 }
@@ -336,6 +340,10 @@ export function DeleteSMIMECertificate(arg1) {
 
 export function DeleteSenderCert(arg1) {
   return window['go']['app']['App']['DeleteSenderCert'](arg1);
+}
+
+export function DeleteVirtualFolder(arg1) {
+  return window['go']['app']['App']['DeleteVirtualFolder'](arg1);
 }
 
 export function DiscoverCardDAVAddressbooks(arg1, arg2, arg3) {
@@ -786,6 +794,26 @@ export function GetUnifiedInboxUnreadCount() {
   return window['go']['app']['App']['GetUnifiedInboxUnreadCount']();
 }
 
+export function GetVirtualFolderConversations(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['App']['GetVirtualFolderConversations'](arg1, arg2, arg3, arg4);
+}
+
+export function GetVirtualFolderCount(arg1) {
+  return window['go']['app']['App']['GetVirtualFolderCount'](arg1);
+}
+
+export function GetVirtualFolderSearchCount(arg1, arg2, arg3) {
+  return window['go']['app']['App']['GetVirtualFolderSearchCount'](arg1, arg2, arg3);
+}
+
+export function GetVirtualFolderUnreadCounts() {
+  return window['go']['app']['App']['GetVirtualFolderUnreadCounts']();
+}
+
+export function GetVirtualFolders() {
+  return window['go']['app']['App']['GetVirtualFolders']();
+}
+
 export function GetWindowDecorationStatus() {
   return window['go']['app']['App']['GetWindowDecorationStatus']();
 }
@@ -1102,6 +1130,10 @@ export function ReorderAccounts(arg1) {
   return window['go']['app']['App']['ReorderAccounts'](arg1);
 }
 
+export function ReorderVirtualFolders(arg1) {
+  return window['go']['app']['App']['ReorderVirtualFolders'](arg1);
+}
+
 export function SaveAllAttachments(arg1) {
   return window['go']['app']['App']['SaveAllAttachments'](arg1);
 }
@@ -1144,6 +1176,10 @@ export function SearchUnifiedFolder(arg1, arg2, arg3, arg4, arg5) {
 
 export function SearchUnifiedInbox(arg1, arg2, arg3, arg4) {
   return window['go']['app']['App']['SearchUnifiedInbox'](arg1, arg2, arg3, arg4);
+}
+
+export function SearchVirtualFolder(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['app']['App']['SearchVirtualFolder'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function SendMessage(arg1, arg2) {
@@ -1444,4 +1480,8 @@ export function UpdateIdentity(arg1, arg2) {
 
 export function UpdateLocalFlags(arg1, arg2, arg3) {
   return window['go']['app']['App']['UpdateLocalFlags'](arg1, arg2, arg3);
+}
+
+export function UpdateVirtualFolder(arg1) {
+  return window['go']['app']['App']['UpdateVirtualFolder'](arg1);
 }

@@ -147,9 +147,9 @@
   },
   "updates": {
     "sectionTitle": "Atualizações",
-    "sectionDescription": "Receba um aviso quando uma nova versão do Eterno Mail for publicada.",
+    "sectionDescription": "Receba um aviso quando uma nova versão do Postilaatikko for publicada.",
     "availableTitle": "Atualização disponível",
-    "availableDescription": "O Eterno Mail {version} já está disponível.",
+    "availableDescription": "O Postilaatikko {version} já está disponível.",
     "versionTransition": "{current} → {latest}",
     "viewRelease": "Ver versão",
     "later": "Depois",
@@ -196,7 +196,7 @@
     "folders": "Pastas"
   },
   "settingsGeneral": {
-    "titleBarEterno": "Eterno Mail",
+    "titleBarEterno": "Postilaatikko",
     "titleBarEternoDesc": "Usar a barra de título do aplicativo",
     "titleBarCompatibilityWayland": "As decorações personalizadas da janela não são compatíveis com a sessão KDE Wayland atual. A barra de título do sistema será usada.",
     "sidebarSize": "Tamanho da lateral",
@@ -223,7 +223,7 @@
   },
   "whatsNew": {
     "title": "Novidades",
-    "welcome": "Bem-vindo ao Eterno Mail v{version}!",
+    "welcome": "Bem-vindo ao Postilaatikko v{version}!",
     "fallback": "Esta versão está pronta para uso. Consulte o histórico de alterações para ver os detalhes.",
     "fullChangelog": "Veja o histórico completo de alterações:"
   }

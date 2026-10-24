@@ -149,7 +149,7 @@ func runMainMode(mailtoData *app.MailtoData, rawMailtoArg string) {
 
 	// Create application with options
 	err = wails.Run(&options.App{
-		Title:                    "Eterno Mail",
+		Title:                    "Postilaatikko",
 		Width:                    1280,
 		Height:                   800,
 		MinWidth:                 360,

@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## Postilaatikko — v0.3.10
+
+- Added unified virtual folders: save, edit, reorder, and delete sets of folders across accounts; show unread conversations and counts in the sidebar; search within a virtual folder.
+- Renamed the product to Postilaatikko while retaining compatibility-sensitive package and desktop application identifiers from the upstream lineage.
+
 ## Eterno Mail — v0.3.9
 
 - feat: Added Virtual Folders, allowing a saved set of folders across accounts to be filtered to unread and listed in the sidebar. Unread mail in these folders can be used as a to-do list.

@@ -1,5 +1,5 @@
 name: Bug Report
-description: Report a bug in Aerion
+description: Report a bug in Postilaatikko
 labels: ["bug"]
 body:
   - type: dropdown
@@ -62,8 +62,8 @@ body:
   - type: input
     id: version
     attributes:
-      label: Aerion Version
-      description: "Find out what version you are running from Aerion at ⚙️ (settings) --> About."
+      label: Postilaatikko Version
+      description: "Find your version in Postilaatikko at ⚙️ (settings) --> About."
       placeholder: e.g. v0.1.25
     validations:
       required: true

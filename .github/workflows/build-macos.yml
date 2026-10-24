@@ -1,0 +1,48 @@
+name: macOS Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    env:
+      GOARCH: arm64
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
+
+      - name: Build macOS app
+        run: make build
+
+      - name: Package app
+        run: ditto -c -k --sequesterRsrc --keepParent build/bin/eterno-mail.app build/bin/Postilaatikko-macos-arm64.zip
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: Postilaatikko-macos-arm64-${{ github.sha }}
+          path: build/bin/Postilaatikko-macos-arm64.zip
+          if-no-files-found: error
+          retention-days: 14
