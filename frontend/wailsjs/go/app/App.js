@@ -334,6 +334,10 @@ export function DeletePermanently(arg1) {
   return window['go']['app']['App']['DeletePermanently'](arg1);
 }
 
+export function DeleteQuickReply(arg1) {
+  return window['go']['app']['App']['DeleteQuickReply'](arg1);
+}
+
 export function DeleteSMIMECertificate(arg1) {
   return window['go']['app']['App']['DeleteSMIMECertificate'](arg1);
 }
@@ -930,6 +934,10 @@ export function ListPGPSenderKeys() {
   return window['go']['app']['App']['ListPGPSenderKeys']();
 }
 
+export function ListQuickReplies() {
+  return window['go']['app']['App']['ListQuickReplies']();
+}
+
 export function ListSMIMECertificates(arg1) {
   return window['go']['app']['App']['ListSMIMECertificates'](arg1);
 }
@@ -1156,6 +1164,10 @@ export function SaveEncryptedAttachmentAs(arg1, arg2) {
 
 export function SavePendingOAuthTokens(arg1) {
   return window['go']['app']['App']['SavePendingOAuthTokens'](arg1);
+}
+
+export function SaveQuickReply(arg1) {
+  return window['go']['app']['App']['SaveQuickReply'](arg1);
 }
 
 export function SaveUIState(arg1) {

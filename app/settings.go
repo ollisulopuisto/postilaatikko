@@ -282,6 +282,21 @@ func (a *App) RemoveSpellcheckCustomWord(word string) error {
 	return a.settingsStore.RemoveSpellcheckCustomWord(word)
 }
 
+// ListQuickReplies returns the saved composer quick replies
+func (a *App) ListQuickReplies() ([]settings.QuickReply, error) {
+	return a.settingsStore.ListQuickReplies()
+}
+
+// SaveQuickReply creates (empty ID) or updates a composer quick reply
+func (a *App) SaveQuickReply(reply settings.QuickReply) (settings.QuickReply, error) {
+	return a.settingsStore.SaveQuickReply(reply)
+}
+
+// DeleteQuickReply removes a composer quick reply
+func (a *App) DeleteQuickReply(id string) error {
+	return a.settingsStore.DeleteQuickReply(id)
+}
+
 // GetLanguage returns the saved language preference (locale code)
 // Returns empty string if not set (frontend defaults to English)
 func (a *App) GetLanguage() (string, error) {

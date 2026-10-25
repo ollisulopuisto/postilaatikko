@@ -30,6 +30,7 @@
   }
   import RecipientInput from './RecipientInput.svelte'
   import EditorToolbar from './EditorToolbar.svelte'
+  import QuickReplies from './QuickReplies.svelte'
   import ComposerAttachmentList from './ComposerAttachmentList.svelte'
   import {
     addParagraphStyles,
@@ -188,7 +189,7 @@
   // Plain text mode toggle (default from user setting, can be toggled per-message)
   let isPlainTextMode = $state(getComposerFormat() === 'plain')
   let plainTextContent = $state('')  // Store plain text when in plain text mode
-  let plainTextRef = $state<{ focus: () => void } | null>(null)  // PlainTextEditor instance (plain text mode)
+  let plainTextRef = $state<{ focus: () => void; insertText: (text: string) => void } | null>(null)  // PlainTextEditor instance (plain text mode)
   let initialRichBody = ''  // original reply/forward rich body (images restored), for plain->rich reprocess
 
   // Component refs
@@ -946,6 +947,16 @@
     return identities.find(identity =>
       identity.email.toLowerCase() === fromEmail
     ) || null
+  }
+
+  // Insert a quick reply at the cursor in whichever surface is active.
+  function insertQuickReply(text: string) {
+    if (isPlainTextMode) {
+      plainTextRef?.insertText(text)
+    } else {
+      editor?.chain().focus().insertContent(plainTextToHtml(text)).run()
+    }
+    scheduleDraftSave()
   }
 
   // Append signature for the current identity based on compose mode
@@ -2232,6 +2243,7 @@
         <Icon icon="mdi:attachment" class="w-4 h-4" />
         {#if !isCompact}{$_('composer.attachFiles')}{/if}
       </button>
+      <QuickReplies onInsert={insertQuickReply} compact={isCompact} />
       {#if isCompact}
         <button
           onclick={() => showFormatting = !showFormatting}
