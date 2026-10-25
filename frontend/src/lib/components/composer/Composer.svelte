@@ -735,8 +735,6 @@
         return false
       }
     }
-
-    return true
   }
 
   // Load blocked remote images in the composer editor

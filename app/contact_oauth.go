@@ -9,6 +9,7 @@ import (
 	"github.com/hkdb/aerion/internal/account"
 	"github.com/hkdb/aerion/internal/carddav"
 	"github.com/hkdb/aerion/internal/credentials"
+	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/oauth2"
 	"github.com/hkdb/aerion/internal/platform"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -342,7 +343,12 @@ func (a *App) saveContactAuthorization(session *pendingContactOAuth, sourceID, a
 	}
 	source.Username, source.Writable = session.email, false
 	if a.carddavSyncer != nil {
-		go a.carddavSyncer.SyncSource(source.ID)
+		log := logging.WithComponent("app")
+		go func(id string) {
+			if err := a.carddavSyncer.SyncSource(id); err != nil {
+				log.Warn().Err(err).Str("source_id", id).Msg("Background contact source sync failed")
+			}
+		}(source.ID)
 	}
 	return source, nil
 }
