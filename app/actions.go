@@ -863,6 +863,7 @@ func (a *App) moveMessagesToIMAP(messages []*message.Message, sourceFolderID str
 			if apiErr == nil {
 				apiMoved = true
 				remoteStarted = true
+				log.Info().Int("count", len(gmailRFCIDs)).Bool("spam", gmailSpam).Msg("Gmail API changed labels for messages")
 			}
 			if apiErr != nil {
 				log.Warn().Err(apiErr).Bool("spam", gmailSpam).Msg("Gmail API label change failed; moving with IMAP instead")

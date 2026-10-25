@@ -305,6 +305,8 @@ export function GetFolderTree(arg1:string):Promise<Array<folder.FolderTree>>;
 
 export function GetFolders(arg1:string):Promise<Array<folder.Folder>>;
 
+export function GetGmailAPIStatus(arg1:string):Promise<app.GmailAPIStatusInfo>;
+
 export function GetIMAPConnectionForUndo(arg1:context.Context,arg2:string):Promise<imap.Client>;
 
 export function GetIPCAddress():Promise<string>;

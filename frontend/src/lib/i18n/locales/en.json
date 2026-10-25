@@ -624,6 +624,15 @@
     "customOAuthScopesHelp": "Space-separated. Most servers need offline_access for a refresh token.",
     "customOAuthRedirectUri": "Redirect URI",
     "customOAuthRedirectUriHelp": "Register this in your OAuth app using regex/pattern matching — the loopback port is assigned dynamically at sign-in (RFC 8252).",
+    "gmailApi": {
+      "title": "Gmail API",
+      "unknown": "Not used yet this session. It is tried on the next search.",
+      "active": "In use: searches use Gmail's own search syntax.",
+      "unavailable": "Unavailable: the Gmail API is not enabled for this app's Google project, or the permission was not granted. Searches use IMAP.",
+      "reauthRequired": "Sign in again to use the Gmail API.",
+      "notUsed": "Not used for this account. Searches use IMAP.",
+      "since": "Since {time}"
+    },
     "oauthConnected": "Connected via OAuth",
     "folderSync": "Folder sync subscriptions",
     "manageFolderSync": "Manage folder sync",

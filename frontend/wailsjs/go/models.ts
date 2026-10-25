@@ -519,6 +519,23 @@ export namespace app {
 	        this.enabled = source["enabled"];
 	    }
 	}
+	export class GmailAPIStatusInfo {
+	    applicable: boolean;
+	    state: string;
+	    since?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new GmailAPIStatusInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.applicable = source["applicable"];
+	        this.state = source["state"];
+	        this.since = source["since"];
+	    }
+	}
+
 	export class LinkedAccountInfo {
 	    accountId: string;
 	    email: string;
