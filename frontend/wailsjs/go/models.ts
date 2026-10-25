@@ -869,6 +869,9 @@ export namespace appstate {
 	    expandedAccounts: Record<string, boolean>;
 	    unifiedInboxExpanded: boolean;
 	    collapsedFolders: Record<string, boolean>;
+	    sidebarGroupOrder: string[];
+	    sidebarGroupCollapsed: Record<string, boolean>;
+	    sidebarGroupHidden: Record<string, boolean>;
 	    activeExtension?: string;
 	
 	    static createFrom(source: any = {}) {

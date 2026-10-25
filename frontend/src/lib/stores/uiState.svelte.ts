@@ -21,6 +21,10 @@ export interface UIState {
   expandedAccounts: Record<string, boolean>  // accountId -> isExpanded (default: true)
   unifiedInboxExpanded: boolean              // Unified Inbox section (default: true)
   collapsedFolders: Record<string, boolean>  // folderId -> isCollapsed (default: true/collapsed, false = explicitly expanded)
+  // Sidebar groups (user-customizable cards of folders)
+  sidebarGroupOrder: string[]                // ordered list of group ids
+  sidebarGroupCollapsed: Record<string, boolean>  // groupId -> isCollapsed
+  sidebarGroupHidden: Record<string, boolean>     // groupId -> isHidden
   // Active extension pane: 'mail' (default) or an extension id like 'contacts'.
   activeExtension: string
 }
@@ -47,6 +51,9 @@ const defaultState: UIState = {
   expandedAccounts: {},
   unifiedInboxExpanded: true,
   collapsedFolders: {},
+  sidebarGroupOrder: [],
+  sidebarGroupCollapsed: {},
+  sidebarGroupHidden: {},
   activeExtension: 'mail',
 }
 
@@ -94,6 +101,9 @@ export async function loadUIState(): Promise<UIState> {
         expandedAccounts: state.expandedAccounts || {},
         unifiedInboxExpanded: state.unifiedInboxExpanded !== false, // default true
         collapsedFolders: state.collapsedFolders || {},
+        sidebarGroupOrder: state.sidebarGroupOrder || [],
+        sidebarGroupCollapsed: state.sidebarGroupCollapsed || {},
+        sidebarGroupHidden: state.sidebarGroupHidden || {},
         activeExtension: state.activeExtension || 'mail',
       }
       sidebarWidthState = currentState.sidebarWidth

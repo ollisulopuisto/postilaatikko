@@ -134,6 +134,19 @@ export const CORE_SHORTCUTS: ShortcutDef[] = [
   { id: 'nav.toggleAccount', label: 'shortcuts.action.toggleAccount', group: 'navigation', combos: ['Alt+Enter'], panes: MAIL, inline: app('Enter') },
   { id: 'nav.folderMenu', label: 'shortcuts.action.folderMenu', group: 'navigation', combos: ['LeftAlt+RightAlt'], panes: MAIL, inline: app('AltLeft') },
 
+  // Rail folder shortcuts — Cmd/Ctrl+1 through Cmd/Ctrl+0 jump to the
+  // configured rail folder shortcuts (most-used folders on the left rail).
+  { id: 'rail.shortcut1', label: 'shortcuts.action.railShortcut1', group: 'navigation', combos: ['Mod+1'], predicates: [KEY.RAIL_SHORTCUT_1] },
+  { id: 'rail.shortcut2', label: 'shortcuts.action.railShortcut2', group: 'navigation', combos: ['Mod+2'], predicates: [KEY.RAIL_SHORTCUT_2] },
+  { id: 'rail.shortcut3', label: 'shortcuts.action.railShortcut3', group: 'navigation', combos: ['Mod+3'], predicates: [KEY.RAIL_SHORTCUT_3] },
+  { id: 'rail.shortcut4', label: 'shortcuts.action.railShortcut4', group: 'navigation', combos: ['Mod+4'], predicates: [KEY.RAIL_SHORTCUT_4] },
+  { id: 'rail.shortcut5', label: 'shortcuts.action.railShortcut5', group: 'navigation', combos: ['Mod+5'], predicates: [KEY.RAIL_SHORTCUT_5] },
+  { id: 'rail.shortcut6', label: 'shortcuts.action.railShortcut6', group: 'navigation', combos: ['Mod+6'], predicates: [KEY.RAIL_SHORTCUT_6] },
+  { id: 'rail.shortcut7', label: 'shortcuts.action.railShortcut7', group: 'navigation', combos: ['Mod+7'], predicates: [KEY.RAIL_SHORTCUT_7] },
+  { id: 'rail.shortcut8', label: 'shortcuts.action.railShortcut8', group: 'navigation', combos: ['Mod+8'], predicates: [KEY.RAIL_SHORTCUT_8] },
+  { id: 'rail.shortcut9', label: 'shortcuts.action.railShortcut9', group: 'navigation', combos: ['Mod+9'], predicates: [KEY.RAIL_SHORTCUT_9] },
+  { id: 'rail.shortcut0', label: 'shortcuts.action.railShortcut0', group: 'navigation', combos: ['Mod+0'], predicates: [KEY.RAIL_SHORTCUT_0] },
+
   // Sidebar (folder list focused)
   { id: 'sidebar.next', label: 'shortcuts.action.sidebarNext', group: 'sidebar', combos: ['ArrowDown', 'j'], panes: MAIL, predicates: [KEY.LIST_NEXT] },
   { id: 'sidebar.prev', label: 'shortcuts.action.sidebarPrev', group: 'sidebar', combos: ['ArrowUp', 'k'], panes: MAIL, predicates: [KEY.LIST_PREV] },

@@ -783,6 +783,54 @@
     return accountStore.accounts[0]?.account.id
   }
 
+  // Find the nth rail folder shortcut target from the first account's folder tree.
+  // Matches the default set built in ExtensionRail: 1=inbox, 2=starred, 3=drafts,
+  // 4=sent, 5=trash.
+  function findRailFolderShortcut(key: string): { accountId: string; folderId: string; folderPath: string; folderName: string; folderType: string } | null {
+    const acc = accountStore.accounts[0]
+    if (!acc?.account) return null
+
+    const findFolderByType = (trees: folder.FolderTree[], type: string): folder.Folder | null => {
+      for (const tree of trees) {
+        if (tree.folder?.type === type) return tree.folder
+        if (tree.children) {
+          const found = findFolderByType(tree.children, type)
+          if (found) return found
+        }
+      }
+      return null
+    }
+
+    const typeMap: Record<string, string> = {
+      '1': 'inbox',
+      '2': 'starred',
+      '3': 'drafts',
+      '4': 'sent',
+      '5': 'trash',
+    }
+    const type = typeMap[key]
+    if (!type) return null
+
+    const target = findFolderByType(acc.folders || [], type)
+    if (!target) return null
+
+    return {
+      accountId: acc.account.id,
+      folderId: target.id,
+      folderPath: target.path,
+      folderName: target.name,
+      folderType: target.type,
+    }
+  }
+
+  // Jump to the rail folder shortcut for the given key (1-9, 0).
+  function handleRailFolderShortcut(key: string) {
+    const target = findRailFolderShortcut(key)
+    if (!target) return
+    setActiveExtension('mail')
+    handleFolderSelect(target.accountId, target.folderId, target.folderPath, target.folderName, target.folderType)
+  }
+
   // Handle compose button click (new message)
   function handleCompose() {
     // Use the selected account, or the first account if none selected
@@ -1139,6 +1187,14 @@
           setActiveExtension(order[next])
           return
         }
+      }
+
+      // Cmd/Ctrl+1 through Cmd/Ctrl+0 — jump to a rail folder shortcut.
+      const railKey = e.key
+      if ((railKey >= '1' && railKey <= '9') || railKey === '0') {
+        e.preventDefault()
+        handleRailFolderShortcut(railKey)
+        return
       }
 
       // Ctrl+S (no shift) — focus the active pane's search input.
@@ -1932,7 +1988,9 @@
 
   <!-- Main Content -->
   <div class="flex flex-1 min-h-0 overflow-hidden relative">
-    <ExtensionRail />
+    <ExtensionRail
+      onFolderSelect={handleFolderSelect}
+    />
 
     {#if getActiveExtension() === 'contacts'}
       <ContactsPane />

@@ -47,6 +47,7 @@ let showMessageListProfilePics = $state<boolean>(false)
 let alwaysShowMessageCheckbox = $state<boolean>(false)
 let showViewerCircles = $state<boolean>(true)
 let markAsReadDelay = $state<number>(0)
+let showExtensionsOnRail = $state<boolean>(false)
 
 // Getter functions to access the state
 export function getMarkAsReadDelay(): number {
@@ -245,6 +246,14 @@ export function setShowViewerCircles(v: boolean) {
   showViewerCircles = v
 }
 
+export function getShowExtensionsOnRail(): boolean {
+  return showExtensionsOnRail
+}
+
+export function setShowExtensionsOnRail(v: boolean) {
+  showExtensionsOnRail = v
+}
+
 export function updateMarkAsReadDelayStore(v: number) {
   markAsReadDelay = v
 }
@@ -301,7 +310,6 @@ export async function loadSettings(): Promise<ThemeMode> {
     spellcheckLanguages = scLangs ?? []
     spellcheckCustomWords = scWords ?? []
     markAsReadDelay = readDelay ?? 0
-    // Apply saved language (if set, overrides system detection from initI18n)
     if (lang) {
       language = lang
       setI18nLocale(lang)

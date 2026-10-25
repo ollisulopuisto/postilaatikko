@@ -94,6 +94,19 @@ export const LIST_MOVE_TO = (e: KeyboardEvent): boolean =>
 export const LIST_COPY_TO = (e: KeyboardEvent): boolean =>
   altOnly(e) && e.key === 'c'
 
+// Cmd/Ctrl+1 through Cmd/Ctrl+0 — jump to a rail folder shortcut (1..0).
+// `Mod` resolves to Cmd on macOS, Ctrl elsewhere.
+export const RAIL_SHORTCUT_1 = (e: KeyboardEvent): boolean => ctrlOrMeta(e) && e.key === '1' && !e.altKey && !e.shiftKey
+export const RAIL_SHORTCUT_2 = (e: KeyboardEvent): boolean => ctrlOrMeta(e) && e.key === '2' && !e.altKey && !e.shiftKey
+export const RAIL_SHORTCUT_3 = (e: KeyboardEvent): boolean => ctrlOrMeta(e) && e.key === '3' && !e.altKey && !e.shiftKey
+export const RAIL_SHORTCUT_4 = (e: KeyboardEvent): boolean => ctrlOrMeta(e) && e.key === '4' && !e.altKey && !e.shiftKey
+export const RAIL_SHORTCUT_5 = (e: KeyboardEvent): boolean => ctrlOrMeta(e) && e.key === '5' && !e.altKey && !e.shiftKey
+export const RAIL_SHORTCUT_6 = (e: KeyboardEvent): boolean => ctrlOrMeta(e) && e.key === '6' && !e.altKey && !e.shiftKey
+export const RAIL_SHORTCUT_7 = (e: KeyboardEvent): boolean => ctrlOrMeta(e) && e.key === '7' && !e.altKey && !e.shiftKey
+export const RAIL_SHORTCUT_8 = (e: KeyboardEvent): boolean => ctrlOrMeta(e) && e.key === '8' && !e.altKey && !e.shiftKey
+export const RAIL_SHORTCUT_9 = (e: KeyboardEvent): boolean => ctrlOrMeta(e) && e.key === '9' && !e.altKey && !e.shiftKey
+export const RAIL_SHORTCUT_0 = (e: KeyboardEvent): boolean => ctrlOrMeta(e) && e.key === '0' && !e.altKey && !e.shiftKey
+
 // `?` — open the keyboard shortcuts overlay. Shift is not checked: `?` needs
 // Shift on most layouts (Shift+/ on US, Shift++ on Finnish), and e.key already
 // reflects the layout.
@@ -126,6 +139,16 @@ export const KEY = {
   LIST_COPY_TO,
   SHORTCUTS_HELP,
   COMMAND_PALETTE,
+  RAIL_SHORTCUT_1,
+  RAIL_SHORTCUT_2,
+  RAIL_SHORTCUT_3,
+  RAIL_SHORTCUT_4,
+  RAIL_SHORTCUT_5,
+  RAIL_SHORTCUT_6,
+  RAIL_SHORTCUT_7,
+  RAIL_SHORTCUT_8,
+  RAIL_SHORTCUT_9,
+  RAIL_SHORTCUT_0,
 }
 
 // matchesAny is a small helper for cases where several predicates should be

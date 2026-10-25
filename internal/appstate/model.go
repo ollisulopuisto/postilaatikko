@@ -23,6 +23,11 @@ type UIState struct {
 	UnifiedInboxExpanded bool            `json:"unifiedInboxExpanded"` // Unified Inbox section (default: true)
 	CollapsedFolders     map[string]bool `json:"collapsedFolders"`     // folderID -> isCollapsed (default: false/absent)
 
+	// Sidebar groups (user-customizable cards of folders)
+	SidebarGroupOrder       []string             `json:"sidebarGroupOrder"`       // ordered list of group ids
+	SidebarGroupCollapsed   map[string]bool      `json:"sidebarGroupCollapsed"`   // groupID -> isCollapsed
+	SidebarGroupHidden      map[string]bool      `json:"sidebarGroupHidden"`      // groupID -> isHidden
+
 	// Active extension pane: "mail" (default) or an extension id like "contacts".
 	// The frontend uses this to decide whether to render Mail or an extension's
 	// pane after the rail is shown. Missing field -> Mail.
