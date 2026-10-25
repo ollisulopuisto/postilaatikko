@@ -70,6 +70,10 @@ export function Calendar_CreateEvent(arg1) {
   return window['go']['app']['App']['Calendar_CreateEvent'](arg1);
 }
 
+export function Calendar_CreateICSFromDetails(arg1) {
+  return window['go']['app']['App']['Calendar_CreateICSFromDetails'](arg1);
+}
+
 export function Calendar_DeleteCalendar(arg1) {
   return window['go']['app']['App']['Calendar_DeleteCalendar'](arg1);
 }
@@ -294,6 +298,10 @@ export function CopyToFolder(arg1, arg2) {
   return window['go']['app']['App']['CopyToFolder'](arg1, arg2);
 }
 
+export function CreateFilterRule(arg1) {
+  return window['go']['app']['App']['CreateFilterRule'](arg1);
+}
+
 export function CreateIdentity(arg1, arg2) {
   return window['go']['app']['App']['CreateIdentity'](arg1, arg2);
 }
@@ -312,6 +320,10 @@ export function DeleteContactSource(arg1) {
 
 export function DeleteDraft(arg1) {
   return window['go']['app']['App']['DeleteDraft'](arg1);
+}
+
+export function DeleteFilterRule(arg1) {
+  return window['go']['app']['App']['DeleteFilterRule'](arg1);
 }
 
 export function DeleteIdentity(arg1) {
@@ -540,6 +552,10 @@ export function GetFTSIndexStatus(arg1) {
 
 export function GetFTSIndexStatusAll() {
   return window['go']['app']['App']['GetFTSIndexStatusAll']();
+}
+
+export function GetFilterRules() {
+  return window['go']['app']['App']['GetFilterRules']();
 }
 
 export function GetFolderTree(arg1) {
@@ -1138,6 +1154,10 @@ export function ReorderAccounts(arg1) {
   return window['go']['app']['App']['ReorderAccounts'](arg1);
 }
 
+export function ReorderFilterRules(arg1) {
+  return window['go']['app']['App']['ReorderFilterRules'](arg1);
+}
+
 export function ReorderVirtualFolders(arg1) {
   return window['go']['app']['App']['ReorderVirtualFolders'](arg1);
 }
@@ -1484,6 +1504,10 @@ export function UpdateAccount(arg1, arg2) {
 
 export function UpdateContactSource(arg1, arg2) {
   return window['go']['app']['App']['UpdateContactSource'](arg1, arg2);
+}
+
+export function UpdateFilterRule(arg1) {
+  return window['go']['app']['App']['UpdateFilterRule'](arg1);
 }
 
 export function UpdateIdentity(arg1, arg2) {

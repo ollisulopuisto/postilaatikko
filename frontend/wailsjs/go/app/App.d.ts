@@ -6,6 +6,7 @@ import {carddav} from '../models';
 import {app} from '../models';
 import {backend} from '../models';
 import {v1} from '../models';
+import {mailfilter} from '../models';
 import {virtualfolder} from '../models';
 import {message} from '../models';
 import {folder} from '../models';
@@ -55,6 +56,8 @@ export function Calendar_AddLocalSource(arg1:string):Promise<string>;
 export function Calendar_AddMicrosoftSource(arg1:string,arg2:string,arg3:string,arg4:Array<backend.MicrosoftCalendarSelection>):Promise<string>;
 
 export function Calendar_CreateEvent(arg1:backend.EventInput):Promise<string>;
+
+export function Calendar_CreateICSFromDetails(arg1:backend.EventInput):Promise<string>;
 
 export function Calendar_DeleteCalendar(arg1:string):Promise<void>;
 
@@ -168,6 +171,8 @@ export function Contacts_UpdateContact(arg1:string,arg2:v1.ContactPatch):Promise
 
 export function CopyToFolder(arg1:Array<string>,arg2:string):Promise<void>;
 
+export function CreateFilterRule(arg1:mailfilter.Rule):Promise<void>;
+
 export function CreateIdentity(arg1:string,arg2:account.IdentityConfig):Promise<account.Identity>;
 
 export function CreateVirtualFolder(arg1:virtualfolder.VirtualFolder):Promise<void>;
@@ -177,6 +182,8 @@ export function DeleteContact(arg1:string):Promise<void>;
 export function DeleteContactSource(arg1:string):Promise<void>;
 
 export function DeleteDraft(arg1:string):Promise<void>;
+
+export function DeleteFilterRule(arg1:string):Promise<void>;
 
 export function DeleteIdentity(arg1:string):Promise<void>;
 
@@ -291,6 +298,8 @@ export function GetDraftForEdit(arg1:string):Promise<app.DraftEditResult>;
 export function GetFTSIndexStatus(arg1:string):Promise<message.FTSIndexStatus>;
 
 export function GetFTSIndexStatusAll():Promise<Record<string, message.FTSIndexStatus>>;
+
+export function GetFilterRules():Promise<Array<mailfilter.Rule>>;
 
 export function GetFolderTree(arg1:string):Promise<Array<folder.FolderTree>>;
 
@@ -590,6 +599,8 @@ export function RemoveTrustedCertificate(arg1:string):Promise<void>;
 
 export function ReorderAccounts(arg1:Array<string>):Promise<void>;
 
+export function ReorderFilterRules(arg1:Array<string>):Promise<void>;
+
 export function ReorderVirtualFolders(arg1:Array<string>):Promise<void>;
 
 export function SaveAllAttachments(arg1:string):Promise<string>;
@@ -763,6 +774,8 @@ export function UnsubscribeFolder(arg1:string,arg2:string):Promise<void>;
 export function UpdateAccount(arg1:string,arg2:account.AccountConfig):Promise<account.Account>;
 
 export function UpdateContactSource(arg1:string,arg2:carddav.SourceConfig):Promise<void>;
+
+export function UpdateFilterRule(arg1:mailfilter.Rule):Promise<void>;
 
 export function UpdateIdentity(arg1:string,arg2:account.IdentityConfig):Promise<account.Identity>;
 

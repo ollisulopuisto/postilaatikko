@@ -794,11 +794,11 @@ export namespace app {
 	    movedToSpam: boolean;
 	    operationId: string;
 	    coalesced: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new SpamUndoResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.movedToSpam = source["movedToSpam"];
@@ -810,11 +810,11 @@ export namespace app {
 	    movedToTrash: boolean;
 	    operationId: string;
 	    coalesced: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new TrashUndoResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.movedToTrash = source["movedToTrash"];
@@ -825,11 +825,11 @@ export namespace app {
 	export class UndoLatestResult {
 	    operationId: string;
 	    description: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new UndoLatestResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.operationId = source["operationId"];
@@ -839,11 +839,11 @@ export namespace app {
 	export class UndoableActionResult {
 	    operationId: string;
 	    coalesced: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new UndoableActionResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.operationId = source["operationId"];
@@ -1966,6 +1966,65 @@ export namespace imap {
 
 }
 
+export namespace mailfilter {
+	
+	export class Rule {
+	    id: string;
+	    name: string;
+	    enabled: boolean;
+	    orderIndex: number;
+	    accountId: string;
+	    folderIds: string[];
+	    fromContains: string[];
+	    toContains: string[];
+	    subjectContains: string[];
+	    destFolderId: string;
+	    // Go type: time
+	    createdAt: any;
+	    // Go type: time
+	    updatedAt: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new Rule(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.enabled = source["enabled"];
+	        this.orderIndex = source["orderIndex"];
+	        this.accountId = source["accountId"];
+	        this.folderIds = source["folderIds"];
+	        this.fromContains = source["fromContains"];
+	        this.toContains = source["toContains"];
+	        this.subjectContains = source["subjectContains"];
+	        this.destFolderId = source["destFolderId"];
+	        this.createdAt = this.convertValues(source["createdAt"], null);
+	        this.updatedAt = this.convertValues(source["updatedAt"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace message {
 	
 	export class Address {
@@ -2570,7 +2629,6 @@ export namespace settings {
 	        this.createdAt = source["createdAt"];
 	    }
 	}
-
 	export class QuickReply {
 	    id: string;
 	    name: string;
@@ -3302,7 +3360,7 @@ export namespace v1 {
 }
 
 export namespace virtualfolder {
-
+	
 	export class VirtualFolder {
 	    id: string;
 	    name: string;
@@ -3312,11 +3370,11 @@ export namespace virtualfolder {
 	    createdAt: any;
 	    // Go type: time
 	    updatedAt: any;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new VirtualFolder(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -3326,7 +3384,7 @@ export namespace virtualfolder {
 	        this.createdAt = this.convertValues(source["createdAt"], null);
 	        this.updatedAt = this.convertValues(source["updatedAt"], null);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -3345,4 +3403,6 @@ export namespace virtualfolder {
 		    return a;
 		}
 	}
+
 }
+
