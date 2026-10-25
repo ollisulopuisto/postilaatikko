@@ -18,6 +18,7 @@ On macOS, `⌘` works wherever `Ctrl` is listed below, unless macOS reserves the
 | Shortcut | Action |
 |----------|--------|
 | `?` | Show the keyboard shortcuts overlay (not in text fields or while composing) |
+| `Ctrl+P` / `Ctrl+Shift+P` (macOS: `⌘P` / `⌘⇧P`) | Open the command palette (Alfred-style quick launcher) |
 | `⌘+,` (macOS) | Open Preferences |
 | `Ctrl+Q` | Quit application |
 | `Ctrl+N` | Compose new message |

@@ -32,6 +32,7 @@
     showViewerCircles: boolean
     darkMailContent: boolean
     darkComposerBody: boolean
+    markAsReadDelay: number
   }
 
   let {
@@ -58,6 +59,7 @@
     showViewerCircles = $bindable(),
     darkMailContent = $bindable(),
     darkComposerBody = $bindable(),
+    markAsReadDelay = $bindable(0),
   }: Props = $props()
 
   // Message list density options
@@ -196,6 +198,25 @@
     // Apply immediately for live preview
     setLocale(value)
     onLanguageChange?.(value)
+  }
+
+  const markAsReadOptions = $derived([
+    { value: '0', label: $_('settingsGeneral.markAsReadImmediately') },
+    { value: '1000', label: $_('settingsGeneral.markAsReadAfter1s') },
+    { value: '2000', label: $_('settingsGeneral.markAsReadAfter2s') },
+    { value: '3000', label: $_('settingsGeneral.markAsReadAfter3s') },
+    { value: '5000', label: $_('settingsGeneral.markAsReadAfter5s') },
+    { value: '-2', label: $_('settingsGeneral.markAsReadOnLeave') },
+    { value: '-1', label: $_('settingsGeneral.markAsReadManual') },
+  ])
+
+  function handleMarkAsReadDelayChange(value: string) {
+    markAsReadDelay = parseInt(value, 10)
+  }
+
+  function getMarkAsReadDelayLabel(value: number): string {
+    const str = String(value)
+    return markAsReadOptions.find(opt => opt.value === str)?.label || str
   }
 
 
@@ -414,6 +435,25 @@
       </Select.Root>
       <p class="text-xs text-muted-foreground">
         {$_('settingsGeneral.messageListDensityHelp')}
+      </p>
+    </div>
+
+    <div class="space-y-2">
+      <Label>{$_('settingsGeneral.markAsRead')}</Label>
+      <Select.Root value={String(markAsReadDelay)} onValueChange={handleMarkAsReadDelayChange}>
+        <Select.Trigger>
+          <Select.Value placeholder={$_('settingsGeneral.markAsRead')}>
+            {getMarkAsReadDelayLabel(markAsReadDelay)}
+          </Select.Value>
+        </Select.Trigger>
+        <Select.Content>
+          {#each markAsReadOptions as opt (opt.value)}
+            <Select.Item value={opt.value} label={opt.label} />
+          {/each}
+        </Select.Content>
+      </Select.Root>
+      <p class="text-xs text-muted-foreground">
+        {$_('settingsGeneral.markAsReadHelp')}
       </p>
     </div>
   </div>

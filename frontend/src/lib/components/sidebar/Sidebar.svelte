@@ -16,6 +16,7 @@
   import { setFocusedPane } from '$lib/stores/keyboard.svelte'
   import { withShortcut, ariaKeyshortcuts, formatShortcut } from '$lib/keyboard/format'
   import { openShortcutsOverlay } from '$lib/stores/shortcutsOverlay.svelte'
+  import { openCommandPalette } from '$lib/stores/commandPalette.svelte'
   import { _ } from '$lib/i18n'
   // @ts-ignore - wailsjs path
   import { account, folder } from '../../../../wailsjs/go/models'
@@ -817,6 +818,12 @@
       <span data-sidebar-label>{accountStore.isAnySyncing ? $_('sidebar.syncing') : $_('sidebar.syncAllAccounts')}</span>
     </button>
 
+    <button type="button" class="sidebar-refresh-entry" data-sidebar-command-palette onclick={openCommandPalette} title={withShortcut($_('commandPalette.title'), 'app.commandPalette')} aria-label={$_('commandPalette.title')} aria-keyshortcuts={ariaKeyshortcuts('app.commandPalette')} aria-haspopup="dialog">
+      <Icon icon="mdi:console-line" class="h-5 w-5" />
+      <span data-sidebar-label>{$_('commandPalette.title')}</span>
+      <kbd data-sidebar-label class="ml-auto font-sans text-xs text-muted-foreground" aria-hidden="true">{formatShortcut('app.commandPalette')}</kbd>
+    </button>
+
     <button type="button" class="sidebar-refresh-entry" data-sidebar-shortcuts onclick={openShortcutsOverlay} title={withShortcut($_('shortcuts.open'), 'app.shortcuts')} aria-label={$_('shortcuts.open')} aria-keyshortcuts={ariaKeyshortcuts('app.shortcuts')} aria-haspopup="dialog">
       <Icon icon="mdi:keyboard-outline" class="h-5 w-5" />
       <span data-sidebar-label>{$_('shortcuts.open')}</span>
@@ -835,6 +842,12 @@
   </div>
 
   {#if showAllFolders}
+    <div
+      class="fixed inset-0 z-20 bg-black/20"
+      onclick={() => (showAllFolders = false)}
+      tabindex="-1"
+      aria-hidden="true"
+    ></div>
     <aside class="sidebar-all-folders-panel" aria-label={$_('sidebar.allFolders')}>
       <header class="sidebar-all-folders-header">
         <h2>{$_('sidebar.allFolders')}</h2>
@@ -857,7 +870,10 @@
             syncError={accountStore.getSyncError(accWithFolders.account.id)}
             {collapsedFolders}
             {onMessagesMoved}
-            onFolderSelect={handleFolderSelect}
+            onFolderSelect={(accountId, folderId, folderPath, folderName, folderType) => {
+              handleFolderSelect(accountId, folderId, folderPath, folderName, folderType)
+              showAllFolders = false
+            }}
             onToggleExpanded={() => toggleAccountExpanded(accWithFolders.account.id)}
             onToggleFolderCollapse={toggleFolderCollapsed}
             onEdit={() => openEditAccount(accWithFolders.account)}
@@ -910,3 +926,9 @@
   accounts={accountStore.accounts}
   onSave={(value) => virtualFoldersStore.save(value as virtualfolder.VirtualFolder)}
 />
+
+<svelte:window onkeydown={(e) => {
+  if (showAllFolders && e.key === 'Escape') {
+    showAllFolders = false
+  }
+}} />

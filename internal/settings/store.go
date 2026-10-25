@@ -251,11 +251,11 @@ func (s *Store) GetMarkAsReadDelay() (int, error) {
 }
 
 // SetMarkAsReadDelay sets the delay before marking messages as read (in milliseconds)
-// Valid values: -1 (manual only), 0 (immediate), or 100-5000 (delay in ms)
+// Valid values: -2 (on leaving conversation), -1 (manual only), 0 (immediate), or 100-5000 (delay in ms)
 func (s *Store) SetMarkAsReadDelay(delayMs int) error {
 	// Validate delay
-	if delayMs < -1 {
-		return fmt.Errorf("invalid delay: %d (must be -1, 0, or 100-5000)", delayMs)
+	if delayMs < -2 {
+		return fmt.Errorf("invalid delay: %d (must be -2, -1, 0, or 100-5000)", delayMs)
 	}
 	if delayMs > 0 && delayMs < 100 {
 		return fmt.Errorf("invalid delay: %d (minimum non-zero delay is 100ms)", delayMs)

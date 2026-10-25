@@ -68,10 +68,11 @@ func TestSetGetMarkAsReadDelay(t *testing.T) {
 	}{
 		{name: "immediate", delay: 0, wantValue: 0},
 		{name: "manual", delay: -1, wantValue: -1},
+		{name: "on_leave", delay: -2, wantValue: -2},
 		{name: "100ms", delay: 100, wantValue: 100},
 		{name: "5000ms", delay: 5000, wantValue: 5000},
 		{name: "50ms_invalid", delay: 50, wantErr: true},
-		{name: "negative_invalid", delay: -2, wantErr: true},
+		{name: "negative_invalid", delay: -3, wantErr: true},
 		{name: "over_max", delay: 5001, wantErr: true},
 	}
 

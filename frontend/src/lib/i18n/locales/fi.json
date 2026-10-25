@@ -104,7 +104,9 @@
     "filterUnread": "Lukemattomat",
     "filterStarred": "Tähdelliset",
     "filterAttachments": "Sisältää liitteitä",
-    "noFilteredMessages": "Yksikään viesti ei vastaa nykyistä suodatinta"
+    "noFilteredMessages": "Yksikään viesti ei vastaa nykyistä suodatinta",
+    "selectedActions": "Valittujen viestien toiminnot",
+    "selectedCount": "{count} valittu"
   },
   "inbox": {
     "priority": "Tärkeät",
@@ -428,6 +430,7 @@
     "general": "Yleiset",
     "accounts": "Tilit",
     "contacts": "Yhteystiedot",
+    "inbox": "Saapuneet",
     "about": "Tietoja",
     "extensions": "Laajennukset",
     "extensionsCoreHeading": "Ydinlaajennukset",
@@ -489,6 +492,15 @@
     "alwaysShowCheckbox": "Näytä valintaruutu aina viestin vieressä",
     "alwaysShowCheckboxHelp": "Varaa kiinteä valintaruutusarake viestiluetteloon sen sijaan, että se näytettäisiin vasta osoitettaessa tai pyyhkäistäessä.",
     "selectDensity": "Valitse tiheys",
+    "markAsRead": "Merkitse viestit luetuiksi",
+    "markAsReadHelp": "Valitse milloin avatut viestit merkitään automaattisesti luetuiksi",
+    "markAsReadImmediately": "Heti avattaessa",
+    "markAsReadAfter1s": "1 sekunnin kuluttua",
+    "markAsReadAfter2s": "2 sekunnin kuluttua",
+    "markAsReadAfter3s": "3 sekunnin kuluttua",
+    "markAsReadAfter5s": "5 sekunnin kuluttua",
+    "markAsReadOnLeave": "Viestistä poistuttaessa",
+    "markAsReadManual": "Vain manuaalisesti",
     "readReceipts": "Lukukuittaukset",
     "readReceiptPolicy": "Kun joku pyytää lukukuittausta",
     "readReceiptPolicyHelp": "Lukukuittaukset ilmoittavat lähettäjälle, kun olet lukenut viestin",
@@ -1097,6 +1109,7 @@
       "lists": "Luettelot"
     },
     "action": {
+      "commandPalette": "Komentovalikko",
       "showShortcuts": "Näytä pikanäppäimet",
       "preferences": "Avaa asetukset",
       "compose": "Uusi viesti",
@@ -1159,6 +1172,25 @@
       "italic": "Kursiivi",
       "underline": "Alleviivaus",
       "closeComposer": "Sulje viestin kirjoitus"
+    }
+  },
+  "commandPalette": {
+    "title": "Komentovalikko",
+    "placeholder": "Kirjoita komento tai hae...",
+    "noResults": "Komentoja ei löytynyt haulle ”{query}”.",
+    "categories": {
+      "general": "Yleiset",
+      "navigation": "Navigointi",
+      "mail": "Sähköposti",
+      "settings": "Asetukset",
+      "view": "Näkymä",
+      "calendar": "Kalenteri",
+      "contacts": "Yhteystiedot"
+    },
+    "hints": {
+      "navigate": "navigoi",
+      "select": "valitse",
+      "close": "sulje"
     }
   }
 }
