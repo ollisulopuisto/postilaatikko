@@ -57,6 +57,7 @@ func (e *Engine) GmailSearch(ctx context.Context, accountID, folderID, query str
 	}
 
 	rfcIDs, total, err := e.gmailRFCIDs(ctx, accountID, f, query, limit)
+	e.recordGmailState(accountID, err)
 	if err != nil {
 		e.noteGmailError(accountID, err)
 		return nil, err
@@ -232,7 +233,6 @@ func (e *Engine) noteGmailError(accountID string, err error) {
 	if !errors.Is(err, gmail.ErrInsufficientScope) && !errors.Is(err, gmail.ErrAPIDisabled) {
 		return
 	}
-	e.log.Warn().Err(err).Str("account_id", accountID).Dur("for", gmailBlockDuration).Msg("Gmail API unavailable for account; using IMAP search")
 	e.gmailBlockMu.Lock()
 	defer e.gmailBlockMu.Unlock()
 	e.gmailBlocked[accountID] = time.Now().Add(gmailBlockDuration)

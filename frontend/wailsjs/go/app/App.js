@@ -566,6 +566,10 @@ export function GetFolders(arg1) {
   return window['go']['app']['App']['GetFolders'](arg1);
 }
 
+export function GetGmailAPIStatus(arg1) {
+  return window['go']['app']['App']['GetGmailAPIStatus'](arg1);
+}
+
 export function GetIMAPConnectionForUndo(arg1, arg2) {
   return window['go']['app']['App']['GetIMAPConnectionForUndo'](arg1, arg2);
 }

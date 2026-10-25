@@ -119,6 +119,7 @@ type Engine struct {
 	gmailBaseURL string // test hook; empty means the real API
 	gmailBlockMu gosync.Mutex
 	gmailBlocked map[string]time.Time
+	gmailStates  map[string]GmailAPIStatus
 }
 
 // NewEngine creates a new sync engine
@@ -135,6 +136,7 @@ func NewEngine(pool *imapPkg.Pool, accountStore *account.Store, folderStore *fol
 		flagSweepCounter: map[string]int{},
 		folderLocks:      folderLocks{locks: map[string]chan struct{}{}},
 		gmailBlocked:     map[string]time.Time{},
+		gmailStates:      map[string]GmailAPIStatus{},
 	}
 }
 

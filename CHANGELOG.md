@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Account settings now show whether a Gmail account is using the Gmail API (in use, unavailable, sign in again, or not used), and the log records when it starts working or falls back to IMAP.
 - Fixed: the command panel's Archive, Spam, Star, Mark read and Mark unread commands acted on the conversation's thread id instead of the selected messages, so they did nothing. They now use the same target as the keyboard (checked messages, else the focused row) and are hidden when there is nothing to act on.
 
 ## Postilaatikko — v0.3.14
