@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## Unreleased
+
+- Added a review-stage E2EE Send Later path with a Mac Studio helper, helper-local SMTP credentials, durable encrypted queues, and composer scheduling/setup/status/cancellation controls. The helper is bundled in macOS app builds. Live delivery, keychain/login behavior and failure/security regression verification remain outstanding; the feature is not marked complete.
+
 ## Postilaatikko — v0.3.14
 
 - Added a floating Command Palette (`⌘P` / `Ctrl+P`, Alfred-style quick launcher) with instant fuzzy search, arrow navigation, and direct action dispatch for accounts, folders, navigation, settings, and themes.

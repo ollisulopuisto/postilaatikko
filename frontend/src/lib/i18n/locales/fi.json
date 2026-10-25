@@ -1219,5 +1219,58 @@
       "select": "valitse",
       "close": "sulje"
     }
+  },
+  "sendLater": {
+    "title": "Lähetä myöhemmin",
+    "description": "Jatkuvasti käynnissä oleva Studio lähettää viestin valittuna aikana. Jonossa oleva sisältö salataan paritetulle apuohjelmalle.",
+    "deliveryTime": "Lähetysaika",
+    "timezone": "Aikavyöhykkeesi",
+    "connection": "Studio-yhteys",
+    "pairingHelp": "Luo tämän laitteen avain ja parita se Studiossa. Syötä sitten Studion apuohjelman avain ja siellä näkyvä tilitunniste. Vertaa apuohjelman avainta suoraan Studiossa ennen tallennusta.",
+    "createKey": "Luo laitteen avain",
+    "deviceKey": "Tämän laitteen julkinen avain",
+    "endpoint": "Studion osoite",
+    "helperKey": "Studion varmennettu julkinen avain",
+    "helperAccount": "Lähettävän tilin tunniste Studiossa",
+    "keyVerified": "Vertasin tätä avainta suoraan Studiooni.",
+    "saveConnection": "Tallenna yhteys",
+    "jobs": "Tämän tilin ajastetut viestit",
+    "lastConfirmed": "Nämä ovat viimeksi vahvistetut tilat. Päivitä viestin tila tarkistamalla se Studiosta.",
+    "refresh": "Päivitä",
+    "retry": "Yritä tallennettua pyyntöä uudelleen",
+    "cancelDelivery": "Peruuta lähetys",
+    "schedule": "Ajasta viesti",
+    "futureTime": "Valitse tuleva lähetysaika.",
+    "saveDraftFirst": "Luonnosta ei voitu tallentaa. Tallenna se ennen ajastusta.",
+    "awaitingConfirmation": "Odotetaan Studion vahvistusta. Säilytä luonnos ja yritä tallennettua pyyntöä uudelleen.",
+    "scheduled": "Ajastettu Studiossa",
+    "status": {
+      "awaiting_ack": "Odotetaan Studion vahvistusta",
+      "cancellation_awaiting_ack": "Peruutus odottaa Studion vahvistusta",
+      "queued": "Ajastettu Studiossa",
+      "retry": "Studio yrittää lähetystä uudelleen",
+      "sending": "Lähetetään",
+      "sent": "Lähetetty",
+      "cancelled": "Peruutettu",
+      "failed": "Lähetys vaatii huomiota",
+      "outcome_unknown": "Lähetyksen tulos on epäselvä — tarkista se Studiossa ennen uutta yritystä"
+    },
+    "keyUnavailable": "Alkuperäinen laitteen avain ei ole saatavilla. Avaa tai palauta se. Tarkista nykyiset ajastukset Studiossa ennen avaimen vaihtamista.",
+    "errors": {
+      "authorization_required": "Kirjaudu tähän sähköpostitiliin uudelleen Studiossa.",
+      "client_authorization_revoked": "Parita tämä laite ja lähettäjä uudelleen Studiossa.",
+      "invalid_payload": "Studio hylkäsi valmistellun viestin. Säilytä luonnos.",
+      "retry_limit_reached": "Lähetys pysähtyi toistuvien virheiden jälkeen. Tarkista se Studiossa.",
+      "permanent_transport_failure": "Sähköpostipalvelu hylkäsi lähetyksen. Tarkista se Studiossa.",
+      "temporary_transport_failure": "Studio yrittää uudelleen tilapäisen yhteys- tai palveluvirheen jälkeen.",
+      "local_authorization_unavailable": "Studio ei voinut tarkistaa paikallisia oikeuksia ja yrittää uudelleen.",
+      "interrupted_delivery": "Lähetys keskeytyi. Tarkista Studion Lähetetyt-kansio ennen uutta yritystä.",
+      "delivery_outcome_unknown": "Palvelu on saattanut hyväksyä viestin. Tarkista Studion Lähetetyt-kansio ennen uutta yritystä.",
+      "manually_confirmed_sent": "Lähetys vahvistettiin paikallisesti Studiossa.",
+      "manually_confirmed_not_sent": "Studio vahvisti, ettei viestiä lähetetty.",
+      "sent_copy_failed": "Viesti lähetettiin, mutta Studio ei voinut tallentaa kopiota Lähetetyt-kansioon. Säilytä alkuperäinen luonnos ja tarkista Studio. Älä lähetä viestiä uudelleen."
+    },
+    "draftRetained": "Tästä luonnoksesta on ajastettu kopio Studiossa. Muokkaukset eivät päivitä jonossa olevaa viestiä. Vahvista peruutus ennen uutta lähetystä ja poista luonnos vahvistetun lähetyksen jälkeen.",
+    "cancelBeforeDiscard": "Vahvista peruutus Studiossa ennen tämän ajastetun luonnoksen hylkäämistä."
   }
 }

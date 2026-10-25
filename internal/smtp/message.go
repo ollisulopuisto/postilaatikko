@@ -104,6 +104,15 @@ func (m *ComposeMessage) AllRecipients() []string {
 
 // ToRFC822 converts the message to RFC 822 format for sending
 func (m *ComposeMessage) ToRFC822() ([]byte, error) {
+	return m.ToRFC822At(time.Now())
+}
+
+// ToRFC822At prepares immutable MIME with a chosen Date header. Scheduled mail
+// uses its planned delivery time and retains the resulting bytes across retries.
+func (m *ComposeMessage) ToRFC822At(date time.Time) ([]byte, error) {
+	if date.IsZero() {
+		return nil, fmt.Errorf("message date is required")
+	}
 	var buf bytes.Buffer
 
 	// Generate Message-ID
@@ -120,7 +129,7 @@ func (m *ComposeMessage) ToRFC822() ([]byte, error) {
 		writeHeader(&buf, "Reply-To", m.ReplyTo.String())
 	}
 	writeHeader(&buf, "Subject", encodeSubject(m.Subject))
-	writeHeader(&buf, "Date", time.Now().Format(time.RFC1123Z))
+	writeHeader(&buf, "Date", date.Format(time.RFC1123Z))
 	writeHeader(&buf, "Message-ID", messageID)
 	writeHeader(&buf, "MIME-Version", "1.0")
 	writeHeader(&buf, "User-Agent", "Aerion Email Client")
