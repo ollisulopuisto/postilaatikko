@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## [Unreleased]
+
+- Added a floating command palette (`⌘P` / `Ctrl+P`, Alfred-style quick launcher) with instant search, keyboard navigation, and direct action dispatch.
+- Stabilized the keyboard shortcuts reference dialog height so that live search filtering no longer resizes the window or causes input focus to be lost.
+
 ## Postilaatikko — v0.3.13
 
 - Added an in-app keyboard shortcuts overlay: press `?` (outside text fields) or use the new Keyboard shortcuts entry in the Mail sidebar or the Calendar/Contacts sidebar footer. It lists the shortcuts for the current view (or all views), is searchable, and shows `⌘` on macOS. Toolbar tooltips and message context-menu items now show their shortcut too.

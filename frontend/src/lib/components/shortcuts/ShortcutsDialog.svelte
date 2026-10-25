@@ -82,13 +82,13 @@
 </script>
 
 <Dialog.Root open={shortcutsOverlay.open} onOpenChange={(value) => (shortcutsOverlay.open = value)}>
-  <Dialog.Content class="max-w-3xl max-h-[85vh] grid-rows-[auto_auto_minmax(0,1fr)_auto]">
-    <Dialog.Header class="pr-6">
+  <Dialog.Content class="max-w-3xl h-[min(640px,85vh)] overflow-hidden flex flex-col" preventCloseAutoFocus>
+    <Dialog.Header class="pr-6 shrink-0">
       <Dialog.Title>{$_('shortcuts.title')}</Dialog.Title>
       <Dialog.Description>{$_('shortcuts.description')}</Dialog.Description>
     </Dialog.Header>
 
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center shrink-0">
       <div class="relative flex-1">
         <Icon icon="mdi:magnify" class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
@@ -98,6 +98,7 @@
           placeholder={$_('shortcuts.search')}
           aria-label={$_('shortcuts.search')}
           aria-controls="shortcuts-dialog-list"
+          autofocus
         />
       </div>
       <label class="flex shrink-0 cursor-pointer select-none items-center gap-2 text-sm text-muted-foreground">
@@ -106,7 +107,7 @@
       </label>
     </div>
 
-    <div id="shortcuts-dialog-list" class="-mx-6 min-h-0 overflow-y-auto px-6 scrollbar-thin" aria-live="polite">
+    <div id="shortcuts-dialog-list" class="-mx-6 flex-1 min-h-0 overflow-y-auto px-6 scrollbar-thin" aria-live="polite">
       {#if sections.length === 0}
         <p class="py-8 text-center text-sm text-muted-foreground">
           {$_('shortcuts.noResults', { values: { query: query.trim() } })}
@@ -144,7 +145,7 @@
       {/if}
     </div>
 
-    <p class="text-xs text-muted-foreground">
+    <p class="text-xs text-muted-foreground shrink-0 mt-3">
       {$_('shortcuts.footer', { values: { key: formatShortcut('app.shortcuts', mac) } })}
     </p>
   </Dialog.Content>

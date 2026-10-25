@@ -112,6 +112,7 @@ const composer = (...keys: string[]): ShortcutInlineBinding => ({ file: 'Compose
 
 export const CORE_SHORTCUTS: ShortcutDef[] = [
   // General
+  { id: 'app.commandPalette', icon: 'mdi:console-line', label: 'shortcuts.action.commandPalette', group: 'general', combos: ['Mod+p', 'Mod+Shift+p'], predicates: [KEY.COMMAND_PALETTE] },
   { id: 'app.shortcuts', icon: 'mdi:keyboard-outline', label: 'shortcuts.action.showShortcuts', group: 'general', combos: ['?'], predicates: [KEY.SHORTCUTS_HELP] },
   { id: 'app.preferences', label: 'shortcuts.action.preferences', group: 'general', combos: ['Meta+,'], macOnly: true, inline: app('Comma') },
   { id: 'app.compose', icon: 'mdi:pencil-plus-outline', label: 'shortcuts.action.compose', group: 'general', combos: ['Mod+n'], panes: MAIL, inline: app('n') },

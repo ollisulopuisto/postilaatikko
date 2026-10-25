@@ -1097,6 +1097,7 @@
       "lists": "Luettelot"
     },
     "action": {
+      "commandPalette": "Komentovalikko",
       "showShortcuts": "Näytä pikanäppäimet",
       "preferences": "Avaa asetukset",
       "compose": "Uusi viesti",
@@ -1159,6 +1160,25 @@
       "italic": "Kursiivi",
       "underline": "Alleviivaus",
       "closeComposer": "Sulje viestin kirjoitus"
+    }
+  },
+  "commandPalette": {
+    "title": "Komentovalikko",
+    "placeholder": "Kirjoita komento tai hae...",
+    "noResults": "Komentoja ei löytynyt haulle ”{query}”.",
+    "categories": {
+      "general": "Yleiset",
+      "navigation": "Navigointi",
+      "mail": "Sähköposti",
+      "settings": "Asetukset",
+      "view": "Näkymä",
+      "calendar": "Kalenteri",
+      "contacts": "Yhteystiedot"
+    },
+    "hints": {
+      "navigate": "navigoi",
+      "select": "valitse",
+      "close": "sulje"
     }
   }
 }

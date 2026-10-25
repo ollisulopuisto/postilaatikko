@@ -16,6 +16,7 @@
   import { setFocusedPane } from '$lib/stores/keyboard.svelte'
   import { withShortcut, ariaKeyshortcuts, formatShortcut } from '$lib/keyboard/format'
   import { openShortcutsOverlay } from '$lib/stores/shortcutsOverlay.svelte'
+  import { openCommandPalette } from '$lib/stores/commandPalette.svelte'
   import { _ } from '$lib/i18n'
   // @ts-ignore - wailsjs path
   import { account, folder } from '../../../../wailsjs/go/models'
@@ -815,6 +816,12 @@
     <button type="button" class="sidebar-refresh-entry" onclick={toggleSync} title={withShortcut(accountStore.isAnySyncing ? $_('sidebar.clickToCancel') : $_('sidebar.syncAllAccounts'), 'app.syncAll')} aria-label={accountStore.isAnySyncing ? $_('sidebar.clickToCancel') : $_('sidebar.syncAllAccounts')}>
       <Icon icon={accountStore.isAnySyncing ? 'mdi:sync' : 'mdi:refresh'} class="h-5 w-5 {accountStore.isAnySyncing ? 'animate-spin' : ''}" />
       <span data-sidebar-label>{accountStore.isAnySyncing ? $_('sidebar.syncing') : $_('sidebar.syncAllAccounts')}</span>
+    </button>
+
+    <button type="button" class="sidebar-refresh-entry" data-sidebar-command-palette onclick={openCommandPalette} title={withShortcut($_('commandPalette.title'), 'app.commandPalette')} aria-label={$_('commandPalette.title')} aria-keyshortcuts={ariaKeyshortcuts('app.commandPalette')} aria-haspopup="dialog">
+      <Icon icon="mdi:console-line" class="h-5 w-5" />
+      <span data-sidebar-label>{$_('commandPalette.title')}</span>
+      <kbd data-sidebar-label class="ml-auto font-sans text-xs text-muted-foreground" aria-hidden="true">{formatShortcut('app.commandPalette')}</kbd>
     </button>
 
     <button type="button" class="sidebar-refresh-entry" data-sidebar-shortcuts onclick={openShortcutsOverlay} title={withShortcut($_('shortcuts.open'), 'app.shortcuts')} aria-label={$_('shortcuts.open')} aria-keyshortcuts={ariaKeyshortcuts('app.shortcuts')} aria-haspopup="dialog">

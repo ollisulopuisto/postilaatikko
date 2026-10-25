@@ -103,6 +103,10 @@ export const LIST_COPY_TO = (e: KeyboardEvent): boolean =>
 export const SHORTCUTS_HELP = (e: KeyboardEvent): boolean =>
   e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey
 
+// Cmd+P / Ctrl+P or Cmd+Shift+P / Ctrl+Shift+P — open the command palette.
+export const COMMAND_PALETTE = (e: KeyboardEvent): boolean =>
+  ctrlOrMeta(e) && (e.key === 'p' || e.key === 'P')
+
 // Convenience: namespace export for predicates that the kit imports as a group.
 export const KEY = {
   LIST_NEXT,
@@ -125,6 +129,7 @@ export const KEY = {
   LIST_MOVE_TO,
   LIST_COPY_TO,
   SHORTCUTS_HELP,
+  COMMAND_PALETTE,
 }
 
 // matchesAny is a small helper for cases where several predicates should be

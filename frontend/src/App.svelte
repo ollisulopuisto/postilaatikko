@@ -19,6 +19,7 @@
   import ExtensionSettingsDialog from './lib/components/settings/ExtensionSettingsDialog.svelte'
   import ExtensionRail from './lib/components/rail/ExtensionRail.svelte'
   import ShortcutsDialog from './lib/components/shortcuts/ShortcutsDialog.svelte'
+  import CommandPalette from './lib/components/command/CommandPalette.svelte'
   import ContactsPane from '$extensions/contacts/frontend/components/ContactsPane.svelte'
   import CalendarPane from '$extensions/calendar/frontend/components/CalendarPane.svelte'
   import { refreshExtensionRegistry, getRailTabs } from '$lib/stores/extensionRegistry.svelte'
@@ -29,7 +30,7 @@
   import { loadSettings, getThemeMode, getShowTitleBar, getNativeTitleBar, getComposerMode, getMailtoMode } from '$lib/stores/settings.svelte'
   import { loadImageAllowlist } from '$lib/stores/imageAllowlist.svelte'
   import { initializeUpdateChecker } from '$lib/stores/updateChecker.svelte'
-  import { initTheme, applyThemeFromMode, handleSystemThemeEvent, handleMediaQueryChange } from '$lib/stores/theme.svelte'
+  import { initTheme, applyTheme, applyThemeFromMode, getIsDarkActive, handleSystemThemeEvent, handleMediaQueryChange } from '$lib/stores/theme.svelte'
   import { loadUIState, saveUIState, paneConstraints, getActiveExtension, setActiveExtension, getSidebarWidth, isSidebarCollapsed, setSidebarCollapsed } from '$lib/stores/uiState.svelte'
   import { setPendingDeepLink } from '$lib/stores/extensionDeepLink.svelte'
   import {
@@ -46,6 +47,7 @@
   import { isDialogGuardActive } from '$lib/stores/dialogGuard'
   import { dispatchExtensionShortcut } from '$lib/stores/extensionShortcuts.svelte'
   import { shortcutsOverlay, openShortcutsOverlay } from '$lib/stores/shortcutsOverlay.svelte'
+  import { openCommandPalette, registerCommandHandler } from '$lib/stores/commandPalette.svelte'
   import { initLayout, getLayoutMode, getResponsiveView, showViewer, hideViewer, showSidebar, hideSidebar, isResponsive } from '$lib/stores/layout.svelte'
   import { publishUndoOperationCompleted, publishUndoOperationCreated } from '$lib/components/list/undoMutationEvents'
   import { runMessageMutation } from '$lib/components/list/mutationInFlight'
@@ -591,6 +593,66 @@
     // Initialize responsive layout breakpoint listeners
     initLayout()
 
+    // Register actions for the command palette
+    registerCommandHandler('app.compose', () => handleCompose())
+    registerCommandHandler('app.search', () => {
+      if (getActiveExtension() === 'mail') {
+        messageListRef?.toggleSearchFocus()
+        setFocusedPane('messageList')
+      } else {
+        getPaneNav('messageList')?.focusSearch?.()
+        setFocusedPane('messageList')
+      }
+    })
+    registerCommandHandler('app.syncAll', () => {
+      sidebarRef?.toggleSync()
+    })
+    registerCommandHandler('app.syncFolder', () => {
+      messageListRef?.toggleFolderSync()
+    })
+    registerCommandHandler('app.preferences', () => sidebarRef?.openSettings())
+    registerCommandHandler('app.shortcuts', () => openShortcutsOverlay())
+    registerCommandHandler('app.undo', () => handleGlobalUndo())
+    registerCommandHandler('app.quit', () => handleQuit())
+    registerCommandHandler('theme.toggle', () => {
+      const next = getIsDarkActive() ? 'light' : 'dark'
+      applyTheme(next)
+    })
+    registerCommandHandler('focus.sidebar', () => setFocusedPane('sidebar'))
+    registerCommandHandler('focus.messageList', () => setFocusedPane('messageList'))
+    registerCommandHandler('focus.viewer', () => setFocusedPane('viewer'))
+    registerCommandHandler('mail.reply', () => {
+      const msgId = getLastMessageId()
+      if (msgId) handleReply('reply', msgId, viewerRef?.isImagesLoaded(msgId) || false)
+    })
+    registerCommandHandler('mail.replyAll', () => {
+      const msgId = getLastMessageId()
+      if (msgId) handleReply('reply-all', msgId, viewerRef?.isImagesLoaded(msgId) || false)
+    })
+    registerCommandHandler('mail.forward', () => {
+      const msgId = getLastMessageId()
+      if (msgId) handleReply('forward', msgId, viewerRef?.isImagesLoaded(msgId) || false)
+    })
+    registerCommandHandler('mail.archive', () => {
+      if (selectedThreadId) handleBulkArchive([selectedThreadId])
+    })
+    registerCommandHandler('mail.spam', () => {
+      if (selectedThreadId) handleBulkSpam([selectedThreadId])
+    })
+    registerCommandHandler('mail.trash', () => {
+      const ids = messageListRef?.getSelectedMessageIds() ?? []
+      if (ids.length > 0) messageListRef?.requestDelete(ids, false)
+    })
+    registerCommandHandler('mail.star', () => {
+      if (selectedThreadId) handleBulkToggleStar([selectedThreadId], true)
+    })
+    registerCommandHandler('mail.markRead', () => {
+      if (selectedThreadId) handleBulkMarkRead([selectedThreadId])
+    })
+    registerCommandHandler('mail.markUnread', () => {
+      if (selectedThreadId) handleBulkMarkUnread([selectedThreadId])
+    })
+
     // Check for pending mailto: URL from command line
     try {
       const mailtoData = await GetPendingMailto()
@@ -1008,6 +1070,13 @@
     if (!inInput && !showComposer && KEY.SHORTCUTS_HELP(e)) {
       e.preventDefault()
       openShortcutsOverlay()
+      return
+    }
+
+    // Cmd+P / Ctrl+P opens the command palette (Alfred style).
+    if (!showComposer && KEY.COMMAND_PALETTE(e)) {
+      e.preventDefault()
+      openCommandPalette()
       return
     }
 
@@ -1952,6 +2021,9 @@
 {#if shortcutsOverlay.open}
   <ShortcutsDialog />
 {/if}
+
+<!-- Command palette (Cmd+P / Ctrl+P, Alfred style quick launcher). -->
+<CommandPalette />
 
 <!-- Shutdown Overlay -->
 {#if isShuttingDown}
