@@ -239,6 +239,7 @@
     "forSender": "For {email}",
     "focusThread": "Focus thread",
     "focusMessage": "Focus message",
+    "enterFocus": "Enter focus mode",
     "exitFocus": "Exit focus mode",
     "darkMailToLight": "Show this email without dark filter",
     "darkMailToDark": "Apply dark filter to this email"

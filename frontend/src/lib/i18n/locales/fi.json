@@ -239,6 +239,7 @@
     "forSender": "Lähettäjälle {email}",
     "focusThread": "Kohdista ketjuun",
     "focusMessage": "Kohdista viestiin",
+    "enterFocus": "Siirry kohdistustilaan",
     "exitFocus": "Poistu kohdistustilasta",
     "darkMailToLight": "Näytä tämä sähköposti ilman tummaa suodatinta",
     "darkMailToDark": "Käytä tummaa suodatinta tähän sähköpostiin"
