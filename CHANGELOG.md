@@ -10,6 +10,7 @@
 - Show configured account names under Inbox and in account rows, falling back to the email address.
 - Added ICS event handoff: create an ICS event from structured date/time details and open it for review/import in the user's calendar application. No email timestamp detection (that is P-022).
 - Added composer quick replies: create, edit, delete and insert reusable plain-text replies from the composer footer without touching the draft, recipients or sender. Stored on this computer only.
+- Added an in-app keyboard shortcuts overlay: press `?` (outside text fields) or use the new Keyboard shortcuts entry in the Mail sidebar or the Calendar/Contacts sidebar footer. It lists the shortcuts for the current view (or all views), is searchable, and shows `⌘` on macOS. Toolbar tooltips and message context-menu items now show their shortcut too.
 - Gmail accounts now search on the server with the Gmail API, so Gmail operators such as `from:`, `has:attachment` and `older_than:` work in folder search; other providers, and Gmail accounts where the API is unavailable, keep using IMAP search.
 - Marking Gmail mail as spam (and not spam) now changes the Gmail labels through the Gmail API when it is available, and falls back to the previous IMAP move otherwise. Undo works as before.
 - Icon-only controls in the Contacts list and the shared detail overlay and rich-text editor now have localized accessible names (screen readers).

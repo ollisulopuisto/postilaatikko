@@ -16,6 +16,7 @@
   import { setFocusedPane, isInputElement, isComposerOpen } from '$lib/stores/keyboard.svelte'
   import { ConfirmDialog } from '$lib/components/ui/confirm-dialog'
   import MessageContextMenu from '$lib/components/common/MessageContextMenu.svelte'
+  import { withShortcut, ariaKeyshortcuts } from '$lib/keyboard/format'
   import { _ } from '$lib/i18n'
   import { isDialogGuardActive } from '$lib/stores/dialogGuard'
   import { getShowViewerCircles, getDarkMailContent } from '$lib/stores/settings.svelte'
@@ -1597,24 +1598,27 @@
         </button>
         <button
           class="viewer-toolbar-action p-2 rounded-md hover:bg-muted transition-all duration-150 hover:-translate-y-0.5 hover:scale-105 hover:shadow-sm active:translate-y-0 active:scale-95"
-          data-tooltip={$_('viewer.reply')}
+          data-tooltip={withShortcut($_('viewer.reply'), 'mail.reply')}
           aria-label={$_('viewer.reply')}
+          aria-keyshortcuts={ariaKeyshortcuts('mail.reply')}
           onclick={handleReply}
         >
           <Icon icon="mdi:reply" class="w-5 h-5 text-muted-foreground" />
         </button>
         <button
           class="viewer-toolbar-action p-2 rounded-md hover:bg-muted transition-all duration-150 hover:-translate-y-0.5 hover:scale-105 hover:shadow-sm active:translate-y-0 active:scale-95"
-          data-tooltip={$_('viewer.replyAll')}
+          data-tooltip={withShortcut($_('viewer.replyAll'), 'mail.replyAll')}
           aria-label={$_('viewer.replyAll')}
+          aria-keyshortcuts={ariaKeyshortcuts('mail.replyAll')}
           onclick={handleReplyAll}
         >
           <Icon icon="mdi:reply-all" class="w-5 h-5 text-muted-foreground" />
         </button>
         <button
           class="viewer-toolbar-action p-2 rounded-md hover:bg-muted transition-all duration-150 hover:-translate-y-0.5 hover:scale-105 hover:shadow-sm active:translate-y-0 active:scale-95"
-          data-tooltip={$_('viewer.forward')}
+          data-tooltip={withShortcut($_('viewer.forward'), 'mail.forward')}
           aria-label={$_('viewer.forward')}
+          aria-keyshortcuts={ariaKeyshortcuts('mail.forward')}
           onclick={handleForward}
         >
           <Icon icon="mdi:share" class="w-5 h-5 text-muted-foreground" />
@@ -1629,8 +1633,9 @@
         {/if}
         <button
           class="viewer-toolbar-action p-2 rounded-md hover:bg-muted transition-all duration-150 hover:-translate-y-0.5 hover:scale-105 hover:shadow-sm active:translate-y-0 active:scale-95"
-          data-tooltip={$_('viewer.archive')}
+          data-tooltip={withShortcut($_('viewer.archive'), 'mail.archive')}
           aria-label={$_('viewer.archive')}
+          aria-keyshortcuts={ariaKeyshortcuts('mail.archive')}
           onclick={handleArchive}
           disabled={moveMutationInFlight}
         >
@@ -1638,7 +1643,7 @@
         </button>
         <button
           class="viewer-toolbar-action p-2 rounded-md hover:bg-muted transition-all duration-150 hover:-translate-y-0.5 hover:scale-105 hover:shadow-sm active:translate-y-0 active:scale-95"
-          data-tooltip={$_(isTrashFolder ? 'viewer.deletePermanently' : 'viewer.delete')}
+          data-tooltip={withShortcut($_(isTrashFolder ? 'viewer.deletePermanently' : 'viewer.delete'), isTrashFolder ? 'mail.deletePermanently' : 'mail.trash')}
           aria-label={$_(isTrashFolder ? 'viewer.deletePermanently' : 'viewer.delete')}
           onclick={handleDelete}
           disabled={moveMutationInFlight}
@@ -1647,7 +1652,7 @@
         </button>
         <button
           class="viewer-toolbar-action p-2 rounded-md hover:bg-muted transition-all duration-150 hover:-translate-y-0.5 hover:scale-105 hover:shadow-sm active:translate-y-0 active:scale-95"
-          data-tooltip={$_(isSpamFolder ? 'viewer.markAsNotSpam' : 'viewer.markAsSpam')}
+          data-tooltip={isSpamFolder ? $_('viewer.markAsNotSpam') : withShortcut($_('viewer.markAsSpam'), 'mail.spam')}
           aria-label={$_(isSpamFolder ? 'viewer.markAsNotSpam' : 'viewer.markAsSpam')}
           onclick={handleSpam}
           disabled={moveMutationInFlight}
@@ -1659,7 +1664,7 @@
 
         <button
           class="viewer-toolbar-action p-2 rounded-md hover:bg-muted transition-all duration-150 hover:-translate-y-0.5 hover:scale-105 hover:shadow-sm active:translate-y-0 active:scale-95"
-          data-tooltip={$_(allStarred ? 'viewer.removeStar' : 'viewer.star')}
+          data-tooltip={withShortcut($_(allStarred ? 'viewer.removeStar' : 'viewer.star'), 'mail.star')}
           aria-label={$_(allStarred ? 'viewer.removeStar' : 'viewer.star')}
           onclick={handleStar}
         >
@@ -1667,7 +1672,7 @@
         </button>
         <button
           class="viewer-toolbar-action p-2 rounded-md hover:bg-muted transition-all duration-150 hover:-translate-y-0.5 hover:scale-105 hover:shadow-sm active:translate-y-0 active:scale-95"
-          data-tooltip={$_(allRead ? 'viewer.markAsUnread' : 'viewer.markAsRead')}
+          data-tooltip={withShortcut($_(allRead ? 'viewer.markAsUnread' : 'viewer.markAsRead'), allRead ? 'mail.markUnread' : 'mail.markRead')}
           aria-label={$_(allRead ? 'viewer.markAsUnread' : 'viewer.markAsRead')}
           onclick={handleMarkRead}
         >
@@ -1696,7 +1701,7 @@
         {/if}
         <button
           class="viewer-toolbar-action p-2 rounded-md hover:bg-muted transition-all duration-150 hover:-translate-y-0.5 hover:scale-105 hover:shadow-sm active:translate-y-0 active:scale-95"
-          data-tooltip={inFocusMode && focusModeKind === 'thread' ? $_('viewer.exitFocus') : $_('viewer.focusThread')}
+          data-tooltip={withShortcut(inFocusMode && focusModeKind === 'thread' ? $_('viewer.exitFocus') : $_('viewer.focusThread'), 'viewer.threadFocus')}
           aria-label={inFocusMode && focusModeKind === 'thread' ? $_('viewer.exitFocus') : $_('viewer.focusThread')}
           onclick={onToggleThreadFocus}
         >

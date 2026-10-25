@@ -2,7 +2,12 @@
 
 Complete reference of all keyboard shortcuts in Postilaatikko. Existing upstream shortcuts are retained; macOS also supports the standard Preferences shortcut below.
 
-## Global Shortcuts
+## In-app reference
+
+Press `?` anywhere outside a text field (and while the composer is closed) to open the keyboard shortcuts overlay. It is also reachable from **Keyboard shortcuts** at the bottom of the Mail sidebar and the keyboard button in the Calendar and Contacts sidebar footers. The overlay lists the shortcuts for the active view, can show all views, is searchable by action or key, and renders `⌘` on macOS. Toolbar tooltips and message context-menu items show the same key labels.
+
+The overlay and hints are generated from `frontend/src/lib/keyboard/registry.ts` (and `extensions/<name>/frontend/keyboard/registry.ts`). When you add or change a binding, update the registry; `npm run check` fails if a displayed key no longer matches its predicate, or if `App.svelte` / `Composer.svelte` gain or lose a key case that the registry does not describe. This document remains the long-form reference.
+
 
 These shortcuts work anywhere in the application, except while the composer is open (see [Composer Blocking](#composer-blocking)). They are ignored while a context menu or modal dialog is open.
 
@@ -12,6 +17,7 @@ On macOS, `⌘` works wherever `Ctrl` is listed below, unless macOS reserves the
 
 | Shortcut | Action |
 |----------|--------|
+| `?` | Show the keyboard shortcuts overlay (not in text fields or while composing) |
 | `⌘+,` (macOS) | Open Preferences |
 | `Ctrl+Q` | Quit application |
 | `Ctrl+N` | Compose new message |

@@ -56,6 +56,7 @@
   import { addToast } from '$lib/stores/toast'
   import { getComposerFormat, getDarkComposerBody } from '$lib/stores/settings.svelte'
   import { getIsDarkActive } from '$lib/stores/theme.svelte'
+  import { withShortcut, ariaKeyshortcuts } from '$lib/keyboard/format'
   import { _ } from '$lib/i18n'
 
   // Keep the composer message body white in dark mode unless the user opted into
@@ -1926,7 +1927,8 @@
           onclick={handlePopOut}
           disabled={poppingOut || sending}
           class="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          title={$_('composer.openInNewWindow')}
+          title={withShortcut($_('composer.openInNewWindow'), 'composer.detach')}
+          aria-keyshortcuts={ariaKeyshortcuts('composer.detach')}
           aria-label={$_('composer.openInNewWindow')}
         >
           {#if poppingOut}
@@ -1940,7 +1942,7 @@
         onclick={handleClose}
         disabled={poppingOut}
         class="{isCompact ? 'p-1.5' : 'px-3 py-1.5 text-sm'} text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors disabled:opacity-50"
-        title={$_('composer.close')}
+        title={withShortcut($_('composer.close'), 'composer.close')}
         aria-label={$_('composer.close')}
       >
         {#if isCompact}
@@ -1953,6 +1955,8 @@
         <button
         onclick={handleSend}
         disabled={sending || poppingOut || toRecipients.length === 0}
+        title={withShortcut($_('composer.send'), 'composer.send')}
+        aria-keyshortcuts={ariaKeyshortcuts('composer.send')}
         class="px-4 py-1.5 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
       >
         {#if sending}
@@ -2237,7 +2241,8 @@
       <button
         onclick={handleAttachFiles}
         class="{isCompact ? 'p-1.5 rounded-md' : 'flex items-center gap-1'} hover:text-foreground hover:bg-muted transition-colors"
-        title={$_('composer.attachFiles')}
+        title={withShortcut($_('composer.attachFiles'), 'composer.attach')}
+        aria-keyshortcuts={ariaKeyshortcuts('composer.attach')}
         aria-label={$_('composer.attachFiles')}
       >
         <Icon icon="mdi:attachment" class="w-4 h-4" />

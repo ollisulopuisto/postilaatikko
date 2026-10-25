@@ -97,6 +97,12 @@ export const LIST_MOVE_TO = (e: KeyboardEvent): boolean =>
 export const LIST_COPY_TO = (e: KeyboardEvent): boolean =>
   altOnly(e) && e.key === 'c'
 
+// `?` — open the keyboard shortcuts overlay. Shift is not checked: `?` needs
+// Shift on most layouts (Shift+/ on US, Shift++ on Finnish), and e.key already
+// reflects the layout.
+export const SHORTCUTS_HELP = (e: KeyboardEvent): boolean =>
+  e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey
+
 // Convenience: namespace export for predicates that the kit imports as a group.
 export const KEY = {
   LIST_NEXT,
@@ -118,6 +124,7 @@ export const KEY = {
   SIDEBAR_LAST,
   LIST_MOVE_TO,
   LIST_COPY_TO,
+  SHORTCUTS_HELP,
 }
 
 // matchesAny is a small helper for cases where several predicates should be

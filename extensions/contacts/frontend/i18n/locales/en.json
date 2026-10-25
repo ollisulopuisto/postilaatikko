@@ -162,6 +162,13 @@
       "syncSucceeded": "Contacts synced",
       "syncAllSucceeded": "All contact sources synced",
       "syncNoSource": "Select a CardDAV source in the sidebar first."
+    },
+    "shortcuts": {
+      "group": "Contacts",
+      "edit": "Edit focused contact",
+      "new": "New contact",
+      "syncAll": "Sync all contact sources",
+      "syncFocused": "Sync focused contact source"
     }
   }
 }

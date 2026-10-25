@@ -14,6 +14,8 @@
   import Icon from '@iconify/svelte'
   import SidebarFrame from '$lib/components/kit/SidebarFrame.svelte'
   import SidebarFooter from '$lib/components/kit/SidebarFooter.svelte'
+  import { withShortcut, ariaKeyshortcuts } from '$lib/keyboard/format'
+  import { openShortcutsOverlay } from '$lib/stores/shortcutsOverlay.svelte'
   import SidebarSyncStatus from '$lib/components/kit/SidebarSyncStatus.svelte'
   import AddCalendarMenu from './AddCalendarMenu.svelte'
   import { calendarSources } from '$extensions/calendar/frontend/stores/calendarSources.svelte'
@@ -173,6 +175,17 @@
         />
       {/snippet}
       {#snippet trailing()}
+        <button
+          class="p-1 rounded hover:bg-muted/40"
+          title={withShortcut($_('shortcuts.open'), 'app.shortcuts')}
+          onclick={openShortcutsOverlay}
+          type="button"
+          aria-label={$_('shortcuts.open')}
+          aria-keyshortcuts={ariaKeyshortcuts('app.shortcuts')}
+          aria-haspopup="dialog"
+        >
+          <Icon icon="mdi:keyboard-outline" class="w-4 h-4" />
+        </button>
         <button
           class="p-1 rounded hover:bg-muted/40"
           title={$_('calendar.sidebar.settings')}

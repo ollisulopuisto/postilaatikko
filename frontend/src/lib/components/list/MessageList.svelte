@@ -20,6 +20,8 @@
   // @ts-ignore - wailsjs bindings
   import { MoveToInboxWithUndo, GetConversations, GetConversationCount, SyncFolder, ForceSyncFolder, CancelFolderSync, SetMessageListSortOrder, GetUnifiedFolderConversations, GetUnifiedFolderCount, SearchConversations, SearchUnifiedFolder, GetSearchCount, GetSearchCountUnifiedFolder, SyncUnifiedFolder, EmptyUnifiedTrash, GetFTSIndexStatus, IsFTSIndexing, TrashWithUndo, DeletePermanently, EmptyTrash, UndoOperation, IMAPSearchFolder, IMAPSearchUnifiedInbox, FetchServerMessage, GetVirtualFolderConversations, GetVirtualFolderCount, SearchVirtualFolder, GetVirtualFolderSearchCount } from '../../../../wailsjs/go/app/App'
   import { toasts } from '$lib/stores/toast'
+  import { withShortcut, ariaKeyshortcuts, formatShortcut } from '$lib/keyboard/format'
+  import ShortcutHint from '$lib/components/shortcuts/ShortcutHint.svelte'
   import { _ } from '$lib/i18n'
   import { ConfirmDialog } from '$lib/components/ui/confirm-dialog'
   // @ts-ignore - wailsjs path
@@ -2221,6 +2223,7 @@
               >
                 <Icon icon="mdi:refresh" class="w-4 h-4 mr-2" />
                 {$_('messageList.syncFolder')}
+                <ShortcutHint id="app.syncFolder" />
               </DropdownMenu.Item>
               <DropdownMenu.Separator class="-mx-1 my-1 h-px bg-border" />
               <DropdownMenu.Item
@@ -2236,7 +2239,8 @@
       {/if}
       <button
         class="p-2 rounded-md hover:bg-muted transition-colors {showSearch ? 'bg-muted' : ''}"
-        title={showSearch ? $_('common.close') : $_('common.search')}
+        title={showSearch ? $_('common.close') : withShortcut($_('common.search'), 'app.search')}
+        aria-keyshortcuts={ariaKeyshortcuts('app.search')}
         aria-label={showSearch ? $_('messageList.clearSearch') : $_('common.search')}
         onclick={toggleSearch}
       >
@@ -2402,10 +2406,10 @@
           <Icon icon="mdi:inbox-arrow-down-outline" class="h-4 w-4" /> {$_('viewer.moveToInbox')}
         </button>
       {/if}
-      <button class="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" onclick={handleBulkArchive} disabled={moveMutationInFlight}>
+      <button class="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title={withShortcut($_('viewer.archive'), 'mail.archive')} onclick={handleBulkArchive} disabled={moveMutationInFlight}>
         <Icon icon="mdi:archive-outline" class="h-4 w-4" /> {$_('viewer.archive')}
       </button>
-      <button class="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title={$_('common.close')} aria-label={$_('common.close')} onclick={clearSelection}>
+      <button class="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title={`${$_('common.close')} (${formatShortcut('list.escape')})`} aria-label={$_('common.close')} onclick={clearSelection}>
         <Icon icon="mdi:close" class="h-4 w-4" />
       </button>
     </div>

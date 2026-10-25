@@ -5,6 +5,8 @@
   import SourceSidebar from '$lib/components/kit/SourceSidebar.svelte'
   import SourceItem from '$lib/components/kit/SourceItem.svelte'
   import SidebarFooter from '$lib/components/kit/SidebarFooter.svelte'
+  import { withShortcut, ariaKeyshortcuts } from '$lib/keyboard/format'
+  import { openShortcutsOverlay } from '$lib/stores/shortcutsOverlay.svelte'
   import SidebarSyncStatus from '$lib/components/kit/SidebarSyncStatus.svelte'
   import { contactSourcesStore } from '$extensions/contacts/frontend/stores/contactSources.svelte'
   import { contactsView, selectSource } from '$extensions/contacts/frontend/stores/contactsView.svelte'
@@ -82,6 +84,17 @@
         />
       {/snippet}
       {#snippet trailing()}
+        <button
+          class="p-1 rounded hover:bg-muted/40"
+          title={withShortcut($_('shortcuts.open'), 'app.shortcuts')}
+          onclick={openShortcutsOverlay}
+          type="button"
+          aria-label={$_('shortcuts.open')}
+          aria-keyshortcuts={ariaKeyshortcuts('app.shortcuts')}
+          aria-haspopup="dialog"
+        >
+          <Icon icon="mdi:keyboard-outline" class="w-4 h-4" />
+        </button>
         <button
           class="p-1 rounded hover:bg-muted/40"
           title={$_('contacts.sidebar.settings')}

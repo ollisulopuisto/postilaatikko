@@ -31,6 +31,7 @@
   import { _ } from '$lib/i18n'
   import { dialogGuardOpen, dialogGuardClose } from '$lib/stores/dialogGuard'
   import { runMessageMutation } from '$lib/components/list/mutationInFlight'
+  import ShortcutHint from '$lib/components/shortcuts/ShortcutHint.svelte'
   import { publishUndoOperationCompleted, publishUndoOperationCreated } from '$lib/components/list/undoMutationEvents'
 
   interface Props {
@@ -378,14 +379,17 @@
       <ContextMenuItem onSelect={handleReply}>
         <Icon icon="mdi:reply" class="mr-2 h-4 w-4" />
         {$_('contextMenu.reply')}
+        <ShortcutHint id="mail.reply" />
       </ContextMenuItem>
       <ContextMenuItem onSelect={handleReplyAll}>
         <Icon icon="mdi:reply-all" class="mr-2 h-4 w-4" />
         {$_('contextMenu.replyAll')}
+        <ShortcutHint id="mail.replyAll" />
       </ContextMenuItem>
       <ContextMenuItem onSelect={handleForward}>
         <Icon icon="mdi:share" class="mr-2 h-4 w-4" />
         {$_('contextMenu.forward')}
+        <ShortcutHint id="mail.forward" />
       </ContextMenuItem>
       <ContextMenuSeparator />
     {/if}
@@ -400,14 +404,17 @@
     <ContextMenuItem onSelect={handleArchive}>
       <Icon icon="mdi:archive-outline" class="mr-2 h-4 w-4" />
       {$_('contextMenu.archive')}
+      <ShortcutHint id="mail.archive" />
     </ContextMenuItem>
     <ContextMenuItem onSelect={handleDelete}>
       <Icon icon={isTrashFolder ? 'mdi:delete-forever' : 'mdi:delete-outline'} class="mr-2 h-4 w-4" />
       {$_(isTrashFolder ? 'contextMenu.deletePermanently' : 'contextMenu.delete')}
+      <ShortcutHint id={isTrashFolder ? 'mail.deletePermanently' : 'mail.trash'} />
     </ContextMenuItem>
     <ContextMenuItem onSelect={handleSpam}>
       <Icon icon={isSpamFolder ? 'mdi:email-check-outline' : 'mdi:alert-octagon-outline'} class="mr-2 h-4 w-4" />
       {$_(isSpamFolder ? 'contextMenu.markAsNotSpam' : 'contextMenu.markAsSpam')}
+      {#if !isSpamFolder}<ShortcutHint id="mail.spam" />{/if}
     </ContextMenuItem>
 
     <ContextMenuSeparator />
@@ -416,12 +423,14 @@
     <ContextMenuItem onSelect={openMoveTo}>
       <Icon icon="mdi:folder-move-outline" class="mr-2 h-4 w-4" />
       {$_('contextMenu.moveTo')}
+      <ShortcutHint id="mail.moveTo" />
     </ContextMenuItem>
 
     <!-- Copy to folder picker -->
     <ContextMenuItem onSelect={openCopyTo}>
       <Icon icon="mdi:content-copy" class="mr-2 h-4 w-4" />
       {$_('contextMenu.copyTo')}
+      <ShortcutHint id="mail.copyTo" />
     </ContextMenuItem>
 
     <ContextMenuSeparator />
@@ -433,6 +442,7 @@
         class="mr-2 h-4 w-4 {isStarred ? 'text-yellow-500' : ''}"
       />
       {$_(isStarred ? 'contextMenu.removeStar' : 'contextMenu.star')}
+      <ShortcutHint id="mail.star" />
     </ContextMenuItem>
     <ContextMenuItem onSelect={handleToggleRead}>
       <Icon
@@ -440,6 +450,7 @@
         class="mr-2 h-4 w-4"
       />
       {$_(isRead ? 'contextMenu.markAsUnread' : 'contextMenu.markAsRead')}
+      <ShortcutHint id={isRead ? 'mail.markUnread' : 'mail.markRead'} />
     </ContextMenuItem>
   </ContextMenuContent>
 </ContextMenuPrimitive.Root>
