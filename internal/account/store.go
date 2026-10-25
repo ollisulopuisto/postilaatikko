@@ -464,7 +464,7 @@ func (s *Store) Delete(id string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // no-op after a successful Commit
 	// Google sources own their credentials. Detach the logical association
 	// before the legacy account FK cascade, retaining contacts and identity.
 	if _, err := tx.Exec(`

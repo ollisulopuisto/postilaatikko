@@ -141,10 +141,31 @@ func TestFetchMessageHeadersFiresNewMessageHandlerOncePerNewUID(t *testing.T) {
 	messageStore := message.NewStore(db)
 	engine := NewEngine(pool, account.NewStore(db), folder.NewStore(db), messageStore, message.NewAttachmentStore(db))
 
-	var fired []uint32
+	// The engine runs the handler in its own goroutine, so results arrive on a
+	// channel instead of being read from shared state right after the fetch.
+	fired := make(chan uint32, 8)
 	engine.SetNewMessageHandler(func(accountID, folderID string, m *message.Message) {
-		fired = append(fired, m.UID)
+		fired <- m.UID
 	})
+	expectFired := func(want uint32) {
+		t.Helper()
+		select {
+		case got := <-fired:
+			if got != want {
+				t.Fatalf("Expected handler fired for UID %d, got UID %d", want, got)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("Expected handler fired for UID %d, got none", want)
+		}
+	}
+	expectNoFire := func() {
+		t.Helper()
+		select {
+		case got := <-fired:
+			t.Fatalf("Handler fired for an existing UID: %d", got)
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -165,9 +186,7 @@ func TestFetchMessageHeadersFiresNewMessageHandlerOncePerNewUID(t *testing.T) {
 	if n != 1 {
 		t.Fatalf("Expected 1 persisted message, got %d", n)
 	}
-	if len(fired) != 1 || fired[0] != 10 {
-		t.Fatalf("Expected handler fired once for UID 10, got %v", fired)
-	}
+	expectFired(10)
 
 	// Re-fetching the same UID is not a new message and must not fire again.
 	n, err = engine.fetchMessageHeaders(ctx, client, "account", "inbox", []uint32{10}, &persist)
@@ -177,9 +196,7 @@ func TestFetchMessageHeadersFiresNewMessageHandlerOncePerNewUID(t *testing.T) {
 	if n != 1 {
 		t.Fatalf("Expected 1 upserted message, got %d", n)
 	}
-	if len(fired) != 1 {
-		t.Fatalf("Handler fired for an existing UID: %v", fired)
-	}
+	expectNoFire()
 
 	// A genuinely new UID fires the handler again.
 	n, err = engine.fetchMessageHeaders(ctx, client, "account", "inbox", []uint32{11}, &persist)
@@ -189,7 +206,5 @@ func TestFetchMessageHeadersFiresNewMessageHandlerOncePerNewUID(t *testing.T) {
 	if n != 1 {
 		t.Fatalf("Expected 1 persisted message, got %d", n)
 	}
-	if len(fired) != 2 || fired[1] != 11 {
-		t.Fatalf("Expected handler fired for UID 11, got %v", fired)
-	}
+	expectFired(11)
 }

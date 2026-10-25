@@ -119,6 +119,7 @@ func TestLegacyGoogleSourceMigratesInPlaceAndSurvivesMailRemoval(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	//nolint:staticcheck // seeds the legacy one-contact-per-email shape this test exercises
 	if err := a.carddavStore.UpsertContactsBatch([]*carddav.Contact{{ID: "cached", AddressbookID: ab.ID, Email: "friend@example.com", DisplayName: "Friend", Href: "people/1"}}); err != nil {
 		t.Fatal(err)
 	}

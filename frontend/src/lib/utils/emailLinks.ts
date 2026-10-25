@@ -8,7 +8,7 @@ export function isAllowedEmailURL(value: string): boolean {
 
 // Match raw text once: never run a second replacement over generated markup.
 export function linkifyText(text: string): string {
-  const pattern = /https?:\/\/[^\s<>"'{}|\\^`\[\]]+|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
+  const pattern = /https?:\/\/[^\s<>"'{}|\\^`[\]]+|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
   let result = '', end = 0
   for (const match of text.matchAll(pattern)) {
     const value = match[0], start = match.index!
