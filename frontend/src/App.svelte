@@ -47,7 +47,10 @@
   import { isDialogGuardActive } from '$lib/stores/dialogGuard'
   import { dispatchExtensionShortcut } from '$lib/stores/extensionShortcuts.svelte'
   import { shortcutsOverlay, openShortcutsOverlay } from '$lib/stores/shortcutsOverlay.svelte'
-  import { openCommandPalette, registerCommandHandler } from '$lib/stores/commandPalette.svelte'
+  import { openCommandPalette, registerCommandAvailability, registerCommandHandler } from '$lib/stores/commandPalette.svelte'
+  import { LIST_ACTIONS, getListAction, runListAction as runActionOnTarget } from '$lib/actions/listActions'
+  import { resolveListTarget } from '$lib/actions/target'
+  import type { ListTarget, MessageActionExecutor, RunOptions } from '$lib/actions/types'
   import { initLayout, getLayoutMode, getResponsiveView, showViewer, hideViewer, showSidebar, hideSidebar, isResponsive } from '$lib/stores/layout.svelte'
   import { publishUndoOperationCompleted, publishUndoOperationCreated } from '$lib/components/list/undoMutationEvents'
   import { runMessageMutation } from '$lib/components/list/mutationInFlight'
@@ -633,25 +636,20 @@
       const msgId = getLastMessageId()
       if (msgId) handleReply('forward', msgId, viewerRef?.isImagesLoaded(msgId) || false)
     })
-    registerCommandHandler('mail.archive', () => {
-      if (selectedThreadId) handleBulkArchive([selectedThreadId])
-    })
-    registerCommandHandler('mail.spam', () => {
-      if (selectedThreadId) handleBulkSpam([selectedThreadId])
-    })
-    registerCommandHandler('mail.trash', () => {
-      const ids = messageListRef?.getSelectedMessageIds() ?? []
-      if (ids.length > 0) messageListRef?.requestDelete(ids, false)
-    })
-    registerCommandHandler('mail.star', () => {
-      if (selectedThreadId) handleBulkToggleStar([selectedThreadId], true)
-    })
-    registerCommandHandler('mail.markRead', () => {
-      if (selectedThreadId) handleBulkMarkRead([selectedThreadId])
-    })
-    registerCommandHandler('mail.markUnread', () => {
-      if (selectedThreadId) handleBulkMarkUnread([selectedThreadId])
-    })
+    // List actions use the same target as the keys (checked messages, else the
+    // focused row) and are hidden from the panel when there is none.
+    for (const listAction of LIST_ACTIONS) {
+      registerCommandAvailability(listAction.id, () => listActionAvailable(listAction.id))
+    }
+    registerCommandHandler('mail.archive', () => runListAction('mail.archive'))
+    registerCommandHandler('mail.spam', () => runListAction('mail.spam'))
+    registerCommandHandler('mail.trash', () => runListAction('mail.trash'))
+    registerCommandHandler('mail.star', () => runListAction('mail.star'))
+    registerCommandHandler('mail.markRead', () => runListAction('mail.markRead'))
+    registerCommandHandler('mail.markUnread', () => runListAction('mail.markUnread'))
+    for (const id of ['mail.reply', 'mail.replyAll', 'mail.forward']) {
+      registerCommandAvailability(id, () => selectedThreadId !== null)
+    }
 
     // Check for pending mailto: URL from command line
     try {
@@ -1245,48 +1243,15 @@
           return
         case 'u':
           e.preventDefault()
-          if (messageListRef?.hasCheckedMessages()) {
-            const messageIds = messageListRef.getCheckedMessageIds()
-            if (e.shiftKey) {
-              handleBulkMarkUnread(messageIds)
-            } else {
-              handleBulkMarkRead(messageIds)
-            }
-          } else {
-            // Mark the keyboard-focused message as read/unread
-            const focusedIds = messageListRef?.getSelectedMessageIds() ?? []
-            if (focusedIds.length > 0) {
-              if (e.shiftKey) {
-                handleBulkMarkUnread(focusedIds)
-              } else {
-                handleBulkMarkRead(focusedIds)
-              }
-            }
-          }
+          runListAction(e.shiftKey ? 'mail.markUnread' : 'mail.markRead')
           return
         case 'k':
           e.preventDefault()
-          if (messageListRef?.hasCheckedMessages()) {
-            handleBulkArchive(messageListRef.getCheckedMessageIds())
-          } else {
-            // Archive the keyboard-focused message
-            const focusedIds = messageListRef?.getSelectedMessageIds() ?? []
-            if (focusedIds.length > 0) {
-              handleBulkArchive(focusedIds)
-            }
-          }
+          runListAction('mail.archive')
           return
         case 'j':
           e.preventDefault()
-          if (messageListRef?.hasCheckedMessages()) {
-            handleBulkSpam(messageListRef.getCheckedMessageIds())
-          } else {
-            // Spam the keyboard-focused message
-            const focusedIds = messageListRef?.getSelectedMessageIds() ?? []
-            if (focusedIds.length > 0) {
-              handleBulkSpam(focusedIds)
-            }
-          }
+          runListAction('mail.spam')
           return
       }
       return
@@ -1586,14 +1551,7 @@
         return
       case 'e':
         e.preventDefault()
-        if (messageListRef?.hasCheckedMessages()) {
-          handleBulkArchive(messageListRef.getCheckedMessageIds())
-        } else {
-          const focusedIds = messageListRef?.getSelectedMessageIds() ?? []
-          if (focusedIds.length > 0) {
-            handleBulkArchive(focusedIds)
-          }
-        }
+        runListAction('mail.archive')
         return
       case 'v':
         if (!isMailActive()) return
@@ -1642,14 +1600,7 @@
         return
       case '!':
         e.preventDefault()
-        if (messageListRef?.hasCheckedMessages()) {
-          handleBulkSpam(messageListRef.getCheckedMessageIds())
-        } else {
-          const focusedIds = messageListRef?.getSelectedMessageIds() ?? []
-          if (focusedIds.length > 0) {
-            handleBulkSpam(focusedIds)
-          }
-        }
+        runListAction('mail.spam')
         return
       case 'z':
         e.preventDefault()
@@ -1661,25 +1612,11 @@
         return
       case 'I':
         e.preventDefault()
-        if (messageListRef?.hasCheckedMessages()) {
-          handleBulkMarkRead(messageListRef.getCheckedMessageIds())
-        } else {
-          const focusedIds = messageListRef?.getSelectedMessageIds() ?? []
-          if (focusedIds.length > 0) {
-            handleBulkMarkRead(focusedIds)
-          }
-        }
+        runListAction('mail.markRead')
         return
       case 'U':
         e.preventDefault()
-        if (messageListRef?.hasCheckedMessages()) {
-          handleBulkMarkUnread(messageListRef.getCheckedMessageIds())
-        } else {
-          const focusedIds = messageListRef?.getSelectedMessageIds() ?? []
-          if (focusedIds.length > 0) {
-            handleBulkMarkUnread(focusedIds)
-          }
-        }
+        runListAction('mail.markUnread')
         return
       case 'u':
         if (selectedThreadId) {
@@ -1691,16 +1628,7 @@
         }
         return
       case 's':
-        if (messageListRef?.hasCheckedMessages()) {
-          handleBulkToggleStar(messageListRef.getCheckedMessageIds(), messageListRef.getCheckedHasUnstarred())
-        } else {
-          // Toggle star on the keyboard-focused message
-          const focusedIds = messageListRef?.getSelectedMessageIds() ?? []
-          if (focusedIds.length > 0) {
-            const isStarred = messageListRef?.isSelectedStarred() ?? false
-            handleBulkToggleStar(focusedIds, !isStarred)
-          }
-        }
+        runListAction('mail.star')
         return
       case 'F': {
         // Shift+F: toggle focus mode
@@ -1721,14 +1649,7 @@
           viewerRef.trash()
           return
         }
-        if (messageListRef?.hasCheckedMessages()) {
-          messageListRef.requestDelete(messageListRef.getCheckedMessageIds(), e.shiftKey)
-          return
-        }
-        const focusedMessageIds = messageListRef?.getSelectedMessageIds() ?? []
-        if (focusedMessageIds.length > 0) {
-          messageListRef?.requestDelete(focusedMessageIds, e.shiftKey)
-        }
+        runListAction('mail.trash', { permanent: e.shiftKey })
         return
       }
     }
@@ -1792,6 +1713,38 @@
     } finally {
       targetedUndoInFlight.delete(operationID)
     }
+  }
+
+  // --- Shared list-action layer (P-029) -------------------------------------
+  // One resolver and one executor for every surface that acts on "the selected
+  // messages": the key handlers above and the command panel. Checked messages
+  // win, then the keyboard-focused row (see lib/actions/target.ts).
+  function currentListTarget(): ListTarget {
+    return resolveListTarget({
+      hasChecked: () => messageListRef?.hasCheckedMessages() ?? false,
+      checkedIds: () => messageListRef?.getCheckedMessageIds() ?? [],
+      focusedIds: () => messageListRef?.getSelectedMessageIds() ?? [],
+      checkedHasUnstarred: () => messageListRef?.getCheckedHasUnstarred() ?? false,
+      selectedStarred: () => messageListRef?.isSelectedStarred() ?? false,
+    })
+  }
+
+  const listActionExecutor: MessageActionExecutor = {
+    archive: (ids) => handleBulkArchive(ids),
+    spam: (ids) => handleBulkSpam(ids),
+    markRead: (ids) => handleBulkMarkRead(ids),
+    markUnread: (ids) => handleBulkMarkUnread(ids),
+    toggleStar: (ids, star) => handleBulkToggleStar(ids, star),
+    trash: (ids, permanent) => messageListRef?.requestDelete(ids, permanent),
+  }
+
+  function runListAction(id: string, options?: RunOptions) {
+    return runActionOnTarget(id, currentListTarget(), listActionExecutor, options)
+  }
+
+  function listActionAvailable(id: string): boolean {
+    const def = getListAction(id)
+    return def ? def.isAvailable({ target: currentListTarget() }) : false
   }
 
   async function handleBulkArchive(messageIds: string[]) {

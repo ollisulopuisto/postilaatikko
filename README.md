@@ -48,7 +48,7 @@ The fork is actively changing. Check the roadmap before relying on a feature des
 
 ## Build and run from source
 
-The application uses Go, Wails, Svelte, TypeScript, and SQLite. You need Go 1.25 or newer, Node.js with npm, Wails' platform build dependencies, and the platform libraries required by WebKitGTK when building on Linux. See the [Wails installation guide](https://wails.io/docs/gettingstarted/installation) for operating-system prerequisites.
+The application uses Go, Wails, Svelte, TypeScript, and SQLite. You need Go 1.26 or newer, Node.js with npm, Wails' platform build dependencies, and the platform libraries required by WebKitGTK when building on Linux. See the [Wails installation guide](https://wails.io/docs/gettingstarted/installation) for operating-system prerequisites.
 
 ```sh
 git clone https://github.com/ollisulopuisto/postilaatikko.git

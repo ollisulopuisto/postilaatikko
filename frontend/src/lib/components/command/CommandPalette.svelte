@@ -8,6 +8,7 @@
     commandPalette,
     closeCommandPalette,
     executeCommand,
+    isCommandAvailable,
   } from '$lib/stores/commandPalette.svelte'
   import { formatShortcut, isMacPlatform } from '$lib/keyboard/format'
   import { getActiveExtension, setActiveExtension } from '$lib/stores/uiState.svelte'
@@ -251,11 +252,15 @@
     return list
   })
 
-  // Filter commands by query
+  // Filter commands by query. Availability is re-checked whenever the panel
+  // opens (reading commandPalette.open makes this derived re-run), since it
+  // depends on the message list's selection, which is not reactive state here.
   const filteredCommands = $derived.by(() => {
+    const open = commandPalette.open
     const q = query.trim().toLowerCase()
-    if (!q) return allCommands
-    return allCommands.filter((cmd) => {
+    const available = open ? allCommands.filter((cmd) => isCommandAvailable(cmd.id)) : allCommands
+    if (!q) return available
+    return available.filter((cmd) => {
       const matchTitle = cmd.title.toLowerCase().includes(q)
       const matchCat = cmd.category.toLowerCase().includes(q)
       const matchShortcut = cmd.shortcut?.toLowerCase().includes(q)
