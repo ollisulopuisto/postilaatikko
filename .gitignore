@@ -33,12 +33,14 @@ frontend/dist/
 *.AppImage
 go*.linux-amd64.tar.gz
 
-# IDE
+# IDE & Backups
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
+*.bak
+*.backup
 
 # OS
 .DS_Store

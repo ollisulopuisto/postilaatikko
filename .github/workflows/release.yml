@@ -4,6 +4,9 @@ on:
   push:
     tags: 'v*'
 
+permissions:
+  contents: read
+
 # Tagged releases are serialized so each run restores the repository deployed by
 # the preceding run before publishing its own commits.
 concurrency:

@@ -14,9 +14,18 @@ import (
 // the system CA pool first, then the trusted certificate store, and returns
 // a CertificateError if the certificate is still untrusted.
 func BuildTLSConfig(host string, store *Store) *tls.Config {
+	return buildTrustVerifyingTLSConfig(host, store)
+}
+
+func buildTrustVerifyingTLSConfig(host string, store *Store) *tls.Config {
+	serverHost := host
 	trustedHost, hostErr := normalizeHost(host)
-	return &tls.Config{
-		ServerName:         host,
+	if hostErr == nil {
+		serverHost = trustedHost
+	}
+
+	verifyingTLSConfig := &tls.Config{
+		ServerName:         serverHost,
 		InsecureSkipVerify: true,
 		VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 			if len(rawCerts) == 0 {
@@ -30,7 +39,7 @@ func BuildTLSConfig(host string, store *Store) *tls.Config {
 			}
 
 			// Try system CA verification first.
-			systemErr := verifyWithSystemCAs(cert, host, rawCerts)
+			systemErr := verifyWithSystemCAs(cert, serverHost, rawCerts)
 			if systemErr == nil {
 				return nil // System CAs trust this cert
 			}
@@ -38,7 +47,15 @@ func BuildTLSConfig(host string, store *Store) *tls.Config {
 			// Only after normal validation fails may a host-bound exception apply.
 			fingerprint := Fingerprint(rawCerts[0])
 			if hostErr == nil && store != nil && store.IsTrusted(trustedHost, fingerprint) {
-				return nil // We trust this cert
+				now := time.Now()
+				if !now.Before(cert.NotBefore) && !now.After(cert.NotAfter) {
+					return nil // We trust this cert and it has not expired
+				}
+				if now.After(cert.NotAfter) {
+					systemErr = fmt.Errorf("certificate has expired")
+				} else {
+					systemErr = fmt.Errorf("certificate is not yet valid")
+				}
 			}
 
 			// Not trusted - return structured error
@@ -49,6 +66,7 @@ func BuildTLSConfig(host string, store *Store) *tls.Config {
 			}
 		},
 	}
+	return verifyingTLSConfig
 }
 
 // BuildTLSConfigDynamic is the host-agnostic variant of BuildTLSConfig: it
@@ -60,7 +78,11 @@ func BuildTLSConfig(host string, store *Store) *tls.Config {
 // fixed-host config like BuildTLSConfig won't do. Same trust logic: system CA
 // first, then the trusted-cert fingerprint store, else a structured *Error.
 func BuildTLSConfigDynamic(store *Store) *tls.Config {
-	return &tls.Config{
+	return buildDynamicTrustVerifyingTLSConfig(store)
+}
+
+func buildDynamicTrustVerifyingTLSConfig(store *Store) *tls.Config {
+	verifyingTLSConfig := &tls.Config{
 		InsecureSkipVerify: true, // real verification happens in VerifyConnection
 		VerifyConnection: func(cs tls.ConnectionState) error {
 			if len(cs.PeerCertificates) == 0 {
@@ -68,21 +90,35 @@ func BuildTLSConfigDynamic(store *Store) *tls.Config {
 			}
 			leaf := cs.PeerCertificates[0]
 
-			systemErr := verifyParsedWithSystemCAs(cs.PeerCertificates, cs.ServerName)
+			host, hostErr := normalizeHost(cs.ServerName)
+			verifyHost := cs.ServerName
+			if hostErr == nil {
+				verifyHost = host
+			}
+
+			systemErr := verifyParsedWithSystemCAs(cs.PeerCertificates, verifyHost)
 			if systemErr == nil {
 				return nil
 			}
 
-			host, hostErr := normalizeHost(cs.ServerName)
 			fingerprint := Fingerprint(leaf.Raw)
 			if hostErr == nil && store != nil && store.IsTrusted(host, fingerprint) {
-				return nil
+				now := time.Now()
+				if !now.Before(leaf.NotBefore) && !now.After(leaf.NotAfter) {
+					return nil
+				}
+				if now.After(leaf.NotAfter) {
+					systemErr = fmt.Errorf("certificate has expired")
+				} else {
+					systemErr = fmt.Errorf("certificate is not yet valid")
+				}
 			}
 
 			info := ExtractCertInfo(leaf.Raw, systemErr)
 			return &Error{Info: info, Reason: info.ErrorReason}
 		},
 	}
+	return verifyingTLSConfig
 }
 
 // verifyParsedWithSystemCAs verifies an already-parsed certificate chain against

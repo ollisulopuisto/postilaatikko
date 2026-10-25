@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -31,6 +32,26 @@ func generateTestCert(t *testing.T) []byte {
 		Subject:      pkix.Name{CommonName: "test.example.com", Organization: []string{"Test Org"}},
 		NotBefore:    time.Now().Add(-1 * time.Hour),
 		NotAfter:     time.Now().Add(24 * time.Hour),
+		DNSNames:     []string{"test.example.com"},
+	}
+	derBytes, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	if err != nil {
+		t.Fatalf("failed to create certificate: %v", err)
+	}
+	return derBytes
+}
+
+func generateExpiredTestCert(t *testing.T) []byte {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(2),
+		Subject:      pkix.Name{CommonName: "test.example.com", Organization: []string{"Test Org"}},
+		NotBefore:    time.Now().Add(-48 * time.Hour),
+		NotAfter:     time.Now().Add(-24 * time.Hour),
 		DNSNames:     []string{"test.example.com"},
 	}
 	derBytes, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
@@ -240,6 +261,9 @@ func TestIsTrustedDefault(t *testing.T) {
 }
 
 func TestBuildTLSConfigAcceptsNormallyTrustedCertificate(t *testing.T) {
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		t.Skip("SSL_CERT_FILE is only supported on Unix/Linux by Go's SystemCertPool")
+	}
 	const host = "valid.example.test"
 	caDER, leafDER, caPEM := generateSystemTrustedTestChain(t, host)
 	path := filepath.Join(t.TempDir(), "test-ca.pem")
@@ -401,5 +425,76 @@ func TestErrorInterface(t *testing.T) {
 	expected := "untrusted certificate: test reason (fingerprint: abcd1234)"
 	if err.Error() != expected {
 		t.Fatalf("Error() = %q, want %q", err.Error(), expected)
+	}
+}
+
+func TestBuildTLSConfigNormalizesPortForServerName(t *testing.T) {
+	store := openTestStore(t)
+	cfg := BuildTLSConfig("mail.example.com:993", store)
+	if cfg.ServerName != "mail.example.com" {
+		t.Fatalf("ServerName = %q, want %q", cfg.ServerName, "mail.example.com")
+	}
+}
+
+func TestBuildTLSConfigRejectsExpiredTrustedCertificate(t *testing.T) {
+	store := openTestStore(t)
+	der := generateExpiredTestCert(t)
+	fp := Fingerprint(der)
+
+	if err := store.AcceptSession("test.example.com", fp); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := BuildTLSConfig("test.example.com", store)
+	err := cfg.VerifyPeerCertificate([][]byte{der}, nil)
+	if err == nil {
+		t.Fatal("expected error for expired certificate, got nil")
+	}
+
+	var certErr *Error
+	if !errors.As(err, &certErr) {
+		t.Fatalf("expected *Error, got %T: %v", err, err)
+	}
+	if !certErr.Info.IsExpired {
+		t.Fatal("expected Info.IsExpired to be true")
+	}
+	if certErr.Reason != "certificate has expired" {
+		t.Fatalf("expected reason 'certificate has expired', got %q", certErr.Reason)
+	}
+}
+
+func TestBuildTLSConfigDynamicRejectsExpiredTrustedCertificate(t *testing.T) {
+	store := openTestStore(t)
+	der := generateExpiredTestCert(t)
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		t.Fatalf("parse cert: %v", err)
+	}
+	fp := Fingerprint(der)
+
+	if err := store.AcceptSession("test.example.com", fp); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := BuildTLSConfigDynamic(store)
+	cs := tls.ConnectionState{
+		ServerName:       "test.example.com",
+		PeerCertificates: []*x509.Certificate{cert},
+	}
+
+	err = cfg.VerifyConnection(cs)
+	if err == nil {
+		t.Fatal("expected error for expired certificate, got nil")
+	}
+
+	var certErr *Error
+	if !errors.As(err, &certErr) {
+		t.Fatalf("expected *Error, got %T: %v", err, err)
+	}
+	if !certErr.Info.IsExpired {
+		t.Fatal("expected Info.IsExpired to be true")
+	}
+	if certErr.Reason != "certificate has expired" {
+		t.Fatalf("expected reason 'certificate has expired', got %q", certErr.Reason)
 	}
 }
