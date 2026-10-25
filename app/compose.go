@@ -58,8 +58,6 @@ type composeOps struct {
 // getValidOAuthToken returns a valid OAuth token, refreshing if needed.
 // ctx is the caller's Wails context (for EventsEmit on reauth).
 func (ops *composeOps) getValidOAuthToken(ctx context.Context, accountID string) (*credentials.OAuthTokens, error) {
-	log := logging.WithComponent("composeOps")
-
 	tokens, err := ops.credStore.GetOAuthTokens(accountID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get OAuth tokens: %w", err)
@@ -69,6 +67,24 @@ func (ops *composeOps) getValidOAuthToken(ctx context.Context, accountID string)
 	if !tokens.IsExpiringSoon(5 * time.Minute) {
 		return tokens, nil
 	}
+
+	return ops.refreshStoredOAuthToken(ctx, accountID, tokens)
+}
+
+// forceRefreshOAuthToken refreshes the stored token even if it has not
+// expired. Used when an API call was rejected with 401 before expiry.
+func (ops *composeOps) forceRefreshOAuthToken(ctx context.Context, accountID string) (*credentials.OAuthTokens, error) {
+	tokens, err := ops.credStore.GetOAuthTokens(accountID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get OAuth tokens: %w", err)
+	}
+	return ops.refreshStoredOAuthToken(ctx, accountID, tokens)
+}
+
+// refreshStoredOAuthToken refreshes tokens with the stored refresh token and
+// persists the result, asking the frontend to re-authorize if the refresh fails.
+func (ops *composeOps) refreshStoredOAuthToken(ctx context.Context, accountID string, tokens *credentials.OAuthTokens) (*credentials.OAuthTokens, error) {
+	log := logging.WithComponent("composeOps")
 
 	log.Debug().
 		Str("account_id", accountID).

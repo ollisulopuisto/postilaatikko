@@ -10,6 +10,7 @@
 - Show configured account names under Inbox and in account rows, falling back to the email address.
 - Added ICS event handoff: create an ICS event from structured date/time details and open it for review/import in the user's calendar application. No email timestamp detection (that is P-022).
 - Added composer quick replies: create, edit, delete and insert reusable plain-text replies from the composer footer without touching the draft, recipients or sender. Stored on this computer only.
+- Gmail accounts now search on the server with the Gmail API, so Gmail operators such as `from:`, `has:attachment` and `older_than:` work in folder search; other providers, and Gmail accounts where the API is unavailable, keep using IMAP search.
 
 ## Postilaatikko — v0.3.11
 

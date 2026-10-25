@@ -575,3 +575,18 @@ func ExtractStableSubjectFromIDToken(idToken string) string {
 	}
 	return claims.TID + ":" + claims.OID
 }
+
+// GrantedScopes returns the scopes the authorization server actually granted,
+// falling back to the requested scopes when the token response does not say.
+// Google's granular consent lets users deselect scopes, so the requested list
+// can overstate the grant.
+func GrantedScopes(resp *TokenResponse, requested []string) []string {
+	if resp == nil {
+		return requested
+	}
+	granted := strings.Fields(resp.Scope)
+	if len(granted) == 0 {
+		return requested
+	}
+	return granted
+}

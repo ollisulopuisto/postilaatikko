@@ -2,14 +2,17 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
 
 	"github.com/hkdb/aerion/internal/folder"
+	"github.com/hkdb/aerion/internal/gmail"
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/sync"
+	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // ============================================================================
@@ -78,6 +81,34 @@ func (a *App) RebuildFTSIndex(folderID string) error {
 func (a *App) IMAPSearchFolder(accountID, folderID, query string, limit int) (*sync.IMAPSearchResponse, error) {
 	ctx, cancel := context.WithTimeout(a.ctx, 60*time.Second)
 	defer cancel()
+	return a.searchFolderOnServer(ctx, accountID, folderID, query, limit)
+}
+
+// searchFolderOnServer searches a folder on the mail server. Gmail accounts use
+// the Gmail API (Gmail query syntax) when it is available; every other account,
+// and any Gmail failure except a rejected login, uses IMAP SEARCH.
+func (a *App) searchFolderOnServer(ctx context.Context, accountID, folderID, query string, limit int) (*sync.IMAPSearchResponse, error) {
+	log := logging.WithComponent("app.search")
+
+	result, err := a.syncEngine.GmailSearch(ctx, accountID, folderID, query, limit)
+	if err == nil {
+		return result, nil
+	}
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if errors.Is(err, gmail.ErrReauthRequired) {
+		// IMAP uses the same token and would fail too; ask for re-authorization.
+		wailsRuntime.EventsEmit(a.ctx, "oauth:reauth-required", map[string]interface{}{
+			"accountId": accountID,
+			"provider":  "google",
+			"error":     err.Error(),
+		})
+		return nil, err
+	}
+	if !errors.Is(err, gmail.ErrNotCapable) {
+		log.Warn().Err(err).Str("accountID", accountID).Msg("Gmail API search failed; falling back to IMAP search")
+	}
 	return a.syncEngine.IMAPSearch(ctx, accountID, folderID, query, limit)
 }
 
@@ -108,7 +139,7 @@ func (a *App) IMAPSearchUnifiedInbox(query string, limit int) (*sync.IMAPSearchR
 			continue
 		}
 
-		result, err := a.syncEngine.IMAPSearch(ctx, account.ID, inbox.ID, query, limit)
+		result, err := a.searchFolderOnServer(ctx, account.ID, inbox.ID, query, limit)
 		if err != nil {
 			// A single unavailable account should not hide results from the other
 			// inboxes. The normal per-folder search still reports these errors.

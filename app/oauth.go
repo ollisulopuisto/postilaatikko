@@ -217,7 +217,7 @@ func (a *App) CompleteOAuthAccountSetup(provider, email, accountName, displayNam
 		AccessToken:  a.pendingOAuthTokens.AccessToken,
 		RefreshToken: a.pendingOAuthTokens.RefreshToken,
 		ExpiresAt:    expiresAt,
-		Scopes:       providerConfig.Scopes,
+		Scopes:       oauth2.GrantedScopes(a.pendingOAuthTokens, providerConfig.Scopes),
 	}
 
 	log.Debug().
@@ -492,7 +492,7 @@ func (a *App) SavePendingOAuthTokens(accountID string) error {
 		AccessToken:  a.pendingOAuthTokens.AccessToken,
 		RefreshToken: a.pendingOAuthTokens.RefreshToken,
 		ExpiresAt:    expiresAt,
-		Scopes:       scopes,
+		Scopes:       oauth2.GrantedScopes(a.pendingOAuthTokens, scopes),
 	}
 
 	if err := a.credStore.SetOAuthTokens(accountID, tokens); err != nil {

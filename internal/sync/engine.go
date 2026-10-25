@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	gosync "sync"
+	"time"
 
 	gomessage "github.com/emersion/go-message"
 	"github.com/hkdb/aerion/internal/account"
@@ -110,6 +111,14 @@ type Engine struct {
 	// reconciles and body fetches lock under separate key namespaces so a
 	// header sync never queues behind a long body download.
 	folderLocks folderLocks
+
+	// Gmail API search (see gmail_search.go). gmailTokens is nil until the app
+	// wires it; gmailBlocked remembers accounts whose Gmail API calls recently
+	// failed with a capability error so searches go straight to IMAP.
+	gmailTokens  GmailTokenSource
+	gmailBaseURL string // test hook; empty means the real API
+	gmailBlockMu gosync.Mutex
+	gmailBlocked map[string]time.Time
 }
 
 // NewEngine creates a new sync engine
@@ -125,6 +134,7 @@ func NewEngine(pool *imapPkg.Pool, accountStore *account.Store, folderStore *fol
 		log:              logging.WithComponent("sync"),
 		flagSweepCounter: map[string]int{},
 		folderLocks:      folderLocks{locks: map[string]chan struct{}{}},
+		gmailBlocked:     map[string]time.Time{},
 	}
 }
 

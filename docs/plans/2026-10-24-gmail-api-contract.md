@@ -113,3 +113,15 @@ IMAP stays the default and the fallback; the Gmail path is additive.
 
 - **P-010:** Gmail accounts search online with Gmail query syntax, paged; results map to local messages or server-only envelopes; other providers unchanged; fallback to IMAP on the errors listed above; tests use a fake Gmail server.
 - **P-019:** Gmail accounts use the native spam label change with undo and clear success/failure feedback; non-Gmail path unchanged; behavior difference from the IMAP move documented.
+
+## 8. Implementation notes (P-010)
+
+What landed for server-side search, and where it deviates from the sketch above.
+
+- `internal/gmail` implements `Search`, `Metadata` and `Modify` with the error taxonomy in section 3. Differences from the sketch: `Metadata` fetches with bounded concurrency (8 single `messages.get` calls) instead of the multipart batch endpoint; the quota cost is the same and it avoids a hand-written multipart parser. The batch endpoint can replace it later without changing callers. `TokenSource` takes a `forceRefresh` flag so a 401 triggers exactly one forced refresh before `ErrReauthRequired`.
+- Folder scoping: the IMAP folder type maps to a system label (`INBOX`, `SENT`, `DRAFT`, `TRASH`, `SPAM`, `STARRED`); All Mail and Archive search without a label; user folders use the `label:` operator (lowercased, spaces to hyphens, `/` kept). Unknown `[Gmail]/...` folders return `ErrNotCapable` and use IMAP.
+- Mapping results to local messages uses the recommendation in section 3, option 1: the API returns Message-ID headers, then `UID SEARCH HEADER Message-ID` in the selected folder resolves UIDs, and the existing local-enrichment and envelope fetch (`resolveSearchUIDs`, shared with `IMAPSearch`) produces the response. No schema change. A message that is in the Gmail result but not in the selected IMAP folder is dropped.
+- Fallback: `searchFolderOnServer` uses Gmail first and IMAP on any error except `ErrReauthRequired` (which emits the existing `oauth:reauth-required` event). `ErrInsufficientScope` and `ErrAPIDisabled` block the account for 30 minutes (in memory only), so a project without the Gmail API enabled costs one failed request per half hour, then searches silently use IMAP.
+- Granted scopes: `oauth2.GrantedScopes` stores the token response `scope` instead of the requested list when an account is added or re-authorized. Accounts added earlier have the requested list (or none) stored and are treated as "unknown": the first API call decides.
+- Not done here: the Gmail query syntax is passed through as typed, so IMAP-style plain words behave like Gmail's full-text search (not field-limited like the IMAP path). The frontend does not yet tell users that Gmail operators work.
+- Open operator question, unchanged: the Gmail API must be enabled in the Google Cloud project behind `GoogleClientID`. Without it every Gmail account silently stays on IMAP search after one failed attempt, with a warning in the log.
