@@ -816,12 +816,18 @@ func (a *App) moveMessagesToIMAP(messages []*message.Message, sourceFolderID str
 	a.noteOwnExpunge(accountID)
 	defer a.noteOwnExpunge(accountID)
 
+	// Inbox <-> Spam on a Gmail account is done as a Gmail label change instead
+	// of IMAP COPY+DELETE (see gmailSpamMove). Every other move keeps the IMAP
+	// path unchanged.
+	gmailRFCIDs, gmailSpam, useGmailLabels := a.gmailSpamMove(accountID, orderedMessages, sourceFolder, destFolder)
+
 	err = a.withIMAPRetry(accountID, func(conn *imap.Client) error {
 		// Without UIDPLUS, take the Message-ID/UID baseline from the server
 		// before COPY. The local cache may be stale and RFC822 Message-ID is not
-		// unique, so it cannot safely stand in for this remote snapshot.
+		// unique, so it cannot safely stand in for this remote snapshot. A Gmail
+		// label change returns no COPYUID either, so it needs the baseline too.
 		preCopyUIDs := make(map[string]map[uint32]bool)
-		if !conn.Caps().Has(goImap.CapUIDPlus) {
+		if !conn.Caps().Has(goImap.CapUIDPlus) || useGmailLabels {
 			if _, err := conn.SelectMailbox(a.ctx, destFolder.Path); err != nil {
 				return fmt.Errorf("failed to select destination mailbox for pre-COPY UID snapshot: %w", err)
 			}
@@ -848,34 +854,51 @@ func (a *App) moveMessagesToIMAP(messages []*message.Message, sourceFolderID str
 			}
 		}
 
-		// Select source mailbox
-		log.Debug().Str("mailbox", sourceFolder.Path).Msg("Selecting source mailbox")
-		if _, err := conn.SelectMailbox(a.ctx, sourceFolder.Path); err != nil {
-			return fmt.Errorf("failed to select source mailbox: %w", err)
+		// Gmail: change the labels through the API. If that fails nothing was
+		// changed (SetSpam resolves every message before modifying), so the IMAP
+		// COPY+DELETE below still runs exactly as it does for other providers.
+		apiMoved := false
+		if useGmailLabels {
+			apiErr := a.newGmailModifyClient(accountID).SetSpam(a.ctx, gmailRFCIDs, gmailSpam)
+			if apiErr == nil {
+				apiMoved = true
+				remoteStarted = true
+			}
+			if apiErr != nil {
+				log.Warn().Err(apiErr).Bool("spam", gmailSpam).Msg("Gmail API label change failed; moving with IMAP instead")
+			}
 		}
 
-		// COPY every selected message to the destination mailbox.
-		if len(moveUIDs) > 0 {
-			log.Debug().Str("destMailbox", destFolder.Path).Int("count", len(moveUIDs)).Msg("Copying messages to destination")
-			remoteStarted = true
-			destUIDs, copyErr := conn.CopyMessages(moveUIDs, destFolder.Path)
-			if copyErr != nil {
-				return fmt.Errorf("failed to copy messages: %w", copyErr)
+		if !apiMoved {
+			// Select source mailbox
+			log.Debug().Str("mailbox", sourceFolder.Path).Msg("Selecting source mailbox")
+			if _, err := conn.SelectMailbox(a.ctx, sourceFolder.Path); err != nil {
+				return fmt.Errorf("failed to select source mailbox: %w", err)
 			}
-			if len(destUIDs) == len(orderedMessages) {
-				copyUIDUsed = true
-				for index, uid := range destUIDs {
-					resolved[orderedMessages[index].ID] = uint32(uid)
-					destinationUIDs = append(destinationUIDs, uint32(uid))
+
+			// COPY every selected message to the destination mailbox.
+			if len(moveUIDs) > 0 {
+				log.Debug().Str("destMailbox", destFolder.Path).Int("count", len(moveUIDs)).Msg("Copying messages to destination")
+				remoteStarted = true
+				destUIDs, copyErr := conn.CopyMessages(moveUIDs, destFolder.Path)
+				if copyErr != nil {
+					return fmt.Errorf("failed to copy messages: %w", copyErr)
 				}
+				if len(destUIDs) == len(orderedMessages) {
+					copyUIDUsed = true
+					for index, uid := range destUIDs {
+						resolved[orderedMessages[index].ID] = uint32(uid)
+						destinationUIDs = append(destinationUIDs, uint32(uid))
+					}
+				}
+				log.Debug().Msg("Messages copied successfully")
 			}
-			log.Debug().Msg("Messages copied successfully")
-		}
 
-		// DELETE the source copies after the destination COPY succeeds.
-		log.Debug().Int("count", len(moveUIDs)).Msg("Deleting messages from source (marking deleted + expunge)")
-		if err := conn.DeleteMessagesByUID(moveUIDs); err != nil {
-			return fmt.Errorf("failed to delete messages from source: %w", err)
+			// DELETE the source copies after the destination COPY succeeds.
+			log.Debug().Int("count", len(moveUIDs)).Msg("Deleting messages from source (marking deleted + expunge)")
+			if err := conn.DeleteMessagesByUID(moveUIDs); err != nil {
+				return fmt.Errorf("failed to delete messages from source: %w", err)
+			}
 		}
 
 		// Servers without UIDPLUS do not return COPYUID. Resolve only the copied
@@ -900,19 +923,34 @@ func (a *App) moveMessagesToIMAP(messages []*message.Message, sourceFolderID str
 					stdlog.Printf("UNDO MOVE operationId=%s phase=uid-fallback-ambiguous sourceFolderId=%s destFolderId=%s groupExpected=%d candidates=unknown reason=baseline-unavailable", operationID, sourceFolderID, destFolder.ID, len(movedGroup))
 					continue
 				}
-				searchCmd := conn.RawClient().UIDSearch(&goImap.SearchCriteria{
-					Header:  []goImap.SearchCriteriaHeaderField{{Key: "MESSAGE-ID", Value: rfc822MessageID}},
-					NotFlag: []goImap.Flag{goImap.FlagDeleted},
-				}, nil)
-				searchData, err := searchCmd.Wait()
-				if err != nil {
-					return fmt.Errorf("failed to resolve copied message UID: %w", err)
+				// IMAP can lag a few seconds behind an API label change, so look a
+				// few times before leaving the UIDs to the destination sync.
+				lookups := 1
+				if apiMoved {
+					lookups = 4
 				}
-				matching := searchData.AllUIDs()
-				candidates := make([]uint32, 0, len(matching))
-				for _, uid := range matching {
-					if !baseline[uint32(uid)] {
-						candidates = append(candidates, uint32(uid))
+				var candidates []uint32
+				for lookup := 0; lookup < lookups; lookup++ {
+					if lookup > 0 {
+						time.Sleep(700 * time.Millisecond)
+					}
+					searchCmd := conn.RawClient().UIDSearch(&goImap.SearchCriteria{
+						Header:  []goImap.SearchCriteriaHeaderField{{Key: "MESSAGE-ID", Value: rfc822MessageID}},
+						NotFlag: []goImap.Flag{goImap.FlagDeleted},
+					}, nil)
+					searchData, err := searchCmd.Wait()
+					if err != nil {
+						return fmt.Errorf("failed to resolve copied message UID: %w", err)
+					}
+					matching := searchData.AllUIDs()
+					candidates = make([]uint32, 0, len(matching))
+					for _, uid := range matching {
+						if !baseline[uint32(uid)] {
+							candidates = append(candidates, uint32(uid))
+						}
+					}
+					if len(candidates) == len(movedGroup) {
+						break
 					}
 				}
 				sort.Slice(candidates, func(i, j int) bool { return candidates[i] < candidates[j] })

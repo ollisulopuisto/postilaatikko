@@ -27,6 +27,9 @@ var (
 	ErrNotFound = errors.New("gmail: not found")
 	// ErrBadRequest means the API rejected the request, for example an invalid query.
 	ErrBadRequest = errors.New("gmail: bad request")
+	// ErrAmbiguous means a lookup that must identify exactly one message matched
+	// several, so no label change was attempted.
+	ErrAmbiguous = errors.New("gmail: lookup matched more than one message")
 )
 
 // APIError carries the HTTP status and Google's error detail. It unwraps to the

@@ -265,3 +265,102 @@ func TestContextCancelStopsRetries(t *testing.T) {
 		t.Fatalf("err = %v, want context.Canceled", err)
 	}
 }
+
+func TestFindByRFCMessageID(t *testing.T) {
+	var gotQ, gotTrash string
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		gotQ = r.URL.Query().Get("q")
+		gotTrash = r.URL.Query().Get("includeSpamTrash")
+		_, _ = w.Write([]byte(`{"messages":[{"id":"g9"}]}`))
+	})
+	id, err := c.FindByRFCMessageID(context.Background(), "<abc@example.com>")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != "g9" || gotQ != "rfc822msgid:abc@example.com" || gotTrash != "true" {
+		t.Errorf("id=%q q=%q includeSpamTrash=%q", id, gotQ, gotTrash)
+	}
+}
+
+func TestFindByRFCMessageIDAmbiguousOrMissing(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want error
+	}{
+		{"none", `{}`, ErrNotFound},
+		{"several", `{"messages":[{"id":"a"},{"id":"b"}]}`, ErrAmbiguous},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(tt.body)) })
+			if _, err := c.FindByRFCMessageID(context.Background(), "<x@y>"); !errors.Is(err, tt.want) {
+				t.Fatalf("err = %v, want %v", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestSetSpamAddsAndRemovesLabels(t *testing.T) {
+	var modifyBody map[string]any
+	var modifyPath string
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			id := "g-" + strings.TrimPrefix(r.URL.Query().Get("q"), "rfc822msgid:")
+			_, _ = w.Write([]byte(`{"messages":[{"id":"` + id + `"}]}`))
+			return
+		}
+		modifyPath = r.URL.Path
+		_ = json.NewDecoder(r.Body).Decode(&modifyBody)
+		_, _ = w.Write([]byte(`{}`))
+	})
+
+	if err := c.SetSpam(context.Background(), []string{"<a@x>", "<b@x>"}, true); err != nil {
+		t.Fatal(err)
+	}
+	if modifyPath != "/messages/batchModify" {
+		t.Errorf("path = %q", modifyPath)
+	}
+	if add, _ := modifyBody["addLabelIds"].([]any); len(add) != 1 || add[0] != "SPAM" {
+		t.Errorf("addLabelIds = %v", modifyBody["addLabelIds"])
+	}
+	if rem, _ := modifyBody["removeLabelIds"].([]any); len(rem) != 1 || rem[0] != "INBOX" {
+		t.Errorf("removeLabelIds = %v", modifyBody["removeLabelIds"])
+	}
+	if ids, _ := modifyBody["ids"].([]any); len(ids) != 2 || ids[0] != "g-a@x" {
+		t.Errorf("ids = %v", modifyBody["ids"])
+	}
+
+	if err := c.SetSpam(context.Background(), []string{"<a@x>"}, false); err != nil {
+		t.Fatal(err)
+	}
+	if add, _ := modifyBody["addLabelIds"].([]any); len(add) != 1 || add[0] != "INBOX" {
+		t.Errorf("not-spam addLabelIds = %v", modifyBody["addLabelIds"])
+	}
+	if rem, _ := modifyBody["removeLabelIds"].([]any); len(rem) != 1 || rem[0] != "SPAM" {
+		t.Errorf("not-spam removeLabelIds = %v", modifyBody["removeLabelIds"])
+	}
+}
+
+func TestSetSpamChangesNothingWhenAnyLookupFails(t *testing.T) {
+	var modifies int32
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			if strings.Contains(r.URL.Query().Get("q"), "missing") {
+				_, _ = w.Write([]byte(`{}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"messages":[{"id":"ok"}]}`))
+			return
+		}
+		atomic.AddInt32(&modifies, 1)
+		_, _ = w.Write([]byte(`{}`))
+	})
+	err := c.SetSpam(context.Background(), []string{"<good@x>", "<missing@x>"}, true)
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("err = %v, want ErrNotFound", err)
+	}
+	if modifies != 0 {
+		t.Errorf("labels were modified despite a failed lookup (%d calls)", modifies)
+	}
+}
