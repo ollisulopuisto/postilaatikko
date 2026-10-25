@@ -842,6 +842,12 @@
   </div>
 
   {#if showAllFolders}
+    <div
+      class="fixed inset-0 z-20 bg-black/20"
+      onclick={() => (showAllFolders = false)}
+      tabindex="-1"
+      aria-hidden="true"
+    ></div>
     <aside class="sidebar-all-folders-panel" aria-label={$_('sidebar.allFolders')}>
       <header class="sidebar-all-folders-header">
         <h2>{$_('sidebar.allFolders')}</h2>
@@ -864,7 +870,10 @@
             syncError={accountStore.getSyncError(accWithFolders.account.id)}
             {collapsedFolders}
             {onMessagesMoved}
-            onFolderSelect={handleFolderSelect}
+            onFolderSelect={(accountId, folderId, folderPath, folderName, folderType) => {
+              handleFolderSelect(accountId, folderId, folderPath, folderName, folderType)
+              showAllFolders = false
+            }}
             onToggleExpanded={() => toggleAccountExpanded(accWithFolders.account.id)}
             onToggleFolderCollapse={toggleFolderCollapsed}
             onEdit={() => openEditAccount(accWithFolders.account)}
@@ -917,3 +926,9 @@
   accounts={accountStore.accounts}
   onSave={(value) => virtualFoldersStore.save(value as virtualfolder.VirtualFolder)}
 />
+
+<svelte:window onkeydown={(e) => {
+  if (showAllFolders && e.key === 'Escape') {
+    showAllFolders = false
+  }
+}} />

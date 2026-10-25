@@ -2396,8 +2396,8 @@
   {/if}
 
   {#if checkedThreadIds.size > 0}
-    <div class="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2" role="toolbar" aria-label="Ações para mensagens selecionadas">
-      <span class="mr-auto text-sm font-medium text-foreground">{checkedThreadIds.size} selecionada{checkedThreadIds.size === 1 ? '' : 's'}</span>
+    <div class="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2" role="toolbar" aria-label={$_('messageList.selectedActions')}>
+      <span class="mr-auto text-sm font-medium text-foreground">{$_('messageList.selectedCount', { values: { count: checkedThreadIds.size } })}</span>
       <button class="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" onclick={() => onBulkMarkRead?.(selectedMessageIds)}>
         <Icon icon="mdi:check-circle-outline" class="h-4 w-4" /> {$_('common.done')}
       </button>

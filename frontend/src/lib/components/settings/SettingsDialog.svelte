@@ -5,9 +5,9 @@
   import * as Tabs from '$lib/components/ui/tabs'
   import { Button } from '$lib/components/ui/button'
   // @ts-ignore - wailsjs path
-  import { GetReadReceiptResponsePolicy, SetReadReceiptResponsePolicy, GetMessageListDensity, SetMessageListDensity, GetThemeMode, SetThemeMode, GetShowTitleBar, SetShowTitleBar, GetRunBackground, SetRunBackground, GetStartHidden, SetStartHidden, GetAutostart, SetAutostart, GetLanguage, SetLanguage, GetComposerMode, SetComposerMode, GetMailtoMode, SetMailtoMode, GetComposerFormat, SetComposerFormat, GetNativeTitleBar, SetNativeTitleBar, GetAlwaysLoadImages, SetAlwaysLoadImages, GetDarkMailContent, SetDarkMailContent, GetDarkComposerBody, SetDarkComposerBody, GetAccentBarUnread, SetAccentBarUnread, GetShowMessageListCircles, SetShowMessageListCircles, GetShowMessageListProfilePics, SetShowMessageListProfilePics, GetAlwaysShowMessageCheckbox, SetAlwaysShowMessageCheckbox, GetShowViewerCircles, SetShowViewerCircles, GetSpellcheckEnabled, SetSpellcheckEnabled, GetSpellcheckLanguages, SetSpellcheckLanguages, GetWindowDecorationStatus, QuitApp } from '../../../../wailsjs/go/app/App.js'
+  import { GetReadReceiptResponsePolicy, SetReadReceiptResponsePolicy, GetMessageListDensity, SetMessageListDensity, GetThemeMode, SetThemeMode, GetShowTitleBar, SetShowTitleBar, GetRunBackground, SetRunBackground, GetStartHidden, SetStartHidden, GetAutostart, SetAutostart, GetLanguage, SetLanguage, GetComposerMode, SetComposerMode, GetMailtoMode, SetMailtoMode, GetComposerFormat, SetComposerFormat, GetNativeTitleBar, SetNativeTitleBar, GetAlwaysLoadImages, SetAlwaysLoadImages, GetDarkMailContent, SetDarkMailContent, GetDarkComposerBody, SetDarkComposerBody, GetAccentBarUnread, SetAccentBarUnread, GetShowMessageListCircles, SetShowMessageListCircles, GetShowMessageListProfilePics, SetShowMessageListProfilePics, GetAlwaysShowMessageCheckbox, SetAlwaysShowMessageCheckbox, GetShowViewerCircles, SetShowViewerCircles, GetSpellcheckEnabled, SetSpellcheckEnabled, GetSpellcheckLanguages, SetSpellcheckLanguages, GetWindowDecorationStatus, QuitApp, GetMarkAsReadDelay, SetMarkAsReadDelay } from '../../../../wailsjs/go/app/App.js'
   import { addToast } from '$lib/stores/toast'
-  import { setMessageListDensity as updateDensityStore, setThemeMode as updateThemeStore, setShowTitleBar as updateShowTitleBarStore, setRunBackground as updateRunBackgroundStore, setStartHidden as updateStartHiddenStore, setAutostart as updateAutostartStore, setLanguage as updateLanguageStore, setComposerMode as updateComposerModeStore, setMailtoMode as updateMailtoModeStore, setComposerFormat as updateComposerFormatStore, setNativeTitleBar as updateNativeTitleBarStore, setAlwaysLoadImages as updateAlwaysLoadImagesStore, setDarkMailContent as updateDarkMailContentStore, setDarkComposerBody as updateDarkComposerBodyStore, setAccentBarUnread as updateAccentBarUnreadStore, setShowMessageListCircles as updateShowMessageListCirclesStore, setShowMessageListProfilePics as updateShowMessageListProfilePicsStore, setAlwaysShowMessageCheckbox as updateAlwaysShowMessageCheckboxStore, setShowViewerCircles as updateShowViewerCirclesStore, setSpellcheckEnabled as updateSpellcheckEnabledStore, setSpellcheckLanguages as updateSpellcheckLanguagesStore, type MessageListDensity, type ThemeMode, type ComposerMode, type ComposerFormat } from '$lib/stores/settings.svelte'
+  import { setMessageListDensity as updateDensityStore, setThemeMode as updateThemeStore, setShowTitleBar as updateShowTitleBarStore, setRunBackground as updateRunBackgroundStore, setStartHidden as updateStartHiddenStore, setAutostart as updateAutostartStore, setLanguage as updateLanguageStore, setComposerMode as updateComposerModeStore, setMailtoMode as updateMailtoModeStore, setComposerFormat as updateComposerFormatStore, setNativeTitleBar as updateNativeTitleBarStore, setAlwaysLoadImages as updateAlwaysLoadImagesStore, setDarkMailContent as updateDarkMailContentStore, setDarkComposerBody as updateDarkComposerBodyStore, setAccentBarUnread as updateAccentBarUnreadStore, setShowMessageListCircles as updateShowMessageListCirclesStore, setShowMessageListProfilePics as updateShowMessageListProfilePicsStore, setAlwaysShowMessageCheckbox as updateAlwaysShowMessageCheckboxStore, setShowViewerCircles as updateShowViewerCirclesStore, setSpellcheckEnabled as updateSpellcheckEnabledStore, setSpellcheckLanguages as updateSpellcheckLanguagesStore, updateMarkAsReadDelayStore, type MessageListDensity, type ThemeMode, type ComposerMode, type ComposerFormat } from '$lib/stores/settings.svelte'
   import { syncSpellcheckLanguagesIfActive, defaultSpellcheckLanguages } from '$lib/spellcheck/settings'
   import { applyThemeFromMode } from '$lib/stores/theme.svelte'
   import { dialogGuardOpen, dialogGuardClose } from '$lib/stores/dialogGuard'
@@ -58,6 +58,7 @@
   let showMessageListProfilePics = $state<boolean>(false)
   let alwaysShowMessageCheckbox = $state<boolean>(false)
   let showViewerCircles = $state<boolean>(true)
+  let markAsReadDelay = $state<number>(0)
   let originalNativeTitleBar = false
   // Snapshot of the saved theme at dialog open time. Used to revert live preview
   // if the dialog closes without Save (Cancel / ESC / click-outside).
@@ -102,7 +103,7 @@
     loading = true
     hasSaved = false
     try {
-      const [policy, density, theme, titleBar, runBg, startHid, autoSt, lang, comp, mail, compFmt, nativeTB, alwaysImages, darkMail, darkComposer, accentBar, listCircles, listProfilePics, alwaysCheckbox, viewerCircles, scEnabled, scLangs, decorationStatus] = await Promise.all([
+      const [policy, density, theme, titleBar, runBg, startHid, autoSt, lang, comp, mail, compFmt, nativeTB, alwaysImages, darkMail, darkComposer, accentBar, listCircles, listProfilePics, alwaysCheckbox, viewerCircles, scEnabled, scLangs, decorationStatus, readDelay] = await Promise.all([
         GetReadReceiptResponsePolicy(),
         GetMessageListDensity(),
         GetThemeMode(),
@@ -126,6 +127,7 @@
         GetSpellcheckEnabled(),
         GetSpellcheckLanguages(),
         GetWindowDecorationStatus(),
+        GetMarkAsReadDelay(),
       ])
       readReceiptResponsePolicy = policy
       messageListDensity = density
@@ -152,6 +154,7 @@
       showMessageListProfilePics = listProfilePics ?? false
       alwaysShowMessageCheckbox = alwaysCheckbox ?? false
       showViewerCircles = viewerCircles ?? true
+      markAsReadDelay = readDelay ?? 0
       originalNativeTitleBar = nativeTitleBar
     } catch (err) {
       console.error('Failed to load settings:', err)
@@ -188,6 +191,7 @@
       await SetShowMessageListProfilePics(showMessageListProfilePics)
       await SetAlwaysShowMessageCheckbox(alwaysShowMessageCheckbox)
       await SetShowViewerCircles(showViewerCircles)
+      await SetMarkAsReadDelay(markAsReadDelay)
       // Update the reactive stores so UI updates immediately
       updateDensityStore(messageListDensity as MessageListDensity)
       updateThemeStore(themeMode as ThemeMode)
@@ -213,6 +217,7 @@
       updateShowMessageListProfilePicsStore(showMessageListProfilePics)
       updateAlwaysShowMessageCheckboxStore(alwaysShowMessageCheckbox)
       updateShowViewerCirclesStore(showViewerCircles)
+      updateMarkAsReadDelayStore(markAsReadDelay)
       addToast({
         type: 'success',
         message: $_('toast.settingsSaved'),
@@ -297,7 +302,7 @@
           </Tabs.Trigger>
           <Tabs.Trigger value="inbox" class="settings-navigation-item">
             <span class="inline-flex w-4 h-4 items-center justify-center shrink-0"><Icon icon="lucide:inbox" width="16" height="16" /></span>
-            Caixa de entrada
+            {$_('settings.inbox')}
           </Tabs.Trigger>
           <Tabs.Trigger value="extensions" class="settings-navigation-item">
             <span class="inline-flex w-4 h-4 items-center justify-center shrink-0"><Icon icon="lucide:puzzle" width="16" height="16" /></span>
@@ -335,6 +340,7 @@
               bind:showViewerCircles
               bind:darkMailContent
               bind:darkComposerBody
+              bind:markAsReadDelay
             />
           </Tabs.Content>
 

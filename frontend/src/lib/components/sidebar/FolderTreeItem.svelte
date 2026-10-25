@@ -161,8 +161,9 @@
 
 {#if tree.folder}
   <FolderContextMenu folderId={tree.folder.id}>
-    <button
-      class="w-full flex items-center gap-2 px-3 py-1.5 text-sm rounded-md transition-colors {isFolderSelected(tree.folder.id)
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="w-full flex items-center rounded-md transition-colors {isFolderSelected(tree.folder.id)
         ? 'bg-primary/10 text-primary font-medium'
         : 'text-foreground hover:bg-muted/50'} {isDragOver ? 'ring-2 ring-primary ring-inset' : ''}"
       data-sidebar-item="folder"
@@ -170,23 +171,18 @@
       data-folder-type={tree.folder.type}
       data-selected={isFolderSelected(tree.folder.id) ? 'true' : undefined}
       data-has-children={hasChildren ? 'true' : undefined}
-      onclick={() => onFolderSelect?.(tree.folder!)}
       ondragenter={handleDragEnter}
       ondragover={handleDragOver}
       ondragleave={handleDragLeave}
       ondrop={handleDrop}
     >
-      <Icon
-        icon={getFolderIcon(tree.folder.type)}
-        class="w-4 h-4 flex-shrink-0"
-      />
-      <span data-sidebar-label class="truncate text-left">{tree.folder.type === 'inbox' ? $_('sidebar.inbox') : tree.folder.name}</span>
       {#if hasChildren}
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <span
-          class="flex-shrink-0 p-0.5 rounded hover:bg-muted"
-          role="button"
-          tabindex="-1"
+        <button
+          type="button"
+          class="flex-shrink-0 p-1 ml-1 rounded hover:bg-muted/80 text-muted-foreground transition-colors"
+          title={isCollapsed ? $_('sidebar.expand') : $_('sidebar.collapse')}
+          aria-label={isCollapsed ? $_('sidebar.expand') : $_('sidebar.collapse')}
+          aria-expanded={!isCollapsed}
           onclick={(e: MouseEvent) => {
             e.stopPropagation()
             onToggleCollapse?.(tree.folder!.id)
@@ -194,20 +190,39 @@
         >
           <Icon
             icon={isCollapsed ? 'mdi:chevron-right' : 'mdi:chevron-down'}
-            class="w-4 h-4 text-muted-foreground"
+            class="w-4 h-4"
           />
-        </span>
+        </button>
+      {:else}
+        <span class="w-6 flex-shrink-0"></span>
       {/if}
-      <span data-sidebar-spacer class="flex-1"></span>
+
+      <button
+        type="button"
+        class="flex-1 min-w-0 flex items-center gap-2 px-1 py-1.5 text-sm text-left truncate"
+        onclick={() => {
+          onFolderSelect?.(tree.folder!)
+          if (hasChildren && isCollapsed) {
+            onToggleCollapse?.(tree.folder!.id)
+          }
+        }}
+      >
+        <Icon
+          icon={getFolderIcon(tree.folder.type)}
+          class="w-4 h-4 flex-shrink-0"
+        />
+        <span data-sidebar-label class="truncate text-left">{tree.folder.type === 'inbox' ? $_('sidebar.inbox') : tree.folder.name}</span>
+      </button>
+
       {#if tree.folder.unreadCount > 0}
         <span
           data-sidebar-badge
-          class="px-1.5 py-0.5 text-xs font-medium rounded-full bg-primary text-primary-foreground"
+          class="mr-2 px-1.5 py-0.5 text-xs font-medium rounded-full bg-primary text-primary-foreground flex-shrink-0"
         >
           {tree.folder.unreadCount}
         </span>
       {/if}
-    </button>
+    </div>
   </FolderContextMenu>
 
   {#if hasChildren && !isCollapsed}

@@ -2,6 +2,9 @@
 // Hidden translated labels remain in the DOM, so reuse them instead of
 // maintaining a second set of tooltip strings.
 
+import { get } from 'svelte/store'
+import { _ } from '$lib/i18n'
+
 function getCompactSidebarButton(target: EventTarget | null): HTMLButtonElement | null {
   if (!(target instanceof Element)) return null
   const button = target.closest<HTMLButtonElement>('button')
@@ -21,7 +24,7 @@ function inferTooltip(button: HTMLButtonElement): string | null {
   if (label) return label
 
   if (button.matches('.sidebar-inbox-rail-button, [data-sidebar-nav-item="unified"]')) {
-    return 'Caixa de entrada'
+    return get(_)('sidebar.inbox')
   }
 
   return null

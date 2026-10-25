@@ -19,7 +19,7 @@
   import { withShortcut, ariaKeyshortcuts } from '$lib/keyboard/format'
   import { _ } from '$lib/i18n'
   import { isDialogGuardActive } from '$lib/stores/dialogGuard'
-  import { getShowViewerCircles, getDarkMailContent } from '$lib/stores/settings.svelte'
+  import { getShowViewerCircles, getDarkMailContent, getMarkAsReadDelay } from '$lib/stores/settings.svelte'
   import { getIsDarkActive } from '$lib/stores/theme.svelte'
   import { contactPhotos } from '$lib/stores/contactPhotos.svelte'
   import { PendingReadOnLeave } from './pendingReadOnLeave'
@@ -161,8 +161,50 @@
   let showDeleteConfirm = $state(false)
 
   // Messages that were unread when this conversation was first displayed.
-  // They are marked read only after this viewer is no longer visible.
+  // They are marked read either immediately, after a delay, or when leaving the viewer.
   const pendingReadOnLeave = new PendingReadOnLeave()
+  let markAsReadTimer: ReturnType<typeof setTimeout> | null = null
+
+  function clearMarkAsReadTimer() {
+    if (markAsReadTimer) {
+      clearTimeout(markAsReadTimer)
+      markAsReadTimer = null
+    }
+  }
+
+  function markCurrentPendingAsRead() {
+    clearMarkAsReadTimer()
+    const messageIds = pendingReadOnLeave.take()
+    if (!messageIds.length) return
+    MarkAsRead(messageIds).catch(err => {
+      console.error('Failed to mark messages as read:', err)
+    })
+  }
+
+  function scheduleMarkAsRead() {
+    clearMarkAsReadTimer()
+    const delay = getMarkAsReadDelay()
+    if (delay === 0) {
+      markCurrentPendingAsRead()
+    } else if (delay > 0) {
+      markAsReadTimer = setTimeout(() => {
+        markAsReadTimer = null
+        markCurrentPendingAsRead()
+      }, delay)
+    }
+    // delay === -2: handled by finalizeReadOnLeave on leave
+    // delay === -1: manual only, never auto-mark
+  }
+
+  function handleReadOnLeave() {
+    clearMarkAsReadTimer()
+    const delay = getMarkAsReadDelay()
+    if (delay === -2) {
+      finalizeReadOnLeave()
+    } else {
+      pendingReadOnLeave.clear()
+    }
+  }
 
   // Debounce timer for refreshConversation (coalesces rapid sync events)
   let refreshTimer: ReturnType<typeof setTimeout> | null = null
@@ -188,6 +230,7 @@
         // A manual or external state change wins over an old snapshot. This
         // includes explicit Mark as unread while the viewer stays open.
         pendingReadOnLeave.cancel(data.messageIds)
+        if (!data.isRead) clearMarkAsReadTimer()
         const changed = new Set(data.messageIds)
         for (const message of conversation.messages) {
           if (changed.has(message.id)) message.isRead = data.isRead
@@ -340,6 +383,7 @@
   onDestroy(() => {
     // Do not issue an asynchronous read-state mutation during process shutdown.
     // Normal navigation finalizes the snapshot before this component unmounts.
+    clearMarkAsReadTimer()
     pendingReadOnLeave.clear()
     if (refreshTimer) {
       clearTimeout(refreshTimer)
@@ -356,7 +400,7 @@
   $effect(() => {
     // Props have already changed by the time this effect runs, so finalizing
     // here cannot reorder the list before the next conversation is selected.
-    finalizeReadOnLeave()
+    handleReadOnLeave()
     void accountId
     viewGeneration++
     conversation = null
@@ -388,7 +432,7 @@
   })
 
   $effect(() => {
-    if (!isViewerVisible) finalizeReadOnLeave()
+    if (!isViewerVisible) handleReadOnLeave()
   })
 
   // Debounced refresh: coalesces rapid sync events (e.g. folder:synced + messages:updated)
@@ -506,6 +550,7 @@
         // becomes a pending read operation merely because it mounted briefly.
         if (threadId === tid && folderId === fid && isViewerVisible && conversation?.messages) {
           pendingReadOnLeave.capture(conversation.messages)
+          scheduleMarkAsRead()
         }
       }
     }
@@ -521,7 +566,7 @@
       clearTimeout(refreshTimer)
       refreshTimer = null
     }
-    finalizeReadOnLeave()
+    handleReadOnLeave()
     conversation = null
     if (autoSelectNext) {
       onActionComplete?.(true)

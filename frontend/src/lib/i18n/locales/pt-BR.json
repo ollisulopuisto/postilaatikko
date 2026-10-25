@@ -106,7 +106,9 @@
     "filterUnread": "Nao lidas",
     "filterStarred": "Com estrela",
     "filterAttachments": "Com anexos",
-    "noFilteredMessages": "Nenhuma mensagem corresponde ao filtro atual"
+    "noFilteredMessages": "Nenhuma mensagem corresponde ao filtro atual",
+    "selectedActions": "Ações para mensagens selecionadas",
+    "selectedCount": "{count} selecionada(s)"
   },
   "inbox": {
     "priority": "Prioritários",
@@ -195,7 +197,19 @@
     "back": "Voltar",
     "folders": "Pastas"
   },
+  "settings": {
+    "inbox": "Caixa de entrada"
+  },
   "settingsGeneral": {
+    "markAsRead": "Marcar mensagens como lidas",
+    "markAsReadHelp": "Escolha quando as mensagens abertas devem ser marcadas automaticamente como lidas",
+    "markAsReadImmediately": "Imediatamente ao abrir",
+    "markAsReadAfter1s": "Após 1 segundo",
+    "markAsReadAfter2s": "Após 2 segundos",
+    "markAsReadAfter3s": "Após 3 segundos",
+    "markAsReadAfter5s": "Após 5 segundos",
+    "markAsReadOnLeave": "Ao sair da conversa",
+    "markAsReadManual": "Apenas manualmente",
     "titleBarEterno": "Postilaatikko",
     "titleBarEternoDesc": "Usar a barra de título do aplicativo",
     "titleBarCompatibilityWayland": "As decorações personalizadas da janela não são compatíveis com a sessão KDE Wayland atual. A barra de título do sistema será usada.",
