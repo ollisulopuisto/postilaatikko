@@ -23,6 +23,7 @@ The goal is a strong personal email client for people who use several accounts. 
 - This is a personal mail client. Shared inboxes, team assignment, and collaboration features are out of scope.
 - Prefer local cross-account behavior when a provider API cannot perform the action, and never delete a source message until a cross-account copy has been confirmed.
 - Keep notifications configurable and avoid making them a requirement for the core mail workflow.
+- Prefer contextual action surfaces (selection bar, context menus, selection popovers) over a floating or dockable tool palette. All of them, and the command panel, draw on one shared action definition list tied to the shortcut registry. See `docs/plans/2026-10-25-contextual-toolbars-design.md` (D-001; follow-ups P-029 to P-034).
 
 ### Recommended implementation order
 
