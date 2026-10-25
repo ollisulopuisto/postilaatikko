@@ -649,6 +649,10 @@ func (a *App) Startup(ctx context.Context) {
 	a.syncEngine.SetSMIMEVerifier(a.smimeVerifier)
 	a.syncEngine.SetPGPVerifier(a.pgpVerifier)
 
+	// Let Gmail accounts search server-side through the Gmail API (IMAP remains
+	// the fallback; see app/gmail.go).
+	a.syncEngine.SetGmailTokenSource(a.gmailTokenSource)
+
 	// Route newly synced messages through local cross-account filters.
 	a.syncEngine.SetNewMessageHandler(a.handleNewMessageForFilters)
 

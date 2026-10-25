@@ -9,6 +9,7 @@ import (
 
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
+	"github.com/hkdb/aerion/internal/folder"
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/message"
 )
@@ -111,6 +112,20 @@ func (e *Engine) IMAPSearch(ctx context.Context, accountID, folderID, query stri
 	// This produces: UID SEARCH OR FROM "q" OR SUBJECT "q" OR TO "q" OR CC "q" BODY "q"
 	client := conn.Client().RawClient()
 	criteria := buildSearchCriteria(query)
+	uids, err := uidSearch(ctx, client, criteria)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(uids) == 0 {
+		return &IMAPSearchResponse{TotalCount: 0}, nil
+	}
+
+	return e.resolveSearchUIDs(ctx, client, f, accountID, folderID, uids, len(uids), limit)
+}
+
+// uidSearch runs a UID SEARCH and waits for it, returning early if ctx is done.
+func uidSearch(ctx context.Context, client *imapclient.Client, criteria *imap.SearchCriteria) ([]uint32, error) {
 	searchCmd := client.UIDSearch(criteria, nil)
 
 	// Run Wait() in a goroutine to allow context cancellation
@@ -124,7 +139,6 @@ func (e *Engine) IMAPSearch(ctx context.Context, accountID, folderID, query stri
 		resultCh <- searchResult{data, err}
 	}()
 
-	var uids []uint32
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -132,17 +146,19 @@ func (e *Engine) IMAPSearch(ctx context.Context, accountID, folderID, query stri
 		if result.err != nil {
 			return nil, fmt.Errorf("IMAP search failed: %w", result.err)
 		}
+		uids := make([]uint32, 0, len(result.data.AllUIDs()))
 		for _, uid := range result.data.AllUIDs() {
 			uids = append(uids, uint32(uid))
 		}
+		return uids, nil
 	}
+}
 
-	if len(uids) == 0 {
-		return &IMAPSearchResponse{TotalCount: 0}, nil
-	}
-
-	totalCount := len(uids)
-
+// resolveSearchUIDs turns matching UIDs of an already-selected folder into search
+// results: local messages are enriched from the store, others get their envelope
+// fetched from the server. totalCount is reported as-is (it may exceed len(uids)
+// when the caller limits the search). Shared by the IMAP and Gmail search paths.
+func (e *Engine) resolveSearchUIDs(ctx context.Context, client *imapclient.Client, f *folder.Folder, accountID, folderID string, uids []uint32, totalCount, limit int) (*IMAPSearchResponse, error) {
 	// When limit is set, keep only the newest UIDs (highest UID = newest).
 	// Sort descending first so we take the most recent ones.
 	if limit > 0 && len(uids) > limit {
