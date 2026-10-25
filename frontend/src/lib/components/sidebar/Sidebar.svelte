@@ -18,8 +18,6 @@
   // @ts-ignore - wailsjs path
   import { account, folder } from '../../../../wailsjs/go/models'
   // @ts-ignore - wailsjs path
-  import { formatDistanceToNow } from 'date-fns'
-  import { getCurrentDateFnsLocale } from '$lib/stores/settings.svelte'
   import { getSidebarWidth } from '$lib/stores/uiState.svelte'
   import { virtualFoldersStore } from '$lib/stores/virtualFolders.svelte'
   import type { virtualfolder } from '../../../../wailsjs/go/models'
@@ -236,28 +234,6 @@
   function handleAccountInboxSelect(accountId: string, folderId: string, folderPath: string) {
     onUnifiedFolderSelect?.(accountId, folderId, folderPath, 'Inbox', 'inbox')
   }
-
-  // Sync status: { accountName, label, percentage } — accountName + percentage are populated only when a sync is active
-  let syncStatus = $derived.by<{ accountName: string | null; label: string; percentage: number | null }>(() => {
-    if (accountStore.isAnySyncing) {
-      const syncingAcc = accountStore.accounts.find((a) => a.syncing)
-      if (syncingAcc) {
-        const accountName = syncingAcc.account.name
-        const progress = accountStore.getSyncProgress(syncingAcc.account.id)
-        if (progress) {
-          if (progress.phase === 'folders') return { accountName, label: $_('sidebar.syncingFolders'), percentage: null }
-          if (progress.phase === 'messages') return { accountName, label: $_('sidebar.fetchingMessageList'), percentage: null }
-          if (progress.phase === 'headers') return { accountName, label: $_('sidebar.fetchingHeaders', { values: { percentage: progress.percentage } }), percentage: progress.percentage }
-          return { accountName, label: $_('sidebar.syncingContent', { values: { percentage: progress.percentage } }), percentage: progress.percentage }
-        }
-        return { accountName, label: $_('sidebar.syncing'), percentage: null }
-      }
-      return { accountName: null, label: $_('sidebar.syncing'), percentage: null }
-    }
-    if (!accountStore.isOnline) return { accountName: null, label: $_('sidebar.offline'), percentage: null }
-    if (!accountStore.lastSyncTime) return { accountName: null, label: $_('sidebar.notSynced'), percentage: null }
-    return { accountName: null, label: $_('sidebar.synced', { values: { time: formatDistanceToNow(accountStore.lastSyncTime, { addSuffix: true, locale: getCurrentDateFnsLocale() }) } }), percentage: null }
-  })
 
   // Handle folder selection
   function handleFolderSelect(accountId: string, folderId: string, folderPath: string, folderName: string, folderType: string) {

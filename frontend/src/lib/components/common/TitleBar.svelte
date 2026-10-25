@@ -1,5 +1,4 @@
 <script lang="ts">
-  import Icon from '@iconify/svelte'
   import logo from '../../../assets/images/logo-universal.png'
   import { _ } from '$lib/i18n'
   import { WindowMinimise, WindowToggleMaximise, Quit } from '../../../../wailsjs/runtime/runtime'

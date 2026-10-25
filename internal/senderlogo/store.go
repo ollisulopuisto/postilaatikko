@@ -151,7 +151,7 @@ func (s *Store) save(results map[string]cacheResult) {
 	if err != nil {
 		return
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // no-op after a successful Commit
 	stmt, err := tx.Prepare(`
 		INSERT INTO sender_logo_cache (domain, data, media_type, failure_type, fetched_at)
 		VALUES (?, ?, ?, ?, ?)

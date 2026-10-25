@@ -43,5 +43,7 @@ func TestUnixSocketPermissionsAndContextCleanup(t *testing.T) {
 	if _, err := os.Stat(s.Address()); !os.IsNotExist(err) {
 		t.Fatal("socket not removed", err)
 	}
-	s.Stop()
+	if err := s.Stop(); err != nil {
+		t.Fatal(err)
+	}
 }

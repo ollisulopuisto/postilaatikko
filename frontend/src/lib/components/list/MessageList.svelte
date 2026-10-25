@@ -534,8 +534,8 @@
       invalidateActiveSearchResults(messageIds)
     })
 
-    window.addEventListener(UNDO_OPERATION_CREATED_EVENT, handleUndoOperationCreated as EventListener)
-    window.addEventListener(UNDO_OPERATION_COMPLETED_EVENT, handleUndoOperationCompleted as EventListener)
+    window.addEventListener(UNDO_OPERATION_CREATED_EVENT, handleUndoOperationCreated as (e: Event) => void)
+    window.addEventListener(UNDO_OPERATION_COMPLETED_EVENT, handleUndoOperationCompleted as (e: Event) => void)
 
     // Listen for FTS indexing progress
     EventsOn('fts:progress', (data: { folderId: string; indexed: number; total: number; percentage: number }) => {
@@ -591,8 +591,8 @@
     EventsOff('fts:progress')
     EventsOff('fts:complete')
     EventsOff('fts:indexing')
-    window.removeEventListener(UNDO_OPERATION_CREATED_EVENT, handleUndoOperationCreated as EventListener)
-    window.removeEventListener(UNDO_OPERATION_COMPLETED_EVENT, handleUndoOperationCompleted as EventListener)
+    window.removeEventListener(UNDO_OPERATION_CREATED_EVENT, handleUndoOperationCreated as (e: Event) => void)
+    window.removeEventListener(UNDO_OPERATION_COMPLETED_EVENT, handleUndoOperationCompleted as (e: Event) => void)
     if (reloadTimer) clearTimeout(reloadTimer)
     if (syncReloadTimer) clearTimeout(syncReloadTimer)
     if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
@@ -816,8 +816,8 @@
         isVirtualFolderView
           ? GetVirtualFolderCount(folderId!)
           : isUnifiedView
-          ? GetUnifiedFolderCount(folderId!, filterMode)
-          : GetConversationCount(accountId!, folderId!, filterMode),
+            ? GetUnifiedFolderCount(folderId!, filterMode)
+            : GetConversationCount(accountId!, folderId!, filterMode),
         'conversation count',
         4_000,
       ).catch((countError) => {
@@ -835,8 +835,8 @@
         isVirtualFolderView
           ? GetVirtualFolderConversations(folderId!, currentOffset, limit, getMessageListSortOrder())
           : isUnifiedView
-          ? GetUnifiedFolderConversations(folderId!, currentOffset, limit, getMessageListSortOrder(), filterMode)
-          : GetConversations(accountId!, folderId!, currentOffset, limit, getMessageListSortOrder(), filterMode),
+            ? GetUnifiedFolderConversations(folderId!, currentOffset, limit, getMessageListSortOrder(), filterMode)
+            : GetConversations(accountId!, folderId!, currentOffset, limit, getMessageListSortOrder(), filterMode),
         'conversation list',
       )
       // Discard stale result — folder was switched while this load was in-flight (#200)
@@ -1287,11 +1287,11 @@
       ? (serverSearchMode ? serverSearchResults : searchResults)
       : canUseInboxDisplay
         ? flattenVisibleInboxGroups(
-            inboxGroups(),
-            collapsedInboxGroups,
-            inboxDisplayMode === 'chronological',
-            visibleInboxConversations,
-          )
+          inboxGroups(),
+          collapsedInboxGroups,
+          inboxDisplayMode === 'chronological',
+          visibleInboxConversations,
+        )
         : conversations
   )
   const activeCount = $derived(
@@ -1869,15 +1869,6 @@
     return selectedHasUnread
   }
 
-  // Get index of earliest checked item (for post-delete focus)
-  function getEarliestCheckedIndex(): number {
-    if (checkedThreadIds.size === 0) return getSelectedIndex()
-    for (let i = 0; i < activeList.length; i++) {
-      if (checkedThreadIds.has(activeList[i].threadId)) return i
-    }
-    return getSelectedIndex()
-  }
-
   // Clear all checkboxes
   export function clearChecked() {
     checkedThreadIds = new Set()
@@ -1986,19 +1977,16 @@
     undoSearchSnapshots.delete(operationID)
     const eligible = snapshots.filter(snapshot => snapshot.source === searchSource && snapshot.query === searchQuery)
     if (eligible.length === 0) return
-    let restoredCount = 0
     if (searchSource === 'server') {
       const restored = restoreSearchResults(serverSearchResults, eligible)
       serverSearchRequestState.restore(eligible.map(snapshot => serverSearchResultIdentity(snapshot.result)))
       serverSearchResults = restored.results
       serverSearchCount += restored.restored
       serverSearchTotalCount += restored.restored
-      restoredCount = restored.restored
     } else {
       const restored = restoreSearchResults(searchResults, eligible)
       searchResults = restored.results
       searchTotalCount += restored.restored
-      restoredCount = restored.restored
     }
   }
 
@@ -2080,9 +2068,9 @@
         moveMutationInFlight = false
       }
     }).catch((err) => {
-        console.error('Delete failed:', err)
-        toasts.error($_('toast.failedToDelete'))
-      })
+      console.error('Delete failed:', err)
+      toasts.error($_('toast.failedToDelete'))
+    })
   }
 
   async function handleBulkArchive() {
