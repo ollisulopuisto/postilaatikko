@@ -6,7 +6,9 @@ import (
 
 	"github.com/hkdb/aerion/internal/account"
 	"github.com/hkdb/aerion/internal/credentials"
+	"github.com/hkdb/aerion/internal/folder"
 	"github.com/hkdb/aerion/internal/gmail"
+	"github.com/hkdb/aerion/internal/message"
 )
 
 // gmailIMAPHost is how Gmail accounts are recognized throughout the app.
@@ -43,4 +45,43 @@ func (a *App) gmailTokensFor(accountID string, scopesOK func([]string) bool, for
 		return a.composeOps.forceRefreshOAuthToken(a.ctx, accountID)
 	}
 	return a.composeOps.getValidOAuthToken(a.ctx, accountID)
+}
+
+// newGmailModifyClient returns a Gmail API client for label changes. Its token
+// source requires a scope that allows modifying labels.
+func (a *App) newGmailModifyClient(accountID string) *gmail.Client {
+	return gmail.NewClient(func(_ context.Context, forceRefresh bool) (string, error) {
+		tokens, err := a.gmailTokensFor(accountID, gmail.ScopesCoverModify, forceRefresh)
+		if err != nil {
+			return "", err
+		}
+		return tokens.AccessToken, nil
+	})
+}
+
+// gmailSpamMove decides whether a move can be done as a Gmail label change.
+// That is the case only for Inbox -> Spam (spam=true) and Spam -> Inbox
+// (spam=false) on an account whose granted scopes allow label changes, when
+// every message has a Message-ID to look up. The IMAP COPY+DELETE path is
+// equivalent for these two moves, so any other move, and any doubt, returns
+// ok=false and keeps the existing behavior.
+func (a *App) gmailSpamMove(accountID string, msgs []*message.Message, source, dest *folder.Folder) (rfcIDs []string, spam, ok bool) {
+	switch {
+	case source.Type == folder.TypeInbox && dest.Type == folder.TypeSpam:
+		spam = true
+	case source.Type == folder.TypeSpam && dest.Type == folder.TypeInbox:
+		spam = false
+	default:
+		return nil, false, false
+	}
+	if _, err := a.gmailTokensFor(accountID, gmail.ScopesCoverModify, false); err != nil {
+		return nil, false, false
+	}
+	for _, m := range msgs {
+		if m.MessageID == "" {
+			return nil, false, false
+		}
+		rfcIDs = append(rfcIDs, m.MessageID)
+	}
+	return rfcIDs, spam, len(rfcIDs) > 0
 }

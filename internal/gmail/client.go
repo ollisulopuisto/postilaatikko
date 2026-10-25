@@ -72,6 +72,10 @@ type SearchRequest struct {
 	LabelIDs  []string // restrict to messages carrying all of these labels
 	PageToken string
 	Limit     int // maxResults, capped at 500
+
+	// IncludeSpamTrash also searches Spam and Trash. It is implied when LabelIDs
+	// contains SPAM or TRASH.
+	IncludeSpamTrash bool
 }
 
 // SearchPage is one page of message ids.
@@ -96,6 +100,9 @@ func (c *Client) Search(ctx context.Context, r SearchRequest) (*SearchPage, erro
 	q.Set("maxResults", strconv.Itoa(limit))
 	if r.PageToken != "" {
 		q.Set("pageToken", r.PageToken)
+	}
+	if r.IncludeSpamTrash {
+		q.Set("includeSpamTrash", "true")
 	}
 	for _, l := range r.LabelIDs {
 		q.Add("labelIds", l)
@@ -399,4 +406,44 @@ func classify(status int, reasons []string) error {
 		return ErrBadRequest
 	}
 	return nil
+}
+
+// FindByRFCMessageID returns the Gmail id of the single message whose Message-ID
+// header matches (Spam and Trash included). ErrNotFound means no match and
+// ErrAmbiguous more than one, so callers never act on a guess.
+func (c *Client) FindByRFCMessageID(ctx context.Context, rfcMessageID string) (string, error) {
+	id := strings.Trim(strings.TrimSpace(rfcMessageID), "<>")
+	if id == "" {
+		return "", fmt.Errorf("%w: empty Message-ID", ErrNotFound)
+	}
+	page, err := c.Search(ctx, SearchRequest{Query: "rfc822msgid:" + id, Limit: 2, IncludeSpamTrash: true})
+	if err != nil {
+		return "", err
+	}
+	switch len(page.MessageIDs) {
+	case 0:
+		return "", ErrNotFound
+	case 1:
+		return page.MessageIDs[0], nil
+	}
+	return "", ErrAmbiguous
+}
+
+// SetSpam moves the messages with the given Message-ID headers to Spam
+// (spam=true: add SPAM, remove INBOX) or back to the Inbox (spam=false: add
+// INBOX, remove SPAM). Every message is resolved first; if any lookup fails
+// nothing is changed, so a failure leaves the mailbox untouched.
+func (c *Client) SetSpam(ctx context.Context, rfcMessageIDs []string, spam bool) error {
+	ids := make([]string, 0, len(rfcMessageIDs))
+	for _, rfc := range rfcMessageIDs {
+		id, err := c.FindByRFCMessageID(ctx, rfc)
+		if err != nil {
+			return err
+		}
+		ids = append(ids, id)
+	}
+	if spam {
+		return c.Modify(ctx, ids, []string{"SPAM"}, []string{"INBOX"})
+	}
+	return c.Modify(ctx, ids, []string{"INBOX"}, []string{"SPAM"})
 }
