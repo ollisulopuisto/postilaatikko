@@ -153,7 +153,7 @@ func (a *App) SyncFolder(accountID, folderID string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get account: %w", err)
 	}
-	syncPeriodDays := 30 // default (0 means all messages)
+	syncPeriodDays := 0 // default (0 means all messages)
 	if acc != nil {
 		syncPeriodDays = acc.SyncPeriodDays
 	}

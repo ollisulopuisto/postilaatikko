@@ -220,6 +220,11 @@ func TestMigrationV32_LocalRecordIDsRewrittenToUUIDs(t *testing.T) {
 	if _, err := db.Exec(`ALTER TABLE contact_sources DROP COLUMN password_storage`); err != nil {
 		t.Fatalf("drop contact_sources.password_storage for re-migrate: %v", err)
 	}
+	for _, col := range []string{"folder_mode", "read_status", "reply_status", "star_status", "date_window"} {
+		if _, err := db.Exec(`ALTER TABLE virtual_folders DROP COLUMN ` + col); err != nil {
+			t.Fatalf("drop virtual_folders.%s for re-migrate: %v", col, err)
+		}
+	}
 
 	// Re-run migrations — migration 32 should rewrite the seeded local- id.
 	if err := db.Migrate(); err != nil {
@@ -395,6 +400,11 @@ func TestMigrationV33_CleansExistingOrphans(t *testing.T) {
 	}
 	if _, err := db.Exec(`ALTER TABLE contact_sources DROP COLUMN password_storage`); err != nil {
 		t.Fatalf("drop contact_sources.password_storage for re-migrate: %v", err)
+	}
+	for _, col := range []string{"folder_mode", "read_status", "reply_status", "star_status", "date_window"} {
+		if _, err := db.Exec(`ALTER TABLE virtual_folders DROP COLUMN ` + col); err != nil {
+			t.Fatalf("drop virtual_folders.%s for re-migrate: %v", col, err)
+		}
 	}
 
 	// Seed: orphan state row whose addressbook doesn't exist. Pre-migration,

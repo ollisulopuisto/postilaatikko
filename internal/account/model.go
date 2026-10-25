@@ -312,7 +312,7 @@ func (c *AccountConfig) Validate() error {
 		c.AuthType = AuthPassword
 	}
 	if c.SyncPeriodDays < 0 {
-		c.SyncPeriodDays = 30
+		c.SyncPeriodDays = 0 // Default: 0 (all messages)
 	}
 	// SyncInterval: 0 is valid (manual only), negative means use default
 	if c.SyncInterval < 0 {

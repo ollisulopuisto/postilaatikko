@@ -177,7 +177,7 @@ func (a *App) CompleteOAuthAccountSetup(provider, email, accountName, displayNam
 			SMTPHost:       "smtp.gmail.com",
 			SMTPPort:       587,
 			SMTPSecurity:   account.SecurityStartTLS,
-			SyncPeriodDays: 180,
+			SyncPeriodDays: 0,
 			SyncInterval:   30,
 		}
 	case "microsoft":
@@ -194,7 +194,7 @@ func (a *App) CompleteOAuthAccountSetup(provider, email, accountName, displayNam
 			SMTPHost:       "smtp.office365.com",
 			SMTPPort:       587,
 			SMTPSecurity:   account.SecurityStartTLS,
-			SyncPeriodDays: 180,
+			SyncPeriodDays: 0,
 			SyncInterval:   30,
 		}
 	default:

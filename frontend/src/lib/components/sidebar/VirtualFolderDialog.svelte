@@ -2,6 +2,7 @@
   import Icon from '@iconify/svelte'
   import * as Dialog from '$lib/components/ui/dialog'
   import { Button } from '$lib/components/ui/button'
+  import { _ } from '$lib/i18n'
   import type { AccountWithFolders } from '$lib/stores/accounts.svelte'
   import type { folder, virtualfolder } from '../../../../wailsjs/go/models'
 
@@ -9,12 +10,27 @@
     open: boolean
     virtualFolder: virtualfolder.VirtualFolder | null
     accounts: AccountWithFolders[]
-    onSave: (value: { id: string; name: string; orderIndex: number; folderIds: string[] }) => Promise<void>
+    onSave: (value: {
+      id: string
+      name: string
+      orderIndex: number
+      folderIds: string[]
+      folderMode: string
+      readStatus: string
+      replyStatus: string
+      starStatus: string
+      dateWindow: string
+    }) => Promise<void>
   }
 
   let { open = $bindable(false), virtualFolder, accounts, onSave }: Props = $props()
   let name = $state('')
   let selectedIDs = $state<string[]>([])
+  let folderMode = $state('include')
+  let readStatus = $state('all')
+  let replyStatus = $state('all')
+  let starStatus = $state('all')
+  let dateWindow = $state('all')
   let saving = $state(false)
   let error = $state('')
 
@@ -34,6 +50,11 @@
     if (!open) return
     name = virtualFolder?.name || ''
     selectedIDs = [...(virtualFolder?.folderIds || [])]
+    folderMode = virtualFolder?.folderMode || 'include'
+    readStatus = virtualFolder?.readStatus || 'all'
+    replyStatus = virtualFolder?.replyStatus || 'all'
+    starStatus = virtualFolder?.starStatus || 'all'
+    dateWindow = virtualFolder?.dateWindow || 'all'
     error = ''
   })
 
@@ -44,21 +65,31 @@
   async function submit() {
     const trimmed = name.trim()
     if (!trimmed) {
-      error = 'Enter a name for this virtual folder.'
+      error = $_('sidebar.virtualFolderNameRequired')
       return
     }
-    if (selectedIDs.length === 0) {
-      error = 'Choose at least one folder.'
+    if (selectedIDs.length === 0 && folderMode === 'include') {
+      error = $_('sidebar.virtualFolderChooseFolder')
       return
     }
     saving = true
     error = ''
     try {
-      await onSave({ id: virtualFolder?.id || '', name: trimmed, orderIndex: virtualFolder?.orderIndex || 0, folderIds: selectedIDs })
+      await onSave({
+        id: virtualFolder?.id || '',
+        name: trimmed,
+        orderIndex: virtualFolder?.orderIndex || 0,
+        folderIds: selectedIDs,
+        folderMode,
+        readStatus,
+        replyStatus,
+        starStatus,
+        dateWindow,
+      })
       open = false
     } catch (cause) {
       console.error('Failed to save virtual folder:', cause)
-      error = 'Could not save the virtual folder.'
+      error = $_('sidebar.virtualFolderSaveFailed')
     } finally {
       saving = false
     }
@@ -66,17 +97,61 @@
 </script>
 
 <Dialog.Root bind:open>
-  <Dialog.Content class="max-w-lg">
+  <Dialog.Content class="max-h-[85vh] max-w-lg overflow-y-auto">
     <Dialog.Header>
-      <Dialog.Title>{virtualFolder ? 'Edit virtual folder' : 'New virtual folder'}</Dialog.Title>
+      <Dialog.Title>{virtualFolder ? $_('sidebar.editVirtualFolder') : $_('sidebar.newVirtualFolder')}</Dialog.Title>
     </Dialog.Header>
     <label class="grid gap-1 text-sm">
-      <span>Name</span>
+      <span>{$_('sidebar.virtualFolderName')}</span>
       <input bind:value={name} maxlength="100" class="h-10 rounded-md border border-input bg-background px-3" />
     </label>
+    <label class="grid gap-1 text-sm">
+      <span>{$_('sidebar.virtualFolderSelection')}</span>
+      <select bind:value={folderMode} class="h-10 rounded-md border border-input bg-background px-3">
+        <option value="include">{$_('sidebar.virtualFolderIncludeSelected')}</option>
+        <option value="exclude">{$_('sidebar.virtualFolderExcludeSelected')}</option>
+      </select>
+    </label>
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <label class="grid gap-1 text-sm">
+        <span>{$_('sidebar.virtualFolderReadStatus')}</span>
+        <select bind:value={readStatus} class="h-10 rounded-md border border-input bg-background px-2 text-xs sm:text-sm">
+          <option value="all">{$_('sidebar.virtualFolderAny')}</option>
+          <option value="unread">{$_('sidebar.virtualFolderUnread')}</option>
+          <option value="read">{$_('sidebar.virtualFolderRead')}</option>
+        </select>
+      </label>
+      <label class="grid gap-1 text-sm">
+        <span>{$_('sidebar.virtualFolderStarStatus')}</span>
+        <select bind:value={starStatus} class="h-10 rounded-md border border-input bg-background px-2 text-xs sm:text-sm">
+          <option value="all">{$_('sidebar.virtualFolderAny')}</option>
+          <option value="starred">{$_('sidebar.virtualFolderStarred')}</option>
+          <option value="unstarred">{$_('sidebar.virtualFolderUnstarred')}</option>
+        </select>
+      </label>
+      <label class="grid gap-1 text-sm">
+        <span>{$_('sidebar.virtualFolderReplyStatus')}</span>
+        <select bind:value={replyStatus} class="h-10 rounded-md border border-input bg-background px-2 text-xs sm:text-sm">
+          <option value="all">{$_('sidebar.virtualFolderAny')}</option>
+          <option value="replied">{$_('sidebar.virtualFolderReplied')}</option>
+          <option value="unreplied">{$_('sidebar.virtualFolderUnreplied')}</option>
+        </select>
+      </label>
+      <label class="grid gap-1 text-sm">
+        <span>{$_('sidebar.virtualFolderTimePeriod')}</span>
+        <select bind:value={dateWindow} class="h-10 rounded-md border border-input bg-background px-2 text-xs sm:text-sm">
+          <option value="all">{$_('sidebar.virtualFolderAllTime')}</option>
+          <option value="7d">{$_('sidebar.virtualFolderLast7Days')}</option>
+          <option value="30d">{$_('sidebar.virtualFolderLast30Days')}</option>
+          <option value="90d">{$_('sidebar.virtualFolderLast90Days')}</option>
+          <option value="1y">{$_('sidebar.virtualFolderLastYear')}</option>
+        </select>
+      </label>
+    </div>
+    <p class="text-xs text-muted-foreground">{$_('sidebar.virtualFolderCriteriaHelp')}</p>
     <div class="max-h-72 overflow-y-auto rounded-md border border-border p-2">
       {#if selectableFolders.length === 0}
-        <p class="p-3 text-sm text-muted-foreground">Folders are still loading, or no folders are available.</p>
+        <p class="p-3 text-sm text-muted-foreground">{$_('sidebar.virtualFolderNoFolders')}</p>
       {:else}
         {#each selectableFolders as item (item.id)}
           <label class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/60">
@@ -88,10 +163,10 @@
     </div>
     {#if error}<p class="text-sm text-destructive" role="alert">{error}</p>{/if}
     <Dialog.Footer>
-      <Button variant="outline" onclick={() => (open = false)}>Cancel</Button>
+      <Button variant="outline" onclick={() => (open = false)}>{$_('common.cancel')}</Button>
       <Button disabled={saving || selectableFolders.length === 0} onclick={submit}>
         {#if saving}<Icon icon="mdi:loading" class="mr-1 h-4 w-4 animate-spin" />{/if}
-        Save
+        {$_('common.save')}
       </Button>
     </Dialog.Footer>
   </Dialog.Content>

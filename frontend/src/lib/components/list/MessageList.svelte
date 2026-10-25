@@ -748,16 +748,16 @@
     return result
   })
   let previousVirtualFolderID = ''
-  let previousVirtualFolderMembers = ''
+  let previousVirtualFolderCriteria = ''
   $effect(() => {
     const current = isVirtualFolderView
       ? virtualFoldersStore.folders.find((item) => item.id === folderId)
       : undefined
     const currentID = current?.id || ''
-    const members = current?.folderIds.join('\u001f') || ''
-    if (currentID && currentID === previousVirtualFolderID && members !== previousVirtualFolderMembers) scheduleReload()
+    const criteriaKey = current ? `${current.folderMode}:${current.readStatus}:${current.replyStatus}:${current.starStatus}:${current.dateWindow}:${current.folderIds.join('\u001f')}` : ''
+    if (currentID && currentID === previousVirtualFolderID && criteriaKey !== previousVirtualFolderCriteria) scheduleReload()
     previousVirtualFolderID = currentID
-    previousVirtualFolderMembers = members
+    previousVirtualFolderCriteria = criteriaKey
   })
 
   // Unified sync fans out to real accounts, so accountStore.isAnySyncing is
@@ -2180,7 +2180,7 @@
       {/if}
     </div>
     <div class="flex items-center gap-1">
-      {#if !isVirtualFolderView && !isSearchMode && syncing}
+      {#if !isVirtualFolderView && !isSearchMode && (syncing || manualSyncing)}
         <!-- While syncing, show spinning icon that cancels on click -->
         <button
           class="p-2 rounded-md hover:bg-muted transition-colors"
