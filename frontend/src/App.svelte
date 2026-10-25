@@ -1528,6 +1528,7 @@
     // locally so they don't depend on this dispatch).
     switch (e.key) {
       case 'Enter':
+      case 'o':
         // A focused native button owns Enter. Do not swallow its activation
         // based on the app's separate pane-navigation state.
         if (document.activeElement?.tagName === 'BUTTON') {
@@ -1545,6 +1546,7 @@
         }
         return
       case ' ':  // Space - toggle checkbox on focused message, or expand/collapse account
+      case 'x':
         // A focused native button owns Space as well.
         if (document.activeElement?.tagName === 'BUTTON') {
           return
@@ -1576,18 +1578,118 @@
       return
     }
 
-    // V — open the keyboard-focused conversation in the viewer (alias of
-    // Enter; shared predicate — kit list panes consume KEY.LIST_VIEW locally)
-    if (KEY.LIST_VIEW(e)) {
-      if (focusedPane === 'messageList') {
-        e.preventDefault()
-        messageListRef?.openSelected()
-      }
-      return
-    }
-
-    // Single-key shortcuts
+    // Single-key shortcuts (Gmail standard shortcuts)
     switch (e.key) {
+      case 'c':
+        e.preventDefault()
+        handleCompose()
+        return
+      case 'e':
+        e.preventDefault()
+        if (messageListRef?.hasCheckedMessages()) {
+          handleBulkArchive(messageListRef.getCheckedMessageIds())
+        } else {
+          const focusedIds = messageListRef?.getSelectedMessageIds() ?? []
+          if (focusedIds.length > 0) {
+            handleBulkArchive(focusedIds)
+          }
+        }
+        return
+      case 'v':
+        if (!isMailActive()) return
+        e.preventDefault()
+        messageListRef?.toggleMoveToDialog()
+        return
+      case 'r': {
+        if (!hasConversation) return
+        e.preventDefault()
+        if (focusedPane === 'viewer' && viewerRef?.hasFocusedMessage()) {
+          viewerRef.reply()
+          return
+        }
+        const msgId = getLastMessageId()
+        if (msgId) handleReply('reply', msgId, viewerRef?.isImagesLoaded(msgId) || false)
+        return
+      }
+      case 'a': {
+        if (!hasConversation) return
+        e.preventDefault()
+        if (focusedPane === 'viewer' && viewerRef?.hasFocusedMessage()) {
+          viewerRef.replyAll()
+          return
+        }
+        const msgId = getLastMessageId()
+        if (msgId) handleReply('reply-all', msgId, viewerRef?.isImagesLoaded(msgId) || false)
+        return
+      }
+      case 'f': {
+        if (!hasConversation) return
+        e.preventDefault()
+        if (focusedPane === 'viewer' && viewerRef?.hasFocusedMessage()) {
+          viewerRef.forward()
+          return
+        }
+        const msgId = getLastMessageId()
+        if (msgId) handleReply('forward', msgId, viewerRef?.isImagesLoaded(msgId) || false)
+        return
+      }
+      case '/':
+        e.preventDefault()
+        if (isMailActive()) {
+          messageListRef?.toggleSearchFocus()
+          setFocusedPane('messageList')
+        }
+        return
+      case '!':
+        e.preventDefault()
+        if (messageListRef?.hasCheckedMessages()) {
+          handleBulkSpam(messageListRef.getCheckedMessageIds())
+        } else {
+          const focusedIds = messageListRef?.getSelectedMessageIds() ?? []
+          if (focusedIds.length > 0) {
+            handleBulkSpam(focusedIds)
+          }
+        }
+        return
+      case 'z':
+        e.preventDefault()
+        if (lastFlagUndo) {
+          handleUndoLastFlag()
+        } else {
+          handleGlobalUndo()
+        }
+        return
+      case 'I':
+        e.preventDefault()
+        if (messageListRef?.hasCheckedMessages()) {
+          handleBulkMarkRead(messageListRef.getCheckedMessageIds())
+        } else {
+          const focusedIds = messageListRef?.getSelectedMessageIds() ?? []
+          if (focusedIds.length > 0) {
+            handleBulkMarkRead(focusedIds)
+          }
+        }
+        return
+      case 'U':
+        e.preventDefault()
+        if (messageListRef?.hasCheckedMessages()) {
+          handleBulkMarkUnread(messageListRef.getCheckedMessageIds())
+        } else {
+          const focusedIds = messageListRef?.getSelectedMessageIds() ?? []
+          if (focusedIds.length > 0) {
+            handleBulkMarkUnread(focusedIds)
+          }
+        }
+        return
+      case 'u':
+        if (selectedThreadId) {
+          e.preventDefault()
+          selectedThreadId = null
+          selectedConversationFolderId = null
+          selectedConversationAccountId = null
+          setFocusedPane('messageList')
+        }
+        return
       case 's':
         if (messageListRef?.hasCheckedMessages()) {
           handleBulkToggleStar(messageListRef.getCheckedMessageIds(), messageListRef.getCheckedHasUnstarred())
@@ -1600,30 +1702,14 @@
           }
         }
         return
-      case 'f':
-        // Toggle thread focus mode (only with a conversation open)
+      case 'F': {
+        // Shift+F: toggle focus mode
         if (!hasConversation) return
         e.preventDefault()
         toggleThreadFocus()
         return
-      case 'F': {
-        // Shift+F: toggle message focus on the currently Tab-focused message
-        // (falls back to last message if none focused)
-        if (!hasConversation) return
-        e.preventDefault()
-        if (focusMode === 'message') {
-          focusMode = 'off'
-          focusedMessageIdInFocus = null
-          return
-        }
-        const targetId = (focusedPane === 'viewer' && viewerRef?.hasFocusedMessage())
-          ? viewerRef.getFocusedMessageId()
-          : getLastMessageId()
-        if (!targetId) return
-        focusMode = 'message'
-        focusedMessageIdInFocus = targetId
-        return
       }
+      case '#':
       case 'd': // alias of Delete: move focused/checked message(s) to Trash
       case 'Backspace':
       case 'Delete': {
