@@ -162,6 +162,13 @@
       "syncSucceeded": "Yhteystiedot synkronoitu",
       "syncAllSucceeded": "Kaikki yhteystietolähteet synkronoitu",
       "syncNoSource": "Valitse ensin CardDAV-lähde sivupalkista."
+    },
+    "shortcuts": {
+      "group": "Yhteystiedot",
+      "edit": "Muokkaa valittua yhteystietoa",
+      "new": "Uusi yhteystieto",
+      "syncAll": "Synkronoi kaikki yhteystietolähteet",
+      "syncFocused": "Synkronoi valittu yhteystietolähde"
     }
   }
 }

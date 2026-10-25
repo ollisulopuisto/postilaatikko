@@ -363,6 +363,19 @@
       "caldav": "CalDAV",
       "google": "Google",
       "microsoft": "Microsoft"
+    },
+    "shortcuts": {
+      "group": "Calendar",
+      "today": "Go to today",
+      "prev": "Previous month, week or day",
+      "next": "Next month, week or day",
+      "viewMonth": "Month view",
+      "viewWeek": "Week view",
+      "viewDay": "Day view",
+      "viewAgenda": "Agenda view",
+      "newEvent": "New event",
+      "sync": "Sync all calendars",
+      "focus": "Focus mode for selected event"
     }
   }
 }

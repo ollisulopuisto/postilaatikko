@@ -9,7 +9,8 @@
     "prebuild": "node scripts/copy-dictionaries.mjs",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "check": "svelte-check --tsconfig ./tsconfig.json && npm run check:shortcuts",
+    "check:shortcuts": "node --test tests/shortcutRegistry.test.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "knip": "knip"

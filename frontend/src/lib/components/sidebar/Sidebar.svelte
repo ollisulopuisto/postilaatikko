@@ -14,6 +14,8 @@
   import { contactPhotos } from '$lib/stores/contactPhotos.svelte'
   import { isAccountExpanded, setAccountExpanded, isUnifiedInboxExpanded, setFolderCollapsed, getUIState, getUIStateVersion, saveUIState, setActiveExtension } from '$lib/stores/uiState.svelte'
   import { setFocusedPane } from '$lib/stores/keyboard.svelte'
+  import { withShortcut, ariaKeyshortcuts, formatShortcut } from '$lib/keyboard/format'
+  import { openShortcutsOverlay } from '$lib/stores/shortcutsOverlay.svelte'
   import { _ } from '$lib/i18n'
   // @ts-ignore - wailsjs path
   import { account, folder } from '../../../../wailsjs/go/models'
@@ -660,7 +662,7 @@
 
 <div class="spark-sidebar spark-sidebar-rebuilt {sidebarDensity} {collapsed ? 'spark-sidebar-collapsed' : ''} relative flex flex-col h-full {isFlashing ? 'pane-focus-flash' : ''}">
   <div class="sidebar-rebuilt-toolbar">
-    <button type="button" class="sidebar-compose-button" onclick={onCompose} title={$_('sidebar.compose')} aria-label={$_('sidebar.compose')}>
+    <button type="button" class="sidebar-compose-button" onclick={onCompose} title={withShortcut($_('sidebar.compose'), 'app.compose')} aria-label={$_('sidebar.compose')} aria-keyshortcuts={ariaKeyshortcuts('app.compose')}>
       <Icon icon="mdi:pencil-plus-outline" class="h-5 w-5" />
       <span data-sidebar-label>{$_('sidebar.compose')}</span>
     </button>
@@ -810,12 +812,18 @@
   </div>
 
   <div class="sidebar-bottom-actions">
-    <button type="button" class="sidebar-refresh-entry" onclick={toggleSync} title={accountStore.isAnySyncing ? $_('sidebar.clickToCancel') : $_('sidebar.syncAllAccounts')} aria-label={accountStore.isAnySyncing ? $_('sidebar.clickToCancel') : $_('sidebar.syncAllAccounts')}>
+    <button type="button" class="sidebar-refresh-entry" onclick={toggleSync} title={withShortcut(accountStore.isAnySyncing ? $_('sidebar.clickToCancel') : $_('sidebar.syncAllAccounts'), 'app.syncAll')} aria-label={accountStore.isAnySyncing ? $_('sidebar.clickToCancel') : $_('sidebar.syncAllAccounts')}>
       <Icon icon={accountStore.isAnySyncing ? 'mdi:sync' : 'mdi:refresh'} class="h-5 w-5 {accountStore.isAnySyncing ? 'animate-spin' : ''}" />
       <span data-sidebar-label>{accountStore.isAnySyncing ? $_('sidebar.syncing') : $_('sidebar.syncAllAccounts')}</span>
     </button>
 
-    <button class="sidebar-settings-entry" type="button" data-sidebar-settings onclick={() => (showSettingsDialog = true)} title={$_('sidebar.settings')}>
+    <button type="button" class="sidebar-refresh-entry" data-sidebar-shortcuts onclick={openShortcutsOverlay} title={withShortcut($_('shortcuts.open'), 'app.shortcuts')} aria-label={$_('shortcuts.open')} aria-keyshortcuts={ariaKeyshortcuts('app.shortcuts')} aria-haspopup="dialog">
+      <Icon icon="mdi:keyboard-outline" class="h-5 w-5" />
+      <span data-sidebar-label>{$_('shortcuts.open')}</span>
+      <kbd data-sidebar-label class="ml-auto font-sans text-xs text-muted-foreground" aria-hidden="true">{formatShortcut('app.shortcuts')}</kbd>
+    </button>
+
+    <button class="sidebar-settings-entry" type="button" data-sidebar-settings onclick={() => (showSettingsDialog = true)} title={withShortcut($_('sidebar.settings'), 'app.preferences')}>
       {#if settingsAccount}
         <Avatar email={settingsAccount.email} name={settingsAccount.name} size={28} photoData={settingsPhoto?.data} photoMediaType={settingsPhoto?.mediaType} />
       {:else}

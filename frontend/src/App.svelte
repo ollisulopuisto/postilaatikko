@@ -18,6 +18,7 @@
   import CertificateDialog from './lib/components/settings/CertificateDialog.svelte'
   import ExtensionSettingsDialog from './lib/components/settings/ExtensionSettingsDialog.svelte'
   import ExtensionRail from './lib/components/rail/ExtensionRail.svelte'
+  import ShortcutsDialog from './lib/components/shortcuts/ShortcutsDialog.svelte'
   import ContactsPane from '$extensions/contacts/frontend/components/ContactsPane.svelte'
   import CalendarPane from '$extensions/calendar/frontend/components/CalendarPane.svelte'
   import { refreshExtensionRegistry, getRailTabs } from '$lib/stores/extensionRegistry.svelte'
@@ -44,6 +45,7 @@
   } from '$lib/stores/keyboard.svelte'
   import { isDialogGuardActive } from '$lib/stores/dialogGuard'
   import { dispatchExtensionShortcut } from '$lib/stores/extensionShortcuts.svelte'
+  import { shortcutsOverlay, openShortcutsOverlay } from '$lib/stores/shortcutsOverlay.svelte'
   import { initLayout, getLayoutMode, getResponsiveView, showViewer, hideViewer, showSidebar, hideSidebar, isResponsive } from '$lib/stores/layout.svelte'
   import { publishUndoOperationCompleted, publishUndoOperationCreated } from '$lib/components/list/undoMutationEvents'
   import { runMessageMutation } from '$lib/components/list/mutationInFlight'
@@ -999,6 +1001,16 @@
       return
     }
 
+    // `?` opens the keyboard shortcuts overlay from every rail pane. Not while
+    // typing (inInput) and not while the composer is open, so the composer
+    // keeps full ownership of its keys. The overlay sets the dialog guard,
+    // so a second `?` while it is open is swallowed by the check above.
+    if (!inInput && !showComposer && KEY.SHORTCUTS_HELP(e)) {
+      e.preventDefault()
+      openShortcutsOverlay()
+      return
+    }
+
     // Extension shortcut dispatch: when the active rail pane is NOT mail, let
     // the extension's registered shortcuts run first. dispatchExtensionShortcut
     // returns true when a handler matched — in that case we treat the event as
@@ -1934,6 +1946,12 @@
 
 <!-- Per-extension settings dialog dispatcher (Settings → Extensions → Edit) -->
 <ExtensionSettingsDialog />
+
+<!-- Keyboard shortcuts overlay (`?`, sidebar entry). Mounted only while open
+     so no inactive focus-trap root lingers in the DOM. -->
+{#if shortcutsOverlay.open}
+  <ShortcutsDialog />
+{/if}
 
 <!-- Shutdown Overlay -->
 {#if isShuttingDown}

@@ -363,6 +363,19 @@
       "caldav": "CalDAV",
       "google": "Google",
       "microsoft": "Microsoft"
+    },
+    "shortcuts": {
+      "group": "Kalenteri",
+      "today": "Siirry tähän päivään",
+      "prev": "Edellinen kuukausi, viikko tai päivä",
+      "next": "Seuraava kuukausi, viikko tai päivä",
+      "viewMonth": "Kuukausinäkymä",
+      "viewWeek": "Viikkonäkymä",
+      "viewDay": "Päivänäkymä",
+      "viewAgenda": "Esityslistanäkymä",
+      "newEvent": "Uusi tapahtuma",
+      "sync": "Synkronoi kaikki kalenterit",
+      "focus": "Valitun tapahtuman keskitystila"
     }
   }
 }
