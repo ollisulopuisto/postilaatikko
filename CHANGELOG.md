@@ -10,6 +10,7 @@
 - Show configured account names under Inbox and in account rows, falling back to the email address.
 - Added ICS event handoff: create an ICS event from structured date/time details and open it for review/import in the user's calendar application. No email timestamp detection (that is P-022).
 - Added composer quick replies: create, edit, delete and insert reusable plain-text replies from the composer footer without touching the draft, recipients or sender. Stored on this computer only.
+- Icon-only controls in the Contacts list and the shared detail overlay and rich-text editor now have localized accessible names (screen readers).
 
 ## Postilaatikko — v0.3.11
 

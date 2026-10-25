@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { _ } from '$lib/i18n'
   // DetailOverlay — generic right-side detail overlay primitive for
   // extensions. Three positioning modes driven by the `focused` prop and
   // the layout store:
@@ -99,8 +100,8 @@
           type="button"
           class="p-1 rounded hover:bg-muted/40"
           onclick={() => onClose?.()}
-          aria-label="Back"
-          title="Back"
+          aria-label={$_('common.back')}
+          title={$_('common.back')}
         >
           <Icon icon="mdi:arrow-left" class="w-5 h-5 text-muted-foreground" />
         </button>
@@ -112,8 +113,8 @@
         type="button"
         class="p-1 rounded hover:bg-muted/40"
         onclick={() => onToggleFocus?.()}
-        aria-label={focused ? 'Exit focus' : 'Enter focus mode'}
-        title={focused ? 'Exit focus' : 'Enter focus mode'}
+        aria-label={focused ? $_('viewer.exitFocus') : $_('viewer.enterFocus')}
+        title={focused ? $_('viewer.exitFocus') : $_('viewer.enterFocus')}
       >
         <Icon
           icon={focused ? 'mdi:fullscreen-exit' : 'mdi:fullscreen'}
@@ -124,8 +125,8 @@
         type="button"
         class="p-1 rounded hover:bg-muted/40"
         onclick={() => onClose?.()}
-        aria-label="Close"
-        title="Close"
+        aria-label={$_('common.close')}
+        title={$_('common.close')}
       >
         <Icon icon="mdi:close" class="w-5 h-5 text-muted-foreground" />
       </button>

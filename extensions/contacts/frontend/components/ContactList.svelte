@@ -200,6 +200,7 @@
             onclick={clearSearch}
             class="p-0.5 hover:bg-muted-foreground/20 rounded"
             title={$_('contacts.list.searchClear')}
+            aria-label={$_('contacts.list.searchClear')}
             type="button"
           >
             <Icon icon="mdi:close" class="w-4 h-4 text-muted-foreground" />
@@ -212,6 +213,7 @@
       <button
         class="p-2 rounded-md hover:bg-muted transition-colors {showSearch ? 'bg-muted' : ''}"
         title={showSearch ? $_('contacts.list.searchClose') : $_('contacts.list.searchOpen')}
+        aria-label={showSearch ? $_('contacts.list.searchClose') : $_('contacts.list.searchOpen')}
         onclick={toggleSearchFocus}
         type="button"
       >
@@ -220,6 +222,7 @@
       <button
         class="p-2 rounded-md hover:bg-muted transition-colors"
         title={sortOrder === 'name-asc' ? $_('contacts.list.sortAsc') : $_('contacts.list.sortDesc')}
+        aria-label={sortOrder === 'name-asc' ? $_('contacts.list.sortAsc') : $_('contacts.list.sortDesc')}
         onclick={toggleSort}
         type="button"
       >
@@ -232,6 +235,7 @@
         <button
           class="p-2 rounded-md hover:bg-muted transition-colors"
           title={$_('contacts.list.addTooltip')}
+          aria-label={$_('contacts.list.addTooltip')}
           onclick={onAdd}
           type="button"
         >
