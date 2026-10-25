@@ -12,6 +12,7 @@
 - Added composer quick replies: create, edit, delete and insert reusable plain-text replies from the composer footer without touching the draft, recipients or sender. Stored on this computer only.
 - Gmail accounts now search on the server with the Gmail API, so Gmail operators such as `from:`, `has:attachment` and `older_than:` work in folder search; other providers, and Gmail accounts where the API is unavailable, keep using IMAP search.
 - Marking Gmail mail as spam (and not spam) now changes the Gmail labels through the Gmail API when it is available, and falls back to the previous IMAP move otherwise. Undo works as before.
+- Icon-only controls in the Contacts list and the shared detail overlay and rich-text editor now have localized accessible names (screen readers).
 
 ## Postilaatikko — v0.3.11
 
