@@ -4,7 +4,9 @@ Complete reference of all keyboard shortcuts in Postilaatikko. Existing upstream
 
 ## Global Shortcuts
 
-These shortcuts work anywhere in the application (unless in composer).
+These shortcuts work anywhere in the application, except while the composer is open (see [Composer Blocking](#composer-blocking)). They are ignored while a context menu or modal dialog is open.
+
+On macOS, `⌘` works wherever `Ctrl` is listed below, unless macOS reserves the chord for itself (for example `⌘+Tab`, which switches applications; use `Ctrl+Tab` to switch rail items).
 
 ### Application
 
@@ -14,8 +16,9 @@ These shortcuts work anywhere in the application (unless in composer).
 | `Ctrl+Q` | Quit application |
 | `Ctrl+N` | Compose new message |
 | `Ctrl+S` | Focus search bar |
-| `Ctrl+Shift+A` | Sync all accounts |
-| `Ctrl+Shift+S` | Sync selected folder |
+| `Ctrl+Z` | Undo the last flag change or move/archive/delete/spam action |
+| `Ctrl+Shift+A` | Start sync of all accounts (cancels the sync if one is already running) |
+| `Ctrl+Shift+S` | Start sync of the selected folder (cancels it if already running) |
 | `Ctrl+Tab` | Switch to next extension on the rail (Mail / Contacts / ...) |
 | `` Ctrl+` `` | Switch to previous extension on the rail |
 
@@ -25,6 +28,8 @@ These shortcuts work anywhere in the application (unless in composer).
 |----------|--------|
 | `Alt+Left` / `Alt+H` | Focus previous pane (viewer -> list -> sidebar) |
 | `Alt+Right` / `Alt+L` | Focus next pane (sidebar -> list -> viewer) |
+
+All `Alt` pane and folder navigation is disabled while focus mode is on.
 
 ### Folder Navigation
 
@@ -111,7 +116,7 @@ These work when not in an input field. They apply to checked messages (bulk) or 
 | `S` | Toggle star |
 | `Backspace` / `Delete` | Move to trash |
 | `Shift+Backspace` / `Shift+Delete` | Permanently delete |
-| `Escape` | Clear checkboxes (first press), close conversation (second press) |
+| `Escape` | Leave focus mode or close the responsive viewer/sidebar overlay if one is open; otherwise clear checkboxes (first press), then close the conversation (second press) |
 
 ---
 
@@ -188,8 +193,9 @@ MESSAGE ACTIONS
   Alt(R)              Context Menu
 
 OTHER
-  Ctrl + Shift + A    Sync all accounts
-  Ctrl + Shift + S    Sync selected folder
+  Ctrl + Z            Undo last action
+  Ctrl + Shift + A    Sync all accounts (again to cancel)
+  Ctrl + Shift + S    Sync selected folder (again to cancel)
   Ctrl + S            Search
   Ctrl + L            Load images
   Ctrl + Q            Quit
@@ -236,7 +242,8 @@ First `Escape` clears checkboxes, second `Escape` closes the conversation viewer
 
 When the composer is open:
 - `Ctrl+R`, `Ctrl+Shift+R`, `Ctrl+F` are blocked to prevent accidental replies
-- Other global shortcuts continue to work
+- The global Mail shortcuts (`Ctrl+N`, `Ctrl+Q`, `Ctrl+Z`, `Ctrl+S`, sync, `Ctrl+Tab` rail switching, and `Alt` pane/folder navigation) do not fire; only the composer's own shortcuts work
+- `⌘+,` (macOS Preferences) and the active extension's registered shortcuts still run, except while typing in a text field
 
 ### Extension Rail Navigation
 
