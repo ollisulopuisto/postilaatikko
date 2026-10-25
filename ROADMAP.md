@@ -112,6 +112,13 @@ These are deliberately small, reviewable candidates that can be offered upstream
 
 ## Done
 
-- **Unified virtual folders (v0.3.10).** Saved views across selected folders and accounts, including sidebar management, message listing, and unread counts. Search exists but its virtual-folder query is currently hard-coded to unread messages.
-- **Virtual-folder criteria (planned).** Current virtual folders save an included set of real folder IDs across accounts, show messages from those folders, provide an unread badge, and support search. They do not yet filter by read/unread or replied/unreplied status, time window, or excluded folders. The target editor should make include/exclude folder mode, status selection, and 7 days / 30 days / always easy to set without making common configurations slow to edit.
+- **Keyboard shortcut overlay and discoverability (v0.3.13).** Unified keyboard shortcut registry, searchable `?` reference dialog, and UI tooltips and key hints.
+- **Gmail API integration (v0.3.13).** Server-side search using Gmail query syntax and native mark-as-spam / not-spam actions through the Gmail API, with graceful fallback to IMAP.
+- **Composer quick replies (v0.3.13).** Saved snippets managed from the composer footer without mutating draft state.
+- **Local cross-account filters (v0.3.13).** Automatic routing of incoming mail across accounts based on rules, using confirmed copy before source deletion.
+- **ICS event handoff (v0.3.13).** Standard `.ics` event creation and handoff to system calendar.
+- **Accessibility and localization (v0.3.13).** Localized accessible names across Contacts and shared UI kit controls.
+- **Routine header-only IMAP sync (v0.3.12).** Body content loaded on demand.
+- **Finnish localization and macOS window conventions (v0.3.12).** Finnish translations, `⌘,` shortcut, title-bar maximize.
+- **Unified virtual folders (v0.3.10).** Saved views across selected folders and accounts, including sidebar management, message listing, and unread counts.
 - **Postilaatikko product naming (v0.3.10).** Updated visible product branding while retaining compatibility-sensitive app identifiers.

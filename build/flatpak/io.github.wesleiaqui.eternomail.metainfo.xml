@@ -309,6 +309,15 @@
   </provides>
 
   <releases>
+    <release version="0.3.13" date="2026-10-25">
+      <description>
+        <ul>
+          <li>Added keyboard shortcuts reference overlay, GUI hints, and shortcut registry.</li>
+          <li>Added Gmail server-side search and Gmail-native spam actions with IMAP fallback.</li>
+          <li>Added composer quick replies, local cross-account filters, and ICS event handoff.</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.3.12" date="2026-10-24">
       <description>
         <ul>
