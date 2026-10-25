@@ -309,6 +309,17 @@
   </provides>
 
   <releases>
+    <release version="0.3.14" date="2026-10-25">
+      <description>
+        <ul>
+          <li>Added floating Command Palette (⌘P / Ctrl+P) for fast folder navigation, account switching, and command execution.</li>
+          <li>Added standard Gmail single-key keyboard shortcuts (v for move, e for archive, c, r, a, f, x, /, !, #, z, Shift+I/U, o, u).</li>
+          <li>Added configurable mark-as-read delay setting (immediate, 1-5 seconds, on leave, or manual).</li>
+          <li>Fixed sidebar All Folders subfolder tree expanding and folder selection.</li>
+          <li>Stabilized keyboard shortcuts reference dialog height to prevent focus loss during search.</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.3.13" date="2026-10-25">
       <description>
         <ul>
