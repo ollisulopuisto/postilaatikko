@@ -333,7 +333,7 @@ func (s *Store) Reorder(ids []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to begin virtual folder reorder: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // no-op after a successful Commit
 	for index, id := range ids {
 		result, err := tx.Exec(`UPDATE virtual_folders SET order_index = ?, updated_at = ? WHERE id = ?`, index, time.Now().UTC(), id)
 		if err != nil {
@@ -374,7 +374,7 @@ func (s *Store) Update(vf *VirtualFolder) error {
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // no-op after a successful Commit
 
 	result, err := tx.Exec(`
 		UPDATE virtual_folders
@@ -426,7 +426,7 @@ func (s *Store) Delete(id string) error {
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // no-op after a successful Commit
 
 	// Members are deleted automatically by cascade or manually
 	_, err = tx.Exec(`DELETE FROM virtual_folder_members WHERE virtual_folder_id = ?`, id)
