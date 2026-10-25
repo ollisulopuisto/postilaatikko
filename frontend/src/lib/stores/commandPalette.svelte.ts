@@ -5,6 +5,7 @@ import { dialogGuardOpen, dialogGuardClose } from '$lib/stores/dialogGuard'
 type CommandHandler = () => void | Promise<void>
 
 const handlers = new Map<string, CommandHandler>()
+const availability = new Map<string, () => boolean>()
 
 let isOpen = $state(false)
 
@@ -41,6 +42,20 @@ export function registerCommandHandler(id: string, handler: CommandHandler) {
 
 export function unregisterCommandHandler(id: string) {
   handlers.delete(id)
+}
+
+/**
+ * Lets a command be hidden from the panel when it has no target right now
+ * (for example list actions with nothing checked or focused). Commands without
+ * a predicate are always shown.
+ */
+export function registerCommandAvailability(id: string, isAvailable: () => boolean) {
+  availability.set(id, isAvailable)
+}
+
+export function isCommandAvailable(id: string): boolean {
+  const check = availability.get(id)
+  return check ? check() : true
 }
 
 export function hasCommandHandler(id: string): boolean {

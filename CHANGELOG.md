@@ -2,6 +2,7 @@
 
 ## Postilaatikko — v0.3.14
 
+- Fixed: the command panel's Archive, Spam, Star, Mark read and Mark unread commands acted on the conversation's thread id instead of the selected messages, so they did nothing. They now use the same target as the keyboard (checked messages, else the focused row) and are hidden when there is nothing to act on.
 - Added a floating Command Palette (`⌘P` / `Ctrl+P`, Alfred-style quick launcher) with instant fuzzy search, arrow navigation, and direct action dispatch for accounts, folders, navigation, settings, and themes.
 - Added standard Gmail single-key keyboard shortcuts (`v` for Move to folder, `e` for archive, `c` for compose, `r` for reply, `a` for reply all, `f` for forward, `x` for select/check, `/` for search, `!` for spam, `#` for trash, `z` for undo, `Shift+I` for mark as read, `Shift+U` for mark as unread, `o`/`Enter` for open, `u` for back to list).
 - Added a configurable mark-as-read delay setting in Settings > General: immediately on open (0s), after 1s, 2s, 3s, or 5s viewing delay, when navigating away from the conversation, or manually only.
