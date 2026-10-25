@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from '@iconify/svelte'
+  import GmailApiStatus from './GmailApiStatus.svelte'
   import { Input } from '$lib/components/ui/input'
   import { Label } from '$lib/components/ui/label'
   import * as Select from '$lib/components/ui/select'
@@ -232,6 +233,9 @@
             <Icon icon="mdi:account-circle-outline" class="h-4 w-4 shrink-0 text-primary" />
             <p>{$_('account.googleProfilePhotoReauthorizeHelp')}</p>
           </div>
+        {/if}
+        {#if isGoogleOAuthAccount}
+          <GmailApiStatus accountId={_editAccount.id} />
         {/if}
       </div>
     {:else}

@@ -3,12 +3,14 @@ package app
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/hkdb/aerion/internal/account"
 	"github.com/hkdb/aerion/internal/credentials"
 	"github.com/hkdb/aerion/internal/folder"
 	"github.com/hkdb/aerion/internal/gmail"
 	"github.com/hkdb/aerion/internal/message"
+	"github.com/hkdb/aerion/internal/sync"
 )
 
 // gmailIMAPHost is how Gmail accounts are recognized throughout the app.
@@ -84,4 +86,36 @@ func (a *App) gmailSpamMove(accountID string, msgs []*message.Message, source, d
 		rfcIDs = append(rfcIDs, m.MessageID)
 	}
 	return rfcIDs, spam, len(rfcIDs) > 0
+}
+
+// GmailAPIStatusInfo is the Gmail API state of one account, for account
+// settings. Applicable is false for accounts that are not Gmail over OAuth, in
+// which case the rest of the fields carry no meaning.
+type GmailAPIStatusInfo struct {
+	Applicable bool   `json:"applicable"`
+	State      string `json:"state"`
+	Since      string `json:"since,omitempty"` // RFC 3339, when the state was last set
+}
+
+// GetGmailAPIStatus reports whether the Gmail API is in use for an account and
+// what the last call told us. It reads in-memory state only; it does not contact
+// Google.
+func (a *App) GetGmailAPIStatus(accountID string) (GmailAPIStatusInfo, error) {
+	acc, err := a.accountStore.Get(accountID)
+	if err != nil {
+		return GmailAPIStatusInfo{}, fmt.Errorf("failed to get account: %w", err)
+	}
+	if acc == nil || acc.AuthType != account.AuthOAuth2 || acc.IMAPHost != gmailIMAPHost {
+		return GmailAPIStatusInfo{Applicable: false, State: string(sync.GmailStateNotUsed)}, nil
+	}
+	info := GmailAPIStatusInfo{Applicable: true, State: string(sync.GmailStateUnknown)}
+	if a.syncEngine == nil {
+		return info, nil
+	}
+	status := a.syncEngine.GmailAPIStatus(accountID)
+	info.State = string(status.State)
+	if !status.Since.IsZero() {
+		info.Since = status.Since.Format(time.RFC3339)
+	}
+	return info, nil
 }

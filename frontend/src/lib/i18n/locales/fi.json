@@ -624,6 +624,15 @@
     "customOAuthScopesHelp": "Välilyönnein eroteltuna. Useimmat palvelimet vaativat oikeuden offline_access virkistystunnusta (refresh token) varten.",
     "customOAuthRedirectUri": "Uudelleenohjauksen URI",
     "customOAuthRedirectUriHelp": "Rekisteröi tämä OAuth-sovellukseesi säännöllisellä lausekkeella tai hahmontunnistuksella — loopback-portti määritetään dynaamisesti sisäänkirjautumisen yhteydessä (RFC 8252).",
+    "gmailApi": {
+      "title": "Gmail-rajapinta",
+      "unknown": "Ei vielä käytetty tässä istunnossa. Kokeillaan seuraavassa haussa.",
+      "active": "Käytössä: haku käyttää Gmailin omaa hakusyntaksia.",
+      "unavailable": "Ei käytettävissä: Gmail-rajapintaa ei ole otettu käyttöön tämän sovelluksen Google-projektissa tai oikeutta ei ole myönnetty. Haku käyttää IMAPia.",
+      "reauthRequired": "Kirjaudu uudelleen, jotta Gmail-rajapinta voidaan käyttää.",
+      "notUsed": "Ei käytössä tälle tilille. Haku käyttää IMAPia.",
+      "since": "Vuodesta {time}"
+    },
     "oauthConnected": "Yhdistetty OAuthilla",
     "folderSync": "Kansioiden synkronointitilaukset",
     "manageFolderSync": "Hallitse kansioiden synkronointia",
