@@ -6,6 +6,8 @@
 
 **Tech stack:** Go, `golang.org/x/crypto/nacl/box`, OS keyring, SQLite (`modernc.org/sqlite`), existing SMTP/account/OAuth infrastructure.
 
+**Review milestone:** The encrypted foundation was checkpointed at `7be5fe3`. The next slice adds the helper-local SMTP adapter, a bounded direct HTTP(S) transport with encrypted request-bound receipts, CLI and macOS login-agent installation, a durable ciphertext client queue, and main/detached composer setup/scheduling/status/cancellation controls. Rescheduling, a dedicated Scheduled view, hosted relay, rotation/retention/quota policies and runtime/security regression verification remain incomplete. Do not mark P-011 complete or release it based on compilation alone.
+
 ## Slice 1 — encrypted queue and worker foundation (this branch)
 
 1. Add `internal/scheduledsend/protocol.go`: versioned schedule/cancel commands, bounded payloads, authenticated encryption, stable job/revision IDs, and immutable RFC822 validation.

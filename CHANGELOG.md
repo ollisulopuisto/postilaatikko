@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## Unreleased
+
+- Added a review-stage E2EE Send Later path with a Mac Studio helper, helper-local SMTP credentials, durable encrypted queues, and composer scheduling/setup/status/cancellation controls. The helper is bundled in macOS app builds. Live delivery, keychain/login behavior and failure/security regression verification remain outstanding; the feature is not marked complete.
+
 ## Postilaatikko — v0.3.12
 
 - Routine IMAP sync now fetches headers and flags only; full conversation content loads when opened.

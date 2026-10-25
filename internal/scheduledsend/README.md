@@ -1,6 +1,6 @@
 # Send Later foundation
 
-This package is the first backend slice of P-011. It provides encrypted commands, helper identity storage, a durable queue, and a transport-independent worker. It is **not yet connected to the composer, a running helper executable, SMTP, or a relay**. Do not advertise Send Later as available or activate a network endpoint from this slice alone.
+This package provides encrypted commands/receipts, helper identity storage, durable helper and client queues, a transport-independent worker, and a helper-local SMTP adapter. `cmd/postilaatikko-helper` exposes a bounded direct HTTP(S) endpoint and CLI; the main and detached composers have scheduling/setup/status controls. The implementation is a review milestone, not a released or verified Send Later feature. A hosted relay is not implemented. See [setup instructions](../../docs/SEND_LATER.md).
 
 ## Trust and encryption
 
@@ -10,7 +10,7 @@ An operator must verify the helper/client public keys through an authenticated l
 
 `SealCommand` uses [`golang.org/x/crypto/nacl/box`](https://pkg.go.dev/golang.org/x/crypto/nacl/box) with a fresh random 24-byte nonce. NaCl box supplies Curve25519/XSalsa20/Poly1305 authenticated encryption; this package does not implement its own cipher. The entire schedule/cancel command is encrypted, including job/revision IDs, account selection, envelope sender/recipients, prepared MIME with attachments, and due time. Public routing keys, ciphertext size, and traffic timing remain observable to a relay. The format is versioned and both sending and receiving reject unsupported versions.
 
-This is E2EE **between the composing device and the trusted helper**. The helper decrypts in memory to deliver the mail using its local credentials. Encryption between the helper and the final email recipient is whatever the mail transport and existing S/MIME/PGP setup provide. Static pairing keys do not provide forward secrecy: compromise of a helper private key can expose captured ciphertext. Rotation, authenticated pairing UX, relay quotas, and authenticated/encrypted remote acknowledgements still need implementation and review before remote activation.
+This is E2EE **between the composing device and the trusted helper**. The helper decrypts in memory to deliver the mail using its local credentials. Encryption between the helper and the final email recipient is whatever the mail transport and existing S/MIME/PGP setup provide. Static pairing keys do not provide forward secrecy: compromise of a helper private key can expose captured ciphertext. Rotation, relay quotas and deployment remain future work. Public-key comparison is explicit in the setup UI and local helper CLI; no relay may silently replace trusted keys.
 
 ## Queue behavior
 
@@ -18,7 +18,7 @@ This is E2EE **between the composing device and the trusted helper**. The helper
 
 Clients must retain and retransmit the **same encoded envelope bytes** when retrying a submission. Exact duplicates return the existing durable status. A different command or fresh nonce with the same revision is a conflict. Higher revisions can update pending/failed jobs; a cancellation arriving before its schedule creates a tombstone so older schedules cannot revive it. Job IDs must be random UUIDs. Do not purge sent/cancelled revision records without an explicit replay-expiration protocol.
 
-`Accept` acknowledges after commit; its local `Status` result is not itself an authenticated remote acknowledgement. A future transport must encrypt and authenticate status/acknowledgement messages before the client reports “scheduled on Studio.”
+`Accept` acknowledges after commit; its local `Status` result is not itself an authenticated remote acknowledgement. `Handler` encrypts and authenticates acknowledgements to the paired client and binds each to the exact request hash. Status queries use fresh encrypted requests. The client rejects redirects, wrong helper/client keys, oversized replies and receipts for another request before reporting “scheduled on Studio.” Pairing/revocation/unknown-outcome resolution remain local administrative operations.
 
 State transitions:
 
@@ -41,10 +41,10 @@ The client must serialize/sign/encrypt RFC822 **once before scheduling**, preser
 
 A `Transport` uses helper-local account credentials. It returns `DeliveryError{Kind: SafeRetry}` only when it knows the mail provider did not accept the message. A dropped connection during/after DATA, timeout with uncertain acceptance, or an untyped error becomes `outcome_unknown`. A stable Message-ID is useful for reconciliation but does not guarantee provider deduplication or exactly-once delivery.
 
-Provider acceptance is the send boundary. Failure to append a Sent copy, update contacts, or clean up a draft after acceptance must never be reported as a retryable delivery failure. Keep those follow-up tasks separately recoverable. Queue status stores fixed error codes, never provider error strings or message content.
+Provider acceptance is the send boundary. Failure to append a Sent copy, update contacts, or clean up a draft after acceptance must never be reported as a retryable delivery failure. The SMTP adapter returns `AcceptedWithoutSentCopy` for the first case; the worker records `sent` with `sent_copy_failed`, retains encrypted payloads for future copy recovery, and never repeats SMTP. The original client draft remains available. Queue status stores fixed error codes, never provider error strings or message content.
 
-Raw MIME is capped at 10 MiB, encoded envelopes at 24 MiB, and ciphertext at 16 MiB for this first slice. Processing is bounded to one payload, but Go/JSON/NaCl still create temporary copies; this is not streaming large attachments or a secure-memory guarantee. Sent payloads are removed from active rows; failed/unknown payloads stay encrypted for reconciliation. Retention cleanup and forward secrecy remain separate work.
+Raw MIME is capped at 10 MiB, encoded envelopes at 24 MiB, and ciphertext at 16 MiB for this first slice. Processing is bounded to one delivery and at most two concurrent HTTP requests, but Go/JSON/NaCl still create temporary copies; this is not streaming large attachments or a secure-memory guarantee. Sent payloads without follow-up warnings are removed from active rows; failed/unknown/Sent-copy-warning payloads stay encrypted for reconciliation. Retention cleanup and forward secrecy remain separate work.
 
 ## Next integration work
 
-See [the implementation plan](../../docs/plans/2026-10-24-send-later.md) for headless SMTP preparation/transport, helper/launchd lifecycle, pairing and relay transport, composer schedule UI, and required verification. No tests were added/run for this slice under the coordinator's instruction. Compilation and source review do not establish the cryptographic and delivery reliability needed for feature release.
+See [the implementation plan](../../docs/plans/2026-10-24-send-later.md) and [helper instructions](../../docs/SEND_LATER.md). Direct helper SMTP/HTTP delivery, login-agent installation, and basic composer scheduling/cancellation/status are implemented for review. Rescheduling UI, dedicated Scheduled view, remote relay transport, key rotation, quotas/retention and live lifecycle/security/reliability verification remain. No tests were added/run under the coordinator's instruction. Compilation and source review do not establish the cryptographic and delivery reliability needed for feature release.

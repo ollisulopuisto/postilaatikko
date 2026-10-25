@@ -9,13 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"net/mail"
-	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
-
-	_ "modernc.org/sqlite"
 )
 
 // State describes durable delivery progress; Unknown always requires explicit
@@ -84,41 +79,10 @@ func OpenStore(directory string, helper *Identity) (*Store, error) {
 	if err := validatePublicKey(helper.PublicKey()); err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(directory, 0700); err != nil {
-		return nil, fmt.Errorf("create scheduled queue directory: %w", err)
-	}
-	info, err := os.Lstat(directory)
-	if err != nil || !info.IsDir() || info.Mode().Perm()&0077 != 0 {
-		return nil, errors.New("scheduled queue requires a dedicated owner-only directory")
-	}
-	path, err := filepath.Abs(filepath.Join(directory, "scheduledsend.db"))
+	db, err := openPrivateDatabase(directory, "scheduledsend.db")
 	if err != nil {
 		return nil, err
 	}
-	info, err = os.Lstat(path)
-	if err == nil {
-		if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
-			return nil, errors.New("scheduled queue database must be a private regular file")
-		}
-	}
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, err
-	}
-	// Create the DB with private permissions before SQLite can create WAL files.
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil {
-		return nil, fmt.Errorf("create scheduled queue database: %w", err)
-	}
-	if err := file.Close(); err != nil {
-		return nil, err
-	}
-	uri := url.URL{Scheme: "file", Path: path}
-	db, err := sql.Open("sqlite", uri.String()+"?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(FULL)&_pragma=cache_size(-2048)")
-	if err != nil {
-		return nil, err
-	}
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS helper_identity (singleton INTEGER PRIMARY KEY CHECK(singleton = 1), public_key TEXT NOT NULL);
 		CREATE TABLE IF NOT EXISTS paired_clients (public_key TEXT PRIMARY KEY, permissions BLOB NOT NULL);
@@ -226,28 +190,47 @@ func (p Permissions) allows(delivery *Delivery) bool {
 // Accept verifies a paired client's encrypted schedule/cancel command and
 // acknowledges only after the ciphertext and revision are durably committed.
 func (s *Store) Accept(ctx context.Context, encoded []byte) (Status, error) {
-	var empty Status
-	envelope, err := decodeEnvelope(encoded)
+	command, clientKey, permissions, err := s.authenticate(ctx, encoded)
 	if err != nil {
-		return empty, err
-	}
-	clientKey, err := ParsePublicKey(envelope.ClientKey)
-	if err != nil {
-		return empty, err
-	}
-	permissions, err := s.permissions(ctx, clientKey)
-	if err != nil {
-		return empty, err
-	}
-	command, _, err := OpenCommand(encoded, s.helper)
-	if err != nil {
-		return empty, err
+		return Status{}, err
 	}
 	if command.Delivery != nil {
 		defer clear(command.Delivery.RFC822)
 	}
+	return s.acceptCommand(ctx, encoded, command, clientKey, permissions)
+}
+
+func (s *Store) authenticate(ctx context.Context, encoded []byte) (Command, PublicKey, Permissions, error) {
+	envelope, err := decodeEnvelope(encoded)
+	if err != nil {
+		return Command{}, PublicKey{}, Permissions{}, err
+	}
+	clientKey, err := ParsePublicKey(envelope.ClientKey)
+	if err != nil {
+		return Command{}, PublicKey{}, Permissions{}, err
+	}
+	permissions, err := s.permissions(ctx, clientKey)
+	if err != nil {
+		return Command{}, PublicKey{}, Permissions{}, err
+	}
+	command, _, err := openEnvelope(envelope, s.helper)
+	return command, clientKey, permissions, err
+}
+
+func (s *Store) acceptCommand(ctx context.Context, encoded []byte, command Command, clientKey PublicKey, permissions Permissions) (Status, error) {
+	var empty Status
 	if !permissions.allows(command.Delivery) {
 		return empty, errors.New("paired client is not authorized for this account or sender")
+	}
+	if command.Action == "status" {
+		var owner string
+		if err := s.db.QueryRowContext(ctx, "SELECT client_key FROM jobs WHERE id = ?", command.JobID).Scan(&owner); err != nil {
+			return empty, err
+		}
+		if owner != clientKey.String() {
+			return empty, ErrUnpaired
+		}
+		return s.GetStatus(ctx, command.JobID)
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -389,8 +372,8 @@ func (s *Store) claim(ctx context.Context, now time.Time) (claimedJob, error) {
 
 func (s *Store) finish(ctx context.Context, job claimedJob, state State, code string, next time.Time) error {
 	result, err := s.db.ExecContext(ctx, `UPDATE jobs SET state = ?, code = ?, next_attempt = ?, updated_at = ?,
-		envelope = CASE WHEN ? = 'sent' THEN X'' ELSE envelope END
-		WHERE id = ? AND revision = ? AND state = 'sending'`, state, code, next.UnixMilli(), time.Now().UTC().UnixMilli(), state, job.id, job.revision)
+		envelope = CASE WHEN ? = 'sent' AND ? != 'sent_copy_failed' THEN X'' ELSE envelope END
+		WHERE id = ? AND revision = ? AND state = 'sending'`, state, code, next.UnixMilli(), time.Now().UTC().UnixMilli(), state, code, job.id, job.revision)
 	if err != nil {
 		return err
 	}

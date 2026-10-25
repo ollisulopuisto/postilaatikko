@@ -74,7 +74,7 @@ type Command struct {
 	Version  int       `json:"version"`
 	JobID    string    `json:"jobId"`
 	Revision int64     `json:"revision"`
-	Action   string    `json:"action"` // schedule or cancel
+	Action   string    `json:"action"` // schedule, cancel, or status
 	Delivery *Delivery `json:"delivery,omitempty"`
 }
 
@@ -122,19 +122,23 @@ func SealCommand(command Command, client *Identity, helper PublicKey) ([]byte, e
 // OpenCommand decrypts and authenticates an envelope. The caller must separately
 // verify that ClientKey is paired and permitted to use the selected account.
 func OpenCommand(encoded []byte, helper *Identity) (Command, PublicKey, error) {
+	envelope, err := decodeEnvelope(encoded)
+	if err != nil {
+		return Command{}, PublicKey{}, err
+	}
+	return openEnvelope(envelope, helper)
+}
+
+func openEnvelope(envelope Envelope, helper *Identity) (Command, PublicKey, error) {
 	var command Command
 	var clientKey PublicKey
 	if helper == nil {
 		return command, clientKey, errors.New("helper identity is required")
 	}
-	envelope, err := decodeEnvelope(encoded)
-	if err != nil {
-		return command, clientKey, err
-	}
 	if envelope.HelperKey != helper.PublicKey().String() {
 		return command, clientKey, errors.New("envelope is addressed to another helper")
 	}
-	clientKey, err = ParsePublicKey(envelope.ClientKey)
+	clientKey, err := ParsePublicKey(envelope.ClientKey)
 	if err != nil {
 		return command, clientKey, err
 	}
@@ -195,7 +199,7 @@ func (c Command) validate() error {
 		return errors.New("scheduled job requires a UUID")
 	}
 	switch c.Action {
-	case "cancel":
+	case "cancel", "status":
 		if c.Delivery != nil {
 			return errors.New("cancel command must not contain a delivery")
 		}

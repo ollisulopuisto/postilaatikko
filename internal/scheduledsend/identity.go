@@ -5,8 +5,11 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
+	devicecrypto "github.com/hkdb/aerion/internal/crypto"
 	"github.com/zalando/go-keyring"
 	"golang.org/x/crypto/curve25519"
 	"golang.org/x/crypto/nacl/box"
@@ -39,7 +42,18 @@ func CreateIdentity(name string) (*Identity, error) {
 	if err := validIdentityName(name); err != nil {
 		return nil, err
 	}
-	_, err := keyring.Get(keyringService, name)
+	configuration, err := os.UserConfigDir()
+	if err != nil {
+		return nil, err
+	}
+	// Keyring Set replaces existing values. Serialize explicit initialization
+	// across helper CLI and composer processes before checking/creating a key.
+	lock, err := devicecrypto.LockCredentialMigration(filepath.Join(configuration, "Postilaatikko", "send-later-identities"))
+	if err != nil {
+		return nil, fmt.Errorf("lock scheduled-send identity setup: %w", err)
+	}
+	defer lock.Close()
+	_, err = keyring.Get(keyringService, name)
 	if err == nil {
 		return nil, errors.New("scheduled-send identity already exists")
 	}

@@ -31,6 +31,7 @@
   import RecipientInput from './RecipientInput.svelte'
   import EditorToolbar from './EditorToolbar.svelte'
   import ComposerAttachmentList from './ComposerAttachmentList.svelte'
+  import SendLaterDialog from './SendLaterDialog.svelte'
   import {
     addParagraphStyles,
     stripParagraphStyles,
@@ -123,6 +124,9 @@
   let showCc = $state(false)
   let showBcc = $state(false)
   let sending = $state(false)
+  let showSendLaterDialog = $state(false)
+  let scheduledDue = $state<string | null>(null)
+  let scheduledDraftState = $state('')
   let poppingOut = $state(false)  // Pop-out in progress
   let editorElement = $state<HTMLElement | null>(null)
   let editor = $state<Editor | null>(null)
@@ -198,6 +202,22 @@
 
   // Draft auto-save state
   let currentDraftId = $state<string | null>(null)
+
+  $effect(() => {
+    const id = currentDraftId
+    const account = activeAccountId
+    if (showSendLaterDialog) return
+    if (!id) {
+      scheduledDraftState = ''
+      return
+    }
+    untrack(() => {
+      api.listScheduledMessages(account).then(jobs => {
+        if (currentDraftId !== id || activeAccountId !== account) return
+        scheduledDraftState = jobs.find(job => job.draftId === id && !['cancelled', 'failed'].includes(job.state))?.state || ''
+      }).catch(() => { scheduledDraftState = '' })
+    })
+  })
   let saveStatus = $state<'idle' | 'saving' | 'saved' | 'error'>('idle')
 
   // Initialize currentDraftId from prop (runs once on mount)
@@ -1240,6 +1260,16 @@
   }
 
   async function handleSend() {
+    scheduledDue = null
+    await validateAndSend()
+  }
+
+  async function handleScheduledSend(due: string) {
+    scheduledDue = due
+    await validateAndSend()
+  }
+
+  async function validateAndSend() {
     if (toRecipients.length === 0) {
       addToast({
         type: 'error',
@@ -1267,6 +1297,9 @@
 
   // Actually send the message (called directly or after confirmation)
   async function doSend() {
+    if (sending || poppingOut) return
+    sending = true
+    const due = scheduledDue
     // Cancel any pending draft save
     if (saveTimeoutId) {
       clearTimeout(saveTimeoutId)
@@ -1276,11 +1309,27 @@
     // Wait for any in-flight draft save to complete before sending
     await savingComplete
 
-    sending = true
-
     try {
+      if (due) {
+        const saved = await saveDraft()
+        if (saved === 'failed' || saved === 'discarding' || !currentDraftId) {
+          throw new Error($_('sendLater.saveDraftFirst'))
+        }
+        const result = await api.scheduleMessage(activeAccountId, buildMessage(), currentDraftId, due)
+        if (result.error || !['queued', 'retry', 'sending', 'sent'].includes(result.job.state)) {
+          addToast({ type: 'error', message: result.error || $_('sendLater.awaitingConfirmation') })
+          showSendLaterDialog = true
+          return
+        }
+        // Keep the recoverable draft until the complete Scheduled view and
+        // delivery-confirmed cleanup are available. A failed delivery must
+        // never leave the user without the original message/attachments.
+        addToast({ type: 'success', message: $_('sendLater.scheduled') })
+        onClose?.()
+        return
+      }
       const message = buildMessage()
-      await api.sendMessage(activeAccountId, message)
+      await api.sendMessage(activeAccountId, message, currentDraftId || '')
 
       // Delete the draft on successful send (fire-and-forget - don't block UI)
       if (currentDraftId) {
@@ -1298,10 +1347,11 @@
       console.error('Failed to send message:', err)
       addToast({
         type: 'error',
-        message: $_('composer.failedToSend'),
+        message: due || String(err).includes('Send Later') ? String(err) : $_('composer.failedToSend'),
       })
     } finally {
       sending = false
+      scheduledDue = null
     }
   }
 
@@ -1334,6 +1384,20 @@
 
   // Discard: Delete draft from local DB and IMAP, then close
   async function handleDiscardAndClose() {
+    if (currentDraftId) {
+      try {
+        const jobs = await api.listScheduledMessages(activeAccountId)
+        if (jobs.some(job => job.draftId === currentDraftId && !['sent', 'cancelled', 'failed'].includes(job.state))) {
+          showCloseConfirm = false
+          showSendLaterDialog = true
+          addToast({ type: 'error', message: $_('sendLater.cancelBeforeDiscard') })
+          return
+        }
+      } catch (err) {
+        addToast({ type: 'error', message: String(err) })
+        return
+      }
+    }
     discarding = true
     if (saveTimeoutId) {
       clearTimeout(saveTimeoutId)
@@ -1493,6 +1557,7 @@
 
   // Keyboard shortcuts
   function handleKeyDown(e: KeyboardEvent) {
+    if (showSendLaterDialog || sending || poppingOut) return
     // Security mode key handling (must be early in handleKeyDown)
     if (securityMode) {
       if (e.key === 'Escape') {
@@ -1942,6 +2007,11 @@
       </button>
       {#if !isCompact}
         <button
+          onclick={() => showSendLaterDialog = true}
+          disabled={sending || poppingOut}
+          class="px-3 py-1.5 text-sm rounded-md border border-border hover:bg-muted disabled:opacity-50"
+        >{$_('sendLater.title')}</button>
+        <button
         onclick={handleSend}
         disabled={sending || poppingOut || toRecipients.length === 0}
         class="px-4 py-1.5 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
@@ -1963,6 +2033,9 @@
 
   <!-- Compose form -->
   <div class="flex-1 flex flex-col min-h-0 overflow-hidden">
+    {#if scheduledDraftState}
+      <p class="border-b border-border bg-muted px-4 py-2 text-xs" role="status">{$_('sendLater.draftRetained')}</p>
+    {/if}
     <!-- From -->
     {#if !isCompact}
       <div class="flex items-center gap-2 px-4 py-2 border-b border-border">
@@ -2300,6 +2373,11 @@
       {/if}
       {#if !isCompact}<span class="text-xs">{$_('composer.ctrlEnterToSend')}</span>{/if}
       {#if isCompact}
+        <button type="button" onclick={() => showSendLaterDialog = true} disabled={sending || poppingOut}
+          class="w-9 h-9 shrink-0 inline-flex items-center justify-center rounded-full hover:bg-muted disabled:opacity-50"
+          title={$_('sendLater.title')} aria-label={$_('sendLater.title')}>
+          <Icon icon="mdi:clock-outline" class="w-4 h-4" />
+        </button>
         <button
           onclick={handleSend}
           disabled={sending || poppingOut || toRecipients.length === 0}
@@ -2324,6 +2402,9 @@
   {/if}
 </div>
 
+<SendLaterDialog bind:open={showSendLaterDialog} accountId={activeAccountId} {api}
+  canSchedule={toRecipients.length > 0} {sending} onSchedule={handleScheduledSend} />
+
 <!-- Empty Subject Confirmation Dialog -->
 <AlertDialog.Root bind:open={showEmptySubjectDialog}>
   <AlertDialog.Content>
@@ -2335,7 +2416,7 @@
     </AlertDialog.Header>
     <AlertDialog.Footer>
       <AlertDialog.Cancel>{$_('common.cancel')}</AlertDialog.Cancel>
-      <AlertDialog.Action onclick={handleConfirmEmptySubject}>{$_('composer.sendAnywayGeneric')}</AlertDialog.Action>
+      <AlertDialog.Action onclick={handleConfirmEmptySubject}>{scheduledDue ? $_('sendLater.schedule') : $_('composer.sendAnywayGeneric')}</AlertDialog.Action>
     </AlertDialog.Footer>
   </AlertDialog.Content>
 </AlertDialog.Root>
@@ -2351,7 +2432,7 @@
     </AlertDialog.Header>
     <AlertDialog.Footer>
       <AlertDialog.Cancel>{$_('common.cancel')}</AlertDialog.Cancel>
-      <AlertDialog.Action onclick={handleConfirmMissingAttachment}>{$_('composer.sendAnywayGeneric')}</AlertDialog.Action>
+      <AlertDialog.Action onclick={handleConfirmMissingAttachment}>{scheduledDue ? $_('sendLater.schedule') : $_('composer.sendAnywayGeneric')}</AlertDialog.Action>
     </AlertDialog.Footer>
   </AlertDialog.Content>
 </AlertDialog.Root>

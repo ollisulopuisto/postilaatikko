@@ -28,6 +28,9 @@ const (
 	PermanentFailure
 	// AuthorizationRequired pauses the job until the user reauthorizes locally.
 	AuthorizationRequired
+	// AcceptedWithoutSentCopy means delivery succeeded but the recoverable
+	// post-send IMAP copy failed. It must never retry SMTP delivery.
+	AcceptedWithoutSentCopy
 )
 
 // DeliveryError classifies failures without persisting potentially sensitive
@@ -38,7 +41,12 @@ type DeliveryError struct {
 }
 
 // Error returns a generic description safe for local operational logging.
-func (e *DeliveryError) Error() string { return "scheduled delivery failed" }
+func (e *DeliveryError) Error() string {
+	if e.Kind == AcceptedWithoutSentCopy {
+		return "scheduled delivery accepted; Sent copy failed"
+	}
+	return "scheduled delivery failed"
+}
 
 // Unwrap permits local transport diagnostics without storing raw errors.
 func (e *DeliveryError) Unwrap() error { return e.Err }
@@ -128,6 +136,8 @@ func (w *Worker) ProcessNext(ctx context.Context) (bool, error) {
 		return true, w.complete(ctx, job, Unknown, "delivery_outcome_unknown", time.Time{})
 	}
 	switch failure.Kind {
+	case AcceptedWithoutSentCopy:
+		return true, w.complete(ctx, job, Sent, "sent_copy_failed", time.Time{})
 	case SafeRetry:
 		if job.attempts >= 8 {
 			return true, w.complete(ctx, job, Failed, "retry_limit_reached", time.Time{})
