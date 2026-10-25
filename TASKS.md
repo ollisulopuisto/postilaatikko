@@ -37,6 +37,7 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 | P-014 | Medium | Add local cross-account filters for routing incoming messages. | opencode (Qwen3.8-27B) / `feat/p014-cross-account-filters` / `../postilaatikko-p014` | Review |
 | P-011 | Large | Critical E2EE Send Later: durable queue, pair clients with the Mac Studio helper, encrypt queued messages to the helper public key, and keep the private key and sending credentials on the helper. Relay stores ciphertext only; helper decrypts at delivery time. Include retry/recovery, cancellation, status, and missed due-time handling. Hosted decryption/sending is out of scope. | GPT-6.1-Sol (medium) / `agent/p011-e2ee-scheduled-send` / `/private/tmp/postilaatikko-p011` | In progress; checkpoint `7be5fe3` |
 | P-012 | Easy | ICS event handoff (Easy): create an ICS event from structured date/time details and open it for review/import. | OpenCode / `agent/p012-ics-event-handoff` / worktree `../postilaatikko-p012` | Done |
+| P-017 | Medium | Prepare the Gmail API integration contract and OAuth scope plan. Plan: `docs/plans/2026-10-24-gmail-api-contract.md`. Documentation only; unblocks P-010 and P-019. | Claude (Sonnet 5.5) / `agent/P-017-gmail-api-contract` / `../postilaatikko-p017` | Review; commit `b234b7c` |
 
 ## Queued sequential follow-up
 
@@ -59,7 +60,6 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 | P-013 | Large | Support multiple independent mail windows. | Preserve per-window navigation and selection state; detached compose already exists. |
 | P-015 | Medium | Select signatures using sender, recipient, and message type. | Reuse configured sender identities and signatures; keep a manual override in the composer. |
 | P-016 | Medium | Add optional per-sender and rule-based notification controls. | Keep configurable and lower priority than core mail workflows. |
-| P-017 | Medium | Prepare the Gmail API integration contract and OAuth scope plan. | Inspect current account/token storage and provider interfaces; document the smallest scopes needed for search and Gmail-specific actions, token refresh/error handling, and an IMAP fallback. No credential migration or broad auth rewrite in this task. Unblocks P-010 and P-019. |
 | P-018 | Easy | Add reusable quick-reply snippets to the composer. | Create, edit, delete, and insert plain-text replies without losing the draft or current sender identity. Keep the first version local to this installation. |
 | P-019 | Medium | Add Gmail-native mark-as-spam and undo actions. | Depends on P-017. Use Gmail's native spam label/action for Gmail accounts, preserve the existing provider-neutral path, and expose undo with clear success/failure feedback. |
 | P-020 | Medium | Add full email templates to the composer. | Save and insert reusable subject/body templates; preserve recipient, sender identity, and unsaved draft fields when inserting. Keep separate from short quick replies in P-018. |
