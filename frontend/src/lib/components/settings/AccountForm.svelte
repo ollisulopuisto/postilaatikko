@@ -159,7 +159,7 @@
       smtpPassword = ''
     }
   }
-  let syncPeriodDays = $state<string>('180')
+  let syncPeriodDays = $state<string>('0')
   let syncInterval = $state<string>('30') // Default: 30 minutes
   let readReceiptRequestPolicy = $state<string>('never')
 

@@ -3366,6 +3366,11 @@ export namespace virtualfolder {
 	    name: string;
 	    orderIndex: number;
 	    folderIds: string[];
+	    folderMode: string;
+	    readStatus: string;
+	    replyStatus: string;
+	    starStatus: string;
+	    dateWindow: string;
 	    // Go type: time
 	    createdAt: any;
 	    // Go type: time
@@ -3381,6 +3386,11 @@ export namespace virtualfolder {
 	        this.name = source["name"];
 	        this.orderIndex = source["orderIndex"];
 	        this.folderIds = source["folderIds"];
+	        this.folderMode = source["folderMode"];
+	        this.readStatus = source["readStatus"];
+	        this.replyStatus = source["replyStatus"];
+	        this.starStatus = source["starStatus"];
+	        this.dateWindow = source["dateWindow"];
 	        this.createdAt = this.convertValues(source["createdAt"], null);
 	        this.updatedAt = this.convertValues(source["updatedAt"], null);
 	    }

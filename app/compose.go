@@ -619,7 +619,7 @@ func (a *App) syncSentFolder(accountID string) error {
 
 	// Get account to determine sync period
 	acc, _ := a.accountStore.Get(accountID)
-	syncPeriodDays := 30 // default
+	syncPeriodDays := 0 // default (0 means all messages)
 	if acc != nil {
 		syncPeriodDays = acc.SyncPeriodDays
 	}

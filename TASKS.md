@@ -46,12 +46,8 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 | P-017 | Medium | Prepare the Gmail API integration contract and OAuth scope plan. Plan: `docs/plans/2026-10-24-gmail-api-contract.md`. Documentation only; unblocks P-010 and P-019. | Claude (Sonnet 5.5) / `agent/P-017-gmail-api-contract` / `../postilaatikko-p017` | Done (v0.3.13); commit `b234b7c` |
 | P-026 | Medium | Make keyboard shortcuts discoverable in the GUI: a shortcut registry as the single source of truth, a `?` reference overlay reachable from the UI, and shortcut hints on existing action tooltips. | Claude Opus / `agent/P-026-shortcut-discoverability` / `../postilaatikko-p026` | Done (v0.3.13); commit `dfd9417`. Verified: `npm ci`, `npm run lint`, `npm run check` (svelte-check 0 errors + registry drift test 7/7), `npm run build`. Not verified: running GUI, real key events, macOS rendering. Registry entries carry action id, label and icon so a future contextual toolbar can reuse them. |
 | P-027 | Medium | Command panel (Alfred-like quick launcher with ⌘P/Ctrl+P), stabilize keyboard shortcuts dialog height to prevent focus loss on search, mark-as-read configurable delay (immediate, 1-5s, on-leave, manual), fix Portuguese i18n remnants (Caixa de entrada, selecionadas), fix sidebar all-folders subfolder expanding and selection, and add Gmail-standard shortcuts (v, e, c, r, a, f, x, /, !, #, z, Shift+I/U, o, u; P-021). | Antigravity / `agent/P-027-command-panel` / PR #12 | Done (v0.3.14); commits `9393dc7`, `2d608c0`, `e6d149d` |
-
-## Queued sequential follow-up
-
-| ID | Effort | Task | Owner / branch / worktree | Status |
-| --- | --- | --- | --- | --- |
-| P-006 | Medium | **High user priority:** persist include/exclude folders, read/unread, replied/unreplied, and 7-day / 30-day / all-time criteria across accounts. Apply identical criteria to the conversation list and virtual-folder search; remove hard-coded unread-only behavior, and include all statuses when no status is selected. | GPT-6.1-Sol (medium), after P-011 / `agent/p006-virtual-folder-criteria` / `/private/tmp/postilaatikko-p006` | Queued; checkpoint `65019b0` |
+| P-006 | Medium | **High user priority:** persist include/exclude folders, read/unread, replied/unreplied, and 7-day / 30-day / all-time criteria across accounts. Apply identical criteria to the conversation list and virtual-folder search; remove hard-coded unread-only behavior, and include all statuses when no status is selected. | Antigravity / `agent/P-028-default-sync-all-messages` / `/private/tmp/postilaatikko-p028` | Review |
+| P-028 | Easy | Default routine sync to All Messages (0 days) across OAuth, settings dialog, and accounts; add migration 52 to update legacy 180-day and 30-day defaults to 0; show visual spinning feedback on manual sync. | Antigravity / `agent/P-028-default-sync-all-messages` / `/private/tmp/postilaatikko-p028` | Review |
 
 ## Next priority after the active tasks
 

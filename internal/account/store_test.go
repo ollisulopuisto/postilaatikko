@@ -100,8 +100,8 @@ func TestAccountConfigValidate(t *testing.T) {
 				c.SyncInterval = -1
 			},
 			checkFunc: func(t *testing.T, c *AccountConfig) {
-				if c.SyncPeriodDays != 30 {
-					t.Errorf("SyncPeriodDays = %d, want 30", c.SyncPeriodDays)
+				if c.SyncPeriodDays != 0 {
+					t.Errorf("SyncPeriodDays = %d, want 0", c.SyncPeriodDays)
 				}
 				if c.SyncInterval != 30 {
 					t.Errorf("SyncInterval = %d, want 30", c.SyncInterval)

@@ -1502,4 +1502,19 @@ var migrations = []Migration{
 			);
 		`,
 	},
+	{
+		Version: 52,
+		SQL: `
+			-- Routine sync is header-only (v0.3.12+), so default sync_period_days to 0 (all messages).
+			-- Migrate existing accounts on the legacy defaults (180 days / 6 months or 30 days / 1 month) to 0.
+			UPDATE accounts SET sync_period_days = 0 WHERE sync_period_days IN (30, 180);
+
+			-- Virtual folder criteria: folder_mode, read_status, reply_status, star_status, date_window.
+			ALTER TABLE virtual_folders ADD COLUMN folder_mode TEXT NOT NULL DEFAULT 'include';
+			ALTER TABLE virtual_folders ADD COLUMN read_status TEXT NOT NULL DEFAULT 'all';
+			ALTER TABLE virtual_folders ADD COLUMN reply_status TEXT NOT NULL DEFAULT 'all';
+			ALTER TABLE virtual_folders ADD COLUMN star_status TEXT NOT NULL DEFAULT 'all';
+			ALTER TABLE virtual_folders ADD COLUMN date_window TEXT NOT NULL DEFAULT 'all';
+		`,
+	},
 }

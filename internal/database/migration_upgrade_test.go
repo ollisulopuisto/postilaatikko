@@ -197,6 +197,75 @@ func TestMigrationV47AddsZeroFlagsSyncWatermark(t *testing.T) {
 	}
 }
 
+func TestMigrationV52_DefaultSyncPeriodAllMessages(t *testing.T) {
+	db := openUnmigratedTestDB(t)
+	applyMigrationsThrough(t, db, 51)
+
+	if _, err := db.Exec(`
+		INSERT INTO accounts (id, name, email, imap_host, smtp_host, username, sync_period_days)
+		VALUES
+			('acc-180', 'OAuth', 'oauth@example.com', 'imap.example.com', 'smtp.example.com', 'user1', 180),
+			('acc-30', 'Legacy', 'legacy@example.com', 'imap.example.com', 'smtp.example.com', 'user2', 30),
+			('acc-custom', 'Custom', 'custom@example.com', 'imap.example.com', 'smtp.example.com', 'user3', 7),
+			('acc-all', 'All', 'all@example.com', 'imap.example.com', 'smtp.example.com', 'user4', 0);
+	`); err != nil {
+		t.Fatalf("seed accounts before v52: %v", err)
+	}
+
+	if err := db.Migrate(); err != nil {
+		t.Fatalf("migrate through v52: %v", err)
+	}
+
+	rows, err := db.Query(`SELECT id, sync_period_days FROM accounts ORDER BY id`)
+	if err != nil {
+		t.Fatalf("query accounts: %v", err)
+	}
+	defer rows.Close()
+
+	results := make(map[string]int)
+	for rows.Next() {
+		var id string
+		var period int
+		if err := rows.Scan(&id, &period); err != nil {
+			t.Fatalf("scan row: %v", err)
+		}
+		results[id] = period
+	}
+
+	if results["acc-180"] != 0 {
+		t.Errorf("acc-180 sync_period_days = %d, want 0", results["acc-180"])
+	}
+	if results["acc-30"] != 0 {
+		t.Errorf("acc-30 sync_period_days = %d, want 0", results["acc-30"])
+	}
+	if results["acc-custom"] != 7 {
+		t.Errorf("acc-custom sync_period_days = %d, want 7", results["acc-custom"])
+	}
+	if results["acc-all"] != 0 {
+		t.Errorf("acc-all sync_period_days = %d, want 0", results["acc-all"])
+	}
+
+	// Verify virtual_folders table has the new criteria columns with defaults
+	if _, err := db.Exec(`
+		INSERT INTO virtual_folders (id, name, order_index, created_at, updated_at)
+		VALUES ('vf-test', 'All Mail', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+	`); err != nil {
+		t.Fatalf("insert virtual folder after v52: %v", err)
+	}
+
+	var folderMode, readStatus, replyStatus, starStatus, dateWindow string
+	if err := db.QueryRow(`
+		SELECT folder_mode, read_status, reply_status, star_status, date_window
+		FROM virtual_folders WHERE id = 'vf-test'
+	`).Scan(&folderMode, &readStatus, &replyStatus, &starStatus, &dateWindow); err != nil {
+		t.Fatalf("query virtual folder criteria columns: %v", err)
+	}
+	if folderMode != "include" || readStatus != "all" || replyStatus != "all" || starStatus != "all" || dateWindow != "all" {
+		t.Errorf("unexpected defaults: mode=%s read=%s reply=%s star=%s date=%s",
+			folderMode, readStatus, replyStatus, starStatus, dateWindow)
+	}
+}
+
 func firstSchemaDifference(want, got []string) string {
 	limit := len(want)
 	if len(got) < limit {
