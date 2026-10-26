@@ -32,6 +32,10 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 
 ## In progress in separate worktrees
 
+| Task | Effort | Scope | Owner / branch / worktree | Status |
+| --- | --- | --- | --- | --- |
+| BUILD-001 | Medium | Integrate reader + release baseline + tagged message-focus shortcuts for a GitHub-built Mac test DMG/prerelease. | Codex / `codex/BUILD-001-reader-test` / `/private/tmp/postilaatikko-build001` | In progress; user requested GitHub build. Integration stays off main. |
+
 | ID | Effort | Task | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
 | INT-033-034 | Medium | Merge UX-005 PR #33 before stacked UX-006 PR #34, verify extraction behavior and update Claude's UX-007 handoff. | Codex coordinator / `codex/INT-033-034-merge` / `/private/tmp/postilaatikko-merge-pr33-34` | Done; PR #33 merged first as `74ed7ff`, then #34 as `7436026`; both CI runs passed. Combined-tree email/views tests, go vet and go build ./app passed. Ledger/dispatch updated and UX-007 reserved for Claude. |
