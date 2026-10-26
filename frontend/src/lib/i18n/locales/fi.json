@@ -288,7 +288,14 @@
     "enterFocus": "Siirry kohdistustilaan",
     "exitFocus": "Poistu kohdistustilasta",
     "darkMailToLight": "Näytä tämä sähköposti ilman tummaa suodatinta",
-    "darkMailToDark": "Käytä tummaa suodatinta tähän sähköpostiin"
+    "darkMailToDark": "Käytä tummaa suodatinta tähän sähköpostiin",
+    "preparingMessage": "Valmistellaan viestiä…",
+    "showQuotedText": "Näytä lainattu teksti",
+    "hideQuotedText": "Piilota lainattu teksti",
+    "showSignature": "Näytä allekirjoitus",
+    "hideSignature": "Piilota allekirjoitus",
+    "showFullMessage": "Näytä koko viesti",
+    "showSplitMessage": "Näytä vain uusi teksti"
   },
   "composer": {
     "newMessage": "Uusi viesti",

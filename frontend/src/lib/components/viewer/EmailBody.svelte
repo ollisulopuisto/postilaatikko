@@ -3,6 +3,7 @@
   import { BrowserOpenURL } from '../../../../wailsjs/runtime/runtime'
   import { GetInlineAttachments, AddImageAllowlist, OpenURL, SetAlwaysLoadImages } from '../../../../wailsjs/go/app/App'
   import { linkifyText, isAllowedEmailURL } from '../../utils/emailLinks'
+  import { hasBlockedRemoteImages, restoreBlockedImages } from '../../utils/blockedImages'
   import { getCached, setCache, getCacheGeneration } from '../../stores/inlineAttachmentCache'
   import { isImageAllowedSync, refreshImageAllowlist } from '$lib/stores/imageAllowlist.svelte'
   import { setFocusedPane, focusPreviousPane, focusNextPane } from '$lib/stores/keyboard.svelte'
@@ -48,7 +49,7 @@
   let ctxMenuY = $state(0)
 
   // Derived state
-  let hasRemoteImages = $derived(checkForRemoteImages(bodyHtml))
+  let hasRemoteImages = $derived(checkForRemoteImages(bodyHtml) || hasBlockedRemoteImages(bodyHtml))
 
   // Outer iframe element bg: matches the dark-mail surface color (derived from
   // active theme) when darken=true, otherwise white. Reactive to theme changes
@@ -107,6 +108,10 @@
         /\bbackground\s*=\s*["'](https?:\/\/[^"']+)["']/gi,
         'background=""'
       )
+    } else {
+      // HTML from the reply extractor arrives with remote images already blocked
+      // (placeholder plus data-original-src); loading images puts the address back.
+      processed = restoreBlockedImages(processed)
     }
     return processed
   }
