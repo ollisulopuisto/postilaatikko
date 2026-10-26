@@ -22,6 +22,7 @@ import {appstate} from '../models';
 import {platform} from '../models';
 import {sync} from '../models';
 import {draft} from '../models';
+import {replycontent} from '../models';
 
 export function AcceptCertificate(arg1:string,arg2:certificate.CertificateInfo,arg3:boolean):Promise<void>;
 
@@ -368,6 +369,8 @@ export function GetPGPSignPolicy(arg1:string):Promise<string>;
 export function GetPendingMailto():Promise<app.MailtoData>;
 
 export function GetReadReceiptResponsePolicy():Promise<string>;
+
+export function GetReplyContent(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<replycontent.Reply>;
 
 export function GetRunBackground():Promise<boolean>;
 

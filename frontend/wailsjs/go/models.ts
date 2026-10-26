@@ -2629,6 +2629,139 @@ export namespace platform {
 
 }
 
+export namespace replycontent {
+	
+	export class Source {
+	    part: string;
+	    start: number;
+	    end: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Source(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.part = source["part"];
+	        this.start = source["start"];
+	        this.end = source["end"];
+	    }
+	}
+	export class Block {
+	    id: string;
+	    kind: string;
+	    format: string;
+	    content: string;
+	    source?: Source;
+	
+	    static createFrom(source: any = {}) {
+	        return new Block(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.kind = source["kind"];
+	        this.format = source["format"];
+	        this.content = source["content"];
+	        this.source = this.convertValues(source["source"], Source);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result {
+	    version: string;
+	    status: string;
+	    blocks: Block[];
+	    warnings?: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Result(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.version = source["version"];
+	        this.status = source["status"];
+	        this.blocks = this.convertValues(source["blocks"], Block);
+	        this.warnings = source["warnings"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Reply {
+	    ref: views.MessageRef;
+	    state: string;
+	    source?: string;
+	    fromCache: boolean;
+	    result: Result;
+	
+	    static createFrom(source: any = {}) {
+	        return new Reply(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ref = this.convertValues(source["ref"], views.MessageRef);
+	        this.state = source["state"];
+	        this.source = source["source"];
+	        this.fromCache = source["fromCache"];
+	        this.result = this.convertValues(source["result"], Result);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace senderlogo {
 	
 	export class SenderLogo {
@@ -3395,6 +3528,25 @@ export namespace v1 {
 	        this.icon = source["icon"];
 	        this.component = source["component"];
 	        this.order = source["order"];
+	    }
+	}
+
+}
+
+export namespace views {
+	
+	export class MessageRef {
+	    accountId: string;
+	    messageId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MessageRef(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.accountId = source["accountId"];
+	        this.messageId = source["messageId"];
 	    }
 	}
 
