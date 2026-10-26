@@ -64,7 +64,8 @@ These are deliberately small, reviewable candidates that can be offered upstream
 
 ### Medium
 
-- **Header-only routine sync.** Stop automatic full-body and attachment downloads; fetch content when a message is opened. In progress after user confirmation.
+- **Header-only routine sync (v0.3.12).** Routine sync fetches headers and flags; message bodies and attachments are no longer downloaded for every message. Folder-specific body prefetch is planned below.
+- **Folder-specific body prefetch.** Let users opt folders into automatic message-body downloads during routine sync, with Inbox enabled by default for each account. All folders still sync headers and flags; attachments remain on demand. Enabling a folder must not silently backfill its full history; older bodies can be fetched on open or by an explicit backfill action.
 - **Sidebar folder access.** Keep the all-folder browser directly reachable and add pinned folders, then persist item order and visibility.
 - **Virtual-folder criteria.** Add include/exclude folders, read/unread and replied/unreplied status, and 7-day / 30-day / all-time windows.
 - **macOS Contacts source.** Start with read-only browsing and recipient autocomplete. Offer a link/action to open the selected person in Apple's Contacts app for modifications; Postilaatikko will not write contact changes in the first version.
@@ -83,7 +84,7 @@ These are deliberately small, reviewable candidates that can be offered upstream
 - **Unified virtual folders (v0.3.10; criteria expanded in v0.3.15).** Saved sets of real folders across accounts, shown in the sidebar. Base folder-set behavior implemented in v0.3.10; criteria facets (include/exclude, read/unread, starred/unstarred, replied/unreplied, date windows) implemented in v0.3.15.
 - **Fast folder browser and pins.** Keep a fast browser for all account folders available from the sidebar and let users pin selected folders for one-click access. The current full folder tree is in the temporary More panel; there is no pinned-folder list.
 - **Sidebar customization.** Let users rearrange sidebar items and hide selected items, persisting the layout across launches. Virtual folders can currently be reordered among themselves; other sidebar sections and folders cannot be rearranged or hidden (collapsing a tree is not the same as hiding it).
-- **Header-only bulk sync.** Make “Sync all” fetch folder/message headers without downloading message bodies or attachments. Fetch full content on demand when a message is opened. Current `SyncAllComplete` calls `SyncFolder`, which starts a background body-and-attachment fetch for missing bodies in each account's sync window.
+- **Header-only bulk sync with folder-specific body prefetch.** “Sync all” fetches headers and flags for every folder. Fetch message bodies automatically only in folders opted into content prefetch, with Inbox enabled by default for each account; keep attachments on demand. Enabling prefetch must not silently trigger an unbounded historical backfill. Other folders continue loading message content when opened.
 - **Cross-account message moves.** Already supported. Preserve the safety rule: confirm the destination copy before removing the source.
 - **Multiple sender identities across accounts.** Already supported in the composer. Improve it with contextual signature selection (sender, recipient, and message type); signatures can already be configured per identity.
 - **Local cross-account filters.** Not started. Build on the existing cross-account move action; match incoming messages and route them to a folder in another account.
