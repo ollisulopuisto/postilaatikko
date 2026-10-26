@@ -112,7 +112,7 @@ func TestServiceCachesByBodyHashAndAccount(t *testing.T) {
 	}
 
 	// The same message id in another account is another message.
-	s.Extract(ctx, "", ref("acc-b", "m1"), body)
+	_, _ = s.Extract(ctx, "", ref("acc-b", "m1"), body)
 	if calls.Load() != 3 {
 		t.Errorf("a second account reused the first account's entry (calls = %d)", calls.Load())
 	}
@@ -129,7 +129,7 @@ func TestServiceDoesNotCacheDecryptedContent(t *testing.T) {
 	s, calls := newTestService(2)
 	ctx := context.Background()
 	body := Body{Fetched: true, Text: replyText, Sensitive: true}
-	s.Extract(ctx, "", ref("acc", "enc"), body)
+	_, _ = s.Extract(ctx, "", ref("acc", "enc"), body)
 	reply, _ := s.Extract(ctx, "", ref("acc", "enc"), body)
 	if reply.FromCache || calls.Load() != 2 {
 		t.Errorf("decrypted content was cached (calls = %d)", calls.Load())
@@ -250,7 +250,9 @@ func TestServiceWaitingForASlotHonorsCancellation(t *testing.T) {
 		}
 		return real(b)
 	}
-	go s.Extract(context.Background(), "", ref("acc", "holder"), Body{Fetched: true, Text: "holder"})
+	go func() {
+		_, _ = s.Extract(context.Background(), "", ref("acc", "holder"), Body{Fetched: true, Text: "holder"})
+	}()
 	<-started
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
@@ -311,7 +313,7 @@ func TestServiceConcurrentUseIsRaceFree(t *testing.T) {
 			defer wg.Done()
 			for i := 0; i < 40; i++ {
 				id := string(rune('a' + (g+i)%10))
-				s.Extract(context.Background(), "reader", ref("acc", id), Body{Fetched: true, Text: "body " + id})
+				_, _ = s.Extract(context.Background(), "reader", ref("acc", id), Body{Fetched: true, Text: "body " + id})
 				if i%13 == 0 {
 					s.PurgeAccount("acc")
 				}
