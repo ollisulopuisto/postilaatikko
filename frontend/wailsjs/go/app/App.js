@@ -694,6 +694,10 @@ export function GetReadReceiptResponsePolicy() {
   return window['go']['app']['App']['GetReadReceiptResponsePolicy']();
 }
 
+export function GetReplyContent(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['App']['GetReplyContent'](arg1, arg2, arg3, arg4);
+}
+
 export function GetRunBackground() {
   return window['go']['app']['App']['GetRunBackground']();
 }

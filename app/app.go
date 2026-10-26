@@ -24,6 +24,7 @@ import (
 	"github.com/hkdb/aerion/internal/credentials"
 	"github.com/hkdb/aerion/internal/database"
 	"github.com/hkdb/aerion/internal/draft"
+	"github.com/hkdb/aerion/internal/email/replycontent"
 	extauth "github.com/hkdb/aerion/internal/extensions/auth"
 	extcompose "github.com/hkdb/aerion/internal/extensions/compose"
 	extmail "github.com/hkdb/aerion/internal/extensions/mail"
@@ -217,6 +218,7 @@ type App struct {
 	accountStore        *account.Store
 	folderStore         *folder.Store
 	messageStore        *message.Store
+	replyContent        *replycontent.Service
 	virtualFolderStore  *virtualfolder.Store
 	filterStore         *mailfilter.Store
 	attachmentStore     *message.AttachmentStore
@@ -580,6 +582,7 @@ func (a *App) Startup(ctx context.Context) {
 	a.accountStore = account.NewStore(db)
 	a.folderStore = folder.NewStore(db)
 	a.messageStore = message.NewStore(db)
+	a.replyContent = replycontent.NewService(replycontent.ServiceOptions{})
 	a.virtualFolderStore = virtualfolder.NewStore(db)
 	a.filterStore = mailfilter.NewStore(db)
 	a.attachmentStore = message.NewAttachmentStore(db)

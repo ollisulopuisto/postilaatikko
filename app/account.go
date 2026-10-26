@@ -324,6 +324,9 @@ func (a *App) accountCredentialUpdateError(accountID, operation string, updateEr
 // RemoveAccount deletes an account and all its data
 func (a *App) RemoveAccount(id string) error {
 	log := logging.WithComponent("app")
+	if a.replyContent != nil {
+		a.replyContent.PurgeAccount(id)
+	}
 	if acc, err := a.accountStore.Get(id); err != nil {
 		log.Warn().Err(err).Msg("Failed to inspect account before credential cleanup")
 	} else if acc != nil && a.pendingOAuthEmail == acc.Email {
