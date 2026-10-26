@@ -114,6 +114,8 @@
     "virtualFolderLastYear": "Viimeinen vuosi",
     "virtualFolderCriteriaHelp": "Suodattimet koskevat keskusteluluetteloa ja hakua. Päivämäärä määräytyy keskustelun viimeisimmän viestin mukaan.",
     "virtualFolderNoFolders": "Kansioita ladataan vielä, tai kansioita ei ole saatavilla.",
+    "virtualFolderSearchFolders": "Hae kansioita",
+    "virtualFolderNoFolderMatches": "Haulla ei löytynyt kansioita.",
     "virtualFolderChooseFolder": "Valitse vähintään yksi kansio.",
     "virtualFolderSaveFailed": "Virtuaalikansion tallennus epäonnistui."
   },

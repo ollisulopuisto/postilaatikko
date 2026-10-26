@@ -5,6 +5,7 @@
 - Added virtual folder search facets and editable criteria (P-006): select Include/Exclude mode for member folders, filter by read/unread, starred/unstarred, replied/unreplied, and date window (7 days, 30 days, 90 days, 1 year, or all time). Removed hardcoded unread-only filtering so virtual folders display all matching conversations consistently across lists and search.
 - Default sync period is now All Messages (0 days, P-028): routine sync is lightweight and headers-only, so the default sync window across OAuth, settings dialogs, and new accounts no longer truncates history to 180 days. Added database Migration 52 to upgrade existing accounts with legacy defaults to All Messages, and added visual spinning feedback on manual sync.
 - Added pinned folders: right-click any folder (or the unified inbox account row) and choose Pin to sidebar. Pinned folders appear in a Pinned section for one-click access, across accounts, and stay pinned after restart.
+- The virtual folder editor has a search field above the folder list, so long lists of accounts and folders can be filtered by typing a few words. Folders stay selected while the list is filtered.
 - The sidebar's More button is now labelled All folders, since it opens the full folder browser.
 - Sidebar sections can be reordered and hidden from Settings > General > Sidebar sections. Hidden sections can be shown again there, and the layout is kept after restart.
 

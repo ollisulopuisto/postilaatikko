@@ -5,6 +5,7 @@
   import { _ } from '$lib/i18n'
   import type { AccountWithFolders } from '$lib/stores/accounts.svelte'
   import type { folder, virtualfolder } from '../../../../wailsjs/go/models'
+  import { filterFolders } from '$lib/sidebar/folderSearch'
 
   interface Props {
     open: boolean
@@ -33,6 +34,7 @@
   let dateWindow = $state('all')
   let saving = $state(false)
   let error = $state('')
+  let folderQuery = $state('')
 
   const selectableFolders = $derived.by(() => {
     const result: { id: string; label: string }[] = []
@@ -46,6 +48,10 @@
     return result
   })
 
+  // The checklist shows only folders matching the search. Selection is kept
+  // for folders that are filtered out.
+  const visibleFolders = $derived(filterFolders(selectableFolders, folderQuery))
+
   $effect(() => {
     if (!open) return
     name = virtualFolder?.name || ''
@@ -55,6 +61,7 @@
     replyStatus = virtualFolder?.replyStatus || 'all'
     starStatus = virtualFolder?.starStatus || 'all'
     dateWindow = virtualFolder?.dateWindow || 'all'
+    folderQuery = ''
     error = ''
   })
 
@@ -149,11 +156,21 @@
       </label>
     </div>
     <p class="text-xs text-muted-foreground">{$_('sidebar.virtualFolderCriteriaHelp')}</p>
+    <input
+      type="search"
+      bind:value={folderQuery}
+      placeholder={$_('sidebar.virtualFolderSearchFolders')}
+      aria-label={$_('sidebar.virtualFolderSearchFolders')}
+      disabled={selectableFolders.length === 0}
+      class="h-9 rounded-md border border-input bg-background px-3 text-sm"
+    />
     <div class="max-h-72 overflow-y-auto rounded-md border border-border p-2">
       {#if selectableFolders.length === 0}
         <p class="p-3 text-sm text-muted-foreground">{$_('sidebar.virtualFolderNoFolders')}</p>
+      {:else if visibleFolders.length === 0}
+        <p class="p-3 text-sm text-muted-foreground">{$_('sidebar.virtualFolderNoFolderMatches')}</p>
       {:else}
-        {#each selectableFolders as item (item.id)}
+        {#each visibleFolders as item (item.id)}
           <label class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/60">
             <input type="checkbox" checked={selectedIDs.includes(item.id)} onchange={() => toggleFolder(item.id)} />
             <span class="truncate">{item.label}</span>
