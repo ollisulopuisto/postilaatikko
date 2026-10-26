@@ -59,6 +59,9 @@ func (a *App) handleIPCMessage(clientID string, msg ipc.Message) {
 		Msg("Received IPC message")
 
 	switch msg.Type {
+	case readerCallType:
+		a.handleReaderCall(clientID, msg)
+
 	case ipc.TypeMessageSent:
 		var payload ipc.MessageSentPayload
 		if err := msg.ParsePayload(&payload); err != nil {

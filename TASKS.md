@@ -34,7 +34,7 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 
 | Task | Effort | Scope | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
-| READER-001 | Medium | User-requested double-click detached reader; compact directional conversation bubbles, hidden signature/source chrome, parser-library evaluation with regression coverage. | Codex / `codex/READER-001-compact-conversations` / `/private/tmp/postilaatikko-reader001` | In progress; based on `0ef36e4`, UX-008/009 merged. |
+| READER-001 | Medium | User-requested double-click detached reader; compact directional conversation bubbles, hidden signature/source chrome, parser-library evaluation with regression coverage. | Codex / `codex/READER-001-compact-conversations` / `/private/tmp/postilaatikko-reader001` | Review; based on `0ef36e4`, UX-008/009 merged. Implemented detached IPC reader and compact bubbles; adopted pinned MIT Go reply parser behind lossless checks. Verified: Go race tests (app, IPC, replycontent, readerbridge), vet, `go build ./...`; frontend check (0 errors, 2 existing warnings, 7 shortcut tests), 26 focused frontend tests, targeted lint and production build. Real Chromium smoke covers content/modes/narrow sizing and actual row double-click/control exclusion. Native window creation, real mail/crypto/attachment dialogs and REL-001 integration remain device/review gates. See `docs/diagnostics/2026-10-26-compact-reader.md`. |
 
 | ID | Effort | Task | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |

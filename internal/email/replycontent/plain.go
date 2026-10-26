@@ -65,7 +65,7 @@ func ExtractPlain(body string) Result {
 	}
 
 	lines := splitPlainLines(body)
-	segments := segmentPlain(lines)
+	segments := refineLibrarySegments(lines, segmentPlain(lines))
 
 	hasAuthored, hasQuoted, hasForwarded := false, false, false
 	for _, seg := range segments {
@@ -317,7 +317,25 @@ func nonBlankCount(lines []plainLine, from, to int) int {
 }
 
 func signatureDelimiterAt(lines []plainLine, i int) bool {
-	return strings.TrimRight(lines[i].text, " \t") == "--"
+	marker := strings.TrimSpace(lines[i].text)
+	if marker == "--" {
+		return true
+	}
+	// Apple Mail commonly uses a standalone em dash. Require a separated,
+	// short footer containing contact information, not merely a prose divider.
+	if marker != "—" || i == 0 || !lines[i-1].blank {
+		return false
+	}
+	end := i + 1
+	contact := false
+	for end < len(lines) && end-i <= maxSignatureLines {
+		if historyBoundaryAt(lines, end) {
+			break
+		}
+		contact = contact || strings.Contains(lines[end].text, "@")
+		end++
+	}
+	return contact && end-i <= maxSignatureLines
 }
 
 func forwardedAt(lines []plainLine, i int) bool {

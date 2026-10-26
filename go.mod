@@ -19,6 +19,7 @@ require (
 	github.com/rs/zerolog v1.34.0
 	github.com/teamwork/tnef v0.0.0-20200108124832-7deabccfdb32
 	github.com/wailsapp/wails/v2 v2.15.0
+	github.com/web-ridge/email-reply-parser v0.0.0-20230428184542-95e2a82fa6bd
 	github.com/zalando/go-keyring v0.2.6
 	go.mozilla.org/pkcs7 v0.9.0
 	golang.org/x/crypto v0.57.0

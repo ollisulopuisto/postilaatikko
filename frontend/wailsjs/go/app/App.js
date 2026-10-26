@@ -1066,6 +1066,10 @@ export function OpenFolder(arg1) {
   return window['go']['app']['App']['OpenFolder'](arg1);
 }
 
+export function OpenReaderWindow(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['App']['OpenReaderWindow'](arg1, arg2, arg3, arg4);
+}
+
 export function OpenURL(arg1) {
   return window['go']['app']['App']['OpenURL'](arg1);
 }

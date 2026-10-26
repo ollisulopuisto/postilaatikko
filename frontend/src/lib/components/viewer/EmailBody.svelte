@@ -21,10 +21,11 @@
     onCompose?: (to: string) => void
     onImagesLoaded?: () => void
     encryptedInlineAttachments?: Record<string, string>
+    compact?: boolean
     darken?: boolean
   }
 
-  let { messageId, accountId: _accountId, bodyHtml = '', bodyText = '', fromEmail = '', onCompose, onImagesLoaded, encryptedInlineAttachments, darken = false }: Props = $props()
+  let { messageId, accountId: _accountId, bodyHtml = '', bodyText = '', fromEmail = '', onCompose, onImagesLoaded, encryptedInlineAttachments, darken = false, compact = false }: Props = $props()
 
   // State for remote image handling
   let imagesBlocked = $state(true)
@@ -56,6 +57,7 @@
   // via getThemeMode() so the iframe outer color updates when user switches.
   let iframeOuterBg = $derived.by(() => {
     void getThemeMode()
+    if (compact) return 'transparent'
     return darken ? getChromeBgHsl() : 'white'
   })
 
@@ -196,7 +198,7 @@
     // html's saturate(S) hue-rotate(H) composed with image's saturate(1/S)
     // hue-rotate(-H) approximately cancels for non-grayscale image content.
     const imageSaturate = 1 / saturate
-    const darkenStyles = applyDarken ? `
+    const darkenStyles = applyDarken && !compact ? `
     html { filter: invert(${invertAmount}) hue-rotate(180deg) saturate(${saturate}) hue-rotate(${hueRotate}deg); background: #fff; color-scheme: dark; }
     img:not([data-blocked-src]), video, iframe, [data-no-invert] { filter: invert(${invertAmount}) hue-rotate(180deg) saturate(${imageSaturate}) hue-rotate(${-hueRotate}deg); }
 ` : `
@@ -418,6 +420,8 @@
     /* Only apply defaults to elements without inline styles */
     blockquote:not([style]) { margin: 0.5em 0; padding-left: 1em; border-left: 3px solid #e5e7eb; color: #6b7280; }
     pre:not([style]) { background: #f3f4f6; padding: 0.5em; border-radius: 4px; overflow-x: auto; }
+    /* Conversation bubbles use app colors without a separate white page. */
+    ${compact ? `html { color-scheme: normal; } html, body { background: transparent !important; color: hsl(${getComputedStyle(document.documentElement).getPropertyValue('--foreground').trim() || '0 0% 15%'}) !important; margin: 0 !important; padding: 0 !important; } body { font-family: system-ui, sans-serif !important; }` : ''}
     /* Remove table/td defaults that conflict with email layouts */
   </sty` + `le>
 </head>
@@ -474,7 +478,7 @@ ${processedHtml}
     if (event.source !== iframeElement?.contentWindow) return
 
     if (event.data?.type === 'iframe-height' && iframeElement) {
-      iframeElement.style.height = `${event.data.height + 20}px`
+      iframeElement.style.height = `${event.data.height + (compact ? 4 : 20)}px`
     } else if (event.data?.type === 'iframe-ready') {
       iframeReady = true
     } else if (event.data?.type === 'open-link') {
@@ -824,12 +828,12 @@ ${processedHtml}
       bind:this={iframeElement}
       title={$_('aria.emailContent')}
       sandbox="allow-scripts"
-      class="w-full border-0 rounded-md min-h-[100px]"
-      style="height: 200px; background-color: {iframeOuterBg};"
+      class="w-full border-0 rounded-md {compact ? '' : 'min-h-[100px]'}"
+      style="height: 200px; background-color: {iframeOuterBg}; {compact ? 'color-scheme: normal;' : ''}"
     ></iframe>
   {:else if bodyText}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="whitespace-pre-wrap font-sans text-sm text-foreground bg-muted/30 rounded-md p-4"
+    <div class="whitespace-pre-wrap font-sans text-sm text-foreground rounded-md {compact ? '' : 'bg-muted/30 p-4'}"
       onkeydown={(e) => { if (e.key === 'Enter') { const link = (e.target as HTMLElement).closest('a'); if (link?.href) { e.preventDefault(); handleLinkClick(link.href) } } }}
       onauxclick={(e) => {
         const link = (e.target as HTMLElement).closest('a')

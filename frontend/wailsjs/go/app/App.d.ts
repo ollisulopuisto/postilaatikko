@@ -16,13 +16,13 @@ import {smtp} from '../models';
 import {imap} from '../models';
 import {settings} from '../models';
 import {pgp} from '../models';
+import {replycontent} from '../models';
 import {smime} from '../models';
 import {senderlogo} from '../models';
 import {appstate} from '../models';
 import {platform} from '../models';
 import {sync} from '../models';
 import {draft} from '../models';
-import {replycontent} from '../models';
 
 export function AcceptCertificate(arg1:string,arg2:certificate.CertificateInfo,arg3:boolean):Promise<void>;
 
@@ -555,6 +555,8 @@ export function OpenEncryptedAttachment(arg1:string,arg2:string):Promise<void>;
 export function OpenFile(arg1:string):Promise<void>;
 
 export function OpenFolder(arg1:string):Promise<void>;
+
+export function OpenReaderWindow(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
 
 export function OpenURL(arg1:string):Promise<void>;
 
