@@ -288,7 +288,14 @@
     "enterFocus": "Enter focus mode",
     "exitFocus": "Exit focus mode",
     "darkMailToLight": "Show this email without dark filter",
-    "darkMailToDark": "Apply dark filter to this email"
+    "darkMailToDark": "Apply dark filter to this email",
+    "preparingMessage": "Preparing message…",
+    "showQuotedText": "Show quoted text",
+    "hideQuotedText": "Hide quoted text",
+    "showSignature": "Show signature",
+    "hideSignature": "Hide signature",
+    "showFullMessage": "Show full message",
+    "showSplitMessage": "Show new text only"
   },
   "composer": {
     "newMessage": "New Message",

@@ -10,7 +10,9 @@
   // @ts-ignore - wailsjs path
   import { message as messageModels } from '../../../../wailsjs/go/models'
   import AttachmentList from './AttachmentList.svelte'
-  import EmailBody from './EmailBody.svelte'
+  import ConversationMessage from './ConversationMessage.svelte'
+  import { canExtract } from './replyContent'
+  import { openTimelineAtTarget } from './timelineScroll'
   import Avatar from '$lib/components/kit/Avatar.svelte'
   import { toasts } from '$lib/stores/toast'
   import { setFocusedPane, isInputElement, isComposerOpen } from '$lib/stores/keyboard.svelte'
@@ -540,10 +542,15 @@
       // A newer load owns the loading state; leave it alone.
       if (generation === viewGeneration) {
         loading = false
-        // Scroll to bottom to show the latest message
+        // Open at the first unread message, else the newest, keeping a peek of
+        // the message before it so the thread still reads as a thread.
         await tick()
         if (contentContainerRef) {
-          contentContainerRef.scrollTop = contentContainerRef.scrollHeight
+          openTimelineAtTarget(
+            contentContainerRef,
+            conversation?.messages,
+            () => generation === viewGeneration && threadId === tid && folderId === fid,
+          )
         }
         // Capture only after the conversation is actually rendered and still
         // visible. A restored selection that is replaced during startup never
@@ -2116,10 +2123,11 @@
                           <!-- Show placeholder while processing -->
                           <div class="text-muted-foreground text-sm italic py-4">{$_('viewer.decryptingMessage')}</div>
                         {:else}
-                          <EmailBody
+                          <ConversationMessage
                             bind:this={emailBodyRefs[msg.id]}
                             messageId={msg.id}
                             accountId={msg.accountId}
+                            extractable={canExtract(msg)}
                             bodyHtml={msg.hasPGP && pgpResults[msg.id] ? pgpResults[msg.id].bodyHtml : msg.hasSMIME && smimeResults[msg.id] ? smimeResults[msg.id].bodyHtml : msg.bodyHtml}
                             bodyText={msg.hasPGP && pgpResults[msg.id] ? pgpResults[msg.id].bodyText : msg.hasSMIME && smimeResults[msg.id] ? smimeResults[msg.id].bodyText : msg.bodyText}
                             fromEmail={msg.fromEmail}
