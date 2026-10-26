@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Fixed: virtual folders with a date window (7 days, 30 days, 90 days or 1 year) showed no conversations and no unread count. Message dates are now read correctly for the window and the sort order.
 - Fixed: deleting a virtual folder from the sidebar did nothing on macOS, because the browser's native confirm dialog is not available in the app's webview. Deletion now asks in the app's own dialog. The delete, edit and move buttons on a virtual folder row are also reachable with the keyboard, not only on hover.
 - The sidebar and message list default to narrower columns (260px and 320px, from 320px and 360px), so the message has more room. This is applied once on the first launch after the update; widths you set afterwards are kept.
 - Added virtual folder search facets and editable criteria (P-006): select Include/Exclude mode for member folders, filter by read/unread, starred/unstarred, replied/unreplied, and date window (7 days, 30 days, 90 days, 1 year, or all time). Removed hardcoded unread-only filtering so virtual folders display all matching conversations consistently across lists and search.

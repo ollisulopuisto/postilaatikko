@@ -1,8 +1,10 @@
 package virtualfolder
 
 import (
+	"fmt"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/hkdb/aerion/internal/database"
 )
@@ -197,5 +199,40 @@ func TestStore_CascadingDelete(t *testing.T) {
 	// Should only have folder2 now
 	if len(got.FolderIDs) != 1 || got.FolderIDs[0] != "folder2" {
 		t.Errorf("Expected FolderIDs to just have folder2, got %v", got.FolderIDs)
+	}
+}
+
+// Unread counts for a view with a date window must include messages whose date
+// the app stored as a Go time.Time; unixepoch() alone is NULL for that format.
+func TestStore_UnreadCountsWithDateWindowForGoTimes(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+	store := NewStore(db)
+
+	vf := &VirtualFolder{Name: "Last week", FolderIDs: []string{"folder1"}, DateWindow: DateWindow7Day}
+	if err := store.Create(vf); err != nil {
+		t.Fatalf("Failed to create virtual folder: %v", err)
+	}
+
+	eest := time.FixedZone("EEST", 3*3600)
+	for i, date := range []time.Time{
+		time.Now().Add(-24 * time.Hour).In(eest),
+		time.Now().Add(-400 * 24 * time.Hour).In(eest),
+	} {
+		id := fmt.Sprintf("m%d", i)
+		if _, err := db.Exec(
+			`INSERT INTO messages (id, account_id, folder_id, uid, thread_id, subject, date, is_read, received_at)
+			 VALUES (?, 'account1', 'folder1', ?, ?, ?, ?, 0, ?)`,
+			id, i+1, id, id, date, time.Now()); err != nil {
+			t.Fatalf("Failed to insert message %s: %v", id, err)
+		}
+	}
+
+	counts, err := store.UnreadCounts()
+	if err != nil {
+		t.Fatalf("UnreadCounts: %v", err)
+	}
+	if got := counts[vf.ID]; got != 1 {
+		t.Errorf("unread count = %d, want 1 (only the message inside the window)", got)
 	}
 }
