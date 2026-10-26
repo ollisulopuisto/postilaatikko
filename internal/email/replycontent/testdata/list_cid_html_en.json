@@ -1,0 +1,29 @@
+{
+  "name": "list_cid_html_en",
+  "description": "HTML message with a list and an inline cid image, all new text.",
+  "client": "other",
+  "language": "en",
+  "format": "html",
+  "tags": [
+    "list",
+    "cid",
+    "html"
+  ],
+  "body": "<p>Steps:</p><ul><li>Open the file</li><li>Press save</li></ul><img src=\"cid:diagram@example.org\" alt=\"diagram\"><p>Done.</p>",
+  "expect": {
+    "status": "extracted",
+    "warnings": [],
+    "blocks": [
+      {
+        "kind": "authored",
+        "text": "Steps: Open the file Press save Done."
+      }
+    ]
+  },
+  "mustSurvive": [
+    "Open the file",
+    "Press save",
+    "Done."
+  ],
+  "mustStayQuoted": []
+}
