@@ -31,7 +31,7 @@ Updated when a pull request merges.
 | --- | --- |
 | UX-002 view contract | Merged (PR 29) |
 | UX-004 extraction schema and fixtures | In review (PR 30), Claude |
-| UX-001 integration checkpoint | Unclaimed. Needs the user: it integrates the P-011 branches |
+| UX-001 integration checkpoint | Unclaimed. The repository and build-provenance part can start now; only the final live-device check needs the user's real mail setup |
 
 ## Next up
 
@@ -47,7 +47,7 @@ branch on `origin`.
 - **Lane C (Codex):** UX-019 versioned agent API design, which needs only UX-002.
   UX-016 shared action targets, also UX-002 only, goes to whichever of lane C or
   lane A has capacity; ask before taking it.
-- **Lane D:** UX-001, then UX-003.
+- **Lane D:** UX-001 (repository part now), then UX-003.
 
 ## File ownership while tasks are active
 
