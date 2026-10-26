@@ -535,7 +535,6 @@ export namespace app {
 	        this.since = source["since"];
 	    }
 	}
-
 	export class LinkedAccountInfo {
 	    accountId: string;
 	    email: string;
@@ -873,34 +872,34 @@ export namespace app {
 export namespace appstate {
 	
 	export class PinnedFolder {
-		    accountId: string;
-		    folderId: string;
-		    path: string;
-		    name: string;
-
-		    static createFrom(source: any = {}) {
-		        return new PinnedFolder(source);
-		    }
-
-		    constructor(source: any = {}) {
-		        if ('string' === typeof source) source = JSON.parse(source);
-		        this.accountId = source["accountId"];
-		        this.folderId = source["folderId"];
-		        this.path = source["path"];
-		        this.name = source["name"];
-		    }
-		}
+	    accountId: string;
+	    folderId: string;
+	    path: string;
+	    name: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PinnedFolder(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.accountId = source["accountId"];
+	        this.folderId = source["folderId"];
+	        this.path = source["path"];
+	        this.name = source["name"];
+	    }
+	}
 	export class SidebarGroup {
 	    id: string;
 	    titleKey: string;
 	    entries: string[];
 	    collapsed: boolean;
 	    hidden: boolean;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new SidebarGroup(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -910,7 +909,7 @@ export namespace appstate {
 	        this.hidden = source["hidden"];
 	    }
 	}
-		export class UIState {
+	export class UIState {
 	    selectedAccountId: string;
 	    selectedFolderId: string;
 	    selectedFolderName: string;
@@ -950,13 +949,31 @@ export namespace appstate {
 	        this.expandedAccounts = source["expandedAccounts"];
 	        this.unifiedInboxExpanded = source["unifiedInboxExpanded"];
 	        this.collapsedFolders = source["collapsedFolders"];
-	        this.pinnedFolders = source["pinnedFolders"];
+	        this.pinnedFolders = this.convertValues(source["pinnedFolders"], PinnedFolder);
 	        this.sidebarOrder = source["sidebarOrder"];
 	        this.sidebarHidden = source["sidebarHidden"];
-	        this.sidebarGroups = source["sidebarGroups"];
+	        this.sidebarGroups = this.convertValues(source["sidebarGroups"], SidebarGroup);
 	        this.showContactsCalendarRail = source["showContactsCalendarRail"];
-		        this.activeExtension = source["activeExtension"];
+	        this.activeExtension = source["activeExtension"];
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }
