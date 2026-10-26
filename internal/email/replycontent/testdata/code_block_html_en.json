@@ -1,0 +1,27 @@
+{
+  "name": "code_block_html_en",
+  "description": "'>' inside a code block is content, not a quotation marker.",
+  "client": "other",
+  "language": "en",
+  "format": "html",
+  "tags": [
+    "code"
+  ],
+  "body": "<p>Use this:</p><pre><code>&gt; npm test\n&gt; npm run build</code></pre><p>Then restart.</p>",
+  "expect": {
+    "status": "extracted",
+    "warnings": [],
+    "blocks": [
+      {
+        "kind": "authored",
+        "text": "Use this: > npm test > npm run build Then restart."
+      }
+    ]
+  },
+  "mustSurvive": [
+    "npm test",
+    "npm run build",
+    "Then restart."
+  ],
+  "mustStayQuoted": []
+}

@@ -1,0 +1,37 @@
+{
+  "name": "code_prompt_lines_en",
+  "description": "Single-level '>' lines with no attribution may be code, not a quotation.",
+  "client": "other",
+  "language": "en",
+  "format": "text",
+  "tags": [
+    "code"
+  ],
+  "body": "Run this and send me the output:\n\n> npm test\n> npm run build\n\nThanks.",
+  "expect": {
+    "status": "partial",
+    "warnings": [
+      "ambiguous-quote-marker"
+    ],
+    "blocks": [
+      {
+        "kind": "authored",
+        "text": "Run this and send me the output:"
+      },
+      {
+        "kind": "unknown",
+        "text": "> npm test > npm run build"
+      },
+      {
+        "kind": "authored",
+        "text": "Thanks."
+      }
+    ]
+  },
+  "mustSurvive": [
+    "npm test",
+    "npm run build",
+    "Thanks."
+  ],
+  "mustStayQuoted": []
+}

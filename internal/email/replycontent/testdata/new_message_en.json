@@ -1,0 +1,25 @@
+{
+  "name": "new_message_en",
+  "description": "A new message with no quoted history.",
+  "client": "other",
+  "language": "en",
+  "format": "text",
+  "tags": [
+    "new_message"
+  ],
+  "body": "Hi Bob,\n\nCan we move the review to Thursday?\n\nThanks,\nAlice",
+  "expect": {
+    "status": "extracted",
+    "warnings": [],
+    "blocks": [
+      {
+        "kind": "authored",
+        "text": "Hi Bob, Can we move the review to Thursday? Thanks, Alice"
+      }
+    ]
+  },
+  "mustSurvive": [
+    "Can we move the review to Thursday?"
+  ],
+  "mustStayQuoted": []
+}

@@ -1,0 +1,29 @@
+{
+  "name": "mobile_signature_en",
+  "description": "Mobile client footer.",
+  "client": "apple_mail",
+  "language": "en",
+  "format": "text",
+  "tags": [
+    "signature"
+  ],
+  "body": "On my way.\n\nSent from my iPhone",
+  "expect": {
+    "status": "extracted",
+    "warnings": [],
+    "blocks": [
+      {
+        "kind": "authored",
+        "text": "On my way."
+      },
+      {
+        "kind": "signature",
+        "text": "Sent from my iPhone"
+      }
+    ]
+  },
+  "mustSurvive": [
+    "On my way."
+  ],
+  "mustStayQuoted": []
+}

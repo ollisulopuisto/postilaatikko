@@ -1,0 +1,31 @@
+{
+  "name": "gmail_html_top_reply_en",
+  "description": "Gmail HTML reply above a gmail_quote container.",
+  "client": "gmail",
+  "language": "en",
+  "format": "html",
+  "tags": [
+    "top_reply"
+  ],
+  "body": "<div dir=\"ltr\">Tuesday works for me.</div><br><div class=\"gmail_quote\"><div dir=\"ltr\" class=\"gmail_attr\">On Mon, Oct 19, 2026 at 9:00 AM Alice &lt;<a href=\"mailto:alice@example.org\">alice@example.org</a>&gt; wrote:<br></div><blockquote class=\"gmail_quote\" style=\"margin:0px 0px 0px 0.8ex;border-left:1px solid rgb(204,204,204);padding-left:1ex\"><div dir=\"ltr\">Could we meet Tuesday?</div></blockquote></div>",
+  "expect": {
+    "status": "extracted",
+    "warnings": [],
+    "blocks": [
+      {
+        "kind": "authored",
+        "text": "Tuesday works for me."
+      },
+      {
+        "kind": "quoted",
+        "text": "On Mon, Oct 19, 2026 at 9:00 AM Alice <alice@example.org> wrote: Could we meet Tuesday?"
+      }
+    ]
+  },
+  "mustSurvive": [
+    "Tuesday works for me."
+  ],
+  "mustStayQuoted": [
+    "Could we meet Tuesday?"
+  ]
+}

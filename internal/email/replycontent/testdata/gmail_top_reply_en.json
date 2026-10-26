@@ -1,0 +1,31 @@
+{
+  "name": "gmail_top_reply_en",
+  "description": "Gmail reply written above the quoted message.",
+  "client": "gmail",
+  "language": "en",
+  "format": "text",
+  "tags": [
+    "top_reply"
+  ],
+  "body": "Tuesday works for me.\n\nOn Mon, Oct 19, 2026 at 9:00 AM Alice <alice@example.org> wrote:\n\n> Could we meet Tuesday?\n>\n> Alice",
+  "expect": {
+    "status": "extracted",
+    "warnings": [],
+    "blocks": [
+      {
+        "kind": "authored",
+        "text": "Tuesday works for me."
+      },
+      {
+        "kind": "quoted",
+        "text": "On Mon, Oct 19, 2026 at 9:00 AM Alice <alice@example.org> wrote: > Could we meet Tuesday? > > Alice"
+      }
+    ]
+  },
+  "mustSurvive": [
+    "Tuesday works for me."
+  ],
+  "mustStayQuoted": [
+    "Could we meet Tuesday?"
+  ]
+}

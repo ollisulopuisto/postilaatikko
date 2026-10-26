@@ -1,0 +1,31 @@
+{
+  "name": "apple_mail_wrote_en",
+  "description": "Apple Mail attribution line.",
+  "client": "apple_mail",
+  "language": "en",
+  "format": "text",
+  "tags": [
+    "top_reply"
+  ],
+  "body": "I'll bring the slides.\n\nOn 19 Oct 2026, at 09:00, Alice <alice@example.org> wrote:\n\n> Please bring the slides.",
+  "expect": {
+    "status": "extracted",
+    "warnings": [],
+    "blocks": [
+      {
+        "kind": "authored",
+        "text": "I'll bring the slides."
+      },
+      {
+        "kind": "quoted",
+        "text": "On 19 Oct 2026, at 09:00, Alice <alice@example.org> wrote: > Please bring the slides."
+      }
+    ]
+  },
+  "mustSurvive": [
+    "I'll bring the slides."
+  ],
+  "mustStayQuoted": [
+    "Please bring the slides."
+  ]
+}

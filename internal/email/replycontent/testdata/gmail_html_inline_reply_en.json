@@ -1,0 +1,41 @@
+{
+  "name": "gmail_html_inline_reply_en",
+  "description": "HTML answers between quoted questions.",
+  "client": "gmail",
+  "language": "en",
+  "format": "html",
+  "tags": [
+    "inline_reply"
+  ],
+  "body": "<div class=\"gmail_quote\"><div class=\"gmail_attr\">On Mon, Oct 19, 2026 at 9:00 AM Alice &lt;alice@example.org&gt; wrote:<br></div><blockquote class=\"gmail_quote\"><div>Can you send the report?</div></blockquote></div><div>Yes, attached.</div><div class=\"gmail_quote\"><blockquote class=\"gmail_quote\"><div>And the invoice?</div></blockquote></div><div>It follows tomorrow.</div>",
+  "expect": {
+    "status": "extracted",
+    "warnings": [],
+    "blocks": [
+      {
+        "kind": "quoted",
+        "text": "On Mon, Oct 19, 2026 at 9:00 AM Alice <alice@example.org> wrote: Can you send the report?"
+      },
+      {
+        "kind": "authored",
+        "text": "Yes, attached."
+      },
+      {
+        "kind": "quoted",
+        "text": "And the invoice?"
+      },
+      {
+        "kind": "authored",
+        "text": "It follows tomorrow."
+      }
+    ]
+  },
+  "mustSurvive": [
+    "Yes, attached.",
+    "It follows tomorrow."
+  ],
+  "mustStayQuoted": [
+    "Can you send the report?",
+    "And the invoice?"
+  ]
+}

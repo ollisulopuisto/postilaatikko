@@ -1,0 +1,32 @@
+{
+  "name": "forwarded_message_en",
+  "description": "A forwarded message is content, not history to hide.",
+  "client": "gmail",
+  "language": "en",
+  "format": "text",
+  "tags": [
+    "forwarded"
+  ],
+  "body": "FYI, see below.\n\n---------- Forwarded message ---------\nFrom: Alice <alice@example.org>\nDate: Mon, Oct 19, 2026 at 9:00 AM\nSubject: Invoice\nTo: <bob@example.org>\n\nThe invoice is attached.",
+  "expect": {
+    "status": "partial",
+    "warnings": [
+      "forwarded-content"
+    ],
+    "blocks": [
+      {
+        "kind": "authored",
+        "text": "FYI, see below."
+      },
+      {
+        "kind": "unknown",
+        "text": "---------- Forwarded message --------- From: Alice <alice@example.org> Date: Mon, Oct 19, 2026 at 9:00 AM Subject: Invoice To: <bob@example.org> The invoice is attached."
+      }
+    ]
+  },
+  "mustSurvive": [
+    "FYI, see below.",
+    "The invoice is attached."
+  ],
+  "mustStayQuoted": []
+}
