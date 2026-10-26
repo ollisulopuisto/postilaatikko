@@ -65,6 +65,9 @@ type Draft struct {
 	// Timestamps
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
+	// StorageVersion is the exact SQLite timestamp token read with this row.
+	// It permits compare-and-delete without reformatting time values.
+	StorageVersion string `json:"-"`
 }
 
 // IsSynced returns true if the draft is synced with IMAP

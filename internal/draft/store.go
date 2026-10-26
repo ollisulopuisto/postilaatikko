@@ -86,7 +86,7 @@ func (s *Store) Update(d *Draft) error {
 		WHERE id = ?
 	`
 
-	_, err := s.db.Exec(query,
+	result, err := s.db.Exec(query,
 		d.ToList, d.CcList, d.BccList, d.Subject,
 		d.BodyHTML, d.BodyText, nullString(d.InReplyToID), nullString(d.ReplyType),
 		nullString(d.ReferencesList), nullString(d.IdentityID), d.SignMessage,
@@ -99,6 +99,13 @@ func (s *Store) Update(d *Draft) error {
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update draft: %w", err)
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count != 1 {
+		return ErrDraftNotFound
 	}
 
 	s.log.Debug().
@@ -118,7 +125,7 @@ func (s *Store) Get(id string) (*Draft, error) {
 			pgp_sign_message, pgp_encrypted, pgp_encrypted_body,
 			attachments_data,
 			sync_status, imap_uid, folder_id,
-			last_sync_attempt, sync_error, created_at, updated_at
+			last_sync_attempt, sync_error, created_at, updated_at, quote(updated_at)
 		FROM drafts
 		WHERE id = ?
 	`
@@ -136,7 +143,7 @@ func (s *Store) Get(id string) (*Draft, error) {
 		&d.PGPSignMessage, &d.PGPEncrypted, &pgpEncryptedBody,
 		&attachmentsData,
 		&d.SyncStatus, &imapUID, &folderID,
-		&lastSyncAttempt, &syncError, &d.CreatedAt, &d.UpdatedAt,
+		&lastSyncAttempt, &syncError, &d.CreatedAt, &d.UpdatedAt, &d.StorageVersion,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil

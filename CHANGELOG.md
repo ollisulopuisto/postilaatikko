@@ -6,6 +6,7 @@
 - Default sync period is now All Messages (0 days, P-028): routine sync is lightweight and headers-only, so the default sync window across OAuth, settings dialogs, and new accounts no longer truncates history to 180 days. Added database Migration 52 to upgrade existing accounts with legacy defaults to All Messages, and added visual spinning feedback on manual sync.
 - Added pinned folders: right-click any folder (or the unified inbox account row) and choose Pin to sidebar. Pinned folders appear in a Pinned section for one-click access, across accounts, and stay pinned after restart.
 - The sidebar's More button is now labelled All folders, since it opens the full folder browser.
+- Extended E2EE Send Later with time-only rescheduling, a paged Scheduled view, encrypted message previews, guarded cleanup after confirmed delivery, queue caps, and atomic Send Now/schedule arbitration. Delivery, keychain/login, and security release checks remain outstanding; the Scheduled sidebar entry is pending sidebar integration.
 
 ## Postilaatikko — v0.3.15
 
