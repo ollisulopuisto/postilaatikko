@@ -1,0 +1,30 @@
+{
+  "name": "signature_delimiter_en",
+  "description": "Signature after the standard '-- ' delimiter.",
+  "client": "other",
+  "language": "en",
+  "format": "text",
+  "tags": [
+    "signature",
+    "new_message"
+  ],
+  "body": "The deployment is done.\n\n-- \nBob Example\nSenior Engineer",
+  "expect": {
+    "status": "extracted",
+    "warnings": [],
+    "blocks": [
+      {
+        "kind": "authored",
+        "text": "The deployment is done."
+      },
+      {
+        "kind": "signature",
+        "text": "-- Bob Example Senior Engineer"
+      }
+    ]
+  },
+  "mustSurvive": [
+    "The deployment is done."
+  ],
+  "mustStayQuoted": []
+}

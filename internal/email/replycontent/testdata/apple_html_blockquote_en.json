@@ -1,0 +1,31 @@
+{
+  "name": "apple_html_blockquote_en",
+  "description": "Apple Mail blockquote type=cite.",
+  "client": "apple_mail",
+  "language": "en",
+  "format": "html",
+  "tags": [
+    "top_reply"
+  ],
+  "body": "<html><body><div>I'll bring the slides.</div><div><br><blockquote type=\"cite\"><div>On 19 Oct 2026, at 09:00, Alice &lt;alice@example.org&gt; wrote:</div><br><div><div>Please bring the slides.</div></div></blockquote></div></body></html>",
+  "expect": {
+    "status": "extracted",
+    "warnings": [],
+    "blocks": [
+      {
+        "kind": "authored",
+        "text": "I'll bring the slides."
+      },
+      {
+        "kind": "quoted",
+        "text": "On 19 Oct 2026, at 09:00, Alice <alice@example.org> wrote: Please bring the slides."
+      }
+    ]
+  },
+  "mustSurvive": [
+    "I'll bring the slides."
+  ],
+  "mustStayQuoted": [
+    "Please bring the slides."
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "name": "gmail_top_reply_fi",
+  "description": "Finnish Gmail attribution line ('kirjoitti').",
+  "client": "gmail",
+  "language": "fi",
+  "format": "text",
+  "tags": [
+    "top_reply"
+  ],
+  "body": "Tiistai sopii minulle.\n\nAlice <alice@example.org> kirjoitti ma 19.10.2026 klo 9.00:\n\n> Voitaisiinko tavata tiistaina?",
+  "expect": {
+    "status": "extracted",
+    "warnings": [],
+    "blocks": [
+      {
+        "kind": "authored",
+        "text": "Tiistai sopii minulle."
+      },
+      {
+        "kind": "quoted",
+        "text": "Alice <alice@example.org> kirjoitti ma 19.10.2026 klo 9.00: > Voitaisiinko tavata tiistaina?"
+      }
+    ]
+  },
+  "mustSurvive": [
+    "Tiistai sopii minulle."
+  ],
+  "mustStayQuoted": [
+    "Voitaisiinko tavata tiistaina?"
+  ]
+}

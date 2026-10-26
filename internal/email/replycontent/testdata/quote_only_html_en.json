@@ -1,0 +1,27 @@
+{
+  "name": "quote_only_html_en",
+  "description": "HTML message that is only a quotation: show everything.",
+  "client": "gmail",
+  "language": "en",
+  "format": "html",
+  "tags": [
+    "quote_only"
+  ],
+  "body": "<div class=\"gmail_quote\"><div class=\"gmail_attr\">On Mon, Oct 19, 2026 at 9:00 AM Alice &lt;alice@example.org&gt; wrote:<br></div><blockquote class=\"gmail_quote\"><div>Could we meet Tuesday?</div></blockquote></div>",
+  "expect": {
+    "status": "fallback",
+    "warnings": [
+      "quote-only"
+    ],
+    "blocks": [
+      {
+        "kind": "unknown",
+        "text": "On Mon, Oct 19, 2026 at 9:00 AM Alice <alice@example.org> wrote: Could we meet Tuesday?"
+      }
+    ]
+  },
+  "mustSurvive": [
+    "Could we meet Tuesday?"
+  ],
+  "mustStayQuoted": []
+}

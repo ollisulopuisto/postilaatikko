@@ -1,0 +1,33 @@
+{
+  "name": "nested_quotes_fi",
+  "description": "Nested '>>' markers only come from earlier replies, so they are history even without an attribution line.",
+  "client": "other",
+  "language": "fi",
+  "format": "text",
+  "tags": [
+    "nested_quote",
+    "top_reply"
+  ],
+  "body": "Kiitos, sopii.\n\n> > Voitaisiinko tavata?\n> Kyllä, tiistaina.",
+  "expect": {
+    "status": "extracted",
+    "warnings": [],
+    "blocks": [
+      {
+        "kind": "authored",
+        "text": "Kiitos, sopii."
+      },
+      {
+        "kind": "quoted",
+        "text": "> > Voitaisiinko tavata? > Kyllä, tiistaina."
+      }
+    ]
+  },
+  "mustSurvive": [
+    "Kiitos, sopii."
+  ],
+  "mustStayQuoted": [
+    "Voitaisiinko tavata?",
+    "Kyllä, tiistaina."
+  ]
+}

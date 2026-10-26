@@ -1,0 +1,31 @@
+{
+  "name": "outlook_original_message_en",
+  "description": "Outlook plain-text 'Original Message' header block.",
+  "client": "outlook",
+  "language": "en",
+  "format": "text",
+  "tags": [
+    "top_reply"
+  ],
+  "body": "Sounds good, see you then.\n\n-----Original Message-----\nFrom: Alice <alice@example.org>\nSent: Monday, October 19, 2026 9:00 AM\nTo: Bob <bob@example.org>\nSubject: Meeting\n\nCan we meet at ten?",
+  "expect": {
+    "status": "extracted",
+    "warnings": [],
+    "blocks": [
+      {
+        "kind": "authored",
+        "text": "Sounds good, see you then."
+      },
+      {
+        "kind": "quoted",
+        "text": "-----Original Message----- From: Alice <alice@example.org> Sent: Monday, October 19, 2026 9:00 AM To: Bob <bob@example.org> Subject: Meeting Can we meet at ten?"
+      }
+    ]
+  },
+  "mustSurvive": [
+    "Sounds good, see you then."
+  ],
+  "mustStayQuoted": [
+    "Can we meet at ten?"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "name": "outlook_html_reply_fi",
+  "description": "Finnish Outlook web reply with the divRplyFwdMsg header.",
+  "client": "outlook",
+  "language": "fi",
+  "format": "html",
+  "tags": [
+    "top_reply"
+  ],
+  "body": "<div>Sopii.</div><hr style=\"display:inline-block;width:98%\" tabindex=\"-1\"><div id=\"divRplyFwdMsg\" dir=\"ltr\"><font face=\"Calibri, sans-serif\" style=\"font-size:11pt\" color=\"#000000\"><b>Lähettäjä:</b> Alice &lt;alice@example.org&gt;<br><b>Lähetetty:</b> maanantai 19. lokakuuta 2026 9.00<br><b>Vastaanottaja:</b> Bob<br><b>Aihe:</b> Tapaaminen</font><div>&nbsp;</div></div><div>Voimmeko tavata kymmeneltä?</div>",
+  "expect": {
+    "status": "extracted",
+    "warnings": [],
+    "blocks": [
+      {
+        "kind": "authored",
+        "text": "Sopii."
+      },
+      {
+        "kind": "quoted",
+        "text": "Lähettäjä: Alice <alice@example.org> Lähetetty: maanantai 19. lokakuuta 2026 9.00 Vastaanottaja: Bob Aihe: Tapaaminen Voimmeko tavata kymmeneltä?"
+      }
+    ]
+  },
+  "mustSurvive": [
+    "Sopii."
+  ],
+  "mustStayQuoted": [
+    "Voimmeko tavata kymmeneltä?"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "name": "gmail_bottom_reply_en",
+  "description": "Reply written below the quoted message (bottom posting).",
+  "client": "gmail",
+  "language": "en",
+  "format": "text",
+  "tags": [
+    "bottom_reply"
+  ],
+  "body": "On Mon, Oct 19, 2026 at 9:00 AM Alice <alice@example.org> wrote:\n> Could we meet Tuesday?\n\nTuesday works for me.",
+  "expect": {
+    "status": "extracted",
+    "warnings": [],
+    "blocks": [
+      {
+        "kind": "quoted",
+        "text": "On Mon, Oct 19, 2026 at 9:00 AM Alice <alice@example.org> wrote: > Could we meet Tuesday?"
+      },
+      {
+        "kind": "authored",
+        "text": "Tuesday works for me."
+      }
+    ]
+  },
+  "mustSurvive": [
+    "Tuesday works for me."
+  ],
+  "mustStayQuoted": [
+    "Could we meet Tuesday?"
+  ]
+}

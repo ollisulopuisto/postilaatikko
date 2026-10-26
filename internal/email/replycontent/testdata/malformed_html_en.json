@@ -1,0 +1,34 @@
+{
+  "name": "malformed_html_en",
+  "description": "Unclosed tags: recover the split instead of failing.",
+  "client": "other",
+  "language": "en",
+  "format": "html",
+  "tags": [
+    "malformed",
+    "top_reply"
+  ],
+  "body": "<div>Thanks for the update<blockquote><div>Old text",
+  "expect": {
+    "status": "extracted",
+    "warnings": [
+      "malformed-html"
+    ],
+    "blocks": [
+      {
+        "kind": "authored",
+        "text": "Thanks for the update"
+      },
+      {
+        "kind": "quoted",
+        "text": "Old text"
+      }
+    ]
+  },
+  "mustSurvive": [
+    "Thanks for the update"
+  ],
+  "mustStayQuoted": [
+    "Old text"
+  ]
+}

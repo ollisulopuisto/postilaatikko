@@ -1,0 +1,27 @@
+{
+  "name": "quote_only_en",
+  "description": "Nothing but a quotation: show the complete body, do not hide it.",
+  "client": "gmail",
+  "language": "en",
+  "format": "text",
+  "tags": [
+    "quote_only"
+  ],
+  "body": "On Mon, Oct 19, 2026 at 9:00 AM Alice <alice@example.org> wrote:\n> Could we meet Tuesday?\n> Alice",
+  "expect": {
+    "status": "fallback",
+    "warnings": [
+      "quote-only"
+    ],
+    "blocks": [
+      {
+        "kind": "unknown",
+        "text": "On Mon, Oct 19, 2026 at 9:00 AM Alice <alice@example.org> wrote: > Could we meet Tuesday? > Alice"
+      }
+    ]
+  },
+  "mustSurvive": [
+    "Could we meet Tuesday?"
+  ],
+  "mustStayQuoted": []
+}

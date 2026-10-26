@@ -1,0 +1,28 @@
+{
+  "name": "table_html_en",
+  "description": "A table in the new message is content and must survive.",
+  "client": "other",
+  "language": "en",
+  "format": "html",
+  "tags": [
+    "table",
+    "new_message"
+  ],
+  "body": "<p>Numbers for the quarter:</p><table border=\"1\"><tr><th>Region</th><th>Revenue</th></tr><tr><td>Nordics</td><td>1.2 M</td></tr></table><p>Let me know.</p>",
+  "expect": {
+    "status": "extracted",
+    "warnings": [],
+    "blocks": [
+      {
+        "kind": "authored",
+        "text": "Numbers for the quarter: Region Revenue Nordics 1.2 M Let me know."
+      }
+    ]
+  },
+  "mustSurvive": [
+    "Nordics",
+    "1.2 M",
+    "Let me know."
+  ],
+  "mustStayQuoted": []
+}

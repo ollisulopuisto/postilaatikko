@@ -1,0 +1,31 @@
+{
+  "name": "outlook_lahettaja_fi",
+  "description": "Finnish Outlook header block (Lähettäjä / Lähetetty).",
+  "client": "outlook",
+  "language": "fi",
+  "format": "text",
+  "tags": [
+    "top_reply"
+  ],
+  "body": "Sopii, nähdään silloin.\n\nLähettäjä: Alice <alice@example.org>\nLähetetty: maanantai 19. lokakuuta 2026 9.00\nVastaanottaja: Bob <bob@example.org>\nAihe: Tapaaminen\n\nVoimmeko tavata kymmeneltä?",
+  "expect": {
+    "status": "extracted",
+    "warnings": [],
+    "blocks": [
+      {
+        "kind": "authored",
+        "text": "Sopii, nähdään silloin."
+      },
+      {
+        "kind": "quoted",
+        "text": "Lähettäjä: Alice <alice@example.org> Lähetetty: maanantai 19. lokakuuta 2026 9.00 Vastaanottaja: Bob <bob@example.org> Aihe: Tapaaminen Voimmeko tavata kymmeneltä?"
+      }
+    ]
+  },
+  "mustSurvive": [
+    "Sopii, nähdään silloin."
+  ],
+  "mustStayQuoted": [
+    "Voimmeko tavata kymmeneltä?"
+  ]
+}
