@@ -25,7 +25,7 @@ func refineLibrarySegments(lines []plainLine, segments []plainSegment) []plainSe
 			quoted = quoted || line.quote
 		}
 		raw := strings.Join(text, "\n")
-		if quoted || !strings.Contains(strings.ToLower(raw), "wrote:") {
+		if quoted || len(raw) > 64<<10 || !strings.Contains(strings.ToLower(raw), "wrote:") {
 			result = append(result, seg)
 			continue
 		}

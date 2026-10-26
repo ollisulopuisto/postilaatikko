@@ -44,7 +44,7 @@ a prose divider alone stays visible.
 
 For unmarked HTML, map rendered text boundaries back to cloned original DOM
 ranges. Preserve links, formatting and image nodes, then sanitize through the
-existing remote-image-blocking policy. Input/line/block bounds limit work. The
+existing remote-image-blocking policy. The library adapter has a 64 KiB / 2,000-line limit; HTML splitting has a 32-block limit. Larger/uncertain content stays visible under the existing fallback rules. The
 extractor version is `reply-v2`, invalidating old cache entries. The upstream
 MIT notice is included under `frontend/public/licenses/` for packaged builds.
 
