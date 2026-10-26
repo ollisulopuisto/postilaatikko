@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+## Postilaatikko — v0.3.16
+
+- Fixed Gmail-style keyboard shortcuts in focused message bodies. Archive, spam, read/unread, and star now act on the open conversation when the message viewer has focus.
 - Added virtual folder search facets and editable criteria (P-006): select Include/Exclude mode for member folders, filter by read/unread, starred/unstarred, replied/unreplied, and date window (7 days, 30 days, 90 days, 1 year, or all time). Removed hardcoded unread-only filtering so virtual folders display all matching conversations consistently across lists and search.
 - Default sync period is now All Messages (0 days, P-028): routine sync is lightweight and headers-only, so the default sync window across OAuth, settings dialogs, and new accounts no longer truncates history to 180 days. Added database Migration 52 to upgrade existing accounts with legacy defaults to All Messages, and added visual spinning feedback on manual sync.
 - Added pinned folders: right-click any folder (or the unified inbox account row) and choose Pin to sidebar. Pinned folders appear in a Pinned section for one-click access, across accounts, and stay pinned after restart.

@@ -9,7 +9,7 @@
   "info": {
     "companyName": "Postilaatikko",
     "productName": "Postilaatikko",
-    "productVersion": "0.3.15",
+    "productVersion": "0.3.16",
     "copyright": "Copyright 2024-2025",
     "comments": "A personal desktop email client for multiple accounts",
     "protocols": [

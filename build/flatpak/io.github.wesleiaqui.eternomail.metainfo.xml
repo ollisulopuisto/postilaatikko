@@ -309,6 +309,11 @@
   </provides>
 
   <releases>
+    <release version="0.3.16" date="2026-10-26">
+      <description>
+        <p>Fixed Gmail-style keyboard shortcuts in focused message bodies. Archive, spam, read/unread, and star now act on the open conversation when the message viewer has focus.</p>
+      </description>
+    </release>
     <release version="0.3.15" date="2026-10-25">
       <description>
         <ul>
