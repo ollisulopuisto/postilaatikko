@@ -1,0 +1,30 @@
+{
+  "name": "gmail_html_signature_en",
+  "description": "Gmail HTML reply that ends with a gmail_signature block.",
+  "client": "gmail",
+  "language": "en",
+  "format": "html",
+  "tags": [
+    "signature",
+    "html"
+  ],
+  "body": "<div dir=\"ltr\">Deployment is done.</div><div><br></div><div dir=\"ltr\" class=\"gmail_signature\" data-smartmail=\"gmail_signature\"><div dir=\"ltr\">Bob Example<br>Senior Engineer</div></div>",
+  "expect": {
+    "status": "extracted",
+    "warnings": [],
+    "blocks": [
+      {
+        "kind": "authored",
+        "text": "Deployment is done."
+      },
+      {
+        "kind": "signature",
+        "text": "Bob Example Senior Engineer"
+      }
+    ]
+  },
+  "mustSurvive": [
+    "Deployment is done."
+  ],
+  "mustStayQuoted": []
+}

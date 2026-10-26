@@ -1,0 +1,33 @@
+{
+  "name": "gmail_html_forwarded_en",
+  "description": "Gmail HTML forward: the forwarded message is not new text and is not collapsed.",
+  "client": "gmail",
+  "language": "en",
+  "format": "html",
+  "tags": [
+    "forwarded",
+    "html"
+  ],
+  "body": "<div dir=\"ltr\">FYI, see below.</div><br><div class=\"gmail_quote\"><div dir=\"ltr\" class=\"gmail_attr\">---------- Forwarded message ---------<br>From: <strong class=\"gmail_sendername\" dir=\"auto\">Alice</strong> <span dir=\"auto\">&lt;<a href=\"mailto:alice@example.org\">alice@example.org</a>&gt;</span><br>Date: Mon, Oct 19, 2026 at 9:00 AM<br>Subject: Invoice<br>To: &lt;<a href=\"mailto:bob@example.org\">bob@example.org</a>&gt;<br></div><br><br><div dir=\"ltr\">The invoice is attached.</div></div>",
+  "expect": {
+    "status": "partial",
+    "warnings": [
+      "forwarded-content"
+    ],
+    "blocks": [
+      {
+        "kind": "authored",
+        "text": "FYI, see below."
+      },
+      {
+        "kind": "unknown",
+        "text": "---------- Forwarded message --------- From: Alice <alice@example.org> Date: Mon, Oct 19, 2026 at 9:00 AM Subject: Invoice To: <bob@example.org> The invoice is attached."
+      }
+    ]
+  },
+  "mustSurvive": [
+    "FYI, see below.",
+    "The invoice is attached."
+  ],
+  "mustStayQuoted": []
+}

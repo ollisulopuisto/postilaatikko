@@ -1,0 +1,32 @@
+{
+  "name": "thunderbird_html_reply_en",
+  "description": "Thunderbird HTML reply with a moz-cite-prefix attribution and a cite blockquote.",
+  "client": "other",
+  "language": "en",
+  "format": "html",
+  "tags": [
+    "top_reply",
+    "html"
+  ],
+  "body": "<p>Sounds good.</p><div class=\"moz-cite-prefix\">On 19.10.2026 09:00, Alice wrote:<br></div><blockquote type=\"cite\" cite=\"mid:abc@example.org\"><p>Shall we start at ten?</p></blockquote>",
+  "expect": {
+    "status": "extracted",
+    "warnings": [],
+    "blocks": [
+      {
+        "kind": "authored",
+        "text": "Sounds good."
+      },
+      {
+        "kind": "quoted",
+        "text": "On 19.10.2026 09:00, Alice wrote: Shall we start at ten?"
+      }
+    ]
+  },
+  "mustSurvive": [
+    "Sounds good."
+  ],
+  "mustStayQuoted": [
+    "Shall we start at ten?"
+  ]
+}
