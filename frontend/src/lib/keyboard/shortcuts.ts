@@ -104,6 +104,11 @@ export const SHORTCUTS_HELP = (e: KeyboardEvent): boolean =>
 export const COMMAND_PALETTE = (e: KeyboardEvent): boolean =>
   ctrlOrMeta(e) && (e.key === 'p' || e.key === 'P')
 
+// `m` — toggle read/unread of the message target. Modifiers are excluded so
+// Alt+M (move to folder) and the Ctrl/Cmd shortcuts keep their own meaning.
+export const LIST_TOGGLE_READ = (e: KeyboardEvent): boolean =>
+  e.key === 'm' && noMods(e)
+
 // Convenience: namespace export for predicates that the kit imports as a group.
 export const KEY = {
   LIST_NEXT,
@@ -126,6 +131,7 @@ export const KEY = {
   LIST_COPY_TO,
   SHORTCUTS_HELP,
   COMMAND_PALETTE,
+  LIST_TOGGLE_READ,
 }
 
 // matchesAny is a small helper for cases where several predicates should be

@@ -163,6 +163,7 @@ export const CORE_SHORTCUTS: ShortcutDef[] = [
   { id: 'mail.star', icon: 'mdi:star-outline', label: 'shortcuts.action.star', group: 'messageActions', combos: ['s'], panes: MAIL, inline: app('s') },
   { id: 'mail.markRead', icon: 'mdi:email-open-outline', label: 'shortcuts.action.markRead', group: 'messageActions', combos: ['Shift+i', 'Mod+u'], panes: MAIL, inline: app('I', 'u') },
   { id: 'mail.markUnread', icon: 'mdi:email-outline', label: 'shortcuts.action.markUnread', group: 'messageActions', combos: ['Shift+u', 'Mod+Shift+u'], panes: MAIL, inline: app('U', 'u') },
+  { id: 'mail.toggleRead', icon: 'mdi:email-sync-outline', label: 'shortcuts.action.toggleRead', group: 'messageActions', combos: ['m'], panes: MAIL, predicates: [KEY.LIST_TOGGLE_READ], inline: app('m') },
   { id: 'mail.moveTo', icon: 'mdi:folder-move-outline', label: 'shortcuts.action.moveTo', group: 'messageActions', combos: ['v', 'Alt+m'], panes: MAIL, predicates: [KEY.LIST_MOVE_TO], inline: app('v') },
   { id: 'mail.copyTo', icon: 'mdi:content-copy', label: 'shortcuts.action.copyTo', group: 'messageActions', combos: ['Alt+c'], panes: MAIL, predicates: [KEY.LIST_COPY_TO] },
 

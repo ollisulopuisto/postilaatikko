@@ -12,6 +12,8 @@ export interface ListTarget {
   messageIds: string[]
   /** What the star action should set: true stars them, false unstars them. */
   star: boolean
+  /** What the read toggle should set: true marks them read, false marks them unread. */
+  read: boolean
 }
 
 /** Reads the message list's current selection state. */
@@ -24,6 +26,10 @@ export interface ListTargetSource {
   checkedHasUnstarred(): boolean
   /** True when the focused row is starred. */
   selectedStarred(): boolean
+  /** True when at least one checked message is unread. */
+  checkedHasUnread(): boolean
+  /** True when the focused row is unread. */
+  selectedUnread(): boolean
 }
 
 /** Everything an action needs to decide availability and run. */

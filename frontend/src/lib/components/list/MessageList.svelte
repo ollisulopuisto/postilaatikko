@@ -1794,6 +1794,13 @@
     return conv?.isStarred ?? false
   }
 
+  // True when the keyboard-focused conversation has unread messages
+  export function isSelectedUnread(): boolean {
+    if (!selectedThreadId) return false
+    const conv = activeList.find(c => c.threadId === selectedThreadId)
+    return (conv?.unreadCount ?? 0) > 0
+  }
+
   // Toggle checkbox for focused message (Space key)
   export function toggleCheck() {
     if (!selectedThreadId) return
