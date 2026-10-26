@@ -320,40 +320,16 @@ func (ops *composeOps) shouldPGPEncryptMessage(accountID string, perMessageOverr
 	return ops.hasPGPKey(accountID)
 }
 
-// sendMessage performs the full send flow: build RFC822, sign, encrypt, SMTP send,
-// save to Sent folder, add recipients to contacts, and optionally delete a draft.
-// When d is non-nil, the draft is fully cleaned up (IMAP + message row + DB) after
-// a successful send. Returns the account for callers that need it post-send.
-func (ops *composeOps) sendMessage(ctx context.Context, accountID string, msg smtp.ComposeMessage, d *draft.Draft) (*account.Account, error) {
+// prepareMessage serializes and applies message security once. Scheduled sends
+// retain these immutable bytes and their Message-ID for every delivery attempt.
+func (ops *composeOps) prepareMessage(accountID string, msg smtp.ComposeMessage) ([]byte, error) {
+	return ops.prepareMessageAt(accountID, msg, time.Now())
+}
+
+func (ops *composeOps) prepareMessageAt(accountID string, msg smtp.ComposeMessage, date time.Time) ([]byte, error) {
 	log := logging.WithComponent("composeOps")
-
-	log.Info().
-		Str("accountID", accountID).
-		Str("from", msg.From.Address).
-		Int("toCount", len(msg.To)).
-		Str("subject", msg.Subject).
-		Msg("Sending message")
-
-	// Get account
-	acc, err := ops.accountStore.Get(accountID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get account: %w", err)
-	}
-	if acc == nil {
-		return nil, fmt.Errorf("account not found: %s", accountID)
-	}
-
-	// Receive-only accounts have no SMTP wiring; reject sends before any
-	// further work. The composer's From dropdown already filters these
-	// out, so reaching this branch indicates a stale draft or a programmatic
-	// caller — surface a clear error rather than dialing a non-existent
-	// SMTP server.
-	if acc.NoOutgoingServer {
-		return nil, fmt.Errorf("account %q is configured as receive-only (no outgoing server)", acc.Email)
-	}
-
 	// Build RFC822 message
-	rawMsg, err := msg.ToRFC822()
+	rawMsg, err := msg.ToRFC822At(date)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build message: %w", err)
 	}
@@ -398,6 +374,46 @@ func (ops *composeOps) sendMessage(ctx context.Context, accountID string, msg sm
 		}
 		rawMsg = encryptedMsg
 		log.Info().Str("accountID", accountID).Msg("Message encrypted with PGP")
+	}
+
+	return rawMsg, nil
+}
+
+// sendMessage performs the full send flow: build RFC822, sign, encrypt, SMTP send,
+// save to Sent folder, add recipients to contacts, and optionally delete a draft.
+// When d is non-nil, the draft is fully cleaned up (IMAP + message row + DB) after
+// a successful send. Returns the account for callers that need it post-send.
+func (ops *composeOps) sendMessage(ctx context.Context, accountID string, msg smtp.ComposeMessage, d *draft.Draft) (*account.Account, error) {
+	log := logging.WithComponent("composeOps")
+
+	log.Info().
+		Str("accountID", accountID).
+		Str("from", msg.From.Address).
+		Int("toCount", len(msg.To)).
+		Str("subject", msg.Subject).
+		Msg("Sending message")
+
+	// Get account
+	acc, err := ops.accountStore.Get(accountID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get account: %w", err)
+	}
+	if acc == nil {
+		return nil, fmt.Errorf("account not found: %s", accountID)
+	}
+
+	// Receive-only accounts have no SMTP wiring; reject sends before any
+	// further work. The composer's From dropdown already filters these
+	// out, so reaching this branch indicates a stale draft or a programmatic
+	// caller — surface a clear error rather than dialing a non-existent
+	// SMTP server.
+	if acc.NoOutgoingServer {
+		return nil, fmt.Errorf("account %q is configured as receive-only (no outgoing server)", acc.Email)
+	}
+
+	rawMsg, err := ops.prepareMessage(accountID, msg)
+	if err != nil {
+		return nil, err
 	}
 
 	// Create SMTP client config

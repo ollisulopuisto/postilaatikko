@@ -11,6 +11,7 @@
 
 // @ts-ignore - Wails generated imports
 import { smtp, account, contact, app, smime, pgp } from '../../wailsjs/go/models'
+import { sendLaterBackend, type SendLaterConfig, type SendLaterSetup, type ScheduledJob, type ScheduleResult } from './scheduledSendApi'
 
 /**
  * Interface for composer API operations.
@@ -18,7 +19,13 @@ import { smtp, account, contact, app, smime, pgp } from '../../wailsjs/go/models
  */
 export interface ComposerApi {
   /** Send a composed email */
-  sendMessage: (accountId: string, message: smtp.ComposeMessage) => Promise<void>
+  sendMessage: (accountId: string, message: smtp.ComposeMessage, draftId?: string) => Promise<void>
+  getSendLaterSetup: (accountId: string) => Promise<SendLaterSetup>
+  initializeSendLaterClient: () => Promise<string>
+  saveSendLaterConfig: (config: SendLaterConfig) => Promise<void>
+  scheduleMessage: (accountId: string, message: smtp.ComposeMessage, draftId: string, due: string) => Promise<ScheduleResult>
+  listScheduledMessages: (accountId: string) => Promise<ScheduledJob[]>
+  updateScheduledMessage: (id: string, action: string) => Promise<ScheduleResult>
 
   /** Search contacts for autocomplete */
   searchContacts: (query: string, limit: number) => Promise<contact.Contact[]>
@@ -122,10 +129,17 @@ export function createMainWindowApi(): ComposerApi {
   // Dynamic import to avoid bundling issues
   // These will be resolved at runtime based on which entry point is used
   return {
-    sendMessage: async (accountId: string, message: smtp.ComposeMessage) => {
+    sendMessage: async (accountId: string, message: smtp.ComposeMessage, draftId?: string) => {
+      if (draftId) return sendLaterBackend().SendMessageWithDraftGuard(accountId, message, draftId)
       const { SendMessage } = await import('../../wailsjs/go/app/App.js')
       return SendMessage(accountId, message)
     },
+    getSendLaterSetup: accountId => sendLaterBackend().GetSendLaterSetup(accountId),
+    initializeSendLaterClient: () => sendLaterBackend().InitializeSendLaterClient(),
+    saveSendLaterConfig: config => sendLaterBackend().SaveSendLaterConfig(config),
+    scheduleMessage: (accountId, message, draftId, due) => sendLaterBackend().ScheduleMessage(accountId, message, draftId, due),
+    listScheduledMessages: accountId => sendLaterBackend().ListScheduledMessages(accountId),
+    updateScheduledMessage: (id, action) => sendLaterBackend().UpdateScheduledMessage(id, action),
 
     searchContacts: async (query: string, limit: number) => {
       const { SearchContacts } = await import('../../wailsjs/go/app/App.js')
@@ -271,10 +285,17 @@ export function createMainWindowApi(): ComposerApi {
  */
 export function createComposerWindowApi(_accountId: string): ComposerApi {
   return {
-    sendMessage: async (accountId: string, message: smtp.ComposeMessage) => {
+    sendMessage: async (accountId: string, message: smtp.ComposeMessage, draftId?: string) => {
+      if (draftId) return sendLaterBackend(true).SendMessageWithDraftGuard(accountId, message, draftId)
       const { SendMessage } = await import('../../wailsjs/go/app/ComposerApp.js')
       return SendMessage(accountId, message)
     },
+    getSendLaterSetup: accountId => sendLaterBackend(true).GetSendLaterSetup(accountId),
+    initializeSendLaterClient: () => sendLaterBackend(true).InitializeSendLaterClient(),
+    saveSendLaterConfig: config => sendLaterBackend(true).SaveSendLaterConfig(config),
+    scheduleMessage: (accountId, message, draftId, due) => sendLaterBackend(true).ScheduleMessage(accountId, message, draftId, due),
+    listScheduledMessages: accountId => sendLaterBackend(true).ListScheduledMessages(accountId),
+    updateScheduledMessage: (id, action) => sendLaterBackend(true).UpdateScheduledMessage(id, action),
 
     searchContacts: async (query: string, limit: number) => {
       const { SearchContacts } = await import('../../wailsjs/go/app/ComposerApp.js')

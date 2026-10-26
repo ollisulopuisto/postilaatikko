@@ -16,13 +16,14 @@ import {smtp} from '../models';
 import {imap} from '../models';
 import {settings} from '../models';
 import {pgp} from '../models';
+import {replycontent} from '../models';
 import {smime} from '../models';
+import {scheduledsend} from '../models';
 import {senderlogo} from '../models';
 import {appstate} from '../models';
 import {platform} from '../models';
 import {sync} from '../models';
 import {draft} from '../models';
-import {replycontent} from '../models';
 
 export function AcceptCertificate(arg1:string,arg2:certificate.CertificateInfo,arg3:boolean):Promise<void>;
 
@@ -380,11 +381,15 @@ export function GetSMIMEEncryptPolicy(arg1:string):Promise<string>;
 
 export function GetSMIMESignPolicy(arg1:string):Promise<string>;
 
+export function GetScheduledPage(arg1:string,arg2:boolean,arg3:number,arg4:number):Promise<scheduledsend.ClientPage>;
+
 export function GetSearchCount(arg1:string,arg2:string,arg3:string,arg4:string):Promise<number>;
 
 export function GetSearchCountUnifiedFolder(arg1:string,arg2:string,arg3:string):Promise<number>;
 
 export function GetSearchCountUnifiedInbox(arg1:string,arg2:string):Promise<number>;
+
+export function GetSendLaterSetup(arg1:string):Promise<app.SendLaterSetup>;
 
 export function GetSenderLogos(arg1:Array<string>):Promise<Array<senderlogo.SenderLogo>>;
 
@@ -466,6 +471,8 @@ export function ImportSMIMECertificateFromPath(arg1:string,arg2:string,arg3:stri
 
 export function ImportSMIMECertificateFromPathBER(arg1:string,arg2:string,arg3:string):Promise<smime.ImportResult>;
 
+export function InitializeSendLaterClient():Promise<string>;
+
 export function InitiateShutdown():Promise<void>;
 
 export function IsExtensionEnabled(arg1:string):Promise<boolean>;
@@ -505,6 +512,8 @@ export function ListPGPSenderKeys():Promise<Array<pgp.SenderKey>>;
 export function ListQuickReplies():Promise<Array<settings.QuickReply>>;
 
 export function ListSMIMECertificates(arg1:string):Promise<Array<smime.Certificate>>;
+
+export function ListScheduledMessages(arg1:string):Promise<Array<scheduledsend.ClientJob>>;
 
 export function ListSenderCerts():Promise<Array<smime.SenderCert>>;
 
@@ -608,6 +617,8 @@ export function ReorderFilterRules(arg1:Array<string>):Promise<void>;
 
 export function ReorderVirtualFolders(arg1:Array<string>):Promise<void>;
 
+export function RescheduleMessage(arg1:string,arg2:string):Promise<app.ScheduleResult>;
+
 export function SaveAllAttachments(arg1:string):Promise<string>;
 
 export function SaveAllEncryptedAttachments(arg1:string):Promise<string>;
@@ -622,7 +633,11 @@ export function SavePendingOAuthTokens(arg1:string):Promise<void>;
 
 export function SaveQuickReply(arg1:settings.QuickReply):Promise<settings.QuickReply>;
 
+export function SaveSendLaterConfig(arg1:scheduledsend.ClientConfig):Promise<void>;
+
 export function SaveUIState(arg1:appstate.UIState):Promise<void>;
+
+export function ScheduleMessage(arg1:string,arg2:smtp.ComposeMessage,arg3:string,arg4:string):Promise<app.ScheduleResult>;
 
 export function SearchContacts(arg1:string,arg2:number):Promise<Array<contact.Contact>>;
 
@@ -635,6 +650,8 @@ export function SearchUnifiedInbox(arg1:string,arg2:number,arg3:number,arg4:stri
 export function SearchVirtualFolder(arg1:string,arg2:string,arg3:number,arg4:number,arg5:string):Promise<Array<message.ConversationSearchResult>>;
 
 export function SendMessage(arg1:string,arg2:smtp.ComposeMessage):Promise<void>;
+
+export function SendMessageWithDraftGuard(arg1:string,arg2:smtp.ComposeMessage,arg3:string):Promise<void>;
 
 export function SendReadReceipt(arg1:string,arg2:string):Promise<void>;
 
@@ -785,5 +802,7 @@ export function UpdateFilterRule(arg1:mailfilter.Rule):Promise<void>;
 export function UpdateIdentity(arg1:string,arg2:account.IdentityConfig):Promise<account.Identity>;
 
 export function UpdateLocalFlags(arg1:Array<string>,arg2:any,arg3:any):Promise<void>;
+
+export function UpdateScheduledMessage(arg1:string,arg2:string):Promise<app.ScheduleResult>;
 
 export function UpdateVirtualFolder(arg1:virtualfolder.VirtualFolder):Promise<void>;

@@ -62,6 +62,8 @@ build:
 	@echo "Building Postilaatikko..."
 	wails build -tags $(BUILD_TAGS)
 ifeq ($(UNAME_S),Darwin)
+	@echo "Building the Send Later helper..."
+	go build -trimpath -ldflags="-s -w" -o build/bin/postilaatikko.app/Contents/MacOS/postilaatikko-helper ./cmd/postilaatikko-helper
 	@echo "Ad-hoc signing postilaatikko.app (required for macOS notifications)..."
 	codesign --force --deep --sign - build/bin/postilaatikko.app
 endif

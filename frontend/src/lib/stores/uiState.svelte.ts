@@ -178,7 +178,7 @@ export function saveUIState(updates: Partial<UIState>): void {
   saveTimer = setTimeout(async () => {
     try {
       // Convert to backend model format
-      const backendState: appstate.UIState = {
+      const backendState = new appstate.UIState({
         selectedAccountId: currentState.selectedAccountId || '',
         selectedFolderId: currentState.selectedFolderId || '',
         selectedFolderName: currentState.selectedFolderName,
@@ -197,7 +197,7 @@ export function saveUIState(updates: Partial<UIState>): void {
         sidebarHidden: currentState.sidebarLayout.hidden,
         readerMode: currentState.readerMode,
         activeExtension: currentState.activeExtension,
-      }
+      })
       await SaveUIState(backendState)
     } catch (err) {
       console.error('Failed to save UI state:', err)

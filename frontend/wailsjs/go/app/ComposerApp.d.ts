@@ -7,6 +7,7 @@ import {smtp} from '../models';
 import {message} from '../models';
 import {pgp} from '../models';
 import {smime} from '../models';
+import {scheduledsend} from '../models';
 import {platform} from '../models';
 import {draft} from '../models';
 import {contact} from '../models';
@@ -49,6 +50,10 @@ export function GetSMIMEEncryptPolicy(arg1:string):Promise<string>;
 
 export function GetSMIMESignPolicy(arg1:string):Promise<string>;
 
+export function GetScheduledPage(arg1:string,arg2:boolean,arg3:number,arg4:number):Promise<scheduledsend.ClientPage>;
+
+export function GetSendLaterSetup(arg1:string):Promise<app.SendLaterSetup>;
+
 export function GetShowTitleBar():Promise<boolean>;
 
 export function GetSystemTheme():Promise<string>;
@@ -65,7 +70,11 @@ export function ImportRecipientCert(arg1:string,arg2:string):Promise<void>;
 
 export function ImportRecipientPGPKey(arg1:string,arg2:string):Promise<void>;
 
+export function InitializeSendLaterClient():Promise<string>;
+
 export function IsFlatpak():Promise<boolean>;
+
+export function ListScheduledMessages(arg1:string):Promise<Array<scheduledsend.ClientJob>>;
 
 export function LogFrontend(arg1:string,arg2:string):Promise<void>;
 
@@ -89,12 +98,22 @@ export function ReadFileAsAttachment(arg1:string):Promise<app.ComposerAttachment
 
 export function RefreshWindowConstraints():Promise<void>;
 
+export function RescheduleMessage(arg1:string,arg2:string):Promise<app.ScheduleResult>;
+
 export function SaveDraft(arg1:string,arg2:smtp.ComposeMessage,arg3:string):Promise<draft.Draft>;
+
+export function SaveSendLaterConfig(arg1:scheduledsend.ClientConfig):Promise<void>;
+
+export function ScheduleMessage(arg1:string,arg2:smtp.ComposeMessage,arg3:string,arg4:string):Promise<app.ScheduleResult>;
 
 export function SearchContacts(arg1:string,arg2:number):Promise<Array<contact.Contact>>;
 
 export function SendMessage(arg1:string,arg2:smtp.ComposeMessage):Promise<void>;
 
+export function SendMessageWithDraftGuard(arg1:string,arg2:smtp.ComposeMessage,arg3:string):Promise<void>;
+
 export function Shutdown(arg1:context.Context):Promise<void>;
 
 export function Startup(arg1:context.Context):Promise<void>;
+
+export function UpdateScheduledMessage(arg1:string,arg2:string):Promise<app.ScheduleResult>;
