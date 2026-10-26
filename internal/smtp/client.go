@@ -4,10 +4,12 @@ package smtp
 import (
 	"bytes"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/smtp"
+	"net/textproto"
 	"strconv"
 	"strings"
 	"time"
@@ -67,6 +69,8 @@ type ClientConfig struct {
 	// ""/"auto" (pick from the server's EHLO AUTH advertisement). Ignored for
 	// OAuth2.
 	AuthMechanism string
+	// RedactMessageMetadata keeps queued-message sender/recipient data out of logs.
+	RedactMessageMetadata bool
 
 	// Timeouts
 	ConnectTimeout time.Duration
@@ -75,6 +79,28 @@ type ClientConfig struct {
 
 	// TLS config (optional)
 	TLSConfig *tls.Config
+}
+
+// DeliveryError describes whether an interrupted SMTP attempt may have been
+// accepted. Callers must not blindly retry an ambiguous DATA completion.
+type DeliveryError struct {
+	MayHaveBeenAccepted bool
+	Err                 error
+}
+
+// Error describes the SMTP failure.
+func (e *DeliveryError) Error() string { return e.Err.Error() }
+
+// Unwrap exposes the provider/network error for retry classification.
+func (e *DeliveryError) Unwrap() error { return e.Err }
+
+// Abort immediately closes a connected SMTP session without waiting for QUIT.
+// It may be called to interrupt network I/O when a delivery context expires.
+func (c *Client) Abort() error {
+	if c.client == nil {
+		return nil
+	}
+	return c.client.Close()
 }
 
 // DefaultConfig returns a ClientConfig with sensible defaults
@@ -328,42 +354,41 @@ func (c *Client) SendMail(from string, to []string, msg []byte) error {
 		return fmt.Errorf("not connected")
 	}
 
-	c.log.Debug().
-		Str("from", from).
-		Strs("to", to).
-		Int("size", len(msg)).
-		Msg("Sending message")
+	if !c.config.RedactMessageMetadata {
+		c.log.Debug().Str("from", from).Strs("to", to).Int("size", len(msg)).Msg("Sending message")
+	}
 
 	// Set the sender
 	if err := c.client.Mail(from); err != nil {
-		return fmt.Errorf("failed to set sender: %w", err)
+		return &DeliveryError{Err: fmt.Errorf("failed to set sender: %w", err)}
 	}
 
 	// Set recipients
 	for _, recipient := range to {
 		if err := c.client.Rcpt(recipient); err != nil {
-			return fmt.Errorf("failed to add recipient %s: %w", recipient, err)
+			return &DeliveryError{Err: fmt.Errorf("failed to add recipient: %w", err)}
 		}
 	}
 
 	// Send the message body
 	w, err := c.client.Data()
 	if err != nil {
-		return fmt.Errorf("failed to start data transfer: %w", err)
+		return &DeliveryError{Err: fmt.Errorf("failed to start data transfer: %w", err)}
 	}
 
 	if _, err := io.Copy(w, bytes.NewReader(msg)); err != nil {
-		return fmt.Errorf("failed to write message: %w", err)
+		return &DeliveryError{MayHaveBeenAccepted: true, Err: fmt.Errorf("failed to write message: %w", err)}
 	}
 
 	if err := w.Close(); err != nil {
-		return fmt.Errorf("failed to complete message: %w", err)
+		var response *textproto.Error
+		knownRejection := errors.As(err, &response) && response.Code >= 400
+		return &DeliveryError{MayHaveBeenAccepted: !knownRejection, Err: fmt.Errorf("failed to complete message: %w", err)}
 	}
 
-	c.log.Info().
-		Str("from", from).
-		Int("recipients", len(to)).
-		Msg("Message sent successfully")
+	if !c.config.RedactMessageMetadata {
+		c.log.Info().Str("from", from).Int("recipients", len(to)).Msg("Message sent successfully")
+	}
 
 	return nil
 }

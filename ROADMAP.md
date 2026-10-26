@@ -25,6 +25,10 @@ Parser checkpoint: PR #33 (`74ed7ff`) integrates plain-text extraction, then sta
 - **Later options:** People grouping, correspondence attachment browsing, optional sender bundles, configurable columns/density, related searches and optional saved-view tabs. Track which defaults are recommendations in D-002; do not treat every inspiration feature as approved scope.
 - **Resource discipline:** keep header/flag sync, explicit body/attachment fetch, bounded extraction/caches, cancellation and incremental rendering. Respect explicit per-folder body-download preferences without eager attachment downloads or unlimited backfill.
 
+### Release-baseline checkpoint
+
+REL-001 restores the Send Later code already present in the remote v0.3.16 tag (`73ca27a`) onto current main in an isolated review branch. The tag and main had diverged; earlier statements that this code was never released were incomplete. Delivery/security/live-device gates remain open. The tagged message-focus shortcut change (`e30b37e`) touches Claude-owned EmailBody and is deferred until UX-008 integration; it must be reconciled before promoting a replacement release.
+
 ### Priorities
 
 1. **Scheduled send — critical.** Compose now, choose a delivery time, and have Postilaatikko send it reliably.

@@ -13,6 +13,10 @@ composer and scheduling controls, `App.svelte` pane selection, en/fi strings and
 generated Wails bindings. This restores the tagged implementation; it does not
 declare delivery/security/live-device gates passed.
 
+Bindings regeneration also requires constructing `appstate.UIState` in the
+UI-state save adapter: the generated class now has `convertValues` for pinned
+folders. This is a two-line adapter correction, without layout schema changes.
+
 No edits to ConversationViewer, EmailBody, ConversationTimeline or ConversationMessage.
 ConversationViewer props/events remain unchanged. UX-008 does not edit the composer
 or App according to Claude's published ownership note. If this assumption changes,

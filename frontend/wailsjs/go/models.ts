@@ -535,7 +535,6 @@ export namespace app {
 	        this.since = source["since"];
 	    }
 	}
-
 	export class LinkedAccountInfo {
 	    accountId: string;
 	    email: string;
@@ -807,6 +806,72 @@ export namespace app {
 		    return a;
 		}
 	}
+	export class ScheduleResult {
+	    job: scheduledsend.ClientJob;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ScheduleResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.job = this.convertValues(source["job"], scheduledsend.ClientJob);
+	        this.error = source["error"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class SendLaterSetup {
+	    config: scheduledsend.ClientConfig;
+	    clientKey: string;
+	    keyAvailable: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new SendLaterSetup(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.config = this.convertValues(source["config"], scheduledsend.ClientConfig);
+	        this.clientKey = source["clientKey"];
+	        this.keyAvailable = source["keyAvailable"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class SpamUndoResult {
 	    movedToSpam: boolean;
 	    operationId: string;
@@ -873,24 +938,24 @@ export namespace app {
 export namespace appstate {
 	
 	export class PinnedFolder {
-		    accountId: string;
-		    folderId: string;
-		    path: string;
-		    name: string;
-
-		    static createFrom(source: any = {}) {
-		        return new PinnedFolder(source);
-		    }
-
-		    constructor(source: any = {}) {
-		        if ('string' === typeof source) source = JSON.parse(source);
-		        this.accountId = source["accountId"];
-		        this.folderId = source["folderId"];
-		        this.path = source["path"];
-		        this.name = source["name"];
-		    }
-		}
-		export class UIState {
+	    accountId: string;
+	    folderId: string;
+	    path: string;
+	    name: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PinnedFolder(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.accountId = source["accountId"];
+	        this.folderId = source["folderId"];
+	        this.path = source["path"];
+	        this.name = source["name"];
+	    }
+	}
+	export class UIState {
 	    selectedAccountId: string;
 	    selectedFolderId: string;
 	    selectedFolderName: string;
@@ -928,11 +993,29 @@ export namespace appstate {
 	        this.expandedAccounts = source["expandedAccounts"];
 	        this.unifiedInboxExpanded = source["unifiedInboxExpanded"];
 	        this.collapsedFolders = source["collapsedFolders"];
-	        this.pinnedFolders = source["pinnedFolders"];
+	        this.pinnedFolders = this.convertValues(source["pinnedFolders"], PinnedFolder);
 	        this.sidebarOrder = source["sidebarOrder"];
 	        this.sidebarHidden = source["sidebarHidden"];
-		        this.activeExtension = source["activeExtension"];
+	        this.activeExtension = source["activeExtension"];
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }
@@ -2739,6 +2822,122 @@ export namespace replycontent {
 	        this.source = source["source"];
 	        this.fromCache = source["fromCache"];
 	        this.result = this.convertValues(source["result"], Result);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+
+}
+
+export namespace scheduledsend {
+	
+	export class ClientConfig {
+	    accountId: string;
+	    endpoint: string;
+	    helperKey: string;
+	    helperAccountId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ClientConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.accountId = source["accountId"];
+	        this.endpoint = source["endpoint"];
+	        this.helperKey = source["helperKey"];
+	        this.helperAccountId = source["helperAccountId"];
+	    }
+	}
+	export class ClientJob {
+	    id: string;
+	    accountId: string;
+	    draftId: string;
+	    revision: number;
+	    state: string;
+	    // Go type: time
+	    dueAt: any;
+	    code: string;
+	    // Go type: time
+	    updatedAt: any;
+	    subject?: string;
+	    from?: string;
+	    to?: string;
+	    toCount?: number;
+	    draftCleanup: string;
+	    previewAvailable: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ClientJob(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.accountId = source["accountId"];
+	        this.draftId = source["draftId"];
+	        this.revision = source["revision"];
+	        this.state = source["state"];
+	        this.dueAt = this.convertValues(source["dueAt"], null);
+	        this.code = source["code"];
+	        this.updatedAt = this.convertValues(source["updatedAt"], null);
+	        this.subject = source["subject"];
+	        this.from = source["from"];
+	        this.to = source["to"];
+	        this.toCount = source["toCount"];
+	        this.draftCleanup = source["draftCleanup"];
+	        this.previewAvailable = source["previewAvailable"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ClientPage {
+	    jobs: ClientJob[];
+	    total: number;
+	    keyAvailable: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ClientPage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.jobs = this.convertValues(source["jobs"], ClientJob);
+	        this.total = source["total"];
+	        this.keyAvailable = source["keyAvailable"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
