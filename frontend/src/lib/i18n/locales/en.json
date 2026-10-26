@@ -36,6 +36,18 @@
     "saveChanges": "Save Changes",
     "none": "None"
   },
+  "sidebarLayout": {
+    "title": "Sidebar sections",
+    "help": "Choose which sections appear in the sidebar and in what order. Hidden sections can be shown again here.",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "reset": "Reset sidebar layout",
+    "blocks": {
+      "unified": "Unified inbox",
+      "virtual": "Virtual folders",
+      "primary": "Special folders"
+    }
+  },
   "sidebar": {
     "compose": "Compose",
     "inbox": "Inbox",

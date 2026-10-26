@@ -25,6 +25,8 @@
   import { virtualFoldersStore } from '$lib/stores/virtualFolders.svelte'
   import { sidebarPins } from '$lib/stores/sidebarPins.svelte'
   import type { PinnedFolder } from '$lib/sidebar/pins'
+  import { sidebarLayout } from '$lib/stores/sidebarLayout.svelte'
+  import type { SidebarBlock } from '$lib/sidebar/layout'
   import type { virtualfolder } from '../../../../wailsjs/go/models'
 
   // Folder item type for flat navigation list
@@ -192,7 +194,14 @@
   $effect(() => {
     void getUIStateVersion()
     sidebarPins.sync()
+    sidebarLayout.sync()
   })
+
+  // CSS order of a sidebar block. Home has no order and sorts first; blocks
+  // follow in the saved order, and the bottom controls are pinned to the end.
+  function blockOrder(block: SidebarBlock): number {
+    return sidebarLayout.position(block) + 1
+  }
 
   // Opens a pinned folder. Its type comes from the loaded folder tree so special
   // folders keep their behavior; a folder that has gone missing opens as a plain folder.
@@ -728,6 +737,7 @@
           <span data-sidebar-label>{$_('sidebar.home')}</span>
         </button>
 
+        {#if sidebarLayout.isVisible('unified')}
         <UnifiedInboxSection
           accounts={getAccountsWithInbox()}
           {selectedAccountId}
@@ -736,10 +746,12 @@
           {collapsed}
           onSelectUnified={handleUnifiedInboxSelect}
           onSelectAccountInbox={handleAccountInboxSelect}
+          order={blockOrder('unified')}
         />
+        {/if}
 
-        {#if sidebarPins.list.length > 0}
-          <section class="mt-3" aria-label={$_('sidebar.pinned')}>
+        {#if sidebarLayout.isVisible('pinned') && sidebarPins.list.length > 0}
+          <section class="mt-3" style:order={blockOrder('pinned')} aria-label={$_('sidebar.pinned')}>
             <div class="px-3 py-1">
               <span class="sidebar-primary-heading" data-sidebar-label>{$_('sidebar.pinned')}</span>
             </div>
@@ -771,7 +783,8 @@
           </section>
         {/if}
 
-        <section class="mt-3" aria-label="Virtual folders">
+        {#if sidebarLayout.isVisible('virtual')}
+        <section class="mt-3" style:order={blockOrder('virtual')} aria-label="Virtual folders">
           <div class="flex items-center justify-between px-3 py-1">
             <span class="sidebar-primary-heading">Virtual folders</span>
             <button type="button" class="sidebar-toolbar-button" onclick={() => openVirtualFolderDialog()} title="Create virtual folder" aria-label="Create virtual folder">
@@ -802,15 +815,19 @@
             </div>
           {/each}
         </section>
+        {/if}
 
-        <button type="button" class="sidebar-primary-link" onclick={() => setActiveExtension('calendar')}>
+        {#if sidebarLayout.isVisible('calendar')}
+        <button type="button" class="sidebar-primary-link" style:order={blockOrder('calendar')} onclick={() => setActiveExtension('calendar')}>
           <Icon icon="mdi:calendar-blank-outline" class="h-6 w-6" />
           <span data-sidebar-label>{$_('sidebar.calendar')}</span>
         </button>
+        {/if}
 
-        <div class="sidebar-primary-separator"></div>
+        {#if sidebarLayout.isVisible('primary')}
+        <div class="sidebar-primary-separator" style:order={blockOrder('primary')}></div>
         {#each primaryFolders as item (item.type)}
-          <div class="sidebar-folder-group">
+          <div class="sidebar-folder-group" style:order={blockOrder('primary')}>
             <div class="sidebar-folder-group-row">
               <button type="button" class="sidebar-folder-toggle" class:sidebar-folder-toggle-expanded={expandedFolderGroups[item.type]} onclick={(event) => toggleFolderGroup(event, item.type)} aria-label={$_(item.label)} aria-expanded={expandedFolderGroups[item.type] ?? false}>
                 <Icon icon={expandedFolderGroups[item.type] ? 'mdi:chevron-down' : 'mdi:chevron-right'} class="h-4 w-4" />
@@ -833,11 +850,12 @@
             {/if}
           </div>
         {/each}
+        {/if}
 
-        {#if !collapsed}
-          <p class="sidebar-primary-heading" data-sidebar-label>{$_('sidebar.folders')}</p>
+        {#if !collapsed && sidebarLayout.isVisible('secondary')}
+          <p class="sidebar-primary-heading" style:order={blockOrder('secondary')} data-sidebar-label>{$_('sidebar.folders')}</p>
           {#each secondaryFolders as item (item.type)}
-            <div class="sidebar-folder-group sidebar-secondary-folder-group">
+            <div class="sidebar-folder-group sidebar-secondary-folder-group" style:order={blockOrder('secondary')}>
               <div class="sidebar-folder-group-row">
                 <button type="button" class="sidebar-folder-toggle" class:sidebar-folder-toggle-expanded={expandedFolderGroups[item.type]} onclick={(event) => toggleFolderGroup(event, item.type)} aria-label={$_(item.label)} aria-expanded={expandedFolderGroups[item.type] ?? false}>
                   <Icon icon={expandedFolderGroups[item.type] ? 'mdi:chevron-down' : 'mdi:chevron-right'} class="h-4 w-4" />
@@ -862,11 +880,11 @@
           {/each}
         {/if}
 
-        <button type="button" class="sidebar-more-button" onclick={openAllFolders} aria-expanded={showAllFolders}>
+        <button type="button" class="sidebar-more-button" style:order="100" onclick={openAllFolders} aria-expanded={showAllFolders}>
           <Icon icon="mdi:folder-multiple-outline" class="h-6 w-6" />
           <span data-sidebar-label>{$_('sidebar.allFolders')}</span>
         </button>
-        <button type="button" class="sidebar-collapse-nav-button" onclick={onToggleCollapsed} title={collapsed ? $_('sidebar.expand') : $_('sidebar.collapse')} aria-label={collapsed ? $_('sidebar.expand') : $_('sidebar.collapse')}>
+        <button type="button" class="sidebar-collapse-nav-button" style:order="100" onclick={onToggleCollapsed} title={collapsed ? $_('sidebar.expand') : $_('sidebar.collapse')} aria-label={collapsed ? $_('sidebar.expand') : $_('sidebar.collapse')}>
           <Icon icon={collapsed ? 'mdi:chevron-double-right' : 'mdi:chevron-double-left'} class="h-5 w-5" />
           <span data-sidebar-label>{collapsed ? $_('sidebar.expand') : $_('sidebar.collapse')}</span>
         </button>

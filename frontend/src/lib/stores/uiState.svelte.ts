@@ -6,6 +6,7 @@ import { GetUIState, SaveUIState } from '../../../wailsjs/go/app/App'
 // @ts-ignore - wailsjs bindings
 import { appstate } from '../../../wailsjs/go/models'
 import { normalizePins, type PinnedFolder } from '../sidebar/pins'
+import { normalizeLayout, type SidebarLayout } from '../sidebar/layout'
 
 export interface UIState {
   selectedAccountId: string | null
@@ -24,6 +25,8 @@ export interface UIState {
   collapsedFolders: Record<string, boolean>  // folderId -> isCollapsed (default: true/collapsed, false = explicitly expanded)
   // Folders pinned to the sidebar, in pin order (see lib/sidebar/pins.ts)
   pinnedFolders: PinnedFolder[]
+  // Order and hidden blocks of the sidebar (see lib/sidebar/layout.ts)
+  sidebarLayout: SidebarLayout
   // Active extension pane: 'mail' (default) or an extension id like 'contacts'.
   activeExtension: string
 }
@@ -51,6 +54,7 @@ const defaultState: UIState = {
   unifiedInboxExpanded: true,
   collapsedFolders: {},
   pinnedFolders: [],
+  sidebarLayout: normalizeLayout(undefined, undefined),
   activeExtension: 'mail',
 }
 
@@ -99,6 +103,7 @@ export async function loadUIState(): Promise<UIState> {
         unifiedInboxExpanded: state.unifiedInboxExpanded !== false, // default true
         collapsedFolders: state.collapsedFolders || {},
         pinnedFolders: normalizePins(state.pinnedFolders),
+        sidebarLayout: normalizeLayout(state.sidebarOrder, state.sidebarHidden),
         activeExtension: state.activeExtension || 'mail',
       }
       sidebarWidthState = currentState.sidebarWidth
@@ -163,6 +168,8 @@ export function saveUIState(updates: Partial<UIState>): void {
         unifiedInboxExpanded: currentState.unifiedInboxExpanded,
         collapsedFolders: currentState.collapsedFolders,
         pinnedFolders: currentState.pinnedFolders,
+        sidebarOrder: currentState.sidebarLayout.order,
+        sidebarHidden: currentState.sidebarLayout.hidden,
         activeExtension: currentState.activeExtension,
       }
       await SaveUIState(backendState)
@@ -230,6 +237,15 @@ export function getPinnedFolders(): PinnedFolder[] {
 
 export function setPinnedFolders(pins: PinnedFolder[]): void {
   saveUIState({ pinnedFolders: pins })
+}
+
+// Sidebar block order and visibility. Like the pins, the layout is replaced whole.
+export function getSidebarLayout(): SidebarLayout {
+  return currentState.sidebarLayout
+}
+
+export function setSidebarLayout(layout: SidebarLayout): void {
+  saveUIState({ sidebarLayout: layout })
 }
 
 // Get current state (synchronous)

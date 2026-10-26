@@ -21,6 +21,8 @@
     onSelectUnified: () => void
     onSelectAccountInbox: (accountId: string, folderId: string, folderPath: string) => void
     collapsed?: boolean
+    // CSS order of the section within the sidebar column (P-008)
+    order?: number
   }
 
   let {
@@ -31,6 +33,7 @@
     onSelectUnified,
     onSelectAccountInbox,
     collapsed = false,
+    order,
   }: Props = $props()
 
   // Initialize from persisted state (defaults to true)
@@ -70,7 +73,7 @@
 
 </script>
 
-<div class="sidebar-unified-section">
+<div class="sidebar-unified-section" style:order={order}>
   {#if collapsed}
     <!-- A separate rail button avoids squeezing the expanded inbox controls
          (chevron, label and count) into a single icon cell. -->

@@ -62,3 +62,46 @@ func TestUIStatePinnedFoldersOmittedWhenEmpty(t *testing.T) {
 		t.Fatalf("pinnedFolders written for empty state: %s", data)
 	}
 }
+
+// TestUIStateSidebarLayout checks that the sidebar block order and hidden set
+// round-trip, and that an unset layout is not written, so older builds see no change.
+func TestUIStateSidebarLayout(t *testing.T) {
+	tests := []struct {
+		name       string
+		state      UIState
+		wantOrder  []string
+		wantHidden []string
+	}{
+		{
+			name:       "legacy state without layout fields loads with none",
+			state:      UIState{},
+			wantOrder:  nil,
+			wantHidden: nil,
+		},
+		{
+			name:       "custom order and hidden blocks round-trip",
+			state:      UIState{SidebarOrder: []string{"calendar", "unified"}, SidebarHidden: []string{"virtual"}},
+			wantOrder:  []string{"calendar", "unified"},
+			wantHidden: []string{"virtual"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := json.Marshal(tt.state)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			var got UIState
+			if err := json.Unmarshal(data, &got); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if !reflect.DeepEqual(got.SidebarOrder, tt.wantOrder) {
+				t.Fatalf("SidebarOrder = %#v, want %#v (json %s)", got.SidebarOrder, tt.wantOrder, data)
+			}
+			if !reflect.DeepEqual(got.SidebarHidden, tt.wantHidden) {
+				t.Fatalf("SidebarHidden = %#v, want %#v (json %s)", got.SidebarHidden, tt.wantHidden, data)
+			}
+		})
+	}
+}

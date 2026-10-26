@@ -36,6 +36,18 @@
     "saveChanges": "Tallenna muutokset",
     "none": "Ei mitään"
   },
+  "sidebarLayout": {
+    "title": "Sivupalkin osiot",
+    "help": "Valitse, mitkä osiot näkyvät sivupalkissa ja missä järjestyksessä. Piilotetut osiot saa takaisin täältä.",
+    "moveUp": "Siirrä ylös",
+    "moveDown": "Siirrä alas",
+    "reset": "Palauta sivupalkin asettelu",
+    "blocks": {
+      "unified": "Yhteinen saapuneet",
+      "virtual": "Virtuaalikansiot",
+      "primary": "Erikoiskansiot"
+    }
+  },
   "sidebar": {
     "compose": "Kirjoita",
     "inbox": "Saapuneet",
