@@ -7,6 +7,7 @@
   import DeleteAccountDialog from '$lib/components/settings/DeleteAccountDialog.svelte'
   import SettingsDialog from '$lib/components/settings/SettingsDialog.svelte'
   import VirtualFolderDialog from './VirtualFolderDialog.svelte'
+  import ConfirmDialog from '$lib/components/ui/confirm-dialog/ConfirmDialog.svelte'
   import { Button } from '$lib/components/ui/button'
   import Avatar from '$lib/components/kit/Avatar.svelte'
   import { accountStore } from '$lib/stores/accounts.svelte'
@@ -157,6 +158,8 @@
   let showAllFolders = $state(false)
   let showVirtualFolderDialog = $state(false)
   let editingVirtualFolder = $state<virtualfolder.VirtualFolder | null>(null)
+  let showDeleteVirtualFolderDialog = $state(false)
+  let deletingVirtualFolder = $state<virtualfolder.VirtualFolder | null>(null)
   let expandedFolderGroups = $state<Record<string, boolean>>({})
   // Presets use the saved expanded width as their durable value. This keeps
   // manual resizing and the Settings selector in one source of truth.
@@ -233,8 +236,18 @@
     showVirtualFolderDialog = true
   }
 
-  async function deleteVirtualFolder(item: virtualfolder.VirtualFolder) {
-    if (!window.confirm(`Delete virtual folder “${item.name}”?`)) return
+  // Asks in the app's own dialog. The browser's native confirm dialog returns
+  // false in the macOS webview (Wails does not provide the JavaScript confirm
+  // panel), which made every delete silently do nothing.
+  function requestDeleteVirtualFolder(item: virtualfolder.VirtualFolder) {
+    deletingVirtualFolder = item
+    showDeleteVirtualFolderDialog = true
+  }
+
+  async function confirmDeleteVirtualFolder() {
+    const item = deletingVirtualFolder
+    deletingVirtualFolder = null
+    if (!item) return
     try {
       await virtualFoldersStore.remove(item.id)
       if (selectedAccountId === 'virtual' && selectedFolderId === item.id) onUnifiedInboxSelect?.()
@@ -800,16 +813,16 @@
                   <span class="ml-auto text-xs tabular-nums text-muted-foreground">{virtualFoldersStore.unreadCounts[item.id]}</span>
                 {/if}
               </button>
-              <button type="button" class="hidden h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-muted group-hover:flex" onclick={() => openVirtualFolderDialog(item)} aria-label={`Edit ${item.name}`} title="Edit">
+              <button type="button" class="flex h-7 w-7 shrink-0 items-center justify-center rounded opacity-0 hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100" onclick={() => openVirtualFolderDialog(item)} aria-label={`Edit ${item.name}`} title="Edit">
                 <Icon icon="mdi:pencil-outline" class="h-4 w-4" />
               </button>
-              <button type="button" class="hidden h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-muted group-hover:flex disabled:opacity-40" onclick={() => void virtualFoldersStore.move(item.id, -1)} disabled={index === 0} aria-label={`Move ${item.name} up`} title="Move up">
+              <button type="button" class="flex h-7 w-7 shrink-0 items-center justify-center rounded opacity-0 hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-40" onclick={() => void virtualFoldersStore.move(item.id, -1)} disabled={index === 0} aria-label={`Move ${item.name} up`} title="Move up">
                 <Icon icon="mdi:chevron-up" class="h-4 w-4" />
               </button>
-              <button type="button" class="hidden h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-muted group-hover:flex disabled:opacity-40" onclick={() => void virtualFoldersStore.move(item.id, 1)} disabled={index === virtualFoldersStore.folders.length - 1} aria-label={`Move ${item.name} down`} title="Move down">
+              <button type="button" class="flex h-7 w-7 shrink-0 items-center justify-center rounded opacity-0 hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-40" onclick={() => void virtualFoldersStore.move(item.id, 1)} disabled={index === virtualFoldersStore.folders.length - 1} aria-label={`Move ${item.name} down`} title="Move down">
                 <Icon icon="mdi:chevron-down" class="h-4 w-4" />
               </button>
-              <button type="button" class="hidden h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-muted group-hover:flex" onclick={() => void deleteVirtualFolder(item)} aria-label={`Delete ${item.name}`} title="Delete">
+              <button type="button" class="flex h-7 w-7 shrink-0 items-center justify-center rounded opacity-0 hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100" onclick={() => requestDeleteVirtualFolder(item)} aria-label={`Delete ${item.name}`} title="Delete">
                 <Icon icon="mdi:delete-outline" class="h-4 w-4" />
               </button>
             </div>
@@ -1005,6 +1018,16 @@
   virtualFolder={editingVirtualFolder}
   accounts={accountStore.accounts}
   onSave={(value) => virtualFoldersStore.save(value as virtualfolder.VirtualFolder)}
+/>
+
+<ConfirmDialog
+  bind:open={showDeleteVirtualFolderDialog}
+  title={$_('sidebar.deleteVirtualFolderTitle')}
+  description={$_('sidebar.deleteVirtualFolderDescription', { values: { name: deletingVirtualFolder?.name ?? '' } })}
+  confirmLabel={$_('common.delete')}
+  variant="destructive"
+  onConfirm={() => void confirmDeleteVirtualFolder()}
+  onCancel={() => { deletingVirtualFolder = null }}
 />
 
 <svelte:window onkeydown={(e) => {
