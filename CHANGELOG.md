@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## [Unreleased]
+
+- Added pinned folders: right-click any folder (or the unified inbox account row) and choose Pin to sidebar. Pinned folders appear in a Pinned section for one-click access, across accounts, and stay pinned after restart.
+- The sidebar's More button is now labelled All folders, since it opens the full folder browser.
+
 ## Postilaatikko — v0.3.15
 
 - Account settings now show whether a Gmail account is using the Gmail API (in use, unavailable, sign in again, or not used), and the log records when it starts working or falls back to IMAP.

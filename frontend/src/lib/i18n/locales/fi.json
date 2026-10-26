@@ -74,6 +74,7 @@
     "snoozed": "Lykätyt",
     "more": "Lisää",
     "allFolders": "Kaikki kansiot",
+    "pinned": "Kiinnitetyt",
     "folders": "Kansiot",
     "returnToMail": "Takaisin sähköpostiin",
     "newVirtualFolder": "Uusi virtuaalikansio",
@@ -376,6 +377,8 @@
     "markAsUnread": "Merkitse lukemattomaksi",
     "markAllAsRead": "Merkitse kaikki luetuiksi",
     "markAllAsUnread": "Merkitse kaikki lukemattomiksi",
+    "pinToSidebar": "Kiinnitä sivupalkkiin",
+    "unpinFromSidebar": "Poista kiinnitys sivupalkista",
     "noFoldersAvailable": "Ei kansioita saatavilla",
     "searchFolders": "Etsi kansioita...",
     "account": "Tili"

@@ -160,7 +160,7 @@
 </script>
 
 {#if tree.folder}
-  <FolderContextMenu folderId={tree.folder.id}>
+  <FolderContextMenu folderId={tree.folder.id} {accountId} folder={tree.folder}>
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       class="w-full flex items-center rounded-md transition-colors {isFolderSelected(tree.folder.id)

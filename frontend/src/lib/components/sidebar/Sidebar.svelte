@@ -23,6 +23,8 @@
   // @ts-ignore - wailsjs path
   import { getSidebarWidth } from '$lib/stores/uiState.svelte'
   import { virtualFoldersStore } from '$lib/stores/virtualFolders.svelte'
+  import { sidebarPins } from '$lib/stores/sidebarPins.svelte'
+  import type { PinnedFolder } from '$lib/sidebar/pins'
   import type { virtualfolder } from '../../../../wailsjs/go/models'
 
   // Folder item type for flat navigation list
@@ -185,6 +187,33 @@
     contactSourcesStore.load()
     void virtualFoldersStore.load()
   })
+
+  // Pins are loaded with the UI state, which can finish after this sidebar mounts.
+  $effect(() => {
+    void getUIStateVersion()
+    sidebarPins.sync()
+  })
+
+  // Opens a pinned folder. Its type comes from the loaded folder tree so special
+  // folders keep their behavior; a folder that has gone missing opens as a plain folder.
+  function selectPinnedFolder(pin: PinnedFolder) {
+    const account = accountStore.accounts.find(item => item.account?.id === pin.accountId)
+    const found = account ? findFolderById(account.folders || [], pin.folderId) : null
+    handleFolderSelect(pin.accountId, pin.folderId, pin.path, pin.name, found?.type || 'folder')
+  }
+
+  function findFolderById(trees: folder.FolderTree[], id: string): folder.Folder | null {
+    for (const tree of trees) {
+      if (tree.folder?.id === id) return tree.folder
+      const child = findFolderById(tree.children || [], id)
+      if (child) return child
+    }
+    return null
+  }
+
+  function isPinnedSelected(pin: PinnedFolder): boolean {
+    return selectionSource === 'account' && selectedFolderId === pin.folderId && selectedAccountId === pin.accountId
+  }
 
   function selectVirtualFolder(item: virtualfolder.VirtualFolder) {
     onFolderSelect?.('virtual', item.id, '', item.name, 'virtual')
@@ -709,6 +738,39 @@
           onSelectAccountInbox={handleAccountInboxSelect}
         />
 
+        {#if sidebarPins.list.length > 0}
+          <section class="mt-3" aria-label={$_('sidebar.pinned')}>
+            <div class="px-3 py-1">
+              <span class="sidebar-primary-heading" data-sidebar-label>{$_('sidebar.pinned')}</span>
+            </div>
+            {#each sidebarPins.list as pin (`${pin.accountId}:${pin.folderId}`)}
+              <div class="group flex min-h-9 items-center gap-1 px-2">
+                <button
+                  type="button"
+                  class="sidebar-primary-link min-w-0 flex-1 {isPinnedSelected(pin) ? 'sidebar-primary-link-selected' : ''}"
+                  onclick={() => selectPinnedFolder(pin)}
+                  title={pin.name}
+                  data-sidebar-pinned-folder
+                >
+                  <Icon icon="mdi:folder-outline" class="h-5 w-5 shrink-0" />
+                  <span data-sidebar-label class="truncate">{pin.name}</span>
+                </button>
+                {#if !collapsed}
+                  <button
+                    type="button"
+                    class="flex h-7 w-7 shrink-0 items-center justify-center rounded opacity-0 hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100"
+                    onclick={() => sidebarPins.unpin(pin.accountId, pin.folderId)}
+                    aria-label={`${$_('contextMenu.unpinFromSidebar')}: ${pin.name}`}
+                    title={$_('contextMenu.unpinFromSidebar')}
+                  >
+                    <Icon icon="mdi:pin-off-outline" class="h-4 w-4" />
+                  </button>
+                {/if}
+              </div>
+            {/each}
+          </section>
+        {/if}
+
         <section class="mt-3" aria-label="Virtual folders">
           <div class="flex items-center justify-between px-3 py-1">
             <span class="sidebar-primary-heading">Virtual folders</span>
@@ -800,9 +862,9 @@
           {/each}
         {/if}
 
-        <button type="button" class="sidebar-more-button" onclick={openAllFolders}>
-          <Icon icon="mdi:dots-horizontal" class="h-6 w-6" />
-          <span data-sidebar-label>{$_('sidebar.more')}</span>
+        <button type="button" class="sidebar-more-button" onclick={openAllFolders} aria-expanded={showAllFolders}>
+          <Icon icon="mdi:folder-multiple-outline" class="h-6 w-6" />
+          <span data-sidebar-label>{$_('sidebar.allFolders')}</span>
         </button>
         <button type="button" class="sidebar-collapse-nav-button" onclick={onToggleCollapsed} title={collapsed ? $_('sidebar.expand') : $_('sidebar.collapse')} aria-label={collapsed ? $_('sidebar.expand') : $_('sidebar.collapse')}>
           <Icon icon={collapsed ? 'mdi:chevron-double-right' : 'mdi:chevron-double-left'} class="h-5 w-5" />

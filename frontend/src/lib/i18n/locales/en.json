@@ -74,6 +74,7 @@
     "snoozed": "Snoozed",
     "more": "More",
     "allFolders": "All folders",
+    "pinned": "Pinned",
     "folders": "Folders",
     "returnToMail": "Back to Mail",
     "newVirtualFolder": "New virtual folder",
@@ -376,6 +377,8 @@
     "markAsUnread": "Mark as Unread",
     "markAllAsRead": "Mark All as Read",
     "markAllAsUnread": "Mark All as Unread",
+    "pinToSidebar": "Pin to sidebar",
+    "unpinFromSidebar": "Unpin from sidebar",
     "noFoldersAvailable": "No folders available",
     "searchFolders": "Search folders...",
     "account": "Account"
