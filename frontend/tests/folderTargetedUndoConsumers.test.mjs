@@ -203,6 +203,6 @@ test('FolderContextMenu read-state actions stay non-undoable and callbacks do no
   assert.doesNotMatch(menuSource, /\bUndo\s*\(/)
   assert.doesNotMatch(menuSource, /UndoOperation/)
   assert.doesNotMatch(menuSource, /common\.undo/)
-  assert.match(treeSource, /<FolderContextMenu folderId=\{tree\.folder\.id\}>/)
+  assert.match(treeSource, /<FolderContextMenu folderId=\{tree\.folder\.id\}[^>]*>/)
   assert.equal((extractFunction(treeSource, 'handleDrop').match(/onMessagesMoved\?\.\(\)/g) ?? []).length, 1)
 })

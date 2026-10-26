@@ -5,6 +5,7 @@
 import { GetUIState, SaveUIState } from '../../../wailsjs/go/app/App'
 // @ts-ignore - wailsjs bindings
 import { appstate } from '../../../wailsjs/go/models'
+import { normalizePins, type PinnedFolder } from '../sidebar/pins'
 
 export interface UIState {
   selectedAccountId: string | null
@@ -21,6 +22,8 @@ export interface UIState {
   expandedAccounts: Record<string, boolean>  // accountId -> isExpanded (default: true)
   unifiedInboxExpanded: boolean              // Unified Inbox section (default: true)
   collapsedFolders: Record<string, boolean>  // folderId -> isCollapsed (default: true/collapsed, false = explicitly expanded)
+  // Folders pinned to the sidebar, in pin order (see lib/sidebar/pins.ts)
+  pinnedFolders: PinnedFolder[]
   // Active extension pane: 'mail' (default) or an extension id like 'contacts'.
   activeExtension: string
 }
@@ -47,6 +50,7 @@ const defaultState: UIState = {
   expandedAccounts: {},
   unifiedInboxExpanded: true,
   collapsedFolders: {},
+  pinnedFolders: [],
   activeExtension: 'mail',
 }
 
@@ -94,6 +98,7 @@ export async function loadUIState(): Promise<UIState> {
         expandedAccounts: state.expandedAccounts || {},
         unifiedInboxExpanded: state.unifiedInboxExpanded !== false, // default true
         collapsedFolders: state.collapsedFolders || {},
+        pinnedFolders: normalizePins(state.pinnedFolders),
         activeExtension: state.activeExtension || 'mail',
       }
       sidebarWidthState = currentState.sidebarWidth
@@ -157,6 +162,7 @@ export function saveUIState(updates: Partial<UIState>): void {
         expandedAccounts: currentState.expandedAccounts,
         unifiedInboxExpanded: currentState.unifiedInboxExpanded,
         collapsedFolders: currentState.collapsedFolders,
+        pinnedFolders: currentState.pinnedFolders,
         activeExtension: currentState.activeExtension,
       }
       await SaveUIState(backendState)
@@ -214,6 +220,16 @@ export function isFolderCollapsed(folderId: string): boolean {
 export function setFolderCollapsed(folderId: string, collapsed: boolean): void {
   const newCollapsedFolders = { ...currentState.collapsedFolders, [folderId]: collapsed }
   saveUIState({ collapsedFolders: newCollapsedFolders })
+}
+
+// Folders pinned to the sidebar. The list is replaced as a whole so the
+// persisted state always matches what the sidebar shows.
+export function getPinnedFolders(): PinnedFolder[] {
+  return currentState.pinnedFolders
+}
+
+export function setPinnedFolders(pins: PinnedFolder[]): void {
+  saveUIState({ pinnedFolders: pins })
 }
 
 // Get current state (synchronous)

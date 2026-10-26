@@ -23,8 +23,22 @@ type UIState struct {
 	UnifiedInboxExpanded bool            `json:"unifiedInboxExpanded"` // Unified Inbox section (default: true)
 	CollapsedFolders     map[string]bool `json:"collapsedFolders"`     // folderID -> isCollapsed (default: false/absent)
 
+	// Folders pinned to the sidebar for one-click access, in pin order. An
+	// account and folder pair identifies a pin, so folders from different
+	// accounts can be pinned side by side.
+	PinnedFolders []PinnedFolder `json:"pinnedFolders,omitempty"`
+
 	// Active extension pane: "mail" (default) or an extension id like "contacts".
 	// The frontend uses this to decide whether to render Mail or an extension's
 	// pane after the rail is shown. Missing field -> Mail.
 	ActiveExtension string `json:"activeExtension,omitempty"`
+}
+
+// PinnedFolder is a folder the user pinned to the sidebar. Name and Path are
+// kept so the pin can be shown and opened without loading the folder tree.
+type PinnedFolder struct {
+	AccountID string `json:"accountId"`
+	FolderID  string `json:"folderId"`
+	Path      string `json:"path"`
+	Name      string `json:"name"`
 }

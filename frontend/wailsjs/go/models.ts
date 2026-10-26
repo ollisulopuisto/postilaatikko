@@ -872,7 +872,25 @@ export namespace app {
 
 export namespace appstate {
 	
-	export class UIState {
+	export class PinnedFolder {
+		    accountId: string;
+		    folderId: string;
+		    path: string;
+		    name: string;
+
+		    static createFrom(source: any = {}) {
+		        return new PinnedFolder(source);
+		    }
+
+		    constructor(source: any = {}) {
+		        if ('string' === typeof source) source = JSON.parse(source);
+		        this.accountId = source["accountId"];
+		        this.folderId = source["folderId"];
+		        this.path = source["path"];
+		        this.name = source["name"];
+		    }
+		}
+		export class UIState {
 	    selectedAccountId: string;
 	    selectedFolderId: string;
 	    selectedFolderName: string;
@@ -886,6 +904,7 @@ export namespace appstate {
 	    expandedAccounts: Record<string, boolean>;
 	    unifiedInboxExpanded: boolean;
 	    collapsedFolders: Record<string, boolean>;
+	    pinnedFolders?: PinnedFolder[];
 	    activeExtension?: string;
 	
 	    static createFrom(source: any = {}) {
@@ -907,7 +926,8 @@ export namespace appstate {
 	        this.expandedAccounts = source["expandedAccounts"];
 	        this.unifiedInboxExpanded = source["unifiedInboxExpanded"];
 	        this.collapsedFolders = source["collapsedFolders"];
-	        this.activeExtension = source["activeExtension"];
+	        this.pinnedFolders = source["pinnedFolders"];
+		        this.activeExtension = source["activeExtension"];
 	    }
 	}
 
