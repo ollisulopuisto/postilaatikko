@@ -8,10 +8,12 @@
 
 **Tech stack:** Go 1.26, Wails v2, Svelte 5/TypeScript, SQLite, existing Go HTML/sanitization libraries, existing IMAP/Gmail integrations, existing draft/identity services. Choose any additional MCP dependency only in its adapter task after checking maintenance and compatibility.
 
-**Status:** User-approved plan consolidated on 2026-10-26. UX-002 is integrated in PR #29 and UX-004 in PR #30; current claims and integration state are in TASKS.md and docs/coordination/DISPATCH.md.
+**Status:** User-approved plan consolidated on 2026-10-26. UX-002/004/005/006 are integrated in PRs #29/#30/#33/#34. UX-007 is reserved for Claude; current claims and integration state are in TASKS.md and docs/coordination/DISPATCH.md.
 **Surveyed base:** Freshly fetched `origin/main` at `8a7a2a8`. This plan does not assert that task-branch work is merged, installed or released.
 
 **Synchronization checkpoint:** PR #29 merged as `d3490b1` (source `d11dfaf`). Use [the accepted view contract](../api/view-contract.md), `internal/views/model.go` and `frontend/src/lib/views/` as the shared foundation. PR #30 (`664f630`) integrates UX-004's accepted `internal/email/replycontent/model.go` schema and 22 fixtures, unblocking UX-005/006 after claim checks. PR #31 (`29da972`) adds the coordination protocol. PR #32 (`2191cb8`) integrates date normalization/NULL-subject fixes; UX-001 remains in Review for live-device and remaining header-refresh/exclude-mode work. UX-016 and UX-019 are available after the integrated UX-002 contract.
+
+**Parser integration checkpoint:** PR #33 merged first as `74ed7ff`, followed by stacked PR #34 as `7436026`. The accepted APIs are `replycontent.ExtractPlain(body) Result` and `replycontent.ExtractHTML(body) Result`; use their merged schema, warnings and fixtures. UX-006 has a real shared-helper dependency on UX-005. UX-007's service/cache dependencies are now UX-002/005/006: it processes existing bodies and explicitly fetches through the current body service, without depending on unresolved virtual-folder refresh UI or live mailbox checks. Those UX-001 gates remain in force for their own work and release verification.
 
 ---
 
@@ -220,7 +222,7 @@ Run lint on changed sources using the repository configuration. `npm run check` 
 ## 8. Delivery sequence and safe parallelism
 
 - **First checkpoint:** UX-001 identifies and verifies the actual virtual-folder build. UX-002 can specify contracts independently.
-- **Backend before presentation:** UX-003 query behavior and UX-004→UX-005/UX-006→UX-007 extraction precede their dependent UI.
+- **Backend before presentation:** UX-003 query behavior and UX-004→UX-005→UX-006→UX-007 extraction precede their dependent UI. The parser order reflects the now-merged shared helpers.
 - **Navigation lane:** UX-010→UX-011→UX-012→UX-013→UX-014. UX-015 then completes existing Focus behavior.
 - **Actions/compose lane:** UX-016→UX-017 and UX-018; reuse P-029/P-030 and current draft behavior.
 - **API lane:** UX-019 design follows UX-002, then UX-020 transport, UX-021 reads, UX-022 mail actions, UX-037 draft/send operations, UX-038 view/layout operations, UX-023 CLI and UX-024 MCP. UX-039 scheduling waits on integrated P-011. API contract design is early even though read implementation awaits extraction.
@@ -228,7 +230,7 @@ Run lint on changed sources using the repository configuration. `npm run check` 
 - **Folder content policy:** UX-040 backend policy follows UX-001/002; UX-041 adds its UI after the drawer is integrated. This is a separate requested feature; it does not hold the virtual-folder repair or core reader release hostage.
 - **Later:** UX-025→UX-026→UX-027 Reply Later sessions, UX-028 related searches, UX-029 keyboard customization, UX-030→UX-031 People, UX-032 attachments, UX-033 columns and UX-034 bundles. UX-029 remains a core release dependency; its implementation can run as soon as its UI dependencies are ready.
 
-Current implementation pickups: UX-002/004 are integrated. UX-005 plain-text and UX-006 HTML extraction are dependency-ready after the dispatch lane/remote claim check; do not launch extra agents without authorization. UX-016 action targets and UX-019 API design can proceed on separate files/worktrees. UX-001's date repair is integrated but its remaining live/refresh gate is not waived. Do not recreate either accepted schema from earlier illustrative examples.
+Current implementation pickups: UX-002/004/005/006 are integrated; UX-007 service/cache is reserved for Claude. UX-016 action targets and UX-019 API design can proceed on separate files/worktrees after the dispatch/claim check. UX-001's date repair is integrated but its remaining live/refresh gate is not waived. Do not recreate accepted schemas from earlier illustrative examples or launch additional agents without authorization.
 
 **File ownership boundaries:** One integrator owns `frontend/src/App.svelte` and `Sidebar.svelte` sequencing. Navigation tasks sharing those files run sequentially. Viewer timeline, toggle, action buttons, focus and inline reply also need sequential integration when they touch `ConversationViewer.svelte`. UX-018 and UX-037 share draft/compose services and need coordinated sequential integration. API transport and read/write adapters share auth/types; integrate contract first. P-030 owns the bulk-selection toolbar; UX-017 consumes it after integration and owns nearby row/message buttons. Migrations get coordinator-assigned numbers immediately before integration; never pick a number independently across worktrees.
 
@@ -300,7 +302,7 @@ Each section is one reviewable task, not an instruction to implement the whole p
 
 ### UX-006: HTML reply extraction preserving meaningful content
 
-**Effort:** Medium. **Suggested agent:** Sol 6.1 High. **Dependencies:** UX-004.
+**Effort:** Medium. **Suggested agent:** Sol 6.1 High. **Dependencies:** UX-004, UX-005.
 
 **Files:** `internal/email/replycontent/html.go (create)`; `internal/email/replycontent/html_test.go (create)`; `internal/email/sanitizer.go`. Paths marked create are proposed; inspect the integrated base before creating an equivalent second module.
 
@@ -312,7 +314,7 @@ Each section is one reviewable task, not an instruction to implement the whole p
 
 ### UX-007: On-demand extraction service and bounded cache
 
-**Effort:** Medium. **Suggested agent:** Sol 6.1 Medium. **Dependencies:** UX-001, UX-005, UX-006.
+**Effort:** Medium. **Suggested agent:** Sol 6.1 Medium. **Dependencies:** UX-002, UX-005, UX-006.
 
 **Files:** `internal/email/replycontent/service.go (create)`; `internal/email/replycontent/cache.go (create)`; `app/message.go`; `internal/message/store.go`. Paths marked create are proposed; inspect the integrated base before creating an equivalent second module.
 
