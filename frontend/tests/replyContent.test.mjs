@@ -108,6 +108,23 @@ test('previews of folded blocks are short plain text', () => {
   assert.equal(textPreview('<style>p{}</style><script>evil()</script>x', 'html', 50), 'x')
 })
 
+test('a preview never contains markup, however the tags are broken up', () => {
+  const hostile = [
+    '<<iframe>iframe src=x onerror=1>hi',
+    '<scr<script>ipt>alert(1)</scr</script>ipt>text',
+    '<<b>script>alert(1)<</b>/script>after',
+    '<iframe src="javascript:alert(1)"',
+    '<img src=x onerror=alert(1)//',
+    'a < b and c > d',
+  ]
+  for (const html of hostile) {
+    const preview = textPreview(html, 'html', 200)
+    assert.doesNotMatch(preview, /<\/?(iframe|script|img|b)\b/i, `${html} -> ${preview}`)
+  }
+  assert.equal(textPreview('a < b and c > d', 'html', 200), 'a < b and c > d')
+  assert.equal(textPreview('<div>unterminated <b', 'html', 200), 'unterminated')
+})
+
 test('the thread opens at the first unread message, else the newest', () => {
   const msgs = [
     { id: 'a', isRead: true },

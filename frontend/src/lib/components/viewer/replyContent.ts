@@ -87,20 +87,60 @@ export function buildBodyPlan(reply: ReplyLike | null | undefined): BodyPlan {
 
 const ENTITIES: Record<string, string> = { '&lt;': '<', '&gt;': '>', '&amp;': '&', '&quot;': '"', '&#39;': "'", '&nbsp;': ' ' }
 
+/** Elements whose content is not text a reader sees. */
+const HIDDEN_ELEMENTS = new Set(['script', 'style'])
+/** Inline elements do not separate words; every other tag does. */
+const INLINE_ELEMENTS = new Set(['a', 'b', 'i', 'u', 'em', 'strong', 'span', 'font', 'code', 'small', 'sub', 'sup'])
+
+const isLetter = (ch: string | undefined) => ch !== undefined && /[a-z]/i.test(ch)
+
+/**
+ * The text of an HTML fragment, read one character at a time rather than with
+ * tag-shaped patterns: a '<' starts a tag only when a name or '/' follows, a tag
+ * runs to the next '>' (or to the end when unterminated), and nothing that was
+ * part of a tag can reach the output. The result is shown as text, never as HTML.
+ */
+function htmlToText(html: string): string {
+  let out = ''
+  let i = 0
+  while (i < html.length) {
+    const ch = html[i]
+    if (ch !== '<' || !(isLetter(html[i + 1]) || html[i + 1] === '/')) {
+      out += ch
+      i++
+      continue
+    }
+    const end = html.indexOf('>', i)
+    const tagEnd = end === -1 ? html.length : end + 1
+    const name = /^<\/?([a-z][a-z0-9]*)/i.exec(html.slice(i, tagEnd))?.[1]?.toLowerCase() ?? ''
+    const closing = html[i + 1] === '/'
+    i = tagEnd
+    if (!closing && HIDDEN_ELEMENTS.has(name)) {
+      // Skip to the end of the element; without one, to the end of the text.
+      const close = html.toLowerCase().indexOf(`</${name}`, i)
+      if (close === -1) break
+      const closeEnd = html.indexOf('>', close)
+      i = closeEnd === -1 ? html.length : closeEnd + 1
+      out += ' '
+      continue
+    }
+    // An inline tag joins the words around it, except next to a literal angle
+    // bracket: removing the tag there could join the pieces into new markup.
+    const joinsWords = INLINE_ELEMENTS.has(name) && !/[<>]$/.test(out) && !/^[<>]/.test(html.slice(i))
+    if (!joinsWords) out += ' '
+  }
+  return out
+}
+
 /** A short plain-text preview of a block, for the button that unfolds it. */
 export function textPreview(content: string, format: string, max = 90): string {
   let text = content
   if (format === 'html') {
-    text = text
-      .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, ' ')
-      // Inline tags do not separate words; every other tag does.
-      .replace(/<\/?(?:a|b|i|u|em|strong|span|font|code|small|sub|sup)\b[^>]*>/gi, '')
-      .replace(/<[^>]*>/g, ' ')
-      .replace(/&(?:lt|gt|amp|quot|nbsp|#39);/g, (entity) => ENTITIES[entity] ?? entity)
+    text = htmlToText(text).replace(/&(?:lt|gt|amp|quot|nbsp|#39);/g, (entity) => ENTITIES[entity] ?? entity)
   }
   text = text.replace(/\s+/g, ' ').trim()
   if (text.length <= max) return text
-  return text.slice(0, max - 1).trimEnd() + '…'
+  return text.slice(0, max - 1).trimEnd() + '\u2026'
 }
 
 /** The message a thread opens at: the first unread one, else the newest. */
