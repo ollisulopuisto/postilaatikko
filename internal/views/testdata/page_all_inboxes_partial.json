@@ -1,0 +1,45 @@
+{
+  "items": [
+    {
+      "ref": { "accountId": "acc-a", "threadId": "thr-100" },
+      "subject": "Lunch on Tuesday",
+      "snippet": "Does 12:00 work?",
+      "latestDate": "2026-10-20T09:05:00Z",
+      "participants": [
+        { "name": "Alice", "email": "alice@example.org" }
+      ],
+      "messageCount": 3,
+      "unreadCount": 1,
+      "hasAttachments": false,
+      "isStarred": false,
+      "matched": [
+        { "accountId": "acc-a", "messageId": "m-101" }
+      ]
+    },
+    {
+      "ref": { "accountId": "acc-b", "threadId": "thr-900" },
+      "subject": "Lunch on Tuesday",
+      "snippet": "Does 12:00 work?",
+      "latestDate": "2026-10-20T09:00:00Z",
+      "participants": [
+        { "name": "Alice", "email": "alice@example.org" }
+      ],
+      "messageCount": 1,
+      "unreadCount": 1,
+      "hasAttachments": false,
+      "isStarred": false,
+      "matched": [
+        { "accountId": "acc-b", "messageId": "m-901" }
+      ]
+    }
+  ],
+  "nextCursor": "opaque-cursor-1",
+  "complete": false,
+  "errors": [
+    {
+      "accountId": "acc-c",
+      "code": "account_unreachable",
+      "message": "IMAP connection failed"
+    }
+  ]
+}
