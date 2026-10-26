@@ -8,6 +8,7 @@ import { appstate } from '../../../wailsjs/go/models'
 import { normalizePins, type PinnedFolder } from '../sidebar/pins'
 import { normalizeLayout, type SidebarLayout } from '../sidebar/layout'
 import { applyNarrowerDefaults, PANE_WIDTH_DEFAULTS } from '../layout/paneWidths'
+import { normalizeReaderMode, type ReaderMode } from '../components/viewer/readerMode'
 
 export interface UIState {
   selectedAccountId: string | null
@@ -28,6 +29,8 @@ export interface UIState {
   pinnedFolders: PinnedFolder[]
   // Order and hidden blocks of the sidebar (see lib/sidebar/layout.ts)
   sidebarLayout: SidebarLayout
+  // How the reader shows a thread: conversation (default) or traditional.
+  readerMode: ReaderMode
   // Active extension pane: 'mail' (default) or an extension id like 'contacts'.
   activeExtension: string
 }
@@ -57,6 +60,7 @@ const defaultState: UIState = {
   collapsedFolders: {},
   pinnedFolders: [],
   sidebarLayout: normalizeLayout(undefined, undefined),
+  readerMode: 'conversation',
   activeExtension: 'mail',
 }
 
@@ -73,6 +77,9 @@ let uiStateLoadedVersion = $state(0)
 // module level keeps them in sync without prop drilling. currentState still
 // holds the persisted value; this mirror is what consumers read.
 let activeExtensionState = $state<string>('mail')
+
+// Reactive mirror of the reader mode, read by the viewer and its toggle.
+let readerModeState = $state<ReaderMode>('conversation')
 
 // Clamp a value within bounds
 function clamp(value: number, min: number, max: number): number {
@@ -106,8 +113,10 @@ export async function loadUIState(): Promise<UIState> {
         collapsedFolders: state.collapsedFolders || {},
         pinnedFolders: normalizePins(state.pinnedFolders),
         sidebarLayout: normalizeLayout(state.sidebarOrder, state.sidebarHidden),
+        readerMode: normalizeReaderMode(state.readerMode),
         activeExtension: state.activeExtension || 'mail',
       }
+      readerModeState = currentState.readerMode
       sidebarWidthState = currentState.sidebarWidth
 
       // Apply the balanced default once: it enlarges text, icons, row height
@@ -186,6 +195,7 @@ export function saveUIState(updates: Partial<UIState>): void {
         pinnedFolders: currentState.pinnedFolders,
         sidebarOrder: currentState.sidebarLayout.order,
         sidebarHidden: currentState.sidebarLayout.hidden,
+        readerMode: currentState.readerMode,
         activeExtension: currentState.activeExtension,
       }
       await SaveUIState(backendState)
@@ -289,4 +299,13 @@ export function setActiveExtension(name: string): void {
 export const paneConstraints = {
   sidebar: { min: SIDEBAR_MIN, max: SIDEBAR_MAX },
   list: { min: LIST_MIN, max: LIST_MAX },
+}
+
+export function getReaderMode(): ReaderMode {
+  return readerModeState
+}
+
+export function setReaderMode(mode: ReaderMode): void {
+  readerModeState = mode
+  saveUIState({ readerMode: mode })
 }

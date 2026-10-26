@@ -205,7 +205,14 @@ function fakeContainer(cards) {
   const original = container.querySelector
   container.querySelector = (selector) => {
     const card = original(selector)
-    return card ? { getBoundingClientRect: () => ({ top: container.cardTops[card.id] - container.scrollTop }) } : null
+    return card
+      ? {
+        getBoundingClientRect: () => {
+          const top = container.cardTops[card.id] - container.scrollTop
+          return { top, bottom: top + (container.cardHeights?.[card.id] ?? 400) }
+        },
+      }
+      : null
   }
   return container
 }
@@ -268,4 +275,58 @@ test('without a matching card the thread opens at the bottom', (t) => {
   const container = fakeContainer({})
   openTimelineAtTarget(container, thread, () => true)
   assert.equal(container.scrollTop, 5000)
+})
+
+// --- Switching reader mode ---------------------------------------------------
+
+const { captureScrollAnchor, holdScrollAnchor } = await load('../src/lib/components/viewer/timelineScroll.ts', {
+  './replyContent': replyContentUri,
+})
+const { normalizeReaderMode, READER_MODES } = await load('../src/lib/components/viewer/readerMode.ts')
+
+test('reader mode is conversation unless the reader chose traditional', () => {
+  assert.deepEqual([...READER_MODES], ['conversation', 'traditional'])
+  assert.equal(normalizeReaderMode('traditional'), 'traditional')
+  assert.equal(normalizeReaderMode('conversation'), 'conversation')
+  for (const unknown of [undefined, null, '', 'Traditional', 'compact', 7]) {
+    assert.equal(normalizeReaderMode(unknown), 'conversation', String(unknown))
+  }
+})
+
+test('the card at the top of the view is the anchor, with its offset', () => {
+  const container = fakeContainer({ a: 0, b: 500, c: 1000 })
+  container.cardHeights = { a: 500, b: 500, c: 500 }
+  container.scrollTop = 620 // card b spans 500-1000, so it is cut at the top
+  const anchor = captureScrollAnchor(container, ['a', 'b', 'c'])
+  assert.deepEqual(anchor, { id: 'b', offset: -120 })
+})
+
+test('no anchor without a visible card', () => {
+  assert.equal(captureScrollAnchor(fakeContainer({}), ['a']), null)
+  assert.equal(captureScrollAnchor(fakeContainer({ a: 0 }), []), null)
+})
+
+test('the anchor card stays where it was while bodies around it change height', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const container = fakeContainer({ a: 0, b: 500, c: 1000 })
+  container.scrollTop = 620
+  const anchor = captureScrollAnchor(container, ['a', 'b', 'c'])
+  container.cardTops.b = 900 // the message above grew after the mode switch
+  holdScrollAnchor(container, anchor, () => true)
+  assert.equal(container.cardTops.b - container.scrollTop, anchor.offset)
+  container.cardTops.b = 1300 // and again as another body finished loading
+  t.mock.timers.tick(1000)
+  assert.equal(container.cardTops.b - container.scrollTop, anchor.offset)
+})
+
+test('the anchor is released when the reader scrolls', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const container = fakeContainer({ a: 0, b: 500 })
+  const anchor = { id: 'b', offset: 0 }
+  holdScrollAnchor(container, anchor, () => true)
+  container.emit('keydown')
+  container.scrollTop = 40
+  container.cardTops.b = 900
+  t.mock.timers.tick(1000)
+  assert.equal(container.scrollTop, 40)
 })

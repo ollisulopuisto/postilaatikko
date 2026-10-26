@@ -11,8 +11,11 @@
   import { message as messageModels } from '../../../../wailsjs/go/models'
   import AttachmentList from './AttachmentList.svelte'
   import ConversationMessage from './ConversationMessage.svelte'
+  import ReaderModeToggle from './ReaderModeToggle.svelte'
   import { canExtract } from './replyContent'
-  import { openTimelineAtTarget } from './timelineScroll'
+  import { openTimelineAtTarget, captureScrollAnchor, holdScrollAnchor } from './timelineScroll'
+  import type { ReaderMode } from './readerMode'
+  import { getReaderMode, setReaderMode } from '$lib/stores/uiState.svelte'
   import Avatar from '$lib/components/kit/Avatar.svelte'
   import { toasts } from '$lib/stores/toast'
   import { setFocusedPane, isInputElement, isComposerOpen } from '$lib/stores/keyboard.svelte'
@@ -561,6 +564,26 @@
         }
       }
     }
+  }
+
+  const readerMode = $derived(getReaderMode())
+
+  /**
+   * Switches how bodies are drawn without changing the thread, the selected
+   * message or what the reader is looking at: the card nearest the top keeps its
+   * place while the bodies around it change height.
+   */
+  async function switchReaderMode(next: ReaderMode) {
+    if (next === readerMode) return
+    const container = contentContainerRef
+    const ids = conversation?.messages?.map((m) => m.id) ?? []
+    const anchor = container ? captureScrollAnchor(container, ids) : null
+    const tid = threadId
+    const fid = folderId
+    setReaderMode(next)
+    if (!container || !anchor) return
+    await tick()
+    holdScrollAnchor(container, anchor, () => threadId === tid && folderId === fid)
   }
 
   /** Dismiss the current conversation from the viewer.
@@ -1733,6 +1756,7 @@
       </div>
 
       <div class="flex items-center gap-2">
+        <ReaderModeToggle mode={readerMode} onChange={switchReaderMode} />
         {#if conversation.messages && conversation.messages.length > 1}
           <button
             class="viewer-toolbar-action p-2 rounded-md hover:bg-muted transition-all duration-150 hover:-translate-y-0.5 hover:scale-105 hover:shadow-sm active:translate-y-0 active:scale-95"
@@ -2128,6 +2152,7 @@
                             messageId={msg.id}
                             accountId={msg.accountId}
                             extractable={canExtract(msg)}
+                            mode={readerMode}
                             bodyHtml={msg.hasPGP && pgpResults[msg.id] ? pgpResults[msg.id].bodyHtml : msg.hasSMIME && smimeResults[msg.id] ? smimeResults[msg.id].bodyHtml : msg.bodyHtml}
                             bodyText={msg.hasPGP && pgpResults[msg.id] ? pgpResults[msg.id].bodyText : msg.hasSMIME && smimeResults[msg.id] ? smimeResults[msg.id].bodyText : msg.bodyText}
                             fromEmail={msg.fromEmail}

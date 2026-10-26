@@ -11,6 +11,7 @@
   import EmailBody from './EmailBody.svelte'
   import { _ } from '$lib/i18n'
   import { buildBodyPlan, type BodyPlan } from './replyContent'
+  import type { ReaderMode } from './readerMode'
 
   interface Props {
     messageId: string
@@ -21,6 +22,8 @@
     fromEmail?: string
     /** False for header-only and encrypted messages: they show the original. */
     extractable?: boolean
+    /** Traditional shows every message in full and asks for no split. */
+    mode?: ReaderMode
     onCompose?: (to: string) => void
     onImagesLoaded?: () => void
     encryptedInlineAttachments?: Record<string, string>
@@ -34,6 +37,7 @@
     bodyText = '',
     fromEmail = '',
     extractable = true,
+    mode = 'conversation',
     onCompose,
     onImagesLoaded,
     encryptedInlineAttachments,
@@ -62,7 +66,8 @@
     void bodyText
     const id = messageId
     const account = accountId
-    if (!extractable) {
+    void mode
+    if (!extractable || mode === 'traditional') {
       plan = { mode: 'original', reason: 'unavailable' }
       return
     }
@@ -123,18 +128,34 @@
     {$_('viewer.preparingMessage')}
   </div>
 {:else if plan.mode === 'original' || showFull}
-  {@render original()}
   {#if plan.mode === 'blocks'}
+    <div class="mb-1 flex justify-end">
+      <button
+        type="button"
+        class="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+        aria-pressed="true"
+        data-original-toggle
+        onclick={() => (showFull = false)}
+        onkeydown={(e) => e.stopPropagation()}
+      >
+        {$_('viewer.showSplitMessage')}
+      </button>
+    </div>
+  {/if}
+  {@render original()}
+{:else}
+  <div class="mb-1 flex justify-end">
     <button
       type="button"
-      class="mt-2 text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
-      onclick={() => (showFull = false)}
+      class="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+      aria-pressed="false"
+      data-original-toggle
+      onclick={() => (showFull = true)}
       onkeydown={(e) => e.stopPropagation()}
     >
-      {$_('viewer.showSplitMessage')}
+      {$_('viewer.showFullMessage')}
     </button>
-  {/if}
-{:else}
+  </div>
   <div class="space-y-2" data-reply-content="blocks">
     {#each plan.blocks as block (block.id)}
       {@const open = !block.collapsed || unfolded.has(block.id)}
@@ -174,12 +195,4 @@
       {/if}
     {/each}
   </div>
-  <button
-    type="button"
-    class="mt-2 text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
-    onclick={() => (showFull = true)}
-    onkeydown={(e) => e.stopPropagation()}
-  >
-    {$_('viewer.showFullMessage')}
-  </button>
 {/if}

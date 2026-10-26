@@ -34,6 +34,11 @@ type UIState struct {
 	SidebarOrder  []string `json:"sidebarOrder,omitempty"`
 	SidebarHidden []string `json:"sidebarHidden,omitempty"`
 
+	// Reader mode: "conversation" (new text with folded history) or
+	// "traditional" (every message in full). The frontend owns the allowed
+	// values; unset or unknown means conversation.
+	ReaderMode string `json:"readerMode,omitempty"`
+
 	// Active extension pane: "mail" (default) or an extension id like "contacts".
 	// The frontend uses this to decide whether to render Mail or an extension's
 	// pane after the rail is shown. Missing field -> Mail.
