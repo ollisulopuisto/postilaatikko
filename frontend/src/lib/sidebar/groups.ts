@@ -95,6 +95,40 @@ export function normalizeSidebarGroups(raw: unknown): SidebarGroups {
   return groups
 }
 
+// Map the P-008 sidebar block layout into the first card layout. The unified
+// inbox remains its own navigation section; these mappings preserve the order
+// and visibility of the old pinned, virtual, primary and secondary sections.
+export function migrateSidebarGroups(raw: unknown, legacyOrder: unknown, legacyHidden: unknown): SidebarGroups {
+  if (Array.isArray(raw) && raw.length > 0) return normalizeSidebarGroups(raw)
+  if (!Array.isArray(legacyOrder) && !Array.isArray(legacyHidden)) return normalizeSidebarGroups(undefined)
+
+  const legacyToGroup: Record<string, string> = {
+    primary: 'core',
+    secondary: 'later',
+    virtual: 'virtual',
+    pinned: 'starred-folders',
+  }
+  const defaults = normalizeSidebarGroups(undefined)
+  const groupOrder: string[] = []
+  for (const block of Array.isArray(legacyOrder) ? legacyOrder : []) {
+    const groupId = legacyToGroup[String(block)]
+    if (groupId && !groupOrder.includes(groupId)) groupOrder.push(groupId)
+  }
+  for (const group of defaults) if (!groupOrder.includes(group.id)) groupOrder.push(group.id)
+
+  const legacyHiddenSet = new Set(Array.isArray(legacyHidden) ? legacyHidden.map(String) : [])
+  const hiddenGroups = new Set(
+    Object.entries(legacyToGroup)
+      .filter(([block]) => legacyHiddenSet.has(block))
+      .map(([, groupId]) => groupId),
+  )
+  const byId = new Map(defaults.map(group => [group.id, group]))
+  return groupOrder.map(id => {
+    const group = byId.get(id)!
+    return { ...group, entries: [...group.entries], hidden: hiddenGroups.has(id) }
+  })
+}
+
 export function moveSidebarGroup(groups: SidebarGroups, groupId: string, delta: -1 | 1): SidebarGroups {
   const from = groups.findIndex(group => group.id === groupId)
   const to = from + delta

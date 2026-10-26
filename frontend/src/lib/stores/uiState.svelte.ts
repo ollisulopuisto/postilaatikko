@@ -7,7 +7,7 @@ import { GetUIState, SaveUIState } from '../../../wailsjs/go/app/App'
 import { appstate } from '../../../wailsjs/go/models'
 import { normalizePins, type PinnedFolder } from '../sidebar/pins'
 import { normalizeLayout, type SidebarLayout } from '../sidebar/layout'
-import { normalizeSidebarGroups, type SidebarGroups } from '../sidebar/groups'
+import { migrateSidebarGroups, normalizeSidebarGroups, type SidebarGroups } from '../sidebar/groups'
 
 export interface UIState {
   selectedAccountId: string | null
@@ -110,8 +110,12 @@ export async function loadUIState(): Promise<UIState> {
         collapsedFolders: state.collapsedFolders || {},
         pinnedFolders: normalizePins(state.pinnedFolders),
         sidebarLayout: normalizeLayout(state.sidebarOrder, state.sidebarHidden),
-        sidebarGroups: normalizeSidebarGroups(state.sidebarGroups),
-        showContactsCalendarRail: state.showContactsCalendarRail === true,
+        sidebarGroups: migrateSidebarGroups(state.sidebarGroups, state.sidebarOrder, state.sidebarHidden),
+        // Existing users saw Calendar in the rail unless they hid that P-008
+        // block. New profiles keep Contacts and Calendar hidden by default.
+        showContactsCalendarRail: typeof state.showContactsCalendarRail === 'boolean'
+          ? state.showContactsCalendarRail
+          : Array.isArray(state.sidebarOrder) && !state.sidebarHidden?.includes('calendar'),
         activeExtension: state.activeExtension || 'mail',
       }
       sidebarWidthState = currentState.sidebarWidth

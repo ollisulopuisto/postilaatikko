@@ -37,7 +37,7 @@ type UIState struct {
 
 	// Contacts and Calendar are available from the rail only when this
 	// preference is enabled. Missing JSON preserves the new default (false).
-	ShowContactsCalendarRail bool `json:"showContactsCalendarRail,omitempty"`
+	ShowContactsCalendarRail *bool `json:"showContactsCalendarRail,omitempty"`
 
 	// Active extension pane: "mail" (default) or an extension id like "contacts".
 	// The frontend uses this to decide whether to render Mail or an extension's
