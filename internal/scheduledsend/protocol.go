@@ -148,20 +148,51 @@ func openEnvelope(envelope Envelope, helper *Identity) (Command, PublicKey, erro
 	if !ok {
 		return command, clientKey, errors.New("scheduled command authentication failed")
 	}
+	command, err = commandFromPlaintext(plaintext)
+	return command, clientKey, err
+}
+
+// OpenClientCommand lets the original sender recover its own encrypted
+// schedule for rescheduling without asking a relay or helper for plaintext.
+func OpenClientCommand(encoded []byte, client *Identity, helper PublicKey) (Command, error) {
+	if client == nil {
+		return Command{}, errors.New("client identity is required")
+	}
+	envelope, err := decodeEnvelope(encoded)
+	if err != nil {
+		return Command{}, err
+	}
+	if envelope.ClientKey != client.PublicKey().String() || envelope.HelperKey != helper.String() {
+		return Command{}, errors.New("stored schedule identity mismatch")
+	}
+	if err := validatePublicKey(helper); err != nil {
+		return Command{}, err
+	}
+	var nonce [24]byte
+	copy(nonce[:], envelope.Nonce)
+	plaintext, ok := box.Open(nil, envelope.Ciphertext, &nonce, (*[32]byte)(&helper), &client.private)
+	if !ok {
+		return Command{}, errors.New("stored schedule authentication failed")
+	}
+	return commandFromPlaintext(plaintext)
+}
+
+func commandFromPlaintext(plaintext []byte) (Command, error) {
+	var command Command
 	defer clear(plaintext)
 	if err := decodeJSON(plaintext, &command); err != nil {
 		if command.Delivery != nil {
 			clear(command.Delivery.RFC822)
 		}
-		return Command{}, clientKey, fmt.Errorf("decode scheduled command: %w", err)
+		return Command{}, fmt.Errorf("decode scheduled command: %w", err)
 	}
 	if err := command.validate(); err != nil {
 		if command.Delivery != nil {
 			clear(command.Delivery.RFC822)
 		}
-		return Command{}, clientKey, err
+		return Command{}, err
 	}
-	return command, clientKey, nil
+	return command, nil
 }
 
 func decodeEnvelope(encoded []byte) (Envelope, error) {

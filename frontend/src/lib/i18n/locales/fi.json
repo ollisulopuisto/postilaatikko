@@ -1253,7 +1253,8 @@
       "sent": "Lähetetty",
       "cancelled": "Peruutettu",
       "failed": "Lähetys vaatii huomiota",
-      "outcome_unknown": "Lähetyksen tulos on epäselvä — tarkista se Studiossa ennen uutta yritystä"
+      "outcome_unknown": "Lähetyksen tulos on epäselvä — tarkista se Studiossa ennen uutta yritystä",
+      "reschedule_awaiting_ack": "Uusi lähetysaika odottaa Studion vahvistusta"
     },
     "keyUnavailable": "Alkuperäinen laitteen avain ei ole saatavilla. Avaa tai palauta se. Tarkista nykyiset ajastukset Studiossa ennen avaimen vaihtamista.",
     "errors": {
@@ -1268,9 +1269,41 @@
       "delivery_outcome_unknown": "Palvelu on saattanut hyväksyä viestin. Tarkista Studion Lähetetyt-kansio ennen uutta yritystä.",
       "manually_confirmed_sent": "Lähetys vahvistettiin paikallisesti Studiossa.",
       "manually_confirmed_not_sent": "Studio vahvisti, ettei viestiä lähetetty.",
-      "sent_copy_failed": "Viesti lähetettiin, mutta Studio ei voinut tallentaa kopiota Lähetetyt-kansioon. Säilytä alkuperäinen luonnos ja tarkista Studio. Älä lähetä viestiä uudelleen."
+      "sent_copy_failed": "Viesti lähetettiin, mutta Studio ei voinut tallentaa kopiota Lähetetyt-kansioon. Säilytä alkuperäinen luonnos ja tarkista Studio. Älä lähetä viestiä uudelleen.",
+      "queue_full": "Studion jonon tallennusraja on saavutettu. Nykyiset tehtävät säilytetään. Vapauta viestitilaa peruuttamalla odottavia lähetyksiä tai tarkista jonon ylläpito Studiolla."
     },
     "draftRetained": "Tästä luonnoksesta on ajastettu kopio Studiossa. Muokkaukset eivät päivitä jonossa olevaa viestiä. Vahvista peruutus ennen uutta lähetystä ja poista luonnos vahvistetun lähetyksen jälkeen.",
-    "cancelBeforeDiscard": "Vahvista peruutus Studiossa ennen tämän ajastetun luonnoksen hylkäämistä."
+    "cancelBeforeDiscard": "Vahvista peruutus Studiossa ennen tämän ajastetun luonnoksen hylkäämistä.",
+    "scheduledView": "Ajastetut",
+    "backToMail": "Takaisin sähköpostiin",
+    "accountFilter": "Tili",
+    "allAccounts": "Kaikki tilit",
+    "statusFilter": "Lähetyksen tila",
+    "active": "Aktiiviset",
+    "history": "Historia",
+    "chooseSetupAccount": "Valitse tili sen Studio-yhteyden määrittämistä varten.",
+    "autoRefresh": "Päivitä tämän näkymän ollessa avoinna",
+    "cachedStatus": "Kaikkia tiloja ei voitu tarkistaa. Näytetään viimeksi vahvistettu tila.",
+    "unlockForActions": "Avaa tai luo tämän laitteen avain esikatselua ja Studio-yhteyttä varten. Valitse tili sen yhteyden määrittämistä varten.",
+    "empty": "Tässä näkymässä ei ole ajastettuja viestejä.",
+    "message": "Viesti",
+    "deliveryStatus": "Lähetyksen tila",
+    "actions": "Toiminnot",
+    "noSubject": "(Ei aihetta)",
+    "previewUnavailable": "Salattu esikatselu ei ole saatavilla",
+    "updating": "Tarkistetaan…",
+    "reschedule": "Muuta lähetysaikaa",
+    "newTime": "Uusi lähetysaika",
+    "timeOnlyChange": "Vain lähetysaika muuttuu. Ajastetun viestin sisältö pysyy samana.",
+    "previousPage": "Edellinen",
+    "nextPage": "Seuraava",
+    "cleanup": {
+      "pending": "Lähetys vahvistettu. Luonnoksen siivousta odotetaan.",
+      "removed": "Alkuperäinen muuttamaton luonnos poistettu.",
+      "kept_changed": "Luonnosta on muokattu, joten se säilytettiin.",
+      "waiting_sent_copy": "Luonnos säilytettiin, koska Lähetetyt-kansio vaatii huomiota.",
+      "manual_legacy": "Alkuperäinen luonnos säilytettiin, koska sen tunnistetta ei voitu varmistaa turvallisesti.",
+      "retry": "Lähetetty. Luonnoksen siivousta yritetään uudelleen."
+    }
   }
 }

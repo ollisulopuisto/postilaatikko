@@ -1331,9 +1331,8 @@
           showSendLaterDialog = true
           return
         }
-        // Keep the recoverable draft until the complete Scheduled view and
-        // delivery-confirmed cleanup are available. A failed delivery must
-        // never leave the user without the original message/attachments.
+        // Keep the recoverable draft until a confirmed sent status triggers
+        // guarded cleanup. Queue acceptance alone must never remove it.
         addToast({ type: 'success', message: $_('sendLater.scheduled') })
         onClose?.()
         return

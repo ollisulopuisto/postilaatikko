@@ -36,7 +36,15 @@ var (
 	ErrStateChanged = errors.New("scheduled job state changed during delivery")
 	// ErrUnpaired rejects submissions and delivery after client revocation.
 	ErrUnpaired = errors.New("client is not paired or has been revoked")
+	// ErrQueueFull preserves existing jobs when the private queue reaches capacity.
+	ErrQueueFull = errors.New("scheduled queue capacity reached; existing jobs are preserved")
 )
+
+// Retain revision tombstones rather than silently forgetting accepted job IDs.
+// These logical limits bound live ciphertext and metadata; SQLite WAL/free pages
+// can occupy additional space until checkpoint/maintenance.
+const maxQueueJobs = 10000
+const maxQueueCiphertextBytes = 512 << 20
 
 // SenderPermission binds one helper-local account to one permitted sender.
 type SenderPermission struct {
@@ -262,6 +270,22 @@ func (s *Store) acceptCommand(ctx context.Context, encoded []byte, command Comma
 		if previous == Sending || previous == Sent || previous == Unknown {
 			return empty, ErrDeliveryStarted
 		}
+	}
+	var count, ciphertextBytes, previousBytes int64
+	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*), COALESCE(SUM(LENGTH(envelope)), 0) FROM jobs").Scan(&count, &ciphertextBytes); err != nil {
+		return empty, err
+	}
+	if previous != "" {
+		if err := tx.QueryRowContext(ctx, "SELECT LENGTH(envelope) FROM jobs WHERE id = ?", command.JobID).Scan(&previousBytes); err != nil {
+			return empty, err
+		}
+	}
+	if previous == "" && count >= maxQueueJobs {
+		return empty, ErrQueueFull
+	}
+	// An existing job can always be cancelled, even when storage is full.
+	if command.Action == "schedule" && ciphertextBytes-previousBytes+int64(len(encoded)) > maxQueueCiphertextBytes {
+		return empty, ErrQueueFull
 	}
 	state, dueAt := Cancelled, int64(0)
 	if command.Action == "schedule" {

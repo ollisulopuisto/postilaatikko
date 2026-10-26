@@ -6,6 +6,7 @@
   import { onMount, tick, untrack } from 'svelte'
   import TitleBar from './lib/components/common/TitleBar.svelte'
   import Sidebar from './lib/components/sidebar/Sidebar.svelte'
+  import ScheduledPane from './lib/components/scheduled/ScheduledPane.svelte'
   import MessageList from './lib/components/list/MessageList.svelte'
   import ConversationViewer from './lib/components/viewer/ConversationViewer.svelte'
   import Composer from './lib/components/composer/Composer.svelte'
@@ -1933,6 +1934,10 @@
   <!-- Main Content -->
   <div class="flex flex-1 min-h-0 overflow-hidden relative">
     <ExtensionRail />
+
+    {#if getActiveExtension() === 'scheduled'}
+      <ScheduledPane />
+    {/if}
 
     {#if getActiveExtension() === 'contacts'}
       <ContactsPane />

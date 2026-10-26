@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -142,7 +141,7 @@ func scheduleMessage(ctx context.Context, data string, ops *composeOps, drafts *
 		return result, err
 	}
 	defer store.Close()
-	result.Job, err = store.Schedule(ctx, accountID, draftID, scheduledsend.Delivery{
+	result.Job, err = store.Schedule(ctx, accountID, draftID, draft.Fingerprint(savedDraft), scheduledsend.Delivery{
 		From: message.From.Address, To: message.AllRecipients(), RFC822: raw, DueAt: when}, identity)
 	if err != nil && result.Job.ID != "" {
 		result.Error = err.Error()
@@ -201,14 +200,7 @@ func guardScheduledDraft(ctx context.Context, data, accountID, draftID string) e
 		return err
 	}
 	defer store.Close()
-	job, err := store.FindDraft(ctx, accountID, draftID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	return fmt.Errorf("this draft already has a Send Later job (%s); inspect or cancel it before sending again", job.State)
+	return store.BeginImmediateSend(ctx, accountID, draftID)
 }
 
 // GetSendLaterSetup returns public device pairing and account helper settings.
@@ -233,7 +225,11 @@ func (a *App) SaveSendLaterConfig(config scheduledsend.ClientConfig) error {
 
 // ScheduleMessage prepares MIME once and queues an E2EE delivery to the helper.
 func (a *App) ScheduleMessage(accountID string, message smtp.ComposeMessage, draftID, due string) (ScheduleResult, error) {
-	return scheduleMessage(a.ctx, a.paths.Data, &a.composeOps, a.draftStore, accountID, message, draftID, due)
+	result, err := scheduleMessage(a.ctx, a.paths.Data, &a.composeOps, a.draftStore, accountID, message, draftID, due)
+	if err == nil {
+		result.Job = cleanupScheduledDraft(a.ctx, a.paths.Data, result.Job, &a.draftOps, a.cancelDraftSync)
+	}
+	return result, err
 }
 
 // ListScheduledMessages returns bounded local metadata without loading bodies.
@@ -248,7 +244,11 @@ func (a *App) ListScheduledMessages(accountID string) ([]scheduledsend.ClientJob
 
 // UpdateScheduledMessage retries, refreshes, or cancels a stored encrypted job.
 func (a *App) UpdateScheduledMessage(id, action string) (ScheduleResult, error) {
-	return updateScheduledMessage(a.ctx, a.paths.Data, id, action)
+	result, err := updateScheduledMessage(a.ctx, a.paths.Data, id, action)
+	if err == nil {
+		result.Job = cleanupScheduledDraft(a.ctx, a.paths.Data, result.Job, &a.draftOps, a.cancelDraftSync)
+	}
+	return result, err
 }
 
 // SendMessageWithDraftGuard prevents Send Now from an already scheduled draft.
@@ -281,7 +281,11 @@ func (c *ComposerApp) SaveSendLaterConfig(config scheduledsend.ClientConfig) err
 
 // ScheduleMessage prepares MIME once and queues an E2EE delivery to the helper.
 func (c *ComposerApp) ScheduleMessage(accountID string, message smtp.ComposeMessage, draftID, due string) (ScheduleResult, error) {
-	return scheduleMessage(c.ctx, c.paths.Data, &c.composeOps, c.draftStore, accountID, message, draftID, due)
+	result, err := scheduleMessage(c.ctx, c.paths.Data, &c.composeOps, c.draftStore, accountID, message, draftID, due)
+	if err == nil {
+		result.Job = c.cleanupScheduled(result.Job)
+	}
+	return result, err
 }
 
 // ListScheduledMessages returns bounded local metadata without loading bodies.
@@ -296,7 +300,87 @@ func (c *ComposerApp) ListScheduledMessages(accountID string) ([]scheduledsend.C
 
 // UpdateScheduledMessage retries, refreshes, or cancels a stored encrypted job.
 func (c *ComposerApp) UpdateScheduledMessage(id, action string) (ScheduleResult, error) {
-	return updateScheduledMessage(c.ctx, c.paths.Data, id, action)
+	result, err := updateScheduledMessage(c.ctx, c.paths.Data, id, action)
+	if err == nil {
+		result.Job = c.cleanupScheduled(result.Job)
+	}
+	return result, err
+}
+
+func (c *ComposerApp) cleanupScheduled(job scheduledsend.ClientJob) scheduledsend.ClientJob {
+	result := cleanupScheduledDraft(c.ctx, c.paths.Data, job, &c.draftOps, func(id string) {
+		if c.currentDraft != nil && c.currentDraft.ID == id {
+			c.cancelDraftSync()
+		}
+	})
+	if result.DraftCleanup == "removed" && job.DraftCleanup != "removed" {
+		c.notifyDraftDeleted(job.AccountID)
+	}
+	return result
+}
+
+func rescheduleMessage(ctx context.Context, data, id, due string) (ScheduleResult, error) {
+	var result ScheduleResult
+	when, err := time.Parse(time.RFC3339, due)
+	if err != nil || !when.After(time.Now()) {
+		return result, errors.New("choose a future delivery time with an explicit timezone")
+	}
+	identity, err := scheduledsend.LoadIdentity("client")
+	if err != nil {
+		return result, err
+	}
+	store, err := clientStore(data)
+	if err != nil {
+		return result, err
+	}
+	defer store.Close()
+	result.Job, err = store.Reschedule(ctx, id, when, identity)
+	if err != nil && result.Job.ID != "" {
+		result.Error = err.Error()
+		return result, nil
+	}
+	return result, err
+}
+
+func scheduledPage(ctx context.Context, data, accountID string, history bool, limit, offset int) (scheduledsend.ClientPage, error) {
+	store, err := clientStore(data)
+	if err != nil {
+		return scheduledsend.ClientPage{}, err
+	}
+	defer store.Close()
+	identity, keyErr := scheduledsend.LoadIdentity("client")
+	if keyErr != nil {
+		identity = nil
+	}
+	return store.ListPage(ctx, accountID, history, limit, offset, identity)
+}
+
+// RescheduleMessage changes a pending job's time using an authenticated revision.
+func (a *App) RescheduleMessage(id, due string) (ScheduleResult, error) {
+	result, err := rescheduleMessage(a.ctx, a.paths.Data, id, due)
+	if err == nil {
+		result.Job = cleanupScheduledDraft(a.ctx, a.paths.Data, result.Job, &a.draftOps, a.cancelDraftSync)
+	}
+	return result, err
+}
+
+// GetScheduledPage returns paged delivery status and encrypted local previews.
+func (a *App) GetScheduledPage(accountID string, history bool, limit, offset int) (scheduledsend.ClientPage, error) {
+	return scheduledPage(a.ctx, a.paths.Data, accountID, history, limit, offset)
+}
+
+// RescheduleMessage changes a pending job's time using an authenticated revision.
+func (c *ComposerApp) RescheduleMessage(id, due string) (ScheduleResult, error) {
+	result, err := rescheduleMessage(c.ctx, c.paths.Data, id, due)
+	if err == nil {
+		result.Job = c.cleanupScheduled(result.Job)
+	}
+	return result, err
+}
+
+// GetScheduledPage returns paged delivery status and encrypted local previews.
+func (c *ComposerApp) GetScheduledPage(accountID string, history bool, limit, offset int) (scheduledsend.ClientPage, error) {
+	return scheduledPage(c.ctx, c.paths.Data, accountID, history, limit, offset)
 }
 
 // SendMessageWithDraftGuard prevents Send Now from an already scheduled draft.

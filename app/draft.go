@@ -2,7 +2,9 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -283,6 +285,15 @@ func (ops *draftOps) saveDraftToDB(accountID string, localDraft *draft.Draft, ms
 		localDraft.SyncStatus = draft.SyncStatusPending
 
 		if err := ops.draftStore.Update(localDraft); err != nil {
+			if errors.Is(err, draft.ErrDraftNotFound) {
+				replacement := *localDraft
+				replacement.ID, replacement.FolderID, replacement.StorageVersion = "", "", ""
+				replacement.IMAPUID, replacement.LastSyncAttempt, replacement.SyncError = 0, nil, ""
+				if createErr := ops.draftStore.Create(&replacement); createErr != nil {
+					return nil, createErr
+				}
+				return &replacement, nil
+			}
 			return nil, fmt.Errorf("failed to update draft: %w", err)
 		}
 		log.Debug().Str("draftID", localDraft.ID).Bool("encrypted", enc.encrypted).Bool("pgpEncrypted", enc.pgpEncrypted).Msg("Updated existing draft")
@@ -457,7 +468,14 @@ func (ops *draftOps) syncToIMAP(ctx context.Context, localDraft *draft.Draft, ms
 		log.Debug().Str("draftID", localDraft.ID).Msg("Draft PGP encrypted for IMAP sync")
 	}
 
-	// Re-check if draft still exists (may have been deleted by concurrent DeleteDraft)
+	// Stable outer headers let delivery-confirmed cleanup prove the remote
+	// UID still belongs to this exact draft and immutable prepared content.
+	if !strings.ContainsAny(localDraft.ID, "\r\n") {
+		digest := sha256.Sum256(rawMsg)
+		marker := fmt.Sprintf("X-Postilaatikko-Draft-ID: %s\r\nX-Postilaatikko-Draft-Source: %s\r\nX-Postilaatikko-Draft-Hash: %x\r\n", localDraft.ID, draft.Fingerprint(localDraft), digest)
+		rawMsg = append([]byte(marker), rawMsg...)
+	}
+	// Re-check existence after preparation; deletion can race MIME creation.
 	if d, _ := ops.draftStore.Get(localDraft.ID); d == nil {
 		log.Debug().Str("draftID", localDraft.ID).Msg("Draft deleted during sync, skipping IMAP append")
 		return nil

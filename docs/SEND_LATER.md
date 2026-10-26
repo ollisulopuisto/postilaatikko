@@ -1,6 +1,6 @@
 # Send Later with a Mac Studio helper
 
-P-011 now has a review-stage helper/SMTP path and composer controls. It is not marked complete or released: live delivery, keychain/login lifecycle, failure recovery and security regression verification are still outstanding. The initial transport is a direct helper connection; there is no hosted relay or paid hosted sender in this implementation.
+P-011 has a review-stage helper/SMTP path, composer controls, and a paged Scheduled view. It is not marked complete or released: live delivery, keychain/login lifecycle, failure recovery and security regression verification are still outstanding. The initial transport is a direct helper connection; there is no hosted relay or paid hosted sender in this implementation.
 
 ## Set up the Studio
 
@@ -52,7 +52,7 @@ The app's default address is `http://127.0.0.1:8028`. Content and acknowledgemen
   --tls-key '/absolute/path/studio-tls-key.pem'
 ```
 
-The client would use the corresponding reachable HTTPS hostname. Redirects and untrusted TLS certificates are rejected; the pinned helper key is an additional E2EE identity check. Request size, concurrent request count and network timeouts are bounded. A public relay still needs additional quotas, retention policy, rotation and deployment work.
+The client would use the corresponding reachable HTTPS hostname. Redirects and untrusted TLS certificates are rejected; the pinned helper key is an additional E2EE identity check. Request size, concurrent request count and network timeouts are bounded. The helper caps its logical queue at 10,000 job records and 512 MiB of encrypted envelopes. Existing jobs can still be cancelled at capacity. Revision tombstones are retained to reject delayed replays; there is no automatic history pruning. SQLite WAL and free pages can use additional disk space. A public relay remains a separate deployment with its own quotas, retention policy and rotation requirements.
 
 Once local setup works, install the macOS login agent using the same flags:
 
@@ -68,13 +68,15 @@ Custom app-data and queue locations are supported through explicit `--data` and 
 
 Pick a future local date/time in **Send Later**; the dialog shows the resolved timezone. The app saves the draft, prepares/signs/encrypts MIME once, seals the complete command for Studio, and durably saves those encrypted bytes locally before submission.
 
-Only a verified encrypted acknowledgement from Studio's durable queue counts as accepted. The original draft is retained for recovery even after queue acceptance; this initial milestone does not delete it merely because a helper has queued it. Editing that draft does not change the helper's immutable message. Confirm cancellation before sending the draft again; after confirmed delivery, remove the original draft when ready. A dedicated Scheduled view and delivery-confirmed cleanup are future work.
+Only a verified encrypted acknowledgement from Studio's durable queue counts as accepted. Offline submissions retain their exact encrypted request for **Retry saved request**. Do not create another job because a network request timed out. Draft-linked uniqueness and atomic SQLite arbitration across composer processes prevent a draft from winning both Send Now and Send Later. A Send Now attempt leaves a small durable marker even on failure, since the provider might have accepted it: inspect delivery before using a new draft to schedule that content. Ordinary Send Now retry behavior is unchanged; this is not an exactly-once SMTP guarantee.
 
-If acknowledgement is lost, the app keeps the durable job ID. Use **Retry saved request**, which retransmits identical bytes, or **Refresh**; do not create a new job just because a network request timed out. Draft-linked uniqueness prevents scheduling the same draft twice. The Send Now path also checks for an existing scheduled job; simultaneous actions across separate windows still need concurrency regression verification.
+The **Scheduled** pane provides all-account or per-account filters, active/history pages of 40 messages, encrypted local previews, last confirmed status, cancellation, time-only rescheduling, and bounded status refresh. It is mounted by the main app when the `scheduled` view is selected. Its sidebar entry is left for coordinator integration with the concurrent sidebar changes. Composer dialogs retain their per-account latest-100 list, including detached composers. The pane never loads attachments during normal refresh; two visible statuses are refreshed per 15-second interval, and polling stops when the pane closes. Locked/unavailable client keys allow cached status metadata, while previews and actions require the key.
 
-The dialog lists the latest 100 jobs for the selected account with their last confirmed state. Open it from a new composer to inspect earlier jobs; a dedicated Scheduled folder is a later UI improvement. **Cancel delivery** succeeds only when Studio confirms it before delivery starts. Offline cancellation stays pending and must not be treated as recalled mail.
+**Cancel delivery** succeeds only when Studio confirms it before delivery starts. Offline cancellation stays pending and must not be treated as recalled mail. **Reschedule** submits a higher authenticated revision with the new future time, preserving the prepared MIME, Message-ID, signatures and original Date header. Changing recipients, content or attachments requires cancelling the old job and composing a new one. If delivery already started, the rejected change reconciles to the helper's real status instead of claiming success. A missed due time is delivered when the awake, authorized helper next processes its queue; an ambiguous interrupted SMTP attempt instead requires inspection.
 
-Raw MIME is limited to 10 MiB in this first implementation. Payloads are immutable after acceptance. Editing/rescheduling an existing job in the UI, streaming large attachments, remote relay transport and multi-device job discovery are not implemented yet.
+The original draft remains until this client refreshes a delivery-confirmed `sent` status. Cleanup compares the scheduled draft fingerprint and exact local row version. Synced drafts additionally require matching UIDVALIDITY, application draft markers, and a streamed body hash check before deleting the recorded remote UID. Edited drafts, legacy drafts without proof, or remote content that cannot be verified are preserved with a visible cleanup outcome. A save racing local deletion creates a new draft instead of losing the edit. Sent-copy failures preserve the original draft and encrypted payload for manual repair; queue acceptance alone never deletes a draft. Cleanup does not run while the composing device/app is offline, and does not affect routine header-only sync.
+
+Raw MIME is limited to 10 MiB. Prepared payloads are immutable; large attachment streaming, relay transport, automatic Sent-copy repair and multi-device job discovery remain outside this helper milestone. Paired static keys have no forward secrecy, and key rotation/history retention still need an explicit migration design. Keep queue metadata/tombstones when backing up or moving a helper, so old encrypted submissions cannot be replayed as new deliveries.
 
 ## Ambiguous SMTP results
 

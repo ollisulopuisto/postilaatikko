@@ -12,9 +12,10 @@
     canSchedule: boolean
     sending: boolean
     onSchedule: (due: string) => Promise<void>
+    setupOnly?: boolean
   }
 
-  let { open = $bindable(false), accountId, api, canSchedule, sending, onSchedule }: Props = $props()
+  let { open = $bindable(false), accountId, api, canSchedule, sending, onSchedule, setupOnly = false }: Props = $props()
   let busy = $state(false)
   let error = $state('')
   let endpoint = $state('http://127.0.0.1:8028')
@@ -55,7 +56,7 @@
       keyAvailable = setup.keyAvailable
       configured = !!helperKey && !!setup.config.endpoint && keyAvailable
       keyVerified = configured
-      settingsOpen = !configured
+      settingsOpen = setupOnly || !configured
       jobs = await api.listScheduledMessages(id) || []
     } catch (err) {
       error = String(err)
@@ -125,7 +126,7 @@
 
     {#if error}<p role="alert" class="text-sm text-destructive break-words">{error}</p>{/if}
 
-    <div class="space-y-2">
+    {#if !setupOnly}<div class="space-y-2">
       <label class="block text-sm" for="scheduled-time">{$_('sendLater.deliveryTime')}</label>
       <input id="scheduled-time" type="datetime-local" bind:value={due} disabled={busy || sending}
         class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" />
@@ -133,7 +134,7 @@
       {#if due && Number.isFinite(new Date(due).getTime())}
         <p class="text-xs text-muted-foreground">{new Date(due).toLocaleString(undefined, { timeZoneName: 'short' })}</p>
       {/if}
-    </div>
+    </div>{/if}
 
     <details bind:open={settingsOpen} class="rounded-md border border-border p-3">
       <summary class="cursor-pointer text-sm font-medium">{$_('sendLater.connection')}</summary>
@@ -166,7 +167,7 @@
       </div>
     </details>
 
-    {#if jobs.length}
+    {#if jobs.length && !setupOnly}
       <div class="space-y-2">
         <h3 class="text-sm font-medium">{$_('sendLater.jobs')}</h3>
         <p class="text-xs text-muted-foreground">{$_('sendLater.lastConfirmed')}</p>
@@ -181,10 +182,10 @@
               {#if job.code}<p class="text-muted-foreground">{$_(`sendLater.errors.${job.code}`)}</p>{/if}
               <div class="flex gap-3">
                 <button type="button" onclick={() => update(job, 'refresh')} disabled={busy} class="underline disabled:opacity-50">{$_('sendLater.refresh')}</button>
-                {#if job.state === 'awaiting_ack' || job.state === 'cancellation_awaiting_ack'}
+                {#if ['awaiting_ack', 'cancellation_awaiting_ack', 'reschedule_awaiting_ack'].includes(job.state)}
                   <button type="button" onclick={() => update(job, 'retry')} disabled={busy} class="underline disabled:opacity-50">{$_('sendLater.retry')}</button>
                 {/if}
-                {#if ['queued', 'retry', 'awaiting_ack'].includes(job.state)}
+                {#if ['queued', 'retry', 'awaiting_ack', 'reschedule_awaiting_ack'].includes(job.state)}
                   <button type="button" onclick={() => update(job, 'cancel')} disabled={busy} class="underline disabled:opacity-50">{$_('sendLater.cancelDelivery')}</button>
                 {/if}
               </div>
@@ -196,8 +197,8 @@
 
     <AlertDialog.Footer>
       <AlertDialog.Cancel disabled={sending}>{$_('common.close')}</AlertDialog.Cancel>
-      <button type="button" onclick={schedule} disabled={busy || sending || !configured || !canSchedule || !due}
-        class="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50">{$_('sendLater.schedule')}</button>
+      {#if !setupOnly}<button type="button" onclick={schedule} disabled={busy || sending || !configured || !canSchedule || !due}
+        class="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground disabled:opacity-50">{$_('sendLater.schedule')}</button>{/if}
     </AlertDialog.Footer>
   </AlertDialog.Content>
 </AlertDialog.Root>

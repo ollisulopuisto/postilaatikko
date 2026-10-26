@@ -21,14 +21,21 @@ type ClientConfig struct {
 
 // ClientJob is local progress metadata; its MIME payload stays encrypted.
 type ClientJob struct {
-	ID        string    `json:"id"`
-	AccountID string    `json:"accountId"`
-	DraftID   string    `json:"draftId"`
-	Revision  int64     `json:"revision"`
-	State     string    `json:"state"`
-	DueAt     time.Time `json:"dueAt"`
-	Code      string    `json:"code"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID               string    `json:"id"`
+	AccountID        string    `json:"accountId"`
+	DraftID          string    `json:"draftId"`
+	Revision         int64     `json:"revision"`
+	State            string    `json:"state"`
+	DueAt            time.Time `json:"dueAt"`
+	Code             string    `json:"code"`
+	UpdatedAt        time.Time `json:"updatedAt"`
+	Subject          string    `json:"subject,omitempty"`
+	From             string    `json:"from,omitempty"`
+	To               string    `json:"to,omitempty"`
+	ToCount          int       `json:"toCount,omitempty"`
+	DraftCleanup     string    `json:"draftCleanup"`
+	DraftFingerprint string    `json:"-"`
+	PreviewAvailable bool      `json:"previewAvailable"`
 }
 
 // ClientStore persists ciphertext before submission so network failures can be
@@ -48,8 +55,15 @@ func OpenClientStore(directory string) (*ClientStore, error) {
 		endpoint TEXT NOT NULL, helper_key TEXT NOT NULL, request BLOB NOT NULL,
 		due_at INTEGER NOT NULL, state TEXT NOT NULL, code TEXT NOT NULL DEFAULT '', updated_at INTEGER NOT NULL);
 		CREATE UNIQUE INDEX IF NOT EXISTS requests_draft ON requests(account_id, draft_id) WHERE draft_id != '' AND state NOT IN ('cancelled','failed');
-		CREATE TABLE IF NOT EXISTS client_identity(singleton INTEGER PRIMARY KEY CHECK(singleton = 1), public_key TEXT NOT NULL);`)
+		CREATE TABLE IF NOT EXISTS client_identity(singleton INTEGER PRIMARY KEY CHECK(singleton = 1), public_key TEXT NOT NULL);
+		CREATE TABLE IF NOT EXISTS immediate_sends (
+			account_id TEXT NOT NULL, draft_id TEXT NOT NULL, attempted_at INTEGER NOT NULL,
+			PRIMARY KEY(account_id, draft_id));`)
 	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := upgradeClientSchema(db); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -89,7 +103,7 @@ func (s *ClientStore) Config(ctx context.Context, accountID string) (ClientConfi
 
 // Schedule stores ciphertext durably before attempting helper submission. On a
 // network error it still returns the local job ID so the UI can retry/query it.
-func (s *ClientStore) Schedule(ctx context.Context, accountID, draftID string, delivery Delivery, client *Identity) (ClientJob, error) {
+func (s *ClientStore) Schedule(ctx context.Context, accountID, draftID, draftFingerprint string, delivery Delivery, client *Identity) (ClientJob, error) {
 	if draftID == "" {
 		return ClientJob{}, errors.New("save the draft before scheduling")
 	}
@@ -110,19 +124,59 @@ func (s *ClientStore) Schedule(ctx context.Context, accountID, draftID string, d
 	if err != nil {
 		return ClientJob{}, err
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO requests(id, account_id, draft_id, revision, endpoint, helper_key, request, due_at, state, updated_at)
-		VALUES(?, ?, ?, 1, ?, ?, ?, ?, 'awaiting_ack', ?)`, command.JobID, accountID, draftID, config.Endpoint, config.HelperKey, encoded, delivery.DueAt.UnixMilli(), time.Now().UnixMilli())
+	preview, err := deliveryPreview(&delivery)
+	if err != nil {
+		return ClientJob{}, err
+	}
+	sealedPreview, err := sealPreview(preview, client)
+	if err != nil {
+		return ClientJob{}, err
+	}
+	inserted, err := s.db.ExecContext(ctx, `INSERT INTO requests(id, account_id, draft_id, revision, endpoint, helper_key, request, due_at, state, updated_at, preview, draft_fingerprint)
+		SELECT ?, ?, ?, 1, ?, ?, ?, ?, 'awaiting_ack', ?, ?, ?
+		WHERE NOT EXISTS (SELECT 1 FROM immediate_sends WHERE account_id = ? AND draft_id = ?)`, command.JobID, accountID, draftID, config.Endpoint, config.HelperKey, encoded, delivery.DueAt.UnixMilli(), time.Now().UnixMilli(), sealedPreview, draftFingerprint, accountID, draftID)
 	if err != nil {
 		if existing, findErr := s.FindDraft(ctx, accountID, draftID); findErr == nil {
 			return existing, errors.New("this draft already has a scheduled job; inspect it before scheduling again")
 		}
 		return ClientJob{}, err
 	}
+	count, err := inserted.RowsAffected()
+	if err != nil {
+		return ClientJob{}, err
+	}
+	if count != 1 {
+		return ClientJob{}, errors.New("this draft has already been used for Send Now; inspect delivery before scheduling a new draft")
+	}
 	job, submitErr := s.Submit(ctx, command.JobID, client)
 	if job.ID == "" {
 		job = ClientJob{ID: command.JobID, AccountID: accountID, DraftID: draftID, Revision: 1, State: "awaiting_ack", DueAt: delivery.DueAt, UpdatedAt: time.Now().UTC()}
 	}
 	return job, submitErr
+}
+
+// BeginImmediateSend atomically arbitrates Send Now against scheduling in other
+// windows/processes. Keep this small durable marker even after a failed send:
+// ordinary SMTP errors can be ambiguous, so switching that draft to Send Later
+// must not silently cause another delivery. Ordinary Send Now retry behavior is
+// unchanged; this marker is not an exactly-once SMTP guarantee.
+func (s *ClientStore) BeginImmediateSend(ctx context.Context, accountID, draftID string) error {
+	result, err := s.db.ExecContext(ctx, `INSERT INTO immediate_sends(account_id, draft_id, attempted_at)
+		SELECT ?, ?, ? WHERE NOT EXISTS (
+			SELECT 1 FROM requests WHERE account_id = ? AND draft_id = ? AND state NOT IN ('cancelled','failed'))
+		ON CONFLICT(account_id, draft_id) DO UPDATE SET attempted_at = excluded.attempted_at`,
+		accountID, draftID, time.Now().UnixMilli(), accountID, draftID)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count != 1 {
+		return errors.New("this draft already has a Send Later job; inspect or cancel it before sending again")
+	}
+	return nil
 }
 
 // Submit retries the exact durable request bytes and records verified status.
@@ -140,15 +194,15 @@ func (s *ClientStore) Submit(ctx context.Context, id string, client *Identity) (
 	status, err := SendEnvelope(ctx, endpoint, encoded, client, helper)
 	if err != nil {
 		var remote *RemoteError
-		if job.State == "cancellation_awaiting_ack" && errors.As(err, &remote) && (remote.Code == "delivery_started" || remote.Code == "stale_revision") {
+		if (job.State == "cancellation_awaiting_ack" || job.State == "reschedule_awaiting_ack") && errors.As(err, &remote) && (remote.Code == "delivery_started" || remote.Code == "stale_revision") {
 			// An authenticated rejection means this cancellation revision
 			// was never accepted. Query with a fresh nonce, then reconcile
 			// even if the helper's actual revision is the earlier schedule.
 			actual, queryErr := queryHelperStatus(ctx, job, endpoint, helper, client)
 			if queryErr == nil && actual.ID == job.ID && actual.Revision > 0 {
-				result, writeErr := s.db.ExecContext(ctx, `UPDATE requests SET revision = ?, state = ?, code = ?, request = X'', updated_at = ?
-					WHERE id = ? AND revision = ? AND state = 'cancellation_awaiting_ack'`,
-					actual.Revision, actual.State, actual.Code, time.Now().UnixMilli(), job.ID, job.Revision)
+				result, writeErr := s.db.ExecContext(ctx, `UPDATE requests SET revision = ?, state = ?, code = ?, request = X'', due_at = CASE WHEN ? != 0 THEN ? ELSE due_at END, updated_at = ?
+					WHERE id = ? AND revision = ? AND state IN ('cancellation_awaiting_ack','reschedule_awaiting_ack')`,
+					actual.Revision, actual.State, actual.Code, statusDueMillis(actual), statusDueMillis(actual), time.Now().UnixMilli(), job.ID, job.Revision)
 				if writeErr != nil {
 					return job, writeErr
 				}
@@ -157,6 +211,9 @@ func (s *ClientStore) Submit(ctx context.Context, id string, client *Identity) (
 					return job, ErrStateChanged
 				}
 				job.Revision, job.State, job.Code = actual.Revision, string(actual.State), actual.Code
+				if !actual.DueAt.IsZero() {
+					job.DueAt = actual.DueAt
+				}
 			}
 		}
 		return job, err
@@ -203,7 +260,9 @@ func (s *ClientStore) Cancel(ctx context.Context, id string, client *Identity) (
 	if err != nil {
 		return job, err
 	}
-	result, err := s.db.ExecContext(ctx, `UPDATE requests SET revision = revision + 1, request = ?, state = 'cancellation_awaiting_ack', code = '', updated_at = ?
+	result, err := s.db.ExecContext(ctx, `UPDATE requests SET revision = revision + 1,
+		delivery_request = CASE WHEN LENGTH(delivery_request) = 0 THEN request ELSE delivery_request END,
+		request = ?, state = 'cancellation_awaiting_ack', code = '', updated_at = ?
 		WHERE id = ? AND revision = ?`, encoded, time.Now().UnixMilli(), id, job.Revision)
 	if err != nil {
 		return job, err
@@ -224,8 +283,8 @@ func (s *ClientStore) request(ctx context.Context, id string, includePayload boo
 	if includePayload {
 		payload = "request"
 	}
-	err := s.db.QueryRowContext(ctx, `SELECT id, account_id, draft_id, revision, state, due_at, code, updated_at, endpoint, helper_key, `+payload+` FROM requests WHERE id = ?`, id).
-		Scan(&job.ID, &job.AccountID, &job.DraftID, &job.Revision, &job.State, &due, &job.Code, &updated, &endpoint, &key, &encoded)
+	err := s.db.QueryRowContext(ctx, `SELECT id, account_id, draft_id, revision, state, due_at, code, updated_at, cleanup_state, draft_fingerprint, endpoint, helper_key, `+payload+` FROM requests WHERE id = ?`, id).
+		Scan(&job.ID, &job.AccountID, &job.DraftID, &job.Revision, &job.State, &due, &job.Code, &updated, &job.DraftCleanup, &job.DraftFingerprint, &endpoint, &key, &encoded)
 	job.DueAt, job.UpdatedAt = time.UnixMilli(due).UTC(), time.UnixMilli(updated).UTC()
 	if err != nil {
 		return job, endpoint, PublicKey{}, nil, err
@@ -240,7 +299,9 @@ func (s *ClientStore) record(ctx context.Context, job ClientJob, status Status) 
 	}
 	result, err := s.db.ExecContext(ctx, `UPDATE requests SET revision = ?, state = ?, code = ?, updated_at = ?,
 		request = CASE WHEN ? IN ('sent','cancelled') AND ? != 'sent_copy_failed' THEN X'' ELSE request END
-		WHERE id = ? AND revision <= ?`, status.Revision, status.State, status.Code, time.Now().UnixMilli(), status.State, status.Code, job.ID, status.Revision)
+		, delivery_request = CASE WHEN ? IN ('sent','cancelled') AND ? != 'sent_copy_failed' THEN X'' ELSE delivery_request END,
+		due_at = CASE WHEN ? != 0 THEN ? ELSE due_at END
+		WHERE id = ? AND revision = ? AND state = ? AND updated_at = ?`, status.Revision, status.State, status.Code, time.Now().UnixMilli(), status.State, status.Code, status.State, status.Code, statusDueMillis(status), statusDueMillis(status), job.ID, job.Revision, job.State, job.UpdatedAt.UnixMilli())
 	if err != nil {
 		return job, err
 	}
@@ -249,7 +310,17 @@ func (s *ClientStore) record(ctx context.Context, job ClientJob, status Status) 
 		return job, ErrStateChanged
 	}
 	job.Revision, job.State, job.Code, job.UpdatedAt = status.Revision, string(status.State), status.Code, time.Now().UTC()
+	if !status.DueAt.IsZero() {
+		job.DueAt = status.DueAt
+	}
 	return job, nil
+}
+
+func statusDueMillis(status Status) int64 {
+	if status.DueAt.IsZero() {
+		return 0
+	}
+	return status.DueAt.UnixMilli()
 }
 
 // List returns at most 100 local jobs without loading encrypted MIME payloads.

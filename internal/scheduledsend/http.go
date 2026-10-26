@@ -103,6 +103,8 @@ func receiptErrorCode(err error) string {
 		return "delivery_started"
 	case errors.Is(err, ErrUnpaired):
 		return "not_authorized"
+	case errors.Is(err, ErrQueueFull):
+		return "queue_full"
 	case errors.Is(err, sql.ErrNoRows):
 		return "job_not_found"
 	default:

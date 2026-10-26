@@ -22,6 +22,18 @@ export interface ScheduledJob {
   dueAt: string
   code: string
   updatedAt: string
+  subject?: string
+  from?: string
+  to?: string
+  toCount?: number
+  previewAvailable: boolean
+  draftCleanup: string
+}
+
+export interface ScheduledPage {
+  jobs: ScheduledJob[]
+  total: number
+  keyAvailable: boolean
 }
 
 export interface ScheduleResult {
@@ -36,6 +48,8 @@ interface Backend {
   ScheduleMessage(accountId: string, message: smtp.ComposeMessage, draftId: string, due: string): Promise<ScheduleResult>
   ListScheduledMessages(accountId: string): Promise<ScheduledJob[]>
   UpdateScheduledMessage(id: string, action: string): Promise<ScheduleResult>
+  RescheduleMessage(id: string, due: string): Promise<ScheduleResult>
+  GetScheduledPage(accountId: string, history: boolean, limit: number, offset: number): Promise<ScheduledPage>
   SendMessageWithDraftGuard(accountId: string, message: smtp.ComposeMessage, draftId: string): Promise<void>
 }
 

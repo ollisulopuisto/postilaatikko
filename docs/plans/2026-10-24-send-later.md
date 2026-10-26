@@ -6,7 +6,7 @@
 
 **Tech stack:** Go, `golang.org/x/crypto/nacl/box`, OS keyring, SQLite (`modernc.org/sqlite`), existing SMTP/account/OAuth infrastructure.
 
-**Review milestone:** The encrypted foundation was checkpointed at `7be5fe3`. The next slice adds the helper-local SMTP adapter, a bounded direct HTTP(S) transport with encrypted request-bound receipts, CLI and macOS login-agent installation, a durable ciphertext client queue, and main/detached composer setup/scheduling/status/cancellation controls. Rescheduling, a dedicated Scheduled view, hosted relay, rotation/retention/quota policies and runtime/security regression verification remain incomplete. Do not mark P-011 complete or release it based on compilation alone.
+**Review milestone:** The encrypted foundation was checkpointed at `7be5fe3`. The next slice adds the helper-local SMTP adapter, a bounded direct HTTP(S) transport with encrypted request-bound receipts, CLI and macOS login-agent installation, a durable ciphertext client queue, and main/detached composer setup/scheduling/status/cancellation controls. The current-main follow-up implements rescheduling, a dedicated Scheduled view, guarded draft cleanup and helper queue caps. Sidebar entry integration, hosted relay, rotation/retention policies and runtime/security regression verification remain incomplete. Do not mark P-011 complete or release it based on compilation alone.
 
 ## Slice 1 — encrypted queue and worker foundation (this branch)
 
@@ -49,3 +49,14 @@
 ## Required verification before activation
 
 Protocol tampering, unknown/revoked keys, helper key mismatch, replay and out-of-order cancellation, duplicate revisions, permission scope, queue restart and concurrent claims, cancellation races, lost SMTP acknowledgement, transient failures, Sent append failure, expired OAuth credentials, large attachments, and keychain lock/reboot. Runtime activation and release require this coverage and security review; the foundation alone is not a usable Send Later feature.
+
+## Current-main follow-up milestone
+
+1. Extend `internal/scheduledsend/client_store.go` with an additive private-client schema upgrade: preserve encrypted schedule payloads separately from operation requests, cache encrypted list previews, and persist the draft snapshot/cleanup outcome.
+2. Add sender-side authenticated payload opening in `protocol.go`, then revision-based time-only rescheduling. A rejected change must reconcile actual helper status; ambiguous requests keep their exact bytes for retry. Keep signed MIME and Message-ID immutable.
+3. Add bounded/paged Scheduled APIs and `frontend/src/lib/components/scheduled/ScheduledPane.svelte`, reachable from the mail sidebar. Poll visible statuses with bounded concurrency and display last-confirmed/offline/pending-change states.
+4. Add delivery-confirmed cleanup in `app/scheduled_send.go` and `internal/draft`: compare the saved draft fingerprint, preserve changed drafts, confirm remote deletion, and compare-and-delete the unchanged local row. A concurrent save must create a new recoverable draft rather than silently updating a removed row.
+5. Add queue-capacity limits and address source-review reliability issues. Keep the helper-only deployment scope; hosted transport/forward secrecy remain outside this milestone.
+6. Update setup/task/roadmap docs and compile/type-check the affected paths. Tests and live delivery remain unperformed under the coordinator's explicit instruction, so do not mark P-011 fully verified/released.
+
+Follow-up source verification: affected Go builds and Svelte type checking pass (two existing titlebar ARIA warnings). The production frontend build and final diff check are recorded in the task ledger. No tests or live delivery are performed under the coordinator instruction. The sidebar entry is deliberately left outside this commit for concurrent sidebar integration.
