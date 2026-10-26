@@ -27,6 +27,8 @@
   import type { PinnedFolder } from '$lib/sidebar/pins'
   import { sidebarLayout } from '$lib/stores/sidebarLayout.svelte'
   import type { SidebarBlock } from '$lib/sidebar/layout'
+  import { sidebarGroups } from '$lib/stores/sidebarGroups.svelte'
+  import type { SidebarGroup, SidebarGroupEntry } from '$lib/sidebar/groups'
   import type { virtualfolder } from '../../../../wailsjs/go/models'
 
   // Folder item type for flat navigation list
@@ -158,6 +160,7 @@
   let showVirtualFolderDialog = $state(false)
   let editingVirtualFolder = $state<virtualfolder.VirtualFolder | null>(null)
   let expandedFolderGroups = $state<Record<string, boolean>>({})
+  let draggedGroupId = $state<string | null>(null)
   // Presets use the saved expanded width as their durable value. This keeps
   // manual resizing and the Settings selector in one source of truth.
   const sidebarDensity = $derived(getSidebarWidth() >= 350 ? 'sidebar-density-large' : getSidebarWidth() >= 310 ? 'sidebar-density-medium' : 'sidebar-density-compact')
@@ -195,6 +198,7 @@
     void getUIStateVersion()
     sidebarPins.sync()
     sidebarLayout.sync()
+    sidebarGroups.sync()
   })
 
   // CSS order of a sidebar block. Home has no order and sorts first; blocks
@@ -222,6 +226,20 @@
 
   function isPinnedSelected(pin: PinnedFolder): boolean {
     return selectionSource === 'account' && selectedFolderId === pin.folderId && selectedAccountId === pin.accountId
+  }
+
+  function moveGroupEntry(entry: SidebarGroupEntry, group: SidebarGroup): void {
+    sidebarGroups.moveEntry(entry, group.id)
+  }
+
+  function entryGroup(entry: SidebarGroupEntry): SidebarGroup | undefined {
+    return sidebarGroups.list.find(group => group.entries.includes(entry))
+  }
+
+  function groupDrop(event: DragEvent, targetId: string): void {
+    event.preventDefault()
+    if (draggedGroupId && draggedGroupId !== targetId) sidebarGroups.reorder(draggedGroupId, targetId)
+    draggedGroupId = null
   }
 
   function selectVirtualFolder(item: virtualfolder.VirtualFolder) {
@@ -405,6 +423,10 @@
     { type: 'spam', label: 'sidebar.blocked', icon: 'mdi:thumb-down-outline' },
     { type: 'all', label: 'sidebar.snoozed', icon: 'mdi:clock-outline' },
   ]
+
+  const groupEntries: Partial<Record<SidebarGroupEntry, { type: string; label: string; icon: string }>> = Object.fromEntries(
+    [...primaryFolders, ...secondaryFolders].map(item => [`special:${item.type}`, item]),
+  ) as Partial<Record<SidebarGroupEntry, { type: string; label: string; icon: string }>>
 
   // Open add account dialog
   function openAddAccount() {
@@ -750,135 +772,92 @@
         />
         {/if}
 
-        {#if sidebarLayout.isVisible('pinned') && sidebarPins.list.length > 0}
-          <section class="mt-3" style:order={blockOrder('pinned')} aria-label={$_('sidebar.pinned')}>
-            <div class="px-3 py-1">
-              <span class="sidebar-primary-heading" data-sidebar-label>{$_('sidebar.pinned')}</span>
-            </div>
-            {#each sidebarPins.list as pin (`${pin.accountId}:${pin.folderId}`)}
-              <div class="group flex min-h-9 items-center gap-1 px-2">
-                <button
-                  type="button"
-                  class="sidebar-primary-link min-w-0 flex-1 {isPinnedSelected(pin) ? 'sidebar-primary-link-selected' : ''}"
-                  onclick={() => selectPinnedFolder(pin)}
-                  title={pin.name}
-                  data-sidebar-pinned-folder
-                >
-                  <Icon icon="mdi:folder-outline" class="h-5 w-5 shrink-0" />
-                  <span data-sidebar-label class="truncate">{pin.name}</span>
-                </button>
-                {#if !collapsed}
-                  <button
-                    type="button"
-                    class="flex h-7 w-7 shrink-0 items-center justify-center rounded opacity-0 hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100"
-                    onclick={() => sidebarPins.unpin(pin.accountId, pin.folderId)}
-                    aria-label={`${$_('contextMenu.unpinFromSidebar')}: ${pin.name}`}
-                    title={$_('contextMenu.unpinFromSidebar')}
-                  >
-                    <Icon icon="mdi:pin-off-outline" class="h-4 w-4" />
+        {#each sidebarGroups.list as group, groupIndex (group.id)}
+          {#if !group.hidden}
+            <section
+              class="mt-2 rounded-md border border-border/50 px-1 pb-1"
+              aria-label={$_(group.titleKey)}
+              draggable={!collapsed}
+              ondragstart={(event) => { draggedGroupId = group.id; event.dataTransfer?.setData('text/plain', group.id) }}
+              ondragover={(event) => event.preventDefault()}
+              ondrop={(event) => groupDrop(event, group.id)}
+            >
+              {#if !collapsed}
+                <div class="group flex items-center gap-1 px-2 py-1">
+                  <span class="cursor-grab text-muted-foreground" aria-hidden="true"><Icon icon="mdi:drag" class="h-4 w-4" /></span>
+                  <button type="button" class="flex min-w-0 flex-1 items-center gap-1 text-left" onclick={() => sidebarGroups.toggleCollapsed(group.id)} aria-expanded={!group.collapsed}>
+                    <Icon icon={group.collapsed ? 'mdi:chevron-right' : 'mdi:chevron-down'} class="h-4 w-4" />
+                    <span class="sidebar-primary-heading truncate" data-sidebar-label>{$_(group.titleKey)}</span>
                   </button>
-                {/if}
-              </div>
-            {/each}
-          </section>
-        {/if}
-
-        {#if sidebarLayout.isVisible('virtual')}
-        <section class="mt-3" style:order={blockOrder('virtual')} aria-label="Virtual folders">
-          <div class="flex items-center justify-between px-3 py-1">
-            <span class="sidebar-primary-heading">Virtual folders</span>
-            <button type="button" class="sidebar-toolbar-button" onclick={() => openVirtualFolderDialog()} title="Create virtual folder" aria-label="Create virtual folder">
-              <Icon icon="mdi:plus" class="h-4 w-4" />
-            </button>
-          </div>
-          {#each virtualFoldersStore.folders as item, index (item.id)}
-            <div class="group flex min-h-9 items-center gap-1 px-2">
-              <button type="button" class="sidebar-primary-link min-w-0 flex-1 {selectedAccountId === 'virtual' && selectedFolderId === item.id ? 'sidebar-primary-link-selected' : ''}" onclick={() => selectVirtualFolder(item)} title={item.name}>
-                <Icon icon="mdi:folder-multiple-outline" class="h-5 w-5 shrink-0" />
-                <span data-sidebar-label class="truncate">{item.name}</span>
-                {#if (virtualFoldersStore.unreadCounts[item.id] ?? 0) > 0}
-                  <span class="ml-auto text-xs tabular-nums text-muted-foreground">{virtualFoldersStore.unreadCounts[item.id]}</span>
-                {/if}
-              </button>
-              <button type="button" class="hidden h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-muted group-hover:flex" onclick={() => openVirtualFolderDialog(item)} aria-label={`Edit ${item.name}`} title="Edit">
-                <Icon icon="mdi:pencil-outline" class="h-4 w-4" />
-              </button>
-              <button type="button" class="hidden h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-muted group-hover:flex disabled:opacity-40" onclick={() => void virtualFoldersStore.move(item.id, -1)} disabled={index === 0} aria-label={`Move ${item.name} up`} title="Move up">
-                <Icon icon="mdi:chevron-up" class="h-4 w-4" />
-              </button>
-              <button type="button" class="hidden h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-muted group-hover:flex disabled:opacity-40" onclick={() => void virtualFoldersStore.move(item.id, 1)} disabled={index === virtualFoldersStore.folders.length - 1} aria-label={`Move ${item.name} down`} title="Move down">
-                <Icon icon="mdi:chevron-down" class="h-4 w-4" />
-              </button>
-              <button type="button" class="hidden h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-muted group-hover:flex" onclick={() => void deleteVirtualFolder(item)} aria-label={`Delete ${item.name}`} title="Delete">
-                <Icon icon="mdi:delete-outline" class="h-4 w-4" />
-              </button>
-            </div>
-          {/each}
-        </section>
-        {/if}
-
-        {#if sidebarLayout.isVisible('calendar')}
-        <button type="button" class="sidebar-primary-link" style:order={blockOrder('calendar')} onclick={() => setActiveExtension('calendar')}>
-          <Icon icon="mdi:calendar-blank-outline" class="h-6 w-6" />
-          <span data-sidebar-label>{$_('sidebar.calendar')}</span>
-        </button>
-        {/if}
-
-        {#if sidebarLayout.isVisible('primary')}
-        <div class="sidebar-primary-separator" style:order={blockOrder('primary')}></div>
-        {#each primaryFolders as item (item.type)}
-          <div class="sidebar-folder-group" style:order={blockOrder('primary')}>
-            <div class="sidebar-folder-group-row">
-              <button type="button" class="sidebar-folder-toggle" class:sidebar-folder-toggle-expanded={expandedFolderGroups[item.type]} onclick={(event) => toggleFolderGroup(event, item.type)} aria-label={$_(item.label)} aria-expanded={expandedFolderGroups[item.type] ?? false}>
-                <Icon icon={expandedFolderGroups[item.type] ? 'mdi:chevron-down' : 'mdi:chevron-right'} class="h-4 w-4" />
-              </button>
-              <button type="button" class="sidebar-primary-link sidebar-folder-group-link" class:sidebar-primary-link-selected={isPrimaryFolderSelected(item.type)} onclick={() => selectPrimaryFolder(item.type)}>
-                <Icon icon={item.icon} class="h-6 w-6" />
-                <span data-sidebar-label>{$_(item.label)}</span>
-              </button>
-            </div>
-            {#if expandedFolderGroups[item.type]}
-              <div class="sidebar-folder-account-list">
-                {#each getFolderGroupAccounts(item.type) as entry (entry.account.id)}
-                  {@const avatarPhoto = contactPhotos.get(entry.account.email)}
-                  <button type="button" class="sidebar-folder-account" onclick={() => selectFolderGroupAccount(entry.account.id, item.type)}>
-                    <Avatar email={entry.account.email} name={entry.account.name} size={16} photoData={avatarPhoto?.data} photoMediaType={avatarPhoto?.mediaType} />
-                    <span class="truncate">{entry.account.name || entry.account.email}</span>
+                  <button type="button" class="hidden h-7 w-7 items-center justify-center rounded hover:bg-muted group-hover:flex" onclick={() => sidebarGroups.setHidden(group.id, true)} aria-label={`${$_('sidebar.hideGroup')}: ${$_(group.titleKey)}`} title={$_('sidebar.hideGroup')}>
+                    <Icon icon="mdi:eye-off-outline" class="h-4 w-4" />
                   </button>
-                {/each}
-              </div>
-            {/if}
-          </div>
-        {/each}
-        {/if}
-
-        {#if !collapsed && sidebarLayout.isVisible('secondary')}
-          <p class="sidebar-primary-heading" style:order={blockOrder('secondary')} data-sidebar-label>{$_('sidebar.folders')}</p>
-          {#each secondaryFolders as item (item.type)}
-            <div class="sidebar-folder-group sidebar-secondary-folder-group" style:order={blockOrder('secondary')}>
-              <div class="sidebar-folder-group-row">
-                <button type="button" class="sidebar-folder-toggle" class:sidebar-folder-toggle-expanded={expandedFolderGroups[item.type]} onclick={(event) => toggleFolderGroup(event, item.type)} aria-label={$_(item.label)} aria-expanded={expandedFolderGroups[item.type] ?? false}>
-                  <Icon icon={expandedFolderGroups[item.type] ? 'mdi:chevron-down' : 'mdi:chevron-right'} class="h-4 w-4" />
-                </button>
-                <button type="button" class="sidebar-primary-link sidebar-folder-group-link" class:sidebar-primary-link-selected={isPrimaryFolderSelected(item.type)} onclick={() => selectPrimaryFolder(item.type)}>
-                  <Icon icon={item.icon} class="h-6 w-6" />
-                  <span data-sidebar-label>{$_(item.label)}</span>
-                </button>
-              </div>
-              {#if expandedFolderGroups[item.type]}
-                <div class="sidebar-folder-account-list">
-                  {#each getFolderGroupAccounts(item.type) as entry (entry.account.id)}
-                    {@const avatarPhoto = contactPhotos.get(entry.account.email)}
-                    <button type="button" class="sidebar-folder-account" onclick={() => selectFolderGroupAccount(entry.account.id, item.type)}>
-                      <Avatar email={entry.account.email} name={entry.account.name} size={16} photoData={avatarPhoto?.data} photoMediaType={avatarPhoto?.mediaType} />
-                      <span class="truncate">{entry.account.name || entry.account.email}</span>
-                    </button>
-                  {/each}
+                  <button type="button" class="hidden h-7 w-7 items-center justify-center rounded hover:bg-muted group-hover:flex disabled:opacity-40" onclick={() => sidebarGroups.move(group.id, -1)} disabled={groupIndex === 0} aria-label={`${$_('sidebarLayout.moveUp')}: ${$_(group.titleKey)}`}>
+                    <Icon icon="mdi:chevron-up" class="h-4 w-4" />
+                  </button>
+                  <button type="button" class="hidden h-7 w-7 items-center justify-center rounded hover:bg-muted group-hover:flex disabled:opacity-40" onclick={() => sidebarGroups.move(group.id, 1)} disabled={groupIndex === sidebarGroups.list.length - 1} aria-label={`${$_('sidebarLayout.moveDown')}: ${$_(group.titleKey)}`}>
+                    <Icon icon="mdi:chevron-down" class="h-4 w-4" />
+                  </button>
                 </div>
               {/if}
-            </div>
-          {/each}
-        {/if}
+
+              {#if !group.collapsed || collapsed}
+                {#if group.entries.includes('virtual-folders')}
+                  <div class="flex items-center justify-between px-3 py-1">
+                    <span class="sidebar-primary-heading" data-sidebar-label>{$_('sidebar.virtualFolders')}</span>
+                    <button type="button" class="sidebar-toolbar-button" onclick={() => openVirtualFolderDialog()} title={$_('sidebar.newVirtualFolder')} aria-label={$_('sidebar.newVirtualFolder')}><Icon icon="mdi:plus" class="h-4 w-4" /></button>
+                  </div>
+                  {#each virtualFoldersStore.folders as item, index (item.id)}
+                    <div class="group flex min-h-9 items-center gap-1 px-2">
+                      <button type="button" class="sidebar-primary-link min-w-0 flex-1 {selectedAccountId === 'virtual' && selectedFolderId === item.id ? 'sidebar-primary-link-selected' : ''}" onclick={() => selectVirtualFolder(item)} title={item.name}>
+                        <Icon icon="mdi:folder-multiple-outline" class="h-5 w-5 shrink-0" /><span data-sidebar-label class="truncate">{item.name}</span>
+                        {#if (virtualFoldersStore.unreadCounts[item.id] ?? 0) > 0}<span class="ml-auto text-xs tabular-nums text-muted-foreground">{virtualFoldersStore.unreadCounts[item.id]}</span>{/if}
+                      </button>
+                      <button type="button" class="hidden h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-muted group-hover:flex" onclick={() => openVirtualFolderDialog(item)} aria-label={`${$_('common.edit')} ${item.name}`}><Icon icon="mdi:pencil-outline" class="h-4 w-4" /></button>
+                      <button type="button" class="hidden h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-muted group-hover:flex" onclick={() => void deleteVirtualFolder(item)} aria-label={`${$_('common.delete')} ${item.name}`}><Icon icon="mdi:delete-outline" class="h-4 w-4" /></button>
+                    </div>
+                  {/each}
+                {/if}
+
+                {#if group.entries.includes('starred-folders')}
+                  {#each sidebarPins.list as pin (`${pin.accountId}:${pin.folderId}`)}
+                    <div class="group flex min-h-9 items-center gap-1 px-2">
+                      <button type="button" class="sidebar-primary-link min-w-0 flex-1 {isPinnedSelected(pin) ? 'sidebar-primary-link-selected' : ''}" onclick={() => selectPinnedFolder(pin)} title={pin.name} data-sidebar-pinned-folder>
+                        <Icon icon="mdi:folder-star-outline" class="h-5 w-5 shrink-0" /><span data-sidebar-label class="truncate">{pin.name}</span>
+                      </button>
+                      {#if !collapsed}<button type="button" class="hidden h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-muted group-hover:flex" onclick={() => sidebarPins.unpin(pin.accountId, pin.folderId)} aria-label={`${$_('contextMenu.unpinFromSidebar')}: ${pin.name}`} title={$_('contextMenu.unpinFromSidebar')}><Icon icon="mdi:pin-off-outline" class="h-4 w-4" /></button>{/if}
+                    </div>
+                  {/each}
+                {/if}
+
+                {#each group.entries as entry (entry)}
+                  {@const item = groupEntries[entry]}
+                  {#if item}
+                    <div class="sidebar-folder-group">
+                      <div class="sidebar-folder-group-row">
+                        <button type="button" class="sidebar-folder-toggle" class:sidebar-folder-toggle-expanded={expandedFolderGroups[item.type]} onclick={(event) => toggleFolderGroup(event, item.type)} aria-label={$_(item.label)} aria-expanded={expandedFolderGroups[item.type] ?? false}><Icon icon={expandedFolderGroups[item.type] ? 'mdi:chevron-down' : 'mdi:chevron-right'} class="h-4 w-4" /></button>
+                        <button type="button" class="sidebar-primary-link sidebar-folder-group-link" class:sidebar-primary-link-selected={isPrimaryFolderSelected(item.type)} onclick={() => selectPrimaryFolder(item.type)}><Icon icon={item.icon} class="h-6 w-6" /><span data-sidebar-label>{$_(item.label)}</span></button>
+                        {#if !collapsed}
+                          <select class="h-7 max-w-10 rounded bg-transparent text-xs opacity-0 group-hover:opacity-100 focus:opacity-100" value={group.id} aria-label={`${$_('sidebar.moveToGroup')}: ${$_(item.label)}`} onchange={(event) => moveGroupEntry(entry, sidebarGroups.list.find(candidate => candidate.id === event.currentTarget.value)!)}>
+                            {#each sidebarGroups.list as target (target.id)}<option value={target.id}>{$_(target.titleKey)}</option>{/each}
+                          </select>
+                        {/if}
+                      </div>
+                      {#if expandedFolderGroups[item.type]}
+                        <div class="sidebar-folder-account-list">
+                          {#each getFolderGroupAccounts(item.type) as accountEntry (accountEntry.account.id)}
+                            {@const avatarPhoto = contactPhotos.get(accountEntry.account.email)}
+                            <button type="button" class="sidebar-folder-account" onclick={() => selectFolderGroupAccount(accountEntry.account.id, item.type)}><Avatar email={accountEntry.account.email} name={accountEntry.account.name} size={16} photoData={avatarPhoto?.data} photoMediaType={avatarPhoto?.mediaType} /><span class="truncate">{accountEntry.account.name || accountEntry.account.email}</span></button>
+                          {/each}
+                        </div>
+                      {/if}
+                    </div>
+                  {/if}
+                {/each}
+              {/if}
+            </section>
+          {/if}
+        {/each}
 
         <button type="button" class="sidebar-more-button" style:order="100" onclick={openAllFolders} aria-expanded={showAllFolders}>
           <Icon icon="mdi:folder-multiple-outline" class="h-6 w-6" />

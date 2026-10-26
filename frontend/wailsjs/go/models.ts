@@ -890,6 +890,26 @@ export namespace appstate {
 		        this.name = source["name"];
 		    }
 		}
+	export class SidebarGroup {
+	    id: string;
+	    titleKey: string;
+	    entries: string[];
+	    collapsed: boolean;
+	    hidden: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new SidebarGroup(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.titleKey = source["titleKey"];
+	        this.entries = source["entries"];
+	        this.collapsed = source["collapsed"];
+	        this.hidden = source["hidden"];
+	    }
+	}
 		export class UIState {
 	    selectedAccountId: string;
 	    selectedFolderId: string;
@@ -907,6 +927,8 @@ export namespace appstate {
 	    pinnedFolders?: PinnedFolder[];
 	    sidebarOrder?: string[];
 	    sidebarHidden?: string[];
+	    sidebarGroups?: SidebarGroup[];
+	    showContactsCalendarRail?: boolean;
 	    activeExtension?: string;
 	
 	    static createFrom(source: any = {}) {
@@ -931,6 +953,8 @@ export namespace appstate {
 	        this.pinnedFolders = source["pinnedFolders"];
 	        this.sidebarOrder = source["sidebarOrder"];
 	        this.sidebarHidden = source["sidebarHidden"];
+	        this.sidebarGroups = source["sidebarGroups"];
+	        this.showContactsCalendarRail = source["showContactsCalendarRail"];
 		        this.activeExtension = source["activeExtension"];
 	    }
 	}

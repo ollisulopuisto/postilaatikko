@@ -31,13 +31,27 @@ type UIState struct {
 	// Sidebar block order and hidden blocks. Block names are owned by the
 	// frontend (lib/sidebar/layout.ts), which normalizes stale or unknown
 	// entries, so the backend stores them as given. Unset means the default layout.
-	SidebarOrder  []string `json:"sidebarOrder,omitempty"`
-	SidebarHidden []string `json:"sidebarHidden,omitempty"`
+	SidebarOrder  []string       `json:"sidebarOrder,omitempty"`
+	SidebarHidden []string       `json:"sidebarHidden,omitempty"`
+	SidebarGroups []SidebarGroup `json:"sidebarGroups,omitempty"`
+
+	// Contacts and Calendar are available from the rail only when this
+	// preference is enabled. Missing JSON preserves the new default (false).
+	ShowContactsCalendarRail bool `json:"showContactsCalendarRail,omitempty"`
 
 	// Active extension pane: "mail" (default) or an extension id like "contacts".
 	// The frontend uses this to decide whether to render Mail or an extension's
 	// pane after the rail is shown. Missing field -> Mail.
 	ActiveExtension string `json:"activeExtension,omitempty"`
+}
+
+// SidebarGroup stores a presentation-only collection of navigation entries.
+type SidebarGroup struct {
+	ID        string   `json:"id"`
+	TitleKey  string   `json:"titleKey"`
+	Entries   []string `json:"entries"`
+	Collapsed bool     `json:"collapsed"`
+	Hidden    bool     `json:"hidden"`
 }
 
 // PinnedFolder is a folder the user pinned to the sidebar. Name and Path are

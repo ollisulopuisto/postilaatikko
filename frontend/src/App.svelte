@@ -1885,7 +1885,7 @@
 
   <!-- Main Content -->
   <div class="flex flex-1 min-h-0 overflow-hidden relative">
-    <ExtensionRail />
+    <ExtensionRail onFolderSelect={handleFolderSelect} />
 
     {#if getActiveExtension() === 'contacts'}
       <ContactsPane />

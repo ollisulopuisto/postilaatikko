@@ -7,6 +7,7 @@ import { GetUIState, SaveUIState } from '../../../wailsjs/go/app/App'
 import { appstate } from '../../../wailsjs/go/models'
 import { normalizePins, type PinnedFolder } from '../sidebar/pins'
 import { normalizeLayout, type SidebarLayout } from '../sidebar/layout'
+import { normalizeSidebarGroups, type SidebarGroups } from '../sidebar/groups'
 
 export interface UIState {
   selectedAccountId: string | null
@@ -27,6 +28,8 @@ export interface UIState {
   pinnedFolders: PinnedFolder[]
   // Order and hidden blocks of the sidebar (see lib/sidebar/layout.ts)
   sidebarLayout: SidebarLayout
+  sidebarGroups: SidebarGroups
+  showContactsCalendarRail: boolean
   // Active extension pane: 'mail' (default) or an extension id like 'contacts'.
   activeExtension: string
 }
@@ -55,6 +58,8 @@ const defaultState: UIState = {
   collapsedFolders: {},
   pinnedFolders: [],
   sidebarLayout: normalizeLayout(undefined, undefined),
+  sidebarGroups: normalizeSidebarGroups(undefined),
+  showContactsCalendarRail: false,
   activeExtension: 'mail',
 }
 
@@ -71,6 +76,7 @@ let uiStateLoadedVersion = $state(0)
 // module level keeps them in sync without prop drilling. currentState still
 // holds the persisted value; this mirror is what consumers read.
 let activeExtensionState = $state<string>('mail')
+let showContactsCalendarRailState = $state(false)
 
 // Clamp a value within bounds
 function clamp(value: number, min: number, max: number): number {
@@ -104,6 +110,8 @@ export async function loadUIState(): Promise<UIState> {
         collapsedFolders: state.collapsedFolders || {},
         pinnedFolders: normalizePins(state.pinnedFolders),
         sidebarLayout: normalizeLayout(state.sidebarOrder, state.sidebarHidden),
+        sidebarGroups: normalizeSidebarGroups(state.sidebarGroups),
+        showContactsCalendarRail: state.showContactsCalendarRail === true,
         activeExtension: state.activeExtension || 'mail',
       }
       sidebarWidthState = currentState.sidebarWidth
@@ -118,6 +126,7 @@ export async function loadUIState(): Promise<UIState> {
         saveUIState({ sidebarCollapsed: false, sidebarWidth: 320 })
       }
       activeExtensionState = currentState.activeExtension
+      showContactsCalendarRailState = currentState.showContactsCalendarRail
     }
   } catch (err) {
     console.error('Failed to load UI state:', err)
@@ -170,6 +179,8 @@ export function saveUIState(updates: Partial<UIState>): void {
         pinnedFolders: currentState.pinnedFolders,
         sidebarOrder: currentState.sidebarLayout.order,
         sidebarHidden: currentState.sidebarLayout.hidden,
+        sidebarGroups: currentState.sidebarGroups,
+        showContactsCalendarRail: currentState.showContactsCalendarRail,
         activeExtension: currentState.activeExtension,
       }
       await SaveUIState(backendState)
@@ -246,6 +257,24 @@ export function getSidebarLayout(): SidebarLayout {
 
 export function setSidebarLayout(layout: SidebarLayout): void {
   saveUIState({ sidebarLayout: layout })
+}
+
+export function getSidebarGroups(): SidebarGroups {
+  return currentState.sidebarGroups
+}
+
+export function setSidebarGroups(groups: SidebarGroups): void {
+  saveUIState({ sidebarGroups: normalizeSidebarGroups(groups) })
+}
+
+export function getShowContactsCalendarRail(): boolean {
+  return showContactsCalendarRailState
+}
+
+export function setShowContactsCalendarRail(show: boolean): void {
+  showContactsCalendarRailState = show
+  saveUIState({ showContactsCalendarRail: show })
+  if (!show && ['contacts', 'calendar'].includes(activeExtensionState)) setActiveExtension('mail')
 }
 
 // Get current state (synchronous)
