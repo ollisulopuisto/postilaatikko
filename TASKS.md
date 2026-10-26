@@ -32,6 +32,10 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 
 ## In progress in separate worktrees
 
+| Task | Effort | Scope | Owner / branch / worktree | Status |
+| --- | --- | --- | --- | --- |
+| READER-001 | Medium | User-requested double-click detached reader; compact directional conversation bubbles, hidden signature/source chrome, parser-library evaluation with regression coverage. | Codex / `codex/READER-001-compact-conversations` / `/private/tmp/postilaatikko-reader001` | In progress; based on `0ef36e4`, UX-008/009 merged. |
+
 | ID | Effort | Task | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
 | INT-033-034 | Medium | Merge UX-005 PR #33 before stacked UX-006 PR #34, verify extraction behavior and update Claude's UX-007 handoff. | Codex coordinator / `codex/INT-033-034-merge` / `/private/tmp/postilaatikko-merge-pr33-34` | Done; PR #33 merged first as `74ed7ff`, then #34 as `7436026`; both CI runs passed. Combined-tree email/views tests, go vet and go build ./app passed. Ledger/dispatch updated and UX-007 reserved for Claude. |
