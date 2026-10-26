@@ -9,14 +9,13 @@ The goal is a strong personal email client for people who use several accounts. 
 ### Priorities
 
 1. **Scheduled send — critical.** Compose now, choose a delivery time, and have Postilaatikko send it reliably.
-2. **Virtual-folder criteria — high user priority.** Make folder selection, read/unread and replied/unreplied status, and date windows apply consistently to both the conversation list and in-folder search.
-3. **Gmail API integration.** Add server-side Gmail search and Gmail-native capabilities for Gmail accounts, starting with spam actions and efficient mailbox updates; keep IMAP support for other providers.
-4. **Calendar from email:** recognize date/time mentions and offer links that open or create events in installed calendar applications.
-5. **Fast everyday mail:** Gmail-style keyboard bindings, quick reply templates, and full email templates.
-6. **Better compose controls:** use existing cross-account sender identities with signatures selected from sender, recipient, and other available context.
-7. **Cross-account automation:** local rules can route incoming mail across accounts when provider-side filters cannot.
-8. **Multiple mail windows:** keep several mail views open for parallel reading and searching. A detached compose window already exists; this goal is multiple mail windows.
-9. **Smart notifications:** optional sender- and rule-based controls. Useful, but lower priority than the items above.
+2. **Gmail API integration.** Add server-side Gmail search and Gmail-native capabilities for Gmail accounts, starting with spam actions and efficient mailbox updates; keep IMAP support for other providers.
+3. **Calendar from email:** recognize date/time mentions and offer links that open or create events in installed calendar applications.
+4. **Fast everyday mail:** Gmail-style keyboard bindings, quick reply templates, and full email templates.
+5. **Better compose controls:** use existing cross-account sender identities with signatures selected from sender, recipient, and other available context.
+6. **Cross-account automation:** local rules can route incoming mail across accounts when provider-side filters cannot.
+7. **Multiple mail windows:** keep several mail views open for parallel reading and searching. A detached compose window already exists; this goal is multiple mail windows.
+8. **Smart notifications:** optional sender- and rule-based controls. Useful, but lower priority than the items above.
 
 ### Product boundaries
 
@@ -28,8 +27,7 @@ The goal is a strong personal email client for people who use several accounts. 
 ### Recommended implementation order
 
 1. **ICS event handoff (quick win).** Given a structured event, create a standard ICS file and open it for review/import in the user's calendar application.
-2. **Virtual-folder criteria (high user priority).** Add include/exclude folders, status filters, and date windows; make the list and search honor the same saved criteria, with no hard-coded unread-only behavior.
-3. **Scheduled send (critical).** Start with the local helper on the always-on Mac Studio. Build end-to-end encryption into the first version: devices encrypt queued messages for the paired helper, and any relay stores only ciphertext. The helper decrypts locally at send time; its private key and account credentials stay on the Studio. A future paid hosted sender would be a separate trust mode, not E2EE.
+2. **Scheduled send (critical).** Start with the local helper on the always-on Mac Studio. Build end-to-end encryption into the first version: devices encrypt queued messages for the paired helper, and any relay stores only ciphertext. The helper decrypts locally at send time; its private key and account credentials stay on the Studio. A future paid hosted sender would be a separate trust mode, not E2EE.
 4. **Gmail API integration.** Establish the Gmail-specific authorization and provider path, then use it for server-side search and Gmail-native capabilities. Keep the existing IMAP path for non-Gmail accounts and use the least-permissive scopes that cover each operation.
 5. **Date/time recognition in email.** Detect likely event times and connect them to the ICS event handoff, asking for confirmation when timezone or event details are ambiguous.
 6. **Gmail-native spam actions.** Mark as spam and undo/report as not spam using Gmail's own mailbox labels and behavior, through the Gmail API.
@@ -82,8 +80,7 @@ These are deliberately small, reviewable candidates that can be offered upstream
 
 - **Gmail API integration.** Not started. Use Gmail's API for server-side search and Gmail-specific capabilities such as native spam actions, filters, aliases/signatures, and mailbox change notifications. Preserve IMAP support for non-Gmail providers and avoid replacing working provider-neutral paths without a clear benefit. Request only the OAuth scopes needed for enabled features. See the [Gmail API overview](https://developers.google.com/workspace/gmail/api/guides) and [scope guide](https://developers.google.com/workspace/gmail/api/auth/scopes).
 - **Scheduled send (critical).** Compose now and send at a chosen time. Not implemented. Start with a durable queue and helper on the user's always-on Mac Studio, and build E2EE from the first version. Paired client devices encrypt each queued message to the helper's public key; any relay must be unable to read message content or account credentials. The helper keeps its private key and sending credentials locally, decrypts at due time, and sends. Gmail's API sends immediately when called, so the helper must be running with network access at the due time; recover missed sends after interruption. A future paid hosted sender is a separate mode and cannot be represented as E2EE if the service must decrypt and send.
-- **Unified virtual folders.** Saved sets of real folders across accounts, shown in the sidebar. The current view lists all messages from included folders and shows an unread count; it does not filter the list to unread messages. Base folder-set behavior is implemented in Postilaatikko v0.3.10.
-- **Virtual-folder criteria (high user priority).** Expand the current saved folder sets into fast cross-account views with include/exclude folder selection (including all folders except selected ones), read/unread and replied/unreplied status criteria, and a 7-day, 30-day, or all-time date window. The current implementation saves only included folder IDs; it has no persisted status/date criteria, and virtual-folder search has hard-coded unread behavior. A selected status must consistently filter both the list and in-folder search; if no status is selected, include all statuses. Date windows use the conversation's latest activity date.
+- **Unified virtual folders (v0.3.10; criteria expanded in v0.3.15).** Saved sets of real folders across accounts, shown in the sidebar. Base folder-set behavior implemented in v0.3.10; criteria facets (include/exclude, read/unread, starred/unstarred, replied/unreplied, date windows) implemented in v0.3.15.
 - **Fast folder browser and pins.** Keep a fast browser for all account folders available from the sidebar and let users pin selected folders for one-click access. The current full folder tree is in the temporary More panel; there is no pinned-folder list.
 - **Sidebar customization.** Let users rearrange sidebar items and hide selected items, persisting the layout across launches. Virtual folders can currently be reordered among themselves; other sidebar sections and folders cannot be rearranged or hidden (collapsing a tree is not the same as hiding it).
 - **Header-only bulk sync.** Make “Sync all” fetch folder/message headers without downloading message bodies or attachments. Fetch full content on demand when a message is opened. Current `SyncAllComplete` calls `SyncFolder`, which starts a background body-and-attachment fetch for missing bodies in each account's sync window.
@@ -113,6 +110,7 @@ These are deliberately small, reviewable candidates that can be offered upstream
 
 ## Done
 
+- **Virtual-folder criteria and default sync (v0.3.15).** Saved folder sets expanded into full cross-account views with include/exclude folder selection, read/unread, starred/unstarred, replied/unreplied, and date window (7d, 30d, 90d, 1y, all-time) criteria. Removed hardcoded unread-only constraint; criteria apply consistently across conversation lists and in-folder search. Default sync period updated to All Messages (0 days) across models, OAuth, and UI, with migration 52 upgrading legacy defaults.
 - **Command palette and Gmail shortcuts (v0.3.14).** Alfred-style quick launcher (`⌘P` / `Ctrl+P`), Gmail standard shortcuts (`v`, `e`, `c`, `r`, `a`, `f`, `x`, `/`, `!`, `#`, `z`, `Shift+I`, `Shift+U`, `o`, `u`), shortcut dialog layout stabilization, configurable mark-as-read delay, sidebar subfolder tree navigation, and i18n cleanup.
 - **Keyboard shortcut overlay and discoverability (v0.3.13).** Unified keyboard shortcut registry, searchable `?` reference dialog, and UI tooltips and key hints.
 - **Gmail API integration (v0.3.13).** Server-side search using Gmail query syntax and native mark-as-spam / not-spam actions through the Gmail API, with graceful fallback to IMAP.
