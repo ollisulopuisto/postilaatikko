@@ -907,6 +907,7 @@ export namespace appstate {
 	    pinnedFolders?: PinnedFolder[];
 	    sidebarOrder?: string[];
 	    sidebarHidden?: string[];
+	    readerMode?: string;
 	    activeExtension?: string;
 	
 	    static createFrom(source: any = {}) {
@@ -931,7 +932,8 @@ export namespace appstate {
 	        this.pinnedFolders = source["pinnedFolders"];
 	        this.sidebarOrder = source["sidebarOrder"];
 	        this.sidebarHidden = source["sidebarHidden"];
-		        this.activeExtension = source["activeExtension"];
+		        this.readerMode = source["readerMode"];
+	        this.activeExtension = source["activeExtension"];
 	    }
 	}
 

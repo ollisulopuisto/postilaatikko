@@ -294,8 +294,11 @@
     "hideQuotedText": "Hide quoted text",
     "showSignature": "Show signature",
     "hideSignature": "Hide signature",
-    "showFullMessage": "Show full message",
-    "showSplitMessage": "Show new text only"
+    "showFullMessage": "Show original",
+    "showSplitMessage": "Show new text only",
+    "readerMode": "Reading mode",
+    "readerConversation": "Conversation",
+    "readerTraditional": "Traditional"
   },
   "composer": {
     "newMessage": "New Message",

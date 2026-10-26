@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- The reader has a Conversation / Traditional switch in its toolbar. Traditional shows every message in full, as before; Conversation folds quoted replies and signatures. Your choice is remembered, switching keeps your place in the thread, and each message has Show original.
 - The reader shows each message's new text and folds quoted replies and signatures behind a button, so long threads take less room. Text it is not sure about is never folded, and Show full message restores the whole message. Threads open at the first unread message instead of the bottom.
 - Fixed: virtual folders with a date window (7 days, 30 days, 90 days or 1 year) showed no conversations and no unread count. Message dates are now read correctly for the window and the sort order.
 - Fixed: deleting a virtual folder from the sidebar did nothing on macOS, because the browser's native confirm dialog is not available in the app's webview. Deletion now asks in the app's own dialog. The delete, edit and move buttons on a virtual folder row are also reachable with the keyboard, not only on hover.

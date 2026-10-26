@@ -294,8 +294,11 @@
     "hideQuotedText": "Piilota lainattu teksti",
     "showSignature": "Näytä allekirjoitus",
     "hideSignature": "Piilota allekirjoitus",
-    "showFullMessage": "Näytä koko viesti",
-    "showSplitMessage": "Näytä vain uusi teksti"
+    "showFullMessage": "Näytä alkuperäinen",
+    "showSplitMessage": "Näytä vain uusi teksti",
+    "readerMode": "Lukutila",
+    "readerConversation": "Keskustelu",
+    "readerTraditional": "Perinteinen"
   },
   "composer": {
     "newMessage": "Uusi viesti",
