@@ -1,0 +1,98 @@
+name: Mac reader test build
+
+on:
+  push:
+    branches:
+      - 'codex/BUILD-001-reader-test'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mac-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dmg:
+    name: macOS ${{ matrix.arch }} DMG
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, amd64]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+          cache: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
+          npm ci --prefix frontend
+      - name: Verify version and frontend
+        run: |
+          ./scripts/version.sh check
+          npm run check --prefix frontend
+          node --test frontend/tests/bubbleLayout.test.mjs frontend/tests/replyContent.test.mjs
+      - name: Verify backend
+        run: |
+          go test ./internal/email/replycontent ./internal/readerbridge ./internal/scheduledsend ./internal/draft ./internal/ipc
+          go test ./app -run '^TestReader'
+      - name: Build and sign app
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: |
+          wails build -tags webkit2_41 -platform "darwin/${TARGET_ARCH}"
+          codesign --force --deep --sign - build/bin/postilaatikko.app
+          codesign --verify --deep --strict build/bin/postilaatikko.app
+      - name: Package DMG
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: |
+          VERSION="$(cat VERSION)"
+          mkdir -p build/dmg-staging
+          cp -R build/bin/postilaatikko.app build/dmg-staging/Postilaatikko.app
+          ln -s /Applications build/dmg-staging/Applications
+          hdiutil create -volname 'Postilaatikko Test' -srcfolder build/dmg-staging \
+            -ov -format UDZO -o "build/bin/Postilaatikko-${VERSION}-reader-test-${TARGET_ARCH}.dmg"
+          hdiutil verify "build/bin/Postilaatikko-${VERSION}-reader-test-${TARGET_ARCH}.dmg"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Postilaatikko-test-${{ matrix.arch }}
+          path: build/bin/Postilaatikko-*.dmg
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish test installers
+    needs: dmg
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: Postilaatikko-test-*
+          path: installers
+          merge-multiple: true
+      - name: Publish prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          BUILD_SHA: ${{ github.sha }}
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          VERSION="$(cat VERSION)"
+          TAG="v${VERSION}-reader-test.${BUILD_NUMBER}"
+          gh release create "$TAG" installers/*.dmg \
+            --target "$BUILD_SHA" --prerelease \
+            --title "Postilaatikko ${VERSION} reader test ${BUILD_NUMBER}" \
+            --notes-file docs/releases/reader-test.md

@@ -309,7 +309,7 @@
   </provides>
 
   <releases>
-    <release version="0.3.15" date="2026-10-25">
+    <release version="0.3.17" date="2026-10-25">
       <description>
         <ul>
           <li>Account settings show whether a Gmail account is using the Gmail API (in use, unavailable, sign in again, or not used).</li>

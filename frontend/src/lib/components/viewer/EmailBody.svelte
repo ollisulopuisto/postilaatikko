@@ -344,10 +344,19 @@
         }, '*');
       });
 
-      // Forward keyboard events to parent for global shortcuts (only modifier keys and Escape)
+      // The message body lives in a sandboxed iframe, so unmodified Gmail-style
+      // shortcuts would otherwise never reach the app's global key handler.
+      // Forward those shortcuts from non-interactive body content; links and
+      // controls keep their normal keyboard behavior.
+      var forwardedShortcutKeys = new Set([
+        'ArrowUp', 'ArrowDown', 'j', 'k', 'g', 'G', ' ', 'x', 'o', 'Enter',
+        'e', 'c', 'v', 'r', 'a', 'f', '/', '!', 'z', 'I', 'U', 'u', 's',
+        'F', '#', 'd', 'Backspace', 'Delete', 'Escape'
+      ]);
       document.addEventListener('keydown', function(e) {
-        // Only forward events that need global handling
-        if (e.altKey || e.ctrlKey || e.metaKey || e.key === 'Escape') {
+        var interactiveTarget = isInteractiveElement(e.target);
+        var isUnmodifiedShortcut = !e.altKey && !e.ctrlKey && !e.metaKey && forwardedShortcutKeys.has(e.key);
+        if (!interactiveTarget && (e.altKey || e.ctrlKey || e.metaKey || isUnmodifiedShortcut)) {
           // For pane navigation, blur inside iframe first
           if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'h' || e.key === 'l')) {
             if (document.activeElement) {
@@ -365,6 +374,7 @@
             metaKey: e.metaKey,
             shiftKey: e.shiftKey
           }, '*');
+          if (isUnmodifiedShortcut) e.preventDefault();
         }
       });
 

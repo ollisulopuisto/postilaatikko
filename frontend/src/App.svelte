@@ -1552,6 +1552,10 @@
         return
       case 'e':
         e.preventDefault()
+        if (focusedPane === 'viewer' && selectedThreadId) {
+          viewerRef?.archive()
+          return
+        }
         runListAction('mail.archive')
         return
       case 'v':
@@ -1601,6 +1605,10 @@
         return
       case '!':
         e.preventDefault()
+        if (focusedPane === 'viewer' && selectedThreadId) {
+          viewerRef?.spam()
+          return
+        }
         runListAction('mail.spam')
         return
       case 'z':
@@ -1617,10 +1625,18 @@
         return
       case 'I':
         e.preventDefault()
+        if (focusedPane === 'viewer' && selectedThreadId) {
+          viewerRef?.markRead()
+          return
+        }
         runListAction('mail.markRead')
         return
       case 'U':
         e.preventDefault()
+        if (focusedPane === 'viewer' && selectedThreadId) {
+          viewerRef?.markUnread()
+          return
+        }
         runListAction('mail.markUnread')
         return
       case 'u':
@@ -1633,6 +1649,11 @@
         }
         return
       case 's':
+        if (focusedPane === 'viewer' && selectedThreadId) {
+          e.preventDefault()
+          viewerRef?.toggleStar()
+          return
+        }
         runListAction('mail.star')
         return
       case 'F': {
