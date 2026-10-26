@@ -8,10 +8,10 @@
 
 **Tech stack:** Go 1.26, Wails v2, Svelte 5/TypeScript, SQLite, existing Go HTML/sanitization libraries, existing IMAP/Gmail integrations, existing draft/identity services. Choose any additional MCP dependency only in its adapter task after checking maintenance and compatibility.
 
-**Status:** User-approved plan consolidated on 2026-10-26. UX-002 is integrated in PR #29 and UX-004 is owned by Claude; current claims and integration state are in TASKS.md.
+**Status:** User-approved plan consolidated on 2026-10-26. UX-002 is integrated in PR #29 and UX-004 in PR #30; current claims and integration state are in TASKS.md and docs/coordination/DISPATCH.md.
 **Surveyed base:** Freshly fetched `origin/main` at `8a7a2a8`. This plan does not assert that task-branch work is merged, installed or released.
 
-**Synchronization checkpoint:** PR #29 merged as `d3490b1` (source `d11dfaf`). Use [the accepted view contract](../api/view-contract.md), `internal/views/model.go` and `frontend/src/lib/views/` as the shared foundation. UX-004 is already active per user report; its owner must publish branch/worktree metadata before another agent can infer claim details. UX-001's repository integration can progress without the live device, but actual-device verification remains a recorded gate. UX-016 and UX-019 are available after the integrated UX-002 contract; UX-005/006 wait for UX-004.
+**Synchronization checkpoint:** PR #29 merged as `d3490b1` (source `d11dfaf`). Use [the accepted view contract](../api/view-contract.md), `internal/views/model.go` and `frontend/src/lib/views/` as the shared foundation. PR #30 (`664f630`) integrates UX-004's accepted `internal/email/replycontent/model.go` schema and 22 fixtures, unblocking UX-005/006 after claim checks. PR #31 (`29da972`) adds the coordination protocol. PR #32 (`2191cb8`) integrates date normalization/NULL-subject fixes; UX-001 remains in Review for live-device and remaining header-refresh/exclude-mode work. UX-016 and UX-019 are available after the integrated UX-002 contract.
 
 ---
 
@@ -93,7 +93,7 @@ Historical P-026/P-036/P-037/P-038 names collided across independently edited bo
 
 Implement extraction in Go so UI and external tools receive the same result. Generic article readability alone cannot define the new portion of an email. Use conservative email-specific segmentation and preserve the original decoded body/source.
 
-Illustrative extraction-extension record (UX-004 finalizes extraction fields; the integrated UX-002 contract is authoritative for shared references, scope and completeness):
+Illustrative content-service envelope using UX-004's integrated extraction field names; UX-007 defines the enclosing response. UX-002 remains authoritative for shared references, scope and completeness, and `internal/email/replycontent/model.go` for the extraction result:
 
 ```json
 {
@@ -101,12 +101,12 @@ Illustrative extraction-extension record (UX-004 finalizes extraction fields; th
   "contentState": "cached",
   "extraction": {
     "version": "reply-v1",
-    "status": "partial",
+    "status": "extracted",
     "blocks": [
-      {"id": "b1", "kind": "authored", "text": "Tuesday works for me."},
-      {"id": "b2", "kind": "quoted", "text": "Could we meet Tuesday?"}
+      {"id": "b1", "kind": "authored", "format": "text", "content": "Tuesday works for me."},
+      {"id": "b2", "kind": "quoted", "format": "text", "content": "Could we meet Tuesday?"}
     ],
-    "warnings": ["ambiguous-signature"]
+    "warnings": []
   },
   "originalAvailable": true,
   "attachmentsState": "metadata-only"
@@ -228,7 +228,7 @@ Run lint on changed sources using the repository configuration. `npm run check` 
 - **Folder content policy:** UX-040 backend policy follows UX-001/002; UX-041 adds its UI after the drawer is integrated. This is a separate requested feature; it does not hold the virtual-folder repair or core reader release hostage.
 - **Later:** UX-025→UX-026→UX-027 Reply Later sessions, UX-028 related searches, UX-029 keyboard customization, UX-030→UX-031 People, UX-032 attachments, UX-033 columns and UX-034 bundles. UX-029 remains a core release dependency; its implementation can run as soon as its UI dependencies are ready.
 
-Current implementation pickups: UX-002 is integrated; UX-004 extraction fixtures are active with Claude. UX-001 repository/build provenance, UX-016 action targets and UX-019 API design can proceed on separate files/worktrees. Plain and HTML extraction may run in parallel only after UX-004's shared types/fixtures are integrated. Do not recreate the accepted UX-002 schema from the plan's earlier illustrative examples.
+Current implementation pickups: UX-002/004 are integrated. UX-005 plain-text and UX-006 HTML extraction are dependency-ready after the dispatch lane/remote claim check; do not launch extra agents without authorization. UX-016 action targets and UX-019 API design can proceed on separate files/worktrees. UX-001's date repair is integrated but its remaining live/refresh gate is not waived. Do not recreate either accepted schema from earlier illustrative examples.
 
 **File ownership boundaries:** One integrator owns `frontend/src/App.svelte` and `Sidebar.svelte` sequencing. Navigation tasks sharing those files run sequentially. Viewer timeline, toggle, action buttons, focus and inline reply also need sequential integration when they touch `ConversationViewer.svelte`. UX-018 and UX-037 share draft/compose services and need coordinated sequential integration. API transport and read/write adapters share auth/types; integrate contract first. P-030 owns the bulk-selection toolbar; UX-017 consumes it after integration and owns nearby row/message buttons. Migrations get coordinator-assigned numbers immediately before integration; never pick a number independently across worktrees.
 
