@@ -1610,6 +1610,10 @@
           handleGlobalUndo()
         }
         return
+      case 'm':
+        if (!KEY.LIST_TOGGLE_READ(e)) return
+        runListAction('mail.toggleRead')
+        return
       case 'I':
         e.preventDefault()
         runListAction('mail.markRead')
@@ -1726,6 +1730,8 @@
       focusedIds: () => messageListRef?.getSelectedMessageIds() ?? [],
       checkedHasUnstarred: () => messageListRef?.getCheckedHasUnstarred() ?? false,
       selectedStarred: () => messageListRef?.isSelectedStarred() ?? false,
+      checkedHasUnread: () => messageListRef?.getCheckedHasUnread() ?? false,
+      selectedUnread: () => messageListRef?.isSelectedUnread() ?? false,
     })
   }
 

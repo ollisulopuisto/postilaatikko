@@ -1206,6 +1206,7 @@
       "star": "Star or unstar",
       "markRead": "Mark as read",
       "markUnread": "Mark as unread",
+      "toggleRead": "Toggle read / unread",
       "moveTo": "Move to folder",
       "copyTo": "Copy to folder",
       "scrollDown": "Scroll down",

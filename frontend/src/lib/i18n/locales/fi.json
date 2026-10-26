@@ -1206,6 +1206,7 @@
       "star": "Lisää tai poista tähti",
       "markRead": "Merkitse luetuksi",
       "markUnread": "Merkitse lukemattomaksi",
+      "toggleRead": "Vaihda luettu / lukematon",
       "moveTo": "Siirrä kansioon",
       "copyTo": "Kopioi kansioon",
       "scrollDown": "Vieritä alas",

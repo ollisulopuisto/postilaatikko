@@ -21,13 +21,15 @@ async function load(relative) {
 const { resolveListTarget } = await load('../src/lib/actions/target.ts')
 const { LIST_ACTIONS, getListAction, runListAction } = await load('../src/lib/actions/listActions.ts')
 
-function source({ checked = [], focused = [], checkedHasUnstarred = false, selectedStarred = false } = {}) {
+function source({ checked = [], focused = [], checkedHasUnstarred = false, selectedStarred = false, checkedHasUnread = false, selectedUnread = false } = {}) {
   return {
     hasChecked: () => checked.length > 0,
     checkedIds: () => checked,
     focusedIds: () => focused,
     checkedHasUnstarred: () => checkedHasUnstarred,
     selectedStarred: () => selectedStarred,
+    checkedHasUnread: () => checkedHasUnread,
+    selectedUnread: () => selectedUnread,
   }
 }
 
@@ -89,7 +91,7 @@ test('every list action is available with a target', () => {
 test('list actions cover the mail commands the panel offers', () => {
   assert.deepEqual(
     LIST_ACTIONS.map((d) => d.id).sort(),
-    ['mail.archive', 'mail.markRead', 'mail.markUnread', 'mail.spam', 'mail.star', 'mail.trash'],
+    ['mail.archive', 'mail.markRead', 'mail.markUnread', 'mail.spam', 'mail.star', 'mail.toggleRead', 'mail.trash'],
   )
 })
 

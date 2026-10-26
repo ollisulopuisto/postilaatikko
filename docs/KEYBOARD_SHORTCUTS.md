@@ -121,6 +121,7 @@ These work when not in an input field. They apply to checked messages (bulk) or 
 | Shortcut | Action |
 |----------|--------|
 | `S` | Toggle star |
+| `M` | Toggle read / unread. If any target message is unread, marks them all read; otherwise marks them unread |
 | `Backspace` / `Delete` | Move to trash |
 | `Shift+Backspace` / `Shift+Delete` | Permanently delete |
 | `Escape` | Leave focus mode or close the responsive viewer/sidebar overlay if one is open; otherwise clear checkboxes (first press), then close the conversation (second press) |
