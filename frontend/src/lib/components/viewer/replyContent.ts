@@ -124,7 +124,10 @@ function htmlToText(html: string): string {
       out += ' '
       continue
     }
-    if (!INLINE_ELEMENTS.has(name)) out += ' '
+    // An inline tag joins the words around it, except next to a literal angle
+    // bracket: removing the tag there could join the pieces into new markup.
+    const joinsWords = INLINE_ELEMENTS.has(name) && !/[<>]$/.test(out) && !/^[<>]/.test(html.slice(i))
+    if (!joinsWords) out += ' '
   }
   return out
 }
