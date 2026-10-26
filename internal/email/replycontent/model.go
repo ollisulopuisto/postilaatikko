@@ -17,7 +17,7 @@ import (
 
 // ExtractorVersion identifies the extraction rules. Stored results with another
 // version are recomputed rather than trusted.
-const ExtractorVersion = "reply-v1"
+const ExtractorVersion = "reply-v2"
 
 // BlockKind says what a block of a message body is.
 type BlockKind string

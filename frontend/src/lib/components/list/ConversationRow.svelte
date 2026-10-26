@@ -16,7 +16,7 @@
   // @ts-ignore - wailsjs path
   import { message } from '../../../../wailsjs/go/models'
   // @ts-ignore - wailsjs path
-  import { MarkAsRead, MarkAsUnread, RemoveFromInboxWithUndo, UndoOperation } from '../../../../wailsjs/go/app/App'
+  import { OpenReaderWindow, MarkAsRead, MarkAsUnread, RemoveFromInboxWithUndo, UndoOperation } from '../../../../wailsjs/go/app/App'
   import MessageContextMenu from '$lib/components/common/MessageContextMenu.svelte'
   import Avatar from '$lib/components/kit/Avatar.svelte'
   import { toasts } from '$lib/stores/toast'
@@ -26,6 +26,7 @@
   import { domainFromEmail, senderLogos } from '$lib/stores/senderLogos.svelte'
   import { isConfiguredAccountEmail } from '$lib/stores/accounts.svelte'
   import { publishUndoOperationCompleted, publishUndoOperationCreated } from './undoMutationEvents'
+  import { isRowOpenTarget } from '../viewer/bubbleLayout'
   import { runMessageMutation } from './mutationInFlight'
 
   interface Props {
@@ -496,6 +497,12 @@
       ? 'bg-primary/20'
       : 'hover:bg-muted/50'} {getAccentBarUnread() && hasUnread ? 'border-l-2 border-l-primary' : ''} {swipeAnim === 'select' ? 'swipe-select-anim' : ''} {swipeAnim === 'delete' ? 'swipe-delete-anim' : ''}"
     onclick={handleRowClick}
+    ondblclick={async (event) => {
+      if (!isRowOpenTarget(event.target, event.currentTarget)) return
+      event.preventDefault()
+      try { await OpenReaderWindow(accountId, folderId, conversation.threadId, folderType) }
+      catch (error) { toasts.error(String(error)) }
+    }}
     onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect() }}}
     ondragstart={handleDragStart}
     ontouchstart={handleTouchStart}

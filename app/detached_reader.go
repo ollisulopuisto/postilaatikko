@@ -1,0 +1,254 @@
+package app
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"strings"
+	"time"
+
+	"github.com/hkdb/aerion/internal/ipc"
+	"github.com/hkdb/aerion/internal/readerbridge"
+	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
+)
+
+const readerCallType = "reader_call"
+
+// ReaderConfig fixes the selected thread independently of the main window.
+type ReaderConfig struct {
+	AccountID  string `json:"accountId"`
+	FolderID   string `json:"folderId"`
+	ThreadID   string `json:"threadId"`
+	FolderType string `json:"folderType"`
+	IPCAddress string `json:"-"`
+}
+
+// ReaderApp owns a window and authenticated IPC only: no database or sync engine.
+type ReaderApp struct {
+	config       ReaderConfig
+	ctx          context.Context
+	client       ipc.Client
+	startupError error
+	ready        chan struct{}
+}
+
+// NewReaderApp creates a detached reader without accessing mail data.
+func NewReaderApp(config ReaderConfig) *ReaderApp {
+	return &ReaderApp{config: config, ready: make(chan struct{})}
+}
+
+// StartReader authenticates using the parent token passed through stdin, not argv.
+func StartReader(r *ReaderApp, ctx context.Context) {
+	defer close(r.ready)
+	r.ctx = ctx
+	token, err := io.ReadAll(io.LimitReader(os.Stdin, 4096))
+	if err != nil {
+		r.startupError = err
+		return
+	}
+	if strings.TrimSpace(string(token)) == "" {
+		r.startupError = errors.New("missing reader authentication")
+		return
+	}
+	r.client = ipc.NewClient(r.config.IPCAddress)
+	r.client.OnMessage(func(msg ipc.Message) {
+		if msg.Type == ipc.TypeShutdown {
+			wailsRuntime.Quit(ctx)
+		}
+	})
+	connectCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	r.startupError = r.client.Connect(connectCtx, strings.TrimSpace(string(token)))
+}
+
+// ShutdownReader releases only this reader's IPC connection.
+func ShutdownReader(r *ReaderApp) {
+	if r.client != nil {
+		_ = r.client.Close()
+	}
+}
+
+// GetConfig returns this window's immutable selection after authentication.
+func (r *ReaderApp) GetConfig() (ReaderConfig, error) {
+	select {
+	case <-r.ready:
+		return r.config, r.startupError
+	case <-time.After(12 * time.Second):
+		return ReaderConfig{}, errors.New("reader connection timed out")
+	}
+}
+
+// Call forwards an explicitly allowlisted mail operation to the main process.
+func (r *ReaderApp) Call(operation string, args json.RawMessage) (any, error) {
+	if _, err := r.GetConfig(); err != nil {
+		return nil, err
+	}
+	if r.client == nil {
+		return nil, errors.New("reader is not connected")
+	}
+	request, err := ipc.NewMessage(readerCallType, struct {
+		Operation string          `json:"operation"`
+		Args      json.RawMessage `json:"args"`
+	}{operation, args})
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(r.ctx, 2*time.Minute)
+	defer cancel()
+	reply, err := r.client.SendAndWait(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	if reply.Error != "" {
+		return nil, errors.New(reply.Error)
+	}
+	var result any
+	if len(reply.Payload) > 0 {
+		err = json.Unmarshal(reply.Payload, &result)
+	}
+	return result, err
+}
+
+// OpenReaderWindow opens a selected thread in another native Wails process.
+func (a *App) OpenReaderWindow(accountID, folderID, threadID, folderType string) error {
+	if a.ipcServer == nil || a.ipcTokenMgr == nil {
+		return errors.New("multi-window service unavailable")
+	}
+	conversation, err := a.GetConversation(threadID, folderID)
+	if err != nil {
+		return err
+	}
+	if conversation == nil || len(conversation.Messages) == 0 {
+		return errors.New("conversation is not available locally; open it first to download")
+	}
+	if conversation.Messages[0].AccountID != accountID {
+		return errors.New("reader account does not match conversation")
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	cmd := exec.Command(executable, "--reader", "--account", accountID, "--reader-folder", folderID, "--reader-thread", threadID, "--reader-folder-type", folderType, "--ipc-address", a.ipcServer.Address())
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return err
+	}
+	if err = cmd.Start(); err != nil {
+		_ = stdin.Close()
+		return fmt.Errorf("open reader: %w", err)
+	}
+	go func() {
+		defer recoverPanic("app.reader", "authenticate child")
+		defer stdin.Close()
+		if _, err := io.WriteString(stdin, a.ipcTokenMgr.GetToken()); err != nil {
+			_ = cmd.Process.Kill()
+		}
+	}()
+	go func() { defer recoverPanic("app.reader", "wait child"); _ = cmd.Wait() }()
+	return nil
+}
+
+func (a *App) handleReaderCall(clientID string, msg ipc.Message) {
+	var request struct {
+		Operation string          `json:"operation"`
+		Args      json.RawMessage `json:"args"`
+	}
+	var result any
+	err := msg.ParsePayload(&request)
+	if err == nil {
+		result, err = readerbridge.Dispatch(a.readerMethods(), request.Operation, request.Args)
+	}
+	reply, marshalErr := ipc.NewReply(msg, readerCallType, result)
+	if marshalErr != nil {
+		reply, _ = ipc.NewReply(msg, readerCallType, nil)
+		err = marshalErr
+	}
+	// Stay within the existing IPC frame limit; report oversize data explicitly.
+	if len(reply.Payload) > 9<<20 {
+		reply.Payload = nil
+		err = errors.New("thread exceeds reader IPC size limit")
+	}
+	if err != nil {
+		reply.Error = err.Error()
+	}
+	_ = a.ipcServer.Send(clientID, reply)
+}
+
+func (a *App) readerMethods() map[string]any {
+	return map[string]any{
+		"AddImageAllowlist":             a.AddImageAllowlist,
+		"ArchiveWithUndo":               a.ArchiveWithUndo,
+		"CopyToFolder":                  a.CopyToFolder,
+		"DeletePermanently":             a.DeletePermanently,
+		"FetchMessageBody":              a.FetchMessageBody,
+		"GetAccentBarUnread":            a.GetAccentBarUnread,
+		"GetAccountProfilePhotos":       a.GetAccountProfilePhotos,
+		"GetAllAccountIdentities":       a.GetAllAccountIdentities,
+		"GetAccounts":                   a.GetAccounts,
+		"GetAlwaysLoadImages":           a.GetAlwaysLoadImages,
+		"GetAlwaysShowMessageCheckbox":  a.GetAlwaysShowMessageCheckbox,
+		"GetAttachments":                a.GetAttachments,
+		"GetAutostart":                  a.GetAutostart,
+		"GetComposerFormat":             a.GetComposerFormat,
+		"GetComposerMode":               a.GetComposerMode,
+		"GetContactPhotos":              a.GetContactPhotos,
+		"GetConversation":               a.GetConversation,
+		"GetDarkComposerBody":           a.GetDarkComposerBody,
+		"GetDarkMailContent":            a.GetDarkMailContent,
+		"GetFolders":                    a.GetFolders,
+		"GetImageAllowlist":             a.GetImageAllowlist,
+		"GetInlineAttachments":          a.GetInlineAttachments,
+		"GetLanguage":                   a.GetLanguage,
+		"GetMailtoMode":                 a.GetMailtoMode,
+		"GetMarkAsReadDelay":            a.GetMarkAsReadDelay,
+		"GetMessageListDensity":         a.GetMessageListDensity,
+		"GetMessageListSortOrder":       a.GetMessageListSortOrder,
+		"GetMessageSource":              a.GetMessageSource,
+		"GetNativeTitleBar":             a.GetNativeTitleBar,
+		"GetReadReceiptResponsePolicy":  a.GetReadReceiptResponsePolicy,
+		"GetReplyContent":               a.GetReplyContent,
+		"GetRunBackground":              a.GetRunBackground,
+		"GetSenderLogos":                a.GetSenderLogos,
+		"GetShowMessageListCircles":     a.GetShowMessageListCircles,
+		"GetShowMessageListProfilePics": a.GetShowMessageListProfilePics,
+		"GetShowTitleBar":               a.GetShowTitleBar,
+		"GetShowViewerCircles":          a.GetShowViewerCircles,
+		"GetSpellcheckCustomWords":      a.GetSpellcheckCustomWords,
+		"GetSpellcheckEnabled":          a.GetSpellcheckEnabled,
+		"GetSpellcheckLanguages":        a.GetSpellcheckLanguages,
+		"GetStartHidden":                a.GetStartHidden,
+		"GetSystemTheme":                a.GetSystemTheme,
+		"GetThemeMode":                  a.GetThemeMode,
+		"GetUIState":                    a.GetUIState,
+		"IgnoreReadReceipt":             a.IgnoreReadReceipt,
+		"MarkAsNotSpamWithUndo":         a.MarkAsNotSpamWithUndo,
+		"MarkAsRead":                    a.MarkAsRead,
+		"MarkAsSpamWithUndo":            a.MarkAsSpamWithUndo,
+		"MarkAsUnread":                  a.MarkAsUnread,
+		"MoveToFolderWithUndo":          a.MoveToFolderWithUndo,
+		"MoveToInboxWithUndo":           a.MoveToInboxWithUndo,
+		"OpenAttachment":                a.OpenAttachment,
+		"OpenComposerWindow":            a.OpenComposerWindow,
+		"OpenEncryptedAttachment":       a.OpenEncryptedAttachment,
+		"OpenFile":                      a.OpenFile,
+		"OpenFolder":                    a.OpenFolder,
+		"OpenURL":                       a.OpenURL,
+		"ProcessPGPMessage":             a.ProcessPGPMessage,
+		"ProcessSMIMEMessage":           a.ProcessSMIMEMessage,
+		"RemoveFromInboxWithUndo":       a.RemoveFromInboxWithUndo,
+		"SaveAllAttachments":            a.SaveAllAttachments,
+		"SaveAllEncryptedAttachments":   a.SaveAllEncryptedAttachments,
+		"SaveAttachmentAs":              a.SaveAttachmentAs,
+		"SaveEncryptedAttachmentAs":     a.SaveEncryptedAttachmentAs,
+		"SendReadReceipt":               a.SendReadReceipt,
+		"SetAlwaysLoadImages":           a.SetAlwaysLoadImages,
+		"Star":                          a.Star,
+		"TrashWithUndo":                 a.TrashWithUndo,
+		"UndoOperation":                 a.UndoOperation,
+		"Unstar":                        a.Unstar,
+	}
+}

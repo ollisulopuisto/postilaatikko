@@ -565,6 +565,8 @@ export function OpenFile(arg1:string):Promise<void>;
 
 export function OpenFolder(arg1:string):Promise<void>;
 
+export function OpenReaderWindow(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
+
 export function OpenURL(arg1:string):Promise<void>;
 
 export function PickAttachmentFiles():Promise<Array<app.ComposerAttachment>>;

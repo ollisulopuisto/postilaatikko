@@ -123,6 +123,7 @@ func ExtractHTML(body string) Result {
 	atoms = markForwarded(atoms)
 	atoms = resolveBare(atoms)
 	atoms = splitHTMLMobileFooter(atoms)
+	atoms = refineHTMLText(atoms)
 
 	var blocks []Block
 	hasAuthored, hasQuoted, hasForwarded := false, false, false

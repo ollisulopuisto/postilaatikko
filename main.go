@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"flag"
 	"fmt"
@@ -43,16 +44,20 @@ func init() {
 
 // Command-line flags
 var (
-	debugMode   = flag.Bool("debug", false, "Enable debug logging")
-	composeMode = flag.Bool("compose", false, "Run in composer mode (detached window)")
-	accountID   = flag.String("account", "", "Account ID for composer")
-	ipcAddress  = flag.String("ipc-address", "", "IPC server address to connect to")
-	mode        = flag.String("mode", "new", "Compose mode: new, reply, reply-all, forward")
-	messageID   = flag.String("message-id", "", "Original message ID for reply/forward")
-	draftID     = flag.String("draft-id", "", "Draft ID to resume editing")
-	mailtoFlag  = flag.String("mailto", "", "Mailto URL to open in composer (detached mode)")
-	dbusNotify  = flag.Bool("dbus-notify", false, "Use direct D-Bus notifications instead of portal (Linux only)")
-	versionFlag = flag.Bool("version", false, "Show version and exit")
+	debugMode        = flag.Bool("debug", false, "Enable debug logging")
+	readerMode       = flag.Bool("reader", false, "Open a detached thread reader")
+	readerFolder     = flag.String("reader-folder", "", "Reader folder ID")
+	readerThread     = flag.String("reader-thread", "", "Reader thread ID")
+	readerFolderType = flag.String("reader-folder-type", "", "Reader folder type")
+	composeMode      = flag.Bool("compose", false, "Run in composer mode (detached window)")
+	accountID        = flag.String("account", "", "Account ID for composer")
+	ipcAddress       = flag.String("ipc-address", "", "IPC server address to connect to")
+	mode             = flag.String("mode", "new", "Compose mode: new, reply, reply-all, forward")
+	messageID        = flag.String("message-id", "", "Original message ID for reply/forward")
+	draftID          = flag.String("draft-id", "", "Draft ID to resume editing")
+	mailtoFlag       = flag.String("mailto", "", "Mailto URL to open in composer (detached mode)")
+	dbusNotify       = flag.Bool("dbus-notify", false, "Use direct D-Bus notifications instead of portal (Linux only)")
+	versionFlag      = flag.Bool("version", false, "Show version and exit")
 )
 
 // DebugMode returns whether debug logging is enabled
@@ -87,6 +92,10 @@ func main() {
 		}
 	}
 
+	if *readerMode {
+		runReaderMode()
+		return
+	}
 	if *composeMode {
 		runComposerMode()
 		return
@@ -167,6 +176,7 @@ func runMainMode(mailtoData *app.MailtoData, rawMailtoArg string) {
 		Bind: []interface{}{
 			application,
 			dummyComposerApp, // For binding generation
+			app.NewReaderApp(app.ReaderConfig{}),
 		},
 		Linux: &linux.Options{
 			WebviewGpuPolicy: linux.WebviewGpuPolicyOnDemand,
@@ -279,6 +289,7 @@ func runComposerMode() {
 // composerAssetHandler serves composer.html instead of index.html for the root request.
 type composerAssetHandler struct {
 	assets embed.FS
+	entry  string
 }
 
 // ServeHTTP implements http.Handler.
@@ -288,7 +299,10 @@ func (h *composerAssetHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 
 	// Rewrite root path to composer.html
 	if path == "/" || path == "" || path == "/index.html" {
-		path = "/composer.html"
+		path = h.entry
+		if path == "" {
+			path = "/composer.html"
+		}
 	}
 
 	// Try to read from the embedded filesystem
@@ -308,4 +322,27 @@ func (h *composerAssetHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 
 	// Serve the file with the modified request
 	http.FileServer(http.FS(subFS)).ServeHTTP(w, modifiedReq)
+}
+
+// runReaderMode reuses the parent services through authenticated IPC, without
+// opening another database, sync engine or single-instance lock.
+func runReaderMode() {
+	if *accountID == "" || *readerFolder == "" || *readerThread == "" || *ipcAddress == "" {
+		println("Error: reader requires account, folder, thread and IPC address")
+		os.Exit(1)
+	}
+	reader := app.NewReaderApp(app.ReaderConfig{AccountID: *accountID, FolderID: *readerFolder, ThreadID: *readerThread, FolderType: *readerFolderType, IPCAddress: *ipcAddress})
+	err := wails.Run(&options.App{
+		Title: "Postilaatikko", Width: 900, Height: 800, MinWidth: 480, MinHeight: 400,
+		AssetServer:      &assetserver.Options{Handler: &composerAssetHandler{assets: assets, entry: "/reader.html"}},
+		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
+		OnStartup:        func(ctx context.Context) { app.StartReader(reader, ctx) },
+		OnShutdown:       func(context.Context) { app.ShutdownReader(reader) },
+		Bind:             []interface{}{reader},
+		Linux:            &linux.Options{WebviewGpuPolicy: linux.WebviewGpuPolicyOnDemand, ProgramName: "io.github.wesleiaqui.eternomail", Icon: appIcon},
+	})
+	if err != nil {
+		println("Error:", err.Error())
+		os.Exit(1)
+	}
 }

@@ -535,7 +535,6 @@ export namespace app {
 	        this.since = source["since"];
 	    }
 	}
-
 	export class LinkedAccountInfo {
 	    accountId: string;
 	    email: string;
@@ -763,6 +762,24 @@ export namespace app {
 		    return a;
 		}
 	}
+	export class ReaderConfig {
+	    accountId: string;
+	    folderId: string;
+	    threadId: string;
+	    folderType: string;
+
+	    static createFrom(source: any = {}) {
+	        return new ReaderConfig(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.accountId = source["accountId"];
+	        this.folderId = source["folderId"];
+	        this.threadId = source["threadId"];
+	        this.folderType = source["folderType"];
+	    }
+	}
 	export class SMIMEViewResult {
 	    bodyHtml: string;
 	    bodyText: string;
@@ -873,24 +890,24 @@ export namespace app {
 export namespace appstate {
 	
 	export class PinnedFolder {
-		    accountId: string;
-		    folderId: string;
-		    path: string;
-		    name: string;
+	    accountId: string;
+	    folderId: string;
+	    path: string;
+	    name: string;
 
-		    static createFrom(source: any = {}) {
-		        return new PinnedFolder(source);
-		    }
+	    static createFrom(source: any = {}) {
+	        return new PinnedFolder(source);
+	    }
 
-		    constructor(source: any = {}) {
-		        if ('string' === typeof source) source = JSON.parse(source);
-		        this.accountId = source["accountId"];
-		        this.folderId = source["folderId"];
-		        this.path = source["path"];
-		        this.name = source["name"];
-		    }
-		}
-		export class UIState {
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.accountId = source["accountId"];
+	        this.folderId = source["folderId"];
+	        this.path = source["path"];
+	        this.name = source["name"];
+	    }
+	}
+	export class UIState {
 	    selectedAccountId: string;
 	    selectedFolderId: string;
 	    selectedFolderName: string;
@@ -929,12 +946,30 @@ export namespace appstate {
 	        this.expandedAccounts = source["expandedAccounts"];
 	        this.unifiedInboxExpanded = source["unifiedInboxExpanded"];
 	        this.collapsedFolders = source["collapsedFolders"];
-	        this.pinnedFolders = source["pinnedFolders"];
+	        this.pinnedFolders = this.convertValues(source["pinnedFolders"], PinnedFolder);
 	        this.sidebarOrder = source["sidebarOrder"];
 	        this.sidebarHidden = source["sidebarHidden"];
-		        this.readerMode = source["readerMode"];
+	        this.readerMode = source["readerMode"];
 	        this.activeExtension = source["activeExtension"];
 	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }
@@ -2761,6 +2796,7 @@ export namespace replycontent {
 		    return a;
 		}
 	}
+
 
 }
 

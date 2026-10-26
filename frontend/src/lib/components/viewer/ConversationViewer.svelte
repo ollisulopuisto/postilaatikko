@@ -2,7 +2,7 @@
   import { onMount, onDestroy, tick } from 'svelte'
   import Icon from '@iconify/svelte'
   // @ts-ignore - wailsjs bindings
-  import { GetConversation, GetReadReceiptResponsePolicy, SendReadReceipt, IgnoreReadReceipt, GetMessageSource, ProcessSMIMEMessage, ProcessPGPMessage, FetchMessageBody } from '../../../../wailsjs/go/app/App'
+  import { GetAllAccountIdentities, GetConversation, GetReadReceiptResponsePolicy, SendReadReceipt, IgnoreReadReceipt, GetMessageSource, ProcessSMIMEMessage, ProcessPGPMessage, FetchMessageBody } from '../../../../wailsjs/go/app/App'
   // @ts-ignore - wailsjs bindings
   import { MoveToInboxWithUndo, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, RemoveFromInboxWithUndo, TrashWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, DeletePermanently, UndoOperation } from '../../../../wailsjs/go/app/App'
   // @ts-ignore - wailsjs path
@@ -11,6 +11,8 @@
   import { message as messageModels } from '../../../../wailsjs/go/models'
   import AttachmentList from './AttachmentList.svelte'
   import ConversationMessage from './ConversationMessage.svelte'
+  import { bubbleLayout } from './bubbleLayout'
+  import { isConfiguredAccountEmail } from '$lib/stores/accounts.svelte'
   import ReaderModeToggle from './ReaderModeToggle.svelte'
   import { canExtract } from './replyContent'
   import { openTimelineAtTarget, captureScrollAnchor, holdScrollAnchor } from './timelineScroll'
@@ -221,6 +223,9 @@
 
   // Load settings and set up event listeners on mount
   onMount(async () => {
+    GetAllAccountIdentities().then(groups => {
+      ownEmails = new Set((groups || []).flatMap(group => [group.account?.email || '', ...(group.identities || []).map(identity => identity.email)]).map(email => email.trim().toLowerCase()))
+    }).catch(error => console.warn('[viewer] sender identities unavailable', error))
     try {
       const policy = await GetReadReceiptResponsePolicy()
       readReceiptPolicy = policy as 'never' | 'ask' | 'always'
@@ -564,6 +569,18 @@
         }
       }
     }
+  }
+
+  let ownEmails = $state<Set<string>>(new Set())
+  let expandedHeaders = $state<Set<string>>(new Set())
+  function toggleHeader(messageId: string) {
+    const next = new Set(expandedHeaders)
+    if (!next.delete(messageId)) next.add(messageId)
+    expandedHeaders = next
+  }
+  function toggleCard(messageId: string) {
+    if (readerMode === 'conversation') toggleHeader(messageId)
+    else toggleMessage(messageId)
   }
 
   const readerMode = $derived(getReaderMode())
@@ -1456,6 +1473,8 @@
       : (conversation?.messages ?? [])
   )
 
+  const bubbles = $derived(bubbleLayout(visibleMessages, email => isConfiguredAccountEmail(email) || ownEmails.has(email)))
+
   // Reference to the scrollable content area
   let contentContainerRef = $state<HTMLDivElement | null>(null)
   const SCROLL_AMOUNT = 100 // pixels to scroll per keypress
@@ -1648,8 +1667,8 @@
   {:else if conversation}
     <div class="conversation-viewer-content flex flex-col h-full">
     <!-- Header with Actions -->
-    <div class="spark-viewer-toolbar flex items-center justify-between px-4 py-3 border-b border-border">
-      <div class="flex items-center gap-2">
+    <div class="spark-viewer-toolbar flex flex-wrap gap-2 items-center justify-between px-4 py-3 border-b border-border">
+      <div class="flex flex-wrap items-center gap-2">
         {#if showBackButton}
           <button
             class="viewer-toolbar-action p-2 rounded-md hover:bg-muted transition-all duration-150 hover:-translate-y-0.5 hover:scale-105 hover:shadow-sm active:translate-y-0 active:scale-95 mr-1"
@@ -1755,9 +1774,9 @@
         </button>
       </div>
 
-      <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2">
         <ReaderModeToggle mode={readerMode} onChange={switchReaderMode} />
-        {#if conversation.messages && conversation.messages.length > 1}
+        {#if readerMode === 'traditional' && conversation.messages && conversation.messages.length > 1}
           <button
             class="viewer-toolbar-action p-2 rounded-md hover:bg-muted transition-all duration-150 hover:-translate-y-0.5 hover:scale-105 hover:shadow-sm active:translate-y-0 active:scale-95"
             data-tooltip={$_('viewer.expandAll')}
@@ -1814,6 +1833,7 @@
           <div class="space-y-4">
             {#each visibleMessages as msg, _index (msg.id)}
               {@const isExpanded = expandedMessages.has(msg.id)}
+              {@const bubble = bubbles.get(msg.id)}
               {@const isFocusedMsg = inFocusMode && focusModeKind === 'message' && focusedMessageIdInFocus === msg.id}
 
               <!-- Wrap each message in its own context menu -->
@@ -1828,25 +1848,34 @@
                 {onReply}
               >
                 <div
-                  class="spark-message-card border rounded-lg overflow-hidden transition-all {focusedMessageId === msg.id ? 'border-primary ring-2 ring-primary/20' : 'border-border'}"
+                  class="spark-message-card border rounded-lg overflow-hidden transition-all {readerMode === 'conversation' ? 'conversation-bubble ' + (bubble?.side === 'right' ? 'bubble-right' : 'bubble-left') : ''} {focusedMessageId === msg.id ? 'border-primary ring-2 ring-primary/20' : 'border-border'}"
                   data-message-id={msg.id}
                   tabindex="-1"
                   role="button"
-                  aria-expanded={isExpanded}
+                  aria-expanded={readerMode === 'conversation' || isExpanded}
                   onfocus={() => focusedMessageId = msg.id}
                   onblur={() => { if (focusedMessageId === msg.id) focusedMessageId = null }}
                   onkeydown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault()
-                      toggleMessage(msg.id)
+                      toggleCard(msg.id)
                     }
                   }}
                 >
-                <!-- Message Header (always visible, clickable to expand/collapse) -->
+                {#if readerMode === 'conversation'}
+                  <button type="button" class="bubble-heading flex w-full items-center justify-between gap-3 px-4 pt-2 pb-1 text-xs text-muted-foreground text-left"
+                    aria-expanded={expandedHeaders.has(msg.id)} title={$_('viewer.messageDetails')} onkeydown={(event) => event.stopPropagation()}
+                    onclick={() => toggleHeader(msg.id)}>
+                    <span class="truncate font-medium text-foreground">{bubble?.showSender ? (msg.fromName || msg.fromEmail) : ''}</span>
+                    <span class="whitespace-nowrap">{formatDate(msg.date)} <span aria-hidden="true">⌄</span></span>
+                  </button>
+                {/if}
+                {#if readerMode === 'traditional' || expandedHeaders.has(msg.id)}
+                <!-- Full message details remain available on request. -->
                 <div
                   class="spark-message-card-header w-full flex items-start gap-3 p-4 text-left hover:bg-muted/50 transition-colors cursor-pointer {!isExpanded ? 'bg-muted/30' : ''}"
-                  onclick={() => toggleMessage(msg.id)}
-                  onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleMessage(msg.id) }}
+                  onclick={() => toggleCard(msg.id)}
+                  onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleCard(msg.id) }}
                   onfocus={() => focusedMessageId = msg.id}
                   role="button"
                   tabindex="0"
@@ -1999,10 +2028,11 @@
                   </div>
                 </div>
 
+                {/if}
                 <!-- Message Body (visible when expanded) -->
-                {#if isExpanded}
+                {#if isExpanded || readerMode === 'conversation'}
                   <div class="px-4 pb-4 pt-0">
-                    <div class="ml-13 pl-3 border-l-2 border-border">
+                    <div class={readerMode === 'traditional' ? 'ml-13 pl-3 border-l-2 border-border' : ''}>
                       <!-- Read Receipt Banner -->
                       {#if shouldShowReadReceiptBanner(msg) && readReceiptPolicy === 'ask'}
                         <div class="flex items-center justify-between gap-3 px-3 py-2 mb-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-md">
@@ -2178,6 +2208,7 @@
                         </div>
                       {/if}
 
+                      {#if readerMode === 'traditional'}
                       <!-- View Source Button -->
                       <div class="border-t border-border pt-4 mt-4">
                         <button
@@ -2210,6 +2241,7 @@
                           </div>
                         {/if}
                       </div>
+                      {/if}
                     </div>
                   </div>
                 {/if}
@@ -2237,6 +2269,10 @@
 
 
 <style>
+  .conversation-bubble { width: min(88%, 58rem); border-radius: 1rem; background: hsl(var(--muted) / 0.35); }
+  .conversation-bubble.bubble-right { margin-left: auto; border-bottom-right-radius: 0.2rem; background: hsl(var(--primary) / 0.08); }
+  .conversation-bubble.bubble-left { margin-right: auto; border-bottom-left-radius: 0.2rem; }
+  @media (max-width: 600px) { .conversation-bubble { width: 96%; } }
   .viewer-toolbar-action :global(svg) {
     transition: color 150ms ease, transform 150ms ease;
   }
