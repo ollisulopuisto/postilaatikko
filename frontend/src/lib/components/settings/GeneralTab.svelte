@@ -7,6 +7,7 @@
   import { supportedLocales } from '$lib/i18n'
   import { getIsDarkActive } from '$lib/stores/theme.svelte'
   import { getSidebarWidth, setSidebarWidth } from '$lib/stores/uiState.svelte'
+  import SidebarLayoutSettings from './SidebarLayoutSettings.svelte'
 
   interface Props {
     messageListDensity: string
@@ -303,6 +304,8 @@
       </Select.Root>
       <p class="text-xs text-muted-foreground">{$_('settingsGeneral.sidebarSizeHelp')}</p>
     </div>
+
+    <SidebarLayoutSettings />
 
     <!-- Dark mail content — only relevant when a dark theme is active -->
     {#if getIsDarkActive()}

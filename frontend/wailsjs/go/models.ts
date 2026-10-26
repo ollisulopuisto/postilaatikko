@@ -905,6 +905,8 @@ export namespace appstate {
 	    unifiedInboxExpanded: boolean;
 	    collapsedFolders: Record<string, boolean>;
 	    pinnedFolders?: PinnedFolder[];
+	    sidebarOrder?: string[];
+	    sidebarHidden?: string[];
 	    activeExtension?: string;
 	
 	    static createFrom(source: any = {}) {
@@ -927,6 +929,8 @@ export namespace appstate {
 	        this.unifiedInboxExpanded = source["unifiedInboxExpanded"];
 	        this.collapsedFolders = source["collapsedFolders"];
 	        this.pinnedFolders = source["pinnedFolders"];
+	        this.sidebarOrder = source["sidebarOrder"];
+	        this.sidebarHidden = source["sidebarHidden"];
 		        this.activeExtension = source["activeExtension"];
 	    }
 	}

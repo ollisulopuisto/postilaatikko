@@ -28,6 +28,12 @@ type UIState struct {
 	// accounts can be pinned side by side.
 	PinnedFolders []PinnedFolder `json:"pinnedFolders,omitempty"`
 
+	// Sidebar block order and hidden blocks. Block names are owned by the
+	// frontend (lib/sidebar/layout.ts), which normalizes stale or unknown
+	// entries, so the backend stores them as given. Unset means the default layout.
+	SidebarOrder  []string `json:"sidebarOrder,omitempty"`
+	SidebarHidden []string `json:"sidebarHidden,omitempty"`
+
 	// Active extension pane: "mail" (default) or an extension id like "contacts".
 	// The frontend uses this to decide whether to render Mail or an extension's
 	// pane after the rail is shown. Missing field -> Mail.

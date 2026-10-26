@@ -4,6 +4,7 @@
 
 - Added pinned folders: right-click any folder (or the unified inbox account row) and choose Pin to sidebar. Pinned folders appear in a Pinned section for one-click access, across accounts, and stay pinned after restart.
 - The sidebar's More button is now labelled All folders, since it opens the full folder browser.
+- Sidebar sections can be reordered and hidden from Settings > General > Sidebar sections. Hidden sections can be shown again there, and the layout is kept after restart.
 
 ## Postilaatikko — v0.3.15
 
