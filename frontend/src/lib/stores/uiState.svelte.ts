@@ -7,6 +7,7 @@ import { GetUIState, SaveUIState } from '../../../wailsjs/go/app/App'
 import { appstate } from '../../../wailsjs/go/models'
 import { normalizePins, type PinnedFolder } from '../sidebar/pins'
 import { normalizeLayout, type SidebarLayout } from '../sidebar/layout'
+import { applyNarrowerDefaults, PANE_WIDTH_DEFAULTS } from '../layout/paneWidths'
 
 export interface UIState {
   selectedAccountId: string | null
@@ -37,6 +38,7 @@ const SIDEBAR_MAX = 400
 const LIST_MIN = 280
 const LIST_MAX = 600
 const SIDEBAR_LAYOUT_MIGRATION_KEY = 'eterno-mail:sidebar-layout-v6'
+const PANE_WIDTH_MIGRATION_KEY = 'eterno-mail:pane-widths-v1'
 
 // Default state
 const defaultState: UIState = {
@@ -47,8 +49,8 @@ const defaultState: UIState = {
   selectedThreadId: null,
   selectedConversationAccountId: null,
   selectedConversationFolderId: null,
-  sidebarWidth: 320,
-  listWidth: 360,
+  sidebarWidth: PANE_WIDTH_DEFAULTS.sidebarWidth,
+  listWidth: PANE_WIDTH_DEFAULTS.listWidth,
   sidebarCollapsed: false,
   expandedAccounts: {},
   unifiedInboxExpanded: true,
@@ -116,6 +118,20 @@ export async function loadUIState(): Promise<UIState> {
         sidebarWidthState = 320
         localStorage.setItem(SIDEBAR_LAYOUT_MIGRATION_KEY, 'done')
         saveUIState({ sidebarCollapsed: false, sidebarWidth: 320 })
+      }
+
+      // P-039: move to the narrower default columns once, so the message has more room.
+      const widthsMigrated = typeof localStorage !== 'undefined' && localStorage.getItem(PANE_WIDTH_MIGRATION_KEY) === 'done'
+      const widths = applyNarrowerDefaults(
+        { sidebarWidth: currentState.sidebarWidth, listWidth: currentState.listWidth },
+        widthsMigrated,
+      ).widths
+      if (!widthsMigrated) {
+        currentState.sidebarWidth = widths.sidebarWidth
+        currentState.listWidth = widths.listWidth
+        sidebarWidthState = widths.sidebarWidth
+        localStorage.setItem(PANE_WIDTH_MIGRATION_KEY, 'done')
+        saveUIState({ sidebarWidth: widths.sidebarWidth, listWidth: widths.listWidth })
       }
       activeExtensionState = currentState.activeExtension
     }
