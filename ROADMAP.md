@@ -4,39 +4,51 @@ Planned, in flight, open questions, and parked items for this fork. Done items a
 
 ## Product direction
 
-The goal is a strong personal email client for people who use several accounts. Spark and Gmail are references for useful interaction patterns, with the focus kept on one person's mail and workflows.
+The goal is a strong personal email client for people who use several accounts. Spark and Gmail remain interaction references; the accepted conversation/navigation design also borrows selected ideas from Spike, HEY, Shortwave, Unibox, MailMate and Superhuman. Keep the focus on one person's mail and workflows.
+
+### Accepted UI and agent-access direction (2026-10-26)
+
+Detailed implementation plan: [D-002 — conversation, navigation and agent API](docs/plans/2026-10-26-conversation-navigation-agent-api.md). Its 41 small `UX-*` tasks, dependencies, owner slots and recommended model/effort are in [TASKS.md](TASKS.md#d-002-conversation-navigation-and-agent-api-queue). These are planned changes; a candidate branch or successful build does not mean they are integrated or released.
+
+- **Two reader formats:** Conversation extracts each email's new contribution into a readable timeline; Traditional shows full emails. Provide a visible toggle and per-message Show original. Preserve inline replies, meaningful formatting, attachments and crypto status; extraction uncertainty falls back to complete content.
+- **Unified and virtual views:** All Inboxes belongs inside the Virtual folders card. Real folders, saved queries and system views use consistent cross-account scope/filter semantics; query, grouping, reader format and panel layout remain independent.
+- **Navigation on demand:** open folder cards in a dismissible drawer with Keep open. Cards support reorder, collapse, hide/restore and moving individual entries between cards. Preserve all-folder browsing and existing account-tree expansion. The rail holds chosen real folders and views with Cmd/Ctrl+1…0; Contacts/Calendar shortcuts default off for new layouts.
+- **Thread Focus mode:** show only the open thread with nearby actions and reply controls. Exiting restores the previous layout, selection, scroll and keyboard focus. Build on the existing focus behavior.
+- **Actions close to messages:** buttons on list rows and message headers, a bulk-selection bar, More menus and shortcut hints. They share explicit target resolution with the command panel, keyboard and backend API. Marking read must not remove the selected row from under the pointer.
+- **Inline replies:** reuse durable drafts, sender identities, signatures and templates; expand to full compose without losing the draft or changing recipients.
+- **Agent access as a foundation:** provide versioned authenticated operations/endpoints for scoped search, structured threads, authored/original content, explicit content fetch, drafts, mail actions and supported queues/scheduling. CLI/MCP are thin adapters. Report incomplete/unfetched data so external LLM summaries cannot silently assume a full thread.
+- **Personal reply workflow:** Reply Later queues conversations to answer; Focus & Reply processes them without inbox interruptions. This is separate from critical Send Later delivery scheduling.
+- **Later options:** People grouping, correspondence attachment browsing, optional sender bundles, configurable columns/density, related searches and optional saved-view tabs. Track which defaults are recommendations in D-002; do not treat every inspiration feature as approved scope.
+- **Resource discipline:** keep header/flag sync, explicit body/attachment fetch, bounded extraction/caches, cancellation and incremental rendering. Respect explicit per-folder body-download preferences without eager attachment downloads or unlimited backfill.
 
 ### Priorities
 
 1. **Scheduled send — critical.** Compose now, choose a delivery time, and have Postilaatikko send it reliably.
 2. **Gmail API integration.** Add server-side Gmail search and Gmail-native capabilities for Gmail accounts, starting with spam actions and efficient mailbox updates; keep IMAP support for other providers.
 3. **Calendar from email:** recognize date/time mentions and offer links that open or create events in installed calendar applications.
-4. **Fast everyday mail:** Gmail-style keyboard bindings, quick reply templates, and full email templates.
-5. **Better compose controls:** use existing cross-account sender identities with signatures selected from sender, recipient, and other available context.
-6. **Cross-account automation:** local rules can route incoming mail across accounts when provider-side filters cannot.
-7. **Multiple mail windows:** keep several mail views open for parallel reading and searching. A detached compose window already exists; this goal is multiple mail windows.
-8. **Smart notifications:** optional sender- and rule-based controls. Useful, but lower priority than the items above.
+4. **Reliable virtual folders and the accepted UI/API design:** first verify the empty-folder repair in the actual installed build, then implement D-002 backend contracts/query/extraction and agent access before dependent presentation. Add the navigation drawer, conversation/Traditional toggle, thread focus and nearby actions in small increments.
+5. **Fast everyday mail:** preserve Gmail-style keyboard bindings and quick reply snippets; add full templates, Finnish-layout support and configurable bindings.
+6. **Better compose controls:** reuse cross-account sender identities and durable drafts, with signatures selected from sender, recipient and available context.
+7. **Cross-account automation:** extend the existing local rules when provider-side filters cannot cross accounts.
+8. **Multiple mail windows:** keep several mail views open for parallel reading and searching, each retaining its own layout/focus state.
+9. **Smart notifications:** optional sender- and rule-based controls. Useful, but lower priority than the core workflows above.
 
 ### Product boundaries
 
-- This is a personal mail client. Shared inboxes, team assignment, and collaboration features are out of scope.
+- This is a personal mail client. Shared inboxes, team assignment, collaboration features and built-in AI writing are out of scope. External LLM tools may use the authenticated API for summarization or user-directed workflows.
 - Prefer local cross-account behavior when a provider API cannot perform the action, and never delete a source message until a cross-account copy has been confirmed.
 - Keep notifications configurable and avoid making them a requirement for the core mail workflow.
 - Prefer contextual action surfaces (selection bar, context menus, selection popovers) over a floating or dockable tool palette. All of them, and the command panel, draw on one shared action definition list tied to the shortcut registry. See `docs/plans/2026-10-25-contextual-toolbars-design.md` (D-001; follow-ups P-029 to P-034).
 
 ### Recommended implementation order
 
-1. **ICS event handoff (quick win).** Given a structured event, create a standard ICS file and open it for review/import in the user's calendar application.
-2. **Scheduled send (critical).** Start with the local helper on the always-on Mac Studio. Build end-to-end encryption into the first version: devices encrypt queued messages for the paired helper, and any relay stores only ciphertext. The helper decrypts locally at send time; its private key and account credentials stay on the Studio. A future paid hosted sender would be a separate trust mode, not E2EE.
-4. **Gmail API integration.** Establish the Gmail-specific authorization and provider path, then use it for server-side search and Gmail-native capabilities. Keep the existing IMAP path for non-Gmail accounts and use the least-permissive scopes that cover each operation.
-5. **Date/time recognition in email.** Detect likely event times and connect them to the ICS event handoff, asking for confirmation when timezone or event details are ambiguous.
-6. **Gmail-native spam actions.** Mark as spam and undo/report as not spam using Gmail's own mailbox labels and behavior, through the Gmail API.
-7. **Gmail-style keyboard bindings.** Add Gmail-like message-list and message-reading actions. Keep single-key bindings inactive while composing or typing in other editable fields.
-8. **Local cross-account filters.** The cross-account move action already exists, so rules can build on it without inventing a second move path.
-9. **Contextual signatures.** Extend the existing cross-account identities and per-identity signatures with sender/recipient/message-type rules.
-10. **Reply and email templates.** Build these on top of the compose identity and signature behavior.
-11. **Multiple mail windows.** Plan around the existing detached composer, but support multiple mail views and their separate navigation state.
-12. **Smart notifications.** Add optional per-sender and rule-based notification controls after the core workflows.
+1. **Repair/release provenance:** UX-001 verifies which empty-folder fix is actually integrated and installed. Preserve main's virtual-folder deletion fix. P-037/P-038 identifiers collided on historical branches, so use descriptive title plus branch/commit.
+2. **Critical scheduled send continues in parallel under P-011:** finish helper/E2EE reliability, security and live-delivery gates. Existing local candidate work is not a shipped guarantee; preserve the helper/relay trust boundary.
+3. **Backend foundations:** UX-002/003 establish shared scope/query semantics, UX-004–007 implement conservative reply extraction, and UX-019/020 establish authenticated external operation contracts/transport. Reuse shipped Gmail search/spam and ICS behavior.
+4. **Presentation:** UX-008–018 add the conversation reader, Traditional toggle, on-demand navigation/cards, All Inboxes placement, pin shortcuts, Focus restoration, nearby actions and durable inline replies.
+5. **Agent clients and verification:** UX-021–024 and UX-037/038 expose structured reads, shared mail/draft actions and view/layout operations through API/CLI/MCP. UX-039 scheduling waits on P-011. UX-029 checks bindings and Finnish layouts; UX-035/036 measure resource use and verify the integrated app before a GitHub-built DMG.
+6. **Follow-on personal workflows:** Reply Later sessions, related searches, People grouping, attachment browsing and columns/bundles follow their dependencies. Reuse P-015/P-016/P-020/P-030–034 rather than create duplicate assignments.
+7. **Existing broader goals:** date/time recognition builds on ICS; contextual signatures, full templates, multiple windows and smart notifications retain their task-specific dependencies and priorities.
 
 ## Guidance for agents
 
@@ -53,48 +65,51 @@ Read this before writing code in this repo. Full contributor rules are in `CONTR
 
 ## PR-sized tasks
 
-These are deliberately small, reviewable candidates that can be offered upstream independently. The current in-flight fixes are not complete until their changes are verified and recorded here.
+Use the [task board](TASKS.md) for current claims and integration status; the [D-002 plan](docs/plans/2026-10-26-conversation-navigation-agent-api.md#9-small-implementation-tasks) contains the new small delivery slices. Existing in-flight fixes are not complete until verified in their target environment and integrated.
 
 ### Easy
 
-- **Finnish UI localization.** Add the core and extension `fi` dictionaries, register the locale, and verify key and placeholder parity. In progress via AGY CLI.
-- **Use account display names in the sidebar.** Prefer the configured name under Inbox and in account rows, falling back to the email address. In progress.
-- **Keep Edit Account dialog geometry stable.** Anchor the footer and keep tab content in a bounded scrolling region so changing tabs cannot move the Save/Close controls. In progress.
-- **macOS window conventions.** Add `⌘,` for Preferences and title-bar double-click maximize/restore. In progress; the Postilaatikko title string itself is fork-specific.
+- **Bounded UI follow-ups:** reader toggle/original controls, rail hints, nearby action wiring, related-search controls and column/density preferences. These have individual UX task IDs and accepted contracts; Luna High is the starting recommendation where the task table says so.
+- **Preserve completed conventions:** Finnish core/extension localization, account display names, stable Edit Account geometry and macOS Preferences/title-bar behavior must survive the redesign.
 
 ### Medium
 
-- **Header-only routine sync.** Stop automatic full-body and attachment downloads; fetch content when a message is opened. In progress after user confirmation.
-- **Sidebar folder access.** Keep the all-folder browser directly reachable and add pinned folders, then persist item order and visibility.
-- **Virtual-folder criteria.** Add include/exclude folders, read/unread and replied/unreplied status, and 7-day / 30-day / all-time windows.
+- **Query and extraction integration:** preserve header-only sync and existing virtual-folder criteria while adding consistent saved queries, bounded derived-content caching and API reads.
+- **Navigation and reply integration:** drawer/cards, restored Focus state and inline draft reuse. Sol 6.1 Medium is the default recommendation after the contracts are integrated.
 - **macOS Contacts source.** Start with read-only browsing and recipient autocomplete. Offer a link/action to open the selected person in Apple's Contacts app for modifications; Postilaatikko will not write contact changes in the first version.
 
 ### Large
 
-- **Gmail API search.** Search Gmail online with Gmail's query syntax while preserving the existing IMAP path for other accounts.
+- **Sensitive work gets stronger review:** HTML/plain-text extraction fidelity, scope/target semantics, authorization and delivery/draft races start with Sol 6.1 High. See D-002 for escalation criteria; effort size and required reasoning capability are separate.
+- **Gmail API extensions.** Build on the existing Gmail server-side search/spam baseline while preserving IMAP support and distinguishing live-provider checks from compilation.
 - **Scheduled send.** Durable E2EE queue plus the always-on Mac Studio helper, retries, cancellation, and delivery status. The helper is the trusted endpoint; a future paid hosted sender needs a separate, clearly disclosed trust model.
 - **Calendar links from email.** Create a standard ICS event from a structured time, then recognize dates and times in email and offer the event for review/import in the installed calendar app.
 - **Multiple mail windows.** Support independent mail views and navigation state beyond the existing detached composer.
 
 ## Must have
 
-- **Gmail API integration.** Not started. Use Gmail's API for server-side search and Gmail-specific capabilities such as native spam actions, filters, aliases/signatures, and mailbox change notifications. Preserve IMAP support for non-Gmail providers and avoid replacing working provider-neutral paths without a clear benefit. Request only the OAuth scopes needed for enabled features. See the [Gmail API overview](https://developers.google.com/workspace/gmail/api/guides) and [scope guide](https://developers.google.com/workspace/gmail/api/auth/scopes).
-- **Scheduled send (critical).** Compose now and send at a chosen time. Not implemented. Start with a durable queue and helper on the user's always-on Mac Studio, and build E2EE from the first version. Paired client devices encrypt each queued message to the helper's public key; any relay must be unable to read message content or account credentials. The helper keeps its private key and sending credentials locally, decrypts at due time, and sends. Gmail's API sends immediately when called, so the helper must be running with network access at the due time; recover missed sends after interruption. A future paid hosted sender is a separate mode and cannot be represented as E2EE if the service must decrypt and send.
+- **Gmail API integration.** Server-side search and native spam actions have a v0.3.13 baseline. Extend provider-specific functionality as needed, preserving IMAP paths and least-required scopes; track actual Gmail authorization/provider verification separately. See the [Gmail API overview](https://developers.google.com/workspace/gmail/api/guides) and [scope guide](https://developers.google.com/workspace/gmail/api/auth/scopes).
+- **Scheduled send (critical).** Compose now and send at a chosen time. Candidate P-011 work exists on local/integration branches and retains live/security release gates; it is not integrated into the surveyed origin/main. Keep the durable E2EE queue and always-on Mac Studio helper: paired devices encrypt to the helper, relays retain ciphertext, and the helper holds its private key/sending credentials locally. Recover interruptions without unsafe duplicate sends. A future paid hosted sender is a separate trust mode if the service decrypts mail to send it.
 - **Unified virtual folders (v0.3.10; criteria expanded in v0.3.15).** Saved sets of real folders across accounts, shown in the sidebar. Base folder-set behavior implemented in v0.3.10; criteria facets (include/exclude, read/unread, starred/unstarred, replied/unreplied, date windows) implemented in v0.3.15.
-- **Fast folder browser and pins.** Keep a fast browser for all account folders available from the sidebar and let users pin selected folders for one-click access. The current full folder tree is in the temporary More panel; there is no pinned-folder list.
-- **Sidebar customization.** Let users rearrange sidebar items and hide selected items, persisting the layout across launches. Virtual folders can currently be reordered among themselves; other sidebar sections and folders cannot be rearranged or hidden (collapsing a tree is not the same as hiding it).
-- **Header-only bulk sync.** Make “Sync all” fetch folder/message headers without downloading message bodies or attachments. Fetch full content on demand when a message is opened. Current `SyncAllComplete` calls `SyncFolder`, which starts a background body-and-attachment fetch for missing bodies in each account's sync window.
+- **Reliable saved views.** Repair and verify virtual-folder population on the actual mail device, then share filtering/count/search semantics with All Inboxes and saved searches. A released criteria feature does not establish that the later empty-folder repair shipped.
+- **Conversation/Traditional reader.** Shared email-specific extraction with original fallback, readable thread cards and a remembered format toggle; see UX-004–009.
+- **Fast folder access and customizable cards.** Pins and section-order/visibility baselines exist from P-007/P-008. Extend them into the on-demand drawer, typed entries/cards, All Inboxes in Virtual folders and rail shortcuts; see UX-010–014. Preserve the all-folder browser and main's deletion confirmation behavior.
+- **Header-only bulk sync.** Preserve the v0.3.12 baseline: headers/flags during routine sync; body/attachment content on demand. Per-folder automatic body-download preferences are a separate requested feature (UX-040/041), with Inbox proposed enabled by default; attachments stay on demand and historical backfill requires a bounded explicit action.
+- **Authenticated agent API.** Structured thread/search/original-content access and shared mail/draft/view/queue operations, with explicit fetching, capabilities, CLI/MCP adapters and honest completeness. This is a foundational requirement, not built-in AI writing; see UX-019–024 and UX-037–039.
 - **Cross-account message moves.** Already supported. Preserve the safety rule: confirm the destination copy before removing the source.
 - **Multiple sender identities across accounts.** Already supported in the composer. Improve it with contextual signature selection (sender, recipient, and message type); signatures can already be configured per identity.
-- **Local cross-account filters.** Not started. Build on the existing cross-account move action; match incoming messages and route them to a folder in another account.
-- **Gmail-style keyboard bindings.** Fast list navigation and common message actions while browsing lists and reading messages, documented in `docs/KEYBOARD_SHORTCUTS.md`. Disable single-key bindings in compose and other editable fields; keep standard macOS editing shortcuts working. Not started.
-- **Gmail-native spam actions.** Let users mark messages as spam and undo that action for Gmail accounts, invoking Gmail's native spam classification/disposition rather than only moving mail to a local folder. The Gmail API supports applying/removing the `SPAM` system label; confirm the exact classifier-training behavior during implementation. Not started.
-- **Quick replies and email templates.** Save reusable short replies and complete message templates as separate composer tools. Preserve the current sender identity and draft fields when inserting either. Not started.
+- **Local cross-account filters.** Baseline shipped in v0.3.13. Extend the existing confirmed-copy move service when new rules need it.
+- **Gmail-style keyboard bindings and nearby buttons.** Existing shortcuts/registry/command panel are the baseline. Complete reading/iframe coverage, Finnish layouts and configurable overrides while sharing targets with visible actions; disable single keys in editable fields. See UX-016/017/029 and `docs/KEYBOARD_SHORTCUTS.md`.
+- **Gmail-native spam actions.** Existing v0.3.13 API baseline supports native spam/not-spam label operations with fallback. Verify actual provider behavior and undo; do not claim classifier-training guarantees without evidence.
+- **Quick replies and email templates.** Short snippets shipped in v0.3.13; full email templates remain P-020. Reuse them in inline/full compose while preserving sender, recipients and unsaved draft content.
 - **Calendar recognition.** Turn recognized date/time mentions in message content into an “Add to Calendar” action using the standard ICS event handoff. Open it for review/import and handle timezone ambiguity conservatively. Not started; build on `extensions/calendar`.
 - **Multiple mail windows.** Keep more than one mail window open for parallel reading and searching. Not started; the detached compose window already exists.
 
 ## Planned
 
+- **Reply Later and Focus & Reply.** Personal queue and focused reply sessions, preserving skipped items/drafts and completing entries only on confirmed send acceptance; UX-025–027. Separate from Send Later scheduling.
+- **People and attachment browsing.** Optional correspondent grouping with topic boundaries, plus scoped attachment discovery with explicit downloads and incomplete-cache indicators; UX-030–032.
+- **Layout/search refinements.** Related searches/save view, configurable columns/density and optional sender bundles; UX-028/033/034. Optional saved-view tabs and hiding empty views remain later decisions.
 - **macOS Contacts integration.** Start with read-only address book browsing and recipient lookup/autocomplete, with macOS privacy authorization. For edits, link to the selected person in Apple's Contacts app; do not write contact changes from Postilaatikko in the initial version.
 - **Smart notifications.** Per-sender and rule-based controls for deciding which messages produce notifications. Not started; lower priority.
 - **Snooze and reminders.** Hide or remind about a conversation at a chosen time. Not started and lower priority than the core items above.
@@ -102,7 +117,7 @@ These are deliberately small, reviewable candidates that can be offered upstream
 ## Open questions
 
 - **Paid hosted scheduled send.** It may serve users without an always-on computer, but the service would have to access message content and sending credentials at delivery time. Decide whether to offer this separate, non-E2EE trust mode; keep the initial Mac Studio helper mode E2EE.
-- **Gmail-style key map.** Start with message-list and reading actions (navigation, archive, select, star, move, delete, spam, reply/forward, undo); single-key shortcuts are inactive in compose/editable fields. Refine exact bindings during implementation.
+- **Later layout options.** Whether to add saved-view tabs, hide empty views, per-view reader overrides or incoming-mail presentation schedules. Do not block the accepted core UI/API work on these decisions.
 
 ## Parked
 

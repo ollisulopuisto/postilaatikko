@@ -34,6 +34,7 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 
 | ID | Effort | Task | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
+| D-002 | Medium | Consolidate the accepted conversation, navigation, focus, contextual actions and agent API design; split delivery into independently claimable tasks with model/effort guidance and dependencies. Documentation only. | Codex / `codex/D-002-conversation-navigation-plan` / `/private/tmp/postilaatikko-d002-plan` | Review; plan, roadmap and 41 unclaimed UX tasks prepared from `origin/main` at `8a7a2a8`. Document validation passed: task/ledger parity, model counts, unique anchors, dependency cycles, local links and example JSON; `git diff --check` passed. No application code changed or app tests run. Not integrated/pushed. |
 | P-011 | Large | Critical E2EE Send Later: durable queue, pair clients with the Mac Studio helper, encrypt queued messages to the helper public key, and keep the private key and sending credentials on the helper. Relay stores ciphertext only; helper decrypts at delivery time. Include retry/recovery, cancellation, status, and missed due-time handling. Hosted decryption/sending is out of scope. | GPT-6.1-Sol (medium) / `agent/p011-e2ee-scheduled-send` / `/private/tmp/postilaatikko-p011` | In progress; checkpoint `7be5fe3` |
 | P-014 | Medium | Add local cross-account filters for routing incoming messages. | opencode (Qwen3.8-27B) / `feat/p014-cross-account-filters` / `../postilaatikko-p014` | Done (v0.3.13) |
 | P-012 | Easy | ICS event handoff (Easy): create an ICS event from structured date/time details and open it for review/import. | OpenCode / `agent/p012-ics-event-handoff` / worktree `../postilaatikko-p012` | Done (v0.3.13) |
@@ -56,9 +57,64 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 | P-038 | Easy | Fix deleting virtual folders from the sidebar. Replace the browser confirm dialog (not available in the macOS webview, so the delete was cancelled silently) with the app's ConfirmDialog; keep the row's delete, edit and move buttons reachable by keyboard. | Claude / `agent/P-038-virtual-folder-delete` / `../postilaatikko-p038` | Review. Verified: `node --test tests/virtualFolderDelete.test.mjs` (red first; 3 pass); `go test ./internal/virtualfolder` (delete and cascade); `svelte-check` 0 errors; eslint; `npm run build`. Root cause from Wails v2.15.0 darwin source: no WKUIDelegate confirm panel. Not verified: a delete on macOS (the reported environment) and keyboard focus in the running app. `searchMutationFlow.test.mjs` still fails on main and is unrelated. |
 | D-001 | Medium | Design proposal for floating/contextual toolbars, selection popovers and context menus: `docs/plans/2026-10-25-contextual-toolbars-design.md`. Recommends no floating tool palette; a shared action layer that also feeds the P-027 command panel; complete list selection bar; unified keyboard-accessible context menus; body selection popover; compact-composer formatting bubble. Follow-ups P-029 to P-034. Documentation only. Verified by reading `main` at `8d0eed4`; not verified: webview selection behavior, the suspected command-panel targeting bug (design §2.9), any running-app behavior. | Claude Opus / `agent/D-001-contextual-toolbars` / `../postilaatikko-d001` | Review; commit `9d0a3ab` |
 
+
+## D-002 conversation, navigation and agent API queue
+
+Plan: [D-002](docs/plans/2026-10-26-conversation-navigation-agent-api.md). These tasks implement the accepted 2026-10-26 direction; planning itself is D-002 above. Use these IDs, not the colliding historical P-037/P-038 labels. Detailed files, acceptance criteria and verification are in each linked task section.
+
+Suggested model/effort is a dispatch recommendation, not an existing claim or model performance guarantee. `Unclaimed; deps pending` tasks may be claimed only after the named predecessors are integrated. Validate the real branch/commit, not a stale status row. Record owner/model, branch and worktree before editing. Integration and release belong to the coordinator.
+
+| ID | Effort | Suggested model / effort | Task / acceptance | Dependencies | Owner / branch / worktree | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| UX-001 | Medium | Sol 6.1 Medium | [Virtual-folder and branch integration checkpoint](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-001) — acceptance in plan. | None | — | Unclaimed; ready |
+| UX-002 | Medium | Sol 6.1 High | [Shared view, thread and message-reference contract](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-002) — acceptance in plan. | None | — | Unclaimed; ready |
+| UX-003 | Medium | Sol 6.1 Medium | [One saved-view query path](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-003) — acceptance in plan. | UX-001, UX-002 | — | Unclaimed; deps pending |
+| UX-004 | Easy | Luna High | [Extraction schema and representative fixture corpus](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-004) — acceptance in plan. | UX-002 | — | Unclaimed; deps pending |
+| UX-005 | Medium | Sol 6.1 High | [Conservative plain-text reply extraction](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-005) — acceptance in plan. | UX-004 | — | Unclaimed; deps pending |
+| UX-006 | Medium | Sol 6.1 High | [HTML reply extraction preserving meaningful content](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-006) — acceptance in plan. | UX-004 | — | Unclaimed; deps pending |
+| UX-007 | Medium | Sol 6.1 Medium | [On-demand extraction service and bounded cache](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-007) — acceptance in plan. | UX-001, UX-005, UX-006 | — | Unclaimed; deps pending |
+| UX-008 | Medium | Sol 6.1 Medium | [Conversation timeline component](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-008) — acceptance in plan. | UX-007 | — | Unclaimed; deps pending |
+| UX-009 | Easy | Luna High | [Conversation/Traditional toggle and per-message original](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-009) — acceptance in plan. | UX-008 | — | Unclaimed; deps pending |
+| UX-010 | Medium | Sol 6.1 High | [Typed navigation entries and card-layout migration](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-010) — acceptance in plan. | UX-001, UX-002 | — | Unclaimed; deps pending |
+| UX-011 | Medium | Sol 6.1 Medium | [Folder drawer with Keep open](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-011) — acceptance in plan. | UX-010 | — | Unclaimed; deps pending |
+| UX-012 | Medium | Sol 6.1 Medium | [Card organization and entry moves](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-012) — acceptance in plan. | UX-011 | — | Unclaimed; deps pending |
+| UX-013 | Easy | Sol 6.1 Medium | [All Inboxes inside the Virtual folders card](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-013) — acceptance in plan. | UX-003, UX-012 | — | Unclaimed; deps pending |
+| UX-014 | Easy | Luna High | [Quick-access rail and Cmd/Ctrl+1…0](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-014) — acceptance in plan. | UX-010, UX-013 | — | Unclaimed; deps pending |
+| UX-015 | Easy | Sol 6.1 Medium | [Complete thread Focus mode and restore behavior](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-015) — acceptance in plan. | UX-008, UX-011 | — | Unclaimed; deps pending |
+| UX-016 | Medium | Sol 6.1 High | [Shared explicit action targets for every surface](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-016) — acceptance in plan. | UX-002 | — | Unclaimed; deps pending |
+| UX-017 | Easy | Luna High | [Nearby list/message buttons and selection toolbar](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-017) — acceptance in plan. | UX-008, UX-016, P-030 | — | Unclaimed; deps pending |
+| UX-018 | Medium | Sol 6.1 Medium | [Inline reply backed by durable drafts](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-018) — acceptance in plan. | UX-008, UX-016 | — | Unclaimed; deps pending |
+| UX-019 | Medium | Sol 6.1 High | [Versioned agent API and authorization design](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-019) — acceptance in plan. | UX-002 | — | Unclaimed; deps pending |
+| UX-020 | Medium | Sol 6.1 High | [Local API listener and capability enforcement](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-020) — acceptance in plan. | UX-019 | — | Unclaimed; deps pending |
+| UX-021 | Medium | Sol 6.1 Medium | [Read/search/thread/body/attachment API endpoints](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-021) — acceptance in plan. | UX-003, UX-007, UX-020 | — | Unclaimed; deps pending |
+| UX-022 | Medium | Sol 6.1 High | [Mail-mutation API endpoints](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-022) — acceptance in plan. | UX-016, UX-020, UX-021 | — | Unclaimed; deps pending |
+| UX-023 | Easy | Luna High | [Documented JSON CLI for agents and humans](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-023) — acceptance in plan. | UX-021 | — | Unclaimed; deps pending |
+| UX-024 | Medium | Sol 6.1 Medium | [MCP adapter using the same API contract](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-024) — acceptance in plan. | UX-021, UX-023 | — | Unclaimed; deps pending |
+| UX-025 | Medium | Sol 6.1 Medium | [Durable Reply Later queue operations](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-025) — acceptance in plan. | UX-002, UX-016 | — | Unclaimed; deps pending |
+| UX-026 | Easy | Luna High | [Reply Later entry, buttons and API tools](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-026) — acceptance in plan. | UX-012, UX-017, UX-021, UX-025 | — | Unclaimed; deps pending |
+| UX-027 | Medium | Sol 6.1 High | [Focus & Reply session](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-027) — acceptance in plan. | UX-015, UX-018, UX-026 | — | Unclaimed; deps pending |
+| UX-028 | Easy | Luna High | [Related searches and Save as virtual folder](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-028) — acceptance in plan. | UX-003, UX-013 | — | Unclaimed; deps pending |
+| UX-029 | Medium | Sol 6.1 Medium | [Keyboard preferences and Finnish layout support](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-029) — acceptance in plan. | UX-014, UX-015, UX-017 | — | Unclaimed; deps pending |
+| UX-030 | Medium | Sol 6.1 High | [People grouping query and identity rules (later)](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-030) — acceptance in plan. | UX-003, UX-021 | — | Unclaimed; deps pending |
+| UX-031 | Medium | Sol 6.1 Medium | [People view and related-thread navigation (later)](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-031) — acceptance in plan. | UX-009, UX-030 | — | Unclaimed; deps pending |
+| UX-032 | Medium | Sol 6.1 Medium | [Scoped attachment browser (later)](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-032) — acceptance in plan. | UX-021, UX-030 | — | Unclaimed; deps pending |
+| UX-033 | Easy | Luna High | [Column order, density and layout preferences](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-033) — acceptance in plan. | UX-009, UX-012 | — | Unclaimed; deps pending |
+| UX-034 | Medium | Sol 6.1 Medium | [Optional sender bundles for bulk triage (later)](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-034) — acceptance in plan. | UX-003, UX-016, UX-031 | — | Unclaimed; deps pending |
+| UX-035 | Medium | Sol 6.1 High | [Bounded work, cancellation and performance measurements](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-035) — acceptance in plan. | UX-007, UX-008, UX-011, UX-021 | — | Unclaimed; deps pending |
+| UX-036 | Medium | Sol 6.1 Medium | [Integration, accessibility, localization and release handoff](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-036) — acceptance in plan. | UX-009, UX-013, UX-014, UX-015, UX-017, UX-018, UX-021, UX-029, UX-035, UX-022, UX-023, UX-024, UX-037, UX-038 | — | Unclaimed; deps pending |
+| UX-037 | Medium | Sol 6.1 High | [Draft/reply/send API and idempotent send receipts](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-037) — acceptance in plan. | UX-016, UX-020, UX-021 | — | Unclaimed; deps pending |
+| UX-038 | Medium | Sol 6.1 Medium | [Saved-view and navigation configuration API](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-038) — acceptance in plan. | UX-003, UX-010, UX-020, UX-021 | — | Unclaimed; deps pending |
+| UX-039 | Medium | Sol 6.1 High | [Scheduling API adapter after P-011 integration](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-039) — acceptance in plan. | UX-020, UX-022, UX-037, P-011 | — | Unclaimed; deps pending |
+| UX-040 | Medium | Sol 6.1 Medium | [Per-folder automatic body-download policy](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-040) — acceptance in plan. | UX-001, UX-002 | — | Unclaimed; deps pending |
+| UX-041 | Easy | Luna High | [Folder content-policy controls and status](docs/plans/2026-10-26-conversation-navigation-agent-api.md#ux-041) — acceptance in plan. | UX-011, UX-040 | — | Unclaimed; deps pending |
+
+**First pickups:** UX-001 (repair/build provenance) and UX-002 (shared view/thread contract). After UX-002, UX-004 fixtures, UX-016 action targets and UX-019 API design can proceed on separate files. Sidebar/App and viewer integration edits are sequenced as described in D-002; do not concurrently rewrite those components. Existing P-015, P-016, P-020, P-030–034 and P-011 retain their owners and scope; coordinate reuse instead of claiming duplicates.
+
+
 ## Next priority after the active tasks
 
-1. **P-017 then P-010 — Gmail API (Medium + Large):** establish the OAuth/provider contract, then implement Gmail server-side search.
+1. **UX-001 and UX-002:** verify the integrated/installed virtual-folder repair and establish the common view/thread contract. Use D-002's dependency and model guidance; Gmail search/spam already have a baseline.
+2. **P-011 remains critical:** keep its existing owner and security/live-delivery gates. Its local candidate status must not be confused with origin/main or a released DMG.
 
 ## Unclaimed
 
