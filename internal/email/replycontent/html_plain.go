@@ -20,6 +20,7 @@ func refineHTMLText(atoms []htmlAtom) []htmlAtom {
 		}
 		var text strings.Builder
 		ranges := map[*html.Node]textRange{}
+		var protected []textRange
 		var index func(*html.Node)
 		index = func(n *html.Node) {
 			start := text.Len()
@@ -30,7 +31,10 @@ func refineHTMLText(atoms []htmlAtom) []htmlAtom {
 					ranges[n] = textRange{start, start}
 					return
 				}
-				if htmlBlockElements[n.Data] {
+				if n.Data == "td" || n.Data == "th" {
+					// Header label/value cells belong on the same logical line.
+					text.WriteByte(' ')
+				} else if htmlBlockElements[n.Data] {
 					text.WriteByte('\n')
 				}
 				if n.Data == "img" {
@@ -39,11 +43,17 @@ func refineHTMLText(atoms []htmlAtom) []htmlAtom {
 				for c := n.FirstChild; c != nil; c = c.NextSibling {
 					index(c)
 				}
-				if htmlBlockElements[n.Data] {
+				if n.Data == "td" || n.Data == "th" {
+					// Header label/value cells belong on the same logical line.
+					text.WriteByte(' ')
+				} else if htmlBlockElements[n.Data] {
 					text.WriteByte('\n')
 				}
 			}
 			ranges[n] = textRange{start, text.Len()}
+			if n.Type == html.ElementNode && (n.Data == "pre" || n.Data == "code") {
+				protected = append(protected, ranges[n])
+			}
 		}
 		for _, n := range atom.nodes {
 			index(n)
@@ -57,6 +67,14 @@ func refineHTMLText(atoms []htmlAtom) []htmlAtom {
 		for _, b := range split.Blocks {
 			if b.Source == nil {
 				valid = false
+				continue
+			}
+			if b.Kind == BlockQuoted || b.Kind == BlockSignature {
+				for _, code := range protected {
+					if b.Source.Start >= code.start && b.Source.Start < code.end {
+						valid = false
+					}
+				}
 			}
 		}
 		if !valid {

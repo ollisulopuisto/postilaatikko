@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - 'codex/BUILD-001-reader-test'
+      - 'codex/READER-002-contrast-quoted-headers'
   workflow_dispatch:
 
 permissions:

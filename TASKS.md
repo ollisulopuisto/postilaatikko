@@ -34,7 +34,7 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 
 | Task | Effort | Scope | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
-| READER-002 | Medium | Fix conversation contrast, Outlook-style quoted headers and visible directional bubble tails; rebuild test DMGs on GitHub. | Codex / `codex/READER-002-contrast-quoted-headers` / `/private/tmp/postilaatikko-reader002` | In progress; published baseline `c21c572`, main remains `385228a` remotely. |
+| READER-002 | Medium | Fix conversation contrast, Outlook-style quoted headers and visible directional bubble tails; rebuild test DMGs on GitHub. | Codex / `codex/READER-002-contrast-quoted-headers` / `/private/tmp/postilaatikko-reader002` | Review / GitHub build queued on branch push. Fixed inline color/opacity overrides in the conversation presentation copy, spaced/table quoted-header recognition (`reply-v3`) and visible left/right tails. Verified new Go header cases red then green, existing extraction/cache/fixture tests, race/vet, frontend check (0 errors; 2 existing warnings; 7 shortcut tests), lint and production build. Real Chromium dark/light checks cover black/white/important styles, opacity, quote removal, unclipped tails, originals/Traditional and narrow sizing. Native WKWebView check remains; source/originals unchanged. Based on published `c21c572`; origin/main stays `385228a`. |
 
 | Task | Effort | Scope | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |

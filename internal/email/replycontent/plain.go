@@ -17,7 +17,7 @@ const (
 	// maxMarkerLineLen is the longest line tested against the marker patterns.
 	maxMarkerLineLen = 300
 	// headerRunLookahead is how far past a "From:" line the header block is searched.
-	headerRunLookahead = 8
+	headerRunLookahead = 24
 )
 
 var (
@@ -401,21 +401,22 @@ func headerLabel(text string) string {
 }
 
 // headerRunAt reports whether a block of at least three consecutive header
-// lines (From, Sent, To, Subject and their Finnish, German and Swedish
-// equivalents) starts at i.
+// fields (From, Sent, To, Subject and their Finnish, German and Swedish
+// equivalents) starts at i. Client-generated blank lines are allowed; ordinary
+// prose stops the run, and repeated labels do not count as additional fields.
 func headerRunAt(lines []plainLine, i int) bool {
 	if !headerStartLabels[headerLabel(lines[i].text)] {
 		return false
 	}
-	found := 1
+	found := map[string]bool{headerLabel(lines[i].text): true}
 	for j := i + 1; j < len(lines) && j <= i+headerRunLookahead; j++ {
 		if lines[j].blank {
-			break
+			continue
 		}
 		if !headerLabels[headerLabel(lines[j].text)] {
 			break
 		}
-		found++
+		found[headerLabel(lines[j].text)] = true
 	}
-	return found >= 3
+	return len(found) >= 3
 }

@@ -2269,10 +2269,40 @@
 
 
 <style>
-  .conversation-bubble { width: min(88%, 58rem); border-radius: 1rem; background: hsl(var(--muted) / 0.35); }
-  .conversation-bubble.bubble-right { margin-left: auto; border-bottom-right-radius: 0.2rem; background: hsl(var(--primary) / 0.08); }
-  .conversation-bubble.bubble-left { margin-right: auto; border-bottom-left-radius: 0.2rem; }
-  @media (max-width: 600px) { .conversation-bubble { width: 96%; } }
+  .conversation-bubble {
+    --bubble-fill: color-mix(in srgb, hsl(var(--muted)) 55%, hsl(var(--background)));
+    position: relative;
+    overflow: visible;
+    width: min(86%, 58rem);
+    border-radius: 1rem;
+    background: var(--bubble-fill) !important;
+  }
+  .conversation-bubble.bubble-right {
+    --bubble-fill: color-mix(in srgb, hsl(var(--primary)) 14%, hsl(var(--background)));
+    margin-left: auto;
+  }
+  .conversation-bubble.bubble-left { margin-right: auto; }
+  .conversation-bubble::after {
+    content: '';
+    position: absolute;
+    bottom: 16px;
+    width: 16px;
+    height: 16px;
+    background: var(--bubble-fill);
+    transform: rotate(45deg);
+    pointer-events: none;
+  }
+  .conversation-bubble.bubble-left::after {
+    left: -9px;
+    border-left: 1px solid hsl(var(--border));
+    border-bottom: 1px solid hsl(var(--border));
+  }
+  .conversation-bubble.bubble-right::after {
+    right: -9px;
+    border-top: 1px solid hsl(var(--border));
+    border-right: 1px solid hsl(var(--border));
+  }
+  @media (max-width: 600px) { .conversation-bubble { width: 94%; } }
   .viewer-toolbar-action :global(svg) {
     transition: color 150ms ease, transform 150ms ease;
   }
