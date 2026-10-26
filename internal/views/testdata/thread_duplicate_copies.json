@@ -1,0 +1,56 @@
+{
+  "ref": { "accountId": "acc-a", "threadId": "thr-100" },
+  "subject": "Lunch on Tuesday",
+  "latestDate": "2026-10-20T09:05:00Z",
+  "participants": [
+    { "name": "Alice", "email": "alice@example.org" },
+    { "name": "Bob", "email": "bob@example.org" }
+  ],
+  "messageCount": 3,
+  "matchedCount": 1,
+  "messages": [
+    {
+      "ref": { "accountId": "acc-a", "messageId": "m-101" },
+      "folderId": "fld-a-inbox",
+      "rfcMessageId": "<lunch-1@example.org>",
+      "from": { "name": "Alice", "email": "alice@example.org" },
+      "date": "2026-10-20T09:00:00Z",
+      "matched": true,
+      "isRead": false,
+      "isStarred": false,
+      "isAnswered": false,
+      "hasAttachments": false,
+      "contentState": "cached"
+    },
+    {
+      "ref": { "accountId": "acc-a", "messageId": "m-102" },
+      "folderId": "fld-a-allmail",
+      "rfcMessageId": "<lunch-1@example.org>",
+      "from": { "name": "Alice", "email": "alice@example.org" },
+      "date": "2026-10-20T09:00:00Z",
+      "matched": false,
+      "isRead": false,
+      "isStarred": false,
+      "isAnswered": false,
+      "hasAttachments": false,
+      "contentState": "cached"
+    },
+    {
+      "ref": { "accountId": "acc-a", "messageId": "m-103" },
+      "folderId": "fld-a-sent",
+      "rfcMessageId": "<lunch-2@example.org>",
+      "from": { "name": "Bob", "email": "bob@example.org" },
+      "date": "2026-10-20T09:05:00Z",
+      "matched": false,
+      "isRead": true,
+      "isStarred": false,
+      "isAnswered": false,
+      "hasAttachments": false,
+      "contentState": "cached"
+    }
+  ],
+  "completeness": {
+    "complete": true,
+    "bodies": { "total": 3, "cached": 3, "notFetched": 0, "fetchFailed": 0 }
+  }
+}

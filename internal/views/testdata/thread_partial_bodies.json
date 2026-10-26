@@ -1,0 +1,68 @@
+{
+  "ref": { "accountId": "acc-a", "threadId": "thr-200" },
+  "subject": "Quarterly numbers",
+  "latestDate": "2026-10-21T14:30:00Z",
+  "participants": [
+    { "name": "Carol", "email": "carol@example.org" }
+  ],
+  "messageCount": 4,
+  "matchedCount": 4,
+  "messages": [
+    {
+      "ref": { "accountId": "acc-a", "messageId": "m-201" },
+      "folderId": "fld-a-inbox",
+      "rfcMessageId": "<q-1@example.org>",
+      "from": { "name": "Carol", "email": "carol@example.org" },
+      "date": "2026-10-21T10:00:00Z",
+      "matched": true,
+      "isRead": true,
+      "isStarred": false,
+      "isAnswered": true,
+      "hasAttachments": true,
+      "contentState": "cached"
+    },
+    {
+      "ref": { "accountId": "acc-a", "messageId": "m-202" },
+      "folderId": "fld-a-inbox",
+      "rfcMessageId": "<q-2@example.org>",
+      "from": { "name": "Carol", "email": "carol@example.org" },
+      "date": "2026-10-21T11:00:00Z",
+      "matched": true,
+      "isRead": false,
+      "isStarred": false,
+      "isAnswered": false,
+      "hasAttachments": false,
+      "contentState": "not_fetched"
+    },
+    {
+      "ref": { "accountId": "acc-a", "messageId": "m-203" },
+      "folderId": "fld-a-inbox",
+      "rfcMessageId": "<q-3@example.org>",
+      "from": { "name": "Carol", "email": "carol@example.org" },
+      "date": "2026-10-21T12:15:00Z",
+      "matched": true,
+      "isRead": false,
+      "isStarred": true,
+      "isAnswered": false,
+      "hasAttachments": false,
+      "contentState": "fetch_failed"
+    },
+    {
+      "ref": { "accountId": "acc-a", "messageId": "m-204" },
+      "folderId": "fld-a-inbox",
+      "rfcMessageId": "<q-4@example.org>",
+      "from": { "name": "Carol", "email": "carol@example.org" },
+      "date": "2026-10-21T14:30:00Z",
+      "matched": true,
+      "isRead": false,
+      "isStarred": false,
+      "isAnswered": false,
+      "hasAttachments": false,
+      "contentState": "cached"
+    }
+  ],
+  "completeness": {
+    "complete": false,
+    "bodies": { "total": 4, "cached": 2, "notFetched": 1, "fetchFailed": 1 }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "valid": [
+    { "kind": "all_inboxes" },
+    { "kind": "folder", "accountId": "acc-a", "folderId": "fld-a-inbox" },
+    { "kind": "virtual_folder", "virtualFolderId": "vf-1" },
+    { "kind": "search", "query": "from:alice" },
+    { "kind": "search", "query": "from:alice", "within": { "kind": "all_inboxes" } },
+    { "kind": "search", "query": "invoice", "within": { "kind": "folder", "accountId": "acc-a", "folderId": "fld-a-inbox" } },
+    { "kind": "search", "query": "invoice", "within": { "kind": "virtual_folder", "virtualFolderId": "vf-1" } }
+  ],
+  "invalid": [
+    { "kind": "folder", "folderId": "fld-a-inbox" },
+    { "kind": "folder", "accountId": "acc-a" },
+    { "kind": "virtual_folder" },
+    { "kind": "search", "query": "   " },
+    { "kind": "search", "query": "x", "within": { "kind": "search", "query": "y" } },
+    { "kind": "search", "query": "x", "within": { "kind": "folder" } },
+    { "kind": "everything" },
+    { "kind": "all_inboxes", "accountId": "acc-a" },
+    { "kind": "folder", "accountId": "a", "folderId": "f", "query": "x" }
+  ]
+}
