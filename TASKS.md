@@ -34,6 +34,10 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 
 | Task | Effort | Scope | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
+| READER-002 | Medium | Fix conversation contrast, Outlook-style quoted headers and visible directional bubble tails; rebuild test DMGs on GitHub. | Codex / `codex/READER-002-contrast-quoted-headers` / `/private/tmp/postilaatikko-reader002` | In progress; published baseline `c21c572`, main remains `385228a` remotely. |
+
+| Task | Effort | Scope | Owner / branch / worktree | Status |
+| --- | --- | --- | --- | --- |
 | BUILD-001 | Medium | Integrate reader + release baseline + tagged message-focus shortcuts for a GitHub-built Mac test DMG/prerelease. | Codex / `codex/BUILD-001-reader-test` / `/private/tmp/postilaatikko-build001` | GitHub build queued by branch push; integrated REL-001 and READER-001 plus restored `e30b37e` message-focus shortcuts. Prerelease DMGs for arm64/amd64; native smoke checks and P-011 live/security gates remain. Integration stays off main. |
 | READER-001 | Medium | User-requested double-click detached reader; compact directional conversation bubbles, hidden signature/source chrome, parser-library evaluation with regression coverage. | Codex / `codex/READER-001-compact-conversations` / `/private/tmp/postilaatikko-reader001` | Review; implementation `6d51a6f`, based on `0ef36e4` with UX-008/009 merged. Implemented detached IPC reader and compact bubbles; adopted pinned MIT Go reply parser behind lossless checks. Verified: Go race tests (app, IPC, replycontent, readerbridge), vet, `go build ./...`; frontend check (0 errors, 2 existing warnings, 7 shortcut tests), 26 focused frontend tests, targeted lint and production build. Real Chromium smoke covers content/modes/narrow sizing and actual row double-click/control exclusion. Native window creation, real mail/crypto/attachment dialogs and REL-001 integration remain device/review gates. See `docs/diagnostics/2026-10-26-compact-reader.md`. |
 
