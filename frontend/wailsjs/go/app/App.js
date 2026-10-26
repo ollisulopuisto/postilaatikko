@@ -710,6 +710,10 @@ export function GetSMIMESignPolicy(arg1) {
   return window['go']['app']['App']['GetSMIMESignPolicy'](arg1);
 }
 
+export function GetScheduledPage(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['App']['GetScheduledPage'](arg1, arg2, arg3, arg4);
+}
+
 export function GetSearchCount(arg1, arg2, arg3, arg4) {
   return window['go']['app']['App']['GetSearchCount'](arg1, arg2, arg3, arg4);
 }
@@ -720,6 +724,10 @@ export function GetSearchCountUnifiedFolder(arg1, arg2, arg3) {
 
 export function GetSearchCountUnifiedInbox(arg1, arg2) {
   return window['go']['app']['App']['GetSearchCountUnifiedInbox'](arg1, arg2);
+}
+
+export function GetSendLaterSetup(arg1) {
+  return window['go']['app']['App']['GetSendLaterSetup'](arg1);
 }
 
 export function GetSenderLogos(arg1) {
@@ -882,6 +890,10 @@ export function ImportSMIMECertificateFromPathBER(arg1, arg2, arg3) {
   return window['go']['app']['App']['ImportSMIMECertificateFromPathBER'](arg1, arg2, arg3);
 }
 
+export function InitializeSendLaterClient() {
+  return window['go']['app']['App']['InitializeSendLaterClient']();
+}
+
 export function InitiateShutdown() {
   return window['go']['app']['App']['InitiateShutdown']();
 }
@@ -960,6 +972,10 @@ export function ListQuickReplies() {
 
 export function ListSMIMECertificates(arg1) {
   return window['go']['app']['App']['ListSMIMECertificates'](arg1);
+}
+
+export function ListScheduledMessages(arg1) {
+  return window['go']['app']['App']['ListScheduledMessages'](arg1);
 }
 
 export function ListSenderCerts() {
@@ -1166,6 +1182,10 @@ export function ReorderVirtualFolders(arg1) {
   return window['go']['app']['App']['ReorderVirtualFolders'](arg1);
 }
 
+export function RescheduleMessage(arg1, arg2) {
+  return window['go']['app']['App']['RescheduleMessage'](arg1, arg2);
+}
+
 export function SaveAllAttachments(arg1) {
   return window['go']['app']['App']['SaveAllAttachments'](arg1);
 }
@@ -1194,8 +1214,16 @@ export function SaveQuickReply(arg1) {
   return window['go']['app']['App']['SaveQuickReply'](arg1);
 }
 
+export function SaveSendLaterConfig(arg1) {
+  return window['go']['app']['App']['SaveSendLaterConfig'](arg1);
+}
+
 export function SaveUIState(arg1) {
   return window['go']['app']['App']['SaveUIState'](arg1);
+}
+
+export function ScheduleMessage(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['App']['ScheduleMessage'](arg1, arg2, arg3, arg4);
 }
 
 export function SearchContacts(arg1, arg2) {
@@ -1220,6 +1248,10 @@ export function SearchVirtualFolder(arg1, arg2, arg3, arg4, arg5) {
 
 export function SendMessage(arg1, arg2) {
   return window['go']['app']['App']['SendMessage'](arg1, arg2);
+}
+
+export function SendMessageWithDraftGuard(arg1, arg2, arg3) {
+  return window['go']['app']['App']['SendMessageWithDraftGuard'](arg1, arg2, arg3);
 }
 
 export function SendReadReceipt(arg1, arg2) {
@@ -1520,6 +1552,10 @@ export function UpdateIdentity(arg1, arg2) {
 
 export function UpdateLocalFlags(arg1, arg2, arg3) {
   return window['go']['app']['App']['UpdateLocalFlags'](arg1, arg2, arg3);
+}
+
+export function UpdateScheduledMessage(arg1, arg2) {
+  return window['go']['app']['App']['UpdateScheduledMessage'](arg1, arg2);
 }
 
 export function UpdateVirtualFolder(arg1) {

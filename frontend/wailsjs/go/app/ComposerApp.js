@@ -78,6 +78,14 @@ export function GetSMIMESignPolicy(arg1) {
   return window['go']['app']['ComposerApp']['GetSMIMESignPolicy'](arg1);
 }
 
+export function GetScheduledPage(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['ComposerApp']['GetScheduledPage'](arg1, arg2, arg3, arg4);
+}
+
+export function GetSendLaterSetup(arg1) {
+  return window['go']['app']['ComposerApp']['GetSendLaterSetup'](arg1);
+}
+
 export function GetShowTitleBar() {
   return window['go']['app']['ComposerApp']['GetShowTitleBar']();
 }
@@ -110,8 +118,16 @@ export function ImportRecipientPGPKey(arg1, arg2) {
   return window['go']['app']['ComposerApp']['ImportRecipientPGPKey'](arg1, arg2);
 }
 
+export function InitializeSendLaterClient() {
+  return window['go']['app']['ComposerApp']['InitializeSendLaterClient']();
+}
+
 export function IsFlatpak() {
   return window['go']['app']['ComposerApp']['IsFlatpak']();
+}
+
+export function ListScheduledMessages(arg1) {
+  return window['go']['app']['ComposerApp']['ListScheduledMessages'](arg1);
 }
 
 export function LogFrontend(arg1, arg2) {
@@ -158,8 +174,20 @@ export function RefreshWindowConstraints() {
   return window['go']['app']['ComposerApp']['RefreshWindowConstraints']();
 }
 
+export function RescheduleMessage(arg1, arg2) {
+  return window['go']['app']['ComposerApp']['RescheduleMessage'](arg1, arg2);
+}
+
 export function SaveDraft(arg1, arg2, arg3) {
   return window['go']['app']['ComposerApp']['SaveDraft'](arg1, arg2, arg3);
+}
+
+export function SaveSendLaterConfig(arg1) {
+  return window['go']['app']['ComposerApp']['SaveSendLaterConfig'](arg1);
+}
+
+export function ScheduleMessage(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['ComposerApp']['ScheduleMessage'](arg1, arg2, arg3, arg4);
 }
 
 export function SearchContacts(arg1, arg2) {
@@ -170,10 +198,18 @@ export function SendMessage(arg1, arg2) {
   return window['go']['app']['ComposerApp']['SendMessage'](arg1, arg2);
 }
 
+export function SendMessageWithDraftGuard(arg1, arg2, arg3) {
+  return window['go']['app']['ComposerApp']['SendMessageWithDraftGuard'](arg1, arg2, arg3);
+}
+
 export function Shutdown(arg1) {
   return window['go']['app']['ComposerApp']['Shutdown'](arg1);
 }
 
 export function Startup(arg1) {
   return window['go']['app']['ComposerApp']['Startup'](arg1);
+}
+
+export function UpdateScheduledMessage(arg1, arg2) {
+  return window['go']['app']['ComposerApp']['UpdateScheduledMessage'](arg1, arg2);
 }
