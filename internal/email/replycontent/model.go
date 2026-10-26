@@ -62,6 +62,7 @@ const (
 	WarnAmbiguousQuoteMarker = "ambiguous-quote-marker"
 	WarnForwardedContent     = "forwarded-content"
 	WarnMalformedHTML        = "malformed-html"
+	WarnInputTooLarge        = "input-too-large"
 )
 
 var knownWarnings = map[string]bool{
@@ -69,6 +70,7 @@ var knownWarnings = map[string]bool{
 	WarnAmbiguousQuoteMarker: true,
 	WarnForwardedContent:     true,
 	WarnMalformedHTML:        true,
+	WarnInputTooLarge:        true,
 }
 
 // IsKnownWarning reports whether w is a warning this version can produce.
