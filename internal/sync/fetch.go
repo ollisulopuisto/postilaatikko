@@ -9,6 +9,7 @@ import (
 
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
+	"github.com/hkdb/aerion/internal/email/reactions"
 	imapPkg "github.com/hkdb/aerion/internal/imap"
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/message"
@@ -17,6 +18,7 @@ import (
 
 // ProcessedBody holds the parsed body content and attachments for a message
 type ProcessedBody struct {
+	Reaction       *reactions.Info
 	MessageID      string
 	BodyHTML       string
 	BodyText       string
@@ -94,7 +96,7 @@ func (e *Engine) FetchMessageBody(ctx context.Context, accountID, messageID stri
 	}
 
 	// Update message in store
-	if err := e.messageStore.UpdateBody(messageID, result.BodyHTML, result.BodyText, result.Snippet, result.HasAttachments); err != nil {
+	if err := e.messageStore.UpdateBodiesBatch([]message.BodyUpdate{{MessageID: messageID, BodyHTML: result.BodyHTML, BodyText: result.BodyText, Snippet: result.Snippet, HasAttachments: result.HasAttachments, InboxCategory: result.InboxCategory, SMIMERawBody: result.SMIMERawBody, SMIMEEncrypted: result.SMIMEEncrypted, PGPRawBody: result.PGPRawBody, PGPEncrypted: result.PGPEncrypted, Reaction: result.Reaction}}); err != nil {
 		return nil, fmt.Errorf("failed to update message body: %w", err)
 	}
 	if result.InboxCategory != "" {
@@ -275,6 +277,7 @@ func (e *Engine) fetchMessageBodiesBatch(ctx context.Context, client *imapclient
 		}
 
 		results[uid] = &ProcessedBody{
+			Reaction:       parsed.Reaction,
 			MessageID:      messageID,
 			BodyHTML:       bodyHTML,
 			BodyText:       parsed.BodyText,
@@ -779,6 +782,7 @@ func (e *Engine) FetchBodiesInBackground(ctx context.Context, accountID, folderI
 			for _, pb := range currentBodies {
 				// Build body update
 				bu := message.BodyUpdate{
+					Reaction:       pb.Reaction,
 					MessageID:      pb.MessageID,
 					BodyHTML:       pb.BodyHTML,
 					BodyText:       pb.BodyText,

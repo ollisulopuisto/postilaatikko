@@ -371,6 +371,8 @@ export function GetPendingMailto():Promise<app.MailtoData>;
 
 export function GetReadReceiptResponsePolicy():Promise<string>;
 
+export function GetReaderIdentityEmails():Promise<Array<string>>;
+
 export function GetReplyContent(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<replycontent.Reply>;
 
 export function GetRunBackground():Promise<boolean>;

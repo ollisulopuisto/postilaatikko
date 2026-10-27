@@ -73,6 +73,9 @@ func (a *App) FetchMessageBody(messageID string) (*message.Message, error) {
 
 	// If body is already fetched, just return it
 	if msg.BodyFetched {
+		if err := a.messageStore.EnrichReactions([]*message.Message{msg}); err != nil {
+			return nil, err
+		}
 		return msg, nil
 	}
 
@@ -82,6 +85,9 @@ func (a *App) FetchMessageBody(messageID string) (*message.Message, error) {
 		return nil, fmt.Errorf("failed to fetch message body: %w", err)
 	}
 
+	if err := a.messageStore.EnrichReactions([]*message.Message{updatedMsg}); err != nil {
+		return nil, err
+	}
 	return updatedMsg, nil
 }
 
@@ -144,6 +150,12 @@ func (a *App) GetConversation(threadID, folderID string) (*message.Conversation,
 	if err != nil {
 		log.Error().Err(err).Msg("GetConversation failed")
 		return nil, err
+	}
+
+	if conv != nil {
+		if err := a.messageStore.EnrichReactions(conv.Messages); err != nil {
+			return nil, fmt.Errorf("load reactions: %w", err)
+		}
 	}
 
 	if conv != nil && conv.Messages != nil {

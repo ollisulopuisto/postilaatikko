@@ -65,7 +65,7 @@ func ExtractPlain(body string) Result {
 	}
 
 	lines := splitPlainLines(body)
-	segments := refineLibrarySegments(lines, segmentPlain(lines))
+	segments := refineSignatureSegments(lines, refineLibrarySegments(lines, segmentPlain(lines)))
 
 	hasAuthored, hasQuoted, hasForwarded := false, false, false
 	for _, seg := range segments {
@@ -419,4 +419,22 @@ func headerRunAt(lines []plainLine, i int) bool {
 		found[headerLabel(lines[j].text)] = true
 	}
 	return len(found) >= 3
+}
+
+// Revisit authored prefixes after quoted history is separated. Otherwise a
+// short signature appears too long because the old quoted message follows it.
+func refineSignatureSegments(lines []plainLine, segments []plainSegment) []plainSegment {
+	var out []plainSegment
+	for _, seg := range segments {
+		if seg.kind != BlockAuthored {
+			out = append(out, seg)
+			continue
+		}
+		for _, part := range segmentPlain(lines[seg.from:seg.to]) {
+			part.from += seg.from
+			part.to += seg.from
+			out = append(out, part)
+		}
+	}
+	return out
 }

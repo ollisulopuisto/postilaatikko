@@ -1517,4 +1517,11 @@ var migrations = []Migration{
 			ALTER TABLE virtual_folders ADD COLUMN date_window TEXT NOT NULL DEFAULT 'all';
 		`,
 	},
+	{
+		Version: 53,
+		SQL: `CREATE TABLE IF NOT EXISTS message_reactions (
+            message_id TEXT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+            metadata TEXT NOT NULL
+        );`,
+	},
 }

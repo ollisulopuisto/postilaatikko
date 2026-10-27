@@ -5,6 +5,7 @@ on:
     branches:
       - 'codex/BUILD-001-reader-test'
       - 'codex/READER-002-contrast-quoted-headers'
+      - 'codex/READER-003-identities-reactions'
   workflow_dispatch:
 
 permissions:
@@ -41,10 +42,10 @@ jobs:
         run: |
           ./scripts/version.sh check
           npm run check --prefix frontend
-          node --test frontend/tests/bubbleLayout.test.mjs frontend/tests/replyContent.test.mjs
+          node --test frontend/tests/bubbleLayout.test.mjs frontend/tests/reactionLayout.test.mjs frontend/tests/replyContent.test.mjs
       - name: Verify backend
         run: |
-          go test ./internal/email/replycontent ./internal/readerbridge ./internal/scheduledsend ./internal/draft ./internal/ipc
+          go test ./internal/email/reactions ./internal/email/replycontent ./internal/database ./internal/message ./internal/sync ./internal/readerbridge ./internal/scheduledsend ./internal/draft ./internal/ipc
           go test ./app -run '^TestReader'
       - name: Build and sign app
         env:

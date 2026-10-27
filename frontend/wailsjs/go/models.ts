@@ -2212,6 +2212,7 @@ export namespace message {
 	    }
 	}
 	export class Message {
+	    reaction?: reactions.Info;
 	    id: string;
 	    accountId: string;
 	    folderId: string;
@@ -2263,6 +2264,7 @@ export namespace message {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.reaction = this.convertValues(source["reaction"], reactions.Info);
 	        this.id = source["id"];
 	        this.accountId = source["accountId"];
 	        this.folderId = source["folderId"];
@@ -2727,6 +2729,29 @@ export namespace platform {
 	        this.effective_mode = source["effective_mode"];
 	        this.frameless_supported = source["frameless_supported"];
 	        this.native_fallback_required = source["native_fallback_required"];
+	    }
+	}
+
+}
+
+export namespace reactions {
+
+	export class Info {
+	    emoji?: string;
+	    targetMessageId?: string;
+	    provider: string;
+	    invalid?: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new Info(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.emoji = source["emoji"];
+	        this.targetMessageId = source["targetMessageId"];
+	        this.provider = source["provider"];
+	        this.invalid = source["invalid"];
 	    }
 	}
 

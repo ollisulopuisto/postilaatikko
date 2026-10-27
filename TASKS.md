@@ -34,7 +34,7 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 
 | Task | Effort | Scope | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
-| READER-003 | Medium | Inbox/alias sender alignment, Gmail/Outlook reaction badges with exact reply targets, signature-plus-quoted-history extraction; GitHub test DMGs. | Codex / `codex/READER-003-identities-reactions` / `/private/tmp/postilaatikko-reader003` | In progress; based on published test build `279baf7`; origin/main unchanged. |
+| READER-003 | Medium | Inbox/alias sender alignment, Gmail/Outlook reaction badges with exact reply targets, signature-plus-quoted-history extraction; GitHub test DMGs. | Codex / `codex/READER-003-identities-reactions` / `/private/tmp/postilaatikko-reader003` | Review / GitHub build queued on push. Sender normalization/historical-identity read API and stable fallback; structured Gmail/RFC and conservative provider notification reaction chips on exact account-scoped targets; signature-before-history fix (`reply-v4`). Adds migration 53 reaction cache. Verified Go reaction/store/migration/sync tests and race checks; App reader identity tests; frontend check 0 errors + 2 existing warnings, 31 focused tests, targeted lint/build; real Chromium dark/light alias/reaction/source/Traditional checks. Native/live Inbox/provider variants remain. See `docs/diagnostics/2026-10-27-reader-identities-reactions.md`. Based on `279baf7`; origin/main unchanged. |
 
 | Task | Effort | Scope | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |

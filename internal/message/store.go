@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hkdb/aerion/internal/database"
+	"github.com/hkdb/aerion/internal/email/reactions"
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/rs/zerolog"
 )
@@ -1284,6 +1285,7 @@ func (s *Store) GetMessageUIDsAndFolder(messageIDs []string) (map[string]UIDInfo
 
 // BodyUpdate holds body content for batch updates
 type BodyUpdate struct {
+	Reaction           *reactions.Info
 	MessageID          string
 	BodyHTML           string
 	BodyText           string
@@ -1347,6 +1349,18 @@ func (s *Store) UpdateBodiesBatch(updates []BodyUpdate) error {
 		if err != nil {
 			s.log.Warn().Err(err).Str("message_ref", logging.ShortHash(u.MessageID)).Msg("Failed to update body in batch")
 			// Continue with other updates
+			continue
+		}
+		if u.Reaction != nil {
+			metadata, err := reactionMetadata(u.Reaction)
+			if err != nil {
+				return err
+			}
+			if _, err = tx.Exec("INSERT INTO message_reactions(message_id,metadata) VALUES(?,?) ON CONFLICT(message_id) DO UPDATE SET metadata=excluded.metadata", u.MessageID, metadata); err != nil {
+				return err
+			}
+		} else if _, err := tx.Exec("DELETE FROM message_reactions WHERE message_id=?", u.MessageID); err != nil {
+			return err
 		}
 	}
 

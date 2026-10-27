@@ -2,14 +2,16 @@
 package message
 
 import (
+	"github.com/hkdb/aerion/internal/email/reactions"
 	"time"
 )
 
 // Message represents an email message
 type Message struct {
-	ID        string `json:"id"`
-	AccountID string `json:"accountId"`
-	FolderID  string `json:"folderId"`
+	Reaction  *reactions.Info `json:"reaction,omitempty"`
+	ID        string          `json:"id"`
+	AccountID string          `json:"accountId"`
+	FolderID  string          `json:"folderId"`
 
 	// IMAP identifiers
 	UID       uint32 `json:"uid"`
@@ -21,17 +23,17 @@ type Message struct {
 	ThreadID   string `json:"threadId,omitempty"`
 
 	// Envelope data
-	Subject   string    `json:"subject"`
-	FromName  string    `json:"fromName"`
-	FromEmail string    `json:"fromEmail"`
-	ToList    string    `json:"toList,omitempty"`  // JSON array
-	CcList    string    `json:"ccList,omitempty"`  // JSON array
-	BccList   string    `json:"bccList,omitempty"` // JSON array
-	ReplyTo   string    `json:"replyTo,omitempty"`
+	Subject   string `json:"subject"`
+	FromName  string `json:"fromName"`
+	FromEmail string `json:"fromEmail"`
+	ToList    string `json:"toList,omitempty"`  // JSON array
+	CcList    string `json:"ccList,omitempty"`  // JSON array
+	BccList   string `json:"bccList,omitempty"` // JSON array
+	ReplyTo   string `json:"replyTo,omitempty"`
 	// InboxCategory is inferred from standards-based mail headers at sync time.
 	// Empty means the message predates header classification or had no signal.
-	InboxCategory string `json:"inboxCategory,omitempty"`
-	Date      time.Time `json:"date"`
+	InboxCategory string    `json:"inboxCategory,omitempty"`
+	Date          time.Time `json:"date"`
 
 	// Preview
 	Snippet string `json:"snippet,omitempty"`
@@ -133,8 +135,8 @@ type Conversation struct {
 	IsStarred      bool       `json:"isStarred"`
 	LatestDate     time.Time  `json:"latestDate"`
 	Participants   []Address  `json:"participants"`
-	MessageIDs     []string   `json:"messageIds"`         // Message IDs for context menu actions
-	IsEncrypted    bool       `json:"isEncrypted"`        // Any message in thread is encrypted (S/MIME or PGP)
+	MessageIDs     []string   `json:"messageIds"`  // Message IDs for context menu actions
+	IsEncrypted    bool       `json:"isEncrypted"` // Any message in thread is encrypted (S/MIME or PGP)
 	InboxCategory  string     `json:"inboxCategory,omitempty"`
 	Messages       []*Message `json:"messages,omitempty"` // Only populated when fetching full conversation
 

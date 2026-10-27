@@ -187,6 +187,7 @@ func (a *App) readerMethods() map[string]any {
 		"FetchMessageBody":              a.FetchMessageBody,
 		"GetAccentBarUnread":            a.GetAccentBarUnread,
 		"GetAccountProfilePhotos":       a.GetAccountProfilePhotos,
+		"GetReaderIdentityEmails":       a.GetReaderIdentityEmails,
 		"GetAllAccountIdentities":       a.GetAllAccountIdentities,
 		"GetAccounts":                   a.GetAccounts,
 		"GetAlwaysLoadImages":           a.GetAlwaysLoadImages,

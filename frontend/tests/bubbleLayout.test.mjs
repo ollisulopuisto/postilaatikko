@@ -15,9 +15,26 @@ test('all own identities use the right side; peers use left; consecutive sender 
 })
 test('two other participants keep stable sides; group threads retain sender labels', () => {
   const result = bubbleLayout([message('a', 'one@example.com'), message('b', 'two@example.com'), message('c', 'one@example.com')], () => false)
-  assert.equal(result.get('b').side, 'right')
-  assert.equal(result.get('c').side, 'left')
+  assert.equal(result.get('b').side, 'left')
+  assert.equal(result.get('c').side, 'right')
   assert.equal(result.get('c').showSender, true)
   const group = bubbleLayout([message('a', 'one'), message('b', 'two'), message('c', 'three')], () => false)
-  assert.ok([...group.values()].every(value => value.side === 'left' && value.showSender))
+  assert.equal(group.get('a').side, 'right')
+  assert.equal(group.get('b').side, 'left')
+  assert.equal(group.get('c').side, 'left')
+})
+
+test('unknown historic identity still gets two sides with a peer using two addresses', () => {
+  const rows=[message('a','historic@example.com'),message('b','peer@old.example'),message('c','historic@example.com'),message('d','peer@new.example')]
+  const result=bubbleLayout(rows,()=>false)
+  assert.equal(result.get('a').side,'right')
+  assert.equal(result.get('b').side,'left')
+  assert.equal(result.get('c').side,'right')
+  assert.equal(result.get('d').side,'left')
+})
+
+test('display-address and bare-address forms of the same identity share a side',()=>{
+  const result=bubbleLayout([message('a','Example Sender <ME@EXAMPLE.COM>'),message('b','peer@example.com')],email=>email==='me@example.com')
+  assert.equal(result.get('a').side,'right')
+  assert.equal(result.get('b').side,'left')
 })

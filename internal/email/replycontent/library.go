@@ -2,7 +2,6 @@ package replycontent
 
 import (
 	"strings"
-	"unicode"
 
 	replyparser "github.com/web-ridge/email-reply-parser"
 )
@@ -29,25 +28,31 @@ func refineLibrarySegments(lines []plainLine, segments []plainSegment) []plainSe
 			result = append(result, seg)
 			continue
 		}
-		proposed := strings.TrimSpace(replyparser.Parse(raw))
-		start := len(raw) - len(strings.TrimLeftFunc(raw, unicode.IsSpace))
-		if proposed == "" || !strings.HasPrefix(raw[start:], proposed) {
-			result = append(result, seg)
-			continue
+		// Ask the library about each strong header independently. A signature
+		// before it can make the library stop before the header in the full body.
+		split := -1
+		attempts := 0
+		for i := seg.from + 1; i < seg.to; i++ {
+			first := strings.TrimSpace(lines[i].text)
+			if len(first) > maxMarkerLineLen || !strings.HasPrefix(strings.ToLower(first), "on ") || !strings.ContainsAny(first, "0123456789") || !strings.Contains(first, "@") || !attributionRe.MatchString(first) {
+				continue
+			}
+			attempts++
+			if attempts > 8 {
+				break
+			}
+			tail := make([]string, 0, seg.to-i)
+			for _, line := range lines[i:seg.to] {
+				tail = append(tail, line.text)
+			}
+			const marker = "Postilaatikko boundary check"
+			proposed := strings.TrimSpace(replyparser.Parse(marker + "\n\n" + strings.Join(tail, "\n")))
+			if proposed == marker {
+				split = i
+				break
+			}
 		}
-		boundary := start + len(proposed)
-		remaining := strings.TrimSpace(raw[boundary:])
-		first, _, _ := strings.Cut(remaining, "\n")
-		dated := strings.ContainsAny(first, "0123456789")
-		if remaining == "" || !strings.HasPrefix(strings.ToLower(first), "on ") || !dated || !strings.Contains(first, "@") || !attributionRe.MatchString(first) {
-			result = append(result, seg)
-			continue
-		}
-		split := seg.from + strings.Count(raw[:boundary], "\n") + 1
-		for split < seg.to && lines[split].blank {
-			split++
-		}
-		if split >= seg.to {
+		if split < 0 {
 			result = append(result, seg)
 			continue
 		}

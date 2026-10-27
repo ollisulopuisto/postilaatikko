@@ -12,6 +12,7 @@ import (
 
 	gomessage "github.com/emersion/go-message"
 	"github.com/hkdb/aerion/internal/email"
+	"github.com/hkdb/aerion/internal/email/reactions"
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/pgp"
 	"github.com/hkdb/aerion/internal/smime"
@@ -73,6 +74,7 @@ func (e *Engine) parseMessageBodyInternal(raw []byte, messageID string) *ParsedB
 		return result
 	}
 
+	result.ReactionTarget = entity.Header.Get("In-Reply-To")
 	topLevelCT := entity.Header.Get("Content-Type")
 	e.log.Debug().
 		Str("topLevelContentType", topLevelCT).
@@ -154,6 +156,18 @@ func (e *Engine) parseMessageBodyInternal(raw []byte, messageID string) *ParsedB
 		e.parseSinglePartBody(entity, result, messageID)
 	}
 
+	if result.Reaction != nil {
+		if result.UnsafeContent {
+			result.Reaction.Invalid = true
+		}
+		if result.BodyText == "" && result.BodyHTML == "" {
+			result.BodyText = result.Reaction.Emoji
+			if result.BodyText == "" {
+				result.BodyText = "Unrecognized reaction metadata"
+			}
+		}
+	}
+
 	e.log.Debug().
 		Int("bodyTextLen", len(result.BodyText)).
 		Int("bodyHTMLLen", len(result.BodyHTML)).
@@ -216,6 +230,12 @@ func (e *Engine) parseMultipartBodyDepth(mr gomessage.MultipartReader, result *P
 			Str("contentID", contentID).
 			Str("charset", params["charset"]).
 			Msg("Processing multipart part")
+
+		if disposition != "attachment" && (contentType == reactions.GoogleMIME || (contentType == "text/plain" && disposition == "reaction")) {
+			body, err := io.ReadAll(io.LimitReader(part.Body, 1025))
+			recordReaction(result, contentType, disposition, body, err)
+			continue
+		}
 
 		// TNEF (winmail.dat): Outlook wraps the real attachments inside an
 		// application/ms-tnef container. Decode it and surface the inner files so
@@ -387,6 +407,12 @@ func (e *Engine) parseSinglePartBody(entity *gomessage.Entity, result *ParsedBod
 	// downloadable attachment instead of raw text dumped into the body.
 	disposition, dispParams, _ := mime.ParseMediaType(entity.Header.Get("Content-Disposition"))
 	contentID := strings.Trim(entity.Header.Get("Content-ID"), "<>")
+	if disposition != "attachment" && (contentType == reactions.GoogleMIME || (contentType == "text/plain" && disposition == "reaction")) {
+		body, err := io.ReadAll(io.LimitReader(entity.Body, 1025))
+		recordReaction(result, contentType, disposition, body, err)
+		return
+	}
+
 	isNonTextBody := contentType != "" && !strings.HasPrefix(contentType, "text/") &&
 		!isSignaturePart(contentType)
 	if disposition == "attachment" || isNonTextBody {
@@ -894,4 +920,15 @@ func sanitizeAddressJSON(value string) string {
 		list = list[:len(list)-1]
 	}
 	return "[]"
+}
+
+func recordReaction(result *ParsedBody, contentType, disposition string, body []byte, readErr error) {
+	info := reactions.ParsePart(contentType, disposition, result.ReactionTarget, body)
+	if info == nil {
+		return
+	}
+	if result.Reaction != nil || readErr != nil {
+		info.Invalid = true
+	}
+	result.Reaction = info
 }

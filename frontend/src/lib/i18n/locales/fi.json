@@ -296,6 +296,8 @@
     "hideSignature": "Piilota allekirjoitus",
     "showFullMessage": "Näytä alkuperäinen",
     "showSplitMessage": "Näytä vain uusi teksti",
+    "reactions": "Reaktiot",
+    "showReactionMessages": "Näytä reaktioviestit",
     "messageDetails": "Viestin tiedot",
     "readerMode": "Lukutila",
     "readerConversation": "Keskustelu",

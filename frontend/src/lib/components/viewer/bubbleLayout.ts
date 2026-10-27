@@ -1,14 +1,24 @@
 export interface BubbleMessage { id: string; fromEmail: string }
 
-/** Self stays right across aliases; a two-person thread without self uses stable sides. */
+/** Normalize envelope and display-address forms for presentation matching only. */
+export function senderAddress(value: string): string {
+  const text = (value || '').trim()
+  return (text.match(/<\s*([^<>\s]+@[^<>\s]+)\s*>/)?.[1] || text).replace(/^mailto:/i, '').normalize('NFC').toLowerCase()
+}
+
+/** Configured identities stay right. Unknown historical threads use their first
+ * speaker as a stable visual anchor; extra peer aliases must not make every
+ * bubble left-aligned. This fallback is presentation, never identity proof.
+ */
 export function bubbleLayout(messages: BubbleMessage[], isSelf: (email: string) => boolean) {
-  const participants = [...new Set(messages.map(message => message.fromEmail.trim().toLowerCase()))]
-  const hasSelf = participants.some(isSelf)
+  const participants = [...new Set(messages.map(message => senderAddress(message.fromEmail)))]
+  const hasSelf = participants.some(email => !!email && isSelf(email))
+  const anchor = !hasSelf && participants.length > 1 ? participants[0] : null
   return new Map(messages.map((message, index) => {
-    const sender = message.fromEmail.trim().toLowerCase()
+    const sender = senderAddress(message.fromEmail)
     return [message.id, {
-      side: isSelf(sender) || (!hasSelf && participants.length === 2 && sender === participants[1]) ? 'right' : 'left',
-      showSender: index === 0 || messages[index - 1].fromEmail.trim().toLowerCase() !== sender,
+      side: isSelf(sender) || sender === anchor ? 'right' : 'left',
+      showSender: index === 0 || senderAddress(messages[index - 1].fromEmail) !== sender,
     }] as const
   }))
 }

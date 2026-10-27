@@ -2,7 +2,7 @@
   import { onMount, onDestroy, tick } from 'svelte'
   import Icon from '@iconify/svelte'
   // @ts-ignore - wailsjs bindings
-  import { GetAllAccountIdentities, GetConversation, GetReadReceiptResponsePolicy, SendReadReceipt, IgnoreReadReceipt, GetMessageSource, ProcessSMIMEMessage, ProcessPGPMessage, FetchMessageBody } from '../../../../wailsjs/go/app/App'
+  import { GetReaderIdentityEmails, GetConversation, GetReadReceiptResponsePolicy, SendReadReceipt, IgnoreReadReceipt, GetMessageSource, ProcessSMIMEMessage, ProcessPGPMessage, FetchMessageBody } from '../../../../wailsjs/go/app/App'
   // @ts-ignore - wailsjs bindings
   import { MoveToInboxWithUndo, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, RemoveFromInboxWithUndo, TrashWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, DeletePermanently, UndoOperation } from '../../../../wailsjs/go/app/App'
   // @ts-ignore - wailsjs path
@@ -11,7 +11,8 @@
   import { message as messageModels } from '../../../../wailsjs/go/models'
   import AttachmentList from './AttachmentList.svelte'
   import ConversationMessage from './ConversationMessage.svelte'
-  import { bubbleLayout } from './bubbleLayout'
+  import { reactionLayout } from './reactionLayout'
+  import { bubbleLayout, senderAddress } from './bubbleLayout'
   import { isConfiguredAccountEmail } from '$lib/stores/accounts.svelte'
   import ReaderModeToggle from './ReaderModeToggle.svelte'
   import { canExtract } from './replyContent'
@@ -223,8 +224,8 @@
 
   // Load settings and set up event listeners on mount
   onMount(async () => {
-    GetAllAccountIdentities().then(groups => {
-      ownEmails = new Set((groups || []).flatMap(group => [group.account?.email || '', ...(group.identities || []).map(identity => identity.email)]).map(email => email.trim().toLowerCase()))
+    GetReaderIdentityEmails().then(emails => {
+      ownEmails = new Set((emails || []).map(senderAddress).filter(Boolean))
     }).catch(error => console.warn('[viewer] sender identities unavailable', error))
     try {
       const policy = await GetReadReceiptResponsePolicy()
@@ -336,7 +337,7 @@
       // we actually navigate, so at the first/last boundary native Tab passes
       // through and the user can leave the viewer normally.
       if (e.key === 'Tab' && conversation?.messages) {
-        const messageIds = conversation.messages.map(m => m.id)
+        const messageIds = visibleMessages.map(m => m.id)
         const currentIndex = focusedMessageId ? messageIds.indexOf(focusedMessageId) : -1
 
         if (e.shiftKey) {
@@ -430,6 +431,7 @@
     // Reset focused message on thread change so opening a thread starts fresh.
     // Same-thread refreshes (handled via scheduleRefresh) preserve focus.
     focusedMessageId = null
+    revealedReactions = new Set()
 
     if (threadId && folderId) {
       loadConversation(threadId, folderId)
@@ -556,7 +558,7 @@
         if (contentContainerRef) {
           openTimelineAtTarget(
             contentContainerRef,
-            conversation?.messages,
+            readerMessages,
             () => generation === viewGeneration && threadId === tid && folderId === fid,
           )
         }
@@ -799,8 +801,8 @@
   }
 
   export function getLastMessageId(): string | null {
-    if (!conversation?.messages || conversation.messages.length === 0) return null
-    return conversation.messages[conversation.messages.length - 1].id
+    const messages = readerMode === 'traditional' ? (conversation?.messages || []) : reactions.messages
+    return messages[messages.length - 1]?.id || null
   }
 
   // Re-fetch conversation to pick up flag changes (star, read) from external actions
@@ -1467,13 +1469,22 @@
   // Computed: messages visible in the viewer.
   // In message-focus mode, narrow to the single targeted message.
   // Otherwise show the whole thread.
+  let revealedReactions = $state<Set<string>>(new Set())
+  const reactions = $derived(reactionLayout(conversation?.messages || []))
+  const readerMessages = $derived(readerMode === 'traditional' ? (conversation?.messages || []) : (conversation?.messages || []).filter(message => !reactions.hidden.has(message.id) || revealedReactions.has(message.id)))
+  function toggleReactionMessages(ids: string[]) {
+    const next = new Set(revealedReactions)
+    const hide = ids.every(id => next.has(id))
+    for (const id of ids) { if (hide) next.delete(id); else next.add(id) }
+    revealedReactions = next
+  }
   const visibleMessages = $derived(
     inFocusMode && focusModeKind === 'message' && focusedMessageIdInFocus
-      ? (conversation?.messages?.filter(m => m.id === focusedMessageIdInFocus) ?? [])
-      : (conversation?.messages ?? [])
+      ? readerMessages.filter(m => m.id === focusedMessageIdInFocus)
+      : readerMessages
   )
 
-  const bubbles = $derived(bubbleLayout(visibleMessages, email => isConfiguredAccountEmail(email) || ownEmails.has(email)))
+  const bubbles = $derived(bubbleLayout(readerMessages, email => isConfiguredAccountEmail(email) || ownEmails.has(email)))
 
   // Reference to the scrollable content area
   let contentContainerRef = $state<HTMLDivElement | null>(null)
@@ -1824,7 +1835,7 @@
         <!-- Message Count Badge -->
         {#if conversation.messages && conversation.messages.length > 1}
           <div class="mb-4 text-sm text-muted-foreground">
-            {$_('viewer.messagesInConversation', { values: { count: conversation.messages.length } })}
+            {$_('viewer.messagesInConversation', { values: { count: readerMessages.length } })}
           </div>
         {/if}
 
@@ -2193,6 +2204,21 @@
                           />
                         {/if}
                       </div>
+
+                      {#if readerMode === 'conversation' && reactions.groups.has(msg.id)}
+                        <div class="flex flex-wrap gap-2 mt-2" aria-label={$_('viewer.reactions')}>
+                          {#each reactions.groups.get(msg.id) || [] as group (group.emoji)}
+                            <button type="button" class="inline-flex items-center gap-1 rounded-full border border-border bg-background/60 px-2 py-1 text-sm hover:bg-muted"
+                              data-reaction-chip aria-expanded={group.messages.every(message => revealedReactions.has(message.id))}
+                              aria-label={`${$_('viewer.showReactionMessages')}: ${group.emoji} ${group.messages.map(message => message.fromName || message.fromEmail).join(', ')}`}
+                              title={group.messages.map(message => message.fromName || message.fromEmail).join(', ')}
+                              onkeydown={(event) => event.stopPropagation()}
+                              onclick={() => toggleReactionMessages(group.messages.map(message => message.id))}>
+                              <span>{group.emoji}</span><span>{group.messages.length}</span>
+                            </button>
+                          {/each}
+                        </div>
+                      {/if}
 
                       <!-- Attachments -->
                       {#if msg.hasAttachments || (pgpResults[msg.id]?.attachments?.length ?? 0) > 0 || (smimeResults[msg.id]?.attachments?.length ?? 0) > 0}

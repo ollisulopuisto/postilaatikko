@@ -10,6 +10,7 @@ import (
 	gomessage "github.com/emersion/go-message"
 	"github.com/hkdb/aerion/internal/account"
 	"github.com/hkdb/aerion/internal/email"
+	"github.com/hkdb/aerion/internal/email/reactions"
 	"github.com/hkdb/aerion/internal/folder"
 	imapPkg "github.com/hkdb/aerion/internal/imap"
 	"github.com/hkdb/aerion/internal/logging"
@@ -50,6 +51,8 @@ const (
 
 // ParsedBody holds the result of parsing a message body, including attachments
 type ParsedBody struct {
+	Reaction       *reactions.Info
+	ReactionTarget string
 	BodyText       string
 	BodyHTML       string
 	HasAttachments bool

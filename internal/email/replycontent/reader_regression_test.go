@@ -81,3 +81,32 @@ func TestReaderHTMLSplittingPreservesMarkupAndImageBlocking(t *testing.T) {
 		t.Fatal("signature not removed")
 	}
 }
+
+func TestSignatureBeforeUnprefixedQuotedHistory(t *testing.T) {
+	quoted := strings.Repeat("Old question, more quoted detail.\n", 20)
+	plain := "New answer!\n\n—\nme@example.com\n0501234567\nOn 22. Oct 2026 at 14.38 +0300, Example Sender <sender@example.com>, wrote:\n" + quoted
+	html := "<div>New answer!</div><div><br></div><div>—</div><div>me@example.com</div><div>0501234567</div><div>On 22. Oct 2026 at 14.38 +0300, Example Sender &lt;sender@example.com&gt;, wrote:</div><div>" + strings.ReplaceAll(quoted, "\n", "<br>") + "</div>"
+	for _, format := range []string{"plain", "html"} {
+		t.Run(format, func(t *testing.T) {
+			result := ExtractPlain(plain)
+			if format == "html" {
+				result = ExtractHTML(html)
+			}
+			var shown strings.Builder
+			hasSignature, hasQuote := false, false
+			for _, b := range result.Blocks {
+				switch b.Kind {
+				case BlockAuthored, BlockUnknown:
+					shown.WriteString(b.Content)
+				case BlockSignature:
+					hasSignature = true
+				case BlockQuoted:
+					hasQuote = true
+				}
+			}
+			if !hasSignature || !hasQuote || strings.Contains(shown.String(), "me@example.com") || strings.Contains(shown.String(), "Old question") {
+				t.Fatalf("unstripped signature/history: %+v", result)
+			}
+		})
+	}
+}

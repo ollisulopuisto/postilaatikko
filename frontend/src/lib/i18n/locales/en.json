@@ -296,6 +296,8 @@
     "hideSignature": "Hide signature",
     "showFullMessage": "Show original",
     "showSplitMessage": "Show new text only",
+    "reactions": "Reactions",
+    "showReactionMessages": "Show reaction messages",
     "messageDetails": "Message details",
     "readerMode": "Reading mode",
     "readerConversation": "Conversation",
