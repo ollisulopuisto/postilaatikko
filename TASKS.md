@@ -34,6 +34,10 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 
 | Task | Effort | Scope | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
+| SEARCH-002 | Medium | Discoverable Gmail search operators and exclusion in search UI. | Codex / `codex/SEARCH-002-operator-ui` / `/private/tmp/postilaatikko-search002` | Review; global search operator picker adds Gmail syntax insertion and Finnish/English labels. Verified svelte-check and targeted ESLint; folder search integration and equivalent non-Gmail operators remain follow-up work. |
+
+| Task | Effort | Scope | Owner / branch / worktree | Status |
+| --- | --- | --- | --- | --- |
 | GLOBAL-001 | Large | User-requested 0.3.18 test build: sidebar cards/rail, Gmail-first operations, global search, API virtual folders, automatic header refresh. | Codex / `codex/GLOBAL-001-api-search` / `/private/tmp/postilaatikko-global001` | Review; implementation `dc08165`, GitHub DMG publication pending. Full Go suite passes; affected race suites and final native history/search/move checks pass; all 162 frontend tests, type check (0 errors; 2 existing warnings), lint and production build pass. Browser smoke passes cards/drag/persistence/Cmd+1/account-scoped global search. Native empty-cache/no-IMAP fixtures cover headers, lazy body/file fetch, history membership, two accounts, pagination, partial authorization failure, move/undo and source preservation after unconfirmed import. Live Google/WKWebView remain device checks. See docs/diagnostics/2026-10-27-gmail-navigation.md for limits. No main merge. |
 
 | Task | Effort | Scope | Owner / branch / worktree | Status |

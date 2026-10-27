@@ -18,6 +18,19 @@
     return () => clearTimeout(timer)
   })
   onDestroy(() => { void CancelMailSearch(session) })
+  function insertOperator(value: string) {
+    const start = input?.selectionStart ?? query.length
+    const end = input?.selectionEnd ?? query.length
+    const prefix = start > 0 && !/\s/.test(query[start - 1]) ? ' ' : ''
+    const suffix = end < query.length && !/\s/.test(query[end]) ? ' ' : ''
+    query = query.slice(0, start) + prefix + value + suffix + query.slice(end)
+    cursor = ''
+    requestAnimationFrame(() => {
+      input?.focus()
+      const position = start + prefix.length + value.length
+      input?.setSelectionRange(position, position)
+    })
+  }
   async function search(more = false) {
     const current = ++generation
     busy = true; error = ''; searched = true
@@ -43,6 +56,27 @@
       </select>
       <button type="submit" class="rounded bg-primary text-primary-foreground px-3">{$_('search.searchButton')}</button>
     </form>
+    <details class="rounded border border-border px-3 py-2">
+      <summary class="cursor-pointer text-sm font-medium">{$_('search.operators')}</summary>
+      <p class="mt-2 text-xs text-muted-foreground">{$_('search.operatorsGmailHint')}</p>
+      <div class="mt-2 flex flex-wrap gap-2">
+        {#each [
+          {label: $_('search.opUnread'), value: 'is:unread'},
+          {label: $_('search.opRead'), value: 'is:read'},
+          {label: $_('search.opStarred'), value: 'is:starred'},
+          {label: $_('search.opFrom'), value: 'from:'},
+          {label: $_('search.opTo'), value: 'to:'},
+          {label: $_('search.opAttachment'), value: 'has:attachment'},
+          {label: $_('search.opFolder'), value: 'label:'},
+          {label: $_('search.opExclude'), value: '-'},
+          {label: $_('search.opBefore'), value: 'before:'},
+          {label: $_('search.opAfter'), value: 'after:'},
+        ] as operator (operator.value)}
+          <button type="button" class="rounded border border-border px-2 py-1 text-sm hover:bg-muted" onclick={() => insertOperator(operator.value)}>{operator.label}</button>
+        {/each}
+      </div>
+      <p class="mt-2 text-xs text-muted-foreground">{$_('search.opExample')}</p>
+    </details>
     <p class="text-xs text-muted-foreground">{$_('search.serverHint')}</p>
     {#if error}<p role="alert" class="text-sm text-destructive">{error}</p>{/if}
     {#each issues as issue (issue.accountId + issue.message)}
