@@ -1114,6 +1114,11 @@
     "shuttingDown": "Shutting down..."
   },
   "search": {
+    "allAccounts": "All accounts",
+    "sourceAccount": "From account",
+    "unavailableAccounts": "Could not load accounts",
+    "crossAccount": "Different account",
+    "refineFolders": "Showing the first 200 folders. Refine your search to find more.",
     "server": "Server",
     "searchOnServer": "Search on Server",
     "serverResults": "Found {count} result(s) on server for \"{query}\"",

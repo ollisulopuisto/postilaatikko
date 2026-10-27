@@ -22,3 +22,30 @@ export function filterFolders<T extends SearchableFolder>(items: T[], query: str
     return words.every(word => label.includes(word))
   })
 }
+
+export interface FolderSearchNode {
+  folder?: { id: string; name: string; path: string; type: string } | null
+  children?: FolderSearchNode[]
+}
+export interface FolderChoice extends SearchableFolder {
+  accountId: string
+  accountName: string
+  accountEmail: string
+  name: string
+  path: string
+  type: string
+}
+
+/** Flatten cached trees so search reaches folders inside collapsed branches. */
+export function folderChoices(accountId: string, accountName: string, accountEmail: string, trees: FolderSearchNode[]): FolderChoice[] {
+  const result: FolderChoice[] = []
+  const visit = (nodes: FolderSearchNode[]) => {
+    for (const node of nodes) {
+      const item = node.folder
+      if (item) result.push({ id: item.id, accountId, accountName, accountEmail, name: item.name, path: item.path, type: item.type, label: `${accountName} ${accountEmail} ${item.path} ${item.name}` })
+      if (node.children?.length) visit(node.children)
+    }
+  }
+  visit(trees)
+  return result
+}

@@ -17,7 +17,7 @@ async function load(relative) {
   return import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`)
 }
 
-const { filterFolders } = await load('../src/lib/sidebar/folderSearch.ts')
+const { filterFolders, folderChoices } = await load('../src/lib/sidebar/folderSearch.ts')
 
 const folders = [
   { id: '1', label: 'GMail · _K-S/ranta' },
@@ -59,4 +59,26 @@ test('filterFolders does not mutate its input and returns no match for an unknow
   filterFolders(folders, 'ranta')
   assert.equal(JSON.stringify(folders), snapshot)
   assert.deepEqual(filterFolders(folders, 'nosuchfolder'), [])
+})
+
+
+test('search reaches nested folders and preserves account-qualified destinations', () => {
+  const tree = (id, path) => [{ folder: { id: `${id}-parent`, name: 'perhe', path: 'perhe', type: 'custom' }, children: [
+    { folder: { id, name: 'bisnes', path, type: 'custom' } },
+  ] }]
+  const choices = [
+    ...folderChoices('gmail', 'Gmail', 'one@example.org', tree('g-bisnes', 'perhe/bisnes')),
+    ...folderChoices('work', 'Peliteoria', 'two@example.org', tree('w-bisnes', 'perhe/bisnes')),
+  ]
+  assert.deepEqual(filterFolders(choices, 'bisn').map(f => [f.accountId, f.id]), [
+    ['gmail', 'g-bisnes'], ['work', 'w-bisnes'],
+  ])
+  assert.deepEqual(filterFolders(choices, 'peliteoria bisn').map(f => f.id), ['w-bisnes'])
+  assert.deepEqual(filterFolders(choices, 'one@example.org bisn').map(f => f.id), ['g-bisnes'])
+})
+
+test('structural tree nodes do not hide their descendant folders', () => {
+  assert.deepEqual(folderChoices('a', 'Account', 'a@example.org', [{ children: [
+    { folder: { id: 'f', name: 'Inbox', path: 'Inbox', type: 'inbox' } },
+  ] }]).map(f => f.id), ['f'])
 })

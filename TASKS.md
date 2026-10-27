@@ -34,7 +34,7 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 
 | Task | Effort | Scope | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
-| GLOBAL-001 | Large | Account-spanning global server search, Gmail API-first operations with incremental OAuth consent, All folders search, automatic header/flag refresh on open and in background. | Codex / `codex/GLOBAL-001-api-search` / `/private/tmp/postilaatikko-global001` | In progress; user authorized requesting needed OAuth scopes. Default global scope is all enabled accounts. Preserve on-demand bodies and copy-before-delete cross-account moves. |
+| GLOBAL-001 | Large | Account-spanning global server search, Gmail API-first operations with incremental OAuth consent, All folders search, automatic header/flag refresh on open and in background. | Codex / `codex/GLOBAL-001-api-search` / `/private/tmp/postilaatikko-global001` | In progress; folder-search slice implemented: All folders searches collapsed descendants; shared move/copy picker searches all accounts by default, groups by destination account, shows source → destination on cross-account groups, and retains correct account-qualified selection. Verified 8 folder tests, frontend check (0 errors; 2 existing warnings), targeted lint, production build, Chromium grouping/filter/keyboard/Cancel smoke. Global message search, API-first routing and automatic header refresh remain pending; do not treat the Gmail migration as complete. User authorized required OAuth scopes. Preserve on-demand bodies and copy-before-delete moves. |
 
 | Task | Effort | Scope | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |

@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from '@iconify/svelte'
+  import { folderChoices, filterFolders } from '$lib/sidebar/folderSearch'
   import { onMount } from 'svelte'
   import AccountSection from './AccountSection.svelte'
   import UnifiedInboxSection from './UnifiedInboxSection.svelte'
@@ -156,6 +157,16 @@
   let showDeleteDialog = $state(false)
   let showSettingsDialog = $state(false)
   let showAllFolders = $state(false)
+  let allFoldersQuery = $state('')
+  let allFoldersSearchInput = $state<HTMLInputElement | null>(null)
+  const allFolderChoices = $derived(accountStore.accounts.flatMap(item => folderChoices(item.account.id, item.account.name, item.account.email, item.folders)))
+  const matchingFolders = $derived(filterFolders(allFolderChoices, allFoldersQuery))
+  $effect(() => {
+    if (!showAllFolders) { allFoldersQuery = ''; return }
+    if (!allFoldersSearchInput) return
+    const timer = setTimeout(() => allFoldersSearchInput?.focus(), 0)
+    return () => clearTimeout(timer)
+  })
   let showVirtualFolderDialog = $state(false)
   let editingVirtualFolder = $state<virtualfolder.VirtualFolder | null>(null)
   let showDeleteVirtualFolderDialog = $state(false)
@@ -948,7 +959,24 @@
           <Icon icon="mdi:close" class="h-5 w-5" />
         </button>
       </header>
+      <div class="px-4 pb-3 relative">
+        <label class="sr-only" for="all-folders-search">{$_('contextMenu.searchFolders')}</label>
+        <input id="all-folders-search" bind:this={allFoldersSearchInput} bind:value={allFoldersQuery}
+          type="search" placeholder={$_('contextMenu.searchFolders')} class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground" />
+      </div>
       <div class="sidebar-all-folders-scroll scrollbar-thin">
+        {#if allFoldersQuery.trim()}
+          {#each matchingFolders.slice(0, 200) as item (item.id)}
+            <button type="button" class="w-full px-4 py-2 text-left hover:bg-muted rounded-md"
+              onclick={() => { handleFolderSelect(item.accountId, item.id, item.path, item.name, item.type); showAllFolders = false }}>
+              <span class="block text-sm text-foreground break-words">{item.path || item.name}</span>
+              <span class="block text-xs text-muted-foreground">{item.accountName} · {item.accountEmail}</span>
+            </button>
+          {:else}
+            <p class="p-4 text-sm text-muted-foreground" role="status">{$_('contextMenu.noFoldersAvailable')}</p>
+          {/each}
+          {#if matchingFolders.length > 200}<p class="px-4 text-xs text-muted-foreground">{$_('search.refineFolders')}</p>{/if}
+        {:else}
         {#each accountStore.accounts as accWithFolders (accWithFolders.account.id)}
           <AccountSection
             account={accWithFolders.account}
@@ -974,6 +1002,7 @@
             onSync={() => accountStore.syncAccount(accWithFolders.account.id)}
           />
         {/each}
+        {/if}
         <button type="button" class="sidebar-all-folders-add" onclick={openAddAccount}>
           <Icon icon="mdi:plus" class="h-5 w-5" /> {$_('sidebar.addAccount')}
         </button>
@@ -1032,6 +1061,7 @@
 
 <svelte:window onkeydown={(e) => {
   if (showAllFolders && e.key === 'Escape') {
-    showAllFolders = false
+    if (allFoldersQuery) { e.preventDefault(); allFoldersQuery = '' }
+    else showAllFolders = false
   }
 }} />

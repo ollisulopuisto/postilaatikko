@@ -1114,6 +1114,11 @@
     "shuttingDown": "Suljetaan..."
   },
   "search": {
+    "allAccounts": "Kaikki tilit",
+    "sourceAccount": "Lähdetili",
+    "unavailableAccounts": "Tilejä ei voitu ladata",
+    "crossAccount": "Eri tili",
+    "refineFolders": "Näytetään 200 ensimmäistä kansiota. Tarkenna hakua löytääksesi lisää.",
     "server": "Palvelin",
     "searchOnServer": "Etsi palvelimelta",
     "serverResults": "Palvelimelta löytyi {count} tulos(ta) haulle ”{query}”",
