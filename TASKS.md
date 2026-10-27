@@ -34,6 +34,13 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 
 | Task | Effort | Scope | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
+| GLOBAL-003 | Large | Live Gmail repair: headers load but bodies unavailable; virtual-folder request quota exhaustion; preserve successful results and show retryable errors. | Codex / `codex/GLOBAL-003-gmail-live-repair` / `/private/tmp/postilaatikko-global003` | In progress; based on main `3d000be`. User reports v0.3.18-test.4 Gmail 403 rateLimitExceeded (Total Query Cost / units per minute per user), missing bodies and empty virtual folders. Takes priority over count expansion. |
+| GLOBAL-002 | Large | Complete online counts and non-Gmail continuation. | Codex / `codex/GLOBAL-002-online-counts` / `/private/tmp/postilaatikko-global002` | In progress, temporarily parked for GLOBAL-003. Published checkpoint `e9f9be5` has Gmail count jobs/UI and IMAP search pages; uncommitted non-Gmail thread-count graph/header work remains only in that worktree. Not merged or complete; see its diagnostic note. |
+| SEARCH-002 | Medium | Exclusion search across folder/global/server search: negative terms and quoted phrases, e.g. `-"google calendar"`; preserve native Gmail query operators. | — | Unclaimed; user request 2026-10-28. Implement after the live Gmail blockers; verify non-Gmail/local parity explicitly. |
+
+
+| Task | Effort | Scope | Owner / branch / worktree | Status |
+| --- | --- | --- | --- | --- |
 | GLOBAL-001 | Large | User-requested 0.3.18 test build: sidebar cards/rail, Gmail-first operations, global search, API virtual folders, automatic header refresh. | Codex / `codex/GLOBAL-001-api-search` / `/private/tmp/postilaatikko-global001` | Review; implementation `dc08165`, GitHub DMG publication pending. Full Go suite passes; affected race suites and final native history/search/move checks pass; all 162 frontend tests, type check (0 errors; 2 existing warnings), lint and production build pass. Browser smoke passes cards/drag/persistence/Cmd+1/account-scoped global search. Native empty-cache/no-IMAP fixtures cover headers, lazy body/file fetch, history membership, two accounts, pagination, partial authorization failure, move/undo and source preservation after unconfirmed import. Live Google/WKWebView remain device checks. See docs/diagnostics/2026-10-27-gmail-navigation.md for limits. No main merge. |
 
 | Task | Effort | Scope | Owner / branch / worktree | Status |
