@@ -34,7 +34,7 @@ REL-001 restores the Send Later code already present in the remote v0.3.16 tag (
 ### Priorities
 
 1. **Scheduled send — critical.** Compose now, choose a delivery time, and have Postilaatikko send it reliably.
-2. **Gmail API integration.** Add server-side Gmail search and Gmail-native capabilities for Gmail accounts, starting with spam actions and efficient mailbox updates; keep IMAP support for other providers.
+2. **Gmail API integration — API-first for all Gmail operations.** User-approved incremental consent for missing scopes; global server search across all enabled accounts/all folders, plus automatic lightweight header/flag refresh on folder open and in background.  Add server-side Gmail search and Gmail-native capabilities for Gmail accounts, starting with spam actions and efficient mailbox updates; keep IMAP support for other providers.
 3. **Calendar from email:** recognize date/time mentions and offer links that open or create events in installed calendar applications.
 4. **Reliable virtual folders and the accepted UI/API design:** first verify the empty-folder repair in the actual installed build, then implement D-002 backend contracts/query/extraction and agent access before dependent presentation. Add the navigation drawer, conversation/Traditional toggle, thread focus and nearby actions in small increments.
 5. **Fast everyday mail:** preserve Gmail-style keyboard bindings and quick reply snippets; add full templates, Finnish-layout support and configurable bindings.
