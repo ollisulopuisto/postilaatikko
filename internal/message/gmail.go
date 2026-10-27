@@ -30,7 +30,7 @@ func (s *Store) UpsertGmail(m *Message, providerID string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // no-op after a successful Commit
 	var key int64
 	if err = tx.QueryRow(`UPDATE gmail_cache_sequence SET next=next+1 WHERE id=1 AND next<4294967295 RETURNING next`).Scan(&key); err != nil {
 		return err
@@ -122,7 +122,7 @@ func (s *Store) MoveGmailMessages(ids []string, destination string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // no-op after a successful Commit
 	if _, err = tx.Exec(`UPDATE gmail_cache_sequence SET next=next WHERE id=1`); err != nil {
 		return err
 	}
@@ -160,7 +160,7 @@ func (s *Store) BindGmailID(accountID, localID, providerID string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // no-op after a successful Commit
 	// Take the write lock before resolving legacy cache rows.
 	if _, err = tx.Exec(`UPDATE gmail_cache_sequence SET next=next WHERE id=1`); err != nil {
 		return err

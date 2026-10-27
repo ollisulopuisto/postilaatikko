@@ -142,7 +142,7 @@ func (t *SMTPTransport) Deliver(ctx context.Context, delivery Delivery) error {
 	if err := client.Connect(); err != nil {
 		return &DeliveryError{Kind: SafeRetry, Err: err}
 	}
-	defer client.Abort()
+	defer func() { _ = client.Abort() }()
 	finished := make(chan struct{})
 	defer close(finished)
 	go func() {
