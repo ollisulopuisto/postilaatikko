@@ -4,7 +4,7 @@ Who works on which part of the D-002 plan
 (`docs/plans/2026-10-26-conversation-navigation-agent-api.md`, task rows in
 `TASKS.md`), and in what order. Protocol: [README.md](README.md).
 
-Last updated by the coordinator: 2026-10-26. The assignments below are a
+Last audited against origin/main `3d000be`: 2026-10-27. The assignments below are a
 proposal until the user confirms them.
 
 ## Lanes
@@ -35,7 +35,11 @@ Updated when a pull request merges.
 | UX-004 extraction schema and fixtures | Merged (PR #30, `664f630`); subsequent additive parser warnings/fixtures merged in PRs #33/#34 |
 | UX-005 plain-text extraction | Merged (PR #33, `74ed7ff`) |
 | UX-006 HTML extraction | Merged after UX-005 (PR #34, `7436026`) |
-| UX-007 extraction service/cache | Reserved for Claude per user handoff; owner publishes branch/worktree before implementing |
+| UX-007 extraction service/cache | Merged (PR #35, `edf7462`) |
+| UX-008 conversation timeline | Merged (PR #36, `357185a`) |
+| UX-009 reader mode toggle | Merged (PR #37, `0ef36e4`) |
+| GLOBAL-001 Gmail navigation/build | Integrated through `8e3659a`; test DMGs published; live gate remains open |
+| GLOBAL-002 online counts/search pages | Codex on `codex/GLOBAL-002-online-counts`; see TASKS.md for remaining work |
 | UX-001 integration checkpoint | PR #32 merged (`2191cb8`): date/NULL-subject query repair and inventory. Review gate remains for live-device verification and remaining header-refresh/exclude-mode integration |
 
 ## Next up
@@ -43,10 +47,8 @@ Updated when a pull request merges.
 Take the first task in your lane whose dependencies are merged and which has no
 branch on `origin`.
 
-- **Lane A (Claude):** UX-007 service/cache is next and reserved. Fetch current
-  main with both PRs #33/#34 before starting; use the accepted extraction APIs
-  in the handoff notes. UX-006 now depends on UX-005 shared helpers; the old
-  parallel-parser assumption is superseded. UX-008 reader waits for UX-007.
+- **Current user priority:** live acceptance of the published DMG and GLOBAL-002 complete online counts/search coverage; then Contacts/dates/independent mail-list windows, Send Later acceptance, drawer/Focus/inline replies and finally agent API/compose refinements. Follow ROADMAP.md for delivery order.
+- **Lane A (Claude):** UX-007/008/009 are merged. Check current claims before taking any remaining reader task; their old reservation is closed.
 - **Lane B (Codex):** UX-010 typed navigation entries, after UX-001.
 - **Lane C (Codex):** UX-019 versioned agent API design, which needs only UX-002.
   UX-016 shared action targets, also UX-002 only, goes to whichever of lane C or
@@ -62,5 +64,5 @@ A file named here has one active owner. To change it, write a handoff note first
 | Files | Owner |
 | --- | --- |
 | `internal/views/`, `frontend/src/lib/views/` | Merged (UX-002); changes through a handoff note |
-| `internal/email/replycontent/` | UX-005/006 merged; Claude owns UX-007 service/cache. Changes to shared model/parser behavior need a handoff and regression fixtures |
+| `internal/email/replycontent/` | UX-005/006/007 merged; no old UX-007 reservation remains. Changes to shared model/parser behavior need a handoff and regression fixtures |
 | `frontend/src/lib/layout/`, sidebar components | Lane B owner |

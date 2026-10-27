@@ -12,7 +12,7 @@ Detailed implementation plan: [D-002 — conversation, navigation and agent API]
 
 Execution checkpoint: UX-002's shared view/thread contract is integrated in PR #29 (`d3490b1`), and UX-004's extraction schema plus 22 synthetic fixtures in PR #30 (`664f630`). Those accepted models remain the foundation for parser/service work. PR #31 adds the coordination protocol. PR #32 (`2191cb8`) integrates the virtual-folder date/NULL-subject repair; actual-device verification and remaining header-refresh/exclude-mode work stay open. UX-016 and UX-019 can proceed from the shared contract. The former divergent local-main Send Later candidate remains on GitHub as `codex/p011-local-main-backup-20261026` through `cba3457`, with its live/security gates intact.
 
-Parser checkpoint: PR #33 (`74ed7ff`) integrates plain-text extraction, then stacked PR #34 (`7436026`) integrates safe HTML extraction. UX-007 service/cache is reserved for Claude; its dependencies are the integrated reference contract and both parsers, independently of the remaining virtual-folder/live-device gate. No conversation-reader UI is shipped by these parser changes.
+Parser checkpoint: PR #33 (`74ed7ff`) integrates plain-text extraction, then stacked PR #34 (`7436026`) integrates safe HTML extraction. UX-007 service/cache is merged in PR #35 (`edf7462`), followed by UX-008 timeline in PR #36 (`357185a`) and UX-009 reader toggle in PR #37 (`0ef36e4`). Subsequent reader refinements and GLOBAL-001 are integrated through `8e3659a`; main also includes cleanup fix `3d000be`. Live-device acceptance remains separate.
 
 - **Compact reading refinement:** conversation mode uses directional bubbles with sender labels once per run and details/originals on demand; signature/source controls stay out of the reading flow. Double-click a message-list row to open an independent reader window. Track implementation in READER-001.
 - **Email reactions:** display recognized Gmail reactions and delivered Outlook notification emails as reversible emoji chips on their exact source message; preserve unknown/unresolved messages and all originals. Sending reactions is a later task.
@@ -33,7 +33,7 @@ REL-001 restores the Send Later code already present in the remote v0.3.16 tag (
 
 ### Current requested build (2026-10-27)
 
-Implement sidebar cards/rail shortcuts, then Gmail-first operations, global server search and API-backed virtual folders, automatic metadata refresh, and a GitHub-built DMG. GLOBAL-001 owns this delivery on an isolated review branch; it is not merged into main. Gmail views must work from server results without requiring a pre-populated IMAP cache. Preserve bounded header/history backfill and explicit body/file downloads. Existing notification-only IMAP IDLE may remain where there is no configured Gmail push service; reads/mutations prefer Gmail REST.
+Implement sidebar cards/rail shortcuts, then Gmail-first operations, global server search and API-backed virtual folders, automatic metadata refresh, and a GitHub-built DMG. GLOBAL-001 is integrated into main through `8e3659a`; the arm64/amd64 v0.3.18-test.4 DMGs are published. GLOBAL-002 now owns complete counts and non-Gmail continuation coverage on its isolated branch. Live Gmail/macOS acceptance remains open. Gmail views must work from server results without requiring a pre-populated IMAP cache. Preserve bounded header/history backfill and explicit body/file downloads. Existing notification-only IMAP IDLE may remain where there is no configured Gmail push service; reads/mutations prefer Gmail REST.
 
 ### Priorities
 

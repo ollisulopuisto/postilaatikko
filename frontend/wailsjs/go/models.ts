@@ -1024,6 +1024,50 @@ export namespace app {
 	        this.coalesced = source["coalesced"];
 	    }
 	}
+	export class VirtualFolderOnlineCount {
+	    sessionId: string;
+	    virtualFolderId: string;
+	    total: number;
+	    unread: number;
+	    scanned: number;
+	    running: boolean;
+	    complete: boolean;
+	    issues: MailSearchIssue[];
+
+	    static createFrom(source: any = {}) {
+	        return new VirtualFolderOnlineCount(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.virtualFolderId = source["virtualFolderId"];
+	        this.total = source["total"];
+	        this.unread = source["unread"];
+	        this.scanned = source["scanned"];
+	        this.running = source["running"];
+	        this.complete = source["complete"];
+	        this.issues = this.convertValues(source["issues"], MailSearchIssue);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 
 }
 
@@ -3395,6 +3439,7 @@ export namespace sync {
 	
 	export class IMAPSearchResult {
 	    rfcMessageId?: string;
+	    inReplyTo?: string;
 	    uid: number;
 	    messageId?: string;
 	    isLocal: boolean;
@@ -3406,6 +3451,7 @@ export namespace sync {
 	    snippet?: string;
 	    isRead: boolean;
 	    isStarred: boolean;
+	    isAnswered: boolean;
 	    hasAttachments: boolean;
 	    accountId: string;
 	    folderId: string;
@@ -3418,6 +3464,7 @@ export namespace sync {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.rfcMessageId = source["rfcMessageId"];
+	        this.inReplyTo = source["inReplyTo"];
 	        this.uid = source["uid"];
 	        this.messageId = source["messageId"];
 	        this.isLocal = source["isLocal"];
@@ -3428,6 +3475,7 @@ export namespace sync {
 	        this.snippet = source["snippet"];
 	        this.isRead = source["isRead"];
 	        this.isStarred = source["isStarred"];
+	        this.isAnswered = source["isAnswered"];
 	        this.hasAttachments = source["hasAttachments"];
 	        this.accountId = source["accountId"];
 	        this.folderId = source["folderId"];

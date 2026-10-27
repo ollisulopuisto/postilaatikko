@@ -1,4 +1,9 @@
 {
+  "onlineCount": {
+    "counting": "Lasketaan keskusteluja palvelimelta…",
+    "complete": "{total} keskustelua · {unread} lukematta",
+    "incomplete": "Palvelimen laskenta on kesken"
+  },
   "spellcheck": {
     "title": "Oikoluku",
     "enable": "Tarkista oikeinkirjoitus",

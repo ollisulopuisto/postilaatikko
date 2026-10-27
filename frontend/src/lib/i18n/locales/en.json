@@ -1,4 +1,9 @@
 {
+  "onlineCount": {
+    "counting": "Counting online conversations…",
+    "complete": "{total} conversations · {unread} unread",
+    "incomplete": "Online count incomplete"
+  },
   "spellcheck": {
     "title": "Spellcheck",
     "enable": "Check spelling",
