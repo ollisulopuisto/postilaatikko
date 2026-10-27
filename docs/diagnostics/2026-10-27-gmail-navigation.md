@@ -1,6 +1,6 @@
 # Gmail/navigation delivery candidate
 
-Branch: codex/GLOBAL-001-api-search. Worktree: /private/tmp/postilaatikko-global001.
+Implementation: dc08165. Branch: codex/GLOBAL-001-api-search. Worktree: /private/tmp/postilaatikko-global001.
 Based on origin/main plus the published reader-test.3 integration ancestry.
 No main push or merge.
 
