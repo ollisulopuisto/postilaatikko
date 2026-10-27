@@ -47,7 +47,7 @@ jobs:
           npm test --prefix frontend
       - name: Verify backend
         run: |
-          go test ./internal/email/reactions ./internal/email/replycontent ./internal/database ./internal/message ./internal/sync ./internal/readerbridge ./internal/scheduledsend ./internal/draft ./internal/ipc
+          go test ./internal/gmail ./internal/email/reactions ./internal/email/replycontent ./internal/database ./internal/message ./internal/sync ./internal/readerbridge ./internal/scheduledsend ./internal/draft ./internal/ipc
           go test ./app
       - name: Build and sign app
         env:
