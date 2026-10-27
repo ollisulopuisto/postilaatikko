@@ -31,6 +31,10 @@ Parser checkpoint: PR #33 (`74ed7ff`) integrates plain-text extraction, then sta
 
 REL-001 restores the Send Later code already present in the remote v0.3.16 tag (`73ca27a`) onto current main in an isolated review branch. The tag and main had diverged; earlier statements that this code was never released were incomplete. Delivery/security/live-device gates remain open. The tagged message-focus shortcut change (`e30b37e`) touches Claude-owned EmailBody and is deferred until UX-008 integration; it must be reconciled before promoting a replacement release.
 
+### Current requested build (2026-10-27)
+
+Implement sidebar cards/rail shortcuts, then Gmail-first operations, global server search and API-backed virtual folders, automatic metadata refresh, and a GitHub-built DMG. GLOBAL-001 owns this delivery on an isolated review branch; it is not merged into main. Gmail views must work from server results without requiring a pre-populated IMAP cache. Preserve bounded header/history backfill and explicit body/file downloads. Existing notification-only IMAP IDLE may remain where there is no configured Gmail push service; reads/mutations prefer Gmail REST.
+
 ### Priorities
 
 1. **Scheduled send — critical.** Compose now, choose a delivery time, and have Postilaatikko send it reliably.

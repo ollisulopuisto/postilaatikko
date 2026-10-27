@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/hkdb/aerion/internal/gmail"
 	"net/textproto"
 	"os"
 	"path/filepath"
@@ -105,6 +106,34 @@ func (t *SMTPTransport) Deliver(ctx context.Context, delivery Delivery) error {
 	if !allowed {
 		return &DeliveryError{Kind: PermanentFailure, Err: errors.New("sender is not a helper-local account identity")}
 	}
+	if acc.AuthType == account.AuthOAuth2 && strings.EqualFold(acc.IMAPHost, "imap.gmail.com") {
+		c := gmail.NewClient(func(ctx context.Context, force bool) (string, error) {
+			tokens, err := t.tokensWithForce(ctx, acc.ID, force)
+			if err != nil {
+				return "", err
+			}
+			if !gmail.ScopesCoverModify(tokens.Scopes) {
+				return "", gmail.ErrReauthRequired
+			}
+			return tokens.AccessToken, nil
+		})
+		_, err := c.Send(ctx, delivery.RFC822, delivery.To...)
+		if err == nil {
+			return nil
+		}
+		kind := OutcomeUnknown
+		if errors.Is(err, gmail.ErrReauthRequired) || errors.Is(err, gmail.ErrInsufficientScope) {
+			kind = AuthorizationRequired
+		}
+		if errors.Is(err, gmail.ErrBadRequest) || errors.Is(err, gmail.ErrAPIDisabled) {
+			kind = PermanentFailure
+		}
+		if errors.Is(err, gmail.ErrRateLimited) {
+			kind = SafeRetry
+		}
+		return &DeliveryError{Kind: kind, Err: err}
+	}
+
 	config, err := t.smtpConfig(ctx, acc)
 	if err != nil {
 		return err
@@ -188,11 +217,14 @@ func (t *SMTPTransport) smtpConfig(ctx context.Context, acc *account.Account) (s
 }
 
 func (t *SMTPTransport) tokens(ctx context.Context, accountID string) (*credentials.OAuthTokens, error) {
+	return t.tokensWithForce(ctx, accountID, false)
+}
+func (t *SMTPTransport) tokensWithForce(ctx context.Context, accountID string, force bool) (*credentials.OAuthTokens, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	tokens, err := t.creds.GetOAuthTokens(accountID)
-	if err != nil || !tokens.IsExpiringSoon(5*time.Minute) {
+	if err != nil || (!force && !tokens.IsExpiringSoon(5*time.Minute)) {
 		return tokens, err
 	}
 	var refreshed *oauth2.TokenResponse

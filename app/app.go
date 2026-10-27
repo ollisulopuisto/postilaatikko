@@ -229,8 +229,13 @@ type App struct {
 	imageAllowlistStore *settings.ImageAllowlistStore
 
 	// IMAP
-	imapPool   *imap.Pool
-	syncEngine *sync.Engine
+	imapPool       *imap.Pool
+	syncEngine     *sync.Engine
+	refreshMu      goSync.Mutex
+	refreshLast    map[string]time.Time
+	refreshActive  map[string]bool
+	mailSearchMu   goSync.Mutex
+	mailSearchJobs map[string]*mailSearchJob
 
 	// Background sync (polling + IDLE)
 	syncScheduler *sync.Scheduler
@@ -632,6 +637,7 @@ func (a *App) Startup(ctx context.Context) {
 
 	// Initialize shared draft operations (used by both App and ComposerApp)
 	a.draftOps = draftOps{
+		gmailClient:    a.composeOps.gmailClient,
 		accountStore:   a.accountStore,
 		folderStore:    a.folderStore,
 		messageStore:   a.messageStore,

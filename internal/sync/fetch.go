@@ -3,7 +3,9 @@ package sync
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/hkdb/aerion/internal/gmail"
 	"io"
 	"time"
 
@@ -47,10 +49,27 @@ type ProcessedBody struct {
 // FetchMessageBody fetches the body for a single message on-demand.
 // Uses streaming fetch internally to avoid blocking on .Collect().
 func (e *Engine) FetchMessageBody(ctx context.Context, accountID, messageID string) (*message.Message, error) {
+	if c, err := e.GmailClient(ctx, accountID); err == nil {
+		m, err := e.messageStore.Get(messageID)
+		if err != nil {
+			return nil, err
+		}
+		if m == nil || m.AccountID != accountID {
+			return nil, fmt.Errorf("message account mismatch")
+		}
+		return e.fetchGmailBody(ctx, c, m)
+	} else if !errors.Is(err, gmail.ErrNotCapable) {
+		return nil, err
+	}
+
 	// Get message from store to get UID and folder
 	uid, folderID, err := e.messageStore.GetMessageUIDAndFolder(messageID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get message info: %w", err)
+	}
+
+	if int32(uid) < 0 {
+		return nil, fmt.Errorf("Gmail content requires reconnecting the Google account; local cache identifiers cannot be used with IMAP")
 	}
 
 	// Get folder to get path
@@ -872,6 +891,29 @@ func (e *Engine) FetchBodiesInBackground(ctx context.Context, accountID, folderI
 // FetchRawMessage fetches the raw RFC822 content of a message from the IMAP server.
 // Uses streaming fetch to avoid blocking on .Collect().
 func (e *Engine) FetchRawMessage(ctx context.Context, accountID, folderID string, uid uint32) ([]byte, error) {
+	if c, err := e.GmailClient(ctx, accountID); err == nil {
+		m, err := e.messageStore.GmailMessageByCacheKey(accountID, folderID, uid)
+		if err == nil && m == nil {
+			m, err = e.messageStore.GetByUID(folderID, uid)
+		}
+		if err != nil {
+			return nil, err
+		}
+		if m == nil || m.AccountID != accountID {
+			return nil, fmt.Errorf("message account mismatch")
+		}
+		id, err := e.GmailProviderID(ctx, c, m)
+		if err != nil {
+			return nil, err
+		}
+		return c.Raw(ctx, id)
+	} else if !errors.Is(err, gmail.ErrNotCapable) {
+		return nil, err
+	}
+	if int32(uid) < 0 {
+		return nil, fmt.Errorf("local cache key cannot be used as an IMAP UID")
+	}
+
 	// Get folder path
 	f, err := e.folderStore.Get(folderID)
 	if err != nil {

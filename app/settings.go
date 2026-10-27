@@ -1,7 +1,9 @@
 package app
 
 import (
+	"errors"
 	"fmt"
+	"github.com/hkdb/aerion/internal/gmail"
 	"strings"
 
 	"github.com/hkdb/aerion/internal/account"
@@ -469,6 +471,18 @@ func (a *App) SendReadReceipt(accountID, messageID string) error {
 	mdnBytes, err := smtp.BuildMDN(msg, fromName, fromEmail, smtp.MDNDisplayed)
 	if err != nil {
 		return fmt.Errorf("failed to build MDN: %w", err)
+	}
+
+	if a.syncEngine != nil {
+		c, apiErr := a.syncEngine.GmailClient(a.ctx, accountID)
+		if apiErr == nil {
+			if _, err = c.Send(a.ctx, mdnBytes, extractEmailFromHeader(msg.ReadReceiptTo)); err != nil {
+				return a.gmailMutationError(accountID, err)
+			}
+			return a.messageStore.MarkReadReceiptHandled(messageID)
+		} else if !errors.Is(apiErr, gmail.ErrNotCapable) {
+			return a.gmailMutationError(accountID, apiErr)
+		}
 	}
 
 	// Create SMTP config

@@ -1,7 +1,9 @@
 package app
 
 import (
+	"errors"
 	"fmt"
+	"github.com/hkdb/aerion/internal/gmail"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -94,21 +96,28 @@ func (a *App) DownloadAttachment(attachmentID, savePath string) (string, error) 
 
 	log.Debug().Uint32("uid", msg.UID).Str("folderID", msg.FolderID).Msg("Got message info")
 
-	// Fetch raw message from IMAP
-	raw, err := a.syncEngine.FetchRawMessage(a.ctx, msg.AccountID, msg.FolderID, msg.UID)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to fetch raw message from IMAP")
-		return "", fmt.Errorf("failed to fetch message: %w", err)
-	}
-
-	log.Debug().Int("rawSize", len(raw)).Msg("Fetched raw message from IMAP")
-
-	// Extract attachment content
 	downloader := email.NewAttachmentDownloader(a.paths.AttachmentsPath())
-	content, err := downloader.ExtractAttachmentContent(raw, att.Filename)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to extract attachment content")
-		return "", fmt.Errorf("failed to extract attachment: %w", err)
+	content, err := a.syncEngine.FetchGmailAttachment(a.ctx, msg.AccountID, att.ID)
+	if errors.Is(err, gmail.ErrNotCapable) {
+
+		// Fetch raw message from IMAP
+		raw, err := a.syncEngine.FetchRawMessage(a.ctx, msg.AccountID, msg.FolderID, msg.UID)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to fetch raw message from IMAP")
+			return "", fmt.Errorf("failed to fetch message: %w", err)
+		}
+
+		log.Debug().Int("rawSize", len(raw)).Msg("Fetched raw message from IMAP")
+
+		// Extract attachment content
+		content, err = downloader.ExtractAttachmentContent(raw, att.Filename)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to extract attachment content")
+			return "", fmt.Errorf("failed to extract attachment: %w", err)
+		}
+
+	} else if err != nil {
+		return "", fmt.Errorf("failed to fetch Gmail attachment: %w", err)
 	}
 
 	log.Debug().Int("contentSize", len(content)).Msg("Extracted attachment content")

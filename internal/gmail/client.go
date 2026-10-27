@@ -130,14 +130,17 @@ func (c *Client) Search(ctx context.Context, r SearchRequest) (*SearchPage, erro
 
 // Message is the metadata subset the client reads.
 type Message struct {
-	ID           string
-	ThreadID     string
-	LabelIDs     []string
-	Snippet      string
-	Date         time.Time
-	RFCMessageID string // Message-ID header, with angle brackets as sent
-	Subject      string
-	From         string
+	ID                                          string
+	ThreadID                                    string
+	LabelIDs                                    []string
+	Snippet                                     string
+	Date                                        time.Time
+	To, Cc, Bcc, ReplyTo, InReplyTo, References string
+	Headers                                     map[string]string
+	Size                                        int
+	RFCMessageID                                string // Message-ID header, with angle brackets as sent
+	Subject                                     string
+	From                                        string
 }
 
 // Metadata fetches headers and labels (never bodies) for the given ids with
@@ -182,39 +185,14 @@ func isNotFound(err error) bool {
 func (c *Client) metadataOne(ctx context.Context, id string) (*Message, error) {
 	q := url.Values{}
 	q.Set("format", "metadata")
-	for _, h := range []string{"Message-ID", "Subject", "From", "Date"} {
+	for _, h := range metadataHeaders {
 		q.Add("metadataHeaders", h)
 	}
-	var resp struct {
-		ID           string   `json:"id"`
-		ThreadID     string   `json:"threadId"`
-		LabelIDs     []string `json:"labelIds"`
-		Snippet      string   `json:"snippet"`
-		InternalDate string   `json:"internalDate"`
-		Payload      struct {
-			Headers []struct {
-				Name  string `json:"name"`
-				Value string `json:"value"`
-			} `json:"headers"`
-		} `json:"payload"`
-	}
+	var resp wireMessage
 	if err := c.do(ctx, http.MethodGet, "/messages/"+url.PathEscape(id), q, nil, &resp); err != nil {
 		return nil, err
 	}
-	m := &Message{ID: resp.ID, ThreadID: resp.ThreadID, LabelIDs: resp.LabelIDs, Snippet: resp.Snippet}
-	if ms, err := strconv.ParseInt(resp.InternalDate, 10, 64); err == nil {
-		m.Date = time.UnixMilli(ms)
-	}
-	for _, h := range resp.Payload.Headers {
-		switch strings.ToLower(h.Name) {
-		case "message-id":
-			m.RFCMessageID = h.Value
-		case "subject":
-			m.Subject = h.Value
-		case "from":
-			m.From = h.Value
-		}
-	}
+	m := resp.metadata()
 	return m, nil
 }
 
@@ -244,6 +222,9 @@ func (c *Client) Modify(ctx context.Context, ids, addLabels, removeLabels []stri
 // do performs a request with token refresh on 401 and bounded retries for rate
 // limits and server errors.
 func (c *Client) do(ctx context.Context, method, path string, query url.Values, body, out any) error {
+	return c.request(ctx, method, path, query, body, out, true, maxResponseBytes)
+}
+func (c *Client) request(ctx context.Context, method, path string, query url.Values, body, out any, retry bool, responseLimit int64) error {
 	var payload []byte
 	if body != nil {
 		var err error
@@ -278,7 +259,7 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			if attempt >= maxAttempts {
+			if !retry || attempt >= maxAttempts {
 				return fmt.Errorf("%w: %v", ErrTransient, err)
 			}
 			if err := c.sleep(ctx, backoff(attempt, 0)); err != nil {
@@ -286,8 +267,11 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 			}
 			continue
 		}
-		data, readErr := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+		data, readErr := io.ReadAll(io.LimitReader(resp.Body, responseLimit+1))
 		_ = resp.Body.Close()
+		if int64(len(data)) > responseLimit {
+			return fmt.Errorf("gmail: response exceeds size limit")
+		}
 		if readErr != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
@@ -315,7 +299,7 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 			attempt--
 			continue
 		}
-		if !isRetryable(apiErr) || attempt >= maxAttempts {
+		if !retry || !isRetryable(apiErr) || attempt >= maxAttempts {
 			return apiErr
 		}
 		if err := c.sleep(ctx, backoff(attempt, retryAfter(resp.Header.Get("Retry-After")))); err != nil {

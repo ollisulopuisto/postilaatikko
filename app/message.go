@@ -146,6 +146,37 @@ func (a *App) GetConversation(threadID, folderID string) (*message.Conversation,
 		Str("folderID", folderID).
 		Msg("GetConversation called")
 
+	if m, _ := a.messageStore.Get(threadID); m != nil && strings.HasPrefix(m.ThreadID, "gmail:") {
+		threadID = m.ThreadID
+	}
+	if strings.HasPrefix(threadID, "gmail:") {
+		f, err := a.folderStore.Get(folderID)
+		if err != nil || f == nil {
+			return nil, fmt.Errorf("folder not found")
+		}
+		prefix := "gmail:" + f.AccountID + ":"
+		if !strings.HasPrefix(threadID, prefix) {
+			return nil, fmt.Errorf("thread account mismatch")
+		}
+		c, err := a.syncEngine.GmailClient(a.ctx, f.AccountID)
+		if err != nil {
+			return nil, err
+		}
+		unlock, err := a.syncEngine.LockGmailAccount(a.ctx, f.AccountID)
+		if err != nil {
+			return nil, err
+		}
+		defer unlock()
+
+		headers, err := c.ThreadMetadata(a.ctx, strings.TrimPrefix(threadID, prefix))
+		if err != nil {
+			return nil, err
+		}
+		if _, err = a.syncEngine.CacheGmailResults(a.ctx, f.AccountID, headers, []string{folderID}); err != nil {
+			return nil, err
+		}
+	}
+
 	conv, err := a.messageStore.GetConversation(threadID, folderID)
 	if err != nil {
 		log.Error().Err(err).Msg("GetConversation failed")

@@ -1,7 +1,9 @@
 package app
 
 import (
+	"errors"
 	"fmt"
+	"github.com/hkdb/aerion/internal/gmail"
 
 	"github.com/hkdb/aerion/internal/folder"
 	"github.com/hkdb/aerion/internal/logging"
@@ -133,6 +135,24 @@ func (a *App) SubscribeFolder(accountID, folderID string) error {
 		return fmt.Errorf("folder not found: %s", folderID)
 	}
 
+	if f.AccountID != accountID {
+		return fmt.Errorf("folder account mismatch")
+	}
+	if c, apiErr := a.syncEngine.GmailClient(a.ctx, accountID); apiErr == nil {
+		label, err := a.syncEngine.GmailLabelID(a.ctx, c, f)
+		if err != nil {
+			return err
+		}
+		if label != "" {
+			if err = c.SetLabelVisible(a.ctx, label, true); err != nil {
+				return a.gmailMutationError(accountID, err)
+			}
+		}
+		return a.folderStore.UpdateSubscribed(folderID, true)
+	} else if !errors.Is(apiErr, gmail.ErrNotCapable) {
+		return a.gmailMutationError(accountID, apiErr)
+	}
+
 	// Subscribe on IMAP server
 	conn, connErr := a.syncEngine.GetPoolConnection(a.ctx, accountID)
 	if connErr != nil {
@@ -149,7 +169,6 @@ func (a *App) SubscribeFolder(accountID, folderID string) error {
 		log.Warn().Err(dbErr).Msg("Failed to update local subscription cache")
 	}
 
-
 	log.Info().Str("folder", f.Path).Msg("Subscribed to folder")
 	return nil
 }
@@ -164,6 +183,24 @@ func (a *App) UnsubscribeFolder(accountID, folderID string) error {
 	}
 	if f == nil {
 		return fmt.Errorf("folder not found: %s", folderID)
+	}
+
+	if f.AccountID != accountID {
+		return fmt.Errorf("folder account mismatch")
+	}
+	if c, apiErr := a.syncEngine.GmailClient(a.ctx, accountID); apiErr == nil {
+		label, err := a.syncEngine.GmailLabelID(a.ctx, c, f)
+		if err != nil {
+			return err
+		}
+		if label != "" {
+			if err = c.SetLabelVisible(a.ctx, label, false); err != nil {
+				return a.gmailMutationError(accountID, err)
+			}
+		}
+		return a.folderStore.UpdateSubscribed(folderID, false)
+	} else if !errors.Is(apiErr, gmail.ErrNotCapable) {
+		return a.gmailMutationError(accountID, apiErr)
 	}
 
 	// Unsubscribe on IMAP server
@@ -193,6 +230,17 @@ func (a *App) SubscribeAllFolders(accountID string) error {
 	folders, err := a.folderStore.List(accountID)
 	if err != nil {
 		return fmt.Errorf("failed to list folders: %w", err)
+	}
+
+	if _, apiErr := a.syncEngine.GmailClient(a.ctx, accountID); apiErr == nil {
+		for _, f := range folders {
+			if err = a.SubscribeFolder(accountID, f.ID); err != nil {
+				return err
+			}
+		}
+		return nil
+	} else if !errors.Is(apiErr, gmail.ErrNotCapable) {
+		return a.gmailMutationError(accountID, apiErr)
 	}
 
 	conn, connErr := a.syncEngine.GetPoolConnection(a.ctx, accountID)

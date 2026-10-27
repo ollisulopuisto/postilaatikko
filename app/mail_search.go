@@ -1,0 +1,440 @@
+package app
+
+import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"github.com/hkdb/aerion/internal/account"
+	"github.com/hkdb/aerion/internal/folder"
+	"github.com/hkdb/aerion/internal/gmail"
+	"github.com/hkdb/aerion/internal/message"
+	"github.com/hkdb/aerion/internal/virtualfolder"
+	"slices"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+)
+
+type MailSearchRequest struct {
+	SessionID       string   `json:"sessionId"`
+	Query           string   `json:"query"`
+	AccountIDs      []string `json:"accountIds"`
+	VirtualFolderID string   `json:"virtualFolderId"`
+	Cursor          string   `json:"cursor"`
+	Limit           int      `json:"limit"`
+}
+type MailSearchIssue struct {
+	AccountID   string `json:"accountId"`
+	AccountName string `json:"accountName"`
+	Message     string `json:"message"`
+	Reauthorize bool   `json:"reauthorize"`
+}
+type MailSearchPage struct {
+	Conversations []*message.Conversation `json:"conversations"`
+	Cursor        string                  `json:"cursor"`
+	Issues        []MailSearchIssue       `json:"issues"`
+}
+type mailCursor struct {
+	Query    string            `json:"q"`
+	Virtual  string            `json:"v"`
+	Accounts []string          `json:"a"`
+	Pages    map[string]string `json:"p"`
+	Seen     map[string]bool   `json:"s"`
+}
+
+// Gmail scope clauses preserve exact label paths, including spaces and Unicode.
+// Multiple includes are ORed, never passed as labelIds (which are ANDed).
+func gmailScopeClause(f *folder.Folder) string {
+	switch f.Type {
+	case folder.TypeInbox:
+		return "in:inbox"
+	case folder.TypeSent:
+		return "in:sent"
+	case folder.TypeDrafts:
+		return "in:drafts"
+	case folder.TypeTrash:
+		return "in:trash"
+	case folder.TypeSpam:
+		return "in:spam"
+	case folder.TypeStarred:
+		return "is:starred"
+	case folder.TypeAll:
+		return "(-in:spam -in:trash)"
+	case folder.TypeArchive:
+		return "(-in:inbox -in:spam -in:trash)"
+	}
+	return `label:"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(f.Path) + `"`
+}
+func gmailViewQuery(query string, folders []*folder.Folder, exclude bool) string {
+	parts := []string{}
+	if strings.TrimSpace(query) != "" {
+		parts = append(parts, "("+query+")")
+	}
+	clauses := []string{}
+	for _, f := range folders {
+		clauses = append(clauses, gmailScopeClause(f))
+	}
+	if len(clauses) > 0 {
+		scope := "(" + strings.Join(clauses, " OR ") + ")"
+		if exclude {
+			scope = "-" + scope
+		}
+		parts = append(parts, scope)
+	}
+	return strings.Join(parts, " ")
+}
+func matchesGmailThread(items []gmail.Message, vf *virtualfolder.VirtualFolder) bool {
+	if vf == nil {
+		return true
+	}
+	unread, starred, replied := false, false, false
+	var latest time.Time
+	for _, m := range items {
+		unread = unread || slices.Contains(m.LabelIDs, "UNREAD")
+		starred = starred || slices.Contains(m.LabelIDs, "STARRED")
+		replied = replied || (slices.Contains(m.LabelIDs, "SENT") && m.InReplyTo != "")
+		if m.Date.After(latest) {
+			latest = m.Date
+		}
+	}
+	if vf.ReadStatus == "unread" && !unread || vf.ReadStatus == "read" && unread {
+		return false
+	}
+	if vf.StarStatus == "starred" && !starred || vf.StarStatus == "unstarred" && starred {
+		return false
+	}
+	if vf.ReplyStatus == "replied" && !replied || vf.ReplyStatus == "unreplied" && replied {
+		return false
+	}
+	days := map[string]int{"7d": 7, "30d": 30, "90d": 90, "1y": 365}[vf.DateWindow]
+	return days == 0 || !latest.Before(time.Now().AddDate(0, 0, -days))
+}
+
+// SearchMail searches server metadata across enabled accounts. Body content is
+// never fetched here. Cursor pages keep per-account failures visible/retryable.
+func (a *App) SearchMail(req MailSearchRequest) (*MailSearchPage, error) {
+	ctx, cancel := context.WithTimeout(a.ctx, 90*time.Second)
+	defer cancel()
+	if len(req.SessionID) > 128 {
+		return nil, fmt.Errorf("invalid search session")
+	}
+	if req.SessionID != "" {
+		job := &mailSearchJob{cancel: cancel}
+		a.mailSearchMu.Lock()
+		if a.mailSearchJobs == nil {
+			a.mailSearchJobs = map[string]*mailSearchJob{}
+		}
+		if old := a.mailSearchJobs[req.SessionID]; old != nil {
+			old.cancel()
+		}
+		a.mailSearchJobs[req.SessionID] = job
+		a.mailSearchMu.Unlock()
+		defer func() {
+			a.mailSearchMu.Lock()
+			if a.mailSearchJobs[req.SessionID] == job {
+				delete(a.mailSearchJobs, req.SessionID)
+			}
+			a.mailSearchMu.Unlock()
+		}()
+	}
+
+	accounts, err := a.accountStore.List()
+	if err != nil {
+		return nil, err
+	}
+	selected := []*account.Account{}
+	ids := []string{}
+	for _, acc := range accounts {
+		if acc.Enabled && (len(req.AccountIDs) == 0 || slices.Contains(req.AccountIDs, acc.ID)) {
+			selected = append(selected, acc)
+			ids = append(ids, acc.ID)
+		}
+	}
+	sort.Strings(ids)
+	state := mailCursor{Query: req.Query, Virtual: req.VirtualFolderID, Accounts: ids, Pages: map[string]string{}, Seen: map[string]bool{}}
+	if req.Cursor != "" {
+		if len(req.Cursor) > 512<<10 {
+			return nil, fmt.Errorf("search cursor too large; start a new search")
+		}
+		decoded, e := base64.RawURLEncoding.DecodeString(req.Cursor)
+		if e != nil {
+			return nil, fmt.Errorf("invalid search cursor")
+		}
+		var saved mailCursor
+		if json.Unmarshal(decoded, &saved) != nil || saved.Query != req.Query || saved.Virtual != req.VirtualFolderID || !slices.Equal(saved.Accounts, ids) || saved.Pages == nil || saved.Seen == nil {
+			return nil, fmt.Errorf("search scope changed; start again")
+		}
+		state = saved
+	}
+	var vf *virtualfolder.VirtualFolder
+	foldersByAccount := map[string][]*folder.Folder{}
+	if req.VirtualFolderID != "" {
+		vf, err = a.virtualFolderStore.Get(req.VirtualFolderID)
+		if err != nil {
+			return nil, err
+		}
+		if vf == nil {
+			return nil, fmt.Errorf("virtual folder not found")
+		}
+		for _, id := range vf.FolderIDs {
+			f, err := a.folderStore.Get(id)
+			if err != nil {
+				return nil, err
+			}
+			if f != nil {
+				foldersByAccount[f.AccountID] = append(foldersByAccount[f.AccountID], f)
+			}
+		}
+	}
+	result := &MailSearchPage{Conversations: []*message.Conversation{}, Issues: []MailSearchIssue{}}
+	limit := req.Limit
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 3)
+	for _, acc := range selected {
+		acc := acc
+		scope := foldersByAccount[acc.ID]
+		mu.Lock()
+		token := state.Pages[acc.ID]
+		if vf != nil && vf.FolderMode != "exclude" && len(scope) == 0 {
+			state.Pages[acc.ID] = "!done"
+			token = "!done"
+		}
+		mu.Unlock()
+		if token == "!done" {
+			continue
+		}
+		wg.Add(1)
+		sem <- struct{}{}
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			issue := func(err error) {
+				mu.Lock()
+				defer mu.Unlock()
+				for _, prior := range result.Issues {
+					if prior.AccountID == acc.ID && prior.Message == err.Error() {
+						return
+					}
+				}
+				result.Issues = append(result.Issues, MailSearchIssue{AccountID: acc.ID, AccountName: acc.Name, Message: err.Error(), Reauthorize: errors.Is(err, gmail.ErrReauthRequired) || errors.Is(err, gmail.ErrInsufficientScope)})
+			}
+			c, err := a.syncEngine.GmailClient(ctx, acc.ID)
+			if errors.Is(err, gmail.ErrNotCapable) {
+				// IMAP remains available for other providers, across their real folders.
+				fs, e := a.folderStore.List(acc.ID)
+				if e != nil {
+					issue(e)
+					return
+				}
+				var convs []*message.Conversation
+				for _, f := range fs {
+					if vf != nil {
+						included := slices.Contains(vf.FolderIDs, f.ID)
+						if included == (vf.FolderMode == "exclude") {
+							continue
+						}
+					}
+					r, e := a.syncEngine.IMAPSearch(ctx, acc.ID, f.ID, req.Query, limit)
+					if e != nil {
+						issue(e)
+						continue
+					}
+					if r.TotalCount > len(r.Results) {
+						issue(fmt.Errorf("IMAP search returns a bounded window per folder; narrow the query for more matches"))
+					}
+					ms, e := a.syncEngine.CacheIMAPSearchHeaders(acc.ID, f.ID, r.Results)
+					if e != nil {
+						issue(e)
+						continue
+					}
+					for _, m := range ms {
+						unread := 0
+						if !m.IsRead {
+							unread = 1
+						}
+						convs = append(convs, &message.Conversation{ThreadID: m.ThreadID, Subject: m.Subject, Snippet: m.Snippet, LatestDate: m.Date, MessageIDs: []string{m.ID}, MessageCount: 1, UnreadCount: unread, AccountID: acc.ID, AccountName: acc.Name, FolderID: f.ID, Participants: []message.Address{{Name: m.FromName, Email: m.FromEmail}}})
+					}
+				}
+
+				mu.Lock()
+				result.Conversations = append(result.Conversations, convs...)
+				state.Pages[acc.ID] = "!done"
+				mu.Unlock()
+				return
+			}
+			if err != nil {
+				issue(err)
+				return
+			}
+			unlock, lockErr := a.syncEngine.LockGmailAccount(ctx, acc.ID)
+			if lockErr != nil {
+				issue(lockErr)
+				return
+			}
+			defer func() {
+				if unlock != nil {
+					unlock()
+				}
+			}()
+
+			query := gmailViewQuery(req.Query, scope, vf != nil && vf.FolderMode == "exclude")
+			page, err := c.Search(ctx, gmail.SearchRequest{Query: query, PageToken: token, Limit: limit, IncludeSpamTrash: true})
+			if err != nil {
+				issue(err)
+				return
+			}
+			headers, err := c.Metadata(ctx, page.MessageIDs)
+			if err != nil {
+				issue(err)
+				return
+			}
+			threadIDs := []string{}
+			for _, m := range headers {
+				if !slices.Contains(threadIDs, m.ThreadID) {
+					threadIDs = append(threadIDs, m.ThreadID)
+				}
+			}
+			preferred := []string{}
+			for _, f := range scope {
+				preferred = append(preferred, f.ID)
+			}
+			if vf != nil && vf.FolderMode == "exclude" {
+				preferred = nil
+			}
+			cached, err := a.syncEngine.CacheGmailResults(ctx, acc.ID, headers, preferred)
+			if err != nil {
+				issue(err)
+				return
+			}
+			unlock()
+			unlock = nil
+
+			localThreads := map[string][]*message.Message{}
+			for _, m := range cached {
+				localThreads[strings.TrimPrefix(m.ThreadID, "gmail:"+acc.ID+":")] = append(localThreads[strings.TrimPrefix(m.ThreadID, "gmail:"+acc.ID+":")], m)
+			}
+			threads := map[string][]gmail.Message{}
+			var threadMu sync.Mutex
+			var threadWG sync.WaitGroup
+			threadSlots := make(chan struct{}, 4)
+			var threadErr error
+			for _, tid := range threadIDs {
+				tid := tid
+				threadWG.Add(1)
+				threadSlots <- struct{}{}
+				go func() {
+					defer threadWG.Done()
+					defer func() { <-threadSlots }()
+					ms, err := c.ThreadMetadata(ctx, tid)
+					threadMu.Lock()
+					defer threadMu.Unlock()
+					if err != nil {
+						threadErr = err
+					} else {
+						threads[tid] = ms
+					}
+				}()
+			}
+			threadWG.Wait()
+			if threadErr != nil {
+				issue(threadErr)
+				return
+			}
+			convs := []*message.Conversation{}
+			newSeen := []string{}
+			for _, tid := range threadIDs {
+				key := acc.ID + ":" + tid
+				mu.Lock()
+				seen := state.Seen[key]
+				mu.Unlock()
+				if seen {
+					continue
+				}
+				thread := threads[tid]
+				if !matchesGmailThread(thread, vf) {
+					newSeen = append(newSeen, key)
+					continue
+				}
+				local := localThreads[tid]
+				if len(local) == 0 {
+					continue
+				}
+				conv := &message.Conversation{ThreadID: local[0].ThreadID, Subject: local[0].Subject, AccountID: acc.ID, AccountName: acc.Name, FolderID: local[0].FolderID, MessageCount: len(thread), Participants: []message.Address{}, MessageIDs: []string{}}
+				people := map[string]bool{}
+				for _, m := range local {
+					conv.MessageIDs = append(conv.MessageIDs, m.ID)
+				}
+				for _, m := range thread {
+					if slices.Contains(m.LabelIDs, "UNREAD") {
+						conv.UnreadCount++
+					}
+					conv.IsStarred = conv.IsStarred || slices.Contains(m.LabelIDs, "STARRED")
+					if m.Date.After(conv.LatestDate) {
+						conv.LatestDate = m.Date
+						conv.Snippet = m.Snippet
+					}
+					for _, p := range local {
+						if !people[p.FromEmail] {
+							people[p.FromEmail] = true
+							conv.Participants = append(conv.Participants, message.Address{Name: p.FromName, Email: p.FromEmail})
+						}
+					}
+				}
+				convs = append(convs, conv)
+				newSeen = append(newSeen, key)
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			result.Conversations = append(result.Conversations, convs...)
+			for _, key := range newSeen {
+				state.Seen[key] = true
+			}
+			if len(state.Seen) > 2048 {
+				state.Seen = map[string]bool{}
+				for _, key := range newSeen {
+					state.Seen[key] = true
+				}
+			}
+			state.Pages[acc.ID] = page.NextPageToken
+			if page.NextPageToken == "" {
+				state.Pages[acc.ID] = "!done"
+			}
+		}()
+	}
+	wg.Wait()
+	sort.Slice(result.Conversations, func(i, j int) bool {
+		return result.Conversations[i].LatestDate.After(result.Conversations[j].LatestDate)
+	})
+	pending := false
+	for _, id := range ids {
+		if state.Pages[id] != "!done" {
+			pending = true
+		}
+	}
+	if pending {
+		encoded, err := json.Marshal(state)
+		if err != nil {
+			return nil, err
+		}
+		result.Cursor = base64.RawURLEncoding.EncodeToString(encoded)
+	}
+	return result, nil
+}
+
+type mailSearchJob struct{ cancel context.CancelFunc }
+
+func (a *App) CancelMailSearch(sessionID string) {
+	a.mailSearchMu.Lock()
+	defer a.mailSearchMu.Unlock()
+	if job := a.mailSearchJobs[sessionID]; job != nil {
+		job.cancel()
+		delete(a.mailSearchJobs, sessionID)
+	}
+}

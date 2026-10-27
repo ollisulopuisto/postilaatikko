@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/hkdb/aerion/internal/gmail"
 	"os"
 	"path/filepath"
 	"strings"
@@ -416,82 +417,106 @@ func (ops *composeOps) sendMessage(ctx context.Context, accountID string, msg sm
 		return nil, err
 	}
 
-	// Create SMTP client config
-	smtpConfig := smtp.DefaultConfig()
-	smtpConfig.Host = acc.SMTPHost
-	smtpConfig.Port = acc.SMTPPort
-	smtpConfig.Security = smtp.SecurityType(acc.SMTPSecurity)
-	smtpConfig.AuthMechanism = string(acc.EffectiveSMTPAuthMechanism())
-	smtpConfig.Username = acc.Username
-	// Shared mailboxes authenticate SMTP with the parent account's username
-	if acc.SharedMailboxParentID != "" {
-		parent, parentErr := ops.accountStore.Get(acc.SharedMailboxParentID)
-		if parentErr == nil && parent != nil {
-			smtpConfig.Username = parent.Username
+	if strings.EqualFold(acc.IMAPHost, "imap.gmail.com") && acc.AuthType == account.AuthOAuth2 {
+		client := gmail.NewClient(func(ctx context.Context, force bool) (string, error) {
+			var tokens *credentials.OAuthTokens
+			var err error
+			if force {
+				tokens, err = ops.forceRefreshOAuthToken(ctx, accountID)
+			} else {
+				tokens, err = ops.getValidOAuthToken(ctx, accountID)
+			}
+			if err != nil {
+				return "", err
+			}
+			if !gmail.ScopesCoverModify(tokens.Scopes) {
+				return "", gmail.ErrReauthRequired
+			}
+			return tokens.AccessToken, nil
+		})
+		if _, err := client.Send(ctx, rawMsg, msg.AllRecipients()...); err != nil {
+			return nil, fmt.Errorf("Gmail send failed (do not resend until delivery is checked): %w", err)
 		}
-	}
-	// Separate SMTP credentials override (Generic provider; gated by
-	// non-empty SMTPUsername at the model layer). Doesn't apply to OAuth
-	// accounts — those keep the bearer-token path below.
-	smtpUsesSeparateCreds := acc.SMTPUsername != "" && acc.AuthType != account.AuthOAuth2
-	if smtpUsesSeparateCreds {
-		smtpConfig.Username = acc.SMTPUsername
-	}
-	smtpConfig.TLSConfig = certificate.BuildTLSConfig(acc.SMTPHost, ops.certStore)
+	} else {
 
-	// Handle authentication based on auth type
-	switch acc.AuthType {
-	case account.AuthOAuth2:
-		tokens, tokenErr := ops.getValidOAuthToken(ctx, accountID)
-		if tokenErr != nil {
-			return nil, fmt.Errorf("failed to get OAuth token: %w", tokenErr)
+		// Create SMTP client config
+		smtpConfig := smtp.DefaultConfig()
+		smtpConfig.Host = acc.SMTPHost
+		smtpConfig.Port = acc.SMTPPort
+		smtpConfig.Security = smtp.SecurityType(acc.SMTPSecurity)
+		smtpConfig.AuthMechanism = string(acc.EffectiveSMTPAuthMechanism())
+		smtpConfig.Username = acc.Username
+		// Shared mailboxes authenticate SMTP with the parent account's username
+		if acc.SharedMailboxParentID != "" {
+			parent, parentErr := ops.accountStore.Get(acc.SharedMailboxParentID)
+			if parentErr == nil && parent != nil {
+				smtpConfig.Username = parent.Username
+			}
 		}
-		smtpConfig.AuthType = smtp.AuthTypeOAuth2
-		smtpConfig.AccessToken = tokens.AccessToken
-	default:
-		smtpConfig.AuthType = smtp.AuthTypePassword
+		// Separate SMTP credentials override (Generic provider; gated by
+		// non-empty SMTPUsername at the model layer). Doesn't apply to OAuth
+		// accounts — those keep the bearer-token path below.
+		smtpUsesSeparateCreds := acc.SMTPUsername != "" && acc.AuthType != account.AuthOAuth2
 		if smtpUsesSeparateCreds {
-			password, passErr := ops.credStore.GetSMTPPassword(accountID)
+			smtpConfig.Username = acc.SMTPUsername
+		}
+		smtpConfig.TLSConfig = certificate.BuildTLSConfig(acc.SMTPHost, ops.certStore)
+
+		// Handle authentication based on auth type
+		switch acc.AuthType {
+		case account.AuthOAuth2:
+			tokens, tokenErr := ops.getValidOAuthToken(ctx, accountID)
+			if tokenErr != nil {
+				return nil, fmt.Errorf("failed to get OAuth token: %w", tokenErr)
+			}
+			smtpConfig.AuthType = smtp.AuthTypeOAuth2
+			smtpConfig.AccessToken = tokens.AccessToken
+		default:
+			smtpConfig.AuthType = smtp.AuthTypePassword
+			if smtpUsesSeparateCreds {
+				password, passErr := ops.credStore.GetSMTPPassword(accountID)
+				if passErr != nil {
+					return nil, fmt.Errorf("failed to get SMTP password: %w", passErr)
+				}
+				smtpConfig.Password = password
+				break
+			}
+			password, passErr := ops.credStore.GetPassword(accountID)
 			if passErr != nil {
-				return nil, fmt.Errorf("failed to get SMTP password: %w", passErr)
+				return nil, fmt.Errorf("failed to get password: %w", passErr)
 			}
 			smtpConfig.Password = password
-			break
 		}
-		password, passErr := ops.credStore.GetPassword(accountID)
-		if passErr != nil {
-			return nil, fmt.Errorf("failed to get password: %w", passErr)
+
+		client := smtp.NewClient(smtpConfig)
+
+		if err := client.Connect(); err != nil {
+			return nil, fmt.Errorf("failed to connect to SMTP server: %w", err)
 		}
-		smtpConfig.Password = password
-	}
+		defer client.Close()
 
-	client := smtp.NewClient(smtpConfig)
-
-	if err := client.Connect(); err != nil {
-		return nil, fmt.Errorf("failed to connect to SMTP server: %w", err)
-	}
-	defer client.Close()
-
-	if err := client.Login(); err != nil {
-		return nil, fmt.Errorf("failed to login to SMTP server: %w", err)
-	}
-
-	recipients := msg.AllRecipients()
-	if len(recipients) == 0 {
-		return nil, fmt.Errorf("no recipients specified")
-	}
-
-	if err := client.SendMail(msg.From.Address, recipients, rawMsg); err != nil {
-		return nil, fmt.Errorf("failed to send message: %w", err)
-	}
-
-	// Save to Sent folder (using IMAP APPEND) if provider doesn't auto-save
-	if !providerAutoSavesSentMail(acc.IMAPHost) {
-		log.Debug().Str("host", acc.IMAPHost).Msg("Provider doesn't auto-save, using IMAP APPEND")
-		if err := ops.saveToSentFolder(ctx, accountID, acc, rawMsg); err != nil {
-			log.Warn().Err(err).Msg("Failed to save message to Sent folder")
-			// Don't fail the send operation if saving fails
+		if err := client.Login(); err != nil {
+			return nil, fmt.Errorf("failed to login to SMTP server: %w", err)
 		}
+
+		recipients := msg.AllRecipients()
+		if len(recipients) == 0 {
+			return nil, fmt.Errorf("no recipients specified")
+		}
+
+		if err := client.SendMail(msg.From.Address, recipients, rawMsg); err != nil {
+			return nil, fmt.Errorf("failed to send message: %w", err)
+		}
+
+		// Save to Sent folder (using IMAP APPEND) if provider doesn't auto-save
+		if !providerAutoSavesSentMail(acc.IMAPHost) {
+			log.Debug().Str("host", acc.IMAPHost).Msg("Provider doesn't auto-save, using IMAP APPEND")
+			if err := ops.saveToSentFolder(ctx, accountID, acc, rawMsg); err != nil {
+				log.Warn().Err(err).Msg("Failed to save message to Sent folder")
+				// Don't fail the send operation if saving fails
+			}
+		}
+
 	}
 
 	// Add recipients to local contacts (best-effort; send already succeeded)
@@ -1241,4 +1266,31 @@ func detectContentType(filename string) string {
 	default:
 		return "application/octet-stream"
 	}
+}
+
+func (ops *composeOps) gmailClient(ctx context.Context, accountID string) (*gmail.Client, error) {
+	acc, err := ops.accountStore.Get(accountID)
+	if err != nil {
+		return nil, err
+	}
+	if acc == nil || acc.AuthType != account.AuthOAuth2 || !strings.EqualFold(acc.IMAPHost, "imap.gmail.com") {
+		return nil, gmail.ErrNotCapable
+	}
+	client := gmail.NewClient(func(ctx context.Context, force bool) (string, error) {
+		var tokens *credentials.OAuthTokens
+		var err error
+		if force {
+			tokens, err = ops.forceRefreshOAuthToken(ctx, accountID)
+		} else {
+			tokens, err = ops.getValidOAuthToken(ctx, accountID)
+		}
+		if err != nil {
+			return "", err
+		}
+		if !gmail.ScopesCoverModify(tokens.Scopes) {
+			return "", gmail.ErrReauthRequired
+		}
+		return tokens.AccessToken, nil
+	})
+	return client, nil
 }

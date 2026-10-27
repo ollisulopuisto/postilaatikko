@@ -261,3 +261,14 @@ func boolToInt(b bool) int {
 	}
 	return 0
 }
+func (s *AttachmentStore) SetGmailReference(localID, providerMessage, providerAttachment string) error {
+	_, err := s.db.Exec(`INSERT INTO gmail_attachment_refs(attachment_id,provider_message_id,provider_attachment_id) VALUES(?,?,?) ON CONFLICT(attachment_id) DO UPDATE SET provider_message_id=excluded.provider_message_id,provider_attachment_id=excluded.provider_attachment_id`, localID, providerMessage, providerAttachment)
+	return err
+}
+func (s *AttachmentStore) GmailReference(localID string) (providerMessage, providerAttachment string, err error) {
+	err = s.db.QueryRow(`SELECT provider_message_id,provider_attachment_id FROM gmail_attachment_refs WHERE attachment_id=?`, localID).Scan(&providerMessage, &providerAttachment)
+	if err == sql.ErrNoRows {
+		err = nil
+	}
+	return
+}

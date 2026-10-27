@@ -1,25 +1,15 @@
-A test build of the compact conversation reader, built on GitHub. Choose
-`arm64` for Apple Silicon (including Mac Studio), or `amd64` for Intel Macs.
+Postilaatikko 0.3.18 navigation and Gmail test build, built on GitHub.
+Choose arm64 for Apple Silicon (including Mac Studio), amd64 for Intel.
 Open the DMG and drag Postilaatikko onto Applications.
 
-Changes in this update:
-- Consistent sender sides in inbox/virtual views, including historical configured identities and multi-address correspondents.
-- Gmail MIME reactions and recognizable Gmail/Outlook fallback notifications display as grouped emoji chips on their exact target message. Click to inspect the source notifications; Traditional keeps all originals. Unknown targets/templates remain ordinary emails.
-- Strip short signatures before long unprefixed quoted replies.
-- Adds an additive local reaction-metadata cache table; routine sync stays header-only and stored bodies are unchanged.
+- Organize sidebar cards: reorder, collapse, hide/restore, custom groups and folder moves. Star up to ten entries for the quick rail and Cmd/Ctrl+1…0. Contacts/Calendar shortcuts default off.
+- Search all mail across accounts from the sidebar or `/`. Gmail uses native server queries; choose an account or search all enabled accounts. Account errors remain visible alongside available results.
+- Virtual folders query Gmail server metadata directly, including folder unions/exclusions, read/star/reply status and latest-activity windows. They no longer depend on an already-populated IMAP cache. The selected row stays put after its own read transition.
+- Gmail OAuth reads and mail operations prefer Gmail API. Includes drafts, sending, native label actions, body/source/file reads and scheduled-helper delivery; preserves Bcc and copy-before-source-removal safeguards.
+- Automatic header refresh on folder open and bounded account-wide Gmail history/backfill in the background. Normal message bodies and file attachments are downloaded separately, on demand.
+- All folders and move/copy searches span accounts; move destinations are grouped by account and crossing the account boundary is explicit.
+- Includes the previous compact reader, contrast/signature/reaction fixes and detached reader windows.
 
-Included previous fixes:
-- Normalize authored inline text/background colors so conversation bubbles remain readable in dark and light themes.
-- Recognize spaced Outlook From/Date/To/Subject quoted headers, including table layouts.
-- Add visible left/right speech-bubble tails.
+Verified with full Go tests, affected race tests, frontend checks and real Chromium fixtures. Live Google authorization/provider behavior and native WKWebView remain device checks. Gmail API must be enabled for the OAuth project; reconnect when the app requests additional permissions. Non-Gmail providers retain IMAP; their cross-folder search currently returns bounded windows with an explicit limitation notice. Legacy cached count endpoints are not server-complete totals; active virtual views use cursor pagination.
 
-Included reader work:
-- Double-click a message-list row to open an independent reader window.
-- Directional conversation bubbles, fewer repeated headers, and originals/details on demand.
-- Better signature and quoted-history removal using a guarded Go reply-parser library.
-- No signature/source control rows in conversation mode; Traditional remains available.
-- Preserve the previously tagged Send Later code and message-focused shortcuts.
-
-This is a prerelease for Mac/WKWebView testing. Send Later's real-delivery,
-pairing/security and recovery acceptance gates remain open. See `docs/diagnostics/2026-10-26-compact-reader.md`
-and `docs/diagnostics/2026-10-26-reader-smoke-checklist.md` in the source for checks.
+Cache schema advances to 54; older binaries reject newer caches. Send Later's existing live delivery/pairing/recovery acceptance gates remain open. This is a prerelease from the isolated integration branch, not a main/stable promotion.

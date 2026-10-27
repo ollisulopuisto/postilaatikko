@@ -39,10 +39,13 @@ func (a *App) gmailTokensFor(accountID string, scopesOK func([]string) bool, for
 	}
 
 	stored, err := a.credStore.GetOAuthTokens(accountID)
-	if err != nil || stored.Provider != "google" || !scopesOK(stored.Scopes) {
+	if err != nil || stored == nil || (stored.Provider != "google" && stored.Provider != "custom") {
 		return nil, gmail.ErrNotCapable
 	}
 
+	if !scopesOK(stored.Scopes) {
+		return nil, gmail.ErrReauthRequired
+	}
 	if forceRefresh {
 		return a.composeOps.forceRefreshOAuthToken(a.ctx, accountID)
 	}

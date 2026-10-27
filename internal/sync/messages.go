@@ -3,7 +3,9 @@ package sync
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/hkdb/aerion/internal/gmail"
 	"io"
 	"sort"
 	"strings"
@@ -79,6 +81,12 @@ func (e *Engine) SyncMessages(ctx context.Context, accountID, folderID string, s
 	}
 	if f.AccountID != accountID {
 		return fmt.Errorf("folder %s belongs to account %s, not %s", folderID, f.AccountID, accountID)
+	}
+
+	if c, apiErr := e.GmailClient(ctx, accountID); apiErr == nil {
+		return e.syncGmailMessages(ctx, c, f, syncPeriodDays)
+	} else if !errors.Is(apiErr, gmail.ErrNotCapable) {
+		return apiErr
 	}
 
 	e.log.Debug().
@@ -556,6 +564,12 @@ func (e *Engine) SyncFolderFlags(ctx context.Context, accountID, folderID string
 	}
 	if f == nil {
 		return fmt.Errorf("folder not found: %s", folderID)
+	}
+
+	if c, apiErr := e.GmailClient(ctx, accountID); apiErr == nil {
+		return e.syncGmailMessages(ctx, c, f, 0)
+	} else if !errors.Is(apiErr, gmail.ErrNotCapable) {
+		return apiErr
 	}
 
 	conn, err := e.pool.GetConnection(ctx, accountID)

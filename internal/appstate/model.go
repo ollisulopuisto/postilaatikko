@@ -2,6 +2,7 @@ package appstate
 
 // UIState represents the persisted UI state across sessions
 type UIState struct {
+	SidebarCards string `json:"sidebarCards,omitempty"`
 	// View state (what folder/view is shown in sidebar)
 	SelectedAccountID  string `json:"selectedAccountId"`  // 'unified' or real account ID
 	SelectedFolderID   string `json:"selectedFolderId"`   // 'inbox' (virtual) or real folder ID

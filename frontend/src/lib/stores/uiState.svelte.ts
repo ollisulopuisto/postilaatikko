@@ -11,6 +11,7 @@ import { applyNarrowerDefaults, PANE_WIDTH_DEFAULTS } from '../layout/paneWidths
 import { normalizeReaderMode, type ReaderMode } from '../components/viewer/readerMode'
 
 export interface UIState {
+  sidebarCards: string
   selectedAccountId: string | null
   selectedFolderId: string | null
   selectedFolderName: string
@@ -45,6 +46,7 @@ const PANE_WIDTH_MIGRATION_KEY = 'eterno-mail:pane-widths-v1'
 
 // Default state
 const defaultState: UIState = {
+  sidebarCards: '',
   selectedAccountId: null,
   selectedFolderId: null,
   selectedFolderName: 'Inbox',
@@ -94,6 +96,7 @@ export async function loadUIState(): Promise<UIState> {
       // Map from backend model to frontend interface
       // Backend uses camelCase JSON tags that match our interface
       currentState = {
+        sidebarCards: state.sidebarCards || '',
         selectedAccountId: state.selectedAccountId || null,
         selectedFolderId: state.selectedFolderId || null,
         selectedFolderName: state.selectedFolderName || 'Inbox',
@@ -179,6 +182,7 @@ export function saveUIState(updates: Partial<UIState>): void {
     try {
       // Convert to backend model format
       const backendState = new appstate.UIState({
+        sidebarCards: currentState.sidebarCards,
         selectedAccountId: currentState.selectedAccountId || '',
         selectedFolderId: currentState.selectedFolderId || '',
         selectedFolderName: currentState.selectedFolderName,

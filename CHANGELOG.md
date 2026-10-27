@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Sidebar cards can be reordered, collapsed and hidden/restored. Move entries between cards by dragging or keyboard controls; add custom groups. All Inboxes lives in Virtual folders. Star up to ten entries for the rail and Cmd/Ctrl+1…0. Contacts/Calendar rail shortcuts default off.
+- Add cross-account global server search, available from the sidebar or `/`, with account scopes, native Gmail queries, pagination and visible account errors. All folders and move/copy destinations have account-spanning folder search.
+- Gmail OAuth accounts prefer Gmail API for metadata/history, labels, body/source/attachments, flags, move/copy/archive/spam/trash/delete, drafts, sending/read receipts and helper delivery. Preserve Bcc recipients and avoid transport fallback after ambiguous sends/imports.
+- Virtual folders query Gmail directly and apply folder unions/exclusions and conversation status/latest-activity criteria. Cached IMAP content is no longer a prerequisite. Normal Gmail bodies and file downloads are separate requests; routine/background sync fetches metadata only.
+- Opening folders automatically refreshes headers without clearing the cache or restarting an active manual sync. Background sync visits all folders, with bounded account-wide Gmail backfill/history.
+- Cache migration 54 stores provider identifiers separately from local/IMAP identifiers. Live Google and native macOS acceptance checks remain for the test release.
+
+
 - Preserve the previously tagged Send Later implementation while integrating the new conversation reader.
 
 - The reader has a Conversation / Traditional switch in its toolbar. Traditional shows every message in full, as before; Conversation folds quoted replies and signatures. Your choice is remembered, switching keeps your place in the thread, and each message has Show original.

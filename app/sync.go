@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/hkdb/aerion/internal/gmail"
 	"strings"
 	gosync "sync"
 	"time"
@@ -105,6 +106,9 @@ func runAccountSyncs(
 // SyncFolder synchronizes message headers and flags for a folder. Message
 // bodies and attachment metadata are fetched on demand when a message is opened.
 func (a *App) SyncFolder(accountID, folderID string) error {
+	return a.syncFolder(accountID, folderID, true)
+}
+func (a *App) syncFolder(accountID, folderID string, restart bool) error {
 	const debounceMs = 500
 	log := logging.WithComponent("app")
 
@@ -125,6 +129,10 @@ func (a *App) SyncFolder(accountID, folderID string) error {
 
 	// Cancel existing sync for this specific folder if any
 	if cancel, exists := a.syncContexts[syncKey]; exists {
+		if !restart {
+			a.syncMu.Unlock()
+			return nil
+		}
 		log.Debug().Str("account", accountID).Str("folder", folderID).Msg("Cancelling existing sync for restart")
 		cancel()
 		// Small delay to let goroutines clean up
@@ -262,6 +270,16 @@ func (a *App) SyncAccountComplete(accountID string) error {
 	}
 	folderSyncDuration := time.Since(folderSyncStarted)
 
+	if _, apiErr := a.syncEngine.GmailClient(a.ctx, accountID); apiErr == nil {
+		touched, err := a.syncEngine.SyncGmailAccount(a.ctx, accountID)
+		for _, id := range touched {
+			a.emitRuntimeEvent("folder:synced", map[string]string{"accountId": accountID, "folderId": id})
+		}
+		return err
+	} else if !errors.Is(apiErr, gmail.ErrNotCapable) {
+		return a.gmailMutationError(accountID, apiErr)
+	}
+
 	// 2. Determine which folders to sync based on account settings
 	foldersToSync, err := a.getSyncFolders(accountID)
 	if err != nil {
@@ -337,7 +355,7 @@ func (a *App) getSyncFolders(accountID string) ([]*folder.Folder, error) {
 	if acct.SyncFoldersEnabled {
 		return a.folderStore.ListSubscribed(accountID)
 	}
-	return a.getCoreOnlyFolders(accountID)
+	return a.folderStore.List(accountID)
 }
 
 // getCoreOnlyFolders returns core folders (Inbox, Drafts, Sent, Trash) — the default sync behavior.

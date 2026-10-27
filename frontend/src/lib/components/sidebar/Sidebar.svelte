@@ -1,9 +1,11 @@
 <script lang="ts">
   import Icon from '@iconify/svelte'
+  import NavigationCards from './NavigationCards.svelte'
+  import { navigationCards } from '$lib/stores/navigationCards.svelte'
+  import type { NavigationEntry } from '$lib/sidebar/cards'
   import { folderChoices, filterFolders } from '$lib/sidebar/folderSearch'
   import { onMount } from 'svelte'
   import AccountSection from './AccountSection.svelte'
-  import UnifiedInboxSection from './UnifiedInboxSection.svelte'
   import AccountDialog from '$lib/components/settings/AccountDialog.svelte'
   import DeleteAccountDialog from '$lib/components/settings/DeleteAccountDialog.svelte'
   import SettingsDialog from '$lib/components/settings/SettingsDialog.svelte'
@@ -14,7 +16,7 @@
   import { accountStore } from '$lib/stores/accounts.svelte'
   import { contactSourcesStore } from '$lib/stores/contactSources.svelte'
   import { contactPhotos } from '$lib/stores/contactPhotos.svelte'
-  import { isAccountExpanded, setAccountExpanded, isUnifiedInboxExpanded, setFolderCollapsed, getUIState, getUIStateVersion, saveUIState, setActiveExtension } from '$lib/stores/uiState.svelte'
+  import { isAccountExpanded, setAccountExpanded, setFolderCollapsed, getUIState, getUIStateVersion, saveUIState, setActiveExtension } from '$lib/stores/uiState.svelte'
   import { setFocusedPane } from '$lib/stores/keyboard.svelte'
   import { withShortcut, ariaKeyshortcuts, formatShortcut } from '$lib/keyboard/format'
   import { openShortcutsOverlay } from '$lib/stores/shortcutsOverlay.svelte'
@@ -28,11 +30,11 @@
   import { sidebarPins } from '$lib/stores/sidebarPins.svelte'
   import type { PinnedFolder } from '$lib/sidebar/pins'
   import { sidebarLayout } from '$lib/stores/sidebarLayout.svelte'
-  import type { SidebarBlock } from '$lib/sidebar/layout'
   import type { virtualfolder } from '../../../../wailsjs/go/models'
 
   // Folder item type for flat navigation list
   interface FolderNavItem {
+    navigation?: NavigationEntry
     type: 'unified' | 'unified-account' | 'account-header' | 'folder'
     accountId?: string
     folderId?: string
@@ -117,6 +119,7 @@
   }
 
   interface Props {
+    onGlobalSearch?: () => void
     onFolderSelect?: (accountId: string, folderId: string, folderPath: string, folderName: string, folderType: string) => void
     onUnifiedFolderSelect?: (accountId: string, folderId: string, folderPath: string, folderName: string, folderType: string) => void
     onUnifiedInboxSelect?: () => void
@@ -135,6 +138,7 @@
   }
 
   let {
+    onGlobalSearch,
     onFolderSelect,
     onUnifiedFolderSelect,
     onUnifiedInboxSelect,
@@ -171,7 +175,6 @@
   let editingVirtualFolder = $state<virtualfolder.VirtualFolder | null>(null)
   let showDeleteVirtualFolderDialog = $state(false)
   let deletingVirtualFolder = $state<virtualfolder.VirtualFolder | null>(null)
-  let expandedFolderGroups = $state<Record<string, boolean>>({})
   // Presets use the saved expanded width as their durable value. This keeps
   // manual resizing and the Settings selector in one source of truth.
   const sidebarDensity = $derived(getSidebarWidth() >= 350 ? 'sidebar-density-large' : getSidebarWidth() >= 310 ? 'sidebar-density-medium' : 'sidebar-density-compact')
@@ -191,6 +194,8 @@
 
   // Load accounts and contact sources on mount
   onMount(() => {
+    const navigate = (event: Event) => selectNavigationEntry((event as CustomEvent<NavigationEntry>).detail)
+    window.addEventListener('postilaatikko:navigate', navigate)
     // Load accounts, then trigger comprehensive sync on launch
     accountStore.load().then(async () => {
       try {
@@ -202,6 +207,7 @@
 
     contactSourcesStore.load()
     void virtualFoldersStore.load()
+    return () => window.removeEventListener('postilaatikko:navigate', navigate)
   })
 
   // Pins are loaded with the UI state, which can finish after this sidebar mounts.
@@ -213,8 +219,26 @@
 
   // CSS order of a sidebar block. Home has no order and sorts first; blocks
   // follow in the saved order, and the bottom controls are pinned to the end.
-  function blockOrder(block: SidebarBlock): number {
-    return sidebarLayout.position(block) + 1
+  $effect(() => {
+    void getUIStateVersion()
+    const entries: NavigationEntry[] = [
+      { id: 'inboxes', kind: 'inboxes', name: $_('navigation.allInboxes') },
+      ...[...primaryFolders, ...secondaryFolders].map(item => ({ id: item.type, kind: 'system' as const, name: $_(item.label), folderType: item.type })),
+      ...sidebarPins.list.map(pin => ({ id: `folder:${pin.accountId}:${pin.folderId}`, kind: 'folder' as const, accountId: pin.accountId, folderId: pin.folderId, name: pin.name, path: pin.path })),
+      ...virtualFoldersStore.folders.map(item => ({ id: `virtual:${item.id}`, kind: 'virtual' as const, folderId: item.id, name: item.name })),
+    ]
+    navigationCards.sync(entries)
+  })
+  function selectNavigationEntry(entry: NavigationEntry) {
+    setActiveExtension('mail')
+    if (entry.kind === 'inboxes') { handleUnifiedInboxSelect(); return }
+    if (entry.kind === 'system') { selectPrimaryFolder(entry.folderType || 'inbox'); return }
+    if (entry.kind === 'virtual') {
+      const vf = virtualFoldersStore.folders.find(item => item.id === entry.folderId)
+      if (vf) selectVirtualFolder(vf)
+      return
+    }
+    selectPinnedFolder({ accountId: entry.accountId!, folderId: entry.folderId!, name: entry.name, path: entry.path || entry.name })
   }
 
   // Opens a pinned folder. Its type comes from the loaded folder tree so special
@@ -232,10 +256,6 @@
       if (child) return child
     }
     return null
-  }
-
-  function isPinnedSelected(pin: PinnedFolder): boolean {
-    return selectionSource === 'account' && selectedFolderId === pin.folderId && selectedAccountId === pin.accountId
   }
 
   function selectVirtualFolder(item: virtualfolder.VirtualFolder) {
@@ -267,37 +287,9 @@
     }
   }
 
-  // Get accounts with their inbox folders for unified inbox section
-  function getAccountsWithInbox() {
-    return accountStore.accounts.map(acc => {
-      // Find the inbox folder in the folder tree
-      const findInbox = (folders: folder.FolderTree[]): folder.Folder | null => {
-        for (const f of folders) {
-          if (f.folder?.type === 'inbox') {
-            return f.folder
-          }
-          if (f.children) {
-            const found = findInbox(f.children)
-            if (found) return found
-          }
-        }
-        return null
-      }
-      return {
-        account: acc.account,
-        inbox: findInbox(acc.folders || [])
-      }
-    })
-  }
-
   // Handle unified inbox selection (All Inboxes)
   function handleUnifiedInboxSelect() {
     onUnifiedInboxSelect?.()
-  }
-
-  // Handle individual account inbox selection from unified section
-  function handleAccountInboxSelect(accountId: string, folderId: string, folderPath: string) {
-    onUnifiedFolderSelect?.(accountId, folderId, folderPath, 'Inbox', 'inbox')
   }
 
   // Handle folder selection
@@ -306,63 +298,9 @@
     onFolderSelect?.(accountId, folderId, folderPath, folderName, folderType)
   }
 
-  function findFolderByType(trees: folder.FolderTree[], type: string): folder.Folder | null {
-    for (const tree of trees) {
-      if (tree.folder?.type === type) return tree.folder
-      const child = findFolderByType(tree.children || [], type)
-      if (child) return child
-    }
-    return null
-  }
-
-  function findFolderByPath(trees: folder.FolderTree[], path: string): folder.Folder | null {
-    for (const tree of trees) {
-      if (tree.folder?.path === path) return tree.folder
-      const child = findFolderByPath(tree.children || [], path)
-      if (child) return child
-    }
-    return null
-  }
-
-  function findAccountFolder(item: { account: account.Account; folders: folder.FolderTree[] }, type: string): folder.Folder | null {
-    const typedFolder = findFolderByType(item.folders, type)
-    if (typedFolder) return typedFolder
-
-    // Some IMAP providers do not label special folders with a type. The
-    // account's configured special-folder paths are the reliable fallback.
-    const configuredPath = (() => {
-      switch (type) {
-        case 'archive': return item.account.archiveFolderPath
-        case 'spam': return item.account.spamFolderPath
-        case 'all': return item.account.allMailFolderPath
-        case 'starred': return item.account.starredFolderPath
-        case 'sent': return item.account.sentFolderPath
-        case 'drafts': return item.account.draftsFolderPath
-        case 'trash': return item.account.trashFolderPath
-        default: return undefined
-      }
-    })()
-
-    return configuredPath ? findFolderByPath(item.folders, configuredPath) : null
-  }
-
   function selectPrimaryFolder(type: string) {
     const label = [...primaryFolders, ...secondaryFolders].find(item => item.type === type)?.label || type
     onUnifiedSpecialFolderSelect?.(type, label)
-  }
-
-  function isPrimaryFolderSelected(type: string): boolean {
-    if (selectedAccountId === 'unified' && selectedFolderId === type) return true
-
-    // The legacy Snoozed shortcut uses the synthetic "all" type, but a real
-    // account All Mail folder selected from More > All folders is not Snoozed.
-    if (type === 'all') return false
-
-    for (const item of accountStore.accounts) {
-      const target = findAccountFolder(item, type)
-      if (target?.id === selectedFolderId) return true
-    }
-    return false
   }
 
   function openAllFolders(): void {
@@ -376,47 +314,6 @@
     showAllFolders = !showAllFolders
   }
 
-  function toggleFolderGroup(event: MouseEvent, type: string): void {
-    event.stopPropagation()
-    const willExpand = !expandedFolderGroups[type]
-    // The account rows are a detail panel, not another permanent navigation
-    // tree. Keep one group open at a time so their avatar column cannot stack
-    // underneath several unrelated folders.
-    expandedFolderGroups = willExpand ? { [type]: true } : {}
-
-    // A per-account list needs the room of the complete navigation. Opening
-    // it from the rail therefore expands the sidebar as part of the action.
-    if (collapsed) onToggleCollapsed?.()
-  }
-
-  function getFolderGroupAccounts(type: string) {
-    // Every rendered child must be actionable. Do not turn a failed special
-    // folder lookup into an unexpected opening of the More panel.
-    return accountStore.accounts
-      .filter(item => !!findAccountFolder(item, type) || (type === 'archive' && !!findAccountFolder(item, 'all')))
-      .map(item => ({ account: item.account, type }))
-  }
-
-  function selectFolderGroupAccount(accountId: string, type: string): void {
-    const item = accountStore.accounts.find(candidate => candidate.account.id === accountId)
-    const target = item ? findAccountFolder(item, type) : null
-    if (item && target) {
-      handleFolderSelect(item.account.id, target.id, target.path, target.name, target.type)
-      return
-    }
-
-    if (item && type === 'archive') {
-      const allMail = findAccountFolder(item, 'all')
-      if (allMail) {
-        handleFolderSelect(item.account.id, 'virtual:archive', '', $_('sidebar.archived'), 'archive')
-        return
-      }
-    }
-
-    // Folder discovery can race this click; keep the selection inert rather
-    // than navigating somewhere unrelated.
-  }
-
   const primaryFolders = [
     { type: 'starred', label: 'sidebar.starred', icon: 'mdi:pin-outline' },
     { type: 'drafts', label: 'sidebar.drafts', icon: 'mdi:file-outline' },
@@ -427,7 +324,6 @@
   const secondaryFolders = [
     { type: 'archive', label: 'sidebar.archived', icon: 'mdi:check' },
     { type: 'spam', label: 'sidebar.blocked', icon: 'mdi:thumb-down-outline' },
-    { type: 'all', label: 'sidebar.snoozed', icon: 'mdi:clock-outline' },
   ]
 
   // Open add account dialog
@@ -475,90 +371,13 @@
       await syncAllAccounts()
     }
   }
-
-  // Build flat list of all navigable folders including Unified Inbox
-  // The list matches the exact visual order in the sidebar, respecting expanded/collapsed state
   function buildFolderNavList(): FolderNavItem[] {
-    const items: FolderNavItem[] = []
-
-    // Add Unified Inbox section items if more than 1 account
-    if (accountStore.accounts.length > 1) {
-      // 1. Add "All Inboxes"
-      items.push({
-        type: 'unified',
-        folderName: 'Unified Inbox',
-        folderType: 'unified',
-      })
-
-      // 2. Add each account's inbox (under unified section) - only if unified section is expanded
-      if (isUnifiedInboxExpanded()) {
-        for (const accWithFolders of accountStore.accounts) {
-          // Skip if account is not fully loaded yet (can happen during reauth)
-          if (!accWithFolders.account) continue
-
-          const findInbox = (trees: folder.FolderTree[]): folder.Folder | null => {
-            for (const tree of trees) {
-              if (tree.folder?.type === 'inbox') return tree.folder
-              if (tree.children) {
-                const found = findInbox(tree.children)
-                if (found) return found
-              }
-            }
-            return null
-          }
-          const inbox = findInbox(accWithFolders.folders || [])
-          if (inbox) {
-            items.push({
-              type: 'unified-account',
-              accountId: accWithFolders.account.id,
-              folderId: inbox.id,
-              folderPath: inbox.path,
-              folderName: inbox.name,
-              folderType: 'inbox',
-            })
-          }
-        }
-      }
-    }
-
-    // 3. Add account headers and their folders
-    for (const accWithFolders of accountStore.accounts) {
-      // Skip if account is not fully loaded yet (can happen during reauth)
-      if (!accWithFolders.account) continue
-
-      // Always add the account header (so user can navigate to it and expand)
-      items.push({
-        type: 'account-header',
-        accountId: accWithFolders.account.id,
-        folderName: accWithFolders.account.name,
-      })
-
-      // Only add folders if the account is expanded
-      if (expandedAccounts[accWithFolders.account.id]) {
-        const flattenFolders = (trees: folder.FolderTree[]) => {
-          for (const tree of trees) {
-            if (tree.folder) {
-              items.push({
-                type: 'folder',
-                accountId: accWithFolders.account.id,
-                folderId: tree.folder.id,
-                folderPath: tree.folder.path,
-                folderName: tree.folder.name,
-                folderType: tree.folder.type,
-              })
-            }
-            // Skip children of collapsed folders
-            if (tree.children && tree.children.length > 0 && tree.folder && collapsedFolders[tree.folder.id] === false) {
-              flattenFolders(tree.children)
-            }
-          }
-        }
-        flattenFolders(accWithFolders.folders || [])
-      }
-    }
-
-    return items
+    return navigationCards.state.cards.filter(c => !c.hidden && !c.collapsed).flatMap(c => c.entries).flatMap(id => {
+      const entry = navigationCards.entries.find(e => e.id === id)
+      return entry ? [{ type: 'folder' as const, folderId: entry.folderId || entry.id, folderName: entry.name, navigation: entry }] : []
+    })
   }
+
 
   // Get current folder index in navigation list
   function getCurrentFolderIndex(): number {
@@ -653,6 +472,7 @@
   function selectFolderByIndex(navList: FolderNavItem[], index: number) {
     const item = navList[index]
     if (!item) return
+    if (item.navigation) { selectNavigationEntry(item.navigation); return }
 
     // Clear account header focus when selecting a folder
     if (item.type !== 'account-header') {
@@ -756,153 +576,14 @@
       </div>
     {:else}
       <nav class="sidebar-primary-navigation" aria-label={$_('sidebar.navigation')}>
-        <button type="button" class="sidebar-primary-link sidebar-home-link" onclick={handleUnifiedInboxSelect}>
-          <Icon icon="mdi:home-outline" class="h-6 w-6" />
-          <span data-sidebar-label>{$_('sidebar.home')}</span>
-        </button>
+        <div style:order="1" class:hidden={collapsed}>
+          <button type="button" class="sidebar-primary-link" onclick={onGlobalSearch}><Icon icon="mdi:magnify" class="h-5 w-5" />{$_('search.global')}</button>
+          <NavigationCards {selectedFolderId} onSelect={selectNavigationEntry}
+            onEdit={(entry) => { const item = virtualFoldersStore.folders.find(f => f.id === entry.folderId); if (item) openVirtualFolderDialog(item) }}
+            onDelete={(entry) => { const item = virtualFoldersStore.folders.find(f => f.id === entry.folderId); if (item) requestDeleteVirtualFolder(item) }} />
+          <button type="button" class="sidebar-primary-link" onclick={() => openVirtualFolderDialog()}><Icon icon="mdi:plus" class="h-5 w-5" />{$_('navigation.addVirtual')}</button>
 
-        {#if sidebarLayout.isVisible('unified')}
-        <UnifiedInboxSection
-          accounts={getAccountsWithInbox()}
-          {selectedAccountId}
-          {selectedFolderId}
-          {selectionSource}
-          {collapsed}
-          onSelectUnified={handleUnifiedInboxSelect}
-          onSelectAccountInbox={handleAccountInboxSelect}
-          order={blockOrder('unified')}
-        />
-        {/if}
-
-        {#if sidebarLayout.isVisible('pinned') && sidebarPins.list.length > 0}
-          <section class="mt-3" style:order={blockOrder('pinned')} aria-label={$_('sidebar.pinned')}>
-            <div class="px-3 py-1">
-              <span class="sidebar-primary-heading" data-sidebar-label>{$_('sidebar.pinned')}</span>
-            </div>
-            {#each sidebarPins.list as pin (`${pin.accountId}:${pin.folderId}`)}
-              <div class="group flex min-h-9 items-center gap-1 px-2">
-                <button
-                  type="button"
-                  class="sidebar-primary-link min-w-0 flex-1 {isPinnedSelected(pin) ? 'sidebar-primary-link-selected' : ''}"
-                  onclick={() => selectPinnedFolder(pin)}
-                  title={pin.name}
-                  data-sidebar-pinned-folder
-                >
-                  <Icon icon="mdi:folder-outline" class="h-5 w-5 shrink-0" />
-                  <span data-sidebar-label class="truncate">{pin.name}</span>
-                </button>
-                {#if !collapsed}
-                  <button
-                    type="button"
-                    class="flex h-7 w-7 shrink-0 items-center justify-center rounded opacity-0 hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100"
-                    onclick={() => sidebarPins.unpin(pin.accountId, pin.folderId)}
-                    aria-label={`${$_('contextMenu.unpinFromSidebar')}: ${pin.name}`}
-                    title={$_('contextMenu.unpinFromSidebar')}
-                  >
-                    <Icon icon="mdi:pin-off-outline" class="h-4 w-4" />
-                  </button>
-                {/if}
-              </div>
-            {/each}
-          </section>
-        {/if}
-
-        {#if sidebarLayout.isVisible('virtual')}
-        <section class="mt-3" style:order={blockOrder('virtual')} aria-label="Virtual folders">
-          <div class="flex items-center justify-between px-3 py-1">
-            <span class="sidebar-primary-heading">Virtual folders</span>
-            <button type="button" class="sidebar-toolbar-button" onclick={() => openVirtualFolderDialog()} title="Create virtual folder" aria-label="Create virtual folder">
-              <Icon icon="mdi:plus" class="h-4 w-4" />
-            </button>
-          </div>
-          {#each virtualFoldersStore.folders as item, index (item.id)}
-            <div class="group flex min-h-9 items-center gap-1 px-2">
-              <button type="button" class="sidebar-primary-link min-w-0 flex-1 {selectedAccountId === 'virtual' && selectedFolderId === item.id ? 'sidebar-primary-link-selected' : ''}" onclick={() => selectVirtualFolder(item)} title={item.name}>
-                <Icon icon="mdi:folder-multiple-outline" class="h-5 w-5 shrink-0" />
-                <span data-sidebar-label class="truncate">{item.name}</span>
-                {#if (virtualFoldersStore.unreadCounts[item.id] ?? 0) > 0}
-                  <span class="ml-auto text-xs tabular-nums text-muted-foreground">{virtualFoldersStore.unreadCounts[item.id]}</span>
-                {/if}
-              </button>
-              <button type="button" class="flex h-7 w-7 shrink-0 items-center justify-center rounded opacity-0 hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100" onclick={() => openVirtualFolderDialog(item)} aria-label={`Edit ${item.name}`} title="Edit">
-                <Icon icon="mdi:pencil-outline" class="h-4 w-4" />
-              </button>
-              <button type="button" class="flex h-7 w-7 shrink-0 items-center justify-center rounded opacity-0 hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-40" onclick={() => void virtualFoldersStore.move(item.id, -1)} disabled={index === 0} aria-label={`Move ${item.name} up`} title="Move up">
-                <Icon icon="mdi:chevron-up" class="h-4 w-4" />
-              </button>
-              <button type="button" class="flex h-7 w-7 shrink-0 items-center justify-center rounded opacity-0 hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100 disabled:opacity-40" onclick={() => void virtualFoldersStore.move(item.id, 1)} disabled={index === virtualFoldersStore.folders.length - 1} aria-label={`Move ${item.name} down`} title="Move down">
-                <Icon icon="mdi:chevron-down" class="h-4 w-4" />
-              </button>
-              <button type="button" class="flex h-7 w-7 shrink-0 items-center justify-center rounded opacity-0 hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100" onclick={() => requestDeleteVirtualFolder(item)} aria-label={`Delete ${item.name}`} title="Delete">
-                <Icon icon="mdi:delete-outline" class="h-4 w-4" />
-              </button>
-            </div>
-          {/each}
-        </section>
-        {/if}
-
-        {#if sidebarLayout.isVisible('calendar')}
-        <button type="button" class="sidebar-primary-link" style:order={blockOrder('calendar')} onclick={() => setActiveExtension('calendar')}>
-          <Icon icon="mdi:calendar-blank-outline" class="h-6 w-6" />
-          <span data-sidebar-label>{$_('sidebar.calendar')}</span>
-        </button>
-        {/if}
-
-        {#if sidebarLayout.isVisible('primary')}
-        <div class="sidebar-primary-separator" style:order={blockOrder('primary')}></div>
-        {#each primaryFolders as item (item.type)}
-          <div class="sidebar-folder-group" style:order={blockOrder('primary')}>
-            <div class="sidebar-folder-group-row">
-              <button type="button" class="sidebar-folder-toggle" class:sidebar-folder-toggle-expanded={expandedFolderGroups[item.type]} onclick={(event) => toggleFolderGroup(event, item.type)} aria-label={$_(item.label)} aria-expanded={expandedFolderGroups[item.type] ?? false}>
-                <Icon icon={expandedFolderGroups[item.type] ? 'mdi:chevron-down' : 'mdi:chevron-right'} class="h-4 w-4" />
-              </button>
-              <button type="button" class="sidebar-primary-link sidebar-folder-group-link" class:sidebar-primary-link-selected={isPrimaryFolderSelected(item.type)} onclick={() => selectPrimaryFolder(item.type)}>
-                <Icon icon={item.icon} class="h-6 w-6" />
-                <span data-sidebar-label>{$_(item.label)}</span>
-              </button>
-            </div>
-            {#if expandedFolderGroups[item.type]}
-              <div class="sidebar-folder-account-list">
-                {#each getFolderGroupAccounts(item.type) as entry (entry.account.id)}
-                  {@const avatarPhoto = contactPhotos.get(entry.account.email)}
-                  <button type="button" class="sidebar-folder-account" onclick={() => selectFolderGroupAccount(entry.account.id, item.type)}>
-                    <Avatar email={entry.account.email} name={entry.account.name} size={16} photoData={avatarPhoto?.data} photoMediaType={avatarPhoto?.mediaType} />
-                    <span class="truncate">{entry.account.name || entry.account.email}</span>
-                  </button>
-                {/each}
-              </div>
-            {/if}
-          </div>
-        {/each}
-        {/if}
-
-        {#if !collapsed && sidebarLayout.isVisible('secondary')}
-          <p class="sidebar-primary-heading" style:order={blockOrder('secondary')} data-sidebar-label>{$_('sidebar.folders')}</p>
-          {#each secondaryFolders as item (item.type)}
-            <div class="sidebar-folder-group sidebar-secondary-folder-group" style:order={blockOrder('secondary')}>
-              <div class="sidebar-folder-group-row">
-                <button type="button" class="sidebar-folder-toggle" class:sidebar-folder-toggle-expanded={expandedFolderGroups[item.type]} onclick={(event) => toggleFolderGroup(event, item.type)} aria-label={$_(item.label)} aria-expanded={expandedFolderGroups[item.type] ?? false}>
-                  <Icon icon={expandedFolderGroups[item.type] ? 'mdi:chevron-down' : 'mdi:chevron-right'} class="h-4 w-4" />
-                </button>
-                <button type="button" class="sidebar-primary-link sidebar-folder-group-link" class:sidebar-primary-link-selected={isPrimaryFolderSelected(item.type)} onclick={() => selectPrimaryFolder(item.type)}>
-                  <Icon icon={item.icon} class="h-6 w-6" />
-                  <span data-sidebar-label>{$_(item.label)}</span>
-                </button>
-              </div>
-              {#if expandedFolderGroups[item.type]}
-                <div class="sidebar-folder-account-list">
-                  {#each getFolderGroupAccounts(item.type) as entry (entry.account.id)}
-                    {@const avatarPhoto = contactPhotos.get(entry.account.email)}
-                    <button type="button" class="sidebar-folder-account" onclick={() => selectFolderGroupAccount(entry.account.id, item.type)}>
-                      <Avatar email={entry.account.email} name={entry.account.name} size={16} photoData={avatarPhoto?.data} photoMediaType={avatarPhoto?.mediaType} />
-                      <span class="truncate">{entry.account.name || entry.account.email}</span>
-                    </button>
-                  {/each}
-                </div>
-              {/if}
-            </div>
-          {/each}
-        {/if}
+        </div>
 
         <button type="button" class="sidebar-more-button" style:order="100" onclick={openAllFolders} aria-expanded={showAllFolders}>
           <Icon icon="mdi:folder-multiple-outline" class="h-6 w-6" />

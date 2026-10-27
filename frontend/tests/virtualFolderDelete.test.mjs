@@ -10,11 +10,12 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
+const cards = await readFile(new URL('../src/lib/components/sidebar/NavigationCards.svelte', import.meta.url), 'utf8')
 const sidebar = await readFile(new URL('../src/lib/components/sidebar/Sidebar.svelte', import.meta.url), 'utf8')
 
 // The sidebar row's delete button, from its aria-label to the closing tag.
 function deleteButton(source) {
-  const start = source.indexOf('aria-label={`Delete ${item.name}`}')
+  const start = source.indexOf('aria-label={`Delete ${entry.name}`}')
   assert.notEqual(start, -1, 'virtual folder delete button exists')
   const open = source.lastIndexOf('<button', start)
   return source.slice(open, source.indexOf('</button>', start))
@@ -30,7 +31,7 @@ test('deleting a virtual folder confirms through the app ConfirmDialog', () => {
 })
 
 test('the row delete button is reachable by keyboard, not only on hover', () => {
-  const button = deleteButton(sidebar)
+  const button = deleteButton(cards)
   assert.doesNotMatch(button, /\bhidden\b/, 'not display:none')
   assert.match(button, /focus-visible:opacity-100/)
 })

@@ -1683,6 +1683,9 @@ func (s *Store) GetConversation(threadID, folderID string) (*Conversation, error
 
 	// Scope to current folder + Sent + Drafts (for full conversation context)
 	folderFilter := "AND (m.folder_id = ? OR f.folder_type IN ('sent', 'drafts'))"
+	if strings.HasPrefix(threadID, "gmail:") {
+		folderFilter = "AND (? IS NOT NULL)"
+	}
 
 	summaryQuery := fmt.Sprintf(`
 		SELECT

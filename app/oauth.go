@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"fmt"
+	"github.com/hkdb/aerion/internal/gmail"
 	"time"
 
 	"github.com/hkdb/aerion/internal/account"
@@ -671,6 +672,16 @@ func (a *App) TestOAuthConnection(accountID string) error {
 
 	if acc.AuthType != account.AuthOAuth2 {
 		return fmt.Errorf("account is not an OAuth account")
+	}
+
+	if a.syncEngine != nil {
+		c, apiErr := a.syncEngine.GmailClient(a.ctx, accountID)
+		if apiErr == nil {
+			_, err := c.ProfileHistoryID(a.ctx)
+			return a.gmailMutationError(accountID, err)
+		} else if !errors.Is(apiErr, gmail.ErrNotCapable) {
+			return a.gmailMutationError(accountID, apiErr)
+		}
 	}
 
 	// Get valid OAuth token

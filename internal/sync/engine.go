@@ -12,6 +12,7 @@ import (
 	"github.com/hkdb/aerion/internal/email"
 	"github.com/hkdb/aerion/internal/email/reactions"
 	"github.com/hkdb/aerion/internal/folder"
+	"github.com/hkdb/aerion/internal/gmail"
 	imapPkg "github.com/hkdb/aerion/internal/imap"
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/message"
@@ -118,11 +119,12 @@ type Engine struct {
 	// Gmail API search (see gmail_search.go). gmailTokens is nil until the app
 	// wires it; gmailBlocked remembers accounts whose Gmail API calls recently
 	// failed with a capability error so searches go straight to IMAP.
-	gmailTokens  GmailTokenSource
-	gmailBaseURL string // test hook; empty means the real API
-	gmailBlockMu gosync.Mutex
-	gmailBlocked map[string]time.Time
-	gmailStates  map[string]GmailAPIStatus
+	gmailTokens        GmailTokenSource
+	gmailClientFactory func(gmail.TokenSource) *gmail.Client
+	gmailBaseURL       string // test hook; empty means the real API
+	gmailBlockMu       gosync.Mutex
+	gmailBlocked       map[string]time.Time
+	gmailStates        map[string]GmailAPIStatus
 }
 
 // NewEngine creates a new sync engine

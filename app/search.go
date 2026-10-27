@@ -97,7 +97,7 @@ func (a *App) searchFolderOnServer(ctx context.Context, accountID, folderID, que
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	if errors.Is(err, gmail.ErrReauthRequired) {
+	if errors.Is(err, gmail.ErrReauthRequired) || errors.Is(err, gmail.ErrInsufficientScope) {
 		// IMAP uses the same token and would fail too; ask for re-authorization.
 		wailsRuntime.EventsEmit(a.ctx, "oauth:reauth-required", map[string]interface{}{
 			"accountId": accountID,
@@ -107,8 +107,12 @@ func (a *App) searchFolderOnServer(ctx context.Context, accountID, folderID, que
 		return nil, err
 	}
 	if !errors.Is(err, gmail.ErrNotCapable) {
-		log.Warn().Err(err).Str("accountID", accountID).Msg("Gmail API search failed; falling back to IMAP search")
+		log.Warn().Err(err).Str("accountID", accountID).Msg("Gmail API search failed; reporting account error")
 	}
+	if !errors.Is(err, gmail.ErrNotCapable) {
+		return nil, err
+	}
+
 	return a.syncEngine.IMAPSearch(ctx, accountID, folderID, query, limit)
 }
 

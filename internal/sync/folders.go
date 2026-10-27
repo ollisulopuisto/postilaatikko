@@ -3,6 +3,8 @@ package sync
 import (
 	"context"
 	"errors"
+	"github.com/hkdb/aerion/internal/gmail"
+
 	"fmt"
 	"sort"
 	"strings"
@@ -42,6 +44,12 @@ var errFolderStatusUnprocessed = errors.New("mailbox status was not processed")
 
 // SyncFolders synchronizes the folder list for an account
 func (e *Engine) SyncFolders(ctx context.Context, accountID string) error {
+	if c, err := e.GmailClient(ctx, accountID); err == nil {
+		return e.syncGmailFolders(ctx, accountID, c)
+	} else if !errors.Is(err, gmail.ErrNotCapable) {
+		return err
+	}
+
 	startedAt := time.Now()
 	acquireStarted := time.Now()
 	e.log.Debug().Str("account", accountID).Msg("Syncing folders")

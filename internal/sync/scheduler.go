@@ -2,6 +2,9 @@ package sync
 
 import (
 	"context"
+	"errors"
+	"github.com/hkdb/aerion/internal/gmail"
+	"strings"
 	"sync"
 	"time"
 
@@ -236,6 +239,13 @@ func (s *Scheduler) isSyncDue(acc *account.Account) bool {
 
 	// Calculate time since last sync
 	elapsed := time.Since(*inbox.LastSync)
+	if acc.AuthType == account.AuthOAuth2 && strings.EqualFold(acc.IMAPHost, "imap.gmail.com") {
+		_, _, backfill, err := s.folderStore.GmailSyncCursor(acc.ID)
+		if err == nil && backfill != "!done" {
+			return elapsed >= time.Minute
+		}
+	}
+
 	interval := time.Duration(acc.SyncInterval) * time.Minute
 
 	return elapsed >= interval
@@ -281,6 +291,31 @@ func (s *Scheduler) syncAccountInbox(parent context.Context, acc *account.Accoun
 			return
 		}
 		s.log.Error().Err(err).Str("account_id", acc.ID).Msg("Failed to sync folders")
+		return
+	}
+
+	if _, apiErr := s.engine.GmailClient(ctx, acc.ID); apiErr == nil {
+		previousInbox, _ := s.folderStore.GetByType(acc.ID, folder.TypeInbox)
+
+		touched, err := s.engine.SyncGmailAccount(ctx, acc.ID)
+		if err == nil && previousInbox != nil && s.newMailCallback != nil {
+			fresh, _ := s.folderStore.Get(previousInbox.ID)
+			if fresh != nil && fresh.TotalCount > previousInbox.TotalCount {
+				s.newMailCallback(NewMailInfo{AccountID: acc.ID, AccountName: acc.Name, FolderID: fresh.ID, Count: fresh.TotalCount - previousInbox.TotalCount})
+			}
+		}
+
+		if s.syncCompletedCallback != nil {
+			for _, id := range touched {
+				s.syncCompletedCallback(acc.ID, id, err)
+			}
+		}
+		if err != nil {
+			s.log.Warn().Err(err).Msg("Gmail metadata/history refresh failed")
+		}
+		return
+	} else if !errors.Is(apiErr, gmail.ErrNotCapable) {
+		s.log.Warn().Err(apiErr).Msg("Gmail authorization required")
 		return
 	}
 
@@ -414,19 +449,7 @@ func (s *Scheduler) getAccountSyncFolders(acc *account.Account) ([]*folder.Folde
 	if acc.SyncFoldersEnabled {
 		return s.folderStore.ListSubscribed(acc.ID)
 	}
-	// Default: core folders including Trash
-	coreTypes := []folder.Type{folder.TypeInbox, folder.TypeDrafts, folder.TypeSent, folder.TypeTrash}
-	var folders []*folder.Folder
-	for _, ft := range coreTypes {
-		f, err := s.folderStore.GetByType(acc.ID, ft)
-		if err != nil {
-			continue
-		}
-		if f != nil {
-			folders = append(folders, f)
-		}
-	}
-	return folders, nil
+	return s.folderStore.List(acc.ID)
 }
 
 // TriggerSync manually triggers a sync for a specific account (non-blocking)

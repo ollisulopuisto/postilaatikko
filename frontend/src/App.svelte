@@ -6,6 +6,8 @@
   import { onMount, tick, untrack } from 'svelte'
   import TitleBar from './lib/components/common/TitleBar.svelte'
   import Sidebar from './lib/components/sidebar/Sidebar.svelte'
+  import GlobalSearch from './lib/components/common/GlobalSearch.svelte'
+  let showGlobalSearch = $state(false)
   import ScheduledPane from './lib/components/scheduled/ScheduledPane.svelte'
   import MessageList from './lib/components/list/MessageList.svelte'
   import ConversationViewer from './lib/components/viewer/ConversationViewer.svelte'
@@ -600,6 +602,7 @@
     // Register actions for the command palette
     registerCommandHandler('app.compose', () => handleCompose())
     registerCommandHandler('app.search', () => {
+      if (getActiveExtension() === 'mail') { showGlobalSearch = true; return }
       if (getActiveExtension() === 'mail') {
         messageListRef?.toggleSearchFocus()
         setFocusedPane('messageList')
@@ -1598,6 +1601,7 @@
       }
       case '/':
         e.preventDefault()
+        if (isMailActive()) { showGlobalSearch = true; return }
         if (isMailActive()) {
           messageListRef?.toggleSearchFocus()
           setFocusedPane('messageList')
@@ -1941,6 +1945,7 @@
       onclick={() => handlePaneClick('sidebar')}
     >
       <Sidebar
+        onGlobalSearch={() => showGlobalSearch = true}
         bind:this={sidebarRef}
         onFolderSelect={handleFolderSelect}
         onUnifiedFolderSelect={handleUnifiedFolderSelect}
@@ -2184,3 +2189,5 @@
     }
   }
 </style>
+
+<GlobalSearch bind:open={showGlobalSearch} onSelect={(thread, folder, account) => { handleConversationSelect(thread, folder, account); setFocusedPane('viewer') }} />

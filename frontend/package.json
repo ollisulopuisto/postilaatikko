@@ -1,9 +1,10 @@
 {
   "name": "postilaatikko",
   "private": true,
-  "version": "0.3.17",
+  "version": "0.3.18",
   "type": "module",
   "scripts": {
+    "test": "node --test --test-concurrency=2 tests/*.test.mjs",
     "predev": "node scripts/copy-dictionaries.mjs",
     "dev": "vite",
     "prebuild": "node scripts/copy-dictionaries.mjs",

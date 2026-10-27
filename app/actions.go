@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/hkdb/aerion/internal/gmail"
 	stdlog "log"
+	"slices"
 	"sort"
 	"time"
 
@@ -274,10 +276,39 @@ func (a *App) syncFlagsToIMAP(messages []*message.Message, folderID, flagType st
 	if len(messages) == 0 {
 		return nil
 	}
+	if a.syncEngine != nil {
+		if c, apiErr := a.syncEngine.GmailClient(a.ctx, messages[0].AccountID); apiErr == nil {
+			ids, err := a.gmailIDs(a.ctx, c, messages)
+			if err != nil {
+				return err
+			}
+			label := "STARRED"
+			add := flagValue
+			if flagType == "read" {
+				label = "UNREAD"
+				add = !flagValue
+			}
+			adds, removes := []string{}, []string{}
+			if add {
+				adds = append(adds, label)
+			} else {
+				removes = append(removes, label)
+			}
+			return a.gmailMutationError(messages[0].AccountID, c.Modify(a.ctx, ids, adds, removes))
+		} else if !errors.Is(apiErr, gmail.ErrNotCapable) {
+			return a.gmailMutationError(messages[0].AccountID, apiErr)
+		}
+	}
 
 	folderObj, err := a.folderStore.Get(folderID)
 	if err != nil || folderObj == nil {
 		return fmt.Errorf("folder not found: %s", folderID)
+	}
+
+	for _, m := range messages {
+		if int32(m.UID) < 0 {
+			return fmt.Errorf("local cache identifier cannot be used with IMAP; reconnect the Google account")
+		}
 	}
 
 	uids := make([]goImap.UID, len(messages))
@@ -354,6 +385,14 @@ func (a *App) moveToFolder(messageIDs []string, destFolderID string, recordUndo 
 	destFolder, err := a.folderStore.Get(destFolderID)
 	if err != nil || destFolder == nil {
 		return operationID, fmt.Errorf("destination folder not found: %s", destFolderID)
+	}
+
+	if a.syncEngine != nil {
+		if _, apiErr := a.syncEngine.GmailClient(a.ctx, messages[0].AccountID); apiErr == nil {
+			return a.moveGmailMessages(messages, destFolder, recordUndo, operationID)
+		} else if !errors.Is(apiErr, gmail.ErrNotCapable) {
+			return operationID, a.gmailMutationError(messages[0].AccountID, apiErr)
+		}
 	}
 
 	// A negative database UID is the placeholder written by MoveMessages while
@@ -1073,10 +1112,27 @@ func (a *App) copyMessagesToIMAP(messages []*message.Message, sourceFolderID str
 	if len(messages) == 0 {
 		return nil
 	}
+	if a.syncEngine != nil {
+		if c, apiErr := a.syncEngine.GmailClient(a.ctx, messages[0].AccountID); apiErr == nil {
+			source, err := a.folderStore.Get(sourceFolderID)
+			if err != nil || source == nil {
+				return fmt.Errorf("source folder missing")
+			}
+			return a.gmailLabelChange(c, messages, source, destFolder, true)
+		} else if !errors.Is(apiErr, gmail.ErrNotCapable) {
+			return a.gmailMutationError(messages[0].AccountID, apiErr)
+		}
+	}
 
 	sourceFolder, err := a.folderStore.Get(sourceFolderID)
 	if err != nil || sourceFolder == nil {
 		return fmt.Errorf("source folder not found")
+	}
+
+	for _, m := range messages {
+		if int32(m.UID) < 0 {
+			return fmt.Errorf("local cache identifier cannot be used with IMAP; reconnect the Google account")
+		}
 	}
 
 	uids := make([]goImap.UID, len(messages))
@@ -1137,6 +1193,43 @@ func (a *App) copyMessagesAcrossAccounts(messages []*message.Message, destFolder
 		Str("destFolder", destFolder.Path).
 		Int("count", len(messages)).
 		Msg("Starting cross-account append")
+
+	if c, apiErr := a.syncEngine.GmailClient(a.ctx, destFolder.AccountID); apiErr == nil {
+		label, err := a.syncEngine.GmailLabelID(a.ctx, c, destFolder)
+		if err != nil {
+			return err
+		}
+		for _, m := range messages {
+			raw, err := a.syncEngine.FetchRawMessage(a.ctx, m.AccountID, m.FolderID, m.UID)
+			if err != nil {
+				return err
+			}
+			labels := []string{}
+			if label != "" {
+				labels = append(labels, label)
+			}
+			if !m.IsRead {
+				labels = append(labels, "UNREAD")
+			}
+			if m.IsStarred {
+				labels = append(labels, "STARRED")
+			}
+			id, err := c.Insert(a.ctx, raw, labels)
+			if err != nil {
+				return a.gmailMutationError(destFolder.AccountID, err)
+			}
+			confirmed, err := c.Metadata(a.ctx, []string{id})
+			if err != nil {
+				return err
+			}
+			if len(confirmed) != 1 || (label != "" && !slices.Contains(confirmed[0].LabelIDs, label)) || (m.MessageID != "" && confirmed[0].RFCMessageID != m.MessageID) {
+				return fmt.Errorf("destination copy not confirmed; source preserved")
+			}
+		}
+		return nil
+	} else if !errors.Is(apiErr, gmail.ErrNotCapable) {
+		return a.gmailMutationError(destFolder.AccountID, apiErr)
+	}
 
 	return a.withIMAPRetry(destFolder.AccountID, func(conn *imap.Client) error {
 		if _, err := conn.SelectMailbox(a.ctx, destFolder.Path); err != nil {
@@ -1334,6 +1427,22 @@ func (a *App) gmailRemoveLabel(messages []*message.Message) error {
 		ids[i] = m.ID
 	}
 
+	remoteFolders := make(map[string][]*message.Message)
+	for id, group := range byFolder {
+		remoteFolders[id] = group
+		if a.syncEngine == nil {
+			continue
+		}
+		if _, apiErr := a.syncEngine.GmailClient(a.ctx, group[0].AccountID); apiErr == nil {
+			if err := a.removeFromIMAPFolder(group, id); err != nil {
+				return err
+			}
+			delete(remoteFolders, id)
+		} else if !errors.Is(apiErr, gmail.ErrNotCapable) {
+			return a.gmailMutationError(group[0].AccountID, apiErr)
+		}
+	}
+
 	// Delete from local DB
 	if err := a.messageStore.DeleteBatch(ids); err != nil {
 		return fmt.Errorf("failed to delete messages locally: %w", err)
@@ -1373,7 +1482,7 @@ func (a *App) gmailRemoveLabel(messages []*message.Message) error {
 	// IMAP: DELETE from source folders (no COPY — just remove the label)
 	go func() {
 		defer recoverPanic("app.actions", "remove Gmail label on IMAP")
-		for folderID, msgs := range byFolder {
+		for folderID, msgs := range remoteFolders {
 			if err := a.removeFromIMAPFolder(msgs, folderID); err != nil {
 				log.Error().Err(err).Str("folderID", folderID).Msg("Failed to remove messages from IMAP folder")
 			}
@@ -1389,6 +1498,28 @@ func (a *App) gmailRemoveLabel(messages []*message.Message) error {
 func (a *App) removeFromIMAPFolder(messages []*message.Message, folderID string) error {
 	if len(messages) == 0 {
 		return nil
+	}
+	if a.syncEngine != nil {
+		if c, apiErr := a.syncEngine.GmailClient(a.ctx, messages[0].AccountID); apiErr == nil {
+			source, err := a.folderStore.Get(folderID)
+			if err != nil || source == nil {
+				return fmt.Errorf("source folder missing")
+			}
+			label, err := a.syncEngine.GmailLabelID(a.ctx, c, source)
+			if err != nil {
+				return err
+			}
+			if label == "" {
+				return fmt.Errorf("cannot remove this synthetic Gmail folder label")
+			}
+			ids, err := a.gmailIDs(a.ctx, c, messages)
+			if err != nil {
+				return err
+			}
+			return a.gmailMutationError(source.AccountID, c.Modify(a.ctx, ids, nil, []string{label}))
+		} else if !errors.Is(apiErr, gmail.ErrNotCapable) {
+			return a.gmailMutationError(messages[0].AccountID, apiErr)
+		}
 	}
 
 	folderObj, err := a.folderStore.Get(folderID)
@@ -1544,6 +1675,41 @@ func (a *App) moveToInboxWithUndo(messageIDs []string, operationID string) (stri
 
 // EmptyTrash permanently deletes all messages in a trash folder
 func (a *App) EmptyTrash(accountID, folderID string) error {
+	if a.syncEngine != nil {
+		c, apiErr := a.syncEngine.GmailClient(a.ctx, accountID)
+		if apiErr == nil {
+			f, err := a.folderStore.Get(folderID)
+			if err != nil || f == nil || f.AccountID != accountID || f.Type != folder.TypeTrash {
+				return fmt.Errorf("invalid Trash folder")
+			}
+			for {
+				page, err := c.Search(a.ctx, gmail.SearchRequest{LabelIDs: []string{"TRASH"}, Limit: 100})
+				if err != nil {
+					return a.gmailMutationError(accountID, err)
+				}
+				if len(page.MessageIDs) == 0 {
+					break
+				}
+				for _, id := range page.MessageIDs {
+					if err = c.Delete(a.ctx, id); err != nil {
+						return a.gmailMutationError(accountID, err)
+					}
+				}
+			}
+			ids, err := a.messageStore.GetAllIDsByFolder(folderID)
+			if err != nil {
+				return err
+			}
+			if err = a.messageStore.DeleteBatch(ids); err != nil {
+				return err
+			}
+			a.emitRuntimeEvent("messages:deleted", ids)
+			return a.folderStore.UpdateCounts(folderID, 0, 0)
+		} else if !errors.Is(apiErr, gmail.ErrNotCapable) {
+			return a.gmailMutationError(accountID, apiErr)
+		}
+	}
+
 	ids, err := a.messageStore.GetAllIDsByFolder(folderID)
 	if err != nil {
 		return fmt.Errorf("failed to get messages in trash: %w", err)
@@ -1574,6 +1740,29 @@ func (a *App) DeletePermanently(messageIDs []string) error {
 	byFolder := make(map[string][]*message.Message)
 	for _, m := range messages {
 		byFolder[m.FolderID] = append(byFolder[m.FolderID], m)
+	}
+
+	for id, group := range byFolder {
+		if a.syncEngine == nil {
+			break
+		}
+		c, apiErr := a.syncEngine.GmailClient(a.ctx, group[0].AccountID)
+		if errors.Is(apiErr, gmail.ErrNotCapable) {
+			continue
+		}
+		if apiErr != nil {
+			return a.gmailMutationError(group[0].AccountID, apiErr)
+		}
+		providerIDs, err := a.gmailIDs(a.ctx, c, group)
+		if err != nil {
+			return err
+		}
+		for _, provider := range providerIDs {
+			if err = c.Delete(a.ctx, provider); err != nil {
+				return a.gmailMutationError(group[0].AccountID, err)
+			}
+		}
+		delete(byFolder, id)
 	}
 
 	// Delete from local DB first
@@ -1632,6 +1821,22 @@ func (a *App) DeletePermanently(messageIDs []string) error {
 func (a *App) deleteMessagesFromIMAP(messages []*message.Message, folderID string) error {
 	if len(messages) == 0 {
 		return nil
+	}
+	if a.syncEngine != nil {
+		if c, apiErr := a.syncEngine.GmailClient(a.ctx, messages[0].AccountID); apiErr == nil {
+			ids, err := a.gmailIDs(a.ctx, c, messages)
+			if err != nil {
+				return err
+			}
+			for _, id := range ids {
+				if err = c.Delete(a.ctx, id); err != nil {
+					return a.gmailMutationError(messages[0].AccountID, err)
+				}
+			}
+			return nil
+		} else if !errors.Is(apiErr, gmail.ErrNotCapable) {
+			return a.gmailMutationError(messages[0].AccountID, apiErr)
+		}
 	}
 
 	log := logging.WithComponent("app.deleteMessagesFromIMAP")

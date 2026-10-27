@@ -138,7 +138,7 @@ test('MessageList header has the required refresh, badge, close, and filter matr
   const header = messageListSource.slice(headerStart, headerEnd)
 
   assert.equal((header.match(/onclick=\{refreshActiveSearch\}/g) ?? []).length, 1)
-  assert.match(header, /\{#if !isSearchMode && syncing\}[\s\S]*?\{:else if !isSearchMode\}/)
+  assert.match(header, /\{#if !isVirtualFolderView && !isSearchMode && \(syncing \|\| manualSyncing\)\}[\s\S]*?\{:else if !isVirtualFolderView && !isSearchMode\}/)
   assert.match(header, /\{#if searchQuery\.trim\(\)\}[\s\S]*?onclick=\{refreshActiveSearch\}/)
   assert.equal((header.match(/onclick=\{toggleSearch\}/g) ?? []).length, 1)
   assert.equal((header.match(/onclick=\{clearSearch\}/g) ?? []).length, 0)
@@ -210,7 +210,8 @@ test('the single Search close control runs one reset and restores normal-list st
   `, {
     compilerOptions: { module: ts.ModuleKind.None, target: ts.ScriptTarget.ES2022 },
   })
-  const harness = new Function(`${outputText}; return { toggleSearch, state }`)()
+  const createHarness = new Function('preferServerSearch', `${outputText}; return { toggleSearch, state }`)
+  const harness = createHarness(false)
 
   harness.toggleSearch()
   assert.deepEqual(harness.state(), {
@@ -230,4 +231,7 @@ test('the single Search close control runs one reset and restores normal-list st
     serverSearchSelectionLocked: false,
     cancelCalls: 1,
   })
+  const gmail = createHarness(true)
+  gmail.toggleSearch()
+  assert.equal(gmail.state().searchSource, 'server', 'Gmail keeps server search as its default after closing search')
 })

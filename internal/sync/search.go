@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 	"fmt"
+	"github.com/google/uuid"
 	"io"
 	"sort"
 	"time"
@@ -23,9 +24,10 @@ type IMAPSearchResponse struct {
 
 // IMAPSearchResult represents a single IMAP server-side search result
 type IMAPSearchResult struct {
-	UID       uint32 `json:"uid"`
-	MessageID string `json:"messageId,omitempty"` // Local DB ID if exists
-	IsLocal   bool   `json:"isLocal"`             // Whether message exists in local DB
+	RFCMessageID string `json:"rfcMessageId,omitempty"`
+	UID          uint32 `json:"uid"`
+	MessageID    string `json:"messageId,omitempty"` // Local DB ID if exists
+	IsLocal      bool   `json:"isLocal"`             // Whether message exists in local DB
 
 	// Envelope data (populated for all results)
 	Subject   string    `json:"subject"`
@@ -292,6 +294,7 @@ func (e *Engine) fetchEnvelopesForSearch(ctx context.Context, client *imapclient
 			}
 
 			if envelope != nil {
+				r.RFCMessageID = envelope.MessageID
 				r.Subject = envelope.Subject
 				r.Date = envelope.Date.UTC()
 				if len(envelope.From) > 0 {
@@ -469,4 +472,28 @@ func (e *Engine) FetchServerMessage(ctx context.Context, accountID, folderID str
 		return saved, nil
 	}
 	return m, nil
+}
+
+func (e *Engine) CacheIMAPSearchHeaders(accountID, folderID string, hits []*IMAPSearchResult) ([]*message.Message, error) {
+	result := []*message.Message{}
+	for _, h := range hits {
+		if h.AccountID != accountID || h.FolderID != folderID {
+			return nil, fmt.Errorf("search result scope mismatch")
+		}
+		m, err := e.messageStore.GetByUID(folderID, h.UID)
+		if err != nil {
+			return nil, err
+		}
+		if m == nil {
+			m = &message.Message{AccountID: accountID, FolderID: folderID, UID: h.UID, MessageID: h.RFCMessageID, ThreadID: h.RFCMessageID, Subject: h.Subject, FromName: h.FromName, FromEmail: h.FromEmail, Date: h.Date, Snippet: h.Snippet, IsRead: h.IsRead, IsStarred: h.IsStarred}
+			if m.ThreadID == "" {
+				m.ThreadID = uuid.NewString()
+			}
+			if err = e.messageStore.Create(m); err != nil {
+				return nil, err
+			}
+		}
+		result = append(result, m)
+	}
+	return result, nil
 }

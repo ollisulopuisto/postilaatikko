@@ -1524,4 +1524,19 @@ var migrations = []Migration{
             metadata TEXT NOT NULL
         );`,
 	},
+	{Version: 54, SQL: `
+ CREATE TABLE IF NOT EXISTS gmail_message_refs (
+ account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+ folder_id TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+ provider_id TEXT NOT NULL,
+ message_id TEXT NOT NULL UNIQUE REFERENCES messages(id) ON DELETE CASCADE,
+ PRIMARY KEY(account_id,folder_id,provider_id));
+ CREATE INDEX IF NOT EXISTS idx_gmail_provider_id ON gmail_message_refs(account_id,provider_id);
+ CREATE TABLE IF NOT EXISTS gmail_cache_sequence (id INTEGER PRIMARY KEY CHECK(id=1),next INTEGER NOT NULL);
+ INSERT OR IGNORE INTO gmail_cache_sequence VALUES(1,2147483648);
+ CREATE TABLE IF NOT EXISTS gmail_folder_refs (folder_id TEXT PRIMARY KEY REFERENCES folders(id) ON DELETE CASCADE,account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,label_id TEXT NOT NULL);
+ CREATE TABLE IF NOT EXISTS gmail_sync_state(account_id TEXT PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,history_id TEXT NOT NULL DEFAULT '',history_page TEXT NOT NULL DEFAULT '',backfill_page TEXT NOT NULL DEFAULT '');
+ CREATE TABLE IF NOT EXISTS gmail_attachment_refs(attachment_id TEXT PRIMARY KEY REFERENCES attachments(id) ON DELETE CASCADE,provider_message_id TEXT NOT NULL,provider_attachment_id TEXT NOT NULL);
+ CREATE TABLE IF NOT EXISTS gmail_draft_refs (draft_id TEXT PRIMARY KEY REFERENCES drafts(id) ON DELETE CASCADE,provider_id TEXT NOT NULL);
+ `},
 }

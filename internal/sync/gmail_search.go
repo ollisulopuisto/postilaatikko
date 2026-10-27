@@ -41,6 +41,48 @@ func (e *Engine) SetGmailTokenSource(src GmailTokenSource) {
 // mapped to IMAP UIDs by Message-ID header so local data and envelopes can be
 // reused. Callers fall back to IMAPSearch on any error except gmail.ErrReauthRequired.
 func (e *Engine) GmailSearch(ctx context.Context, accountID, folderID, query string, limit int) (*IMAPSearchResponse, error) {
+	if e.accountStore != nil {
+		c, apiErr := e.GmailClient(ctx, accountID)
+		if apiErr == nil {
+			f, err := e.folderStore.Get(folderID)
+			if err != nil || f == nil || f.AccountID != accountID {
+				return nil, fmt.Errorf("folder account mismatch")
+			}
+			label, err := e.GmailLabelID(ctx, c, f)
+			if err != nil {
+				return nil, err
+			}
+			labels := []string{}
+			if label != "" {
+				labels = append(labels, label)
+			}
+			q := query
+			if f.Type == folder.TypeArchive {
+				q = buildGmailQuery(query, "-in:inbox -in:spam -in:trash")
+			}
+			page, err := c.Search(ctx, gmail.SearchRequest{Query: q, LabelIDs: labels, Limit: limit})
+			if err != nil {
+				return nil, err
+			}
+			headers, err := c.Metadata(ctx, page.MessageIDs)
+			if err != nil {
+				return nil, err
+			}
+			local, err := e.cacheGmailMetadata(accountID, folderID, headers)
+			if err != nil {
+				return nil, err
+			}
+			out := &IMAPSearchResponse{TotalCount: page.EstimateTotal}
+			for _, m := range local {
+				out.Results = append(out.Results, &IMAPSearchResult{IsLocal: true, MessageID: m.ID, AccountID: accountID, FolderID: folderID, FolderName: f.Name, Subject: m.Subject, FromName: m.FromName, FromEmail: m.FromEmail, Date: m.Date, Snippet: m.Snippet, IsRead: m.IsRead, IsStarred: m.IsStarred})
+			}
+			return out, nil
+		}
+		if !errors.Is(apiErr, gmail.ErrNotCapable) {
+			return nil, apiErr
+		}
+	}
+
 	if e.gmailTokens == nil || e.gmailIsBlocked(accountID) {
 		return nil, gmail.ErrNotCapable
 	}

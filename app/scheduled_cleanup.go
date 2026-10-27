@@ -8,8 +8,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/hkdb/aerion/internal/gmail"
 	"io"
 	"net/textproto"
+	"strings"
 	"time"
 
 	goimap "github.com/emersion/go-imap/v2"
@@ -57,6 +59,50 @@ func cleanupScheduledDraft(ctx context.Context, data string, job scheduledsend.C
 	}
 	cleanupContext, done := context.WithTimeout(ctx, 25*time.Second)
 	defer done()
+	if ops.gmailClient != nil {
+		c, apiErr := ops.gmailClient(cleanupContext, current.AccountID)
+		if apiErr == nil {
+			provider, err := ops.gmailDraftID(cleanupContext, c, current)
+			if err != nil && !errors.Is(err, gmail.ErrNotFound) {
+				return finish("retry")
+			}
+			if provider != "" {
+				raw, err := c.DraftRaw(cleanupContext, provider)
+				if err != nil && !errors.Is(err, gmail.ErrNotFound) {
+					return finish("retry")
+				}
+				if err == nil {
+					reader := bufio.NewReader(bytes.NewReader(raw))
+					line1, _ := reader.ReadString('\n')
+					line2, _ := reader.ReadString('\n')
+					line3, _ := reader.ReadString('\n')
+					if line1 != "X-Postilaatikko-Draft-ID: "+current.ID+"\r\n" || line2 != "X-Postilaatikko-Draft-Source: "+job.DraftFingerprint+"\r\n" || !strings.HasPrefix(line3, "X-Postilaatikko-Draft-Hash: ") {
+						return finish("manual_legacy")
+					}
+					expected := strings.TrimSpace(strings.TrimPrefix(line3, "X-Postilaatikko-Draft-Hash: "))
+					remainder, _ := io.ReadAll(reader)
+					actual := sha256.Sum256(remainder)
+					if expected != hex.EncodeToString(actual[:]) {
+						return finish("kept_changed")
+					}
+					if err = c.DeleteDraft(cleanupContext, provider); err != nil && !errors.Is(err, gmail.ErrNotFound) {
+						return finish("retry")
+					}
+				}
+			}
+			deleted, err := ops.draftStore.DeleteUnchanged(cleanupContext, current)
+			if err != nil {
+				return finish("retry")
+			}
+			if !deleted {
+				return finish("kept_changed")
+			}
+			return finish("removed")
+		} else if !errors.Is(apiErr, gmail.ErrNotCapable) {
+			return finish("retry")
+		}
+	}
+
 	var draftsFolder *folder.Folder
 	if current.IsSynced() {
 		if current.FolderID == "" {

@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/virtualfolder"
@@ -55,6 +56,39 @@ func (a *App) DeleteVirtualFolder(id string) error {
 
 // GetVirtualFolderConversations returns conversations matching a virtual folder's criteria
 func (a *App) GetVirtualFolderConversations(virtualFolderID string, offset, limit int, sortOrder string) ([]*message.Conversation, error) {
+	if a.syncEngine != nil {
+		result := []*message.Conversation{}
+		cursor := ""
+		if limit <= 0 {
+			limit = 50
+		}
+		for pages := 0; pages < 100; pages++ {
+			page, err := a.SearchMail(MailSearchRequest{VirtualFolderID: virtualFolderID, Cursor: cursor, Limit: 100})
+			if err != nil {
+				return nil, err
+			}
+			if len(page.Issues) > 0 {
+				return nil, fmt.Errorf("virtual-folder account unavailable: %s", page.Issues[0].Message)
+			}
+			result = append(result, page.Conversations...)
+			cursor = page.Cursor
+			if cursor == "" || len(result) >= offset+limit {
+				break
+			}
+		}
+		if sortOrder == "oldest" {
+			sort.Slice(result, func(i, j int) bool { return result[i].LatestDate.Before(result[j].LatestDate) })
+		}
+		if offset >= len(result) {
+			return []*message.Conversation{}, nil
+		}
+		end := offset + limit
+		if end > len(result) {
+			end = len(result)
+		}
+		return result[offset:end], nil
+	}
+
 	vf, err := a.virtualFolderStore.Get(virtualFolderID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get virtual folder: %w", err)

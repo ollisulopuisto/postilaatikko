@@ -209,6 +209,7 @@ func (c *ComposerApp) Startup(ctx context.Context) {
 
 	// Initialize shared draft operations
 	c.draftOps = draftOps{
+		gmailClient:    c.composeOps.gmailClient,
 		accountStore:   c.accountStore,
 		folderStore:    c.folderStore,
 		messageStore:   c.messageStore,

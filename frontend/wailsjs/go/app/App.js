@@ -202,6 +202,10 @@ export function CancelFolderSync(arg1, arg2) {
   return window['go']['app']['App']['CancelFolderSync'](arg1, arg2);
 }
 
+export function CancelMailSearch(arg1) {
+  return window['go']['app']['App']['CancelMailSearch'](arg1);
+}
+
 export function CancelOAuthFlow() {
   return window['go']['app']['App']['CancelOAuthFlow']();
 }
@@ -1150,6 +1154,10 @@ export function RebuildFTSIndex(arg1) {
   return window['go']['app']['App']['RebuildFTSIndex'](arg1);
 }
 
+export function RefreshViewHeaders(arg1, arg2) {
+  return window['go']['app']['App']['RefreshViewHeaders'](arg1, arg2);
+}
+
 export function RefreshWindowConstraints() {
   return window['go']['app']['App']['RefreshWindowConstraints']();
 }
@@ -1244,6 +1252,10 @@ export function SearchContacts(arg1, arg2) {
 
 export function SearchConversations(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['app']['App']['SearchConversations'](arg1, arg2, arg3, arg4, arg5, arg6);
+}
+
+export function SearchMail(arg1) {
+  return window['go']['app']['App']['SearchMail'](arg1);
 }
 
 export function SearchUnifiedFolder(arg1, arg2, arg3, arg4, arg5) {

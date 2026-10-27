@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/hkdb/aerion/internal/gmail"
 	"strings"
 	"time"
 
@@ -62,6 +63,7 @@ type syncStatusEmitter func(status draft.SyncStatus, imapUID uint32, syncError s
 // draftOps contains shared draft operation logic used by both App and ComposerApp.
 // This prevents divergence between in-window and detached composer draft handling.
 type draftOps struct {
+	gmailClient    func(context.Context, string) (*gmail.Client, error)
 	accountStore   *account.Store
 	folderStore    *folder.Store
 	messageStore   *message.Store
@@ -94,6 +96,30 @@ func (ops *draftOps) resolveDraftReference(ref string) (*draft.Draft, *message.M
 	if err != nil {
 		return nil, nil, err
 	}
+	if d == nil && ops.gmailClient != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		c, apiErr := ops.gmailClient(ctx, msg.AccountID)
+		if apiErr == nil {
+			provider, err := ops.messageStore.GmailID(msg.AccountID, msg.ID)
+			if err != nil {
+				return nil, nil, err
+			}
+			if provider != "" {
+				remote, err := c.DraftIDForMessage(ctx, provider)
+				if err != nil {
+					return nil, nil, err
+				}
+				d, err = ops.draftStore.GetByGmailID(msg.AccountID, remote)
+				if err != nil {
+					return nil, nil, err
+				}
+			}
+		} else if !errors.Is(apiErr, gmail.ErrNotCapable) {
+			return nil, nil, apiErr
+		}
+	}
+
 	return d, msg, nil
 }
 
@@ -340,6 +366,25 @@ func (ops *draftOps) deleteDraftCore(ctx context.Context, d *draft.Draft) (*fold
 		d = fresh
 	}
 
+	if ops.gmailClient != nil {
+		c, apiErr := ops.gmailClient(ctx, d.AccountID)
+		if apiErr == nil {
+			id, err := ops.gmailDraftID(ctx, c, d)
+			if err != nil && !errors.Is(err, gmail.ErrNotFound) {
+				return nil, err
+			}
+			if id != "" {
+				if err = c.DeleteDraft(ctx, id); err != nil && !errors.Is(err, gmail.ErrNotFound) {
+					return nil, err
+				}
+			}
+			f, _ := ops.getSpecialFolder(d.AccountID, folder.TypeDrafts)
+			return f, ops.draftStore.Delete(d.ID)
+		} else if !errors.Is(apiErr, gmail.ErrNotCapable) {
+			return nil, apiErr
+		}
+	}
+
 	var draftsFolder *folder.Folder
 	if d.IsSynced() {
 		draftsFolder, _ = ops.getSpecialFolder(d.AccountID, folder.TypeDrafts)
@@ -387,27 +432,6 @@ func (ops *draftOps) syncToIMAP(ctx context.Context, localDraft *draft.Draft, ms
 		return nil
 	}
 
-	// Get IMAP connection from pool
-	poolConn, err := ops.imapPool.GetConnection(ctx, localDraft.AccountID)
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to get IMAP connection, will retry later")
-		_ = ops.draftStore.UpdateSyncStatus(localDraft.ID, draft.SyncStatusFailed, 0, "", err.Error())
-		emitStatus(draft.SyncStatusFailed, 0, err.Error())
-		return nil
-	}
-	defer ops.imapPool.Release(poolConn)
-
-	conn := poolConn.Client()
-
-	// Delete old IMAP draft if it exists
-	if localDraft.IMAPUID > 0 && localDraft.FolderID != "" {
-		if _, err := conn.SelectMailbox(ctx, draftsFolder.Path); err == nil {
-			if err := conn.DeleteMessageByUID(goImap.UID(localDraft.IMAPUID)); err != nil {
-				log.Warn().Err(err).Uint32("uid", localDraft.IMAPUID).Msg("Failed to delete old draft from IMAP")
-			}
-		}
-	}
-
 	// Build RFC822 message
 	rawMsg, err := msg.ToRFC822()
 	if err != nil {
@@ -415,6 +439,17 @@ func (ops *draftOps) syncToIMAP(ctx context.Context, localDraft *draft.Draft, ms
 		_ = ops.draftStore.UpdateSyncStatus(localDraft.ID, draft.SyncStatusFailed, 0, "", err.Error())
 		emitStatus(draft.SyncStatusFailed, 0, err.Error())
 		return nil
+	}
+
+	if ops.gmailClient != nil {
+		if _, apiErr := ops.gmailClient(ctx, localDraft.AccountID); apiErr == nil {
+			rawMsg = stableGmailDraftMessageID(rawMsg, localDraft.ID)
+			rawMsg, err = gmail.WithEnvelopeRecipients(rawMsg, msg.AllRecipients())
+			if err != nil {
+				emitStatus(draft.SyncStatusFailed, 0, err.Error())
+				return nil
+			}
+		}
 	}
 
 	// The sender's email determines which cert/key to use
@@ -485,6 +520,91 @@ func (ops *draftOps) syncToIMAP(ctx context.Context, localDraft *draft.Draft, ms
 	if ctx.Err() != nil {
 		log.Debug().Str("draftID", localDraft.ID).Msg("Draft sync cancelled before IMAP append")
 		return nil
+	}
+
+	if ops.gmailClient != nil {
+		c, apiErr := ops.gmailClient(ctx, localDraft.AccountID)
+		if apiErr == nil {
+			previous, lookupErr := ops.gmailDraftID(ctx, c, localDraft)
+			if lookupErr != nil && !errors.Is(lookupErr, gmail.ErrNotFound) {
+				_ = ops.draftStore.UpdateSyncStatus(localDraft.ID, draft.SyncStatusFailed, 0, draftsFolder.ID, lookupErr.Error())
+				emitStatus(draft.SyncStatusFailed, 0, lookupErr.Error())
+				return nil
+			}
+			if previous == "" || previous == "!unknown" {
+				providerMessage, lookupErr := c.FindByRFCMessageID(ctx, gmailDraftRFCID(localDraft.ID))
+				if lookupErr == nil {
+					previous, lookupErr = c.DraftIDForMessage(ctx, providerMessage)
+					if lookupErr != nil {
+						emitStatus(draft.SyncStatusFailed, 0, lookupErr.Error())
+						return nil
+					}
+				}
+				if lookupErr != nil && !errors.Is(lookupErr, gmail.ErrNotFound) {
+					emitStatus(draft.SyncStatusFailed, 0, lookupErr.Error())
+					return nil
+				}
+				if previous == "!unknown" {
+					emitStatus(draft.SyncStatusFailed, 0, "Previous Gmail draft save outcome is uncertain; waiting for server reconciliation")
+					return nil
+				}
+			}
+			if previous == "" {
+				if err := ops.draftStore.SetGmailID(localDraft.ID, "!unknown"); err != nil {
+					emitStatus(draft.SyncStatusFailed, 0, err.Error())
+					return nil
+				}
+			}
+			providerID, err := c.SaveDraft(ctx, previous, rawMsg)
+			if err != nil {
+				if previous == "" {
+					var api *gmail.APIError
+					if (errors.As(err, &api) && api.Status >= 400 && api.Status < 500) || errors.Is(err, gmail.ErrReauthRequired) || errors.Is(err, gmail.ErrInsufficientScope) {
+						_ = ops.draftStore.SetGmailID(localDraft.ID, "")
+					}
+				}
+
+				_ = ops.draftStore.UpdateSyncStatus(localDraft.ID, draft.SyncStatusFailed, 0, draftsFolder.ID, err.Error())
+				emitStatus(draft.SyncStatusFailed, 0, err.Error())
+				return nil
+			}
+			if d, _ := ops.draftStore.Get(localDraft.ID); d == nil {
+				_ = c.DeleteDraft(context.WithoutCancel(ctx), providerID)
+				return nil
+			}
+			if err = ops.draftStore.SetGmailID(localDraft.ID, providerID); err != nil {
+				emitStatus(draft.SyncStatusFailed, 0, err.Error())
+				return nil
+			}
+			_ = ops.draftStore.UpdateSyncStatus(localDraft.ID, draft.SyncStatusSynced, 0, draftsFolder.ID, "")
+			emitStatus(draft.SyncStatusSynced, 0, "")
+			return draftsFolder
+		}
+		if !errors.Is(apiErr, gmail.ErrNotCapable) {
+			emitStatus(draft.SyncStatusFailed, 0, apiErr.Error())
+			return nil
+		}
+	}
+
+	// Get IMAP connection from pool
+	poolConn, err := ops.imapPool.GetConnection(ctx, localDraft.AccountID)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to get IMAP connection, will retry later")
+		_ = ops.draftStore.UpdateSyncStatus(localDraft.ID, draft.SyncStatusFailed, 0, "", err.Error())
+		emitStatus(draft.SyncStatusFailed, 0, err.Error())
+		return nil
+	}
+	defer ops.imapPool.Release(poolConn)
+
+	conn := poolConn.Client()
+
+	// Delete old IMAP draft if it exists
+	if localDraft.IMAPUID > 0 && localDraft.FolderID != "" {
+		if _, err := conn.SelectMailbox(ctx, draftsFolder.Path); err == nil {
+			if err := conn.DeleteMessageByUID(goImap.UID(localDraft.IMAPUID)); err != nil {
+				log.Warn().Err(err).Uint32("uid", localDraft.IMAPUID).Msg("Failed to delete old draft from IMAP")
+			}
+		}
 	}
 
 	// Append to IMAP Drafts folder with \Draft and \Seen flags
@@ -896,4 +1016,86 @@ func (a *App) messageToComposeMessage(msg *message.Message) *smtp.ComposeMessage
 // ListDrafts returns all drafts for an account
 func (a *App) ListDrafts(accountID string) ([]*draft.Draft, error) {
 	return a.draftStore.ListByAccount(accountID)
+}
+
+func (ops *draftOps) gmailDraftID(ctx context.Context, c *gmail.Client, d *draft.Draft) (string, error) {
+	id, err := ops.draftStore.GmailID(d.ID)
+	if err == nil && id == "!unknown" {
+		provider, lookupErr := c.FindByRFCMessageID(ctx, gmailDraftRFCID(d.ID))
+		if lookupErr != nil {
+			return "", fmt.Errorf("previous Gmail draft save is not yet reconciled; local draft preserved: %v: %w", lookupErr, gmail.ErrAmbiguous)
+		}
+		id, lookupErr = c.DraftIDForMessage(ctx, provider)
+		if lookupErr != nil {
+			return "", lookupErr
+		}
+		if lookupErr = ops.draftStore.SetGmailID(d.ID, id); lookupErr != nil {
+			return "", lookupErr
+		}
+	}
+
+	if err != nil || id != "" {
+		return id, err
+	}
+	if d.IMAPUID == 0 || d.FolderID == "" {
+		return "", nil
+	}
+	m, err := ops.messageStore.GmailMessageByCacheKey(d.AccountID, d.FolderID, d.IMAPUID)
+	if err != nil {
+		return "", err
+	}
+	if m == nil {
+		m, err = ops.messageStore.GetByUID(d.FolderID, d.IMAPUID)
+		if err != nil {
+			return "", err
+		}
+	}
+	if m == nil {
+		return "", gmail.ErrNotFound
+	}
+	provider, err := ops.messageStore.GmailID(d.AccountID, m.ID)
+	if err != nil {
+		return "", err
+	}
+	if provider == "" {
+		provider, err = c.FindByRFCMessageID(ctx, m.MessageID)
+		if err != nil {
+			return "", err
+		}
+	}
+	id, err = c.DraftIDForMessage(ctx, provider)
+	if err != nil {
+		return "", err
+	}
+	if err = ops.draftStore.SetGmailID(d.ID, id); err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
+func gmailDraftRFCID(id string) string {
+	return "<postilaatikko-draft-" + id + "@draft.postilaatikko.local>"
+}
+func stableGmailDraftMessageID(raw []byte, id string) []byte {
+	if strings.ContainsAny(id, "\r\n") {
+		return raw
+	}
+	text := string(raw)
+	end := strings.Index(text, "\r\n\r\n")
+	if end < 0 {
+		return raw
+	}
+	lines := strings.Split(text[:end], "\r\n")
+	found := false
+	for i, line := range lines {
+		if strings.HasPrefix(strings.ToLower(line), "message-id:") {
+			lines[i] = "Message-ID: " + gmailDraftRFCID(id)
+			found = true
+			break
+		}
+	}
+	if !found {
+		lines = append([]string{"Message-ID: " + gmailDraftRFCID(id)}, lines...)
+	}
+	return []byte(strings.Join(lines, "\r\n") + text[end:])
 }

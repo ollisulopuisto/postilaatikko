@@ -125,6 +125,8 @@ export function CancelContactSourceOAuthFlow():Promise<void>;
 
 export function CancelFolderSync(arg1:string,arg2:string):Promise<void>;
 
+export function CancelMailSearch(arg1:string):Promise<void>;
+
 export function CancelOAuthFlow():Promise<void>;
 
 export function CheckForUpdates():Promise<string>;
@@ -599,6 +601,8 @@ export function ReauthorizeContactSource(arg1:string):Promise<void>;
 
 export function RebuildFTSIndex(arg1:string):Promise<void>;
 
+export function RefreshViewHeaders(arg1:string,arg2:string):Promise<void>;
+
 export function RefreshWindowConstraints():Promise<void>;
 
 export function RemoveAccount(arg1:string):Promise<void>;
@@ -646,6 +650,8 @@ export function ScheduleMessage(arg1:string,arg2:smtp.ComposeMessage,arg3:string
 export function SearchContacts(arg1:string,arg2:number):Promise<Array<contact.Contact>>;
 
 export function SearchConversations(arg1:string,arg2:string,arg3:string,arg4:number,arg5:number,arg6:string):Promise<Array<message.ConversationSearchResult>>;
+
+export function SearchMail(arg1:app.MailSearchRequest):Promise<app.MailSearchPage>;
 
 export function SearchUnifiedFolder(arg1:string,arg2:string,arg3:number,arg4:number,arg5:string):Promise<Array<message.ConversationSearchResult>>;
 
