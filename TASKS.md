@@ -34,6 +34,10 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 
 | Task | Effort | Scope | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
+| READER-003 | Medium | Inbox/alias sender alignment, Gmail/Outlook reaction badges with exact reply targets, signature-plus-quoted-history extraction; GitHub test DMGs. | Codex / `codex/READER-003-identities-reactions` / `/private/tmp/postilaatikko-reader003` | In progress; based on published test build `279baf7`; origin/main unchanged. |
+
+| Task | Effort | Scope | Owner / branch / worktree | Status |
+| --- | --- | --- | --- | --- |
 | READER-002 | Medium | Fix conversation contrast, Outlook-style quoted headers and visible directional bubble tails; rebuild test DMGs on GitHub. | Codex / `codex/READER-002-contrast-quoted-headers` / `/private/tmp/postilaatikko-reader002` | Review; implementation `0ca40b3`. GitHub build queued on branch push. Fixed inline color/opacity overrides in the conversation presentation copy, spaced/table quoted-header recognition (`reply-v3`) and visible left/right tails. Verified new Go header cases red then green, existing extraction/cache/fixture tests, race/vet, frontend check (0 errors; 2 existing warnings; 7 shortcut tests), lint and production build. Real Chromium dark/light checks cover black/white/important styles, opacity, quote removal, unclipped tails, originals/Traditional and narrow sizing. Native WKWebView check remains; source/originals unchanged. Based on published `c21c572`; origin/main stays `385228a`. |
 
 | Task | Effort | Scope | Owner / branch / worktree | Status |
