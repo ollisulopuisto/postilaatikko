@@ -34,7 +34,8 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 
 | Task | Effort | Scope | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
-| GLOBAL-001 | Large | User-requested 0.3.18 test build: sidebar cards/rail, Gmail-first operations, global search, API virtual folders, automatic header refresh. | Codex / `codex/GLOBAL-001-api-search` / `/private/tmp/postilaatikko-global001` | Review; implementation `dc08165`, GitHub DMG publication pending. Full Go suite passes; affected race suites and final native history/search/move checks pass; all 162 frontend tests, type check (0 errors; 2 existing warnings), lint and production build pass. Browser smoke passes cards/drag/persistence/Cmd+1/account-scoped global search. Native empty-cache/no-IMAP fixtures cover headers, lazy body/file fetch, history membership, two accounts, pagination, partial authorization failure, move/undo and source preservation after unconfirmed import. Live Google/WKWebView remain device checks. See docs/diagnostics/2026-10-27-gmail-navigation.md for limits. No main merge. |
+| GLOBAL-002 | Large | Complete online virtual-folder conversation/unread counts and paginated non-Gmail cross-account server search. | Codex / `codex/GLOBAL-002-online-counts` / `/private/tmp/postilaatikko-global002` | In progress; starts from `origin/main` `3d000be`, retaining the other agent’s checked-cleanup fixes. Live Gmail/macOS feedback on the published DMG remains pending. Read docs/plans/2026-10-27-online-counts-search-pages.md before overlapping these files. |
+| GLOBAL-001 | Large | 0.3.18 sidebar cards/rail, Gmail-first operations, global/virtual server search, automatic header refresh and GitHub DMG. | Codex / integrated into main through `8e3659a`; follow-up cleanup fix `3d000be` | Done for implementation/build integration; GitHub run 40510053287 succeeded and v0.3.18-test.4 publishes arm64 + amd64 DMGs. Live Gmail/WKWebView acceptance remains open under UX-001; complete online counts/search coverage is GLOBAL-002. See docs/diagnostics/2026-10-27-gmail-navigation.md. |
 
 | Task | Effort | Scope | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
@@ -154,8 +155,16 @@ Suggested model/effort is a dispatch recommendation, not an existing claim or mo
 
 ## Next priority after the active tasks
 
-1. **UX-007 is reserved for Claude after merged UX-005/006.** Follow docs/coordination/DISPATCH.md and check origin branches first. UX-001's refresh/live-device gate remains open; UX-016 and UX-019 remain dependency-ready.
-2. **P-011 remains critical:** keep its existing owner and security/live-delivery gates. Its local candidate status must not be confused with origin/main or a released DMG.
+User-confirmed order (2026-10-27); overrides earlier dispatch suggestions:
+
+1. Publish GLOBAL-001's DMG and complete live Gmail/macOS verification (UX-001 live gate remains open).
+2. Server-complete virtual-folder counts and paginated non-Gmail cross-account search (new follow-up GLOBAL-002; claimed by Codex after the completed build handoff).
+3. P-009 read-only Mac Contacts/autocomplete, P-022 automatic date recognition/ICS, P-013 independent mail-list windows.
+4. P-011 live delivery, pairing/security, cancellation and recovery acceptance checks.
+5. UX-011 drawer Keep open, UX-015 full Focus restoration, UX-018 durable inline replies.
+6. UX-019..024/037..039 agent API/CLI/MCP, P-015 contextual signatures and P-020 full templates.
+
+GLOBAL-001 reserves its overlapping sidebar/rail code through integration review. Coordinate new branches from the published candidate before touching those files; do not infer that unmerged code is on main.
 
 ## Unclaimed
 

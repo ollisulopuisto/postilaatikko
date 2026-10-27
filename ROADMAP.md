@@ -37,15 +37,16 @@ Implement sidebar cards/rail shortcuts, then Gmail-first operations, global serv
 
 ### Priorities
 
-1. **Scheduled send — critical.** Compose now, choose a delivery time, and have Postilaatikko send it reliably.
-2. **Gmail API integration — API-first for all Gmail operations.** User-approved incremental consent for missing scopes; global server search across all enabled accounts/all folders, plus automatic lightweight header/flag refresh on folder open and in background.  Add server-side Gmail search and Gmail-native capabilities for Gmail accounts, starting with spam actions and efficient mailbox updates; keep IMAP support for other providers.
-3. **Calendar from email:** recognize date/time mentions and offer links that open or create events in installed calendar applications.
-4. **Reliable virtual folders and the accepted UI/API design:** first verify the empty-folder repair in the actual installed build, then implement D-002 backend contracts/query/extraction and agent access before dependent presentation. Add the navigation drawer, conversation/Traditional toggle, thread focus and nearby actions in small increments.
-5. **Fast everyday mail:** preserve Gmail-style keyboard bindings and quick reply snippets; add full templates, Finnish-layout support and configurable bindings.
-6. **Better compose controls:** reuse cross-account sender identities and durable drafts, with signatures selected from sender, recipient and available context.
-7. **Cross-account automation:** extend the existing local rules when provider-side filters cannot cross accounts.
-8. **Multiple mail windows:** keep several mail views open for parallel reading and searching, each retaining its own layout/focus state.
-9. **Smart notifications:** optional sender- and rule-based controls. Useful, but lower priority than the core workflows above.
+User-confirmed delivery order, updated 2026-10-27:
+
+1. **Ship and verify the current build.** Publish the 0.3.18 test DMGs, then verify actual Gmail authorization, server-backed virtual folders and macOS/WKWebView behavior on the mail device. Automated fixtures and compilation do not close the live-device gate.
+2. **Complete online view/search coverage.** Server-complete virtual-folder conversation/unread counts; replace bounded non-Gmail per-folder search windows with continuations and honest completeness. Preserve multi-account scope, Gmail server queries and header-only operation.
+3. **macOS Contacts, dates and independent mail views.** Read-only Mac address book lookup/autocomplete with a link to Contacts for edits; recognize email date/time mentions and offer ICS handoff; multiple independent mail-list windows with per-window state.
+4. **Finish Send Later acceptance.** Scheduled delivery remains a critical feature. Close live delivery, E2EE pairing/security, cancellation/retry/recovery and duplicate-send gates for the always-on Mac Studio helper.
+5. **Complete the reading/reply layout.** Drawer Keep open; full thread Focus mode with restoration; durable inline replies reusing identities, signatures and drafts.
+6. **Agent access and compose refinements.** Authenticated versioned API, CLI/MCP; contextual signature selection; full email templates. External LLM access remains planned; built-in AI writing and team features stay out of scope.
+
+Supporting work continues under its task IDs: Gmail-style/Finnish keyboard support and performance checks accompany each delivery; local cross-account automation and configurable notifications retain their existing scope. Do not use the older architectural implementation sequence below to override this delivery order.
 
 ### Product boundaries
 
