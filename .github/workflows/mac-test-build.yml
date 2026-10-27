@@ -7,6 +7,7 @@ on:
       - 'codex/READER-002-contrast-quoted-headers'
       - 'codex/READER-003-identities-reactions'
       - 'codex/GLOBAL-001-api-search'
+      - 'codex/GLOBAL-003-gmail-live-repair'
   workflow_dispatch:
 
 permissions:

@@ -209,6 +209,7 @@
     "neverChecked": "Not checked yet"
   },
   "viewer": {
+    "contentDownloadFailed": "Message content could not be downloaded. Your message is still available; try again shortly.",
     "moveToInbox": "Move to inbox",
     "selectConversation": "Select a conversation to read",
     "failedToLoad": "Failed to load conversation",

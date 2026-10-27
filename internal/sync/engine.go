@@ -125,6 +125,7 @@ type Engine struct {
 	gmailBlockMu       gosync.Mutex
 	gmailBlocked       map[string]time.Time
 	gmailStates        map[string]GmailAPIStatus
+	gmailBudgets       map[string]*gmail.Budget // protected by gmailBlockMu
 }
 
 // NewEngine creates a new sync engine

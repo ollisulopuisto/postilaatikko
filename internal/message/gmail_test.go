@@ -11,6 +11,10 @@ func TestGmailHeadersPersistWithoutIMAPAndKeepBodies(t *testing.T) {
 	if err := s.UpsertGmail(m, "remote-id"); err != nil {
 		t.Fatal(err)
 	}
+	loadedHeader, err := s.Get(m.ID)
+	if err != nil || loadedHeader.BodyFetched {
+		t.Fatalf("header-only Gmail row already fetched: %+v %v", loadedHeader, err)
+	}
 	if m.ID == "" {
 		t.Fatal("no local id")
 	}

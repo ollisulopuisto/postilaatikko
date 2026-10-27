@@ -40,6 +40,7 @@ type Client struct {
 	// BaseURL can be overridden in tests.
 	BaseURL    string
 	HTTPClient *http.Client
+	Budget     *Budget // shared account quota admission; nil for isolated transports
 
 	tokenSource TokenSource
 	sleep       func(ctx context.Context, d time.Duration) error
@@ -147,31 +148,48 @@ type Message struct {
 // bounded concurrency, preserving the input order. Messages that no longer
 // exist are skipped.
 func (c *Client) Metadata(ctx context.Context, ids []string) ([]Message, error) {
+	workCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	results := make([]*Message, len(ids))
-	errs := make([]error, len(ids))
 	sem := make(chan struct{}, metadataConcurrency)
 	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var firstErr error
+enqueue:
 	for i, id := range ids {
+		select {
+		case sem <- struct{}{}:
+		case <-workCtx.Done():
+			break enqueue
+		}
 		wg.Add(1)
-		sem <- struct{}{}
 		go func(i int, id string) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			results[i], errs[i] = c.metadataOne(ctx, id)
+			m, err := c.metadataOne(workCtx, id)
+			if err != nil && !isNotFound(err) {
+				mu.Lock()
+				if firstErr == nil {
+					firstErr = err
+					cancel()
+				}
+				mu.Unlock()
+				return
+			}
+			results[i] = m
 		}(i, id)
 	}
 	wg.Wait()
-
+	if firstErr != nil {
+		return nil, firstErr
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	out := make([]Message, 0, len(ids))
-	for i := range ids {
-		if errs[i] != nil {
-			if isNotFound(errs[i]) {
-				continue
-			}
-			return nil, errs[i]
-		}
-		if results[i] != nil {
-			out = append(out, *results[i])
+	for _, m := range results {
+		if m != nil {
+			out = append(out, *m)
 		}
 	}
 	return out, nil
@@ -240,6 +258,17 @@ func (c *Client) request(ctx context.Context, method, path string, query url.Val
 	force := false
 	refreshed := false
 	for attempt := 1; ; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if c.Budget != nil {
+			if c.Budget.Paused() {
+				return ErrRateLimited
+			}
+			if err := c.Budget.Wait(ctx, method, path, query); err != nil {
+				return err
+			}
+		}
 		token, err := c.tokenSource(ctx, force)
 		if err != nil {
 			return err
@@ -290,6 +319,12 @@ func (c *Client) request(ctx context.Context, method, path string, query url.Val
 		}
 
 		apiErr := parseAPIError(resp.StatusCode, data)
+		if c.Budget != nil && apiErr.kind == ErrRateLimited {
+			c.Budget.Cooldown(retryAfter(resp.Header.Get("Retry-After")))
+			// Surface the limit once; all account clients now share the pause.
+			// Immediate per-request retries would multiply the exhausted workload.
+			return apiErr
+		}
 		if resp.StatusCode == http.StatusUnauthorized {
 			if refreshed {
 				apiErr.kind = ErrReauthRequired

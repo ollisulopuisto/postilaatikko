@@ -223,7 +223,11 @@ func (a *App) SearchMail(req MailSearchRequest) (*MailSearchPage, error) {
 						return
 					}
 				}
-				result.Issues = append(result.Issues, MailSearchIssue{AccountID: acc.ID, AccountName: acc.Name, Message: err.Error(), Reauthorize: errors.Is(err, gmail.ErrReauthRequired) || errors.Is(err, gmail.ErrInsufficientScope)})
+				text := err.Error()
+				if errors.Is(err, gmail.ErrRateLimited) {
+					text = "Gmail is temporarily rate limiting this account. Requests are paused; retry shortly."
+				}
+				result.Issues = append(result.Issues, MailSearchIssue{AccountID: acc.ID, AccountName: acc.Name, Message: text, Reauthorize: errors.Is(err, gmail.ErrReauthRequired) || errors.Is(err, gmail.ErrInsufficientScope)})
 			}
 			c, err := a.syncEngine.GmailClient(ctx, acc.ID)
 			if errors.Is(err, gmail.ErrNotCapable) {
@@ -285,28 +289,60 @@ func (a *App) SearchMail(req MailSearchRequest) (*MailSearchPage, error) {
 			}()
 
 			query := gmailViewQuery(req.Query, scope, vf != nil && vf.FolderMode == "exclude")
-			page, err := c.Search(ctx, gmail.SearchRequest{Query: query, PageToken: token, Limit: limit, IncludeSpamTrash: true})
+			page, err := c.Threads(ctx, gmail.SearchRequest{Query: query, PageToken: token, Limit: min(limit, 25), IncludeSpamTrash: true})
 			if err != nil {
 				issue(err)
 				return
 			}
-			headers, err := c.Metadata(ctx, page.MessageIDs)
-			if err != nil {
-				issue(err)
-				return
-			}
-			threadIDs := []string{}
-			for _, m := range headers {
-				if !slices.Contains(threadIDs, m.ThreadID) {
-					threadIDs = append(threadIDs, m.ThreadID)
-				}
-			}
+			threadIDs := page.ThreadIDs
 			preferred := []string{}
 			for _, f := range scope {
 				preferred = append(preferred, f.ID)
 			}
 			if vf != nil && vf.FolderMode == "exclude" {
 				preferred = nil
+			}
+			threads := map[string][]gmail.Message{}
+			var threadMu sync.Mutex
+			var threadWG sync.WaitGroup
+			threadSlots := make(chan struct{}, 4)
+			var threadErr error
+			threadCtx, stopThreads := context.WithCancel(ctx)
+			defer stopThreads()
+		enqueue:
+			for _, tid := range threadIDs {
+				tid := tid
+				select {
+				case threadSlots <- struct{}{}:
+				case <-threadCtx.Done():
+					break enqueue
+				}
+				threadWG.Add(1)
+				go func() {
+					defer threadWG.Done()
+					defer func() { <-threadSlots }()
+					ms, err := c.ThreadMetadata(threadCtx, tid)
+					threadMu.Lock()
+					defer threadMu.Unlock()
+					if err != nil {
+						if threadErr == nil {
+							threadErr = err
+							stopThreads()
+						}
+						return
+					}
+					threads[tid] = ms
+				}()
+			}
+			threadWG.Wait()
+			if threadErr != nil {
+				issue(threadErr)
+				return
+			}
+
+			headers := []gmail.Message{}
+			for _, tid := range threadIDs {
+				headers = append(headers, threads[tid]...)
 			}
 			cached, err := a.syncEngine.CacheGmailResults(ctx, acc.ID, headers, preferred)
 			if err != nil {
@@ -315,37 +351,10 @@ func (a *App) SearchMail(req MailSearchRequest) (*MailSearchPage, error) {
 			}
 			unlock()
 			unlock = nil
-
 			localThreads := map[string][]*message.Message{}
 			for _, m := range cached {
-				localThreads[strings.TrimPrefix(m.ThreadID, "gmail:"+acc.ID+":")] = append(localThreads[strings.TrimPrefix(m.ThreadID, "gmail:"+acc.ID+":")], m)
-			}
-			threads := map[string][]gmail.Message{}
-			var threadMu sync.Mutex
-			var threadWG sync.WaitGroup
-			threadSlots := make(chan struct{}, 4)
-			var threadErr error
-			for _, tid := range threadIDs {
-				tid := tid
-				threadWG.Add(1)
-				threadSlots <- struct{}{}
-				go func() {
-					defer threadWG.Done()
-					defer func() { <-threadSlots }()
-					ms, err := c.ThreadMetadata(ctx, tid)
-					threadMu.Lock()
-					defer threadMu.Unlock()
-					if err != nil {
-						threadErr = err
-					} else {
-						threads[tid] = ms
-					}
-				}()
-			}
-			threadWG.Wait()
-			if threadErr != nil {
-				issue(threadErr)
-				return
+				tid := strings.TrimPrefix(m.ThreadID, "gmail:"+acc.ID+":")
+				localThreads[tid] = append(localThreads[tid], m)
 			}
 			convs := []*message.Conversation{}
 			newSeen := []string{}

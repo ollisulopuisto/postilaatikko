@@ -3,10 +3,12 @@ package app
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/hkdb/aerion/internal/folder"
+	"github.com/hkdb/aerion/internal/gmail"
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/pgp"
@@ -170,6 +172,15 @@ func (a *App) GetConversation(threadID, folderID string) (*message.Conversation,
 
 		headers, err := c.ThreadMetadata(a.ctx, strings.TrimPrefix(threadID, prefix))
 		if err != nil {
+			if errors.Is(err, gmail.ErrRateLimited) || errors.Is(err, gmail.ErrTransient) {
+				cached, cacheErr := a.messageStore.GetConversation(threadID, folderID)
+				if cacheErr == nil && cached != nil && len(cached.Messages) > 0 {
+					if err := a.messageStore.EnrichReactions(cached.Messages); err != nil {
+						return nil, err
+					}
+					return cached, nil
+				}
+			}
 			return nil, err
 		}
 		if _, err = a.syncEngine.CacheGmailResults(a.ctx, f.AccountID, headers, []string{folderID}); err != nil {

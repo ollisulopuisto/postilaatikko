@@ -41,6 +41,17 @@ func (e *Engine) GmailClient(ctx context.Context, accountID string) (*gmail.Clie
 	if e.gmailBaseURL != "" {
 		c.BaseURL = e.gmailBaseURL
 	}
+	if c.BaseURL == gmail.DefaultBaseURL {
+		e.gmailBlockMu.Lock()
+		if e.gmailBudgets == nil {
+			e.gmailBudgets = map[string]*gmail.Budget{}
+		}
+		if e.gmailBudgets[accountID] == nil {
+			e.gmailBudgets[accountID] = gmail.NewBudget()
+		}
+		c.Budget = e.gmailBudgets[accountID]
+		e.gmailBlockMu.Unlock()
+	}
 	return c, nil
 }
 func (e *Engine) GmailProviderID(ctx context.Context, c *gmail.Client, m *message.Message) (string, error) {
@@ -239,7 +250,7 @@ func (e *Engine) syncGmailMessages(ctx context.Context, c *gmail.Client, f *fold
 	if days > 0 {
 		q += fmt.Sprintf(" after:%d", time.Now().AddDate(0, 0, -days).Unix())
 	}
-	req := gmail.SearchRequest{Query: strings.TrimSpace(q), Limit: 100}
+	req := gmail.SearchRequest{Query: strings.TrimSpace(q), Limit: 25}
 	if label != "" {
 		req.LabelIDs = []string{label}
 	}
@@ -399,7 +410,7 @@ func (e *Engine) SyncGmailAccount(ctx context.Context, accountID string) ([]stri
 			return nil, err
 		}
 	}
-	req := gmail.SearchRequest{Limit: 100, IncludeSpamTrash: true}
+	req := gmail.SearchRequest{Limit: 25, IncludeSpamTrash: true}
 	if backfill != "!done" {
 		req.PageToken = backfill
 	}

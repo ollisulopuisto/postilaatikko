@@ -1539,4 +1539,14 @@ var migrations = []Migration{
  CREATE TABLE IF NOT EXISTS gmail_attachment_refs(attachment_id TEXT PRIMARY KEY REFERENCES attachments(id) ON DELETE CASCADE,provider_message_id TEXT NOT NULL,provider_attachment_id TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS gmail_draft_refs (draft_id TEXT PRIMARY KEY REFERENCES drafts(id) ON DELETE CASCADE,provider_id TEXT NOT NULL);
  `},
+	{Version: 55, SQL: `
+ -- Gmail metadata inserts previously inherited body_fetched=1. Re-enable
+ -- on-demand fetch for affected empty native cache rows; preserve all content.
+ UPDATE messages SET body_fetched=0,body_failed=0
+ WHERE id IN (SELECT message_id FROM gmail_message_refs)
+ AND body_fetched=1
+ AND COALESCE(body_text,'')='' AND COALESCE(body_html,'')=''
+ AND length(COALESCE(smime_raw_body,''))=0
+ AND length(COALESCE(pgp_raw_body,''))=0;
+ `},
 }

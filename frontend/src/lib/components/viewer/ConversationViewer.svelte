@@ -624,10 +624,14 @@
 
   // Process S/MIME messages on-view (verify/decrypt fresh each time)
   // Fetch bodies on-demand for messages that don't have them yet
+  let bodyFetchErrors = $state<Record<string, string>>({})
+
   async function fetchUnfetchedBodies(messages: messageModels.Message[]) {
     const generation = viewGeneration
     for (const msg of messages) {
+      if (generation !== viewGeneration) return
       if ((msg as any).bodyFetched === false && !msg.bodyHtml && !msg.bodyText) {
+        bodyFetchErrors = { ...bodyFetchErrors, [msg.id]: '' }
         try {
           const updated = await FetchMessageBody(msg.id)
           if (generation !== viewGeneration) {
@@ -646,11 +650,9 @@
             continue
           }
           console.error('Failed to fetch body for message:', msg.id, err)
-          // Message may have been deleted from server — remove from conversation display
-          if (conversation?.messages) {
-            conversation.messages = conversation.messages.filter(m => m.id !== msg.id)
-            conversation = conversation // trigger reactivity
-          }
+          // Rate limits, network failures and authorization errors do not mean
+          // this message was deleted. Keep its header and offer an explicit retry.
+          bodyFetchErrors = { ...bodyFetchErrors, [msg.id]: String(err) }
         }
       }
     }
@@ -2179,11 +2181,17 @@
                       <!-- Body (use on-view result for S/MIME or PGP messages) -->
                       <div class="mb-4">
                         {#if (msg as any).bodyFetched === false && !msg.bodyHtml && !msg.bodyText}
-                          <!-- Body not yet fetched (IDLE synced headers only) -->
-                          <div class="flex items-center gap-2 text-muted-foreground text-sm italic py-4">
-                            <Icon icon="mdi:loading" class="w-4 h-4 animate-spin" />
-                            {$_('viewer.downloadingContent')}
-                          </div>
+                          {#if bodyFetchErrors[msg.id]}
+                            <div class="py-4 text-sm" role="status">
+                              <p class="text-muted-foreground">{$_('viewer.contentDownloadFailed')}</p>
+                              <button type="button" class="mt-2 text-primary hover:underline" onclick={() => void fetchUnfetchedBodies([msg])}>{$_('common.retry')}</button>
+                            </div>
+                          {:else}
+                            <div class="flex items-center gap-2 text-muted-foreground text-sm italic py-4">
+                              <Icon icon="mdi:loading" class="w-4 h-4 animate-spin" />
+                              {$_('viewer.downloadingContent')}
+                            </div>
+                          {/if}
                         {:else if (msg.hasSMIME && !smimeResults[msg.id] && smimeLoading.has(msg.id)) || (msg.hasPGP && !pgpResults[msg.id] && pgpLoading.has(msg.id))}
                           <!-- Show placeholder while processing -->
                           <div class="text-muted-foreground text-sm italic py-4">{$_('viewer.decryptingMessage')}</div>

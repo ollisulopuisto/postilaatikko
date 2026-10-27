@@ -52,8 +52,8 @@ func (s *Store) UpsertGmail(m *Message, providerID string) error {
 	if id == "" {
 		id = uuid.NewString()
 	}
-	_, err = tx.Exec(`INSERT INTO messages(id,account_id,folder_id,uid,message_id,in_reply_to,references_list,thread_id,subject,from_name,from_email,to_list,cc_list,bcc_list,reply_to,read_receipt_to,inbox_category,date,snippet,is_read,is_starred,is_answered,is_draft,size,received_at)
- VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
+	_, err = tx.Exec(`INSERT INTO messages(id,account_id,folder_id,uid,message_id,in_reply_to,references_list,thread_id,subject,from_name,from_email,to_list,cc_list,bcc_list,reply_to,read_receipt_to,inbox_category,date,snippet,is_read,is_starred,is_answered,is_draft,size,received_at,body_fetched)
+ VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0) ON CONFLICT(id) DO UPDATE SET
  thread_id=excluded.thread_id,subject=excluded.subject,from_name=excluded.from_name,from_email=excluded.from_email,to_list=excluded.to_list,cc_list=excluded.cc_list,bcc_list=excluded.bcc_list,reply_to=excluded.reply_to,read_receipt_to=excluded.read_receipt_to,inbox_category=excluded.inbox_category,in_reply_to=excluded.in_reply_to,references_list=excluded.references_list,date=excluded.date,snippet=excluded.snippet,is_read=excluded.is_read,is_starred=excluded.is_starred,is_draft=excluded.is_draft,size=excluded.size`, id, m.AccountID, m.FolderID, key, m.MessageID, m.InReplyTo, m.References, m.ThreadID, m.Subject, m.FromName, m.FromEmail, m.ToList, m.CcList, m.BccList, m.ReplyTo, m.ReadReceiptTo, m.InboxCategory, m.Date.UTC(), m.Snippet, m.IsRead, m.IsStarred, m.IsAnswered, m.IsDraft, m.Size, time.Now().UTC())
 	if err != nil {
 		return err

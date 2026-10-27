@@ -831,8 +831,16 @@
         virtualCursor = response.cursor || ''
         virtualIssues = (response.issues || []).map(item => `${item.accountName}: ${item.message}`).join(' · ')
         const items = response.conversations || []
+        // Keep already visible mail during provider failures; errors are not an
+        // empty mailbox. Accounts that returned successfully still contribute.
+        const failedAccounts = new Set((response.issues || []).map(item => item.accountId))
+        if (currentOffset === 0 && failedAccounts.size && lastLoadedFolderId === folderId) {
+          const keys = new Set(items.map(item => `${item.accountId}:${item.threadId}`))
+          for (const prior of conversations) if (failedAccounts.has(prior.accountId || '') && !keys.has(`${prior.accountId}:${prior.threadId}`)) items.push(prior)
+        }
         const view = virtualFoldersStore.folders.find(item => item.id === folderId)
         conversations = currentOffset === 0 ? retainReadSelection(conversations, items, selectedThreadId, view?.readStatus === 'unread' && lastLoadedFolderId === folderId) : [...new Map([...conversations, ...items].map(c => [`${c.accountId}:${c.threadId}`, c])).values()]
+        listError = conversations.length === 0 && virtualIssues ? virtualIssues : null
         totalCount = conversations.length + (virtualCursor ? 1 : 0)
         if (currentOffset === 0 && (!selectedThreadId || !conversations.some(c => c.threadId === selectedThreadId))) selectedThreadId = conversations[0]?.threadId || null
         lastLoadedFolderId = folderId
@@ -2481,7 +2489,7 @@
   {/if}
 
   {#if virtualIssues}<p class="px-3 py-2 text-xs text-destructive" role="status">{virtualIssues}</p>{/if}
-  {#if isVirtualFolderView && virtualCursor && !loading}<button type="button" class="px-3 py-2 text-sm text-primary" onclick={loadNextPage}>{$_('search.loadMore')}</button>{/if}
+  {#if isVirtualFolderView && virtualCursor && !loading && !virtualIssues}<button type="button" class="px-3 py-2 text-sm text-primary" onclick={loadNextPage}>{$_('search.loadMore')}</button>{/if}
   <!-- Conversation List -->
   <div bind:this={listContainerRef} class="message-list-scroll flex-1 min-h-0 overflow-y-auto scrollbar-thin" onscroll={handleListScroll}>
     <div

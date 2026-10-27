@@ -209,6 +209,7 @@
     "neverChecked": "Ei vielä tarkistettu"
   },
   "viewer": {
+    "contentDownloadFailed": "Viestin sisältöä ei voitu ladata. Viesti on yhä tallessa. Yritä hetken kuluttua uudelleen.",
     "moveToInbox": "Siirrä Saapuneet-kansioon",
     "selectConversation": "Valitse keskustelu lukeaksesi sen",
     "failedToLoad": "Keskustelun lataaminen epäonnistui",

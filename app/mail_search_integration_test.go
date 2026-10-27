@@ -41,8 +41,8 @@ func TestGmailSearchAcrossAccountsAndVirtualFolderFromEmptyCache(t *testing.T) {
 			}
 		}
 	}
-	var bodyCalls, modifies atomic.Int32
-	var failB atomic.Bool
+	var bodyCalls, modifies, metadataCalls atomic.Int32
+	var failB, quotaThreads atomic.Bool
 	header := func(id string) map[string]any {
 		return map[string]any{"id": id, "threadId": id, "internalDate": fmt.Sprint(time.Now().UnixMilli()), "labelIds": []string{"Label_1", "UNREAD"}, "payload": map[string]any{"headers": []map[string]string{{"name": "Subject", "value": "Remote only"}, {"name": "From", "value": "peer@example.org"}, {"name": "Message-ID", "value": "<" + id + "@example.org>"}}}}
 	}
@@ -51,12 +51,17 @@ func TestGmailSearchAcrossAccountsAndVirtualFolderFromEmptyCache(t *testing.T) {
 			w.WriteHeader(401)
 			return
 		}
+		if quotaThreads.Load() && strings.HasPrefix(r.URL.Path, "/threads/") {
+			w.WriteHeader(403)
+			_, _ = w.Write([]byte(`{"error":{"errors":[{"reason":"rateLimitExceeded"}],"message":"quota"}}`))
+			return
+		}
 		switch {
 		case r.URL.Path == "/labels":
 			_, _ = w.Write([]byte(`{"labels":[{"id":"Label_1","name":"Folder 1"},{"id":"Label_2","name":"Folder 2"}]}`))
 		case r.URL.Path == "/messages" && r.Method == http.MethodPost:
 			_, _ = w.Write([]byte(`{"id":"copied"}`))
-		case r.URL.Path == "/messages":
+		case r.URL.Path == "/messages" || r.URL.Path == "/threads":
 			id, next := "same", ""
 			if r.Header.Get("Authorization") == "Bearer a" && r.URL.Query().Get("pageToken") == "" {
 				next = "next"
@@ -64,16 +69,26 @@ func TestGmailSearchAcrossAccountsAndVirtualFolderFromEmptyCache(t *testing.T) {
 			if r.URL.Query().Get("pageToken") == "next" {
 				id = "second"
 			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"messages": []map[string]string{{"id": id}}, "nextPageToken": next})
+			key := "messages"
+			if r.URL.Path == "/threads" {
+				key = "threads"
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{key: []map[string]string{{"id": id}}, "nextPageToken": next})
 		case strings.HasSuffix(r.URL.Path, "/modify"):
 			modifies.Add(1)
 			_, _ = w.Write([]byte(`{}`))
 		case strings.HasPrefix(r.URL.Path, "/messages/"):
+			if r.URL.Query().Get("format") == "full" {
+				bodyCalls.Add(1)
+				_ = json.NewEncoder(w).Encode(map[string]any{"payload": map[string]any{"mimeType": "text/plain", "body": map[string]any{"data": base64.RawURLEncoding.EncodeToString([]byte("Requested content"))}}})
+				return
+			}
 			if r.URL.Query().Get("format") == "raw" {
 				bodyCalls.Add(1)
 				_ = json.NewEncoder(w).Encode(map[string]string{"raw": base64.RawURLEncoding.EncodeToString([]byte("From: peer@example.org\r\nMessage-ID: <same@example.org>\r\n\r\nContent"))})
 				return
 			}
+			metadataCalls.Add(1)
 			_ = json.NewEncoder(w).Encode(header(strings.TrimPrefix(r.URL.Path, "/messages/")))
 		case strings.HasPrefix(r.URL.Path, "/threads/"):
 			_ = json.NewEncoder(w).Encode(map[string]any{"messages": []any{header(strings.TrimPrefix(r.URL.Path, "/threads/"))}})
@@ -115,6 +130,9 @@ func TestGmailSearchAcrossAccountsAndVirtualFolderFromEmptyCache(t *testing.T) {
 		t.Fatalf("one account hid another: %+v %v", partial, err)
 	}
 	failB.Store(false)
+	if metadataCalls.Load() != 0 {
+		t.Fatalf("search duplicated message and thread metadata: %d message gets", metadataCalls.Load())
+	}
 	if bodyCalls.Load() != 0 {
 		t.Fatal("search fetched bodies")
 	}
@@ -124,6 +142,20 @@ func TestGmailSearchAcrossAccountsAndVirtualFolderFromEmptyCache(t *testing.T) {
 			chosen = c
 		}
 	}
+	opened, err := a.messageStore.Get(chosen.MessageIDs[0])
+	if err != nil || opened.BodyFetched {
+		t.Fatalf("search-created message is not header-only: %+v %v", opened, err)
+	}
+	opened, err = a.FetchMessageBody(opened.ID)
+	if err != nil || !opened.BodyFetched || opened.BodyText != "Requested content" {
+		t.Fatalf("on-demand body unavailable: %+v %v", opened, err)
+	}
+	quotaThreads.Store(true)
+	cached, err := a.GetConversation(chosen.ThreadID, chosen.FolderID)
+	if err != nil || cached == nil || len(cached.Messages) == 0 || cached.Messages[0].BodyText != "Requested content" {
+		t.Fatalf("quota hid cached reader: %+v %v", cached, err)
+	}
+	quotaThreads.Store(false)
 	operation, err := a.moveToFolder(chosen.MessageIDs, "a2", true, "")
 	if err != nil || operation == "" {
 		t.Fatalf("native move failed %s %v", operation, err)
