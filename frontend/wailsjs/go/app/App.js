@@ -1218,6 +1218,26 @@ export function SaveAttachmentAs(arg1) {
   return window['go']['app']['App']['SaveAttachmentAs'](arg1);
 }
 
+export function DraftHistoryCommit(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['App']['DraftHistoryCommit'](arg1, arg2, arg3, arg4);
+}
+
+export function DraftHistoryTree(arg1) {
+  return window['go']['app']['App']['DraftHistoryTree'](arg1);
+}
+
+export function DraftHistoryState(arg1) {
+  return window['go']['app']['App']['DraftHistoryState'](arg1);
+}
+
+export function DraftHistoryCheckout(arg1, arg2) {
+  return window['go']['app']['App']['DraftHistoryCheckout'](arg1, arg2);
+}
+
+export function ClearDraftHistory(arg1) {
+  return window['go']['app']['App']['ClearDraftHistory'](arg1);
+}
+
 export function SaveDraft(arg1, arg2, arg3) {
   return window['go']['app']['App']['SaveDraft'](arg1, arg2, arg3);
 }

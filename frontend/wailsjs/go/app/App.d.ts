@@ -633,6 +633,16 @@ export function SaveAllEncryptedAttachments(arg1:string):Promise<string>;
 
 export function SaveAttachmentAs(arg1:string):Promise<string>;
 
+export function DraftHistoryCommit(arg1: string, arg2: string, arg3: string, arg4: string): Promise<string>;
+
+export function DraftHistoryTree(arg1: string): Promise<any>;
+
+export function DraftHistoryState(arg1: string): Promise<string>;
+
+export function DraftHistoryCheckout(arg1: string, arg2: string): Promise<void>;
+
+export function ClearDraftHistory(arg1: string): Promise<void>;
+
 export function SaveDraft(arg1:string,arg2:smtp.ComposeMessage,arg3:string):Promise<app.DraftResult>;
 
 export function SaveEncryptedAttachmentAs(arg1:string,arg2:string):Promise<string>;

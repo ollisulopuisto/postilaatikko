@@ -29,6 +29,7 @@
     filename: string
   }
   import RecipientInput from './RecipientInput.svelte'
+  import { DraftHistoryController } from './draftHistory'
   import EditorToolbar from './EditorToolbar.svelte'
   import QuickReplies from './QuickReplies.svelte'
   import ComposerAttachmentList from './ComposerAttachmentList.svelte'
@@ -229,6 +230,12 @@
     }
   })
 
+  // Recipient edits are accepted composer edits: commit them to the tree.
+  $effect(() => {
+    void JSON.stringify([toRecipients, ccRecipients, bccRecipients])
+    if (historyCtl) historyCommit('recipients')
+  })
+
   // Check recipient certs when encrypt is toggled on or recipients change
   $effect(() => {
     if (!encryptMessage) return
@@ -323,6 +330,72 @@
   let syncStatus = $state<'pending' | 'synced' | 'failed'>('pending') // IMAP sync status
   let lastSavedAt = $state<Date | null>(null)
   let saveTimeoutId: ReturnType<typeof setTimeout> | null = null
+
+  // Branching undo history (Kuulas-style). Every accepted edit commits a
+  // full composer-state node to the local SQLite store; undo/redo move a
+  // pointer, editing after undo forks a branch. The 10s debounce below now
+  // only trails the visible Drafts-folder copy + IMAP sync.
+  const composerInstanceId = crypto.randomUUID()
+  let historyCtl: DraftHistoryController | null = null
+  let historyHeadNode = $state('')
+  let isComposing = false
+  let composeDirty = false
+
+  function historyDraftKey(): string {
+    return `${activeAccountId || accountId}:${draftId || 'new-' + composerInstanceId}`
+  }
+
+  function historySnapshot(): string {
+    // Key order fixed by construction = canonical JSON for hashing.
+    return JSON.stringify({
+      v: 1,
+      html: isPlainTextMode ? null : (editor?.getJSON() ?? null),
+      plain: isPlainTextMode ? plainTextContent : null,
+      subject,
+      to: toRecipients.map(a => ({ name: a.name, address: a.address })),
+      cc: ccRecipients.map(a => ({ name: a.name, address: a.address })),
+      bcc: bccRecipients.map(a => ({ name: a.name, address: a.address })),
+    })
+  }
+
+  async function historyApply(payload: string) {
+    const st = JSON.parse(payload)
+    subject = st.subject || ''
+    toRecipients = (st.to || []).map(toSmtpAddress)
+    ccRecipients = (st.cc || []).map(toSmtpAddress)
+    bccRecipients = (st.bcc || []).map(toSmtpAddress)
+    if (st.plain != null) {
+      plainTextContent = st.plain
+    } else if (st.html != null) {
+      ensureEditor()
+      editor?.commands.setContent(st.html, { emitUpdate: false })
+    }
+    await tick()
+  }
+
+  function historyCommit(label: string) {
+    if (!historyCtl || historyCtl.isApplying) return
+    historyCtl.commit(label)
+    historyHeadNode = historyCtl.currentNode || historyHeadNode
+  }
+
+  function historyEdit(label: string) {
+    // Body edits keep the trailing drafts-folder/IMAP save as before; the
+    // per-edit history commit is the durable local record.
+    scheduleDraftSave()
+    if (isComposing) {
+      composeDirty = true
+      return
+    }
+    historyCommit(label)
+  }
+
+  async function historyUndo() {
+    if (await historyCtl?.undo()) historyHeadNode = historyCtl?.currentNode || ''
+  }
+  async function historyRedo() {
+    if (await historyCtl?.redo()) historyHeadNode = historyCtl?.currentNode || ''
+  }
   let lastContent = ''  // Track content changes to avoid unnecessary saves
 
   // Computed draft status indicator
@@ -829,6 +902,24 @@
 
   // Initialize
   onMount(async () => {
+    historyCtl = new DraftHistoryController(
+      historyDraftKey(),
+      historySnapshot,
+      historyApply,
+      (err) => addToast({ type: 'error', message: String(err) }),
+    )
+    // Reopened draft: resume at the last committed node (survives restarts).
+    // Its state is at least as fresh as the drafts-folder row, so it wins.
+    try {
+      await historyCtl.restore()
+      if (historyCtl.currentNode) {
+        const head = await import('../../../../wailsjs/go/app/App').then(m => m.DraftHistoryState(historyCtl!.currentNode))
+        await historyApply(head)
+        historyHeadNode = historyCtl.currentNode
+      }
+    } catch (err) {
+      console.error('Draft history restore failed:', err)
+    }
     // Load identities — try cross-account first (main window), fall back to single-account (detached)
     try {
       // When replying or forwarding on a no-outgoing account, honor that
@@ -1521,8 +1612,13 @@
   // mode, since the editor <div> lives in the {:else} branch.
   function ensureEditor() {
     if (editor || !editorElement) return
+    editorElement.addEventListener('compositionstart', () => { isComposing = true })
+    editorElement.addEventListener('compositionend', () => {
+      isComposing = false
+      if (composeDirty) { composeDirty = false; historyCommit('typing') }
+    })
     editor = createComposerEditor(editorElement, {
-      onUpdate: scheduleDraftSave,
+      onUpdate: () => historyEdit('typing'),
       onPasteImage: handleInlineImageFile,
       onDropImage: handleInlineImageFile,
       onDropFile: handleDroppedFile,
@@ -1635,6 +1731,15 @@
         securityMode = securityMode === 'smime' ? null : 'smime'
         return
       }
+    }
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'z') {
+      e.preventDefault()
+      if (e.shiftKey) {
+        void historyRedo()
+      } else {
+        void historyUndo()
+      }
+      return
     }
     if (e.key === 'Escape') {
       handleClose()
@@ -1961,7 +2066,7 @@
     <div class="flex items-center gap-3 min-w-0 flex-1">
       {#if isCompact}
         <label for="composer-subject" class="sr-only">{$_('composer.subject')}</label>
-        <input id="composer-subject" bind:value={subject} type="text" placeholder={$_('composer.subject')} class="w-full min-w-0 bg-transparent text-lg font-medium placeholder:text-muted-foreground focus:outline-none" />
+        <input id="composer-subject" bind:value={subject} oninput={() => historyCommit('subject')} type="text" placeholder={$_('composer.subject')} class="w-full min-w-0 bg-transparent text-lg font-medium placeholder:text-muted-foreground focus:outline-none" />
       {/if}
       {#if !isCompact}
         <h2 class="text-lg font-semibold">
@@ -2154,6 +2259,7 @@
       <input
         id="composer-subject"
         bind:value={subject}
+        oninput={() => historyCommit('subject')}
         type="text"
         placeholder={$_('composer.subject')}
         class="flex-1 bg-transparent text-sm focus:outline-none"

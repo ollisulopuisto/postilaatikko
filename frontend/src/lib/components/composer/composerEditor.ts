@@ -194,7 +194,7 @@ export function createComposerEditor(
   return new Editor({
     element,
     extensions: [
-      StarterKit,
+      StarterKit.configure({ undoRedo: false }), // linear undo replaced by drafthistory tree
       Spellcheck,
       Underline,
       ExtendedTextStyle,
