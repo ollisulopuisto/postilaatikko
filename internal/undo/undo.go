@@ -45,6 +45,11 @@ func (c *BaseCommand) CreatedAt() time.Time { return c.createdAt }
 
 // Stack is an undo stack with an optional durable backing store. Without a
 // store it behaves exactly like the original in-memory stack.
+//
+// maxSize <= 0 means no count cap: retention is then purely time-based. The
+// durable mailbox history uses that mode deliberately - the user asked for a
+// 24h (later maybe 7-day) history to observe growth, and a count cap would
+// silently truncate that history before the time limit.
 type Stack struct {
 	mu        sync.Mutex
 	commands  []entry
@@ -147,8 +152,8 @@ func (s *Stack) PushOperation(operationID string, cmd Command, metadata ...Opera
 		Bool("created", created).
 		Msg("UNDO PUSH")
 
-	// Trim if over max size
-	if len(s.commands) > s.maxSize {
+	// Trim if over max size (a non-positive cap means unbounded)
+	if s.maxSize > 0 && len(s.commands) > s.maxSize {
 		s.commands = s.commands[len(s.commands)-s.maxSize:]
 	}
 	s.persistLocked(operationID, meta.Action, meta.MessageIDs, cmd)
@@ -268,7 +273,7 @@ func (s *Stack) RestoreOperation(claim *OperationClaim, failedCommand int) {
 		s.commands = append(s.commands, item)
 		s.persistLocked(item.operationID, item.action, item.messageIDs, item.command)
 	}
-	if len(s.commands) > s.maxSize {
+	if s.maxSize > 0 && len(s.commands) > s.maxSize {
 		s.commands = s.commands[len(s.commands)-s.maxSize:]
 	}
 }
