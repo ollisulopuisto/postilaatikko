@@ -244,7 +244,15 @@
     "saveAndClose": "Lưu & Đóng",
     "failedToImportCert": "Không thể nhập chứng chỉ",
     "failedToImportPGPKey": "Không thể nhập khóa PGP",
-    "sendAnywayGeneric": "Vẫn gửi"
+    "sendAnywayGeneric": "Vẫn gửi",
+    "undo": "Undo",
+    "redo": "Redo",
+    "history": "Edit history",
+    "historyBranches": "Branch tips",
+    "historyEmpty": "No edits yet",
+    "historyEdit": "Edit",
+    "sendQueued": "Sending in 30 seconds - click the countdown to cancel",
+    "failedToSaveDraft": "Failed to save draft before sending"
   },
   "contextMenu": {
     "reply": "Trả lời",
@@ -974,5 +982,11 @@
       "successToast": "Đã bật quyền ghi cho {name}",
       "failureToast": "Không bật được quyền ghi: {message}"
     }
+  },
+  "pendingSend": {
+    "countdown": "Sending in {seconds}s",
+    "cancel": "Cancel",
+    "cancelled": "Send cancelled - draft restored",
+    "alreadySending": "Too late - the send already started"
   }
 }

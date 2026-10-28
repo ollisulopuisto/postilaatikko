@@ -244,7 +244,15 @@
     "saveAndClose": "儲存並關閉",
     "failedToImportCert": "匯入憑證失敗",
     "failedToImportPGPKey": "匯入 PGP 金鑰失敗",
-    "sendAnywayGeneric": "仍然傳送"
+    "sendAnywayGeneric": "仍然傳送",
+    "undo": "Undo",
+    "redo": "Redo",
+    "history": "Edit history",
+    "historyBranches": "Branch tips",
+    "historyEmpty": "No edits yet",
+    "historyEdit": "Edit",
+    "sendQueued": "Sending in 30 seconds - click the countdown to cancel",
+    "failedToSaveDraft": "Failed to save draft before sending"
   },
   "contextMenu": {
     "reply": "回覆",
@@ -974,5 +982,11 @@
       "successToast": "Write access enabled for {name}",
       "failureToast": "Failed to enable write access: {message}"
     }
+  },
+  "pendingSend": {
+    "countdown": "Sending in {seconds}s",
+    "cancel": "Cancel",
+    "cancelled": "Send cancelled - draft restored",
+    "alreadySending": "Too late - the send already started"
   }
 }

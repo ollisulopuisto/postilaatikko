@@ -244,7 +244,15 @@
     "saveAndClose": "Enregistrer et Fermer",
     "failedToImportCert": "Échec de l'importation du certificat",
     "failedToImportPGPKey": "Échec de l'importation de la clé PGP",
-    "sendAnywayGeneric": "Envoyer quand même"
+    "sendAnywayGeneric": "Envoyer quand même",
+    "undo": "Undo",
+    "redo": "Redo",
+    "history": "Edit history",
+    "historyBranches": "Branch tips",
+    "historyEmpty": "No edits yet",
+    "historyEdit": "Edit",
+    "sendQueued": "Sending in 30 seconds - click the countdown to cancel",
+    "failedToSaveDraft": "Failed to save draft before sending"
   },
   "contextMenu": {
     "reply": "Répondre",
@@ -974,5 +982,11 @@
     "implication": "Cela signifie que les fournisseurs avec des identifiants manquants ne fonctionneront pas correctement. Vous n'avez probablement pas installé Postilaatikko depuis une source officielle.",
     "installInstruction": "Pour installer Postilaatikko depuis une source officielle, voir :",
     "dontShowAgain": "Ne plus afficher"
+  },
+  "pendingSend": {
+    "countdown": "Sending in {seconds}s",
+    "cancel": "Cancel",
+    "cancelled": "Send cancelled - draft restored",
+    "alreadySending": "Too late - the send already started"
   }
 }

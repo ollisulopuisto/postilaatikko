@@ -1549,4 +1549,44 @@ var migrations = []Migration{
  AND length(COALESCE(smime_raw_body,''))=0
  AND length(COALESCE(pgp_raw_body,''))=0;
  `},
+	{Version: 56, SQL: `
+ -- Composer draft undo tree (Kuulas-style): every accepted edit is a node
+ -- holding the whole composer state; states are stored once by content hash.
+ -- Undo never destroys: editing after undo forks a new branch.
+ CREATE TABLE IF NOT EXISTS draft_history_states (
+   hash TEXT PRIMARY KEY,
+   payload TEXT NOT NULL,
+   byte_size INTEGER NOT NULL,
+   created_at TEXT NOT NULL DEFAULT (datetime('now'))
+ );
+ CREATE TABLE IF NOT EXISTS draft_history_nodes (
+   node_id TEXT PRIMARY KEY,
+   draft_key TEXT NOT NULL,
+   parent_id TEXT REFERENCES draft_history_nodes(node_id),
+   preferred_child_id TEXT,
+   label TEXT NOT NULL DEFAULT '',
+   state_hash TEXT NOT NULL REFERENCES draft_history_states(hash),
+   created_at TEXT NOT NULL DEFAULT (datetime('now'))
+ );
+ CREATE INDEX IF NOT EXISTS idx_draft_history_nodes_draft ON draft_history_nodes(draft_key, created_at);
+ CREATE TABLE IF NOT EXISTS draft_history_heads (
+   draft_key TEXT PRIMARY KEY,
+   current_node_id TEXT NOT NULL REFERENCES draft_history_nodes(node_id)
+ );
+ `},
+	{Version: 57, SQL: `
+ -- 30-second undo-send queue. The frontend main window owns the countdown
+ -- timer and dispatches through the normal send path; this table makes a
+ -- pending send durable so an app restart can EXPIRE it back to a draft
+ -- instead of silently losing or silently sending it.
+ CREATE TABLE IF NOT EXISTS pending_sends (
+   id TEXT PRIMARY KEY,
+   account_id TEXT NOT NULL,
+   draft_id TEXT NOT NULL DEFAULT '',
+   payload TEXT NOT NULL,
+   dispatch_at TEXT NOT NULL,
+   state TEXT NOT NULL DEFAULT 'pending',
+   created_at TEXT NOT NULL DEFAULT (datetime('now'))
+ );
+ `},
 }

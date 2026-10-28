@@ -123,7 +123,7 @@
     "smimeSignedBy": "Podpisane przez {email} za pomocą S/MIME",
     "smimeUnknownSigner": "Podpisano za pomocą S/MIME — Nieznany podpisujący ({email})",
     "smimeSelfSigned": "Podpisano przez {email} za pomocą S/MIME — Certyfikat podpisany przez samego siebie",
-    "smimeExpiredCert":"Podpisano przez {email} za pomocą S/MIME — Certyfikat wygasł",
+    "smimeExpiredCert": "Podpisano przez {email} za pomocą S/MIME — Certyfikat wygasł",
     "smimeInvalid": "Podpis S/MIME jest nieprawidłowy",
     "smimeDecryptFailed": "Odszyfrowanie S/MIME nie powiodło się",
     "processingPGP": "Przetwarzanie wiadomości PGP...",
@@ -244,7 +244,15 @@
     "saveAndClose": "Zapisz i zamknij",
     "failedToImportCert": "Nie udało się zaimportować certyfikatu",
     "failedToImportPGPKey": "Nie udało się zaimportować klucza PGP",
-    "sendAnywayGeneric": "Wyślij mimo to"
+    "sendAnywayGeneric": "Wyślij mimo to",
+    "undo": "Undo",
+    "redo": "Redo",
+    "history": "Edit history",
+    "historyBranches": "Branch tips",
+    "historyEmpty": "No edits yet",
+    "historyEdit": "Edit",
+    "sendQueued": "Sending in 30 seconds - click the countdown to cancel",
+    "failedToSaveDraft": "Failed to save draft before sending"
   },
   "contextMenu": {
     "reply": "Odpowiedz",
@@ -644,7 +652,7 @@
     "htmlSignature": "Podpis HTML",
     "signatureHelp": "Możesz wkleić zawartość HTML lub dodać obrazy za pomocą adresu URL lub przesyłania pliku",
     "plainTextSignature": "Podpis w zwykłym tekście (opcjonalnie)",
-    "generateFromHtml":  "Utwórz na podstawie HTML",
+    "generateFromHtml": "Utwórz na podstawie HTML",
     "plainTextHelp": "Używane przy wysyłaniu wiadomości w zwykłym tekście",
     "appendSignatureTo": "Dołącz podpis do:",
     "newMessages": "Nowych wiadomości",
@@ -770,7 +778,7 @@
     "deleteConfirmName": "Usunąć \"{name}\"? Spowoduje to usunięcie wszystkich zsynchronizowanych kontaktów z tego źródła.",
     "forceSync": "Wymuś ponowną synchronizację",
     "forceSyncConfirmTitle": "Wymusić ponowną synchronizację źródła „{name}”?",
-"forceSyncConfirmDescription": "Ponownie pobierz wszystkie kontakty z „{name}” z serwera. Uzupełni brakujące pola (telefon, adres, organizacja, notatki itd.), które mogły nie zostać zsynchronizowane w starszych wersjach Postilaatikko. Może to potrwać kilka minut w przypadku dużych książek adresowych.",
+    "forceSyncConfirmDescription": "Ponownie pobierz wszystkie kontakty z „{name}” z serwera. Uzupełni brakujące pola (telefon, adres, organizacja, notatki itd.), które mogły nie zostać zsynchronizowane w starszych wersjach Postilaatikko. Może to potrwać kilka minut w przypadku dużych książek adresowych.",
     "name": "Nazwa",
     "namePlaceholder": "np. Nextcloud, Praca, Osobiste",
     "serverUrl": "Adres URL serwera",
@@ -963,18 +971,24 @@
     "removed": "Usunięto z listy zaufanych"
   },
   "oauth": {
-  "writeAccessPicker": {
-    "title": "Włącz możliwość zapisu",
-    "description": "Wybierz konto {provider}, któremu chcesz przyznać uprawnienia do zapisu w źródle {sourceName}.",
-    "providerGoogle": "Google",
-    "providerMicrosoft": "Microsoft",
-    "loadFailed": "Nie udało się wczytać kont: {message}",
-    "emptyHeading": "Brak kont {provider}.",
-    "emptyHint": "Najpierw dodaj konto {provider} w Poczcie (Ustawienia → Konta) lub w Kontaktach (Ustawienia → Kontakty → Dodaj źródło), a następnie wróć tutaj.",
-    "cancel": "Anuluj",
-    "continue": "Kontynuuj",
-    "successToast": "Włączono uprawnienia do zapisu dla {name}",
-    "failureToast": "Nie udało się włączyć uprawnień do zapisu: {message}"
+    "writeAccessPicker": {
+      "title": "Włącz możliwość zapisu",
+      "description": "Wybierz konto {provider}, któremu chcesz przyznać uprawnienia do zapisu w źródle {sourceName}.",
+      "providerGoogle": "Google",
+      "providerMicrosoft": "Microsoft",
+      "loadFailed": "Nie udało się wczytać kont: {message}",
+      "emptyHeading": "Brak kont {provider}.",
+      "emptyHint": "Najpierw dodaj konto {provider} w Poczcie (Ustawienia → Konta) lub w Kontaktach (Ustawienia → Kontakty → Dodaj źródło), a następnie wróć tutaj.",
+      "cancel": "Anuluj",
+      "continue": "Kontynuuj",
+      "successToast": "Włączono uprawnienia do zapisu dla {name}",
+      "failureToast": "Nie udało się włączyć uprawnień do zapisu: {message}"
     }
+  },
+  "pendingSend": {
+    "countdown": "Sending in {seconds}s",
+    "cancel": "Cancel",
+    "cancelled": "Send cancelled - draft restored",
+    "alreadySending": "Too late - the send already started"
   }
 }

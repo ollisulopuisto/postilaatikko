@@ -86,6 +86,14 @@ func (a *App) handleIPCMessage(clientID string, msg ipc.Message) {
 		}
 		a.handleComposerDraftDeleted(payload)
 
+	case ipc.TypePendingSendQueued:
+		var payload ipc.PendingSendQueuedPayload
+		if err := msg.ParsePayload(&payload); err != nil {
+			log.Error().Err(err).Msg("Failed to parse pending_send_queued payload")
+			return
+		}
+		a.handlePendingSendQueued(payload)
+
 	case ipc.TypeComposerReady:
 		log.Info().Str("clientID", clientID).Msg("Composer window ready")
 

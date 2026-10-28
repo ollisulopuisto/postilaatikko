@@ -22,6 +22,9 @@ const (
 
 	// TypeComposerClosed indicates the composer window was closed
 	TypeComposerClosed = "composer_closed"
+
+	// TypePendingSendQueued indicates the composer queued a delayed send
+	TypePendingSendQueued = "pending_send_queued"
 )
 
 // Message type constants for Main -> Composer (broadcast) communication
@@ -55,6 +58,14 @@ const (
 type MessageSentPayload struct {
 	AccountID string `json:"account_id"`
 	FolderID  int64  `json:"folder_id"`
+}
+
+// PendingSendQueuedPayload is the payload for TypePendingSendQueued messages.
+type PendingSendQueuedPayload struct {
+	ID         string `json:"id"`
+	AccountID  string `json:"account_id"`
+	DraftID    string `json:"draft_id"`
+	DispatchAt string `json:"dispatch_at"`
 }
 
 // DraftSavedPayload is the payload for TypeDraftSaved messages.

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '@iconify/svelte'
   // Load offline icon data before anything else
   import { LAYOUT_SYMBOL, PERMANENT_DELETE } from '$lib/keyboard/shortcuts'
   import './lib/iconify-offline'
@@ -59,7 +60,7 @@
   import { publishUndoOperationCompleted, publishUndoOperationCreated } from '$lib/components/list/undoMutationEvents'
   import { runMessageMutation } from '$lib/components/list/mutationInFlight'
   // @ts-ignore - wailsjs path
-  import { PrepareReply, GetPendingMailto, GetDraftForEdit, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, UndoOperation, UndoLatestWithResult, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, OpenComposerWindow, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
+  import { PrepareReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, SendMessageWithDraftGuard, QueuePendingSend, CancelPendingSend, CompletePendingSend, ListPendingSends, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, UndoOperation, UndoLatestWithResult, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, OpenComposerWindow, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
   // @ts-ignore - wailsjs path
   import { smtp, folder, certificate } from '../wailsjs/go/models'
   // @ts-ignore - wailsjs runtime
@@ -349,8 +350,72 @@
     return searchTree(acc.folders)
   }
 
+  // 30-second undo-send countdown (user-approved). The composer queues the
+  // send and closes; this bar owns the timer, dispatch and cancel. Restart
+  // never auto-sends: the backend expires leftover rows at startup.
+  type PendingSendItem = { id: string; accountId: string; draftId: string; payload: string; dispatchAt: string; dispatching?: boolean }
+  let pendingSends = $state<PendingSendItem[]>([])
+  let pendingNow = $state(Date.now())
+
+  function pendingRemove(id: string) {
+    pendingSends = pendingSends.filter(p => p.id !== id)
+  }
+
+  async function pendingDispatch(ps: PendingSendItem) {
+    if (ps.dispatching) return
+    ps.dispatching = true
+    try {
+      const msg = JSON.parse(ps.payload)
+      await SendMessageWithDraftGuard(ps.accountId, msg, ps.draftId)
+      if (ps.draftId) {
+        DeleteDraft(ps.draftId).catch(err => console.error('Failed to delete draft after send:', err))
+      }
+      await CompletePendingSend(ps.id)
+      pendingRemove(ps.id)
+      addToast({ type: 'success', message: $_('composer.messageSent') })
+      messageListRef?.handleActionComplete?.(false)
+    } catch (err) {
+      // The send attempt is over; the draft row is untouched and reopenable.
+      await CompletePendingSend(ps.id).catch(() => {})
+      pendingRemove(ps.id)
+      addToast({ type: 'error', message: String(err) })
+    }
+  }
+
+  async function pendingCancel(ps: PendingSendItem) {
+    try {
+      await CancelPendingSend(ps.id)
+      pendingRemove(ps.id)
+      addToast({ type: 'info', message: $_('pendingSend.cancelled') })
+      if (ps.draftId) await handleEditDraft(ps.draftId)
+    } catch (err) {
+      pendingRemove(ps.id)
+      addToast({ type: 'error', message: $_('pendingSend.alreadySending') })
+    }
+  }
+
+  function pendingRemaining(ps: PendingSendItem): number {
+    return Math.max(0, Math.ceil((new Date(ps.dispatchAt).getTime() - pendingNow) / 1000))
+  }
+
   onMount(async () => {
     // Listen for notification click events from backend
+    try {
+      pendingSends = await ListPendingSends() as PendingSendItem[]
+    } catch { /* older backend without pending sends */ }
+    EventsOn('pending-send:queued', (ps: PendingSendItem) => {
+      if (!pendingSends.some(p => p.id === ps.id)) pendingSends = [...pendingSends, ps]
+    })
+    EventsOn('pending-send:cancelled', (id: string) => pendingRemove(id))
+    const pendingTick = setInterval(() => {
+      pendingNow = Date.now()
+      for (const ps of pendingSends) {
+        if (!ps.dispatching && new Date(ps.dispatchAt).getTime() <= Date.now()) {
+          void pendingDispatch(ps)
+        }
+      }
+    }, 250)
+
     EventsOn('notification:clicked', (data: { accountId: string; folderId: string; threadId: string }) => {
       // Find folder info for display
       const folderInfo = findFolderById(data.accountId, data.folderId)
@@ -1057,6 +1122,27 @@
     // Don't intercept while a modal dialog has the guard active — keystrokes
     // (especially Ctrl+A) should target dialog inputs, not the background.
     if (isDialogGuardActive()) return
+
+    // Undo-send countdown takes priority: Esc / Cmd-Z cancels the pending
+    // send, Cmd-Shift-Enter dispatches it immediately (user-approved).
+    if (pendingSends.length > 0) {
+      const ps = pendingSends[0]
+      if (e.key === 'Escape' && !ps.dispatching) {
+        e.preventDefault()
+        void pendingCancel(ps)
+        return
+      }
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'z' && !ps.dispatching) {
+        e.preventDefault()
+        void pendingCancel(ps)
+        return
+      }
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.shiftKey && e.key === 'Enter') {
+        e.preventDefault()
+        void pendingDispatch(ps)
+        return
+      }
+    }
 
     // macOS-standard Preferences shortcut. Allow this even when an input has
     // focus so users can reach settings from anywhere in the main window.
@@ -2100,6 +2186,21 @@
 {/if}
 
 <!-- Command palette (Cmd+P / Ctrl+P, Alfred style quick launcher). -->
+{#if pendingSends.length > 0}
+  <div class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-full border border-border bg-popover px-4 py-2 shadow-lg" role="status" aria-live="polite">
+    <Icon icon="mdi:send-clock-outline" class="w-4 h-4 text-muted-foreground" />
+    <span class="text-sm">{$_('pendingSend.countdown', { values: { seconds: pendingRemaining(pendingSends[0]) } })}</span>
+    <div class="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
+      <div class="h-full bg-primary transition-all" style="width: {Math.min(100, (pendingRemaining(pendingSends[0]) / 30) * 100)}%"></div>
+    </div>
+    <button
+      class="rounded-full px-2.5 py-1 text-sm font-medium hover:bg-muted disabled:opacity-50"
+      disabled={pendingSends[0].dispatching}
+      onclick={() => void pendingCancel(pendingSends[0])}
+    >{$_('pendingSend.cancel')}</button>
+  </div>
+{/if}
+
 <CommandPalette />
 
 <!-- Shutdown Overlay -->

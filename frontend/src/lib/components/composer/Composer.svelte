@@ -29,6 +29,7 @@
     filename: string
   }
   import RecipientInput from './RecipientInput.svelte'
+  import { DraftHistoryController } from './draftHistory'
   import EditorToolbar from './EditorToolbar.svelte'
   import QuickReplies from './QuickReplies.svelte'
   import ComposerAttachmentList from './ComposerAttachmentList.svelte'
@@ -229,6 +230,12 @@
     }
   })
 
+  // Recipient edits are accepted composer edits: commit them to the tree.
+  $effect(() => {
+    void JSON.stringify([toRecipients, ccRecipients, bccRecipients])
+    if (historyCtl) historyCommit('recipients')
+  })
+
   // Check recipient certs when encrypt is toggled on or recipients change
   $effect(() => {
     if (!encryptMessage) return
@@ -323,6 +330,102 @@
   let syncStatus = $state<'pending' | 'synced' | 'failed'>('pending') // IMAP sync status
   let lastSavedAt = $state<Date | null>(null)
   let saveTimeoutId: ReturnType<typeof setTimeout> | null = null
+
+  // Branching undo history (Kuulas-style). Every accepted edit commits a
+  // full composer-state node to the local SQLite store; undo/redo move a
+  // pointer, editing after undo forks a branch. The 10s debounce below now
+  // only trails the visible Drafts-folder copy + IMAP sync.
+  const composerInstanceId = crypto.randomUUID()
+  let historyCtl: DraftHistoryController | null = null
+  let historyHeadNode = $state('')
+  let isComposing = false
+  let composeDirty = false
+
+  function historyDraftKey(): string {
+    return `${activeAccountId || accountId}:${draftId || 'new-' + composerInstanceId}`
+  }
+
+  function historySnapshot(): string {
+    // Key order fixed by construction = canonical JSON for hashing.
+    return JSON.stringify({
+      v: 1,
+      html: isPlainTextMode ? null : (editor?.getJSON() ?? null),
+      plain: isPlainTextMode ? plainTextContent : null,
+      subject,
+      to: toRecipients.map(a => ({ name: a.name, address: a.address })),
+      cc: ccRecipients.map(a => ({ name: a.name, address: a.address })),
+      bcc: bccRecipients.map(a => ({ name: a.name, address: a.address })),
+    })
+  }
+
+  async function historyApply(payload: string) {
+    const st = JSON.parse(payload)
+    subject = st.subject || ''
+    toRecipients = (st.to || []).map(toSmtpAddress)
+    ccRecipients = (st.cc || []).map(toSmtpAddress)
+    bccRecipients = (st.bcc || []).map(toSmtpAddress)
+    if (st.plain != null) {
+      plainTextContent = st.plain
+    } else if (st.html != null) {
+      ensureEditor()
+      editor?.commands.setContent(st.html, { emitUpdate: false })
+    }
+    await tick()
+  }
+
+  function historyCommit(label: string) {
+    if (!historyCtl || historyCtl.isApplying) return
+    historyCtl.commit(label)
+    historyHeadNode = historyCtl.currentNode || historyHeadNode
+    void historyRefreshNav()
+  }
+
+  function historyEdit(label: string) {
+    // Body edits keep the trailing drafts-folder/IMAP save as before; the
+    // per-edit history commit is the durable local record.
+    scheduleDraftSave()
+    if (isComposing) {
+      composeDirty = true
+      return
+    }
+    historyCommit(label)
+  }
+
+  async function historyUndo() {
+    if (await historyCtl?.undo()) historyHeadNode = historyCtl?.currentNode || ''
+    await historyRefreshNav()
+  }
+  async function historyRedo() {
+    if (await historyCtl?.redo()) historyHeadNode = historyCtl?.currentNode || ''
+    await historyRefreshNav()
+  }
+
+  let historyCanUndo = $state(false)
+  let historyCanRedo = $state(false)
+  let historyPanelOpen = $state(false)
+  let historyTips = $state<Array<{ nodeId: string; label: string; createdAt: string }>>([])
+
+  async function historyRefreshNav() {
+    if (!historyCtl) return
+    const tree = await historyCtl.tree()
+    const cur = tree.nodes.find(n => n.nodeId === historyCtl?.currentNode)
+    historyCanUndo = !!cur?.parentId
+    historyCanRedo = !!cur && (cur.preferredChildId !== '' || tree.nodes.some(n => n.parentId === cur.nodeId))
+    if (historyPanelOpen) {
+      historyTips = (await historyCtl.branchTips()).map(n => ({ nodeId: n.nodeId, label: n.label, createdAt: n.createdAt }))
+    }
+  }
+
+  async function historyTogglePanel() {
+    historyPanelOpen = !historyPanelOpen
+    if (historyPanelOpen) await historyRefreshNav()
+  }
+
+  async function historyGoto(nodeId: string) {
+    await historyCtl?.goto(nodeId)
+    historyHeadNode = historyCtl?.currentNode || ''
+    await historyRefreshNav()
+  }
   let lastContent = ''  // Track content changes to avoid unnecessary saves
 
   // Computed draft status indicator
@@ -829,6 +932,25 @@
 
   // Initialize
   onMount(async () => {
+    historyCtl = new DraftHistoryController(
+      historyDraftKey(),
+      historySnapshot,
+      historyApply,
+      (err) => addToast({ type: 'error', message: String(err) }),
+    )
+    // Reopened draft: resume at the last committed node (survives restarts).
+    // Its state is at least as fresh as the drafts-folder row, so it wins.
+    try {
+      await historyCtl.restore()
+      if (historyCtl.currentNode) {
+        const head = await import('../../../../wailsjs/go/app/App').then(m => m.DraftHistoryState(historyCtl!.currentNode))
+        await historyApply(head)
+        historyHeadNode = historyCtl.currentNode
+      }
+      await historyRefreshNav()
+    } catch (err) {
+      console.error('Draft history restore failed:', err)
+    }
     // Load identities — try cross-account first (main window), fall back to single-account (detached)
     try {
       // When replying or forwarding on a no-outgoing account, honor that
@@ -1338,6 +1460,22 @@
         return
       }
       const message = buildMessage()
+      // 30-second undo-send: the draft must exist so cancel can restore it,
+      // then the send is queued; the main window's countdown bar dispatches
+      // through the normal send path (or cancels back to this draft).
+      if (api.queuePendingSend) {
+        const saved = await saveDraft()
+        if (saved === 'failed' || saved === 'discarding' || !currentDraftId) {
+          throw new Error($_('composer.failedToSaveDraft'))
+        }
+        await api.queuePendingSend(activeAccountId, currentDraftId, JSON.stringify(message))
+        addToast({
+          type: 'success',
+          message: $_('composer.sendQueued'),
+        })
+        onClose?.()
+        return
+      }
       await api.sendMessage(activeAccountId, message, currentDraftId || '')
 
       // Delete the draft on successful send (fire-and-forget - don't block UI)
@@ -1521,8 +1659,13 @@
   // mode, since the editor <div> lives in the {:else} branch.
   function ensureEditor() {
     if (editor || !editorElement) return
+    editorElement.addEventListener('compositionstart', () => { isComposing = true })
+    editorElement.addEventListener('compositionend', () => {
+      isComposing = false
+      if (composeDirty) { composeDirty = false; historyCommit('typing') }
+    })
     editor = createComposerEditor(editorElement, {
-      onUpdate: scheduleDraftSave,
+      onUpdate: () => historyEdit('typing'),
       onPasteImage: handleInlineImageFile,
       onDropImage: handleInlineImageFile,
       onDropFile: handleDroppedFile,
@@ -1635,6 +1778,21 @@
         securityMode = securityMode === 'smime' ? null : 'smime'
         return
       }
+    }
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'z') {
+      e.preventDefault()
+      if (e.shiftKey) {
+        void historyRedo()
+      } else {
+        void historyUndo()
+      }
+      return
+    }
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'w') {
+      // Same close flow as the X button / Escape: draft-safe confirm dialog.
+      e.preventDefault()
+      handleClose()
+      return
     }
     if (e.key === 'Escape') {
       handleClose()
@@ -1956,12 +2114,31 @@
   role="region"
   aria-label={$_('aria.emailComposer')}
 >
+  {#if historyPanelOpen}
+    <div class="absolute right-2 top-12 z-50 w-72 max-h-80 overflow-auto rounded-lg border border-border bg-popover p-2 shadow-lg" role="dialog" aria-label={$_('composer.history')}>
+      <div class="px-2 py-1 text-xs font-medium text-muted-foreground">{$_('composer.historyBranches')}</div>
+      {#if historyTips.length === 0}
+        <div class="px-2 py-2 text-sm text-muted-foreground">{$_('composer.historyEmpty')}</div>
+      {:else}
+        {#each historyTips as tip (tip.nodeId)}
+          <button
+            class="w-full text-left rounded-md px-2 py-1.5 text-sm hover:bg-muted {tip.nodeId === historyHeadNode ? 'bg-muted font-medium' : ''}"
+            onclick={() => void historyGoto(tip.nodeId)}
+          >
+            <span class="block truncate">{tip.label || $_('composer.historyEdit')}</span>
+            <span class="block text-xs text-muted-foreground">{new Date(tip.createdAt).toLocaleString()}</span>
+          </button>
+        {/each}
+      {/if}
+    </div>
+  {/if}
+
   <!-- Header -->
   <div class="flex items-center justify-between gap-3 border-b border-border shrink-0 {isCompact ? 'px-6 h-[52px]' : 'px-4 py-3'}">
     <div class="flex items-center gap-3 min-w-0 flex-1">
       {#if isCompact}
         <label for="composer-subject" class="sr-only">{$_('composer.subject')}</label>
-        <input id="composer-subject" bind:value={subject} type="text" placeholder={$_('composer.subject')} class="w-full min-w-0 bg-transparent text-lg font-medium placeholder:text-muted-foreground focus:outline-none" />
+        <input id="composer-subject" bind:value={subject} oninput={() => historyCommit('subject')} type="text" placeholder={$_('composer.subject')} class="w-full min-w-0 bg-transparent text-lg font-medium placeholder:text-muted-foreground focus:outline-none" />
       {/if}
       {#if !isCompact}
         <h2 class="text-lg font-semibold">
@@ -1985,6 +2162,34 @@
       {/if}
     </div>
     <div class="flex items-center gap-2">
+      <!-- Branching undo controls -->
+      <button
+        onclick={() => void historyUndo()}
+        disabled={!historyCanUndo}
+        class="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        title={$_('composer.undo')}
+        aria-label={$_('composer.undo')}
+      >
+        <Icon icon="mdi:undo" class="w-4 h-4" />
+      </button>
+      <button
+        onclick={() => void historyRedo()}
+        disabled={!historyCanRedo}
+        class="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        title={$_('composer.redo')}
+        aria-label={$_('composer.redo')}
+      >
+        <Icon icon="mdi:redo" class="w-4 h-4" />
+      </button>
+      <button
+        onclick={() => void historyTogglePanel()}
+        class="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+        title={$_('composer.history')}
+        aria-label={$_('composer.history')}
+        aria-expanded={historyPanelOpen}
+      >
+        <Icon icon="mdi:history" class="w-4 h-4" />
+      </button>
       <!-- Pop-out button (only shown in main window, not detached) -->
       {#if !isDetached && api.openComposerWindow}
         <button
@@ -2154,6 +2359,7 @@
       <input
         id="composer-subject"
         bind:value={subject}
+        oninput={() => historyCommit('subject')}
         type="text"
         placeholder={$_('composer.subject')}
         class="flex-1 bg-transparent text-sm focus:outline-none"
