@@ -227,3 +227,35 @@ func (s *Store) Clear(draftKey string) error {
 	}
 	return tx.Commit()
 }
+
+// Move re-keys an entire tree from oldKey to newKey. Used when an unsaved
+// "new" draft first gets a real draft ID: the pre-save states committed
+// under the temporary key stay reachable instead of being orphaned. It is
+// a no-op when no tree exists under oldKey. If a tree already exists under
+// newKey (e.g. a restored draft was edited before the re-key arrived), the
+// caller must resolve that conflict before calling; Move refuses rather
+// than merging two live trees.
+func (s *Store) Move(oldKey, newKey string) error {
+	if oldKey == newKey {
+		return nil
+	}
+	tx, err := s.db.BeginTx(context.Background(), nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var existing int
+	if err := tx.QueryRow(`SELECT COUNT(1) FROM draft_history_nodes WHERE draft_key = ?`, newKey).Scan(&existing); err != nil {
+		return err
+	}
+	if existing > 0 {
+		return fmt.Errorf("draft history: target key %q already has a tree", newKey)
+	}
+	if _, err := tx.Exec(`UPDATE draft_history_nodes SET draft_key = ? WHERE draft_key = ?`, newKey, oldKey); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(`UPDATE draft_history_heads SET draft_key = ? WHERE draft_key = ?`, newKey, oldKey); err != nil {
+		return err
+	}
+	return tx.Commit()
+}

@@ -9,12 +9,16 @@
 // of durable storage. That in-flight window is the honest crash-loss
 // boundary (force-kill mid-write); it is NOT claimed as zero.
 
-import {
-  DraftHistoryCommit,
-  DraftHistoryTree,
-  DraftHistoryState,
-  DraftHistoryCheckout,
-} from '../../../../wailsjs/go/app/App'
+// The backend is injected so the same controller works in the main window
+// (App bindings) and the detached composer (ComposerApp bindings).
+export interface HistoryBackend {
+  commit: (draftKey: string, parentId: string, label: string, payload: string) => Promise<string>
+  tree: (draftKey: string) => Promise<HistoryTree>
+  state: (nodeId: string) => Promise<string>
+  checkout: (draftKey: string, nodeId: string) => Promise<void>
+  clear: (draftKey: string) => Promise<void>
+  move: (oldKey: string, newKey: string) => Promise<void>
+}
 
 export interface HistoryNode {
   nodeId: string
@@ -41,10 +45,37 @@ export class DraftHistoryController {
 
   constructor(
     private draftKey: string,
+    private backend: HistoryBackend,
     private snapshot: SnapshotProvider,
     private apply: SnapshotApplier,
     private onError: (err: unknown) => void,
   ) {}
+
+  /** Start over under a new key with no nodes (account switch). */
+  reset(newKey: string): void {
+    this.draftKey = newKey
+    this.currentNodeId = ''
+    this.lastPayload = ''
+    this.treeCache = null
+  }
+
+  /** Re-key the whole tree (unsaved draft got a real draft ID). */
+  moveKey(newKey: string): void {
+    if (newKey === this.draftKey) return
+    const oldKey = this.draftKey
+    this.draftKey = newKey // optimistic, like commit payloads
+    this.queue = this.queue
+      .then(() => this.backend.move(oldKey, newKey))
+      .catch((err) => this.onError(err))
+  }
+
+  /** Delete the whole tree (actual send or explicit discard). */
+  clear(): void {
+    const key = this.draftKey
+    this.queue = this.queue
+      .then(() => this.backend.clear(key))
+      .catch((err) => this.onError(err))
+  }
 
   get currentNode(): string {
     return this.currentNodeId
@@ -57,11 +88,11 @@ export class DraftHistoryController {
 
   /** Load an existing tree (draft reopened after restart). */
   async restore(): Promise<void> {
-    const tree = (await DraftHistoryTree(this.draftKey)) as HistoryTree
+    const tree = await this.backend.tree(this.draftKey)
     this.treeCache = tree
     this.currentNodeId = tree.currentNodeId || ''
     if (this.currentNodeId) {
-      this.lastPayload = await DraftHistoryState(this.currentNodeId)
+      this.lastPayload = await this.backend.state(this.currentNodeId)
     }
   }
 
@@ -72,7 +103,7 @@ export class DraftHistoryController {
     if (payload === this.lastPayload) return
     this.lastPayload = payload // optimistic: identical rapid edits collapse only exact duplicates
     this.queue = this.queue
-      .then(() => DraftHistoryCommit(this.draftKey, this.currentNodeId, label, payload))
+      .then(() => this.backend.commit(this.draftKey, this.currentNodeId, label, payload))
       .then((nodeId) => {
         this.currentNodeId = nodeId
         this.treeCache = null
@@ -82,7 +113,7 @@ export class DraftHistoryController {
 
   async tree(): Promise<HistoryTree> {
     if (!this.treeCache) {
-      this.treeCache = (await DraftHistoryTree(this.draftKey)) as HistoryTree
+      this.treeCache = await this.backend.tree(this.draftKey)
     }
     return this.treeCache
   }
@@ -91,8 +122,8 @@ export class DraftHistoryController {
     await this.queue // land every accepted edit before moving the pointer
     this.applying = true
     try {
-      await DraftHistoryCheckout(this.draftKey, nodeId)
-      const payload = await DraftHistoryState(nodeId)
+      await this.backend.checkout(this.draftKey, nodeId)
+      const payload = await this.backend.state(nodeId)
       this.currentNodeId = nodeId
       this.lastPayload = payload
       this.treeCache = null

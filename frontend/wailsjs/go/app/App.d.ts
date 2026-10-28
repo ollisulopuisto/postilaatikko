@@ -643,6 +643,8 @@ export function DraftHistoryCheckout(arg1: string, arg2: string): Promise<void>;
 
 export function ClearDraftHistory(arg1: string): Promise<void>;
 
+export function MoveDraftHistory(arg1: string, arg2: string): Promise<void>;
+
 export function QueuePendingSend(arg1: string, arg2: string, arg3: string): Promise<string>;
 
 export function CancelPendingSend(arg1: string): Promise<void>;

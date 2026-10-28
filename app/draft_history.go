@@ -33,7 +33,44 @@ func (a *App) DraftHistoryCheckout(draftKey, nodeID string) error {
 }
 
 // ClearDraftHistory deletes a draft's whole tree. Nothing calls this yet:
-// wiring it to send/discard lifecycle awaits the settled product decision.
+// wiring it to send/discard lifecycle lands in the follow-up PR.
 func (a *App) ClearDraftHistory(draftKey string) error {
 	return a.draftHistoryStore().Clear(draftKey)
+}
+
+// MoveDraftHistory re-keys a tree when an unsaved draft first gets a real
+// draft ID, keeping pre-save states reachable. See store.Move semantics.
+func (a *App) MoveDraftHistory(oldKey, newKey string) error {
+	return a.draftHistoryStore().Move(oldKey, newKey)
+}
+
+func (c *ComposerApp) draftHistoryStore() *drafthistory.Store {
+	return drafthistory.NewStore(c.db.DB)
+}
+
+// Detached-composer twins: the child process binds only ComposerApp, so it
+// needs its own history bindings against the shared database.
+
+func (c *ComposerApp) DraftHistoryCommit(draftKey, parentID, label, payload string) (string, error) {
+	return c.draftHistoryStore().Commit(draftKey, parentID, label, payload)
+}
+
+func (c *ComposerApp) DraftHistoryTree(draftKey string) (*drafthistory.Tree, error) {
+	return c.draftHistoryStore().Tree(draftKey)
+}
+
+func (c *ComposerApp) DraftHistoryState(nodeID string) (string, error) {
+	return c.draftHistoryStore().State(nodeID)
+}
+
+func (c *ComposerApp) DraftHistoryCheckout(draftKey, nodeID string) error {
+	return c.draftHistoryStore().Checkout(draftKey, nodeID)
+}
+
+func (c *ComposerApp) ClearDraftHistory(draftKey string) error {
+	return c.draftHistoryStore().Clear(draftKey)
+}
+
+func (c *ComposerApp) MoveDraftHistory(oldKey, newKey string) error {
+	return c.draftHistoryStore().Move(oldKey, newKey)
 }

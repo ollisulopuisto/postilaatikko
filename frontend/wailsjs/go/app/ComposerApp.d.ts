@@ -119,3 +119,15 @@ export function Shutdown(arg1:context.Context):Promise<void>;
 export function Startup(arg1:context.Context):Promise<void>;
 
 export function UpdateScheduledMessage(arg1:string,arg2:string):Promise<app.ScheduleResult>;
+
+export function DraftHistoryCommit(arg1: string, arg2: string, arg3: string, arg4: string): Promise<string>;
+
+export function DraftHistoryTree(arg1: string): Promise<any>;
+
+export function DraftHistoryState(arg1: string): Promise<string>;
+
+export function DraftHistoryCheckout(arg1: string, arg2: string): Promise<void>;
+
+export function ClearDraftHistory(arg1: string): Promise<void>;
+
+export function MoveDraftHistory(arg1: string, arg2: string): Promise<void>;
