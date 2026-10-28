@@ -1,5 +1,6 @@
 <script lang="ts">
   // Load offline icon data before anything else
+  import { LAYOUT_SYMBOL, PERMANENT_DELETE } from '$lib/keyboard/shortcuts'
   import './lib/iconify-offline'
   import { clearCache as clearInlineAttachmentCache } from './lib/stores/inlineAttachmentCache'
 
@@ -1116,7 +1117,7 @@
     // with no kit pane DOM-focused but an extension is the active rail pane —
     // we don't want those acting on the (hidden) mail UI.
     const isMailActive = () => getActiveExtension() === 'mail'
-    if (e.ctrlKey || e.metaKey) {
+    if ((e.ctrlKey || e.metaKey) && !LAYOUT_SYMBOL(e)) {
       // GLOBAL Ctrl/Cmd shortcuts — fire regardless of active rail pane.
       switch (e.key.toLowerCase()) {
         case 'q':
@@ -1300,7 +1301,7 @@
     }
 
     // Handle Alt shortcuts (pane/folder navigation, always work)
-    if (e.altKey) {
+    if (e.altKey && !LAYOUT_SYMBOL(e)) {
       // Pane navigation is meaningless in focus mode (other panes hidden)
       if (focusMode !== 'off') return
 
@@ -1672,14 +1673,14 @@
       case 'Backspace':
       case 'Delete': {
         if (focusedPane === 'viewer' && viewerRef?.hasFocusedMessage()) {
-          if (e.shiftKey) {
+          if (PERMANENT_DELETE(e)) {
             viewerRef.deletePermanently()
             return
           }
           viewerRef.trash()
           return
         }
-        runListAction('mail.trash', { permanent: e.shiftKey })
+        runListAction('mail.trash', { permanent: PERMANENT_DELETE(e) })
         return
       }
     }

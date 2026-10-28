@@ -34,6 +34,13 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 
 | Task | Effort | Scope | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
+| KEYBOARD-FI-001 | Medium | Finnish keyboard layouts, including AltGr-produced `#` shortcuts. | Codex / `codex/KEYBOARD-FI-001-altgr` / `/private/tmp/postilaatikko-keyboard-fi` | Review; character-based symbol shortcuts accept macOS Option and Windows/Linux AltGr, including focused message bodies; # remains Trash even when Shift produces it. Verified shortcut tests, svelte-check and targeted lint. Live Finnish keyboard/WKWebView verification remains. |
+| INBOX-DUP | Medium | Legacy/Gmail duplicate inbox rows. | Codex / `codex/INBOX-DUP-unified` | Review; source `7082e0d`. |
+| CHARSET-001 | Medium | Finnish plain-text mojibake repair. | Codex / `codex/CHARSET-001-mail-decoding` | Review; source `e1f0e42`; HTML/live verification remains. |
+| FACET-001 | Medium | Visible search facets and quick buttons instead of a dropdown. | — | Unclaimed; user request 2026-10-28. |
+
+| Task | Effort | Scope | Owner / branch / worktree | Status |
+| --- | --- | --- | --- | --- |
 | GLOBAL-003 | Large | Live Gmail repair: headers load but bodies unavailable; virtual-folder request quota exhaustion; preserve successful results and show retryable errors. | Codex / `codex/GLOBAL-003-gmail-live-repair` / `/private/tmp/postilaatikko-global003` | Done; source `971cd68`, based on main `3d000be`. Confirmed/fixed Gmail header-only inserts inheriting body_fetched=1; migration 55 repairs affected empty native rows while preserving downloaded/crypto content. Search now lists threads without duplicate per-message metadata, shared weighted account read budget/cooldown, smaller background batches, cached-reader fallback and visible retryable body/view errors. Verified full Go suites, affected race checks, 162 frontend tests, type/lint/build and Chromium message-preservation/retry. GitHub DMG workflow enabled on this branch; live Gmail/macOS recheck remains. See docs/diagnostics/2026-10-28-gmail-live-repair.md. |
 | GLOBAL-002 | Large | Complete online counts and non-Gmail continuation. | Codex / `codex/GLOBAL-002-online-counts` / `/private/tmp/postilaatikko-global002` | In progress, temporarily parked for GLOBAL-003. Published checkpoint `e9f9be5` has Gmail count jobs/UI and IMAP search pages; uncommitted non-Gmail thread-count graph/header work remains only in that worktree. Not merged or complete; see its diagnostic note. |
 
