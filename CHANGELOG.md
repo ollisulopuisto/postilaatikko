@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Settle pending spelling checks and suggestions when spellcheck is disabled or its worker fails, instead of leaving callers waiting indefinitely. Late events from a replaced worker are ignored.
 - Bound the reader's inline-image session cache to 128 messages and 32 MiB of accounted string payloads, evicting least-recently-used entries. Images already open remain visible; evicted copies are reloaded from local storage when needed.
 
 - Sidebar cards can be reordered, collapsed and hidden/restored. Move entries between cards by dragging or keyboard controls; add custom groups. All Inboxes lives in Virtual folders. Star up to ten entries for the rail and Cmd/Ctrl+1…0. Contacts/Calendar rail shortcuts default off.
