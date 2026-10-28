@@ -217,3 +217,27 @@ export function Startup(arg1) {
 export function UpdateScheduledMessage(arg1, arg2) {
   return window['go']['app']['ComposerApp']['UpdateScheduledMessage'](arg1, arg2);
 }
+
+export function DraftHistoryCommit(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['ComposerApp']['DraftHistoryCommit'](arg1, arg2, arg3, arg4);
+}
+
+export function DraftHistoryTree(arg1) {
+  return window['go']['app']['ComposerApp']['DraftHistoryTree'](arg1);
+}
+
+export function DraftHistoryState(arg1) {
+  return window['go']['app']['ComposerApp']['DraftHistoryState'](arg1);
+}
+
+export function DraftHistoryCheckout(arg1, arg2) {
+  return window['go']['app']['ComposerApp']['DraftHistoryCheckout'](arg1, arg2);
+}
+
+export function ClearDraftHistory(arg1) {
+  return window['go']['app']['ComposerApp']['ClearDraftHistory'](arg1);
+}
+
+export function MoveDraftHistory(arg1, arg2) {
+  return window['go']['app']['ComposerApp']['MoveDraftHistory'](arg1, arg2);
+}

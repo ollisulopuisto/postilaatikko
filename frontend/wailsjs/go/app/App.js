@@ -1238,6 +1238,10 @@ export function ClearDraftHistory(arg1) {
   return window['go']['app']['App']['ClearDraftHistory'](arg1);
 }
 
+export function MoveDraftHistory(arg1, arg2) {
+  return window['go']['app']['App']['MoveDraftHistory'](arg1, arg2);
+}
+
 export function QueuePendingSend(arg1, arg2, arg3) {
   return window['go']['app']['App']['QueuePendingSend'](arg1, arg2, arg3);
 }

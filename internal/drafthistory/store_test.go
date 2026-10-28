@@ -153,3 +153,43 @@ func TestStoreAgainstMigratedSchema(t *testing.T) {
 		t.Fatalf("tree = %+v, %v", tree, err)
 	}
 }
+
+func TestMoveRekeysTree(t *testing.T) {
+	s := newTestStore(t)
+	root, err := s.Commit("acc:new-1", "", "new", `{"a":1}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	child, err := s.Commit("acc:new-1", root, "typing", `{"a":2}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Move("acc:new-1", "acc:42"); err != nil {
+		t.Fatal(err)
+	}
+	oldTree, err := s.Tree("acc:new-1")
+	if err != nil || len(oldTree.Nodes) != 0 {
+		t.Fatalf("old key should be empty, got %+v, %v", oldTree, err)
+	}
+	tree, err := s.Tree("acc:42")
+	if err != nil || len(tree.Nodes) != 2 || tree.CurrentNodeID != child {
+		t.Fatalf("moved tree = %+v, %v", tree, err)
+	}
+	// History keeps working under the new key.
+	if _, err := s.Commit("acc:42", child, "typing", `{"a":3}`); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMoveRefusesOccupiedTarget(t *testing.T) {
+	s := newTestStore(t)
+	if _, err := s.Commit("k1", "", "new", `{"a":1}`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Commit("k2", "", "new", `{"b":1}`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Move("k1", "k2"); err == nil {
+		t.Fatal("expected refusal to merge two live trees")
+	}
+}

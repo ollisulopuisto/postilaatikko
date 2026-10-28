@@ -342,7 +342,7 @@
   let composeDirty = false
 
   function historyDraftKey(): string {
-    return `${activeAccountId || accountId}:${draftId || 'new-' + composerInstanceId}`
+    return `${activeAccountId || accountId}:${currentDraftId || draftId || 'new-' + composerInstanceId}`
   }
 
   function historySnapshot(): string {
@@ -808,7 +808,9 @@
     try {
       const message = buildMessage()
       const result = await api.saveDraft(activeAccountId, message, currentDraftId || '')
+      const hadNoDraftId = !currentDraftId
       currentDraftId = result.id
+      if (hadNoDraftId && result.id) historyCtl?.moveKey(historyDraftKey())
       lastContent = currentHash
       saveStatus = 'saved'
       syncStatus = result.syncStatus as 'pending' | 'synced' | 'failed'
@@ -934,6 +936,14 @@
   onMount(async () => {
     historyCtl = new DraftHistoryController(
       historyDraftKey(),
+      {
+        commit: (k, p, l, pl) => api.draftHistoryCommit(k, p, l, pl),
+        tree: (k) => api.draftHistoryTree(k),
+        state: (n) => api.draftHistoryState(n),
+        checkout: (k, n) => api.draftHistoryCheckout(k, n),
+        clear: (k) => api.clearDraftHistory(k),
+        move: (o, n) => api.moveDraftHistory(o, n),
+      },
       historySnapshot,
       historyApply,
       (err) => addToast({ type: 'error', message: String(err) }),
@@ -943,7 +953,7 @@
     try {
       await historyCtl.restore()
       if (historyCtl.currentNode) {
-        const head = await import('../../../../wailsjs/go/app/App').then(m => m.DraftHistoryState(historyCtl!.currentNode))
+        const head = await api.draftHistoryState(historyCtl!.currentNode)
         await historyApply(head)
         historyHeadNode = historyCtl.currentNode
       }

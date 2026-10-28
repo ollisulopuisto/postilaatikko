@@ -21,6 +21,13 @@ export interface ComposerApi {
   /** Send a composed email */
   sendMessage: (accountId: string, message: smtp.ComposeMessage, draftId?: string) => Promise<void>
   queuePendingSend: (accountId: string, draftId: string, payload: string) => Promise<string>
+  /** Branching draft-history bindings (identical signatures on App and ComposerApp) */
+  draftHistoryCommit: (draftKey: string, parentId: string, label: string, payload: string) => Promise<string>
+  draftHistoryTree: (draftKey: string) => Promise<any>
+  draftHistoryState: (nodeId: string) => Promise<string>
+  draftHistoryCheckout: (draftKey: string, nodeId: string) => Promise<void>
+  clearDraftHistory: (draftKey: string) => Promise<void>
+  moveDraftHistory: (oldKey: string, newKey: string) => Promise<void>
   getSendLaterSetup: (accountId: string) => Promise<SendLaterSetup>
   initializeSendLaterClient: () => Promise<string>
   saveSendLaterConfig: (config: SendLaterConfig) => Promise<void>
@@ -138,6 +145,30 @@ export function createMainWindowApi(): ComposerApi {
     queuePendingSend: async (accountId: string, draftId: string, payload: string) => {
       const { QueuePendingSend } = await import('../../wailsjs/go/app/App.js')
       return QueuePendingSend(accountId, draftId, payload)
+    },
+    draftHistoryCommit: async (draftKey, parentId, label, payload) => {
+      const { DraftHistoryCommit } = await import('../../wailsjs/go/app/App.js')
+      return DraftHistoryCommit(draftKey, parentId, label, payload)
+    },
+    draftHistoryTree: async (draftKey) => {
+      const { DraftHistoryTree } = await import('../../wailsjs/go/app/App.js')
+      return DraftHistoryTree(draftKey)
+    },
+    draftHistoryState: async (nodeId) => {
+      const { DraftHistoryState } = await import('../../wailsjs/go/app/App.js')
+      return DraftHistoryState(nodeId)
+    },
+    draftHistoryCheckout: async (draftKey, nodeId) => {
+      const { DraftHistoryCheckout } = await import('../../wailsjs/go/app/App.js')
+      return DraftHistoryCheckout(draftKey, nodeId)
+    },
+    clearDraftHistory: async (draftKey) => {
+      const { ClearDraftHistory } = await import('../../wailsjs/go/app/App.js')
+      return ClearDraftHistory(draftKey)
+    },
+    moveDraftHistory: async (oldKey, newKey) => {
+      const { MoveDraftHistory } = await import('../../wailsjs/go/app/App.js')
+      return MoveDraftHistory(oldKey, newKey)
     },
     getSendLaterSetup: accountId => sendLaterBackend().GetSendLaterSetup(accountId),
     initializeSendLaterClient: () => sendLaterBackend().InitializeSendLaterClient(),
@@ -298,6 +329,30 @@ export function createComposerWindowApi(_accountId: string): ComposerApi {
     queuePendingSend: async (accountId: string, draftId: string, payload: string) => {
       const { QueuePendingSend } = await import('../../wailsjs/go/app/ComposerApp.js')
       return QueuePendingSend(accountId, draftId, payload)
+    },
+    draftHistoryCommit: async (draftKey, parentId, label, payload) => {
+      const { DraftHistoryCommit } = await import('../../wailsjs/go/app/ComposerApp.js')
+      return DraftHistoryCommit(draftKey, parentId, label, payload)
+    },
+    draftHistoryTree: async (draftKey) => {
+      const { DraftHistoryTree } = await import('../../wailsjs/go/app/ComposerApp.js')
+      return DraftHistoryTree(draftKey)
+    },
+    draftHistoryState: async (nodeId) => {
+      const { DraftHistoryState } = await import('../../wailsjs/go/app/ComposerApp.js')
+      return DraftHistoryState(nodeId)
+    },
+    draftHistoryCheckout: async (draftKey, nodeId) => {
+      const { DraftHistoryCheckout } = await import('../../wailsjs/go/app/ComposerApp.js')
+      return DraftHistoryCheckout(draftKey, nodeId)
+    },
+    clearDraftHistory: async (draftKey) => {
+      const { ClearDraftHistory } = await import('../../wailsjs/go/app/ComposerApp.js')
+      return ClearDraftHistory(draftKey)
+    },
+    moveDraftHistory: async (oldKey, newKey) => {
+      const { MoveDraftHistory } = await import('../../wailsjs/go/app/ComposerApp.js')
+      return MoveDraftHistory(oldKey, newKey)
     },
     getSendLaterSetup: accountId => sendLaterBackend(true).GetSendLaterSetup(accountId),
     initializeSendLaterClient: () => sendLaterBackend(true).InitializeSendLaterClient(),
