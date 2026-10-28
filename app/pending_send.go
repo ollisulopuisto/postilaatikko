@@ -24,6 +24,8 @@ import (
 
 	"github.com/google/uuid"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
+
+	"github.com/hkdb/aerion/internal/ipc"
 )
 
 // PendingSend is the durable record of one queued send.
@@ -134,4 +136,74 @@ func (a *App) ListPendingSends() ([]*PendingSend, error) {
 func (a *App) ExpirePendingSends() error {
 	_, err := a.db.Exec(`UPDATE pending_sends SET state = 'expired' WHERE state = 'pending'`)
 	return err
+}
+
+// handlePendingSendQueued relays a detached composer's queued send to the
+// main window so its countdown bar can track it. The row is already in the
+// shared database; the main window reads it via ListPendingSends.
+func (a *App) handlePendingSendQueued(p ipc.PendingSendQueuedPayload) {
+	row, err := a.db.Query(
+		`SELECT id, account_id, draft_id, payload, dispatch_at, state, created_at
+		 FROM pending_sends WHERE id = ? AND state = 'pending'`, p.ID)
+	if err != nil {
+		return
+	}
+	defer row.Close()
+	if row.Next() {
+		ps := &PendingSend{}
+		if err := row.Scan(&ps.ID, &ps.AccountID, &ps.DraftID, &ps.Payload, &ps.DispatchAt, &ps.State, &ps.CreatedAt); err != nil {
+			return
+		}
+		wailsRuntime.EventsEmit(a.ctx, "pending-send:queued", ps)
+	}
+}
+
+// QueuePendingSend is the detached composer's twin of App.QueuePendingSend:
+// it writes the same shared table and notifies the main window over IPC,
+// which relays it to the countdown UI. The countdown and dispatch still
+// happen in the main process, so closing the composer window mid-countdown
+// is safe.
+func (c *ComposerApp) QueuePendingSend(accountID, draftID, payload string) (string, error) {
+	if accountID == "" || payload == "" {
+		return "", fmt.Errorf("pending send: account and payload are required")
+	}
+	id := uuid.NewString()
+	now := time.Now().UTC()
+	dispatchAt := now.Add(PendingSendDelay)
+
+	tx, err := c.db.Begin()
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback()
+	if draftID != "" {
+		var n int
+		if err := tx.QueryRow(
+			`SELECT COUNT(*) FROM pending_sends WHERE draft_id = ? AND state = 'pending'`, draftID).Scan(&n); err != nil {
+			return "", err
+		}
+		if n > 0 {
+			return "", fmt.Errorf("pending send: this draft is already queued to send")
+		}
+	}
+	if _, err := tx.Exec(
+		`INSERT INTO pending_sends (id, account_id, draft_id, payload, dispatch_at, state, created_at)
+		 VALUES (?,?,?,?,?,'pending',?)`,
+		id, accountID, draftID, payload,
+		dispatchAt.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)); err != nil {
+		return "", err
+	}
+	if err := tx.Commit(); err != nil {
+		return "", err
+	}
+	if c.ipcClient != nil {
+		msg, err := ipc.NewMessage(ipc.TypePendingSendQueued, ipc.PendingSendQueuedPayload{
+			ID: id, AccountID: accountID, DraftID: draftID,
+			DispatchAt: dispatchAt.Format(time.RFC3339Nano),
+		})
+		if err == nil {
+			_ = c.ipcClient.Send(msg)
+		}
+	}
+	return id, nil
 }
