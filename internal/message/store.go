@@ -109,6 +109,17 @@ func (s *Store) ListByFolder(folderID string, offset, limit int) ([]*MessageHead
 	return messages, nil
 }
 
+// preferNativeGmailCopy hides only an unmapped legacy copy when the same
+// account and folder also contain a Gmail API copy with the same Message-ID.
+// Both cache rows remain intact, including any downloaded body or attachments.
+const preferNativeGmailCopy = ` AND (m.message_id IS NULL OR m.message_id = ''
+ OR EXISTS (SELECT 1 FROM gmail_message_refs self WHERE self.message_id=m.id)
+ OR NOT EXISTS (
+  SELECT 1 FROM messages native JOIN gmail_message_refs ref ON ref.message_id=native.id
+  WHERE native.account_id=m.account_id AND native.folder_id=m.folder_id AND native.id<>m.id
+  AND native.message_id IN (m.message_id, trim(m.message_id,'<>'), '<' || trim(m.message_id,'<>') || '>')
+ ))`
+
 // ListConversationsUnifiedInbox returns conversations from all inbox folders across all accounts
 // This is used for the unified inbox view
 // ListConversationsByFolderIDs returns conversations across the supplied real
@@ -169,7 +180,7 @@ func (s *Store) listConversationsByFolderIDs(folderIDs []string, offset, limit i
 		FROM messages m
 		INNER JOIN folders f ON m.folder_id = f.id
 		INNER JOIN accounts a ON f.account_id = a.id AND a.enabled = 1
-		WHERE m.folder_id IN (%s)%s
+		WHERE m.folder_id IN (%s)%s`+preferNativeGmailCopy+`
 		GROUP BY COALESCE(m.thread_id, m.id), a.id`+
 		filterHavingClause(filter, "m.")+`
 		`+orderClause+`
@@ -267,7 +278,7 @@ func (s *Store) countConversationsByFolderIDs(folderIDs []string, filter string,
 		FROM messages m
 		INNER JOIN folders f ON m.folder_id = f.id
 		INNER JOIN accounts a ON f.account_id = a.id AND a.enabled = 1
-		WHERE m.folder_id IN (%s)%s`+filterCond, placeholders, archiveClause)
+		WHERE m.folder_id IN (%s)%s`+preferNativeGmailCopy+filterCond, placeholders, archiveClause)
 
 	var count int
 	args := make([]any, len(folderIDs))
@@ -1493,8 +1504,8 @@ func (s *Store) ListConversationsByFolder(folderID string, offset, limit int, so
 			MAX(CASE WHEN smime_encrypted = 1 OR pgp_encrypted = 1 THEN 1 ELSE 0 END) as is_encrypted,
 			MAX(inbox_category) as inbox_category,
 			%s as participants_json
-		FROM messages
-		WHERE folder_id = ?
+		FROM messages m
+		WHERE folder_id = ?`+preferNativeGmailCopy+`
 		GROUP BY COALESCE(thread_id, id)`+
 		filterHavingClause(filter, "")+`
 		`+orderClause+`
@@ -1626,9 +1637,9 @@ func (s *Store) CountConversationsByFolder(folderID, filter string) (int, error)
 
 	query := `
 		SELECT COUNT(DISTINCT COALESCE(thread_id, id))
-		FROM messages
+		FROM messages m
 		WHERE folder_id = ?
-	` + filterWhereClause(filter, "")
+	` + preferNativeGmailCopy + filterWhereClause(filter, "")
 
 	var count int
 	err := s.db.QueryRowContext(ctx, query, folderID).Scan(&count)
