@@ -1293,7 +1293,8 @@
       "bold": "Bold",
       "italic": "Italic",
       "underline": "Underline",
-      "closeComposer": "Close composer"
+      "closeComposer": "Close composer",
+      "redo": "Redo"
     }
   },
   "commandPalette": {

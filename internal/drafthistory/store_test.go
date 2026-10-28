@@ -96,8 +96,12 @@ func TestStateDeduplicatedByHash(t *testing.T) {
 		t.Fatal(err)
 	}
 	var states, nodes int
-	s.db.QueryRow(`SELECT COUNT(*) FROM draft_history_states`).Scan(&states)
-	s.db.QueryRow(`SELECT COUNT(*) FROM draft_history_nodes`).Scan(&nodes)
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM draft_history_states`).Scan(&states); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM draft_history_nodes`).Scan(&nodes); err != nil {
+		t.Fatal(err)
+	}
 	if states != 1 || nodes != 2 {
 		t.Fatalf("states=%d nodes=%d, want 1 deduped state, 2 nodes", states, nodes)
 	}
@@ -109,7 +113,9 @@ func TestCommitRejectsForeignParentAndSecondRoot(t *testing.T) {
 	if _, err := s.Commit("d1", other, "x", `{}`); err == nil {
 		t.Fatal("foreign parent accepted")
 	}
-	s.Commit("d1", "", "new", `{}`)
+	if _, err := s.Commit("d1", "", "new", `{}`); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := s.Commit("d1", "", "again", `{}`); err == nil {
 		t.Fatal("second root accepted")
 	}
@@ -124,10 +130,20 @@ func TestCheckoutUnknownNode(t *testing.T) {
 
 func TestClearRemovesTreeAndOrphanStates(t *testing.T) {
 	s := newTestStore(t)
-	r1, _ := s.Commit("d1", "", "new", `{"body":"keep? no"}`)
-	s.Commit("d1", r1, "typing", `{"body":"gone"}`)
-	r2, _ := s.Commit("d2", "", "new", `{"body":"shared"}`)
-	s.Commit("d2", r2, "typing", `{"body":"shared2"}`)
+	r1, err := s.Commit("d1", "", "new", `{"body":"keep? no"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Commit("d1", r1, "typing", `{"body":"gone"}`); err != nil {
+		t.Fatal(err)
+	}
+	r2, err := s.Commit("d2", "", "new", `{"body":"shared"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Commit("d2", r2, "typing", `{"body":"shared2"}`); err != nil {
+		t.Fatal(err)
+	}
 	if err := s.Clear("d1"); err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +152,9 @@ func TestClearRemovesTreeAndOrphanStates(t *testing.T) {
 		t.Fatalf("d1 nodes remain: %d", len(tree.Nodes))
 	}
 	var n int
-	s.db.QueryRow(`SELECT COUNT(*) FROM draft_history_states`).Scan(&n)
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM draft_history_states`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
 	if n != 2 {
 		t.Fatalf("states = %d, want d2's 2 states untouched", n)
 	}
