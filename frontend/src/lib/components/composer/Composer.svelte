@@ -885,6 +885,7 @@
     try {
       await api.deleteDraft(currentDraftId)
       currentDraftId = null
+      historyCtl?.clear()
     } catch (err) {
       console.error('Failed to delete draft:', err)
     }
@@ -1228,6 +1229,8 @@
         api.deleteDraft(oldDraftId).catch(err => {
           console.error('Failed to delete old account draft:', err)
         })
+        historyCtl?.clear()
+        historyCtl?.reset(historyDraftKey())
       }
     }
 
@@ -1567,6 +1570,7 @@
         await api.deleteDraft(currentDraftId)
         currentDraftId = null
       }
+      historyCtl?.clear()
     } catch (err) {
       console.error('Failed to delete draft:', err)
       // Still close even if delete fails

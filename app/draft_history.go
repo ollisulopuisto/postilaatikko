@@ -32,8 +32,8 @@ func (a *App) DraftHistoryCheckout(draftKey, nodeID string) error {
 	return a.draftHistoryStore().Checkout(draftKey, nodeID)
 }
 
-// ClearDraftHistory deletes a draft's whole tree. Nothing calls this yet:
-// wiring it to send/discard lifecycle lands in the follow-up PR.
+// ClearDraftHistory deletes a draft's whole tree. Wired to actual send and
+// explicit draft discard only; cancelling a pending send preserves history.
 func (a *App) ClearDraftHistory(draftKey string) error {
 	return a.draftHistoryStore().Clear(draftKey)
 }

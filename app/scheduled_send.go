@@ -227,7 +227,9 @@ func (a *App) SaveSendLaterConfig(config scheduledsend.ClientConfig) error {
 func (a *App) ScheduleMessage(accountID string, message smtp.ComposeMessage, draftID, due string) (ScheduleResult, error) {
 	result, err := scheduleMessage(a.ctx, a.paths.Data, &a.composeOps, a.draftStore, accountID, message, draftID, due)
 	if err == nil {
-		result.Job = cleanupScheduledDraft(a.ctx, a.paths.Data, result.Job, &a.draftOps, a.cancelDraftSync)
+		result.Job = cleanupScheduledDraft(a.ctx, a.paths.Data, result.Job, &a.draftOps, a.cancelDraftSync, func(accountID, draftID string) {
+			_ = a.draftHistoryStore().Clear(accountID + ":" + draftID)
+		})
 	}
 	return result, err
 }
@@ -246,7 +248,9 @@ func (a *App) ListScheduledMessages(accountID string) ([]scheduledsend.ClientJob
 func (a *App) UpdateScheduledMessage(id, action string) (ScheduleResult, error) {
 	result, err := updateScheduledMessage(a.ctx, a.paths.Data, id, action)
 	if err == nil {
-		result.Job = cleanupScheduledDraft(a.ctx, a.paths.Data, result.Job, &a.draftOps, a.cancelDraftSync)
+		result.Job = cleanupScheduledDraft(a.ctx, a.paths.Data, result.Job, &a.draftOps, a.cancelDraftSync, func(accountID, draftID string) {
+			_ = a.draftHistoryStore().Clear(accountID + ":" + draftID)
+		})
 	}
 	return result, err
 }
@@ -312,6 +316,8 @@ func (c *ComposerApp) cleanupScheduled(job scheduledsend.ClientJob) scheduledsen
 		if c.currentDraft != nil && c.currentDraft.ID == id {
 			c.cancelDraftSync()
 		}
+	}, func(accountID, draftID string) {
+		_ = c.draftHistoryStore().Clear(accountID + ":" + draftID)
 	})
 	if result.DraftCleanup == "removed" && job.DraftCleanup != "removed" {
 		c.notifyDraftDeleted(job.AccountID)
@@ -359,7 +365,9 @@ func scheduledPage(ctx context.Context, data, accountID string, history bool, li
 func (a *App) RescheduleMessage(id, due string) (ScheduleResult, error) {
 	result, err := rescheduleMessage(a.ctx, a.paths.Data, id, due)
 	if err == nil {
-		result.Job = cleanupScheduledDraft(a.ctx, a.paths.Data, result.Job, &a.draftOps, a.cancelDraftSync)
+		result.Job = cleanupScheduledDraft(a.ctx, a.paths.Data, result.Job, &a.draftOps, a.cancelDraftSync, func(accountID, draftID string) {
+			_ = a.draftHistoryStore().Clear(accountID + ":" + draftID)
+		})
 	}
 	return result, err
 }
