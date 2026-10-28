@@ -394,7 +394,9 @@
     "history": "Muokkaushistoria",
     "historyBranches": "Haarojen päät",
     "historyEmpty": "Ei muokkauksia vielä",
-    "historyEdit": "Muokkaus"
+    "historyEdit": "Muokkaus",
+    "sendQueued": "Lähetetään 30 sekunnin kuluttua - peruuta napsauttamalla lähtölaskentaa",
+    "failedToSaveDraft": "Luonnoksen tallennus ennen lähetystä epäonnistui"
   },
   "contextMenu": {
     "reply": "Vastaa",
@@ -1397,5 +1399,11 @@
       "manual_legacy": "Alkuperäinen luonnos säilytettiin, koska sen tunnistetta ei voitu varmistaa turvallisesti.",
       "retry": "Lähetetty. Luonnoksen siivousta yritetään uudelleen."
     }
+  },
+  "pendingSend": {
+    "countdown": "Lähetetään {seconds} s kuluttua",
+    "cancel": "Peruuta",
+    "cancelled": "Lähetys peruttu - luonnos palautettu",
+    "alreadySending": "Liian myöhäistä - lähetys on jo käynnissä"
   }
 }

@@ -178,6 +178,10 @@ export function RescheduleMessage(arg1, arg2) {
   return window['go']['app']['ComposerApp']['RescheduleMessage'](arg1, arg2);
 }
 
+export function QueuePendingSend(arg1, arg2, arg3) {
+  return window['go']['app']['ComposerApp']['QueuePendingSend'](arg1, arg2, arg3);
+}
+
 export function SaveDraft(arg1, arg2, arg3) {
   return window['go']['app']['ComposerApp']['SaveDraft'](arg1, arg2, arg3);
 }

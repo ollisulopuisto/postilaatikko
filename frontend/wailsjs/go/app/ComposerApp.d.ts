@@ -100,6 +100,8 @@ export function RefreshWindowConstraints():Promise<void>;
 
 export function RescheduleMessage(arg1:string,arg2:string):Promise<app.ScheduleResult>;
 
+export function QueuePendingSend(arg1: string, arg2: string, arg3: string): Promise<string>;
+
 export function SaveDraft(arg1:string,arg2:smtp.ComposeMessage,arg3:string):Promise<draft.Draft>;
 
 export function SaveSendLaterConfig(arg1:scheduledsend.ClientConfig):Promise<void>;

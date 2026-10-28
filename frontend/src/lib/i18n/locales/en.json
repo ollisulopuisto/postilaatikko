@@ -394,7 +394,9 @@
     "history": "Edit history",
     "historyBranches": "Branch tips",
     "historyEmpty": "No edits yet",
-    "historyEdit": "Edit"
+    "historyEdit": "Edit",
+    "sendQueued": "Sending in 30 seconds - click the countdown to cancel",
+    "failedToSaveDraft": "Failed to save draft before sending"
   },
   "contextMenu": {
     "reply": "Reply",
@@ -1397,5 +1399,11 @@
       "manual_legacy": "Original draft kept because its identity could not be safely verified.",
       "retry": "Delivered; draft cleanup will be retried."
     }
+  },
+  "pendingSend": {
+    "countdown": "Sending in {seconds}s",
+    "cancel": "Cancel",
+    "cancelled": "Send cancelled - draft restored",
+    "alreadySending": "Too late - the send already started"
   }
 }

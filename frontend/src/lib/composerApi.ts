@@ -20,6 +20,7 @@ import { sendLaterBackend, type SendLaterConfig, type SendLaterSetup, type Sched
 export interface ComposerApi {
   /** Send a composed email */
   sendMessage: (accountId: string, message: smtp.ComposeMessage, draftId?: string) => Promise<void>
+  queuePendingSend: (accountId: string, draftId: string, payload: string) => Promise<string>
   getSendLaterSetup: (accountId: string) => Promise<SendLaterSetup>
   initializeSendLaterClient: () => Promise<string>
   saveSendLaterConfig: (config: SendLaterConfig) => Promise<void>
@@ -133,6 +134,10 @@ export function createMainWindowApi(): ComposerApi {
       if (draftId) return sendLaterBackend().SendMessageWithDraftGuard(accountId, message, draftId)
       const { SendMessage } = await import('../../wailsjs/go/app/App.js')
       return SendMessage(accountId, message)
+    },
+    queuePendingSend: async (accountId: string, draftId: string, payload: string) => {
+      const { QueuePendingSend } = await import('../../wailsjs/go/app/App.js')
+      return QueuePendingSend(accountId, draftId, payload)
     },
     getSendLaterSetup: accountId => sendLaterBackend().GetSendLaterSetup(accountId),
     initializeSendLaterClient: () => sendLaterBackend().InitializeSendLaterClient(),
@@ -289,6 +294,10 @@ export function createComposerWindowApi(_accountId: string): ComposerApi {
       if (draftId) return sendLaterBackend(true).SendMessageWithDraftGuard(accountId, message, draftId)
       const { SendMessage } = await import('../../wailsjs/go/app/ComposerApp.js')
       return SendMessage(accountId, message)
+    },
+    queuePendingSend: async (accountId: string, draftId: string, payload: string) => {
+      const { QueuePendingSend } = await import('../../wailsjs/go/app/ComposerApp.js')
+      return QueuePendingSend(accountId, draftId, payload)
     },
     getSendLaterSetup: accountId => sendLaterBackend(true).GetSendLaterSetup(accountId),
     initializeSendLaterClient: () => sendLaterBackend(true).InitializeSendLaterClient(),

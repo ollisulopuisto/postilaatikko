@@ -643,6 +643,14 @@ export function DraftHistoryCheckout(arg1: string, arg2: string): Promise<void>;
 
 export function ClearDraftHistory(arg1: string): Promise<void>;
 
+export function QueuePendingSend(arg1: string, arg2: string, arg3: string): Promise<string>;
+
+export function CancelPendingSend(arg1: string): Promise<void>;
+
+export function CompletePendingSend(arg1: string): Promise<void>;
+
+export function ListPendingSends(): Promise<any[]>;
+
 export function SaveDraft(arg1:string,arg2:smtp.ComposeMessage,arg3:string):Promise<app.DraftResult>;
 
 export function SaveEncryptedAttachmentAs(arg1:string,arg2:string):Promise<string>;

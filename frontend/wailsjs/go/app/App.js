@@ -1238,6 +1238,22 @@ export function ClearDraftHistory(arg1) {
   return window['go']['app']['App']['ClearDraftHistory'](arg1);
 }
 
+export function QueuePendingSend(arg1, arg2, arg3) {
+  return window['go']['app']['App']['QueuePendingSend'](arg1, arg2, arg3);
+}
+
+export function CancelPendingSend(arg1) {
+  return window['go']['app']['App']['CancelPendingSend'](arg1);
+}
+
+export function CompletePendingSend(arg1) {
+  return window['go']['app']['App']['CompletePendingSend'](arg1);
+}
+
+export function ListPendingSends() {
+  return window['go']['app']['App']['ListPendingSends']();
+}
+
 export function SaveDraft(arg1, arg2, arg3) {
   return window['go']['app']['App']['SaveDraft'](arg1, arg2, arg3);
 }

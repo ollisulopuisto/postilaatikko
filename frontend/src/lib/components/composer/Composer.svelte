@@ -1460,6 +1460,22 @@
         return
       }
       const message = buildMessage()
+      // 30-second undo-send: the draft must exist so cancel can restore it,
+      // then the send is queued; the main window's countdown bar dispatches
+      // through the normal send path (or cancels back to this draft).
+      if (api.queuePendingSend) {
+        const saved = await saveDraft()
+        if (saved === 'failed' || saved === 'discarding' || !currentDraftId) {
+          throw new Error($_('composer.failedToSaveDraft'))
+        }
+        await api.queuePendingSend(activeAccountId, currentDraftId, JSON.stringify(message))
+        addToast({
+          type: 'success',
+          message: $_('composer.sendQueued'),
+        })
+        onClose?.()
+        return
+      }
       await api.sendMessage(activeAccountId, message, currentDraftId || '')
 
       // Delete the draft on successful send (fire-and-forget - don't block UI)

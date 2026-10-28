@@ -250,7 +250,9 @@
     "history": "Edit history",
     "historyBranches": "Branch tips",
     "historyEmpty": "No edits yet",
-    "historyEdit": "Edit"
+    "historyEdit": "Edit",
+    "sendQueued": "Sending in 30 seconds - click the countdown to cancel",
+    "failedToSaveDraft": "Failed to save draft before sending"
   },
   "contextMenu": {
     "reply": "回复",
@@ -980,5 +982,11 @@
       "successToast": "Write access enabled for {name}",
       "failureToast": "Failed to enable write access: {message}"
     }
+  },
+  "pendingSend": {
+    "countdown": "Sending in {seconds}s",
+    "cancel": "Cancel",
+    "cancelled": "Send cancelled - draft restored",
+    "alreadySending": "Too late - the send already started"
   }
 }

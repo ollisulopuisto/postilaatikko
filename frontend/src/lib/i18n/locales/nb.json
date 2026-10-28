@@ -250,7 +250,9 @@
     "history": "Edit history",
     "historyBranches": "Branch tips",
     "historyEmpty": "No edits yet",
-    "historyEdit": "Edit"
+    "historyEdit": "Edit",
+    "sendQueued": "Sending in 30 seconds - click the countdown to cancel",
+    "failedToSaveDraft": "Failed to save draft before sending"
   },
   "contextMenu": {
     "reply": "Svar",
@@ -982,5 +984,11 @@
       "successToast": "Skrivetilgang aktivert for {name}",
       "failureToast": "Klarte ikke å aktivere skrivetilgang: {message}"
     }
+  },
+  "pendingSend": {
+    "countdown": "Sending in {seconds}s",
+    "cancel": "Cancel",
+    "cancelled": "Send cancelled - draft restored",
+    "alreadySending": "Too late - the send already started"
   }
 }
