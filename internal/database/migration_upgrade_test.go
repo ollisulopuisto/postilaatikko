@@ -317,3 +317,30 @@ func TestMigrationV58AddsDraftAttachmentBlobTables(t *testing.T) {
 		t.Fatalf("membership = %q, want b1", got)
 	}
 }
+
+func TestMigrationV59AddsMailboxUndoCommands(t *testing.T) {
+	db := openUnmigratedTestDB(t)
+	applyMigrationsThrough(t, db, 58)
+
+	var before int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'mailbox_undo_commands'`).Scan(&before); err != nil {
+		t.Fatalf("count undo table before v59: %v", err)
+	}
+	if before != 0 {
+		t.Fatal("mailbox_undo_commands present before v59")
+	}
+
+	if err := db.Migrate(); err != nil {
+		t.Fatalf("migrate through v59: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO mailbox_undo_commands (operation_id, action, type, payload, created_at) VALUES ('op1', 'archive', 'move', '{}', '2026-10-28 20:00:00.000000000')`); err != nil {
+		t.Fatalf("insert undo row: %v", err)
+	}
+	var op string
+	if err := db.QueryRow(`SELECT operation_id FROM mailbox_undo_commands WHERE seq = 1`).Scan(&op); err != nil {
+		t.Fatalf("read undo row: %v", err)
+	}
+	if op != "op1" {
+		t.Fatalf("operation_id = %q, want op1", op)
+	}
+}

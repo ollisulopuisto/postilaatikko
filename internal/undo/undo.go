@@ -2,6 +2,7 @@
 package undo
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"sync"
@@ -42,12 +43,16 @@ func (c *BaseCommand) Description() string { return c.description }
 // CreatedAt returns when the command was created
 func (c *BaseCommand) CreatedAt() time.Time { return c.createdAt }
 
-// Stack is an in-memory undo stack
+// Stack is an undo stack with an optional durable backing store. Without a
+// store it behaves exactly like the original in-memory stack.
 type Stack struct {
-	mu       sync.Mutex
-	commands []entry
-	maxSize  int
-	timeout  time.Duration // How long commands remain undoable
+	mu        sync.Mutex
+	commands  []entry
+	maxSize   int
+	timeout   time.Duration // How long commands remain undoable
+	store     *OperationStore
+	undoCtx   UndoContext
+	lastSweep time.Time
 }
 
 type entry struct {
@@ -146,7 +151,57 @@ func (s *Stack) PushOperation(operationID string, cmd Command, metadata ...Opera
 	if len(s.commands) > s.maxSize {
 		s.commands = s.commands[len(s.commands)-s.maxSize:]
 	}
+	s.persistLocked(operationID, meta.Action, meta.MessageIDs, cmd)
 	return operationID
+}
+
+// AttachStore binds the durable mailbox undo history and immediately
+// rehydrates every operation still inside the retention window, so Ctrl+Z
+// works across restarts. Expired rows are swept first. A nil store disables
+// persistence. Rehydration failures skip only the affected row.
+func (s *Stack) AttachStore(store *OperationStore, undoCtx UndoContext) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.store = store
+	s.undoCtx = undoCtx
+	if store == nil {
+		return
+	}
+	log := logging.WithComponent("undo")
+	if swept := store.Sweep(time.Now(), s.timeout); swept > 0 {
+		log.Info().Int("swept", swept).Msg("UNDO STORE SWEEP")
+	}
+	rows := store.loadActive(time.Now(), s.timeout, s.maxSize)
+	restored := 0
+	for _, row := range rows {
+		cmd, err := rehydrateCommand(row.Type, row.Payload, context.Background(), undoCtx)
+		if err != nil {
+			log.Warn().Err(err).Str("operationId", row.OperationID).Msg("UNDO STORE REHYDRATE SKIP")
+			continue
+		}
+		s.commands = append(s.commands, entry{
+			operationID: row.OperationID,
+			command:     cmd,
+			action:      row.Action,
+			messageIDs:  append([]string(nil), row.MessageIDs...),
+			expiresAt:   row.CreatedAt.Add(s.timeout),
+		})
+		restored++
+	}
+	log.Info().Int("restored", restored).Int("stored", store.Count()).Msg("UNDO STORE ATTACHED")
+}
+
+// persistLocked persists one freshly pushed command and occasionally sweeps
+// expired rows. Caller must hold s.mu.
+func (s *Stack) persistLocked(operationID, action string, messageIDs []string, cmd Command) {
+	if s.store == nil {
+		return
+	}
+	s.store.persistCommand(operationID, action, messageIDs, cmd)
+	if time.Since(s.lastSweep) > 10*time.Minute {
+		s.lastSweep = time.Now()
+		s.store.Sweep(time.Now(), s.timeout)
+	}
 }
 
 // PopLatestOperation atomically claims every command belonging to the newest
@@ -189,6 +244,9 @@ func (s *Stack) PopLatestOperation() *OperationClaim {
 		Strs("messageIds", claim.MessageIDs).
 		Int("commands", len(claim.entries)).
 		Msg("UNDO CLAIM")
+	if s.store != nil {
+		s.store.removeOperation(claim.OperationID)
+	}
 	return claim
 }
 
@@ -208,6 +266,7 @@ func (s *Stack) RestoreOperation(claim *OperationClaim, failedCommand int) {
 		item := claim.entries[i]
 		item.expiresAt = retryUntil
 		s.commands = append(s.commands, item)
+		s.persistLocked(item.operationID, item.action, item.messageIDs, item.command)
 	}
 	if len(s.commands) > s.maxSize {
 		s.commands = s.commands[len(s.commands)-s.maxSize:]
@@ -236,6 +295,9 @@ func (s *Stack) Pop() Command {
 		Str("action", item.action).
 		Strs("messageIds", item.messageIDs).
 		Msg("UNDO POP")
+	if s.store != nil {
+		s.store.removeOperation(item.operationID)
+	}
 	return item.command
 }
 
@@ -276,6 +338,9 @@ func (s *Stack) PopOperation(operationID string) []Command {
 		Strs("messageIds", messageIDs).
 		Int("commands", len(commands)).
 		Msg("UNDO CLAIM")
+	if s.store != nil {
+		s.store.removeOperation(operationID)
+	}
 	return commands
 }
 
@@ -312,6 +377,9 @@ func (s *Stack) DiscardOperation(operationID string) int {
 		remaining = append(remaining, item)
 	}
 	s.commands = remaining
+	if removed > 0 && s.store != nil {
+		s.store.removeOperation(operationID)
+	}
 	return removed
 }
 
@@ -333,6 +401,9 @@ func (s *Stack) Clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.commands = make([]entry, 0)
+	if s.store != nil {
+		s.store.removeAll()
+	}
 }
 
 // cleanExpired removes commands older than timeout (must be called with lock held)
