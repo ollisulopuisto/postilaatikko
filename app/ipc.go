@@ -223,17 +223,37 @@ func (a *App) OpenComposerWindow(accountID, mode, messageID, draftID, mailtoURL 
 		Msg("Spawning composer window")
 
 	cmd := exec.Command(execPath, args...)
+	var cacheDir string
+	if a.paths != nil {
+		cacheDir = a.paths.Cache
+	}
+	childLog := detachedChildLogFile(cacheDir, "composer", cmd)
 
 	// Pass token securely via stdin
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
+		if childLog != nil {
+			_ = childLog.Close()
+		}
 		return nil // Can't create stdin pipe - skip
 	}
 
 	// Start the process
 	if err := cmd.Start(); err != nil {
+		if childLog != nil {
+			_ = childLog.Close()
+		}
 		return nil // Can't start process - skip
 	}
+	go func() {
+		defer recoverPanic("app.ipc", "wait composer child")
+		defer func() {
+			if childLog != nil {
+				_ = childLog.Close()
+			}
+		}()
+		_ = cmd.Wait()
+	}()
 
 	// Write token to stdin and close immediately
 	go func() {

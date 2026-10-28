@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 
 	"github.com/hkdb/aerion/internal/ipc"
@@ -62,5 +65,45 @@ func TestReaderAllowlistExcludesAccountAndQueueAdministration(t *testing.T) {
 	}
 	if _, ok := methods["GetReplyContent"]; !ok {
 		t.Fatal("extraction unavailable")
+	}
+}
+
+func TestDetachedChildLogFile(t *testing.T) {
+	dir := t.TempDir()
+	cmd := exec.Command("true")
+	f := detachedChildLogFile(dir, "reader", cmd)
+	if f == nil {
+		t.Fatal("expected log file")
+	}
+	if cmd.Stdout == nil || cmd.Stderr == nil {
+		t.Fatal("expected child stdout/stderr redirected to the log file")
+	}
+	if _, err := f.WriteString("first run\n"); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+
+	// A second spawn truncates the previous log so the file stays bounded.
+	cmd2 := exec.Command("true")
+	f2 := detachedChildLogFile(dir, "reader", cmd2)
+	if f2 == nil {
+		t.Fatal("expected log file on second spawn")
+	}
+	if _, err := f2.WriteString("second run\n"); err != nil {
+		t.Fatal(err)
+	}
+	_ = f2.Close()
+
+	data, err := os.ReadFile(filepath.Join(dir, "logs", "reader-window.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "second run\n" {
+		t.Fatalf("expected truncated log, got %q", data)
+	}
+
+	// Missing cache dir disables logging instead of failing the spawn.
+	if f := detachedChildLogFile("", "reader", exec.Command("true")); f != nil {
+		t.Fatal("expected nil log file without cache dir")
 	}
 }
