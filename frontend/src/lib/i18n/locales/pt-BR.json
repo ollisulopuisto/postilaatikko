@@ -240,5 +240,13 @@
     "welcome": "Bem-vindo ao Postilaatikko v{version}!",
     "fallback": "Esta versão está pronta para uso. Consulte o histórico de alterações para ver os detalhes.",
     "fullChangelog": "Veja o histórico completo de alterações:"
+  },
+  "composer": {
+    "undo": "Undo",
+    "redo": "Redo",
+    "history": "Edit history",
+    "historyBranches": "Branch tips",
+    "historyEmpty": "No edits yet",
+    "historyEdit": "Edit"
   }
 }

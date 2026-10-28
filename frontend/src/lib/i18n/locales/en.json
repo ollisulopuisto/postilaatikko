@@ -388,7 +388,13 @@
     "saveAndClose": "Save & Close",
     "failedToImportCert": "Failed to import certificate",
     "failedToImportPGPKey": "Failed to import PGP key",
-    "sendAnywayGeneric": "Send anyway"
+    "sendAnywayGeneric": "Send anyway",
+    "undo": "Undo",
+    "redo": "Redo",
+    "history": "Edit history",
+    "historyBranches": "Branch tips",
+    "historyEmpty": "No edits yet",
+    "historyEdit": "Edit"
   },
   "contextMenu": {
     "reply": "Reply",
@@ -1131,7 +1137,7 @@
     "showApps": "Show Contacts and Calendar in rail",
     "addVirtual": "New virtual folder",
     "allInboxes": "All Inboxes"
-},
+  },
   "search": {
     "operators": "Search operators",
     "operatorsGmailHint": "These operators use Gmail syntax; other accounts may interpret them differently.",

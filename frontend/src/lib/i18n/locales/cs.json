@@ -244,7 +244,13 @@
     "saveAndClose": "Uložit a zavřít",
     "failedToImportCert": "Nepodařilo se importovat certifikát",
     "failedToImportPGPKey": "Nepodařilo se importovat PGP klíč",
-    "sendAnywayGeneric": "Přesto odeslat"
+    "sendAnywayGeneric": "Přesto odeslat",
+    "undo": "Undo",
+    "redo": "Redo",
+    "history": "Edit history",
+    "historyBranches": "Branch tips",
+    "historyEmpty": "No edits yet",
+    "historyEdit": "Edit"
   },
   "contextMenu": {
     "reply": "Odpovědět",

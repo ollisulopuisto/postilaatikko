@@ -377,6 +377,7 @@
     if (!historyCtl || historyCtl.isApplying) return
     historyCtl.commit(label)
     historyHeadNode = historyCtl.currentNode || historyHeadNode
+    void historyRefreshNav()
   }
 
   function historyEdit(label: string) {
@@ -392,9 +393,38 @@
 
   async function historyUndo() {
     if (await historyCtl?.undo()) historyHeadNode = historyCtl?.currentNode || ''
+    await historyRefreshNav()
   }
   async function historyRedo() {
     if (await historyCtl?.redo()) historyHeadNode = historyCtl?.currentNode || ''
+    await historyRefreshNav()
+  }
+
+  let historyCanUndo = $state(false)
+  let historyCanRedo = $state(false)
+  let historyPanelOpen = $state(false)
+  let historyTips = $state<Array<{ nodeId: string; label: string; createdAt: string }>>([])
+
+  async function historyRefreshNav() {
+    if (!historyCtl) return
+    const tree = await historyCtl.tree()
+    const cur = tree.nodes.find(n => n.nodeId === historyCtl?.currentNode)
+    historyCanUndo = !!cur?.parentId
+    historyCanRedo = !!cur && (cur.preferredChildId !== '' || tree.nodes.some(n => n.parentId === cur.nodeId))
+    if (historyPanelOpen) {
+      historyTips = (await historyCtl.branchTips()).map(n => ({ nodeId: n.nodeId, label: n.label, createdAt: n.createdAt }))
+    }
+  }
+
+  async function historyTogglePanel() {
+    historyPanelOpen = !historyPanelOpen
+    if (historyPanelOpen) await historyRefreshNav()
+  }
+
+  async function historyGoto(nodeId: string) {
+    await historyCtl?.goto(nodeId)
+    historyHeadNode = historyCtl?.currentNode || ''
+    await historyRefreshNav()
   }
   let lastContent = ''  // Track content changes to avoid unnecessary saves
 
@@ -917,6 +947,7 @@
         await historyApply(head)
         historyHeadNode = historyCtl.currentNode
       }
+      await historyRefreshNav()
     } catch (err) {
       console.error('Draft history restore failed:', err)
     }
@@ -2061,6 +2092,25 @@
   role="region"
   aria-label={$_('aria.emailComposer')}
 >
+  {#if historyPanelOpen}
+    <div class="absolute right-2 top-12 z-50 w-72 max-h-80 overflow-auto rounded-lg border border-border bg-popover p-2 shadow-lg" role="dialog" aria-label={$_('composer.history')}>
+      <div class="px-2 py-1 text-xs font-medium text-muted-foreground">{$_('composer.historyBranches')}</div>
+      {#if historyTips.length === 0}
+        <div class="px-2 py-2 text-sm text-muted-foreground">{$_('composer.historyEmpty')}</div>
+      {:else}
+        {#each historyTips as tip (tip.nodeId)}
+          <button
+            class="w-full text-left rounded-md px-2 py-1.5 text-sm hover:bg-muted {tip.nodeId === historyHeadNode ? 'bg-muted font-medium' : ''}"
+            onclick={() => void historyGoto(tip.nodeId)}
+          >
+            <span class="block truncate">{tip.label || $_('composer.historyEdit')}</span>
+            <span class="block text-xs text-muted-foreground">{new Date(tip.createdAt).toLocaleString()}</span>
+          </button>
+        {/each}
+      {/if}
+    </div>
+  {/if}
+
   <!-- Header -->
   <div class="flex items-center justify-between gap-3 border-b border-border shrink-0 {isCompact ? 'px-6 h-[52px]' : 'px-4 py-3'}">
     <div class="flex items-center gap-3 min-w-0 flex-1">
@@ -2090,6 +2140,34 @@
       {/if}
     </div>
     <div class="flex items-center gap-2">
+      <!-- Branching undo controls -->
+      <button
+        onclick={() => void historyUndo()}
+        disabled={!historyCanUndo}
+        class="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        title={$_('composer.undo')}
+        aria-label={$_('composer.undo')}
+      >
+        <Icon icon="mdi:undo" class="w-4 h-4" />
+      </button>
+      <button
+        onclick={() => void historyRedo()}
+        disabled={!historyCanRedo}
+        class="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        title={$_('composer.redo')}
+        aria-label={$_('composer.redo')}
+      >
+        <Icon icon="mdi:redo" class="w-4 h-4" />
+      </button>
+      <button
+        onclick={() => void historyTogglePanel()}
+        class="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+        title={$_('composer.history')}
+        aria-label={$_('composer.history')}
+        aria-expanded={historyPanelOpen}
+      >
+        <Icon icon="mdi:history" class="w-4 h-4" />
+      </button>
       <!-- Pop-out button (only shown in main window, not detached) -->
       {#if !isDetached && api.openComposerWindow}
         <button

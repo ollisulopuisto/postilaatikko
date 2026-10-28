@@ -244,7 +244,13 @@
     "saveAndClose": "儲存並關閉",
     "failedToImportCert": "匯入憑證失敗",
     "failedToImportPGPKey": "匯入 PGP 金鑰失敗",
-    "sendAnywayGeneric": "仍然傳送"
+    "sendAnywayGeneric": "仍然傳送",
+    "undo": "Undo",
+    "redo": "Redo",
+    "history": "Edit history",
+    "historyBranches": "Branch tips",
+    "historyEmpty": "No edits yet",
+    "historyEdit": "Edit"
   },
   "contextMenu": {
     "reply": "回覆",

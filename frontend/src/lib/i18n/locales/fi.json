@@ -388,7 +388,13 @@
     "saveAndClose": "Tallenna ja sulje",
     "failedToImportCert": "Varmenteen tuominen epäonnistui",
     "failedToImportPGPKey": "PGP-avaimen tuominen epäonnistui",
-    "sendAnywayGeneric": "Lähetä silti"
+    "sendAnywayGeneric": "Lähetä silti",
+    "undo": "Kumoa",
+    "redo": "Tee uudelleen",
+    "history": "Muokkaushistoria",
+    "historyBranches": "Haarojen päät",
+    "historyEmpty": "Ei muokkauksia vielä",
+    "historyEdit": "Muokkaus"
   },
   "contextMenu": {
     "reply": "Vastaa",
@@ -1131,7 +1137,7 @@
     "showApps": "Näytä Yhteystiedot ja Kalenteri palkissa",
     "addVirtual": "Uusi virtuaalikansio",
     "allInboxes": "Kaikki saapuneet"
-},
+  },
   "search": {
     "operators": "Hakuoperaattorit",
     "operatorsGmailHint": "Operaattorit käyttävät Gmailin syntaksia; muut tilit voivat tulkita ne eri tavalla.",

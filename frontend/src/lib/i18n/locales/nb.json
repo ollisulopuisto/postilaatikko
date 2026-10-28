@@ -244,7 +244,13 @@
     "saveAndClose": "Lagre & lukk",
     "failedToImportCert": "Klarte ikke å importere sertifikat",
     "failedToImportPGPKey": "Klarte ikke å importere PGP-nøkkel",
-    "sendAnywayGeneric": "Send likevel"
+    "sendAnywayGeneric": "Send likevel",
+    "undo": "Undo",
+    "redo": "Redo",
+    "history": "Edit history",
+    "historyBranches": "Branch tips",
+    "historyEmpty": "No edits yet",
+    "historyEdit": "Edit"
   },
   "contextMenu": {
     "reply": "Svar",

@@ -246,7 +246,13 @@
     "saveAndClose": "Speichern & Schließen",
     "failedToImportCert": "Zertifikat konnte nicht importiert werden",
     "failedToImportPGPKey": "PGP-Schlüssel konnte nicht importiert werden",
-    "sendAnywayGeneric": "Trotzdem senden"
+    "sendAnywayGeneric": "Trotzdem senden",
+    "undo": "Undo",
+    "redo": "Redo",
+    "history": "Edit history",
+    "historyBranches": "Branch tips",
+    "historyEmpty": "No edits yet",
+    "historyEdit": "Edit"
   },
   "contextMenu": {
     "reply": "Antworten",

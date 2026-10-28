@@ -246,7 +246,13 @@
     "saveAndClose": "Salva e chiudi",
     "failedToImportCert": "Impossibile importare il certificato",
     "failedToImportPGPKey": "Impossibile importare la chiave PGP",
-    "sendAnywayGeneric": "Invia comunque"
+    "sendAnywayGeneric": "Invia comunque",
+    "undo": "Undo",
+    "redo": "Redo",
+    "history": "Edit history",
+    "historyBranches": "Branch tips",
+    "historyEmpty": "No edits yet",
+    "historyEdit": "Edit"
   },
   "contextMenu": {
     "reply": "Rispondi",
