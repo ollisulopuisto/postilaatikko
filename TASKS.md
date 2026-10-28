@@ -34,9 +34,9 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 
 | Task | Effort | Scope | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
-| CHARSET-001 | Medium | Fix Finnish mojibake in message bodies; preserve originals and correctly decode MIME charsets. | — | Unclaimed; user report 2026-10-28. |
 | KEYBOARD-FI-001 | Medium | Make Gmail-style shortcuts work on Finnish keyboard layouts, including `#` produced with AltGr. | — | Unclaimed; user report 2026-10-28. |
 | INBOX-DUP | Medium | Diagnose and fix duplicate conversation rows in All Inboxes. | Codex / `codex/INBOX-DUP-unified` / `/private/tmp/postilaatikko-inbox-dup` | Review; hide only legacy cache copies with a matching Gmail provider copy in the same account/folder, and reuse uniquely matching unbound legacy rows for new Gmail metadata. Preserves stored content and distinct provider/account messages. Verified `go test ./internal/message ./app`, including inbox list/count and legacy-ID regression fixtures. Live mailbox confirmation remains. |
+| CHARSET-001 | Medium | Fix Finnish mojibake in message bodies without losing original content. | Codex / `codex/CHARSET-001-mail-decoding` / `/private/tmp/postilaatikko-charset` | Review; conservative repeated Finnish UTF-8-as-Western mojibake detection corrects mislabeled MIME and cached plain-text display, leaving database originals intact. Verified Latin-1/UTF-8 boundaries and cached-reader preservation; HTML-only repair and live samples remain open. |
 
 | Task | Effort | Scope | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |

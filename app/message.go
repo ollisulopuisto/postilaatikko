@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/hkdb/aerion/internal/email/textrepair"
 	"github.com/hkdb/aerion/internal/folder"
 	"github.com/hkdb/aerion/internal/gmail"
 	"github.com/hkdb/aerion/internal/logging"
@@ -178,6 +179,9 @@ func (a *App) GetConversation(threadID, folderID string) (*message.Conversation,
 					if err := a.messageStore.EnrichReactions(cached.Messages); err != nil {
 						return nil, err
 					}
+					for _, m := range cached.Messages {
+						m.BodyText = textrepair.FinnishUTF8(m.BodyText)
+					}
 					return cached, nil
 				}
 			}
@@ -200,6 +204,11 @@ func (a *App) GetConversation(threadID, folderID string) (*message.Conversation,
 		}
 	}
 
+	if conv != nil {
+		for _, m := range conv.Messages {
+			m.BodyText = textrepair.FinnishUTF8(m.BodyText)
+		}
+	}
 	if conv != nil && conv.Messages != nil {
 		for i, m := range conv.Messages {
 			log.Debug().
