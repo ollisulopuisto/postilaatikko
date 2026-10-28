@@ -42,7 +42,7 @@ func (s *Store) UpsertGmail(m *Message, providerID string) error {
 	}
 	if id == "" && m.MessageID != "" {
 		var count int
-		if err = tx.QueryRow(`SELECT COUNT(*),COALESCE(MIN(id),'') FROM messages WHERE account_id=? AND folder_id=? AND message_id=?`, m.AccountID, m.FolderID, m.MessageID).Scan(&count, &id); err != nil {
+		if err = tx.QueryRow(`SELECT COUNT(*),COALESCE(MIN(id),'') FROM messages WHERE account_id=? AND folder_id=? AND message_id IN (?,?,?) AND NOT EXISTS (SELECT 1 FROM gmail_message_refs bound WHERE bound.message_id=messages.id)`, m.AccountID, m.FolderID, m.MessageID, strings.Trim(m.MessageID, "<>"), "<"+strings.Trim(m.MessageID, "<>")+">").Scan(&count, &id); err != nil {
 			return err
 		}
 		if count != 1 {
