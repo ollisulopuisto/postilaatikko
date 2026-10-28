@@ -241,3 +241,15 @@ export function ClearDraftHistory(arg1) {
 export function MoveDraftHistory(arg1, arg2) {
   return window['go']['app']['ComposerApp']['MoveDraftHistory'](arg1, arg2);
 }
+
+export function PutDraftAttachmentBlob(arg1, arg2, arg3) {
+  return window['go']['app']['ComposerApp']['PutDraftAttachmentBlob'](arg1, arg2, arg3);
+}
+
+export function GetDraftAttachmentBlob(arg1) {
+  return window['go']['app']['ComposerApp']['GetDraftAttachmentBlob'](arg1);
+}
+
+export function DraftHistoryCommitBlobs(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['app']['ComposerApp']['DraftHistoryCommitBlobs'](arg1, arg2, arg3, arg4, arg5);
+}

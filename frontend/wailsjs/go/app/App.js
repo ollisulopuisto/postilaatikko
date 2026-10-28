@@ -1625,3 +1625,15 @@ export function UpdateScheduledMessage(arg1, arg2) {
 export function UpdateVirtualFolder(arg1) {
   return window['go']['app']['App']['UpdateVirtualFolder'](arg1);
 }
+
+export function PutDraftAttachmentBlob(arg1, arg2, arg3) {
+  return window['go']['app']['App']['PutDraftAttachmentBlob'](arg1, arg2, arg3);
+}
+
+export function GetDraftAttachmentBlob(arg1) {
+  return window['go']['app']['App']['GetDraftAttachmentBlob'](arg1);
+}
+
+export function DraftHistoryCommitBlobs(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['app']['App']['DraftHistoryCommitBlobs'](arg1, arg2, arg3, arg4, arg5);
+}

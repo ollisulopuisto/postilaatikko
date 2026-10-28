@@ -213,6 +213,12 @@ func (s *Store) Clear(draftKey string) error {
 		return err
 	}
 	defer tx.Rollback()
+	// FK cascades are not relied on (enforcement depends on the connection
+	// pragma); remove membership rows explicitly.
+	if _, err := tx.Exec(
+		`DELETE FROM draft_history_node_blobs WHERE node_id IN (SELECT node_id FROM draft_history_nodes WHERE draft_key = ?)`, draftKey); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(`DELETE FROM draft_history_nodes WHERE draft_key = ?`, draftKey); err != nil {
 		return err
 	}
@@ -225,7 +231,93 @@ func (s *Store) Clear(draftKey string) error {
 		`DELETE FROM draft_history_states WHERE hash NOT IN (SELECT DISTINCT state_hash FROM draft_history_nodes)`); err != nil {
 		return err
 	}
+	// Same for attachment blobs: collected only once no node references
+	// them, and only at this approved clear point.
+	if _, err := tx.Exec(
+		`DELETE FROM draft_attachment_blobs WHERE hash NOT IN (SELECT DISTINCT blob_hash FROM draft_history_node_blobs)`); err != nil {
+		return err
+	}
 	return tx.Commit()
+}
+
+// PutBlob stores attachment content addressed by its SHA-256. The same
+// content costs one row no matter how many nodes reference it. Name/mime
+// are kept from the first store for display on restore.
+func (s *Store) PutBlob(name, mime string, content []byte) (string, error) {
+	sum := sha256.Sum256(content)
+	hash := hex.EncodeToString(sum[:])
+	_, err := s.db.Exec(
+		`INSERT INTO draft_attachment_blobs (hash, name, mime, size, content)
+		 VALUES (?, ?, ?, ?, ?)
+		 ON CONFLICT(hash) DO NOTHING`,
+		hash, name, mime, len(content), content)
+	if err != nil {
+		return "", err
+	}
+	return hash, nil
+}
+
+// Blob is attachment content plus its display metadata.
+type Blob struct {
+	Hash    string `json:"hash"`
+	Name    string `json:"name"`
+	Mime    string `json:"mime"`
+	Size    int64  `json:"size"`
+	Content []byte `json:"content"`
+}
+
+// GetBlob returns one attachment blob by hash.
+func (s *Store) GetBlob(hash string) (*Blob, error) {
+	b := &Blob{Hash: hash}
+	err := s.db.QueryRow(
+		`SELECT name, mime, size, content FROM draft_attachment_blobs WHERE hash = ?`, hash,
+	).Scan(&b.Name, &b.Mime, &b.Size, &b.Content)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+// CommitBlobs is Commit plus attachment membership: blobHashes records
+// which blobs this node's snapshot refers to. Blobs themselves must be
+// stored with PutBlob first; unknown hashes are rejected.
+func (s *Store) CommitBlobs(draftKey, parentID, label, payload string, blobHashes []string) (string, error) {
+	nodeID, err := s.Commit(draftKey, parentID, label, payload)
+	if err != nil {
+		return "", err
+	}
+	for _, h := range blobHashes {
+		res, err := s.db.Exec(
+			`INSERT INTO draft_history_node_blobs (node_id, blob_hash)
+			 SELECT ?, ? WHERE EXISTS (SELECT 1 FROM draft_attachment_blobs WHERE hash = ?)
+			 ON CONFLICT DO NOTHING`, nodeID, h, h)
+		if err != nil {
+			return "", err
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return "", fmt.Errorf("draft history: unknown attachment blob %q", h)
+		}
+	}
+	return nodeID, nil
+}
+
+// NodeBlobs lists the attachment hashes one node references.
+func (s *Store) NodeBlobs(nodeID string) ([]string, error) {
+	rows, err := s.db.Query(
+		`SELECT blob_hash FROM draft_history_node_blobs WHERE node_id = ?`, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var h string
+		if err := rows.Scan(&h); err != nil {
+			return nil, err
+		}
+		out = append(out, h)
+	}
+	return out, rows.Err()
 }
 
 // Move re-keys an entire tree from oldKey to newKey. Used when an unsaved

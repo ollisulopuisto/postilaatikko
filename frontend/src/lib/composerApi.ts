@@ -28,6 +28,9 @@ export interface ComposerApi {
   draftHistoryCheckout: (draftKey: string, nodeId: string) => Promise<void>
   clearDraftHistory: (draftKey: string) => Promise<void>
   moveDraftHistory: (oldKey: string, newKey: string) => Promise<void>
+  draftHistoryCommitBlobs: (draftKey: string, parentId: string, label: string, payload: string, blobHashes: string[]) => Promise<string>
+  putDraftAttachmentBlob: (name: string, mime: string, contentBase64: string) => Promise<string>
+  getDraftAttachmentBlob: (hash: string) => Promise<{ hash: string; name: string; mime: string; size: number; content: string }>
   getSendLaterSetup: (accountId: string) => Promise<SendLaterSetup>
   initializeSendLaterClient: () => Promise<string>
   saveSendLaterConfig: (config: SendLaterConfig) => Promise<void>
@@ -169,6 +172,18 @@ export function createMainWindowApi(): ComposerApi {
     moveDraftHistory: async (oldKey, newKey) => {
       const { MoveDraftHistory } = await import('../../wailsjs/go/app/App.js')
       return MoveDraftHistory(oldKey, newKey)
+    },
+    draftHistoryCommitBlobs: async (draftKey, parentId, label, payload, blobHashes) => {
+      const { DraftHistoryCommitBlobs } = await import('../../wailsjs/go/app/App.js')
+      return DraftHistoryCommitBlobs(draftKey, parentId, label, payload, blobHashes)
+    },
+    putDraftAttachmentBlob: async (name, mime, contentBase64) => {
+      const { PutDraftAttachmentBlob } = await import('../../wailsjs/go/app/App.js')
+      return PutDraftAttachmentBlob(name, mime, contentBase64)
+    },
+    getDraftAttachmentBlob: async (hash) => {
+      const { GetDraftAttachmentBlob } = await import('../../wailsjs/go/app/App.js')
+      return GetDraftAttachmentBlob(hash)
     },
     getSendLaterSetup: accountId => sendLaterBackend().GetSendLaterSetup(accountId),
     initializeSendLaterClient: () => sendLaterBackend().InitializeSendLaterClient(),
@@ -353,6 +368,18 @@ export function createComposerWindowApi(_accountId: string): ComposerApi {
     moveDraftHistory: async (oldKey, newKey) => {
       const { MoveDraftHistory } = await import('../../wailsjs/go/app/ComposerApp.js')
       return MoveDraftHistory(oldKey, newKey)
+    },
+    draftHistoryCommitBlobs: async (draftKey, parentId, label, payload, blobHashes) => {
+      const { DraftHistoryCommitBlobs } = await import('../../wailsjs/go/app/ComposerApp.js')
+      return DraftHistoryCommitBlobs(draftKey, parentId, label, payload, blobHashes)
+    },
+    putDraftAttachmentBlob: async (name, mime, contentBase64) => {
+      const { PutDraftAttachmentBlob } = await import('../../wailsjs/go/app/ComposerApp.js')
+      return PutDraftAttachmentBlob(name, mime, contentBase64)
+    },
+    getDraftAttachmentBlob: async (hash) => {
+      const { GetDraftAttachmentBlob } = await import('../../wailsjs/go/app/ComposerApp.js')
+      return GetDraftAttachmentBlob(hash)
     },
     getSendLaterSetup: accountId => sendLaterBackend(true).GetSendLaterSetup(accountId),
     initializeSendLaterClient: () => sendLaterBackend(true).InitializeSendLaterClient(),

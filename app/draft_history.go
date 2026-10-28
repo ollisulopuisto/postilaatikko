@@ -5,6 +5,9 @@ package app
 // automatic pruning; lifetime/clear policy wired separately.
 
 import (
+	"encoding/base64"
+	"fmt"
+
 	"github.com/hkdb/aerion/internal/drafthistory"
 )
 
@@ -32,8 +35,8 @@ func (a *App) DraftHistoryCheckout(draftKey, nodeID string) error {
 	return a.draftHistoryStore().Checkout(draftKey, nodeID)
 }
 
-// ClearDraftHistory deletes a draft's whole tree. Nothing calls this yet:
-// wiring it to send/discard lifecycle lands in the follow-up PR.
+// ClearDraftHistory deletes a draft's whole tree. Wired to actual send and
+// explicit draft discard only; cancelling a pending send preserves history.
 func (a *App) ClearDraftHistory(draftKey string) error {
 	return a.draftHistoryStore().Clear(draftKey)
 }
@@ -73,4 +76,39 @@ func (c *ComposerApp) ClearDraftHistory(draftKey string) error {
 
 func (c *ComposerApp) MoveDraftHistory(oldKey, newKey string) error {
 	return c.draftHistoryStore().Move(oldKey, newKey)
+}
+
+// PutDraftAttachmentBlob stores attachment content (base64 over Wails RPC to
+// avoid pathologically slow number-array JSON) addressed by its SHA-256.
+func putDraftAttachmentBlob(store *drafthistory.Store, name, mime, contentBase64 string) (string, error) {
+	content, err := base64.StdEncoding.DecodeString(contentBase64)
+	if err != nil {
+		return "", fmt.Errorf("draft attachment: invalid base64: %w", err)
+	}
+	return store.PutBlob(name, mime, content)
+}
+
+func (a *App) PutDraftAttachmentBlob(name, mime, contentBase64 string) (string, error) {
+	return putDraftAttachmentBlob(a.draftHistoryStore(), name, mime, contentBase64)
+}
+
+func (a *App) GetDraftAttachmentBlob(hash string) (*drafthistory.Blob, error) {
+	return a.draftHistoryStore().GetBlob(hash)
+}
+
+// DraftHistoryCommitBlobs is DraftHistoryCommit plus attachment membership.
+func (a *App) DraftHistoryCommitBlobs(draftKey, parentID, label, payload string, blobHashes []string) (string, error) {
+	return a.draftHistoryStore().CommitBlobs(draftKey, parentID, label, payload, blobHashes)
+}
+
+func (c *ComposerApp) PutDraftAttachmentBlob(name, mime, contentBase64 string) (string, error) {
+	return putDraftAttachmentBlob(c.draftHistoryStore(), name, mime, contentBase64)
+}
+
+func (c *ComposerApp) GetDraftAttachmentBlob(hash string) (*drafthistory.Blob, error) {
+	return c.draftHistoryStore().GetBlob(hash)
+}
+
+func (c *ComposerApp) DraftHistoryCommitBlobs(draftKey, parentID, label, payload string, blobHashes []string) (string, error) {
+	return c.draftHistoryStore().CommitBlobs(draftKey, parentID, label, payload, blobHashes)
 }

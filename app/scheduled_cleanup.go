@@ -22,7 +22,7 @@ import (
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-func cleanupScheduledDraft(ctx context.Context, data string, job scheduledsend.ClientJob, ops *draftOps, cancelSync func(string)) scheduledsend.ClientJob {
+func cleanupScheduledDraft(ctx context.Context, data string, job scheduledsend.ClientJob, ops *draftOps, cancelSync func(string), clearHistory func(accountID, draftID string)) scheduledsend.ClientJob {
 	if job.State != "sent" || job.DraftCleanup == "removed" || job.DraftCleanup == "kept_changed" || job.DraftCleanup == "manual_legacy" {
 		return job
 	}
@@ -36,6 +36,12 @@ func cleanupScheduledDraft(ctx context.Context, data string, job scheduledsend.C
 		if err := store.SetDraftCleanup(ctx, job.ID, state); err != nil {
 			job.DraftCleanup = "retry"
 			return job
+		}
+		// Actual send ended the draft: its undo history ends too (approved
+		// lifecycle). Best-effort: a clear failure must not flip the job to
+		// retry, the draft row is already gone.
+		if state == "removed" && clearHistory != nil {
+			clearHistory(job.AccountID, job.DraftID)
 		}
 		job.DraftCleanup = state
 		return job

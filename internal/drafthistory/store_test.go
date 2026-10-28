@@ -26,7 +26,16 @@ func newTestStore(t *testing.T) *Store {
 		  created_at TEXT NOT NULL DEFAULT (datetime('now')));
 		CREATE TABLE draft_history_heads (
 		  draft_key TEXT PRIMARY KEY,
-		  current_node_id TEXT NOT NULL REFERENCES draft_history_nodes(node_id));`)
+		  current_node_id TEXT NOT NULL REFERENCES draft_history_nodes(node_id));
+		CREATE TABLE draft_attachment_blobs (
+		  hash TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '',
+		  mime TEXT NOT NULL DEFAULT '', size INTEGER NOT NULL DEFAULT 0,
+		  content BLOB NOT NULL,
+		  created_at TEXT NOT NULL DEFAULT (datetime('now')));
+		CREATE TABLE draft_history_node_blobs (
+		  node_id TEXT NOT NULL REFERENCES draft_history_nodes(node_id) ON DELETE CASCADE,
+		  blob_hash TEXT NOT NULL REFERENCES draft_attachment_blobs(hash),
+		  PRIMARY KEY (node_id, blob_hash));`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,5 +200,61 @@ func TestMoveRefusesOccupiedTarget(t *testing.T) {
 	}
 	if err := s.Move("k1", "k2"); err == nil {
 		t.Fatal("expected refusal to merge two live trees")
+	}
+}
+
+func TestBlobMembershipAndCollection(t *testing.T) {
+	s := newTestStore(t)
+	content := []byte("fake-pdf-bytes")
+	h1, err := s.PutBlob("a.pdf", "application/pdf", content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Dedup: same content, same hash, no error.
+	h2, err := s.PutBlob("copy.pdf", "application/pdf", content)
+	if err != nil || h1 != h2 {
+		t.Fatalf("dedup: %v %v %v", h1, h2, err)
+	}
+	node, err := s.CommitBlobs("k", "", "attach", `{"a":1}`, []string{h1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CommitBlobs("k", node, "edit", `{"a":2}`, []string{"deadbeef"}); err == nil {
+		t.Fatal("expected unknown-blob rejection")
+	}
+	got, err := s.GetBlob(h1)
+	if err != nil || got.Name != "a.pdf" || string(got.Content) != string(content) {
+		t.Fatalf("GetBlob = %+v, %v", got, err)
+	}
+	hashes, err := s.NodeBlobs(node)
+	if err != nil || len(hashes) != 1 || hashes[0] != h1 {
+		t.Fatalf("NodeBlobs = %v, %v", hashes, err)
+	}
+	// Clear removes the tree, membership, and the now-orphaned blob.
+	if err := s.Clear("k"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.GetBlob(h1); err == nil {
+		t.Fatal("expected blob collected after Clear")
+	}
+}
+
+func TestBlobSurvivesClearWhileReferenced(t *testing.T) {
+	s := newTestStore(t)
+	h, err := s.PutBlob("a.pdf", "application/pdf", []byte("x"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CommitBlobs("k1", "", "attach", `{"a":1}`, []string{h}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CommitBlobs("k2", "", "attach", `{"b":1}`, []string{h}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Clear("k1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.GetBlob(h); err != nil {
+		t.Fatal("blob still referenced by k2 must survive k1 Clear")
 	}
 }
