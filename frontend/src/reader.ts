@@ -38,9 +38,15 @@ async function bootstrap() {
   accountStore.accounts = (accounts || []).map(account => ({ account, folders: [], loading: false, syncing: false, error: null, lastSync: null }))
   await initTheme(theme, GetSystemTheme)
   mount(ReaderApp, { target: document.getElementById('app')!, props: { config } })
+  document.getElementById('boot-status')?.remove()
 }
 bootstrap().catch(error => {
   console.error('[reader]', error)
-  const root = document.getElementById('app')!
-  root.textContent = `Postilaatikko: ${error instanceof Error ? error.message : String(error)}`
+  const message = `Postilaatikko: ${error instanceof Error ? error.message : String(error)}`
+  const status = document.getElementById('boot-status')
+  if (status) {
+    status.textContent = message
+  } else {
+    document.getElementById('app')!.textContent = message
+  }
 })

@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -113,6 +114,26 @@ func (r *ReaderApp) Call(operation string, args json.RawMessage) (any, error) {
 	return result, err
 }
 
+// detachedChildLogFile captures a spawned window's stdout/stderr so failures
+// that lose the webview (blank window, early crash) are diagnosable after the
+// fact. One file per window kind, truncated per spawn, under the cache dir.
+func detachedChildLogFile(cacheDir, kind string, cmd *exec.Cmd) *os.File {
+	if cacheDir == "" {
+		return nil
+	}
+	logDir := filepath.Join(cacheDir, "logs")
+	if err := os.MkdirAll(logDir, 0o700); err != nil {
+		return nil
+	}
+	f, err := os.OpenFile(filepath.Join(logDir, kind+"-window.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return nil
+	}
+	cmd.Stdout = f
+	cmd.Stderr = f
+	return f
+}
+
 // OpenReaderWindow opens a selected thread in another native Wails process.
 func (a *App) OpenReaderWindow(accountID, folderID, threadID, folderType string) error {
 	if a.ipcServer == nil || a.ipcTokenMgr == nil {
@@ -133,12 +154,20 @@ func (a *App) OpenReaderWindow(accountID, folderID, threadID, folderType string)
 		return err
 	}
 	cmd := exec.Command(executable, "--reader", "--account", accountID, "--reader-folder", folderID, "--reader-thread", threadID, "--reader-folder-type", folderType, "--ipc-address", a.ipcServer.Address())
+	var cacheDir string
+	if a.paths != nil {
+		cacheDir = a.paths.Cache
+	}
+	childLog := detachedChildLogFile(cacheDir, "reader", cmd)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return err
 	}
 	if err = cmd.Start(); err != nil {
 		_ = stdin.Close()
+		if childLog != nil {
+			_ = childLog.Close()
+		}
 		return fmt.Errorf("open reader: %w", err)
 	}
 	go func() {
@@ -148,7 +177,15 @@ func (a *App) OpenReaderWindow(accountID, folderID, threadID, folderType string)
 			_ = cmd.Process.Kill()
 		}
 	}()
-	go func() { defer recoverPanic("app.reader", "wait child"); _ = cmd.Wait() }()
+	go func() {
+		defer recoverPanic("app.reader", "wait child")
+		defer func() {
+			if childLog != nil {
+				_ = childLog.Close()
+			}
+		}()
+		_ = cmd.Wait()
+	}()
 	return nil
 }
 
