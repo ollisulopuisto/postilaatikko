@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Bound the reader's inline-image session cache to 128 messages and 32 MiB of accounted string payloads, evicting least-recently-used entries. Images already open remain visible; evicted copies are reloaded from local storage when needed.
+
 - Sidebar cards can be reordered, collapsed and hidden/restored. Move entries between cards by dragging or keyboard controls; add custom groups. All Inboxes lives in Virtual folders. Star up to ten entries for the rail and Cmd/Ctrl+1…0. Contacts/Calendar rail shortcuts default off.
 - Add cross-account global server search, available from the sidebar or `/`, with account scopes, native Gmail queries, pagination and visible account errors. All folders and move/copy destinations have account-spanning folder search.
 - Gmail OAuth accounts prefer Gmail API for metadata/history, labels, body/source/attachments, flags, move/copy/archive/spam/trash/delete, drafts, sending/read receipts and helper delivery. Preserve Bcc recipients and avoid transport fallback after ambiguous sends/imports.

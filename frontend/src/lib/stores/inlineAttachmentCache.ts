@@ -1,51 +1,63 @@
 /**
- * In-memory cache for inline attachments within a session.
- *
- * This cache avoids redundant API calls when switching between messages.
- * The backend already stores inline attachment content in SQLite for offline access,
- * but this frontend cache prevents unnecessary round-trips when revisiting messages.
- *
- * Cache is unlimited (no eviction) - grows throughout the session.
- * Memory is released when the app is closed/refreshed.
+ * Bounded session cache for inline attachment data URLs. SQLite owns the durable
+ * copies; a cache miss is fetched again by the reader. Eviction does not revoke
+ * data already held by an open message.
  */
+const MAX_MESSAGES = 128
+const MAX_STRING_BYTES = 32 * 1024 * 1024
 
-// Map of messageId -> Record<contentId, dataUrl>
+type Entry = { data: Record<string, string>; bytes: number }
+const cache = new Map<string, Entry>()
+let stringBytes = 0
 let generation = 0
+
 export function getCacheGeneration(): number { return generation }
 
-const cache = new Map<string, Record<string, string>>()
-
-/**
- * Get cached inline attachments for a message
- * @param messageId The message ID to look up
- * @returns The cached data URL map, or null if not cached
- */
+/** Get cached attachments and mark the message as recently used. */
 export function getCached(messageId: string): Record<string, string> | null {
-  return cache.get(messageId) ?? null
+  const entry = cache.get(messageId)
+  if (!entry) return null
+  cache.delete(messageId)
+  cache.set(messageId, entry)
+  return entry.data
 }
 
-/**
- * Store inline attachments in the cache
- * @param messageId The message ID to cache for
- * @param data The content-id to data URL map
- */
+/** Store attachments, evicting least-recently-used messages within the budget. */
 export function setCache(messageId: string, data: Record<string, string>): void {
-  cache.set(messageId, data)
+  const previous = cache.get(messageId)
+  if (previous) {
+    stringBytes -= previous.bytes
+    cache.delete(messageId)
+  }
+
+  // Two bytes per UTF-16 code unit is conservative for the data URL strings.
+  // Include keys, but do not claim this bounds JS objects or decoded images.
+  let bytes = messageId.length * 2
+  for (const [contentId, dataUrl] of Object.entries(data)) {
+    bytes += (contentId.length + dataUrl.length) * 2
+    if (bytes > MAX_STRING_BYTES) return
+  }
+  if (bytes > MAX_STRING_BYTES) return
+
+  while (cache.size >= MAX_MESSAGES || stringBytes + bytes > MAX_STRING_BYTES) {
+    const oldest = cache.keys().next()
+    if (oldest.done) break
+    const entry = cache.get(oldest.value)!
+    stringBytes -= entry.bytes
+    cache.delete(oldest.value)
+  }
+  cache.set(messageId, { data, bytes })
+  stringBytes += bytes
 }
 
-/**
- * Clear the entire cache
- * Can be used for memory management if needed
- */
+/** Clear attachments and invalidate requests started before this reset. */
 export function clearCache(): void {
   generation++
   cache.clear()
+  stringBytes = 0
 }
 
-/**
- * Get the current cache size (number of messages cached)
- * Useful for debugging
- */
+/** Get the number of messages retained in the session cache. */
 export function getCacheSize(): number {
   return cache.size
 }
