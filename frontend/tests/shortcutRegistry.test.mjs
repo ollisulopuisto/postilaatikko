@@ -27,7 +27,8 @@ after(() => server.close())
 
 const registry = await server.ssrLoadModule('/src/lib/keyboard/registry.ts')
 const format = await server.ssrLoadModule('/src/lib/keyboard/format.ts')
-const coreKeys = (await server.ssrLoadModule('/src/lib/keyboard/shortcuts.ts')).KEY
+const shortcutModule = await server.ssrLoadModule('/src/lib/keyboard/shortcuts.ts')
+const coreKeys = shortcutModule.KEY
 
 const { SHORTCUTS, SHORTCUT_GROUPS, CORE_SHORTCUTS, CORE_GROUPS, EXTENSION_REGISTRIES } = registry
 
@@ -211,4 +212,17 @@ test('formatting follows the platform', () => {
   assert.equal(format.ariaKeyshortcuts('mail.replyAll', false), 'Control+Shift+R a')
   assert.equal(format.ariaKeyshortcuts('mail.replyAll', true), 'Meta+Shift+R a')
   assert.equal(format.ariaKeyshortcuts('app.preferences', false), undefined)
+})
+
+test('Finnish layout symbols support AltGr without swallowing real modifiers', () => {
+  const event = (key, modifiers = {}) => ({ key, altKey: false, ctrlKey: false, metaKey: false, shiftKey: false, getModifierState: () => false, ...modifiers })
+  assert.equal(shortcutModule.LAYOUT_SYMBOL(event('#', { altKey: true })), true, 'macOS Option+3')
+  assert.equal(shortcutModule.LAYOUT_SYMBOL(event('#', { altKey: true, ctrlKey: true, getModifierState: key => key === 'AltGraph' })), true, 'Windows/Linux AltGr+3')
+  assert.equal(shortcutModule.LAYOUT_SYMBOL(event('#', { altKey: true, ctrlKey: true })), false, 'actual Ctrl+Alt is not AltGr')
+  assert.equal(shortcutModule.LAYOUT_SYMBOL(event('#', { metaKey: true, altKey: true })), false, 'Cmd combinations stay separate')
+  assert.equal(shortcutModule.LAYOUT_SYMBOL(event('m', { altKey: true })), false, 'Alt+M remains move')
+  assert.equal(coreKeys.SHORTCUTS_HELP(event('?', { altKey: true })), true)
+  assert.equal(shortcutModule.PERMANENT_DELETE(event('#', { shiftKey: true })), false, 'typing # must never permanently delete')
+  assert.equal(shortcutModule.PERMANENT_DELETE(event('Delete', { shiftKey: true })), true)
+
 })

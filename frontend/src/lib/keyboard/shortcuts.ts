@@ -94,11 +94,26 @@ export const LIST_MOVE_TO = (e: KeyboardEvent): boolean =>
 export const LIST_COPY_TO = (e: KeyboardEvent): boolean =>
   altOnly(e) && e.key === 'c'
 
+// A symbol is identified by its produced character, not the physical key.
+// On Finnish macOS Option+3 produces #; on other platforms AltGr may also
+// report Ctrl+Alt. Ordinary Ctrl+Alt combinations remain reserved.
+export function LAYOUT_SYMBOL(e: KeyboardEvent): boolean {
+  if (!['#', '/', '!', '?'].includes(e.key) || e.metaKey) return false
+  if (!e.altKey) return !e.ctrlKey
+  return !e.ctrlKey || !!e.getModifierState?.('AltGraph')
+}
+
+// Shift may be needed to type # on some layouts; it must not turn Trash into
+// permanent deletion. Shift+Delete / Shift+Backspace retain their meaning.
+export function PERMANENT_DELETE(e: KeyboardEvent): boolean {
+  return e.shiftKey && e.key !== '#'
+}
+
 // `?` — open the keyboard shortcuts overlay. Shift is not checked: `?` needs
 // Shift on most layouts (Shift+/ on US, Shift++ on Finnish), and e.key already
 // reflects the layout.
 export const SHORTCUTS_HELP = (e: KeyboardEvent): boolean =>
-  e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey
+  e.key === '?' && LAYOUT_SYMBOL(e)
 
 // Cmd+P / Ctrl+P or Cmd+Shift+P / Ctrl+Shift+P — open the command palette.
 export const COMMAND_PALETTE = (e: KeyboardEvent): boolean =>

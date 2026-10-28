@@ -373,7 +373,8 @@
             altKey: e.altKey,
             ctrlKey: e.ctrlKey,
             metaKey: e.metaKey,
-            shiftKey: e.shiftKey
+            shiftKey: e.shiftKey,
+            altGraph: e.getModifierState('AltGraph')
           }, '*');
           if (isUnmodifiedShortcut) e.preventDefault();
         }
@@ -512,12 +513,16 @@ ${processedHtml}
           return
         }
       }
+      // A synthetic KeyboardEvent cannot represent AltGraph reliably; normalize
+      // only recognized symbol shortcuts from a non-interactive message body.
+      const symbol = ['#', '/', '!', '?'].includes(event.data.key) && !event.data.metaKey &&
+        (!event.data.ctrlKey || event.data.altGraph) && event.data.altKey
       // For other shortcuts (Ctrl+, Escape), dispatch to window
       const syntheticEvent = new KeyboardEvent('keydown', {
         key: event.data.key,
         code: event.data.code,
-        altKey: event.data.altKey,
-        ctrlKey: event.data.ctrlKey,
+        altKey: symbol ? false : event.data.altKey,
+        ctrlKey: symbol ? false : event.data.ctrlKey,
         metaKey: event.data.metaKey,
         shiftKey: event.data.shiftKey,
         bubbles: true,
