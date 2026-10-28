@@ -583,6 +583,12 @@ func (a *App) Startup(ctx context.Context) {
 	log := logging.WithComponent("app")
 	db := a.db
 
+	// A restart never auto-sends: expire any leftover undo-send queue rows;
+	// their drafts simply reappear in the Drafts folder.
+	if err := a.ExpirePendingSends(); err != nil {
+		log.Warn().Err(err).Msg("Failed to expire leftover pending sends")
+	}
+
 	// Initialize stores
 	a.accountStore = account.NewStore(db)
 	a.folderStore = folder.NewStore(db)

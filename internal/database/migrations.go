@@ -1574,4 +1574,19 @@ var migrations = []Migration{
    current_node_id TEXT NOT NULL REFERENCES draft_history_nodes(node_id)
  );
  `},
+	{Version: 57, SQL: `
+ -- 30-second undo-send queue. The frontend main window owns the countdown
+ -- timer and dispatches through the normal send path; this table makes a
+ -- pending send durable so an app restart can EXPIRE it back to a draft
+ -- instead of silently losing or silently sending it.
+ CREATE TABLE IF NOT EXISTS pending_sends (
+   id TEXT PRIMARY KEY,
+   account_id TEXT NOT NULL,
+   draft_id TEXT NOT NULL DEFAULT '',
+   payload TEXT NOT NULL,
+   dispatch_at TEXT NOT NULL,
+   state TEXT NOT NULL DEFAULT 'pending',
+   created_at TEXT NOT NULL DEFAULT (datetime('now'))
+ );
+ `},
 }
