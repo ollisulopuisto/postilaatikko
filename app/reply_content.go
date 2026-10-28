@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/hkdb/aerion/internal/email/replycontent"
+	"github.com/hkdb/aerion/internal/email/textrepair"
 )
 
 // GetReplyContent returns the reply extraction (new text, quoted history,
@@ -39,6 +40,7 @@ func (a *App) GetReplyContent(accountID, messageID, channel string, fetch bool) 
 		}
 	}
 
+	msg.BodyText = textrepair.FinnishUTF8(msg.BodyText)
 	reply, err := a.replyContent.Extract(a.replyContext(), channel, replycontent.RefOf(msg), replycontent.BodyFromMessage(msg))
 	if err != nil {
 		return nil, err

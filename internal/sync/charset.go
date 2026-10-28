@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	msgcharset "github.com/emersion/go-message/charset"
+	"github.com/hkdb/aerion/internal/email/textrepair"
 	"github.com/hkdb/aerion/internal/logging"
 	"golang.org/x/net/html/charset"
 	"golang.org/x/text/encoding/htmlindex"
@@ -124,6 +125,12 @@ func decodeCharset(content []byte, declaredCharset string) string {
 		return string(content)
 	}
 
+	// Some old messages declare Latin-1 while already containing UTF-8. Only
+	// override the declaration when the decoded result has repeated, reversible
+	// Finnish mojibake; correctly encoded legacy text remains untouched.
+	if utf8.Valid(content) && textrepair.FinnishUTF8(string(decoded)) == string(content) && string(decoded) != string(content) {
+		return string(content)
+	}
 	log.Debug().Str("declaredCharset", declaredCharset).Msg("Successfully decoded charset to UTF-8")
 	return string(decoded)
 }
