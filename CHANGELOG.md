@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## Postilaatikko — v0.3.19
+
+- Avoid duplicate legacy/Gmail inbox entries without deleting cached content.
+- Correct recurring Finnish character encoding errors in plain-text messages while preserving originals.
+- Support Finnish Option/AltGr symbol shortcuts and keep `#` from triggering permanent deletion.
+
 - Settle pending spelling checks and suggestions when spellcheck is disabled or its worker fails, instead of leaving callers waiting indefinitely. Late events from a replaced worker are ignored.
 - Bound the reader's inline-image session cache to 128 messages and 32 MiB of accounted string payloads, evicting least-recently-used entries. Images already open remain visible; evicted copies are reloaded from local storage when needed.
 

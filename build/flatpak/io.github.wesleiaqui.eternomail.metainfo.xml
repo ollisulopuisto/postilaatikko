@@ -309,6 +309,9 @@
   </provides>
 
   <releases>
+    <release version="0.3.19" date="2026-10-28">
+      <description><p>Fix duplicate legacy inbox messages, Finnish text decoding and keyboard layout shortcuts.</p></description>
+    </release>
     <release version="0.3.18" date="2026-10-27">
       <description><p>Customizable sidebar cards, Gmail-first operations, cross-account server search and API-backed virtual folders.</p></description>
     </release>
