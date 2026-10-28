@@ -1772,6 +1772,12 @@
       }
       return
     }
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'w') {
+      // Same close flow as the X button / Escape: draft-safe confirm dialog.
+      e.preventDefault()
+      handleClose()
+      return
+    }
     if (e.key === 'Escape') {
       handleClose()
     }
