@@ -57,7 +57,7 @@ func (a *App) QueuePendingSend(accountID, draftID, payload string) (string, erro
 	if err != nil {
 		return "", err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if draftID != "" {
 		var n int
 		if err := tx.QueryRow(
@@ -175,7 +175,7 @@ func (c *ComposerApp) QueuePendingSend(accountID, draftID, payload string) (stri
 	if err != nil {
 		return "", err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if draftID != "" {
 		var n int
 		if err := tx.QueryRow(
