@@ -278,3 +278,42 @@ func firstSchemaDifference(want, got []string) string {
 	}
 	return fmt.Sprintf("entry count: fresh=%d upgrade=%d", len(want), len(got))
 }
+
+func TestMigrationV58AddsDraftAttachmentBlobTables(t *testing.T) {
+	db := openUnmigratedTestDB(t)
+	applyMigrationsThrough(t, db, 57)
+
+	// Before v58 the PR #45 blob tables must not exist.
+	var before int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('draft_attachment_blobs', 'draft_history_node_blobs')`).Scan(&before); err != nil {
+		t.Fatalf("count blob tables before v58: %v", err)
+	}
+	if before != 0 {
+		t.Fatalf("blob tables present before v58: %d, want 0", before)
+	}
+
+	if err := db.Migrate(); err != nil {
+		t.Fatalf("migrate through v58: %v", err)
+	}
+
+	// Round-trip one blob and one membership row the way drafthistory does.
+	if _, err := db.Exec(`INSERT INTO draft_history_states (hash, payload, byte_size) VALUES ('s1', '{}', 2)`); err != nil {
+		t.Fatalf("seed state: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO draft_history_nodes (node_id, draft_key, state_hash) VALUES ('n1', 'acc:d1', 's1')`); err != nil {
+		t.Fatalf("seed node: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO draft_attachment_blobs (hash, name, mime, size, content) VALUES ('b1', 'a.pdf', 'application/pdf', 3, x'010203')`); err != nil {
+		t.Fatalf("insert blob: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO draft_history_node_blobs (node_id, blob_hash) VALUES ('n1', 'b1')`); err != nil {
+		t.Fatalf("insert membership: %v", err)
+	}
+	var got string
+	if err := db.QueryRow(`SELECT blob_hash FROM draft_history_node_blobs WHERE node_id = 'n1'`).Scan(&got); err != nil {
+		t.Fatalf("read membership: %v", err)
+	}
+	if got != "b1" {
+		t.Fatalf("membership = %q, want b1", got)
+	}
+}
