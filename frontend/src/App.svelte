@@ -5,7 +5,7 @@
   import './lib/iconify-offline'
   import { clearCache as clearInlineAttachmentCache } from './lib/stores/inlineAttachmentCache'
 
-  import { onMount, tick, untrack } from 'svelte'
+  import { onDestroy, onMount, tick, untrack } from 'svelte'
   import TitleBar from './lib/components/common/TitleBar.svelte'
   import Sidebar from './lib/components/sidebar/Sidebar.svelte'
   import GlobalSearch from './lib/components/common/GlobalSearch.svelte'
@@ -60,7 +60,7 @@
   import { publishUndoOperationCompleted, publishUndoOperationCreated } from '$lib/components/list/undoMutationEvents'
   import { runMessageMutation } from '$lib/components/list/mutationInFlight'
   // @ts-ignore - wailsjs path
-  import { PrepareReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, ClearDraftHistory, SendMessageWithDraftGuard, QueuePendingSend, CancelPendingSend, CompletePendingSend, ListPendingSends, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, UndoOperation, UndoLatestWithResult, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, OpenComposerWindow, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
+  import { PrepareReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, ClearDraftHistory, SendMessageWithDraftGuard, CancelPendingSend, CompletePendingSend, ListPendingSends, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, UndoOperation, UndoLatestWithResult, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, OpenComposerWindow, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
   // @ts-ignore - wailsjs path
   import { smtp, folder, certificate } from '../wailsjs/go/models'
   // @ts-ignore - wailsjs runtime
@@ -355,6 +355,7 @@
   // never auto-sends: the backend expires leftover rows at startup.
   type PendingSendItem = { id: string; accountId: string; draftId: string; payload: string; dispatchAt: string; dispatching?: boolean }
   let pendingSends = $state<PendingSendItem[]>([])
+  let pendingTick: ReturnType<typeof setInterval> | undefined
   let pendingNow = $state(Date.now())
 
   function pendingRemove(id: string) {
@@ -391,7 +392,7 @@
       pendingRemove(ps.id)
       addToast({ type: 'info', message: $_('pendingSend.cancelled') })
       if (ps.draftId) await handleEditDraft(ps.draftId)
-    } catch (err) {
+    } catch {
       pendingRemove(ps.id)
       addToast({ type: 'error', message: $_('pendingSend.alreadySending') })
     }
@@ -400,6 +401,10 @@
   function pendingRemaining(ps: PendingSendItem): number {
     return Math.max(0, Math.ceil((new Date(ps.dispatchAt).getTime() - pendingNow) / 1000))
   }
+
+  onDestroy(() => {
+    if (pendingTick !== undefined) clearInterval(pendingTick)
+  })
 
   onMount(async () => {
     // Listen for notification click events from backend
@@ -410,7 +415,7 @@
       if (!pendingSends.some(p => p.id === ps.id)) pendingSends = [...pendingSends, ps]
     })
     EventsOn('pending-send:cancelled', (id: string) => pendingRemove(id))
-    const pendingTick = setInterval(() => {
+    pendingTick = setInterval(() => {
       pendingNow = Date.now()
       for (const ps of pendingSends) {
         if (!ps.dispatching && new Date(ps.dispatchAt).getTime() <= Date.now()) {
