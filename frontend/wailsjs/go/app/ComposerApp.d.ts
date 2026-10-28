@@ -131,3 +131,9 @@ export function DraftHistoryCheckout(arg1: string, arg2: string): Promise<void>;
 export function ClearDraftHistory(arg1: string): Promise<void>;
 
 export function MoveDraftHistory(arg1: string, arg2: string): Promise<void>;
+
+export function PutDraftAttachmentBlob(arg1: string, arg2: string, arg3: string): Promise<string>;
+
+export function GetDraftAttachmentBlob(arg1: string): Promise<any>;
+
+export function DraftHistoryCommitBlobs(arg1: string, arg2: string, arg3: string, arg4: string, arg5: string[]): Promise<string>;

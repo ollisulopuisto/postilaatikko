@@ -396,7 +396,8 @@
     "historyEmpty": "Ei muokkauksia vielä",
     "historyEdit": "Muokkaus",
     "sendQueued": "Lähetetään 30 sekunnin kuluttua - peruuta napsauttamalla lähtölaskentaa",
-    "failedToSaveDraft": "Luonnoksen tallennus ennen lähetystä epäonnistui"
+    "failedToSaveDraft": "Luonnoksen tallennus ennen lähetystä epäonnistui",
+    "attachmentsNotRestored": "{count} liitettä ei voitu palauttaa"
   },
   "contextMenu": {
     "reply": "Vastaa",

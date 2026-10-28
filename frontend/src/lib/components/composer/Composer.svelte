@@ -355,11 +355,37 @@
       to: toRecipients.map(a => ({ name: a.name, address: a.address })),
       cc: ccRecipients.map(a => ({ name: a.name, address: a.address })),
       bcc: bccRecipients.map(a => ({ name: a.name, address: a.address })),
+      atts: attachments.map(a => ({ h: (a as { h?: string }).h || null, name: a.filename, type: a.contentType })),
     })
+  }
+
+  function historyAttachmentHashes(payload: string): string[] {
+    try {
+      const st = JSON.parse(payload)
+      return (st.atts || []).map((a: { h?: string | null }) => a.h).filter((h: string | null | undefined): h is string => !!h)
+    } catch {
+      return []
+    }
   }
 
   async function historyApply(payload: string) {
     const st = JSON.parse(payload)
+    if (Array.isArray(st.atts)) {
+      const restored: ComposerAttachment[] = []
+      let dropped = 0
+      for (const d of st.atts as { h?: string | null; name: string; type: string }[]) {
+        if (!d.h) { dropped++; continue }
+        try {
+          const blob = await api.getDraftAttachmentBlob(d.h)
+          restored.push({ filename: blob.name || d.name, contentType: blob.mime || d.type, data: blob.content } as ComposerAttachment)
+        } catch {
+          dropped++
+        }
+      }
+      attachments = restored
+      attachmentRevision += 1
+      if (dropped > 0) addToast({ type: 'warning', message: $_('composer.attachmentsNotRestored', { values: { count: dropped } }) })
+    }
     subject = st.subject || ''
     toRecipients = (st.to || []).map(toSmtpAddress)
     ccRecipients = (st.cc || []).map(toSmtpAddress)
@@ -740,6 +766,18 @@
   function updateAttachments(nextAttachments: ComposerAttachment[]) {
     attachments = nextAttachments
     attachmentRevision += 1
+    // Store each new attachment's content as a content-addressed blob so
+    // undo history can reference it by hash. The hash lands on the object
+    // only after the backend ack, which keeps the commit path race-free:
+    // a snapshot can only carry hashes whose blobs are already stored.
+    for (const att of nextAttachments) {
+      const a = att as ComposerAttachment & { h?: string }
+      if (a.h || !a.data) continue
+      const target = a
+      api.putDraftAttachmentBlob(a.filename, a.contentType, a.data)
+        .then((hash) => { target.h = hash })
+        .catch((err) => console.error('Failed to store attachment blob:', err))
+    }
   }
 
   // Schedule a draft save (debounced)
@@ -944,10 +982,12 @@
         checkout: (k, n) => api.draftHistoryCheckout(k, n),
         clear: (k) => api.clearDraftHistory(k),
         move: (o, n) => api.moveDraftHistory(o, n),
+        commitBlobs: (k, p, l, pl, hs) => api.draftHistoryCommitBlobs(k, p, l, pl, hs),
       },
       historySnapshot,
       historyApply,
       (err) => addToast({ type: 'error', message: String(err) }),
+      historyAttachmentHashes,
     )
     // Reopened draft: resume at the last committed node (survives restarts).
     // Its state is at least as fresh as the drafts-folder row, so it wins.

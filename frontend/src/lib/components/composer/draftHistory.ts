@@ -18,6 +18,7 @@ export interface HistoryBackend {
   checkout: (draftKey: string, nodeId: string) => Promise<void>
   clear: (draftKey: string) => Promise<void>
   move: (oldKey: string, newKey: string) => Promise<void>
+  commitBlobs: (draftKey: string, parentId: string, label: string, payload: string, blobHashes: string[]) => Promise<string>
 }
 
 export interface HistoryNode {
@@ -49,6 +50,9 @@ export class DraftHistoryController {
     private snapshot: SnapshotProvider,
     private apply: SnapshotApplier,
     private onError: (err: unknown) => void,
+    // Extracts attachment blob hashes from a captured payload so node
+    // membership always matches the stored state exactly.
+    private hashesFromPayload: (payload: string) => string[] = () => [],
   ) {}
 
   /** Start over under a new key with no nodes (account switch). */
@@ -103,7 +107,7 @@ export class DraftHistoryController {
     if (payload === this.lastPayload) return
     this.lastPayload = payload // optimistic: identical rapid edits collapse only exact duplicates
     this.queue = this.queue
-      .then(() => this.backend.commit(this.draftKey, this.currentNodeId, label, payload))
+      .then(() => this.backend.commitBlobs(this.draftKey, this.currentNodeId, label, payload, this.hashesFromPayload(payload)))
       .then((nodeId) => {
         this.currentNodeId = nodeId
         this.treeCache = null
