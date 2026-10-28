@@ -156,7 +156,9 @@ func (s *Store) RevokeClient(ctx context.Context, key PublicKey) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	// Best-effort cleanup preserves the operation/Commit error and is a
+	// no-op after Commit or a checked explicit rollback.
+	defer func() { _ = tx.Rollback() }()
 	if _, err := tx.ExecContext(ctx, "DELETE FROM paired_clients WHERE public_key = ?", key.String()); err != nil {
 		return err
 	}
@@ -244,7 +246,9 @@ func (s *Store) acceptCommand(ctx context.Context, encoded []byte, command Comma
 	if err != nil {
 		return empty, err
 	}
-	defer tx.Rollback()
+	// Best-effort cleanup preserves the operation/Commit error and is a
+	// no-op after Commit or a checked explicit rollback.
+	defer func() { _ = tx.Rollback() }()
 	var previous State
 	var owner string
 	var revision int64
