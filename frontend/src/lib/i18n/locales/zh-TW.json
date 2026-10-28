@@ -989,5 +989,10 @@
     "cancel": "Cancel",
     "cancelled": "Send cancelled - draft restored",
     "alreadySending": "Too late - the send already started"
+  },
+  "shortcuts": {
+    "action": {
+      "redo": "Redo"
+    }
   }
 }

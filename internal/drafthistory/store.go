@@ -78,7 +78,7 @@ func (s *Store) Commit(draftKey, parentID, label, payload string) (string, error
 	if err != nil {
 		return "", fmt.Errorf("draft history commit: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	if parentID == "" {
 		var n int
@@ -178,7 +178,7 @@ func (s *Store) Checkout(draftKey, nodeID string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var parent string
 	err = tx.QueryRow(`SELECT COALESCE(parent_id,'') FROM draft_history_nodes WHERE node_id = ? AND draft_key = ?`, nodeID, draftKey).Scan(&parent)
 	if err == sql.ErrNoRows {
@@ -212,7 +212,7 @@ func (s *Store) Clear(draftKey string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	// FK cascades are not relied on (enforcement depends on the connection
 	// pragma); remove membership rows explicitly.
 	if _, err := tx.Exec(
@@ -335,7 +335,7 @@ func (s *Store) Move(oldKey, newKey string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var existing int
 	if err := tx.QueryRow(`SELECT COUNT(1) FROM draft_history_nodes WHERE draft_key = ?`, newKey).Scan(&existing); err != nil {
 		return err

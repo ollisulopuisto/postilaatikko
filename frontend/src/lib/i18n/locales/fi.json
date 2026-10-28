@@ -1293,7 +1293,8 @@
       "bold": "Lihavointi",
       "italic": "Kursiivi",
       "underline": "Alleviivaus",
-      "closeComposer": "Sulje viestin kirjoitus"
+      "closeComposer": "Sulje viestin kirjoitus",
+      "redo": "Tee uudelleen"
     }
   },
   "commandPalette": {

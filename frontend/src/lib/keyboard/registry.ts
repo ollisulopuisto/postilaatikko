@@ -186,7 +186,9 @@ export const CORE_SHORTCUTS: ShortcutDef[] = [
   { id: 'composer.bold', label: 'shortcuts.action.bold', group: 'composer', combos: ['Mod+b'], panes: MAIL, external: 'TipTap' },
   { id: 'composer.italic', label: 'shortcuts.action.italic', group: 'composer', combos: ['Mod+i'], panes: MAIL, external: 'TipTap' },
   { id: 'composer.underline', label: 'shortcuts.action.underline', group: 'composer', combos: ['Mod+u'], panes: MAIL, external: 'TipTap' },
-  { id: 'composer.close', label: 'shortcuts.action.closeComposer', group: 'composer', combos: ['Escape'], panes: MAIL, inline: composer('Escape') },
+  { id: 'composer.undo', icon: 'mdi:undo', label: 'shortcuts.action.undo', group: 'composer', combos: ['Mod+z'], panes: MAIL, inline: composer('z') },
+  { id: 'composer.redo', icon: 'mdi:redo', label: 'shortcuts.action.redo', group: 'composer', combos: ['Mod+Shift+z'], panes: MAIL, inline: composer('z') },
+  { id: 'composer.close', label: 'shortcuts.action.closeComposer', group: 'composer', combos: ['Escape', 'Mod+w'], panes: MAIL, inline: composer('Escape', 'w') },
 
   // Kit list panes used by extensions (Calendar agenda, Contacts list)
   { id: 'lists.next', label: 'shortcuts.action.listNext', group: 'lists', combos: ['ArrowDown', 'j'], panes: ['calendar', 'contacts'], predicates: [KEY.LIST_NEXT] },
