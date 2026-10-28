@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## Postilaatikko v0.3.20
+
+- Add branching composer undo, per-keystroke autosave and a 30-second undo-send countdown.
+- Fix detached-window bindings and restart-durable attachment history keys.
+- Preserve attachment membership when navigating history and clear history at the correct composer lifecycle boundaries.
+- Prepare fresh desktop packages from the merged changes. Native build and DMG download verification remain release steps.
+
 ## Postilaatikko — v0.3.19
 
 - Avoid duplicate legacy/Gmail inbox entries without deleting cached content.
