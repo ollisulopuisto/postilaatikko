@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte'
+  import SearchOperators from './SearchOperators.svelte'
   import * as Dialog from '$lib/components/ui/dialog'
   import { SearchMail, CancelMailSearch, ReauthorizeAccount } from '../../../../wailsjs/go/app/App'
   import { accountStore } from '$lib/stores/accounts.svelte'
@@ -18,6 +19,19 @@
     return () => clearTimeout(timer)
   })
   onDestroy(() => { void CancelMailSearch(session) })
+  function insertOperator(value: string) {
+    const start = input?.selectionStart ?? query.length
+    const end = input?.selectionEnd ?? query.length
+    const prefix = start > 0 && !/\s/.test(query[start - 1]) ? ' ' : ''
+    const suffix = end < query.length && !/\s/.test(query[end]) ? ' ' : ''
+    query = query.slice(0, start) + prefix + value + suffix + query.slice(end)
+    cursor = ''
+    requestAnimationFrame(() => {
+      input?.focus()
+      const position = start + prefix.length + value.length
+      input?.setSelectionRange(position, position)
+    })
+  }
   async function search(more = false) {
     const current = ++generation
     busy = true; error = ''; searched = true
@@ -43,6 +57,7 @@
       </select>
       <button type="submit" class="rounded bg-primary text-primary-foreground px-3">{$_('search.searchButton')}</button>
     </form>
+    <SearchOperators onInsert={insertOperator} />
     <p class="text-xs text-muted-foreground">{$_('search.serverHint')}</p>
     {#if error}<p role="alert" class="text-sm text-destructive">{error}</p>{/if}
     {#each issues as issue (issue.accountId + issue.message)}

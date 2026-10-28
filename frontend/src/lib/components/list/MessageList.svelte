@@ -17,6 +17,7 @@
   import { onMount, onDestroy } from 'svelte'
   import Icon from '@iconify/svelte'
   import ConversationRow from './ConversationRow.svelte'
+  import SearchOperators from '../common/SearchOperators.svelte'
   import { DropdownMenu } from 'bits-ui'
   import { cn } from '$lib/utils'
   import { Button } from '$lib/components/ui/button'
@@ -1023,6 +1024,20 @@
       console.error('Failed to force re-sync folder:', err)
       listError = $_('viewer.failedToLoadMessages')
     }
+  }
+
+  function insertSearchOperator(value: string) {
+    const start = searchInputRef?.selectionStart ?? searchQuery.length
+    const end = searchInputRef?.selectionEnd ?? searchQuery.length
+    const prefix = start > 0 && !/\s/.test(searchQuery[start - 1]) ? ' ' : ''
+    const suffix = end < searchQuery.length && !/\s/.test(searchQuery[end]) ? ' ' : ''
+    searchQuery = searchQuery.slice(0, start) + prefix + value + suffix + searchQuery.slice(end)
+    handleSearchInput()
+    requestAnimationFrame(() => {
+      searchInputRef?.focus()
+      const position = start + prefix.length + value.length
+      searchInputRef?.setSelectionRange(position, position)
+    })
   }
 
   // Handle search input with debounce
@@ -2197,6 +2212,9 @@
             </button>
           {/if}
         </div>
+        {#if preferServerSearch || isVirtualFolderView}
+          <SearchOperators onInsert={insertSearchOperator} popup />
+        {/if}
       {:else}
         {#if folderType === 'inbox'}
           <button
