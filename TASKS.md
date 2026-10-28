@@ -34,7 +34,7 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 
 | Task | Effort | Scope | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
-| SEARCH-002 | Medium | Discoverable Gmail search operators and exclusion in search UI. | Codex / `codex/SEARCH-002-operator-ui` / `/private/tmp/postilaatikko-search002` | Review; global search operator picker adds Gmail syntax insertion and Finnish/English labels. Verified svelte-check and targeted ESLint; folder search integration and equivalent non-Gmail operators remain follow-up work. |
+| SEARCH-002 | Medium | Discoverable Gmail search operators and exclusion in search UI. | Codex / `codex/SEARCH-002-operator-ui` / `/private/tmp/postilaatikko-search002` | Review; shared global, Gmail-folder and virtual-folder operator picker inserts Gmail syntax with Finnish/English labels. Verified svelte-check and targeted ESLint. Non-Gmail operator interpretation remains follow-up. MessageList also changed on GLOBAL-003, so integrate sequentially and reconcile that file. |
 
 | Task | Effort | Scope | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
