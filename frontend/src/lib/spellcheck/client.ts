@@ -22,10 +22,22 @@ class SpellcheckClient {
       // Vite dev server (unbundled ESM). Vite builds it as an ES worker too
       // (see worker.format in vite.config).
       this.worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })
-      this.worker.onmessage = (e: MessageEvent) => this.onMessage(e.data)
-      // Field-debug signals: fire only when spellcheck actually breaks.
-      this.worker.onerror = (e) => logger.error(`spellcheck: worker failed to load: ${e.message || 'unknown'}`)
-      this.worker.onmessageerror = () => logger.error('spellcheck: worker message error')
+      const worker = this.worker
+      worker.onmessage = (e: MessageEvent) => {
+        if (this.worker === worker) this.onMessage(e.data)
+      }
+      // A failed worker cannot finish pending work. Settle it before dropping
+      // the worker so callers and their captured editor state can be released.
+      worker.onerror = (e) => {
+        if (this.worker !== worker) return
+        logger.error(`spellcheck: worker failed to load: ${e.message || 'unknown'}`)
+        this.destroy()
+      }
+      worker.onmessageerror = () => {
+        if (this.worker !== worker) return
+        logger.error('spellcheck: worker message error')
+        this.destroy()
+      }
     }
     return this.worker
   }
@@ -110,6 +122,7 @@ class SpellcheckClient {
     this.worker?.terminate()
     this.worker = null
     this.ready = false
+    for (const resolve of this.pending.values()) resolve({})
     this.pending.clear()
   }
 }

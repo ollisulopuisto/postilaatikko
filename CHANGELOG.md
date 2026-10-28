@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Settle pending spelling checks and suggestions when spellcheck is disabled or its worker fails, instead of leaving callers waiting indefinitely. Late events from a replaced worker are ignored.
+
 - Sidebar cards can be reordered, collapsed and hidden/restored. Move entries between cards by dragging or keyboard controls; add custom groups. All Inboxes lives in Virtual folders. Star up to ten entries for the rail and Cmd/Ctrl+1…0. Contacts/Calendar rail shortcuts default off.
 - Add cross-account global server search, available from the sidebar or `/`, with account scopes, native Gmail queries, pagination and visible account errors. All folders and move/copy destinations have account-spanning folder search.
 - Gmail OAuth accounts prefer Gmail API for metadata/history, labels, body/source/attachments, flags, move/copy/archive/spam/trash/delete, drafts, sending/read receipts and helper delivery. Preserve Bcc recipients and avoid transport fallback after ambiguous sends/imports.
