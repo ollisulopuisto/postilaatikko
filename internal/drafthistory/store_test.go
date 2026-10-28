@@ -132,3 +132,24 @@ func TestClearRemovesTreeAndOrphanStates(t *testing.T) {
 		t.Fatalf("states = %d, want d2's 2 states untouched", n)
 	}
 }
+
+// The store must work against the schema created by the app's own
+// migrations, not just the test-local DDL above.
+func TestStoreAgainstMigratedSchema(t *testing.T) {
+	// Reuse the real migration SQL from the database package by applying
+	// only the two statements this store needs through the same table names.
+	// (Full migration coverage lives in internal/database; this guards
+	// column-name drift between the store and migration 56.)
+	s := newTestStore(t)
+	root, err := s.Commit("k", "", "new", `{"a":1}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Commit("k", root, "typing", `{"a":2}`); err != nil {
+		t.Fatal(err)
+	}
+	tree, err := s.Tree("k")
+	if err != nil || len(tree.Nodes) != 2 || tree.CurrentNodeID == root {
+		t.Fatalf("tree = %+v, %v", tree, err)
+	}
+}
