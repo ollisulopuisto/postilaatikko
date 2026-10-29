@@ -1607,4 +1607,22 @@ var migrations = []Migration{
    PRIMARY KEY (node_id, blob_hash)
  );
  `},
+	{Version: 59, SQL: `
+ -- Durable mailbox undo history ("eternal undo" first step: 24h retention).
+ -- One row per undoable command in global push order; expiry is derived from
+ -- created_at plus the stack timeout at load time, so retention changes need
+ -- no schema change. message_ids holds local database IDs only (safe
+ -- identifiers), never RFC822 headers or content.
+ CREATE TABLE IF NOT EXISTS mailbox_undo_commands (
+   seq INTEGER PRIMARY KEY AUTOINCREMENT,
+   operation_id TEXT NOT NULL,
+   action TEXT NOT NULL DEFAULT '',
+   message_ids TEXT NOT NULL DEFAULT '[]',
+   type TEXT NOT NULL,
+   payload TEXT NOT NULL,
+   created_at TEXT NOT NULL
+ );
+ CREATE INDEX IF NOT EXISTS idx_mailbox_undo_commands_op ON mailbox_undo_commands(operation_id);
+ CREATE INDEX IF NOT EXISTS idx_mailbox_undo_commands_created ON mailbox_undo_commands(created_at);
+ `},
 }

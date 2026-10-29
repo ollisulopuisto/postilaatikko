@@ -776,8 +776,16 @@ func (a *App) Startup(ctx context.Context) {
 	// Start CardDAV background sync scheduler
 	a.carddavScheduler.Start(ctx)
 
-	// Initialize undo stack (max 50 commands, 30 second timeout)
-	a.undoStack = undo.NewStack(50, 30*time.Second)
+	// Initialize undo stack with the durable 24h mailbox history. Retention is
+	// deliberately conservative at first (user asked to start with 24h and
+	// watch storage growth before extending); expiry derives from each
+	// command's created_at, so changing the timeout needs no migration.
+	// No count cap (maxSize 0): a cap could silently truncate the history
+	// before 24h, which is exactly the growth the user wants to observe.
+	// Memory per entry is a few IDs and UIDs, and attach/sweep logs report
+	// the actual stored counts.
+	a.undoStack = undo.NewStack(0, 24*time.Hour)
+	a.undoStack.AttachStore(undo.NewOperationStore(a.db.DB), a)
 
 	// OAuth2 manager was constructed earlier (before the Auth Broker, which
 	// captures it). See the earlier guarded init above for the rationale.
