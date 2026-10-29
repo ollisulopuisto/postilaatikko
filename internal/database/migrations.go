@@ -1589,4 +1589,22 @@ var migrations = []Migration{
    created_at TEXT NOT NULL DEFAULT (datetime('now'))
  );
  `},
+	{Version: 58, SQL: `
+ -- Attachment blobs for the composer draft undo history. PR #45's store code
+ -- references these tables but the migration itself never landed on main, so
+ -- blob-backed snapshot/restore/clear paths failed on migrated databases.
+ CREATE TABLE IF NOT EXISTS draft_attachment_blobs (
+   hash TEXT PRIMARY KEY,
+   name TEXT NOT NULL DEFAULT '',
+   mime TEXT NOT NULL DEFAULT '',
+   size INTEGER NOT NULL DEFAULT 0,
+   content BLOB NOT NULL,
+   created_at TEXT NOT NULL DEFAULT (datetime('now'))
+ );
+ CREATE TABLE IF NOT EXISTS draft_history_node_blobs (
+   node_id TEXT NOT NULL REFERENCES draft_history_nodes(node_id) ON DELETE CASCADE,
+   blob_hash TEXT NOT NULL REFERENCES draft_attachment_blobs(hash),
+   PRIMARY KEY (node_id, blob_hash)
+ );
+ `},
 }
