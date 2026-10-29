@@ -49,7 +49,7 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    include: ['@iconify-json/mdi', '@iconify-json/lucide', '@iconify-json/heroicons', '@iconify-json/logos', '@iconify-json/simple-icons', 'nspell', 'fflate'],
+    include: ['nspell', 'fflate'],
   },
   // Spellcheck runs in a module worker (src/lib/spellcheck/worker.ts) so its
   // ESM imports work under the Vite dev server; build it as an ES worker too.

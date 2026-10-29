@@ -1,13 +1,13 @@
 {
   "name": "postilaatikko",
   "private": true,
-  "version": "2026.10.29",
+  "version": "2026.10.29.1",
   "type": "module",
   "scripts": {
     "test": "node --test --test-concurrency=2 tests/*.test.mjs",
-    "predev": "node scripts/copy-dictionaries.mjs",
+    "predev": "node scripts/generate-offline-icons.mjs && node scripts/copy-dictionaries.mjs",
     "dev": "vite",
-    "prebuild": "node scripts/copy-dictionaries.mjs",
+    "prebuild": "node scripts/generate-offline-icons.mjs && node scripts/copy-dictionaries.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json && npm run check:shortcuts",

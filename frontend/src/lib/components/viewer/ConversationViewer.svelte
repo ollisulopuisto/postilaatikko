@@ -30,7 +30,7 @@
   import MessageContextMenu from '$lib/components/common/MessageContextMenu.svelte'
   import { withShortcut, ariaKeyshortcuts } from '$lib/keyboard/format'
   import { _ } from '$lib/i18n'
-  import { isDialogGuardActive } from '$lib/stores/dialogGuard'
+  import { isDialogGuardActive, onDialogGuardChange } from '$lib/stores/dialogGuard'
   import { getShowViewerCircles, getDarkMailContent, getMarkAsReadDelay } from '$lib/stores/settings.svelte'
   import { getIsDarkActive } from '$lib/stores/theme.svelte'
   import { contactPhotos } from '$lib/stores/contactPhotos.svelte'
@@ -226,7 +226,7 @@
   // Debounce timer for refreshConversation (coalesces rapid sync events)
   let refreshTimer: ReturnType<typeof setTimeout> | null = null
   let pendingRefresh: { tid: string; fid: string } | null = null
-  let dialogGuardInterval: ReturnType<typeof setInterval> | null = null
+  let stopDialogGuardListener: (() => void) | null = null
 
   // Event listener cleanup functions
   let cleanupFunctions: (() => void)[] = []
@@ -390,14 +390,14 @@
       window.removeEventListener('keydown', handleKeyDown)
     })
 
-    // Flush deferred refreshes once dialogs close
-    dialogGuardInterval = setInterval(() => {
-      if (pendingRefresh && !isDialogGuardActive()) {
+    // Flush deferred refreshes as soon as the last blocking dialog closes.
+    stopDialogGuardListener = onDialogGuardChange(active => {
+      if (!active && pendingRefresh) {
         const { tid, fid } = pendingRefresh
         pendingRefresh = null
         scheduleRefresh(tid, fid)
       }
-    }, 500)
+    })
   })
 
   onDestroy(() => {
@@ -409,7 +409,7 @@
       clearTimeout(refreshTimer)
       refreshTimer = null
     }
-    if (dialogGuardInterval) clearInterval(dialogGuardInterval)
+    stopDialogGuardListener?.()
     // Clean up all event listeners
     cleanupFunctions.forEach(cleanup => cleanup())
   })
@@ -2241,7 +2241,7 @@
                       <!-- PGP Signature Banner -->
                       {#if pgpResults[msg.id]?.pgpStatus === 'signed'}
                         <div class="flex items-center gap-2 px-3 py-2 mb-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-md text-sm text-green-700 dark:text-green-300">
-                          <Icon icon="mdi:key-check" class="w-4 h-4 flex-shrink-0" />
+                          <Icon icon="mdi:key-outline" class="w-4 h-4 flex-shrink-0" />
                           <span>{$_('viewer.pgpSignedBy', { values: { email: pgpResults[msg.id]?.pgpSignerEmail || $_('viewer.unknown').toLowerCase() } })}</span>
                         </div>
                       {:else if pgpResults[msg.id]?.pgpStatus === 'unknown_key'}

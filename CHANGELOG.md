@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## Postilaatikko 2026.10.29.1
+
+- Replace half-second dialog-guard polling in message lists and readers with event-driven refreshes when the last blocking dialog closes.
+- Keep the CalVer release check compatible with same-day patch releases.
+
 ## Postilaatikko 2026.10.29
 
 - Open independent mail workspaces in tabs, keep folder/search/thread state while switching, and detach a tab into its own native window.

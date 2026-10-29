@@ -107,7 +107,7 @@ export const providers: EmailProvider[] = [
   {
     id: 'fastmail',
     name: 'Fastmail',
-    icon: 'simple-icons:fastmail',
+    icon: 'mdi:email-fast-outline',
     iconSrc: fastmailIcon,
     domains: ['fastmail.com', 'fastmail.fm', 'messagingengine.com'],
     imap: { host: 'imap.fastmail.com', port: 993, security: 'tls' },

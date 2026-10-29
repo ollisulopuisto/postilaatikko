@@ -43,7 +43,7 @@
   import { accountStore } from '$lib/stores/accounts.svelte'
   import { virtualFoldersStore } from '$lib/stores/virtualFolders.svelte'
   import { getLayoutMode, hideViewer } from '$lib/stores/layout.svelte'
-  import { isDialogGuardActive } from '$lib/stores/dialogGuard'
+  import { isDialogGuardActive, onDialogGuardChange } from '$lib/stores/dialogGuard'
   import { captureAutoSelectNext, findAutoSelectNext, flattenVisibleInboxGroups } from './autoSelectNext'
   import { removeServerSearchResults, restoreSearchResults, serverSearchResultIdentity, ServerSearchRequestState, updateServerSearchCounts } from './serverSearchResults'
   import { publishUndoOperationCompleted, publishUndoOperationCreated, UNDO_OPERATION_COMPLETED_EVENT, UNDO_OPERATION_CREATED_EVENT, type UndoOperationCreatedDetail } from './undoMutationEvents'
@@ -601,16 +601,16 @@
     // Check initial FTS index status for current folder
     checkFTSIndexStatus()
 
-    // Flush deferred reloads once dialogs close
-    dialogGuardInterval = setInterval(() => {
-      if (pendingReload && !isDialogGuardActive()) {
+    // Flush deferred reloads as soon as the last blocking dialog closes.
+    stopDialogGuardListener = onDialogGuardChange(active => {
+      if (!active && pendingReload) {
         pendingReload = false
         scheduleReload()
       }
-    }, 500)
+    })
   })
 
-  let dialogGuardInterval: ReturnType<typeof setInterval> | null = null
+  let stopDialogGuardListener: (() => void) | null = null
 
   onDestroy(() => {
     void CancelMailSearch(virtualSearchSession)
@@ -627,7 +627,7 @@
     if (reloadTimer) clearTimeout(reloadTimer)
     if (syncReloadTimer) clearTimeout(syncReloadTimer)
     if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
-    if (dialogGuardInterval) clearInterval(dialogGuardInterval)
+    stopDialogGuardListener?.()
   })
 
   // Check FTS index status for current folder

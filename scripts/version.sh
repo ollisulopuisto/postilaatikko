@@ -18,9 +18,10 @@ else
     [[ -f "$VERSION_FILE" ]] || { echo "VERSION file not found: $VERSION_FILE" >&2; exit 2; }
     VERSION="$(tr -d '\r\n' < "$VERSION_FILE")"
 fi
-SEMVER_RE='^[0-9]+\.[0-9]+\.[0-9]+$'
-if [[ ! "$VERSION" =~ $SEMVER_RE ]]; then
-    echo "Invalid VERSION '$VERSION': expected X.Y.Z" >&2
+LEGACY_SEMVER_RE='^[0-9]+\.[0-9]+\.[0-9]+$'
+CALVER_RE='^[0-9]{4}\.(0[1-9]|1[0-2])\.(0[1-9]|[12][0-9]|3[01])(\.[0-9]+)?$'
+if [[ ! "$VERSION" =~ $LEGACY_SEMVER_RE && ! "$VERSION" =~ $CALVER_RE ]]; then
+    echo "Invalid VERSION '$VERSION': expected legacy X.Y.Z or YYYY.MM.DD[.PATCH]" >&2
     exit 1
 fi
 

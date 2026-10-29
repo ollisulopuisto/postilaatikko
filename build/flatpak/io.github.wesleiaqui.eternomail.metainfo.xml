@@ -309,7 +309,7 @@
   </provides>
 
   <releases>
-    <release version="2026.10.29" date="2026-10-29">
+    <release version="2026.10.29.1" date="2026-10-29">
       <description><ul>
         <li>Open independent mail workspaces in tabs and detach a tab into its own window.</li>
         <li>Prefetch message bodies only for sidebar folders by default, with per-folder controls.</li>
