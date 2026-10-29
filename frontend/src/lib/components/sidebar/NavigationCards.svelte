@@ -23,6 +23,17 @@
     nav.update({ ...nav.state, cards: [...nav.state.cards, { id: crypto.randomUUID(), name: newName.trim(), hidden: false, collapsed: false, entries: [] }] })
     newName = ''
   }
+  function dragCard(event: DragEvent, card: string) {
+    event.dataTransfer?.setData('application/x-postilaatikko-card', card)
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
+  }
+  function dragEntry(event: DragEvent, id: string) {
+    event.stopPropagation()
+    event.dataTransfer?.setData('application/x-postilaatikko-entry', id)
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
+  }
+  function isQuick(id: string): boolean { return nav.state.quick.includes(id) }
+  function quickFull(): boolean { return nav.state.quick.length >= 10 }
 </script>
 <div class="flex items-center justify-end px-2 py-1">
   <button type="button" class="text-xs text-muted-foreground hover:text-foreground" aria-pressed={editing} onclick={() => editing = !editing}>{$_('navigation.organize')}</button>
@@ -31,10 +42,17 @@
   {#if editing || (!card.hidden && card.entries.length > 0)}
     <section class="mx-2 mb-3 rounded-xl border border-border bg-muted/20 overflow-hidden {card.hidden ? 'opacity-50' : ''}"
       aria-label={cardName(card)} data-navigation-card={card.id}>
-      <div class="flex items-center gap-1 px-2 py-2" draggable={editing}
+      <div class="group/card flex items-center gap-1 px-2 py-2" draggable={editing}
         role="group" aria-label={cardName(card)}
-        ondragstart={(event) => { event.dataTransfer?.setData('application/x-postilaatikko-card', card.id) }}
+        ondragstart={(event) => dragCard(event, card.id)}
         ondragover={(event) => event.preventDefault()} ondrop={(event) => drop(event, card.id, card.entries.length)}>
+        {#if !editing}
+          <span class="inline-flex h-5 w-4 shrink-0 cursor-grab items-center justify-center text-muted-foreground/60 opacity-0 transition-opacity group-hover/card:opacity-100 active:cursor-grabbing"
+            draggable="true" role="button" tabindex="-1" aria-label={$_('navigation.dragCard')}
+            ondragstart={(event) => dragCard(event, card.id)}>
+            <Icon icon="mdi:drag-vertical" class="h-4 w-4" />
+          </span>
+        {/if}
         <button type="button" class="flex flex-1 items-center gap-1 text-sm font-medium text-left min-w-0" aria-expanded={!card.collapsed} onclick={() => nav.patchCard(card.id, { collapsed: !card.collapsed })}>
           <Icon icon={card.collapsed ? 'mdi:chevron-right' : 'mdi:chevron-down'} class="h-4 w-4 shrink-0" /><span class="truncate">{cardName(card)}</span>
         </button>
@@ -50,12 +68,27 @@
             {@const entry = nav.entries.find(e => e.id === id)}
             {#if entry}
               <div class="group flex items-center gap-1 px-2 py-0.5" role="group" aria-label={entry.name} draggable={editing}
-                ondragstart={(event) => { event.stopPropagation(); event.dataTransfer?.setData('application/x-postilaatikko-entry', id) }}
+                ondragstart={(event) => dragEntry(event, id)}
                 ondragover={(event) => event.preventDefault()} ondrop={(event) => drop(event, card.id, index)}>
+                {#if !editing}
+                  <span class="inline-flex h-5 w-4 shrink-0 cursor-grab items-center justify-center text-muted-foreground/60 opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+                    draggable="true" role="button" tabindex="-1" aria-label={$_('navigation.dragEntry')}
+                    ondragstart={(event) => dragEntry(event, id)}>
+                    <Icon icon="mdi:drag-vertical" class="h-4 w-4" />
+                  </span>
+                {/if}
                 <button type="button" class="sidebar-primary-link min-w-0 flex-1 {selectedFolderId === entry.folderId || (entry.kind === 'system' && selectedFolderId === entry.folderType) || (entry.kind === 'inboxes' && selectedFolderId === 'inbox') ? 'sidebar-primary-link-selected' : ''}" onclick={() => onSelect(entry)} title={entry.path || entry.name}>
                   <Icon icon={entry.kind === 'virtual' ? 'mdi:folder-multiple-outline' : entry.kind === 'inboxes' ? 'mdi:inbox-multiple-outline' : 'mdi:folder-outline'} class="h-5 w-5 shrink-0" />
                   <span class="truncate">{entry.name}</span>
                 </button>
+                {#if !editing}
+                  <button type="button" class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-muted focus-visible:opacity-100 {isQuick(id) ? 'text-amber-500' : 'text-muted-foreground/60 opacity-0 group-hover:opacity-100'}"
+                    aria-label={$_('navigation.favorite')} aria-pressed={isQuick(id)} title={$_('navigation.favorite')}
+                    disabled={!isQuick(id) && quickFull()}
+                    onclick={() => nav.toggleQuick(id)}>
+                    <Icon icon={isQuick(id) ? 'mdi:star' : 'mdi:star-outline'} />
+                  </button>
+                {/if}
                 {#if entry.kind === 'virtual'}
                   <button type="button" class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-muted" aria-label={`Edit ${entry.name}`} onclick={() => onEdit?.(entry)}><Icon icon="mdi:pencil-outline" /></button>
                   <button type="button" class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-muted" aria-label={`Delete ${entry.name}`} onclick={() => onDelete?.(entry)}><Icon icon="mdi:delete-outline" /></button>

@@ -18,7 +18,7 @@
   import { contactPhotos } from '$lib/stores/contactPhotos.svelte'
   import { isAccountExpanded, setAccountExpanded, setFolderCollapsed, getUIState, getUIStateVersion, saveUIState, setActiveExtension } from '$lib/stores/uiState.svelte'
   import { setFocusedPane } from '$lib/stores/keyboard.svelte'
-  import { withShortcut, ariaKeyshortcuts, formatShortcut } from '$lib/keyboard/format'
+  import { withShortcut, ariaKeyshortcuts } from '$lib/keyboard/format'
   import { openShortcutsOverlay } from '$lib/stores/shortcutsOverlay.svelte'
   import { openCommandPalette } from '$lib/stores/commandPalette.svelte'
   import { _ } from '$lib/i18n'
@@ -30,6 +30,7 @@
   import { sidebarPins } from '$lib/stores/sidebarPins.svelte'
   import type { PinnedFolder } from '$lib/sidebar/pins'
   import { sidebarLayout } from '$lib/stores/sidebarLayout.svelte'
+  import { isFolderFavorite, favoritesFull, toggleFolderFavorite } from '$lib/sidebar/favorites'
   import type { virtualfolder } from '../../../../wailsjs/go/models'
 
   // Folder item type for flat navigation list
@@ -598,32 +599,30 @@
   </div>
 
   <div class="sidebar-bottom-actions">
-    <button type="button" class="sidebar-refresh-entry" onclick={toggleSync} title={withShortcut(accountStore.isAnySyncing ? $_('sidebar.clickToCancel') : $_('sidebar.syncAllAccounts'), 'app.syncAll')} aria-label={accountStore.isAnySyncing ? $_('sidebar.clickToCancel') : $_('sidebar.syncAllAccounts')}>
-      <Icon icon={accountStore.isAnySyncing ? 'mdi:sync' : 'mdi:refresh'} class="h-5 w-5 {accountStore.isAnySyncing ? 'animate-spin' : ''}" />
-      <span data-sidebar-label>{accountStore.isAnySyncing ? $_('sidebar.syncing') : $_('sidebar.syncAllAccounts')}</span>
-    </button>
+    <div class="sidebar-bottom-row" role="toolbar" aria-label={$_('sidebar.bottomActions')}>
+      <button type="button" class="sidebar-bottom-button" onclick={toggleSync} title={withShortcut(accountStore.isAnySyncing ? $_('sidebar.clickToCancel') : $_('sidebar.syncAllAccounts'), 'app.syncAll')} aria-label={accountStore.isAnySyncing ? $_('sidebar.clickToCancel') : $_('sidebar.syncAllAccounts')}>
+        <Icon icon={accountStore.isAnySyncing ? 'mdi:sync' : 'mdi:refresh'} class="h-5 w-5 {accountStore.isAnySyncing ? 'animate-spin' : ''}" />
+      </button>
 
-    <button type="button" class="sidebar-refresh-entry" data-sidebar-command-palette onclick={openCommandPalette} title={withShortcut($_('commandPalette.title'), 'app.commandPalette')} aria-label={$_('commandPalette.title')} aria-keyshortcuts={ariaKeyshortcuts('app.commandPalette')} aria-haspopup="dialog">
-      <Icon icon="mdi:console-line" class="h-5 w-5" />
-      <span data-sidebar-label>{$_('commandPalette.title')}</span>
-      <kbd data-sidebar-label class="ml-auto font-sans text-xs text-muted-foreground" aria-hidden="true">{formatShortcut('app.commandPalette')}</kbd>
-    </button>
+      <button type="button" class="sidebar-bottom-button" data-sidebar-command-palette onclick={openCommandPalette} title={withShortcut($_('commandPalette.title'), 'app.commandPalette')} aria-label={$_('commandPalette.title')} aria-keyshortcuts={ariaKeyshortcuts('app.commandPalette')} aria-haspopup="dialog">
+        <Icon icon="mdi:console-line" class="h-5 w-5" />
+      </button>
 
-    <button type="button" class="sidebar-refresh-entry" data-sidebar-shortcuts onclick={openShortcutsOverlay} title={withShortcut($_('shortcuts.open'), 'app.shortcuts')} aria-label={$_('shortcuts.open')} aria-keyshortcuts={ariaKeyshortcuts('app.shortcuts')} aria-haspopup="dialog">
-      <Icon icon="mdi:keyboard-outline" class="h-5 w-5" />
-      <span data-sidebar-label>{$_('shortcuts.open')}</span>
-      <kbd data-sidebar-label class="ml-auto font-sans text-xs text-muted-foreground" aria-hidden="true">{formatShortcut('app.shortcuts')}</kbd>
-    </button>
+      <button type="button" class="sidebar-bottom-button" data-sidebar-shortcuts onclick={openShortcutsOverlay} title={withShortcut($_('shortcuts.open'), 'app.shortcuts')} aria-label={$_('shortcuts.open')} aria-keyshortcuts={ariaKeyshortcuts('app.shortcuts')} aria-haspopup="dialog">
+        <Icon icon="mdi:keyboard-outline" class="h-5 w-5" />
+      </button>
 
-    <button class="sidebar-settings-entry" type="button" data-sidebar-settings onclick={() => (showSettingsDialog = true)} title={withShortcut($_('sidebar.settings'), 'app.preferences')}>
-      {#if settingsAccount}
-        <Avatar email={settingsAccount.email} name={settingsAccount.name} size={28} photoData={settingsPhoto?.data} photoMediaType={settingsPhoto?.mediaType} />
-      {:else}
-        <Icon icon="mdi:cog-outline" class="h-6 w-6" />
-      {/if}
-      <span data-sidebar-label>{$_('sidebar.settings')}</span>
-      {#if contactSourcesStore.hasErrors}<span class="sidebar-settings-error"></span>{/if}
-    </button>
+      <span class="flex-1"></span>
+
+      <button class="sidebar-bottom-button sidebar-settings-entry" type="button" data-sidebar-settings onclick={() => (showSettingsDialog = true)} title={withShortcut($_('sidebar.settings'), 'app.preferences')} aria-label={$_('sidebar.settings')}>
+        {#if settingsAccount}
+          <Avatar email={settingsAccount.email} name={settingsAccount.name} size={24} photoData={settingsPhoto?.data} photoMediaType={settingsPhoto?.mediaType} />
+        {:else}
+          <Icon icon="mdi:cog-outline" class="h-5 w-5" />
+        {/if}
+        {#if contactSourcesStore.hasErrors}<span class="sidebar-settings-error"></span>{/if}
+      </button>
+    </div>
   </div>
 
   {#if showAllFolders}
@@ -648,11 +647,21 @@
       <div class="sidebar-all-folders-scroll scrollbar-thin">
         {#if allFoldersQuery.trim()}
           {#each matchingFolders.slice(0, 200) as item (item.id)}
-            <button type="button" class="w-full px-4 py-2 text-left hover:bg-muted rounded-md"
-              onclick={() => { handleFolderSelect(item.accountId, item.id, item.path, item.name, item.type); showAllFolders = false }}>
-              <span class="block text-sm text-foreground break-words">{item.path || item.name}</span>
-              <span class="block text-xs text-muted-foreground">{item.accountName} · {item.accountEmail}</span>
-            </button>
+            <div class="group flex items-center rounded-md hover:bg-muted">
+              <button type="button" class="min-w-0 flex-1 px-4 py-2 text-left rounded-md"
+                onclick={() => { handleFolderSelect(item.accountId, item.id, item.path, item.name, item.type); showAllFolders = false }}>
+                <span class="block text-sm text-foreground break-words">{item.path || item.name}</span>
+                <span class="block text-xs text-muted-foreground">{item.accountName} · {item.accountEmail}</span>
+              </button>
+              <button type="button"
+                class="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-background focus-visible:opacity-100 {isFolderFavorite(item.accountId, item.id) ? 'text-amber-500' : 'text-muted-foreground/60 opacity-0 group-hover:opacity-100'}"
+                title={$_('navigation.favorite')} aria-label={$_('navigation.favorite')}
+                aria-pressed={isFolderFavorite(item.accountId, item.id)}
+                disabled={!isFolderFavorite(item.accountId, item.id) && favoritesFull()}
+                onclick={() => toggleFolderFavorite(item.accountId, { id: item.id, path: item.path, name: item.name })}>
+                <Icon icon={isFolderFavorite(item.accountId, item.id) ? 'mdi:star' : 'mdi:star-outline'} class="h-4 w-4" />
+              </button>
+            </div>
           {:else}
             <p class="p-4 text-sm text-muted-foreground" role="status">{$_('contextMenu.noFoldersAvailable')}</p>
           {/each}

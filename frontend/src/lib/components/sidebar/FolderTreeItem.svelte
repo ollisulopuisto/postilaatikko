@@ -10,6 +10,7 @@
   import { _ } from '$lib/i18n'
   import { runMessageMutation } from '$lib/components/list/mutationInFlight'
   import { publishUndoOperationCompleted, publishUndoOperationCreated } from '$lib/components/list/undoMutationEvents'
+  import { isFolderFavorite, favoritesFull, toggleFolderFavorite } from '$lib/sidebar/favorites'
 
   interface Props {
     tree: folder.FolderTree
@@ -53,6 +54,7 @@
     return selectionSource === 'account' && selectedFolderId === folderId
   }
 
+  let starred = $derived(tree.folder ? isFolderFavorite(accountId, tree.folder.id) : false)
   let hasChildren = $derived(tree.children && tree.children.length > 0)
   let isCollapsed = $derived(
     hasChildren
@@ -163,7 +165,7 @@
   <FolderContextMenu folderId={tree.folder.id} {accountId} folder={tree.folder}>
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
-      class="w-full flex items-center rounded-md transition-colors {isFolderSelected(tree.folder.id)
+      class="group w-full flex items-center rounded-md transition-colors {isFolderSelected(tree.folder.id)
         ? 'bg-primary/10 text-primary font-medium'
         : 'text-foreground hover:bg-muted/50'} {isDragOver ? 'ring-2 ring-primary ring-inset' : ''}"
       data-sidebar-item="folder"
@@ -212,6 +214,21 @@
           class="w-4 h-4 flex-shrink-0"
         />
         <span data-sidebar-label class="truncate text-left">{tree.folder.type === 'inbox' ? $_('sidebar.inbox') : tree.folder.name}</span>
+      </button>
+
+      <button
+        type="button"
+        class="mr-1 inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded hover:bg-muted/80 focus-visible:opacity-100 {starred ? 'text-amber-500' : 'text-muted-foreground/60 opacity-0 group-hover:opacity-100'}"
+        title={$_('navigation.favorite')}
+        aria-label={$_('navigation.favorite')}
+        aria-pressed={starred}
+        disabled={!starred && favoritesFull()}
+        onclick={(e: MouseEvent) => {
+          e.stopPropagation()
+          if (tree.folder) toggleFolderFavorite(accountId, { id: tree.folder.id, path: tree.folder.path, name: tree.folder.name })
+        }}
+      >
+        <Icon icon={starred ? 'mdi:star' : 'mdi:star-outline'} class="w-4 h-4" />
       </button>
 
       {#if tree.folder.unreadCount > 0}

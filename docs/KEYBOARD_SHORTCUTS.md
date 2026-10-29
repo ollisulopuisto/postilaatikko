@@ -4,7 +4,7 @@ Complete reference of all keyboard shortcuts in Postilaatikko. Existing upstream
 
 ## In-app reference
 
-Press `?` anywhere outside a text field (and while the composer is closed) to open the keyboard shortcuts overlay. It is also reachable from **Keyboard shortcuts** at the bottom of the Mail sidebar and the keyboard button in the Calendar and Contacts sidebar footers. The overlay lists the shortcuts for the active view, can show all views, is searchable by action or key, and renders `⌘` on macOS. Toolbar tooltips and message context-menu items show the same key labels.
+Press `?` anywhere outside a text field (and while the composer is closed) to open the keyboard shortcuts overlay. It is also reachable from the keyboard icon in the Mail sidebar footer and the keyboard button in the Calendar and Contacts sidebar footers. The overlay lists the shortcuts for the active view, can show all views, is searchable by action or key, and renders `⌘` on macOS. Toolbar tooltips and message context-menu items show the same key labels.
 
 The overlay and hints are generated from `frontend/src/lib/keyboard/registry.ts` (and `extensions/<name>/frontend/keyboard/registry.ts`). When you add or change a binding, update the registry; `npm run check` fails if a displayed key no longer matches its predicate, or if `App.svelte` / `Composer.svelte` gain or lose a key case that the registry does not describe. This document remains the long-form reference.
 
@@ -28,6 +28,7 @@ On macOS, `⌘` works wherever `Ctrl` is listed below, unless macOS reserves the
 | `Ctrl+Shift+S` | Start sync of the selected folder (cancels it if already running) |
 | `Ctrl+Tab` | Switch to next extension on the rail (Mail / Contacts / ...) |
 | `` Ctrl+` `` | Switch to previous extension on the rail |
+| `Ctrl+1…9,0` (macOS: `⌘1…9,0`) | Open favorite 1–10 on the quick-access rail (star any folder in the sidebar cards, folder tree or All folders browser to set them) |
 
 ### Pane Navigation
 
