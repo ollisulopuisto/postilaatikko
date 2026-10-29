@@ -156,7 +156,7 @@
   let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
   // Filter state
-  let filterMode = $state<string>('')  // '' | 'unread' | 'starred' | 'attachments'
+  let filterMode = $state<string>('')  // '' | 'unread' | 'replyLater' | 'starred' | 'attachments'
 
   type InboxDisplayGroup = {
     id: string
@@ -400,6 +400,7 @@
   const filterLabel = $derived((() => {
     switch (filterMode) {
       case 'unread': return $_('messageList.filterUnread')
+      case 'replyLater': return $_('messageList.filterReplyLater')
       case 'starred': return $_('messageList.filterStarred')
       case 'attachments': return $_('messageList.filterAttachments')
       default: return ''
@@ -409,6 +410,7 @@
   const filterOptions = $derived([
     { value: '', label: $_('messageList.filterAll') },
     { value: 'unread', label: $_('messageList.filterUnread'), separator: true },
+    { value: 'replyLater', label: $_('messageList.filterReplyLater') },
     { value: 'starred', label: $_('messageList.filterStarred') },
     { value: 'attachments', label: $_('messageList.filterAttachments') },
   ])
@@ -529,6 +531,10 @@
       }
     })
 
+    EventsOn('replyLater:changed', () => {
+      if (filterMode === 'replyLater') scheduleReload()
+    })
+
     // Listen for message read-state changes. Star changes ride their own
     // `messages:starredChanged` event and don't affect unread counts here.
     EventsOn('messages:readChanged', (data: { messageIds: string[], isRead: boolean }) => {
@@ -616,6 +622,7 @@
     void CancelMailSearch(virtualSearchSession)
     EventsOff('folder:synced')
     EventsOff('messages:updated')
+    EventsOff('replyLater:changed')
     EventsOff('messages:readChanged')
     EventsOff('messages:moved')
     EventsOff('messages:deleted')
@@ -690,6 +697,7 @@
     rememberListState()
     prevAccountId = currentAccount
     prevFolderId = currentFolder
+    filterMode = ''
     loadGeneration++ // Invalidate any in-flight loads from the previous folder (#200)
     offset = 0
     virtualCursor = ''; virtualIssues = ''; virtualQueryCursor = ''
@@ -1391,6 +1399,7 @@
   function toggleSearch() {
     showSearch = !showSearch
     if (showSearch) {
+      if (filterMode) searchSource = 'local'
       // Focus input after it appears
       setTimeout(() => searchInputRef?.focus(), 50)
       return
@@ -1747,6 +1756,9 @@
     filterMode = mode
     offset = 0
     if (isSearchMode) {
+      // App-local queue membership cannot be expressed in IMAP SEARCH. Use the
+      // local, filter-aware search path while a quick filter is active.
+      if (mode && searchSource === 'server') searchSource = 'local'
       searchOffset = 0
       refreshActiveSearch()
       return
@@ -2497,6 +2509,29 @@
       </button>
     </div>
   </div>
+
+  {#if folderId && !isVirtualFolderView}
+    <div class="flex items-center gap-2 overflow-x-auto border-b border-border px-3 py-2" aria-label={$_('messageList.quickFilters')}>
+      <button
+        type="button"
+        class="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors {filterMode === 'unread' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}"
+        aria-pressed={filterMode === 'unread'}
+        onclick={() => setFilter(filterMode === 'unread' ? '' : 'unread')}
+      >
+        <Icon icon="mdi:email-outline" class="h-3.5 w-3.5" />
+        {$_('messageList.filterUnread')}
+      </button>
+      <button
+        type="button"
+        class="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors {filterMode === 'replyLater' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}"
+        aria-pressed={filterMode === 'replyLater'}
+        onclick={() => setFilter(filterMode === 'replyLater' ? '' : 'replyLater')}
+      >
+        <Icon icon="mdi:reply-outline" class="h-3.5 w-3.5" />
+        {$_('messageList.filterReplyLater')}
+      </button>
+    </div>
+  {/if}
 
   {#if showInboxDisplayPicker}
     <div class="absolute inset-0 z-40 flex items-start justify-center p-3 pt-[clamp(3.75rem,9vh,5rem)]">

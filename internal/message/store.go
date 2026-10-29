@@ -32,8 +32,11 @@ func NewStore(db *database.DB) *Store {
 }
 
 // filterHavingClause returns a HAVING clause for conversation-level filtering.
-// prefix should be "" for single-table queries or "m." for joined queries.
+// prefix is the message-table alias for the surrounding query (normally "m.").
 func filterHavingClause(filter, prefix string) string {
+	if prefix == "" {
+		prefix = "m."
+	}
 	switch filter {
 	case "unread":
 		return fmt.Sprintf(" HAVING SUM(CASE WHEN %sis_read = 0 THEN 1 ELSE 0 END) > 0", prefix)
@@ -41,14 +44,19 @@ func filterHavingClause(filter, prefix string) string {
 		return fmt.Sprintf(" HAVING MAX(CASE WHEN %sis_starred = 1 THEN 1 ELSE 0 END) = 1", prefix)
 	case "attachments":
 		return fmt.Sprintf(" HAVING MAX(CASE WHEN %shas_attachments = 1 THEN 1 ELSE 0 END) = 1", prefix)
+	case "replyLater":
+		return fmt.Sprintf(" HAVING SUM(CASE WHEN EXISTS (SELECT 1 FROM reply_later_queue rl WHERE rl.account_id = %saccount_id AND rl.conversation_id = COALESCE(%sthread_id, %sid)) THEN 1 ELSE 0 END) > 0", prefix, prefix, prefix)
 	default:
 		return ""
 	}
 }
 
 // filterWhereClause returns a WHERE condition for count queries.
-// prefix should be "" for single-table queries or "m." for joined queries.
+// prefix is the message-table alias for the surrounding query (normally "m.").
 func filterWhereClause(filter, prefix string) string {
+	if prefix == "" {
+		prefix = "m."
+	}
 	switch filter {
 	case "unread":
 		return fmt.Sprintf(" AND %sis_read = 0", prefix)
@@ -56,6 +64,8 @@ func filterWhereClause(filter, prefix string) string {
 		return fmt.Sprintf(" AND %sis_starred = 1", prefix)
 	case "attachments":
 		return fmt.Sprintf(" AND %shas_attachments = 1", prefix)
+	case "replyLater":
+		return fmt.Sprintf(" AND EXISTS (SELECT 1 FROM reply_later_queue rl WHERE rl.account_id = %saccount_id AND rl.conversation_id = COALESCE(%sthread_id, %sid))", prefix, prefix, prefix)
 	default:
 		return ""
 	}
