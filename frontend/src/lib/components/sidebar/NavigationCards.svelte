@@ -53,8 +53,8 @@
             <Icon icon="mdi:drag-vertical" class="h-4 w-4" />
           </span>
         {/if}
-        <button type="button" class="flex flex-1 items-center gap-1 text-sm font-medium text-left min-w-0" aria-expanded={!card.collapsed} onclick={() => nav.patchCard(card.id, { collapsed: !card.collapsed })}>
-          <Icon icon={card.collapsed ? 'mdi:chevron-right' : 'mdi:chevron-down'} class="h-4 w-4 shrink-0" /><span class="truncate">{cardName(card)}</span>
+        <button type="button" class="flex flex-1 items-center gap-1 text-sm font-medium text-left min-w-0" aria-label={cardName(card)} title={cardName(card)} aria-expanded={!card.collapsed} onclick={() => nav.patchCard(card.id, { collapsed: !card.collapsed })}>
+          <Icon icon={card.collapsed ? 'mdi:chevron-right' : 'mdi:chevron-down'} class="h-4 w-4 shrink-0" /><span class="min-w-0 whitespace-normal break-words leading-tight line-clamp-2">{cardName(card)}</span>
         </button>
         {#if editing}
           <button type="button" class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-muted disabled:opacity-30" disabled={cardIndex === 0} aria-label={$_('navigation.up')} onclick={() => nav.moveCard(card.id, -1)}><Icon icon="mdi:arrow-up" /></button>
@@ -77,9 +77,9 @@
                     <Icon icon="mdi:drag-vertical" class="h-4 w-4" />
                   </span>
                 {/if}
-                <button type="button" class="sidebar-primary-link min-w-0 flex-1 {selectedFolderId === entry.folderId || (entry.kind === 'system' && selectedFolderId === entry.folderType) || (entry.kind === 'inboxes' && selectedFolderId === 'inbox') ? 'sidebar-primary-link-selected' : ''}" onclick={() => onSelect(entry)} title={entry.path || entry.name}>
+                <button type="button" class="sidebar-primary-link min-w-0 flex-1 {selectedFolderId === entry.folderId || (entry.kind === 'system' && selectedFolderId === entry.folderType) || (entry.kind === 'inboxes' && selectedFolderId === 'inbox') ? 'sidebar-primary-link-selected' : ''}" onclick={() => onSelect(entry)} title={entry.path || entry.name} aria-label={entry.name}>
                   <Icon icon={entry.kind === 'virtual' ? 'mdi:folder-multiple-outline' : entry.kind === 'inboxes' ? 'mdi:inbox-multiple-outline' : 'mdi:folder-outline'} class="h-5 w-5 shrink-0" />
-                  <span class="truncate">{entry.name}</span>
+                  <span class="min-w-0 whitespace-normal break-words leading-tight line-clamp-2">{entry.name}</span>
                 </button>
                 {#if !editing}
                   <button type="button" class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-muted focus-visible:opacity-100 {isQuick(id) ? 'text-amber-500' : 'text-muted-foreground/60 opacity-0 group-hover:opacity-100'}"

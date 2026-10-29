@@ -201,7 +201,8 @@
 
       <button
         type="button"
-        class="flex-1 min-w-0 flex items-center gap-2 px-1 py-1.5 text-sm text-left truncate"
+        class="flex-1 min-w-0 min-h-9 flex items-center gap-2 px-1 py-1.5 text-sm text-left"
+        title={tree.folder.type === 'inbox' ? $_('sidebar.inbox') : tree.folder.name}
         onclick={() => {
           onFolderSelect?.(tree.folder!)
           if (hasChildren && isCollapsed) {
@@ -213,7 +214,7 @@
           icon={getFolderIcon(tree.folder.type)}
           class="w-4 h-4 flex-shrink-0"
         />
-        <span data-sidebar-label class="truncate text-left">{tree.folder.type === 'inbox' ? $_('sidebar.inbox') : tree.folder.name}</span>
+        <span data-sidebar-label class="min-w-0 whitespace-normal break-words leading-tight line-clamp-2 text-left">{tree.folder.type === 'inbox' ? $_('sidebar.inbox') : tree.folder.name}</span>
       </button>
 
       <button
