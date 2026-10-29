@@ -65,6 +65,7 @@ export default defineConfig({
         main: path.resolve(__dirname, 'index.html'),
         composer: path.resolve(__dirname, 'composer.html'),
         reader: path.resolve(__dirname, 'reader.html'),
+        mailWindow: path.resolve(__dirname, 'mail-window.html'),
       },
     },
   },

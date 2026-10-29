@@ -67,6 +67,8 @@ export function Calendar_DeleteEvent(arg1:string,arg2:string):Promise<void>;
 
 export function Calendar_DeleteSource(arg1:string):Promise<void>;
 
+export function Calendar_DetectDateTimes(arg1:string):Promise<Array<backend.DateTimeMention>>;
+
 export function Calendar_DismissAlarm(arg1:string):Promise<void>;
 
 export function Calendar_ForceSyncSource(arg1:string):Promise<void>;
@@ -128,6 +130,8 @@ export function CancelFolderSync(arg1:string,arg2:string):Promise<void>;
 export function CancelMailSearch(arg1:string):Promise<void>;
 
 export function CancelOAuthFlow():Promise<void>;
+
+export function CancelVirtualFolderOnlineCount(arg1:string):Promise<void>;
 
 export function CheckForUpdates():Promise<string>;
 
@@ -443,9 +447,13 @@ export function GetUnifiedInboxCount(arg1:string):Promise<number>;
 
 export function GetUnifiedInboxUnreadCount():Promise<number>;
 
+export function GetVirtualFolderCachedView(arg1:string):Promise<app.VirtualFolderCachedView>;
+
 export function GetVirtualFolderConversations(arg1:string,arg2:number,arg3:number,arg4:string):Promise<Array<message.Conversation>>;
 
 export function GetVirtualFolderCount(arg1:string):Promise<number>;
+
+export function GetVirtualFolderOnlineCount(arg1:string):Promise<app.VirtualFolderOnlineCount>;
 
 export function GetVirtualFolderSearchCount(arg1:string,arg2:string,arg3:string):Promise<number>;
 
@@ -781,6 +789,8 @@ export function StartCustomOAuthFlow(arg1:string,arg2:string,arg3:string,arg4:Ar
 
 export function StartOAuthFlow(arg1:string):Promise<void>;
 
+export function StartVirtualFolderOnlineCount(arg1:string,arg2:string):Promise<void>;
+
 export function SubscribeAllFolders(arg1:string):Promise<void>;
 
 export function SubscribeFolder(arg1:string,arg2:string):Promise<void>;
@@ -842,3 +852,5 @@ export function PutDraftAttachmentBlob(arg1: string, arg2: string, arg3: string)
 export function GetDraftAttachmentBlob(arg1: string): Promise<any>;
 
 export function DraftHistoryCommitBlobs(arg1: string, arg2: string, arg3: string, arg4: string, arg5: string[]): Promise<string>;
+
+export function OpenMailWindow(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;

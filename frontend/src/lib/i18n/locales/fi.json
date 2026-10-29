@@ -1,4 +1,20 @@
 {
+  "onlineCount": {
+    "counting": "Lasketaan keskusteluja palvelimelta…",
+    "complete": "{total} keskustelua · {unread} lukematta",
+    "incomplete": "Palvelimen laskenta on kesken"
+  },
+  "mailWindow": {
+    "allMail": "Kaikki viestit",
+    "spam": "Roskaposti",
+    "newWindow": "Uusi posti-ikkuna",
+    "folder": "Postikansio",
+    "compose": "Uusi viesti",
+    "listWidth": "Listan leveys",
+    "focus": "Keskity keskusteluun",
+    "selectMessage": "Valitse keskustelu",
+    "messageUnavailable": "Viesti ei ole saatavilla"
+  },
   "spellcheck": {
     "title": "Oikoluku",
     "enable": "Tarkista oikeinkirjoitus",
@@ -304,7 +320,9 @@
     "messageDetails": "Viestin tiedot",
     "readerMode": "Lukutila",
     "readerConversation": "Keskustelu",
-    "readerTraditional": "Perinteinen"
+    "readerTraditional": "Perinteinen",
+    "addToCalendar": "Lisää kalenteriin",
+    "addToCalendarFailed": "Kalenteritapahtumaa ei voitu luoda"
   },
   "composer": {
     "newMessage": "Uusi viesti",

@@ -1,4 +1,20 @@
 {
+  "onlineCount": {
+    "counting": "Counting online conversations…",
+    "complete": "{total} conversations · {unread} unread",
+    "incomplete": "Online count incomplete"
+  },
+  "mailWindow": {
+    "allMail": "All Mail",
+    "spam": "Spam",
+    "newWindow": "New mail window",
+    "folder": "Mail folder",
+    "compose": "New message",
+    "listWidth": "List width",
+    "focus": "Focus thread",
+    "selectMessage": "Select a conversation",
+    "messageUnavailable": "Message is unavailable"
+  },
   "spellcheck": {
     "title": "Spellcheck",
     "enable": "Check spelling",
@@ -304,7 +320,9 @@
     "messageDetails": "Message details",
     "readerMode": "Reading mode",
     "readerConversation": "Conversation",
-    "readerTraditional": "Traditional"
+    "readerTraditional": "Traditional",
+    "addToCalendar": "Add to Calendar",
+    "addToCalendarFailed": "Could not create the calendar event"
   },
   "composer": {
     "newMessage": "New Message",

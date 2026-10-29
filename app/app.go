@@ -236,6 +236,8 @@ type App struct {
 	refreshActive  map[string]bool
 	mailSearchMu   goSync.Mutex
 	mailSearchJobs map[string]*mailSearchJob
+	viewCountMu    goSync.Mutex
+	viewCountJobs  map[string]*viewCountJob
 
 	// Background sync (polling + IDLE)
 	syncScheduler *sync.Scheduler

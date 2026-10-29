@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Show fully enumerated Gmail virtual-folder conversation/unread counts with progress and incomplete/error states, including saved-search queries. Reply/date counts reuse header metadata for flags to avoid redundant account scans. Continue non-Gmail searches through older UID pages and additional folders with retryable failures; complete non-Gmail conversation counts remain follow-up.
+- Add a New mail window action for parallel mail views, each with its own folder, search, selection, reader mode and list width. Replies reuse the detached composer; all windows share the existing mail services.
+- Reduce repeated pull-request CI installs/builds, select affected language checks conservatively, run frontend regression tests, and cancel superseded checks. Keep existing required status names and an explicit artifact-only macOS hotfix build with architecture selection.
+
 ## Postilaatikko v0.3.20
 
 - Add branching composer undo, per-keystroke autosave and a 30-second undo-send countdown.
@@ -74,6 +78,8 @@
 - Updated visible window branding and release-note lookup to use Postilaatikko.
 - Kept the Edit Account dialog size and action buttons stable when switching tabs.
 - Show configured account names under Inbox and in account rows, falling back to the email address.
+- Added ICS event handoff: create an ICS event from structured date/time details and open it for review/import in the user's calendar application. No email timestamp detection (that is P-022).
+- Recognized date/time mentions in email bodies and offered "Add to Calendar" chips in the conversation viewer; parsing is conservative (explicit year required, fixed zone designators only) and opens the ICS event for review/import rather than adding silently.
 
 ## Postilaatikko — v0.3.11
 

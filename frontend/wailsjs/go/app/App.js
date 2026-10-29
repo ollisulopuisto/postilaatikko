@@ -86,6 +86,10 @@ export function Calendar_DeleteSource(arg1) {
   return window['go']['app']['App']['Calendar_DeleteSource'](arg1);
 }
 
+export function Calendar_DetectDateTimes(arg1) {
+  return window['go']['app']['App']['Calendar_DetectDateTimes'](arg1);
+}
+
 export function Calendar_DismissAlarm(arg1) {
   return window['go']['app']['App']['Calendar_DismissAlarm'](arg1);
 }
@@ -208,6 +212,10 @@ export function CancelMailSearch(arg1) {
 
 export function CancelOAuthFlow() {
   return window['go']['app']['App']['CancelOAuthFlow']();
+}
+
+export function CancelVirtualFolderOnlineCount(arg1) {
+  return window['go']['app']['App']['CancelVirtualFolderOnlineCount'](arg1);
 }
 
 export function CheckForUpdates() {
@@ -848,6 +856,10 @@ export function GetVirtualFolderConversations(arg1, arg2, arg3, arg4) {
 
 export function GetVirtualFolderCount(arg1) {
   return window['go']['app']['App']['GetVirtualFolderCount'](arg1);
+}
+
+export function GetVirtualFolderOnlineCount(arg1) {
+  return window['go']['app']['App']['GetVirtualFolderOnlineCount'](arg1);
 }
 
 export function GetVirtualFolderSearchCount(arg1, arg2, arg3) {
@@ -1522,6 +1534,10 @@ export function StartOAuthFlow(arg1) {
   return window['go']['app']['App']['StartOAuthFlow'](arg1);
 }
 
+export function StartVirtualFolderOnlineCount(arg1, arg2) {
+  return window['go']['app']['App']['StartVirtualFolderOnlineCount'](arg1, arg2);
+}
+
 export function SubscribeAllFolders(arg1) {
   return window['go']['app']['App']['SubscribeAllFolders'](arg1);
 }
@@ -1644,4 +1660,8 @@ export function GetDraftAttachmentBlob(arg1) {
 
 export function DraftHistoryCommitBlobs(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['app']['App']['DraftHistoryCommitBlobs'](arg1, arg2, arg3, arg4, arg5);
+}
+
+export function OpenMailWindow(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['App']['OpenMailWindow'](arg1, arg2, arg3, arg4);
 }

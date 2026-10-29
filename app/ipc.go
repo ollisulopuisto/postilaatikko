@@ -33,6 +33,7 @@ func (a *App) initIPC(ctx context.Context) {
 
 	// Register message handler
 	a.ipcServer.OnMessage(a.handleIPCMessage)
+	a.bridgeMailWindowEvents()
 
 	// Log the address (available immediately after NewServer)
 	log.Info().Str("address", a.ipcServer.Address()).Msg("Starting IPC server")
@@ -59,7 +60,7 @@ func (a *App) handleIPCMessage(clientID string, msg ipc.Message) {
 		Msg("Received IPC message")
 
 	switch msg.Type {
-	case readerCallType:
+	case readerCallType, mailWindowCallType:
 		a.handleReaderCall(clientID, msg)
 
 	case ipc.TypeMessageSent:

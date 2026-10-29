@@ -1,116 +1,134 @@
 name: CI
 
+# Keep the workflow running for docs-only PRs so required checks conclude.
 on:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   version:
     name: Version consistency
     runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    outputs:
+      frontend: ${{ steps.scope.outputs.frontend }}
+      backend: ${{ steps.scope.outputs.backend }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
-
+        with:
+          # Read the complete Git diff, including more than 300 changed files.
+          fetch-depth: 0
       - name: Check application version consistency
         run: ./scripts/version.sh check
+      - name: Test CI change selection
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v
+      - name: Select affected checks
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [[ "$EVENT_NAME" == 'workflow_dispatch' ]]; then
+            echo 'frontend=true' >> "$GITHUB_OUTPUT"
+            echo 'backend=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          python3 scripts/ci_scope.py --base "$BASE_SHA"
 
-  lint:
-    name: Lint
+  check:
+    # Retain the existing status name for repository branch protection.
+    name: Type check
+    needs: version
+    if: needs.version.outputs.frontend == 'true'
     runs-on: ubuntu-22.04
+    timeout-minutes: 15
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend
+      - name: Run frontend linter
+        run: npm run lint --prefix frontend
+      - name: Run type and shortcut checks
+        run: npm run check --prefix frontend
+      - name: Run frontend regression tests
+        run: npm test --prefix frontend
+      - name: Build frontend
+        run: npm run build --prefix frontend
 
-      - name: Set up Go
-        uses: actions/setup-go@v6
+  test:
+    name: Test
+    needs: version
+    if: needs.version.outputs.backend == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
         with:
           go-version: '1.26'
           cache: true
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
-
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
-
-      # main.go has `//go:embed all:frontend/dist`, so the frontend build
-      # output must exist before any Go package in the module can typecheck —
-      # including for golangci-lint which runs typecheck as part of linting.
-      - name: Build frontend (required for go:embed)
-        run: cd frontend && npm ci && npm run build
-
+          sudo apt-get install -y --no-install-recommends libgtk-3-dev libwebkit2gtk-4.1-dev
+      - name: Prepare compile-only embedded asset
+        # Go unit tests/lint only need a non-empty go:embed directory. The real
+        # production frontend build is checked separately above. This fixture
+        # is never uploaded or used by any installer/release workflow.
+        run: |
+          mkdir -p frontend/dist
+          printf '<!doctype html><title>CI compile fixture</title>\n' > frontend/dist/index.html
       - name: Run Go linter
-        # golangci-lint v2 is required: the v1 line ended at v1.64.8, which
-        # is built with Go 1.24 and refuses to lint a module targeting
-        # go 1.26.0 (forced by echo v4.16.1 and our golang.org/x/* deps). action@v8 installs
-        # the v2 series; pinned for reproducible CI.
         uses: golangci/golangci-lint-action@v8
         with:
           version: v2.12.2
           args: --build-tags=webkit2_41
-
-      - name: Run frontend linter
-        run: cd frontend && npm run lint
-
-  check:
-    name: Type check
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install frontend dependencies
-        run: cd frontend && npm ci
-
-      - name: Run svelte-check
-        run: cd frontend && npm run check
-
-  test:
-    name: Test
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: '1.26'
-          cache: true
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
-
-      # main.go has `//go:embed all:frontend/dist`, so the frontend build
-      # output must exist before any package in the module can compile —
-      # including for `go test ./...`.
-      - name: Build frontend (required for go:embed)
-        run: cd frontend && npm ci && npm run build
-
       - name: Run Go tests
         run: make test
+
+  lint:
+    # Preserve the old required status and fail even when a dependency failed
+    # before a selected job could start. Never accept skipped selected work.
+    name: Lint
+    needs: [version, check, test]
+    if: always()
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - name: Require all affected checks
+        env:
+          VERSION_RESULT: ${{ needs.version.result }}
+          FRONTEND_REQUIRED: ${{ needs.version.outputs.frontend }}
+          FRONTEND_RESULT: ${{ needs.check.result }}
+          BACKEND_REQUIRED: ${{ needs.version.outputs.backend }}
+          BACKEND_RESULT: ${{ needs.test.result }}
+        run: |
+          if [[ "$VERSION_RESULT" != 'success' ]]; then
+            echo 'Version/policy checks did not succeed' >&2
+            exit 1
+          fi
+          if [[ ! "$FRONTEND_REQUIRED" =~ ^(true|false)$ || ! "$BACKEND_REQUIRED" =~ ^(true|false)$ ]]; then
+            echo 'Missing or invalid scope outputs' >&2
+            exit 1
+          fi
+          if [[ "$FRONTEND_REQUIRED" == 'true' && "$FRONTEND_RESULT" != 'success' ]]; then
+            echo "Required frontend checks: $FRONTEND_RESULT" >&2
+            exit 1
+          fi
+          if [[ "$BACKEND_REQUIRED" == 'true' && "$BACKEND_RESULT" != 'success' ]]; then
+            echo "Required backend checks: $BACKEND_RESULT" >&2
+            exit 1
+          fi
