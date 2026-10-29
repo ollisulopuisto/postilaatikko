@@ -28,6 +28,7 @@ type ReaderConfig struct {
 	ThreadID        string `json:"threadId"`
 	ThreadAccountID string `json:"threadAccountId"`
 	ThreadFolderID  string `json:"threadFolderId"`
+	SearchQuery     string `json:"searchQuery"`
 	FolderType      string `json:"folderType"`
 	IPCAddress      string `json:"-"`
 }

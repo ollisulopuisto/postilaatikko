@@ -61,6 +61,7 @@
     onBulkMarkRead?: (messageIds: string[]) => void
     onBulkAction?: (actionId: string, options?: { permanent?: boolean }) => unknown
     enableCommandPalette?: boolean
+    onSearchQueryChange?: (query: string) => void
     isFocused?: boolean
     isFlashing?: boolean
     showFolderToggle?: boolean
@@ -78,6 +79,7 @@
     onBulkMarkRead,
     onBulkAction,
     enableCommandPalette = true,
+    onSearchQueryChange,
     isFocused: _isFocused = false,
     isFlashing = false,
     showFolderToggle = false,
@@ -1105,6 +1107,7 @@
 
   // Handle search input with debounce
   function handleSearchInput() {
+    onSearchQueryChange?.(searchQuery)
     if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
 
     if (!searchQuery.trim()) {
@@ -1246,6 +1249,7 @@
   // Clear search and return to normal view
   function clearSearch() {
     searchQuery = ''
+    onSearchQueryChange?.('')
     searchResults = []
     searchTotalCount = 0
     searchOffset = 0
@@ -1881,6 +1885,16 @@
       default:
         clearSearch()
     }
+  }
+
+  export function getSearchQuery(): string {
+    return searchQuery
+  }
+
+  export function setSearchQuery(query: string) {
+    searchQuery = query
+    if (query.trim()) showSearch = true
+    handleSearchInput()
   }
 
   // Get the currently selected thread ID (exposed for parent access)

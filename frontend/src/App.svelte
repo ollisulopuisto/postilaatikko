@@ -114,6 +114,7 @@
         threadAccountId: selectedConversationAccountId || undefined,
         threadFolderId: selectedConversationFolderId || undefined,
       } : {}),
+      searchQuery: messageListRef?.getSearchQuery() || '',
     }
   }
 
@@ -152,7 +153,7 @@
     if (!tab) return
     try {
       const { accountId, folderId, folderName, folderType } = tab.scope
-      await OpenMailWindow(accountId, folderId, folderName, folderType, tab.scope.threadId || '', tab.scope.threadAccountId || '', tab.scope.threadFolderId || '')
+      await OpenMailWindow(accountId, folderId, folderName, folderType, tab.scope.threadId || '', tab.scope.threadAccountId || '', tab.scope.threadFolderId || '', tab.scope.searchQuery || '')
       closeWorkspaceTab(id)
     } catch (error) { toasts.error(String(error)) }
   }
@@ -2095,7 +2096,7 @@
       {/each}
       <button type="button" class="rounded p-1.5 text-muted-foreground hover:bg-muted disabled:opacity-40" title={$_('mailWindow.newTab')} aria-label={$_('mailWindow.newTab')} disabled={mailWorkspaceTabs.length >= maxMailWorkspaceTabs} onclick={openWorkspaceTab}><Icon icon="mdi:plus" width="18" /></button>
       <div class="ml-auto flex shrink-0 items-center">
-      <button class="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted" onclick={() => OpenMailWindow(selectedAccountId || '', selectedFolderId || '', selectedFolderName, selectedFolderType || 'inbox', selectedThreadId || '', selectedConversationAccountId || '', selectedConversationFolderId || '').catch(error => toasts.error(String(error)))}>
+      <button class="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted" onclick={() => OpenMailWindow(selectedAccountId || '', selectedFolderId || '', selectedFolderName, selectedFolderType || 'inbox', selectedThreadId || '', selectedConversationAccountId || '', selectedConversationFolderId || '', messageListRef?.getSearchQuery() || '').catch(error => toasts.error(String(error)))}>
         <Icon icon="mdi:open-in-new" width="16" />{$_('mailWindow.newWindow')}
       </button>
       </div>
