@@ -6,8 +6,10 @@
   // Keyed "accountId:folderId" ("unified:inbox" for the unified view).
   const sessionListState = new Map<
     string,
-    { loadedCount: number; scrollTop: number; selectedThreadId: string | null }
+    { loadedCount: number; scrollTop: number; selectedThreadId: string | null; conversations: unknown[]; totalCount: number }
   >()
+  const MAX_CACHED_FOLDER_LISTS = 8
+  const MAX_CACHED_FOLDER_ROWS = 50
 </script>
 
 <script lang="ts">
@@ -655,7 +657,14 @@
       loadedCount: conversations.length,
       scrollTop: listContainerRef?.scrollTop ?? 0,
       selectedThreadId,
+      conversations: conversations.slice(0, MAX_CACHED_FOLDER_ROWS),
+      totalCount,
     })
+    while (sessionListState.size > MAX_CACHED_FOLDER_LISTS) {
+      const oldestKey = sessionListState.keys().next().value
+      if (oldestKey === undefined) break
+      sessionListState.delete(oldestKey)
+    }
   }
 
   // Clear selection and search when folder changes
@@ -698,9 +707,27 @@
     serverSearchTotalCount = 0
     serverSearchSelectionLocked = false
     serverSearchRequestState.cancel()
-    // Restore this folder's session state: reload the previously-paginated
-    // window and put the scroll back where the user left it.
+    // Show only this folder's own small, session-only header cache while its
+    // index reloads. Never leave the previous folder's rows under the new name.
     const remembered = sessionListState.get(`${currentAccount}:${currentFolder}`)
+    if (remembered) {
+      sessionListState.delete(`${currentAccount}:${currentFolder}`)
+      sessionListState.set(`${currentAccount}:${currentFolder}`, remembered)
+      conversations = remembered.conversations as message.Conversation[]
+      totalCount = remembered.totalCount
+      selectedThreadId = remembered.selectedThreadId && conversations.some((item) => item.threadId === remembered.selectedThreadId)
+        ? remembered.selectedThreadId
+        : null
+    }
+    if (!remembered) {
+      conversations = []
+      totalCount = 0
+      selectedThreadId = null
+    }
+    listError = null
+    virtualCacheRefreshedAt = null
+    // Restore this folder's session state: reload the previously-paginated
+    // window and put the scroll back after the matching query completes.
     const restoreCount = remembered && remembered.loadedCount > PAGE_SIZE ? remembered.loadedCount : undefined
     void RefreshViewHeaders(currentAccount!, currentFolder!).catch(err => console.warn('Header refresh failed', err))
     loadConversations(restoreCount).then(() => {
@@ -968,9 +995,13 @@
       // Flush any deferred reload (from sync event during load or dialog guard).
       // Only the latest-generation load should drive the flush — otherwise a
       // stale completion could fire scheduleReload redundantly.
-      if (generation === loadGeneration && pendingReload && !isDialogGuardActive()) {
+      if (pendingReload && !isDialogGuardActive()) {
         pendingReload = false
-        scheduleReload()
+        // A newer folder load can be deferred behind this request. Start it
+        // against the current view after the older generation has released
+        // the loading lock.
+        if (generation === loadGeneration) scheduleReload()
+        else void loadConversations()
       }
     }
   }
