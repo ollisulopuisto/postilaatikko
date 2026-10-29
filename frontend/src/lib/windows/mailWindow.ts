@@ -3,6 +3,9 @@ export interface MailScope {
   folderId: string
   folderName: string
   folderType: string
+  threadId?: string
+  threadAccountId?: string
+  threadFolderId?: string
 }
 export interface MailThread { accountId: string; folderId: string; threadId: string }
 export interface MailWindowState {
@@ -13,7 +16,8 @@ export interface MailWindowState {
 const scopeKey = (scope: MailScope) => JSON.stringify([scope.accountId, scope.folderId])
 
 export function createMailWindowState(scope: MailScope): MailWindowState {
-  return { scope: { ...scope }, thread: null, selections: {} }
+  const thread = scope.threadId ? { threadId: scope.threadId, folderId: scope.threadFolderId || scope.folderId, accountId: scope.threadAccountId || scope.accountId } : null
+  return { scope: { ...scope }, thread, selections: thread ? { [scopeKey(scope)]: thread } : {} }
 }
 export function navigateMailWindow(state: MailWindowState, scope: MailScope): MailWindowState {
   return { ...state, scope: { ...scope }, thread: state.selections[scopeKey(scope)] ?? null }

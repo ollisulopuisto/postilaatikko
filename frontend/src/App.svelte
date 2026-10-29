@@ -1,6 +1,8 @@
 <script lang="ts">
   import Icon from '@iconify/svelte'
   import { OpenMailWindow } from '../wailsjs/go/app/App'
+  import MailWindowApp from './MailWindowApp.svelte'
+  import type { MailScope } from './lib/windows/mailWindow'
   // Load offline icon data before anything else
   import { LAYOUT_SYMBOL, PERMANENT_DELETE } from '$lib/keyboard/shortcuts'
   import './lib/iconify-offline'
@@ -90,8 +92,74 @@
   let selectedFolderId = $state<string | null>(null)
   let selectedFolderName = $state('Inbox')
   let selectedFolderType = $state<string | null>(null)
+  type MailWorkspaceTab = { id: string; scope: MailScope }
+  const maxMailWorkspaceTabs = 4
+  let mailWorkspaceTabs = $state<MailWorkspaceTab[]>([])
+  let activeMailWorkspace = $state('primary')
   // Track where the selection came from: 'unified' for unified section, 'account' for account tree
   let selectionSource = $state<'unified' | 'account' | null>(null)
+
+  function currentMailScope(): MailScope {
+    if (activeMailWorkspace !== 'primary') {
+      const active = mailWorkspaceTabs.find(tab => tab.id === activeMailWorkspace)
+      if (active) return active.scope
+    }
+    return {
+      accountId: selectedAccountId || 'unified',
+      folderId: selectedFolderId || 'inbox',
+      folderName: selectedFolderName,
+      folderType: selectedFolderType || 'inbox',
+      ...(selectedThreadId ? {
+        threadId: selectedThreadId,
+        threadAccountId: selectedConversationAccountId || undefined,
+        threadFolderId: selectedConversationFolderId || undefined,
+      } : {}),
+    }
+  }
+
+  function workspaceLabel(scope: MailScope): string {
+    if (scope.accountId !== 'unified') return scope.folderName || $_('mailWindow.folder')
+    const key = ({ inbox: 'allInboxes', archive: 'archived' } as Record<string, string>)[scope.folderType] || scope.folderType
+    return $_(`sidebar.${key}`)
+  }
+
+  function openWorkspaceTab() {
+    if (mailWorkspaceTabs.length >= maxMailWorkspaceTabs) {
+      toasts.error($_('mailWindow.tabLimit', { values: { count: maxMailWorkspaceTabs } }))
+      return
+    }
+    const tab = { id: crypto.randomUUID(), scope: { ...currentMailScope() } }
+    mailWorkspaceTabs = [...mailWorkspaceTabs, tab]
+    switchMailWorkspace(tab.id)
+  }
+
+  function switchMailWorkspace(id: string) {
+    activeMailWorkspace = id
+    setFocusedPane('messageList')
+  }
+
+  function closeWorkspaceTab(id: string) {
+    const index = mailWorkspaceTabs.findIndex(tab => tab.id === id)
+    if (index < 0) return
+    mailWorkspaceTabs = mailWorkspaceTabs.filter(tab => tab.id !== id)
+    if (activeMailWorkspace === id) {
+      switchMailWorkspace(mailWorkspaceTabs[Math.min(index, mailWorkspaceTabs.length - 1)]?.id || 'primary')
+    }
+  }
+
+  async function detachWorkspaceTab(id: string) {
+    const tab = mailWorkspaceTabs.find(item => item.id === id)
+    if (!tab) return
+    try {
+      const { accountId, folderId, folderName, folderType } = tab.scope
+      await OpenMailWindow(accountId, folderId, folderName, folderType, tab.scope.threadId || '', tab.scope.threadAccountId || '', tab.scope.threadFolderId || '')
+      closeWorkspaceTab(id)
+    } catch (error) { toasts.error(String(error)) }
+  }
+
+  function updateWorkspaceScope(id: string, scope: MailScope) {
+    mailWorkspaceTabs = mailWorkspaceTabs.map(tab => tab.id === id ? { ...tab, scope } : tab)
+  }
 
   // Selected conversation state
   let selectedThreadId = $state<string | null>(null)
@@ -1094,6 +1162,7 @@
   let leftAltHeld = false
 
   function handleGlobalKeyUp(e: KeyboardEvent) {
+    if (activeMailWorkspace !== 'primary') return
     if (e.code === 'AltLeft') {
       leftAltHeld = false
     }
@@ -1101,6 +1170,7 @@
 
   // Global keyboard shortcut handler
   function handleGlobalKeyDown(e: KeyboardEvent) {
+    if (activeMailWorkspace !== 'primary') return
     // Track Left Alt press
     if (e.code === 'AltLeft') {
       leftAltHeld = true
@@ -2012,10 +2082,23 @@
   {/if}
 
   {#if getActiveExtension() === 'mail'}
-    <div class="flex justify-end border-b border-border px-2 py-1">
-      <button class="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted" onclick={() => OpenMailWindow(selectedAccountId || '', selectedFolderId || '', selectedFolderName, selectedFolderType || 'inbox').catch(error => toasts.error(String(error)))}>
+    <div class="flex min-h-10 items-center gap-1 overflow-x-auto border-b border-border px-2 py-1" role="tablist" aria-label={$_('mailWindow.workspaces')}>
+      <button type="button" role="tab" aria-selected={activeMailWorkspace === 'primary'} class="max-w-52 truncate rounded px-3 py-1.5 text-sm {activeMailWorkspace === 'primary' ? 'bg-muted font-medium' : 'text-muted-foreground hover:bg-muted/60'}" title={selectedFolderName} onclick={() => switchMailWorkspace('primary')}>{selectedFolderName || $_('mailWindow.primaryWorkspace')}</button>
+      {#each mailWorkspaceTabs as tab (tab.id)}
+        <div class="flex shrink-0 items-center rounded {activeMailWorkspace === tab.id ? 'bg-muted' : 'hover:bg-muted/60'}">
+          <button type="button" role="tab" aria-selected={activeMailWorkspace === tab.id} class="max-w-48 truncate px-3 py-1.5 text-sm {activeMailWorkspace === tab.id ? 'font-medium' : 'text-muted-foreground'}" title={workspaceLabel(tab.scope)} onclick={() => switchMailWorkspace(tab.id)}>{workspaceLabel(tab.scope)}</button>
+          {#if activeMailWorkspace === tab.id}
+            <button type="button" class="rounded p-1 text-muted-foreground hover:bg-background" title={$_('mailWindow.detachTab')} aria-label={$_('mailWindow.detachTab')} onclick={() => void detachWorkspaceTab(tab.id)}><Icon icon="mdi:open-in-new" width="16" /></button>
+          {/if}
+          <button type="button" class="rounded p-1 text-muted-foreground hover:bg-background" title={$_('mailWindow.closeTab')} aria-label={$_('mailWindow.closeTab')} onclick={() => closeWorkspaceTab(tab.id)}><Icon icon="mdi:close" width="16" /></button>
+        </div>
+      {/each}
+      <button type="button" class="rounded p-1.5 text-muted-foreground hover:bg-muted disabled:opacity-40" title={$_('mailWindow.newTab')} aria-label={$_('mailWindow.newTab')} disabled={mailWorkspaceTabs.length >= maxMailWorkspaceTabs} onclick={openWorkspaceTab}><Icon icon="mdi:plus" width="18" /></button>
+      <div class="ml-auto flex shrink-0 items-center">
+      <button class="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted" onclick={() => OpenMailWindow(selectedAccountId || '', selectedFolderId || '', selectedFolderName, selectedFolderType || 'inbox', selectedThreadId || '', selectedConversationAccountId || '', selectedConversationFolderId || '').catch(error => toasts.error(String(error)))}>
         <Icon icon="mdi:open-in-new" width="16" />{$_('mailWindow.newWindow')}
       </button>
+      </div>
     </div>
   {/if}
   <!-- Main Content -->
@@ -2039,7 +2122,7 @@
          every extension switch was leaking state (zombie listeners) and pinning
          the main thread on the second mount. display:contents keeps the flex
          children as direct flex items so the layout doesn't shift. -->
-    <div style:display={getActiveExtension() === 'mail' ? 'contents' : 'none'}>
+    <div style:display={getActiveExtension() === 'mail' && activeMailWorkspace === 'primary' ? 'contents' : 'none'}>
     <!-- Sidebar (Folder List) -->
     <aside
       class="spark-sidebar-host {getLayoutMode() === 'narrow' ? `responsive-sidebar-overlay w-72 border-r border-border bg-background ${getResponsiveView() === 'sidebar' ? 'responsive-sidebar-visible' : ''}` : 'flex-shrink-0 border-r border-border bg-muted/30'}"
@@ -2162,6 +2245,13 @@
       />
     </main>
     </div>
+    {#if getActiveExtension() === 'mail'}
+      {#each mailWorkspaceTabs as tab (tab.id)}
+        <div class="flex-1 min-w-0 min-h-0 overflow-hidden" style:display={activeMailWorkspace === tab.id ? 'flex' : 'none'}>
+          <MailWindowApp config={tab.scope} embedded active={activeMailWorkspace === tab.id} onScopeChange={scope => updateWorkspaceScope(tab.id, scope)} onNewTab={openWorkspaceTab} />
+        </div>
+      {/each}
+    {/if}
     {#if showComposer && composerAccountId}
       <div class="compact-composer-host" style:--composer-left-clearance={getLayoutMode() === 'full' ? `${(sidebarCollapsed ? 56 : sidebarWidth) + 80}px` : '16px'}>
         <Composer
