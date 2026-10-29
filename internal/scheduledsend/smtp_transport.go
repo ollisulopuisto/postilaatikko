@@ -110,7 +110,9 @@ func (t *SMTPTransport) Deliver(ctx context.Context, delivery Delivery) error {
 		c := gmail.NewClient(func(ctx context.Context, force bool) (string, error) {
 			tokens, err := t.tokensWithForce(ctx, acc.ID, force)
 			if err != nil {
-				return "", err
+				// Token lookup/refresh runs before submission, or after an
+				// explicit 401 rejection. It cannot mean mail was accepted.
+				return "", &DeliveryError{Kind: AuthorizationRequired, Err: err}
 			}
 			if !gmail.ScopesCoverModify(tokens.Scopes) {
 				return "", gmail.ErrReauthRequired
@@ -120,6 +122,10 @@ func (t *SMTPTransport) Deliver(ctx context.Context, delivery Delivery) error {
 		_, err := c.Send(ctx, delivery.RFC822, delivery.To...)
 		if err == nil {
 			return nil
+		}
+		var localFailure *DeliveryError
+		if errors.As(err, &localFailure) {
+			return localFailure
 		}
 		kind := OutcomeUnknown
 		if errors.Is(err, gmail.ErrReauthRequired) || errors.Is(err, gmail.ErrInsufficientScope) {

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Report missing or unavailable helper-local Gmail OAuth credentials as requiring authorization in Send Later, preserving the encrypted job instead of claiming an unknown delivery outcome before submission.
+
 - Browse macOS Contacts in Settings → Contacts and include authorized addresses in main-window and detached-composer recipient suggestions. Request access only from an explicit action; open a person in Contacts.app for edits. Postilaatikko never writes native contacts. Settings explains denied access and reports lookup/open failures.
 
 - Show fully enumerated Gmail virtual-folder conversation/unread counts with progress and incomplete/error states, including saved-search queries. Reply/date counts reuse header metadata for flags to avoid redundant account scans. Continue non-Gmail searches through older UID pages and additional folders with retryable failures; complete non-Gmail conversation counts remain follow-up.
