@@ -142,7 +142,7 @@
   function addSignatureRule() {
     signatureRules = [...signatureRules, {
       id: crypto.randomUUID(),
-      name: `Rule ${signatureRules.length + 1}`,
+      name: $_('identity.signatureRuleName'),
       enabled: true,
       recipients: [],
       messageTypes: ['new', 'reply', 'reply-all', 'forward'],
