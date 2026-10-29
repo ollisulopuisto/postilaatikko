@@ -16,7 +16,7 @@
   import { publishUndoOperationCreated, publishUndoOperationCompleted } from './lib/components/list/undoMutationEvents'
   import { runMessageMutation } from './lib/components/list/mutationInFlight'
   import type { virtualfolder } from '../wailsjs/go/models'
-  import { GetAccounts, GetFolders, GetFolderTree, GetMessage, OpenMailWindow, OpenComposerWindow, MarkAsRead, ArchiveWithUndo, UndoOperation } from '../wailsjs/go/app/App'
+  import { GetAccounts, GetFolders, GetFolderTree, GetMessage, OpenMailWindow, OpenComposerWindow, MarkAsRead, MarkAsUnread, Star, Unstar, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ArchiveWithUndo, UndoOperation } from '../wailsjs/go/app/App'
   import { EventsEmit, WindowSetTitle } from '../wailsjs/runtime/runtime'
 
   let { config }: { config: MailScope } = $props()
@@ -112,6 +112,40 @@
       list?.handleActionComplete(true)
     }))
   }
+  async function bulkAction(id: string, options?: { permanent?: boolean }) {
+    const ids = list?.getCheckedMessageIds() ?? []
+    if (!ids.length) return
+    if (id === 'mail.archive') { await archive(ids); return }
+    if (id === 'mail.trash') { list?.requestDelete(ids, options?.permanent === true); return }
+    if (id === 'mail.markRead' || id === 'mail.markUnread') {
+      await run(() => runMessageMutation(ids, async () => {
+        if (id === 'mail.markRead') await MarkAsRead(ids)
+        else await MarkAsUnread(ids)
+        list?.clearChecked()
+        refresh()
+      }))
+      return
+    }
+    if (id === 'mail.star') {
+      const shouldStar = list?.getCheckedHasUnstarred() ?? true
+      await run(() => runMessageMutation(ids, async () => {
+        if (shouldStar) await Star(ids)
+        else await Unstar(ids)
+        list?.clearChecked()
+        refresh()
+      }))
+      return
+    }
+    if (id === 'mail.spam') {
+      await run(() => runMessageMutation(ids, async () => {
+        const spamFolder = windowState.scope.folderType === 'spam'
+        const result = spamFolder ? await MarkAsNotSpamWithUndo(ids) : await MarkAsSpamWithUndo(ids)
+        publishUndoOperationCreated(result.operationId, ids, spamFolder ? 'mark-as-not-spam' : 'mark-as-spam')
+        list?.clearChecked()
+        refresh()
+      }))
+    }
+  }
   function closeReader() { readerOnly = false; windowState = { ...windowState, thread: null }; setFocusedPane('messageList') }
   function keydown(event: KeyboardEvent) {
     if (isInputElement(event.target) || isDialogGuardActive() || event.defaultPrevented) return
@@ -166,7 +200,7 @@
       <MessageList bind:this={list} accountId={windowState.scope.accountId} folderId={windowState.scope.folderId} folderName={label(windowState.scope)} folderType={windowState.scope.folderType}
         isFocused={getFocusedPane() === 'messageList'} onConversationSelect={select} onReply={reply}
         onRowActionComplete={auto => { if (auto) windowState = { ...windowState, thread: null } }}
-        onBulkMarkRead={ids => void run(() => MarkAsRead(ids))} onBulkArchive={archive} />
+        onBulkMarkRead={ids => void run(() => MarkAsRead(ids))} onBulkAction={bulkAction} enableCommandPalette={false} />
     </section>
     <section class="mail-reader flex-1 min-w-0 min-h-0" role="presentation" onclick={() => setFocusedPane('viewer')}>
       {#if windowState.thread}

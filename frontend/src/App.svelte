@@ -2112,7 +2112,7 @@
         onReply={handleReply}
         onRowActionComplete={handleMessageListActionComplete}
         onBulkMarkRead={handleBulkMarkRead}
-        onBulkArchive={handleBulkArchive}
+        onBulkAction={(id, options) => runListAction(id, options)}
         isFocused={getFocusedPane() === 'messageList'}
         isFlashing={isPaneFlashing('messageList')}
         showFolderToggle={getLayoutMode() === 'narrow'}
