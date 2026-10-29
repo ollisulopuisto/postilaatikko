@@ -3,42 +3,76 @@ name: macOS Build
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
   workflow_dispatch:
+    inputs:
+      architecture:
+        description: 'DMG architecture (manual artifact-only hotfix build; CI checks run separately)'
+        type: choice
+        options: [arm64, amd64]
+        default: arm64
 
 permissions:
   contents: read
 
+# Automatic builds replace older automatic builds. Each manual hotfix keeps its
+# own group so a subsequent main push cannot cancel it.
+concurrency:
+  group: macos-build-${{ github.event_name }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
 jobs:
   build:
-    runs-on: macos-latest
+    # Keep the app and bundled CGO/keychain helper native to the selected CPU.
+    runs-on: ${{ inputs.architecture == 'amd64' && 'macos-26-intel' || 'macos-latest' }}
+    timeout-minutes: 25
     env:
-      GOARCH: arm64
+      GOARCH: ${{ inputs.architecture || 'arm64' }}
     steps:
       - name: Check out source
         uses: actions/checkout@v6
-
+      - name: Check version and record source
+        env:
+          BUILD_SHA: ${{ github.sha }}
+        run: |
+          ./scripts/version.sh check
+          {
+            echo '### Artifact-only macOS build'
+            echo "Source: $BUILD_SHA"
+            echo "Architecture: $GOARCH"
+            echo 'CI tests and native acceptance remain separate checks; this run does not publish a release.'
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
           go-version: '1.26'
           cache: true
-
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
           node-version: '24'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-
+      - name: Cache Wails CLI
+        id: wails
+        uses: actions/cache@v4
+        with:
+          path: ~/go/bin/wails
+          # The CLI runs on the runner's architecture, independent of GOARCH.
+          key: wails-${{ runner.os }}-${{ runner.arch }}-go1.26-v2.15.0
       - name: Install Wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
-
+        if: steps.wails.outputs.cache-hit != 'true'
+        # Cross-compiling Wails would produce a CLI the runner cannot execute.
+        run: env -u GOARCH go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
       - name: Install frontend dependencies
-        run: cd frontend && npm ci
-
+        run: npm ci --prefix frontend
       - name: Build macOS app
         run: make build
-
+      - name: Verify app signature
+        run: codesign --verify --deep --strict build/bin/postilaatikko.app
       - name: Create drag-and-drop DMG
         run: |
           mkdir -p build/bin/dmg-staging
@@ -49,13 +83,13 @@ jobs:
             -srcfolder build/bin/dmg-staging \
             -ov \
             -format UDZO \
-            build/bin/Postilaatikko-macos-arm64.dmg
+            "build/bin/Postilaatikko-macos-${GOARCH}.dmg"
+          hdiutil verify "build/bin/Postilaatikko-macos-${GOARCH}.dmg"
           rm -rf build/bin/dmg-staging
-
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
         with:
-          name: Postilaatikko-macos-arm64-dmg-${{ github.sha }}
-          path: build/bin/Postilaatikko-macos-arm64.dmg
+          name: Postilaatikko-macos-${{ env.GOARCH }}-dmg-${{ github.sha }}
+          path: build/bin/Postilaatikko-macos-${{ env.GOARCH }}.dmg
           if-no-files-found: error
           retention-days: 14
