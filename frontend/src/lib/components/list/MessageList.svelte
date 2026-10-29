@@ -22,7 +22,7 @@
   import { cn } from '$lib/utils'
   import { Button } from '$lib/components/ui/button'
   // @ts-ignore - wailsjs bindings
-  import { RefreshViewHeaders, SearchMail, CancelMailSearch, MoveToInboxWithUndo, GetConversations, GetConversationCount, SyncFolder, ForceSyncFolder, CancelFolderSync, SetMessageListSortOrder, GetUnifiedFolderConversations, GetUnifiedFolderCount, SearchConversations, SearchUnifiedFolder, GetSearchCount, GetSearchCountUnifiedFolder, SyncUnifiedFolder, EmptyUnifiedTrash, GetFTSIndexStatus, IsFTSIndexing, TrashWithUndo, DeletePermanently, EmptyTrash, UndoOperation, IMAPSearchFolder, IMAPSearchUnifiedInbox, FetchServerMessage, GetVirtualFolderConversations, GetVirtualFolderCount, SearchVirtualFolder } from '../../../../wailsjs/go/app/App'
+  import { RefreshViewHeaders, SearchMail, CancelMailSearch, MoveToInboxWithUndo, GetConversations, GetConversationCount, SyncFolder, ForceSyncFolder, CancelFolderSync, SetMessageListSortOrder, GetUnifiedFolderConversations, GetUnifiedFolderCount, SearchConversations, SearchUnifiedFolder, GetSearchCount, GetSearchCountUnifiedFolder, SyncUnifiedFolder, EmptyUnifiedTrash, GetFTSIndexStatus, IsFTSIndexing, TrashWithUndo, DeletePermanently, EmptyTrash, UndoOperation, IMAPSearchFolder, IMAPSearchUnifiedInbox, FetchServerMessage, GetVirtualFolderConversations, GetVirtualFolderCount, GetVirtualFolderCachedView, SearchVirtualFolder } from '../../../../wailsjs/go/app/App'
   import { toasts } from '$lib/stores/toast'
   import { withShortcut, ariaKeyshortcuts, formatShortcut } from '$lib/keyboard/format'
   import ShortcutHint from '$lib/components/shortcuts/ShortcutHint.svelte'
@@ -82,6 +82,7 @@
   let totalCount = $state(0)
   let virtualCursor = $state('')
   let virtualIssues = $state('')
+  let virtualCacheRefreshedAt = $state<Date | null>(null)
   const virtualSearchSession = crypto.randomUUID()
   let loading = $state(false)
   let moveMutationInFlight = $state(false)
@@ -501,6 +502,14 @@
       }
     })
 
+    // The backend refreshes cached virtual-folder indexes in the background;
+    // reload an open view when its index changes.
+    EventsOn('virtualfolder:cacheUpdated', (data: { virtualFolderId: string }) => {
+      if (isVirtualFolderView && folderId === data.virtualFolderId && !searchQuery.trim()) {
+        scheduleReload()
+      }
+    })
+
     // Listen for messages:updated events (e.g., from IDLE push notifications)
     EventsOn('messages:updated', (data: { accountId: string; folderId: string }) => {
       // Reload if this is the current folder, or unified inbox when an inbox folder updated
@@ -666,6 +675,7 @@
     loadGeneration++ // Invalidate any in-flight loads from the previous folder (#200)
     offset = 0
     virtualCursor = ''; virtualIssues = ''
+    virtualCacheRefreshedAt = null
     void CancelMailSearch(virtualSearchSession)
     checkedThreadIds = new Set()
     lastClickedIndex = null
@@ -827,6 +837,20 @@
     try {
 
       if (isVirtualFolderView) {
+        // Instant first paint from the cached virtual-folder index; the live
+        // SearchMail result below replaces it. Only paint an empty list so a
+        // background refresh never flickers visible rows backward.
+        if (currentOffset === 0) {
+          void GetVirtualFolderCachedView(folderId!).then((view: searchModels.VirtualFolderCachedView | null) => {
+            if (generation !== loadGeneration || isSearchMode || !view) return
+            virtualCacheRefreshedAt = view.refreshedAt ? new Date(view.refreshedAt) : null
+            if (conversations.length === 0 && (view.conversations?.length ?? 0) > 0) {
+              conversations = view.conversations
+              totalCount = conversations.length
+              if (!selectedThreadId) selectedThreadId = conversations[0]?.threadId || null
+            }
+          }).catch((cacheError: unknown) => console.warn('Virtual folder cache view failed:', cacheError))
+        }
         const response = await SearchMail(new searchModels.MailSearchRequest({sessionId: virtualSearchSession, query: '', accountIds: [], virtualFolderId: folderId!, cursor: currentOffset === 0 ? '' : virtualCursor, limit: Math.min(limit, 100)}))
         if (generation !== loadGeneration || isSearchMode) return
         virtualCursor = response.cursor || ''
@@ -2211,6 +2235,16 @@
               <Icon icon="mdi:refresh" class="w-4 h-4 text-muted-foreground" />
             </button>
           {/if}
+          {#if searchQuery.trim() && !isVirtualFolderView}
+            <button
+              class="p-0.5 hover:bg-muted-foreground/20 rounded"
+              title={$_('search.saveAsVirtualFolder')}
+              aria-label={$_('search.saveAsVirtualFolder')}
+              onclick={() => virtualFoldersStore.requestSaveSearch(searchQuery.trim(), isUnifiedView ? null : folderId)}
+            >
+              <Icon icon="mdi:folder-star-outline" class="w-4 h-4 text-muted-foreground" />
+            </button>
+          {/if}
         </div>
         {#if preferServerSearch || isVirtualFolderView}
           <SearchOperators onInsert={insertSearchOperator} popup />
@@ -2507,6 +2541,9 @@
   {/if}
 
   {#if virtualIssues}<p class="px-3 py-2 text-xs text-destructive" role="status">{virtualIssues}</p>{/if}
+  {#if isVirtualFolderView && virtualCacheRefreshedAt && !isSearchMode}
+    <p class="px-3 pb-1 text-[10px] text-muted-foreground" role="status">{$_('search.virtualFolderCacheUpdated', { values: { time: virtualCacheRefreshedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) } })}</p>
+  {/if}
   {#if isVirtualFolderView && virtualCursor && !loading && !virtualIssues}<button type="button" class="px-3 py-2 text-sm text-primary" onclick={loadNextPage}>{$_('search.loadMore')}</button>{/if}
   <!-- Conversation List -->
   <div bind:this={listContainerRef} class="message-list-scroll flex-1 min-h-0 overflow-y-auto scrollbar-thin" onscroll={handleListScroll}>

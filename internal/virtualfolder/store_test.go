@@ -236,3 +236,93 @@ func TestStore_UnreadCountsWithDateWindowForGoTimes(t *testing.T) {
 		t.Errorf("unread count = %d, want 1 (only the message inside the window)", got)
 	}
 }
+
+func TestStore_SearchQueryRoundtrip(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+	store := NewStore(db)
+
+	vf := &VirtualFolder{
+		Name:        "Invoices",
+		FolderIDs:   []string{"folder1"},
+		SearchQuery: "  invoice  ",
+	}
+	if err := store.Create(vf); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	got, err := store.Get(vf.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.SearchQuery != "invoice" {
+		t.Errorf("Get searchQuery = %q, want trimmed %q", got.SearchQuery, "invoice")
+	}
+	list, err := store.List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(list) != 1 || list[0].SearchQuery != "invoice" {
+		t.Errorf("List searchQuery = %+v, want one folder with query %q", list, "invoice")
+	}
+
+	vf.SearchQuery = "receipt"
+	if err := store.Update(vf); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	got, err = store.Get(vf.ID)
+	if err != nil {
+		t.Fatalf("Get after update: %v", err)
+	}
+	if got.SearchQuery != "receipt" {
+		t.Errorf("updated searchQuery = %q, want %q", got.SearchQuery, "receipt")
+	}
+}
+
+func TestStore_CacheSaveLoadDelete(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+	store := NewStore(db)
+
+	vf := &VirtualFolder{Name: "Cached", FolderIDs: []string{"folder1"}}
+	if err := store.Create(vf); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if _, _, found, err := store.LoadCache(vf.ID); err != nil || found {
+		t.Errorf("LoadCache before save: found=%v err=%v, want false/nil", found, err)
+	}
+
+	entries := []CachedConversation{
+		{AccountID: "account1", ConversationID: "conv-b"},
+		{AccountID: "account1", ConversationID: "conv-a"},
+	}
+	if err := store.SaveCache(vf.ID, entries); err != nil {
+		t.Fatalf("SaveCache: %v", err)
+	}
+	got, refreshedAt, found, err := store.LoadCache(vf.ID)
+	if err != nil || !found {
+		t.Fatalf("LoadCache: found=%v err=%v", found, err)
+	}
+	if len(got) != 2 || got[0].ConversationID != "conv-b" || got[1].ConversationID != "conv-a" {
+		t.Errorf("cache order = %+v, want conv-b then conv-a", got)
+	}
+	if refreshedAt.IsZero() || time.Since(refreshedAt) > time.Minute {
+		t.Errorf("refreshedAt = %v, want a fresh timestamp", refreshedAt)
+	}
+
+	// Saving again replaces rather than appends.
+	if err := store.SaveCache(vf.ID, entries[:1]); err != nil {
+		t.Fatalf("SaveCache replace: %v", err)
+	}
+	got, _, found, err = store.LoadCache(vf.ID)
+	if err != nil || !found || len(got) != 1 || got[0].ConversationID != "conv-b" {
+		t.Errorf("after replace: got=%+v found=%v err=%v", got, found, err)
+	}
+
+	if err := store.Delete(vf.ID); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if _, _, found, err := store.LoadCache(vf.ID); err != nil || found {
+		t.Errorf("LoadCache after delete: found=%v err=%v, want false/nil", found, err)
+	}
+}

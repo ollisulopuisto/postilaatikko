@@ -1625,4 +1625,22 @@ var migrations = []Migration{
  CREATE INDEX IF NOT EXISTS idx_mailbox_undo_commands_op ON mailbox_undo_commands(operation_id);
  CREATE INDEX IF NOT EXISTS idx_mailbox_undo_commands_created ON mailbox_undo_commands(created_at);
  `},
+	{Version: 60, SQL: `
+ -- Saved searches as virtual folders: a virtual folder can carry a text query,
+ -- and its ordered conversation index is cached so the folder opens instantly.
+ -- The cache is refreshed in the background and on demand; membership can lag
+ -- live data until the next refresh, which the UI shows via refreshed_at.
+ ALTER TABLE virtual_folders ADD COLUMN search_query TEXT NOT NULL DEFAULT '';
+ CREATE TABLE IF NOT EXISTS virtual_folder_cache (
+   virtual_folder_id TEXT NOT NULL REFERENCES virtual_folders(id) ON DELETE CASCADE,
+   position INTEGER NOT NULL,
+   account_id TEXT NOT NULL,
+   conversation_id TEXT NOT NULL,
+   PRIMARY KEY (virtual_folder_id, position)
+ );
+ CREATE TABLE IF NOT EXISTS virtual_folder_cache_meta (
+   virtual_folder_id TEXT PRIMARY KEY REFERENCES virtual_folders(id) ON DELETE CASCADE,
+   refreshed_at INTEGER NOT NULL
+ );
+ `},
 }

@@ -264,9 +264,25 @@
   }
 
   function openVirtualFolderDialog(item: virtualfolder.VirtualFolder | null = null) {
+    pendingVirtualFolderQuery = ''
+    pendingVirtualFolderFolderId = null
     editingVirtualFolder = item
     showVirtualFolderDialog = true
   }
+
+  // "Save as virtual folder" requests arrive from the message list's search
+  // bar via the store; this sidebar owns the dialog.
+  let pendingVirtualFolderQuery = $state('')
+  let pendingVirtualFolderFolderId = $state<string | null>(null)
+  $effect(() => {
+    const request = virtualFoldersStore.saveSearchRequest
+    if (!request) return
+    virtualFoldersStore.clearSaveSearchRequest()
+    editingVirtualFolder = null
+    pendingVirtualFolderQuery = request.query
+    pendingVirtualFolderFolderId = request.folderId
+    showVirtualFolderDialog = true
+  })
 
   // Asks in the app's own dialog. The browser's native confirm dialog returns
   // false in the macOS webview (Wails does not provide the JavaScript confirm
@@ -736,6 +752,8 @@
   bind:open={showVirtualFolderDialog}
   virtualFolder={editingVirtualFolder}
   accounts={accountStore.accounts}
+  initialSearchQuery={pendingVirtualFolderQuery}
+  initialFolderId={pendingVirtualFolderFolderId}
   onSave={(value) => virtualFoldersStore.save(value as virtualfolder.VirtualFolder)}
 />
 

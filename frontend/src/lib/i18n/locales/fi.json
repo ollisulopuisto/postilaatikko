@@ -120,7 +120,8 @@
     "virtualFolderNoFolderMatches": "Haulla ei löytynyt kansioita.",
     "virtualFolderChooseFolder": "Valitse vähintään yksi kansio.",
     "virtualFolderSaveFailed": "Virtuaalikansion tallennus epäonnistui.",
-    "bottomActions": "Pikatoiminnot"
+    "bottomActions": "Pikatoiminnot",
+    "virtualFolderSavedQuery": "Tallennettu haku"
   },
   "messageList": {
     "searchMessages": "Etsi viestejä...",
@@ -1179,7 +1180,9 @@
     "serverSearching": "Etsitään palvelimelta...",
     "notSyncedLocally": "(ei synkronoitu paikallisesti)",
     "serverResultsCapped": "Näytetään {shown} / {total} tuloksesta haulle ”{query}”",
-    "showAllResults": "Näytä kaikki {total} tulosta"
+    "showAllResults": "Näytä kaikki {total} tulosta",
+    "saveAsVirtualFolder": "Tallenna virtuaalikansioksi",
+    "virtualFolderCacheUpdated": "Virtuaalikansion indeksi päivitetty {time}"
   },
   "responsive": {
     "back": "Takaisin",

@@ -11,6 +11,9 @@
     open: boolean
     virtualFolder: virtualfolder.VirtualFolder | null
     accounts: AccountWithFolders[]
+    // Prefill when creating a virtual folder from an active search.
+    initialSearchQuery?: string
+    initialFolderId?: string | null
     onSave: (value: {
       id: string
       name: string
@@ -21,10 +24,11 @@
       replyStatus: string
       starStatus: string
       dateWindow: string
+      searchQuery: string
     }) => Promise<void>
   }
 
-  let { open = $bindable(false), virtualFolder, accounts, onSave }: Props = $props()
+  let { open = $bindable(false), virtualFolder, accounts, initialSearchQuery = '', initialFolderId = null, onSave }: Props = $props()
   let name = $state('')
   let selectedIDs = $state<string[]>([])
   let folderMode = $state('include')
@@ -32,6 +36,7 @@
   let replyStatus = $state('all')
   let starStatus = $state('all')
   let dateWindow = $state('all')
+  let searchQuery = $state('')
   let saving = $state(false)
   let error = $state('')
   let folderQuery = $state('')
@@ -56,11 +61,15 @@
     if (!open) return
     name = virtualFolder?.name || ''
     selectedIDs = [...(virtualFolder?.folderIds || [])]
+    if (!virtualFolder && initialFolderId && !selectedIDs.includes(initialFolderId)) {
+      selectedIDs = [...selectedIDs, initialFolderId]
+    }
     folderMode = virtualFolder?.folderMode || 'include'
     readStatus = virtualFolder?.readStatus || 'all'
     replyStatus = virtualFolder?.replyStatus || 'all'
     starStatus = virtualFolder?.starStatus || 'all'
     dateWindow = virtualFolder?.dateWindow || 'all'
+    searchQuery = virtualFolder?.searchQuery || initialSearchQuery || ''
     folderQuery = ''
     error = ''
   })
@@ -92,6 +101,7 @@
         replyStatus,
         starStatus,
         dateWindow,
+        searchQuery: searchQuery.trim(),
       })
       open = false
     } catch (cause) {
@@ -112,6 +122,12 @@
       <span>{$_('sidebar.virtualFolderName')}</span>
       <input bind:value={name} maxlength="100" class="h-10 rounded-md border border-input bg-background px-3" />
     </label>
+    {#if searchQuery.trim()}
+      <div class="grid gap-1 text-sm">
+        <span>{$_('sidebar.virtualFolderSavedQuery')}</span>
+        <code class="rounded-md border border-input bg-muted px-3 py-2 text-xs break-all">{searchQuery}</code>
+      </div>
+    {/if}
     <label class="grid gap-1 text-sm">
       <span>{$_('sidebar.virtualFolderSelection')}</span>
       <select bind:value={folderMode} class="h-10 rounded-md border border-input bg-background px-3">
