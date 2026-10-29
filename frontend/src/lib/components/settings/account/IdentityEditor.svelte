@@ -41,6 +41,18 @@
   let signatureForForward = $state(true)
   let signaturePlacement = $state<'above' | 'below'>('above')
   let signatureSeparator = $state(false)
+  type SignatureRule = {
+    id: string
+    name: string
+    enabled: boolean
+    recipients: string[]
+    messageTypes: ('new' | 'reply' | 'reply-all' | 'forward')[]
+    signatureHtml: string
+    signatureText: string
+    signaturePlacement: 'above' | 'below'
+    signatureSeparator: boolean
+  }
+  let signatureRules = $state<SignatureRule[]>([])
 
   let saving = $state(false)
   let errors = $state<Record<string, string>>({})
@@ -60,6 +72,7 @@
         signatureForForward = identity.signatureForForward ?? true
         signaturePlacement = (identity.signaturePlacement as 'above' | 'below') || 'above'
         signatureSeparator = identity.signatureSeparator ?? false
+        signatureRules = structuredClone(identity.signatureRules || [])
       } else {
         // New identity - reset to defaults
         email = ''
@@ -72,6 +85,7 @@
         signatureForForward = true
         signaturePlacement = 'above'
         signatureSeparator = false
+        signatureRules = []
       }
       errors = {}
     }
@@ -103,6 +117,7 @@
         name: name.trim(),
         signatureHtml,
         signatureText,
+        signatureRules,
         signatureEnabled,
         signatureForNew,
         signatureForReply,
@@ -120,6 +135,34 @@
     } finally {
       saving = false
     }
+  }
+
+  const messageTypes: SignatureRule['messageTypes'] = ['new', 'reply', 'reply-all', 'forward']
+
+  function addSignatureRule() {
+    signatureRules = [...signatureRules, {
+      id: crypto.randomUUID(),
+      name: `Rule ${signatureRules.length + 1}`,
+      enabled: true,
+      recipients: [],
+      messageTypes: ['new', 'reply', 'reply-all', 'forward'],
+      signatureHtml: '',
+      signatureText: '',
+      signaturePlacement: 'above',
+      signatureSeparator: false,
+    }]
+  }
+
+  function updateRuleRecipients(rule: SignatureRule, value: string) {
+    rule.recipients = value.split(/[;,\n]/).map(item => item.trim().toLowerCase()).filter(Boolean)
+    signatureRules = [...signatureRules]
+  }
+
+  function toggleRuleMessageType(rule: SignatureRule, mode: SignatureRule['messageTypes'][number], checked: boolean) {
+    rule.messageTypes = checked
+      ? [...new Set([...rule.messageTypes, mode])]
+      : rule.messageTypes.filter(item => item !== mode)
+    signatureRules = [...signatureRules]
   }
 
   function handleCancel() {
@@ -339,6 +382,48 @@
             </Label>
           </div>
         {/if}
+
+        <div class="border-t border-border pt-4 space-y-4">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <Label class="font-medium">Contextual signatures</Label>
+              <p class="text-xs text-muted-foreground">Choose a signature for a recipient or domain and message type. The identity signature remains the fallback.</p>
+            </div>
+            <Button type="button" variant="outline" size="sm" onclick={addSignatureRule} disabled={signatureRules.length >= 32}>
+              <Icon icon="mdi:plus" class="w-4 h-4 mr-1" /> Add rule
+            </Button>
+          </div>
+
+          {#each signatureRules as rule, index (rule.id)}
+            <section class="rounded-md border border-border p-3 space-y-3">
+              <div class="flex items-center gap-2">
+                <input type="checkbox" bind:checked={rule.enabled} aria-label="Enable signature rule" class="w-4 h-4 accent-primary" />
+                <Input bind:value={rule.name} aria-label="Rule name" class="flex-1" />
+                <Button type="button" variant="ghost" size="sm" onclick={() => signatureRules = signatureRules.filter((_, i) => i !== index)} aria-label="Remove signature rule">
+                  <Icon icon="mdi:delete-outline" class="w-4 h-4" />
+                </Button>
+              </div>
+              <div class="space-y-1">
+                <Label>Recipients or domains</Label>
+                <Input value={rule.recipients.join(', ')} oninput={(event) => updateRuleRecipients(rule, event.currentTarget.value)} placeholder="person@example.org, @example.net" />
+                <p class="text-xs text-muted-foreground">Separate matches with commas. A domain starts with @.</p>
+              </div>
+              <div class="flex flex-wrap gap-x-4 gap-y-2">
+                {#each messageTypes as mode}
+                  <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={rule.messageTypes.includes(mode)} onchange={(event) => toggleRuleMessageType(rule, mode, event.currentTarget.checked)} class="w-4 h-4 accent-primary" />
+                    {mode}
+                  </label>
+                {/each}
+              </div>
+              <div class="space-y-2">
+                <Label>Signature</Label>
+                <SignatureEditor value={rule.signatureHtml} placeholder="Enter this rule's signature..." onchange={(html) => { rule.signatureHtml = html; signatureRules = [...signatureRules] }} />
+                <textarea bind:value={rule.signatureText} aria-label="Plain-text contextual signature" placeholder="Plain-text version (optional)" class="w-full min-h-[60px] p-2 text-sm bg-background border border-input rounded-md resize-y font-mono"></textarea>
+              </div>
+            </section>
+          {/each}
+        </div>
       </div>
 
       <!-- Error message -->
