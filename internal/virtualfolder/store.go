@@ -75,9 +75,9 @@ func (s *Store) Create(vf *VirtualFolder) error {
 
 	// Insert virtual folder
 	_, err = tx.Exec(`
-		INSERT INTO virtual_folders (id, name, order_index, folder_mode, read_status, reply_status, star_status, date_window, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, vf.ID, vf.Name, vf.OrderIndex, vf.FolderMode, vf.ReadStatus, vf.ReplyStatus, vf.StarStatus, vf.DateWindow, vf.CreatedAt, vf.UpdatedAt)
+		INSERT INTO virtual_folders (id, name, order_index, folder_mode, read_status, reply_status, star_status, date_window, search_query, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, vf.ID, vf.Name, vf.OrderIndex, vf.FolderMode, vf.ReadStatus, vf.ReplyStatus, vf.StarStatus, vf.DateWindow, vf.SearchQuery, vf.CreatedAt, vf.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to insert virtual folder: %w", err)
 	}
@@ -105,10 +105,10 @@ func (s *Store) Get(id string) (*VirtualFolder, error) {
 	vf := &VirtualFolder{}
 
 	err := s.db.QueryRow(`
-		SELECT id, name, order_index, folder_mode, read_status, reply_status, star_status, date_window, created_at, updated_at
+		SELECT id, name, order_index, folder_mode, read_status, reply_status, star_status, date_window, search_query, created_at, updated_at
 		FROM virtual_folders
 		WHERE id = ?
-	`, id).Scan(&vf.ID, &vf.Name, &vf.OrderIndex, &vf.FolderMode, &vf.ReadStatus, &vf.ReplyStatus, &vf.StarStatus, &vf.DateWindow, &vf.CreatedAt, &vf.UpdatedAt)
+	`, id).Scan(&vf.ID, &vf.Name, &vf.OrderIndex, &vf.FolderMode, &vf.ReadStatus, &vf.ReplyStatus, &vf.StarStatus, &vf.DateWindow, &vf.SearchQuery, &vf.CreatedAt, &vf.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -153,7 +153,7 @@ func (s *Store) Get(id string) (*VirtualFolder, error) {
 // List returns all virtual folders ordered by order_index
 func (s *Store) List() ([]*VirtualFolder, error) {
 	rows, err := s.db.Query(`
-		SELECT v.id, v.name, v.order_index, v.folder_mode, v.read_status, v.reply_status, v.star_status, v.date_window, v.created_at, v.updated_at, m.folder_id
+		SELECT v.id, v.name, v.order_index, v.folder_mode, v.read_status, v.reply_status, v.star_status, v.date_window, v.search_query, v.created_at, v.updated_at, m.folder_id
 		FROM virtual_folders v
 		LEFT JOIN virtual_folder_members m ON v.id = m.virtual_folder_id
 		ORDER BY v.order_index ASC, v.name ASC
@@ -169,11 +169,11 @@ func (s *Store) List() ([]*VirtualFolder, error) {
 	for rows.Next() {
 		var id, name string
 		var orderIndex int
-		var folderMode, readStatus, replyStatus, starStatus, dateWindow string
+		var folderMode, readStatus, replyStatus, starStatus, dateWindow, searchQuery string
 		var createdAt, updatedAt time.Time
 		var folderID sql.NullString
 
-		if err := rows.Scan(&id, &name, &orderIndex, &folderMode, &readStatus, &replyStatus, &starStatus, &dateWindow, &createdAt, &updatedAt, &folderID); err != nil {
+		if err := rows.Scan(&id, &name, &orderIndex, &folderMode, &readStatus, &replyStatus, &starStatus, &dateWindow, &searchQuery, &createdAt, &updatedAt, &folderID); err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
 
@@ -188,6 +188,7 @@ func (s *Store) List() ([]*VirtualFolder, error) {
 				ReplyStatus: replyStatus,
 				StarStatus:  starStatus,
 				DateWindow:  dateWindow,
+				SearchQuery: searchQuery,
 				CreatedAt:   createdAt,
 				UpdatedAt:   updatedAt,
 				FolderIDs:   []string{},
@@ -378,9 +379,9 @@ func (s *Store) Update(vf *VirtualFolder) error {
 
 	result, err := tx.Exec(`
 		UPDATE virtual_folders
-		SET name = ?, order_index = ?, folder_mode = ?, read_status = ?, reply_status = ?, star_status = ?, date_window = ?, updated_at = ?
+		SET name = ?, order_index = ?, folder_mode = ?, read_status = ?, reply_status = ?, star_status = ?, date_window = ?, search_query = ?, updated_at = ?
 		WHERE id = ?
-	`, vf.Name, vf.OrderIndex, vf.FolderMode, vf.ReadStatus, vf.ReplyStatus, vf.StarStatus, vf.DateWindow, vf.UpdatedAt, vf.ID)
+	`, vf.Name, vf.OrderIndex, vf.FolderMode, vf.ReadStatus, vf.ReplyStatus, vf.StarStatus, vf.DateWindow, vf.SearchQuery, vf.UpdatedAt, vf.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update virtual folder: %w", err)
 	}
@@ -434,6 +435,15 @@ func (s *Store) Delete(id string) error {
 		return fmt.Errorf("failed to delete virtual folder members: %w", err)
 	}
 
+	// FK cascades depend on the foreign_keys pragma, so clear the cached index
+	// and its metadata explicitly.
+	if _, err = tx.Exec(`DELETE FROM virtual_folder_cache WHERE virtual_folder_id = ?`, id); err != nil {
+		return fmt.Errorf("failed to delete virtual folder cache: %w", err)
+	}
+	if _, err = tx.Exec(`DELETE FROM virtual_folder_cache_meta WHERE virtual_folder_id = ?`, id); err != nil {
+		return fmt.Errorf("failed to delete virtual folder cache meta: %w", err)
+	}
+
 	result, err := tx.Exec(`DELETE FROM virtual_folders WHERE id = ?`, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete virtual folder: %w", err)
@@ -451,4 +461,84 @@ func (s *Store) Delete(id string) error {
 	}
 
 	return nil
+}
+
+// CachedConversation is one entry of a virtual folder's cached conversation index.
+type CachedConversation struct {
+	AccountID      string
+	ConversationID string
+}
+
+// SaveCache atomically replaces a virtual folder's cached conversation index
+// and stamps the refresh time.
+func (s *Store) SaveCache(virtualFolderID string, entries []CachedConversation) error {
+	if virtualFolderID == "" {
+		return fmt.Errorf("virtual folder ID cannot be empty")
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }() // no-op after a successful Commit
+
+	if _, err = tx.Exec(`DELETE FROM virtual_folder_cache WHERE virtual_folder_id = ?`, virtualFolderID); err != nil {
+		return fmt.Errorf("failed to clear virtual folder cache: %w", err)
+	}
+	for position, entry := range entries {
+		if _, err = tx.Exec(`
+			INSERT INTO virtual_folder_cache (virtual_folder_id, position, account_id, conversation_id)
+			VALUES (?, ?, ?, ?)
+		`, virtualFolderID, position, entry.AccountID, entry.ConversationID); err != nil {
+			return fmt.Errorf("failed to insert virtual folder cache entry %d: %w", position, err)
+		}
+	}
+	if _, err = tx.Exec(`
+		INSERT INTO virtual_folder_cache_meta (virtual_folder_id, refreshed_at)
+		VALUES (?, ?)
+		ON CONFLICT(virtual_folder_id) DO UPDATE SET refreshed_at = excluded.refreshed_at
+	`, virtualFolderID, time.Now().UTC().Unix()); err != nil {
+		return fmt.Errorf("failed to stamp virtual folder cache meta: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit virtual folder cache: %w", err)
+	}
+	return nil
+}
+
+// LoadCache returns a virtual folder's cached conversation index in display
+// order plus the last refresh time. found is false when nothing was cached yet.
+func (s *Store) LoadCache(virtualFolderID string) ([]CachedConversation, time.Time, bool, error) {
+	if virtualFolderID == "" {
+		return nil, time.Time{}, false, fmt.Errorf("virtual folder ID cannot be empty")
+	}
+	var refreshedAt int64
+	err := s.db.QueryRow(`SELECT refreshed_at FROM virtual_folder_cache_meta WHERE virtual_folder_id = ?`, virtualFolderID).Scan(&refreshedAt)
+	if err == sql.ErrNoRows {
+		return nil, time.Time{}, false, nil
+	}
+	if err != nil {
+		return nil, time.Time{}, false, fmt.Errorf("failed to read virtual folder cache meta: %w", err)
+	}
+	rows, err := s.db.Query(`
+		SELECT account_id, conversation_id
+		FROM virtual_folder_cache
+		WHERE virtual_folder_id = ?
+		ORDER BY position ASC
+	`, virtualFolderID)
+	if err != nil {
+		return nil, time.Time{}, false, fmt.Errorf("failed to read virtual folder cache: %w", err)
+	}
+	defer rows.Close()
+	entries := make([]CachedConversation, 0)
+	for rows.Next() {
+		var entry CachedConversation
+		if err := rows.Scan(&entry.AccountID, &entry.ConversationID); err != nil {
+			return nil, time.Time{}, false, fmt.Errorf("failed to scan virtual folder cache entry: %w", err)
+		}
+		entries = append(entries, entry)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, time.Time{}, false, fmt.Errorf("rows error: %w", err)
+	}
+	return entries, time.Unix(refreshedAt, 0).UTC(), true, nil
 }

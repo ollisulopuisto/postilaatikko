@@ -2,6 +2,7 @@ package virtualfolder
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -30,15 +31,18 @@ const (
 
 // VirtualFolder represents a saved set of folders across accounts.
 type VirtualFolder struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	OrderIndex  int       `json:"orderIndex"`
-	FolderIDs   []string  `json:"folderIds"`
-	FolderMode  string    `json:"folderMode"`
-	ReadStatus  string    `json:"readStatus"`
-	ReplyStatus string    `json:"replyStatus"`
-	StarStatus  string    `json:"starStatus"`
-	DateWindow  string    `json:"dateWindow"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	OrderIndex  int      `json:"orderIndex"`
+	FolderIDs   []string `json:"folderIds"`
+	FolderMode  string   `json:"folderMode"`
+	ReadStatus  string   `json:"readStatus"`
+	ReplyStatus string   `json:"replyStatus"`
+	StarStatus  string   `json:"starStatus"`
+	DateWindow  string   `json:"dateWindow"`
+	// SearchQuery is an optional saved text search. When set, the virtual
+	// folder lists conversations matching the folder/criteria set AND the query.
+	SearchQuery string    `json:"searchQuery"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
 }
@@ -59,6 +63,7 @@ func (vf *VirtualFolder) normalizeCriteria() error {
 	if vf.DateWindow == "" {
 		vf.DateWindow = DateWindowAll
 	}
+	vf.SearchQuery = strings.TrimSpace(vf.SearchQuery)
 	if vf.FolderMode != FolderModeInclude && vf.FolderMode != FolderModeExclude {
 		return fmt.Errorf("invalid virtual folder mode: %s", vf.FolderMode)
 	}

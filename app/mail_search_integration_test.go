@@ -43,6 +43,7 @@ func TestGmailSearchAcrossAccountsAndVirtualFolderFromEmptyCache(t *testing.T) {
 	}
 	var bodyCalls, modifies, metadataCalls atomic.Int32
 	var failB, quotaThreads atomic.Bool
+	var lastListQuery atomic.Value
 	header := func(id string) map[string]any {
 		return map[string]any{"id": id, "threadId": id, "internalDate": fmt.Sprint(time.Now().UnixMilli()), "labelIds": []string{"Label_1", "UNREAD"}, "payload": map[string]any{"headers": []map[string]string{{"name": "Subject", "value": "Remote only"}, {"name": "From", "value": "peer@example.org"}, {"name": "Message-ID", "value": "<" + id + "@example.org>"}}}}
 	}
@@ -62,6 +63,7 @@ func TestGmailSearchAcrossAccountsAndVirtualFolderFromEmptyCache(t *testing.T) {
 		case r.URL.Path == "/messages" && r.Method == http.MethodPost:
 			_, _ = w.Write([]byte(`{"id":"copied"}`))
 		case r.URL.Path == "/messages" || r.URL.Path == "/threads":
+			lastListQuery.Store(r.URL.Query().Get("q"))
 			id, next := "same", ""
 			if r.Header.Get("Authorization") == "Bearer a" && r.URL.Query().Get("pageToken") == "" {
 				next = "next"
@@ -123,6 +125,28 @@ func TestGmailSearchAcrossAccountsAndVirtualFolderFromEmptyCache(t *testing.T) {
 	virtual, err := a.SearchMail(MailSearchRequest{VirtualFolderID: vf.ID})
 	if err != nil || len(virtual.Issues) > 0 || len(virtual.Conversations) != 2 {
 		t.Fatalf("virtual page %+v %v", virtual, err)
+	}
+	// A saved-search virtual folder applies its stored query on the provider.
+	vf.SearchQuery = "invoice"
+	if err = a.virtualFolderStore.Update(vf); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = a.SearchMail(MailSearchRequest{VirtualFolderID: vf.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if q, _ := lastListQuery.Load().(string); !strings.Contains(q, "invoice") {
+		t.Fatalf("stored query not applied to provider search: %q", q)
+	}
+	// A typed in-folder search ANDs onto the stored query.
+	if _, err = a.SearchMail(MailSearchRequest{VirtualFolderID: vf.ID, Query: "report"}); err != nil {
+		t.Fatal(err)
+	}
+	if q, _ := lastListQuery.Load().(string); !strings.Contains(q, "invoice") || !strings.Contains(q, "report") {
+		t.Fatalf("typed query not combined with stored query: %q", q)
+	}
+	vf.SearchQuery = ""
+	if err = a.virtualFolderStore.Update(vf); err != nil {
+		t.Fatal(err)
 	}
 	failB.Store(true)
 	partial, err := a.SearchMail(MailSearchRequest{Query: "is:unread"})

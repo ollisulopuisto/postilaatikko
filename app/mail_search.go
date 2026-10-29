@@ -188,6 +188,13 @@ func (a *App) SearchMail(req MailSearchRequest) (*MailSearchPage, error) {
 				foldersByAccount[f.AccountID] = append(foldersByAccount[f.AccountID], f)
 			}
 		}
+		// A saved-search virtual folder carries its text query: listing the
+		// folder applies it, and a typed in-folder search ANDs onto it. The
+		// cursor state above tracks the raw client query, so paging stays
+		// consistent while the stored query lives only in the folder.
+		if combined := combineVirtualFolderQueries(vf.SearchQuery, req.Query); combined != req.Query {
+			req.Query = combined
+		}
 	}
 	result := &MailSearchPage{Conversations: []*message.Conversation{}, Issues: []MailSearchIssue{}}
 	limit := req.Limit

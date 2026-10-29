@@ -344,3 +344,127 @@ func scanVirtualFolderSearchResults(rows *sql.Rows, query string) ([]*Conversati
 	}
 	return results, nil
 }
+
+// ConversationRef identifies one conversation inside one account.
+type ConversationRef struct {
+	AccountID      string
+	ConversationID string
+}
+
+// ListVirtualFolderConversationIDs returns the ordered conversation refs that
+// currently match the saved view's folders, criteria, and optional text query,
+// newest first, capped at limit. It backs the virtual-folder index cache.
+func (s *Store) ListVirtualFolderConversationIDs(folderIDs []string, query string, limit int, criteria VirtualFolderCriteria) ([]ConversationRef, error) {
+	if len(folderIDs) == 0 {
+		return []ConversationRef{}, nil
+	}
+	cte, args, err := virtualFolderConversationCTE(folderIDs)
+	if err != nil {
+		return nil, err
+	}
+	matchJoin := ""
+	if strings.TrimSpace(query) != "" {
+		matchCTE, matchArgs := virtualFolderMatchesCTE(prepareFTSQuery(query))
+		cte += matchCTE
+		args = append(args, matchArgs...)
+		matchJoin = `
+		INNER JOIN virtual_folder_matches matches
+			ON matches.account_id = c.account_id AND matches.conversation_id = c.conversation_id`
+	}
+	criteriaWhere, criteriaArgs, err := virtualFolderCriteriaWhere(criteria)
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, criteriaArgs...)
+	queryText := cte + `
+		SELECT c.account_id, c.conversation_id
+		FROM virtual_folder_conversations c` + matchJoin + `
+		WHERE 1 = 1` + criteriaWhere + `
+		ORDER BY c.latest_date_epoch DESC
+		LIMIT ?`
+	args = append(args, limit)
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	rows, err := s.db.QueryContext(ctx, queryText, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list virtual-folder conversation ids: %w", err)
+	}
+	defer rows.Close()
+	refs := make([]ConversationRef, 0)
+	for rows.Next() {
+		var ref ConversationRef
+		if err := rows.Scan(&ref.AccountID, &ref.ConversationID); err != nil {
+			return nil, fmt.Errorf("failed to scan virtual-folder conversation id: %w", err)
+		}
+		refs = append(refs, ref)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+	return refs, nil
+}
+
+// ListConversationsByRefs hydrates conversation rows for the given refs,
+// preserving the input order. Refs whose messages no longer match (deleted or
+// moved out of every folder) are skipped. State such as unread counts is read
+// live, so a cached index only affects membership and order, never freshness
+// of the rows themselves.
+func (s *Store) ListConversationsByRefs(refs []ConversationRef) ([]*Conversation, error) {
+	if len(refs) == 0 {
+		return []*Conversation{}, nil
+	}
+	conditions := make([]string, 0, len(refs))
+	args := make([]any, 0, len(refs)*2)
+	for _, ref := range refs {
+		conditions = append(conditions, "(m.account_id = ? AND COALESCE(m.thread_id, m.id) = ?)")
+		args = append(args, ref.AccountID, ref.ConversationID)
+	}
+	queryText := fmt.Sprintf(`
+		SELECT COALESCE(m.thread_id, m.id) AS conversation_id,
+			COALESCE(MIN(m.subject), '') AS subject,
+			MAX(m.snippet) AS snippet,
+			MIN(m.from_name) AS from_name,
+			COUNT(*) AS message_count,
+			SUM(CASE WHEN m.is_read = 0 THEN 1 ELSE 0 END) AS unread_count,
+			MAX(CASE WHEN m.has_attachments = 1 THEN 1 ELSE 0 END) AS has_attachments,
+			MAX(CASE WHEN m.is_starred = 1 THEN 1 ELSE 0 END) AS is_starred,
+			MAX(%s) AS latest_date_epoch,
+			GROUP_CONCAT(m.id) AS message_ids,
+			MAX(CASE WHEN m.smime_encrypted = 1 OR m.pgp_encrypted = 1 THEN 1 ELSE 0 END) AS is_encrypted,
+			MAX(m.inbox_category) AS inbox_category,
+			m.account_id,
+			MIN(a.name) AS account_name,
+			MIN(a.color) AS account_color,
+			MIN(m.folder_id) AS folder_id,
+			MIN(f.name) AS folder_name,
+			MIN(f.folder_type) AS folder_type,
+			json_group_array(DISTINCT json_object('name', m.from_name, 'email', m.from_email)) AS participants_json
+		FROM messages m
+		INNER JOIN folders f ON f.id = m.folder_id
+		INNER JOIN accounts a ON a.id = m.account_id AND a.enabled = 1
+		WHERE %s
+		GROUP BY m.account_id, conversation_id
+	`, database.UnixEpochSQL("m.date"), strings.Join(conditions, " OR "))
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	rows, err := s.db.QueryContext(ctx, queryText, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hydrate cached conversations: %w", err)
+	}
+	defer rows.Close()
+	results, err := scanVirtualFolderSearchResults(rows, "")
+	if err != nil {
+		return nil, err
+	}
+	byRef := make(map[string]*ConversationSearchResult, len(results))
+	for _, result := range results {
+		byRef[result.AccountID+"\x00"+result.ThreadID] = result
+	}
+	conversations := make([]*Conversation, 0, len(refs))
+	for _, ref := range refs {
+		if result, ok := byRef[ref.AccountID+"\x00"+ref.ConversationID]; ok {
+			conversations = append(conversations, &result.Conversation)
+		}
+	}
+	return conversations, nil
+}
