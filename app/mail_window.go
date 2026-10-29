@@ -21,6 +21,7 @@ const mailWindowEventType = "mail_window_event"
 var mailWindowEvents = []string{
 	"folder:synced", "folder:syncError", "folders:countsChanged", "messages:updated",
 	"messages:readChanged", "messages:starredChanged", "messages:moved", "messages:deleted",
+	"replyLater:changed",
 	"sync:progress", "fts:progress", "fts:complete", "fts:indexing", "contacts:changed",
 	"sent:synced", "network:online", "network:offline",
 	"virtualfolder:cacheUpdated",
