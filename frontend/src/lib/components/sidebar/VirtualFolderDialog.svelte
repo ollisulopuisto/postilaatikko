@@ -57,6 +57,7 @@
   // The checklist shows only folders matching the search. Selection is kept
   // for folders that are filtered out.
   const visibleFolders = $derived(filterFolders(selectableFolders, folderQuery))
+  const visibleSelectedCount = $derived(visibleFolders.filter((item) => selectedIDs.includes(item.id)).length)
 
   // Reset the editable state once per dialog open. The reads of editable
   // state (selectedIDs) must stay untracked: writing a fresh array while the
@@ -83,6 +84,13 @@
 
   function toggleFolder(id: string) {
     selectedIDs = selectedIDs.includes(id) ? selectedIDs.filter((item) => item !== id) : [...selectedIDs, id]
+  }
+
+  function setVisibleSelection(selected: boolean) {
+    const visibleIDs = new Set(visibleFolders.map((item) => item.id))
+    selectedIDs = selected
+      ? [...new Set([...selectedIDs, ...visibleIDs])]
+      : selectedIDs.filter((id) => !visibleIDs.has(id))
   }
 
   async function submit() {
@@ -187,6 +195,25 @@
       disabled={selectableFolders.length === 0}
       class="h-9 rounded-md border border-input bg-background px-3 text-sm"
     />
+    <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+      <span class="text-muted-foreground">
+        {$_('sidebar.virtualFolderVisibleSelection', { values: { selected: visibleSelectedCount, total: visibleFolders.length } })}
+      </span>
+      <div class="flex gap-1">
+        <button
+          type="button"
+          class="rounded px-2 py-1 text-primary hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={visibleFolders.length === 0 || visibleSelectedCount === visibleFolders.length}
+          onclick={() => setVisibleSelection(true)}
+        >{$_('sidebar.virtualFolderSelectVisible')}</button>
+        <button
+          type="button"
+          class="rounded px-2 py-1 text-primary hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={visibleSelectedCount === 0}
+          onclick={() => setVisibleSelection(false)}
+        >{$_('sidebar.virtualFolderClearVisible')}</button>
+      </div>
+    </div>
     <div class="max-h-72 overflow-y-auto rounded-md border border-border p-2">
       {#if selectableFolders.length === 0}
         <p class="p-3 text-sm text-muted-foreground">{$_('sidebar.virtualFolderNoFolders')}</p>

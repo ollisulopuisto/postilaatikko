@@ -11,11 +11,20 @@
     sent: 'mdi:send-outline', trash: 'mdi:delete-outline', archive: 'mdi:archive-outline',
     spam: 'mdi:alert-octagon-outline', snoozed: 'mdi:clock-outline', all: 'mdi:email-multiple-outline',
   }
-  function quickIcon(entry: { kind: string; folderType?: string }): string {
+  function quickIcon(entry: { kind: string; folderType?: string }): string | null {
     if (entry.kind === 'inboxes') return 'mdi:inbox-multiple-outline'
-    if (entry.kind === 'virtual') return 'mdi:folder-multiple-outline'
     if (entry.kind === 'system') return systemIcons[entry.folderType || ''] || 'mdi:folder-outline'
-    return 'mdi:folder-outline'
+    return null
+  }
+  function favoriteInitial(name: string): string {
+    const words = name.trim().split(/\s+/).filter(Boolean)
+    const letters = words.length > 1 ? words.slice(0, 2).map(word => Array.from(word)[0]) : Array.from(words[0] || '')
+    return letters.join('').toLocaleUpperCase().slice(0, 2)
+  }
+  function favoriteColor(id: string): string {
+    let hash = 0
+    for (const character of id) hash = (hash * 31 + character.charCodeAt(0)) | 0
+    return `hsl(${Math.abs(hash) % 360} 54% 40%)`
   }
   function keydown(event: KeyboardEvent) {
     if (event.defaultPrevented || document.querySelector('[role="dialog"], [role="alertdialog"]')) return
@@ -29,7 +38,14 @@
 <nav class="flex flex-col items-stretch w-12 flex-shrink-0 bg-muted/30 border-r border-border pt-2" aria-label={$_('navigation.quickAccess')}>
   <RailButton icon="mdi:email" label="Mail" active={getActiveExtension() === 'mail'} onclick={() => setActiveExtension('mail')} />
   {#each nav.quick as entry, index (entry.id)}
-    <RailButton icon={quickIcon(entry)} label={`${entry.name} (${mac ? '⌘' : 'Ctrl+'}${(index + 1) % 10})`} active={false} onclick={() => nav.navigate(entry)} />
+    <RailButton
+      icon={quickIcon(entry)}
+      initial={entry.kind === 'folder' || entry.kind === 'virtual' ? favoriteInitial(entry.name) : undefined}
+      color={entry.kind === 'folder' || entry.kind === 'virtual' ? favoriteColor(entry.id) : undefined}
+      label={`${entry.name} (${mac ? '⌘' : 'Ctrl+'}${(index + 1) % 10})`}
+      active={false}
+      onclick={() => nav.navigate(entry)}
+    />
   {/each}
   {#if nav.state.showApps}
     {#each getRailTabs() as tab (tab.extensionId)}
