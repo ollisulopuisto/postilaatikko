@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte'
   import Icon from '@iconify/svelte'
   import * as Dialog from '$lib/components/ui/dialog'
   import { Button } from '$lib/components/ui/button'
@@ -57,21 +58,27 @@
   // for folders that are filtered out.
   const visibleFolders = $derived(filterFolders(selectableFolders, folderQuery))
 
+  // Reset the editable state once per dialog open. The reads of editable
+  // state (selectedIDs) must stay untracked: writing a fresh array while the
+  // effect depends on it loops forever (effect_update_depth_exceeded in dev,
+  // a hang in production).
   $effect(() => {
     if (!open) return
-    name = virtualFolder?.name || ''
-    selectedIDs = [...(virtualFolder?.folderIds || [])]
-    if (!virtualFolder && initialFolderId && !selectedIDs.includes(initialFolderId)) {
-      selectedIDs = [...selectedIDs, initialFolderId]
-    }
-    folderMode = virtualFolder?.folderMode || 'include'
-    readStatus = virtualFolder?.readStatus || 'all'
-    replyStatus = virtualFolder?.replyStatus || 'all'
-    starStatus = virtualFolder?.starStatus || 'all'
-    dateWindow = virtualFolder?.dateWindow || 'all'
-    searchQuery = virtualFolder?.searchQuery || initialSearchQuery || ''
-    folderQuery = ''
-    error = ''
+    untrack(() => {
+      name = virtualFolder?.name || ''
+      selectedIDs = [...(virtualFolder?.folderIds || [])]
+      if (!virtualFolder && initialFolderId && !selectedIDs.includes(initialFolderId)) {
+        selectedIDs = [...selectedIDs, initialFolderId]
+      }
+      folderMode = virtualFolder?.folderMode || 'include'
+      readStatus = virtualFolder?.readStatus || 'all'
+      replyStatus = virtualFolder?.replyStatus || 'all'
+      starStatus = virtualFolder?.starStatus || 'all'
+      dateWindow = virtualFolder?.dateWindow || 'all'
+      searchQuery = virtualFolder?.searchQuery || initialSearchQuery || ''
+      folderQuery = ''
+      error = ''
+    })
   })
 
   function toggleFolder(id: string) {
