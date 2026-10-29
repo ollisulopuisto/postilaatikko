@@ -2,7 +2,14 @@
 
 ## [Unreleased]
 
-- Complete bulk message actions: select multiple conversations and apply read/unread, star, archive, move, spam or delete across every message they contain. The selection bar adapts to Spam and Trash folders, and More opens the command palette without dropping the selection.
+## Postilaatikko 2026.10.29
+
+- Open independent mail workspaces in tabs, keep folder/search/thread state while switching, and detach a tab into its own native window.
+- Prefetch bodies for Inbox, Starred and pinned folders by default, with per-folder overrides; other folders remain header-only unless enabled.
+- Clear stale message rows on folder changes while caching a small bounded list per recently visited folder.
+- Wrap long sidebar labels across two lines and expose their full names.
+- Select multiple conversations and apply read/unread, star, archive, move, spam or delete across their messages. The action bar adapts to Spam and Trash.
+
 ## Postilaatikko v0.3.21
 
 - Add opt-in, read-only macOS Contacts browsing and recipient autocomplete; open a selected person in Contacts.app to edit.

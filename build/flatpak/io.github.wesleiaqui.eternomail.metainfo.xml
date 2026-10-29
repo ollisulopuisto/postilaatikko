@@ -309,6 +309,14 @@
   </provides>
 
   <releases>
+    <release version="2026.10.29" date="2026-10-29">
+      <description><ul>
+        <li>Open independent mail workspaces in tabs and detach a tab into its own window.</li>
+        <li>Prefetch message bodies only for sidebar folders by default, with per-folder controls.</li>
+        <li>Keep folder lists from showing stale rows and make long sidebar labels readable.</li>
+        <li>Apply actions to multiple selected conversations.</li>
+      </ul></description>
+    </release>
     <release version="0.3.21" date="2026-10-28">
       <description><p>Add branching composer history, per-keystroke autosave and an undo-send countdown; fix detached-window history, attachment membership and history cleanup.</p></description>
     </release>
