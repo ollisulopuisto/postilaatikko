@@ -80,7 +80,7 @@ func validateMailWindowFolder(accountID string, f *folder.Folder) error {
 
 // OpenMailWindow opens an independent mail list using the existing parent services.
 // Empty scope opens All Inboxes. It never starts another sync engine or database.
-func (a *App) OpenMailWindow(accountID, folderID, folderName, folderType, threadID, threadAccountID, threadFolderID string) error {
+func (a *App) OpenMailWindow(accountID, folderID, folderName, folderType, threadID, threadAccountID, threadFolderID, searchQuery string) error {
 	if a.ipcServer == nil || a.ipcTokenMgr == nil {
 		return errors.New("multi-window service unavailable")
 	}
@@ -124,7 +124,7 @@ func (a *App) OpenMailWindow(accountID, folderID, folderName, folderType, thread
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command(executable, "--mail-window", "--account", accountID, "--reader-folder", folderID, "--reader-folder-name", folderName, "--reader-thread", threadID, "--reader-thread-account", threadAccountID, "--reader-thread-folder", threadFolderID, "--reader-folder-type", folderType, "--ipc-address", a.ipcServer.Address())
+	cmd := exec.Command(executable, "--mail-window", "--account", accountID, "--reader-folder", folderID, "--reader-folder-name", folderName, "--reader-thread", threadID, "--reader-thread-account", threadAccountID, "--reader-thread-folder", threadFolderID, "--reader-search", searchQuery, "--reader-folder-type", folderType, "--ipc-address", a.ipcServer.Address())
 	var cacheDir string
 	if a.paths != nil {
 		cacheDir = a.paths.Cache

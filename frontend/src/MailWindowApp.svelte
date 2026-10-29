@@ -66,13 +66,13 @@
     const scope = scopes.find(scope => scopeKey(scope) === value)
     if (!scope) return
     windowState = navigateMailWindow(windowState, scope)
-    onScopeChange?.({ ...scope, ...(windowState.thread ? { threadId: windowState.thread.threadId, threadAccountId: windowState.thread.accountId, threadFolderId: windowState.thread.folderId } : {}) })
+    onScopeChange?.({ ...scope, searchQuery: list?.getSearchQuery() || '', ...(windowState.thread ? { threadId: windowState.thread.threadId, threadAccountId: windowState.thread.accountId, threadFolderId: windowState.thread.folderId } : {}) })
     readerOnly = false
     setFocusedPane('messageList')
   }
   function select(threadId: string, folderId: string, accountId: string) {
     windowState = selectMailWindowConversation(windowState, threadId, folderId, accountId)
-    onScopeChange?.({ ...windowState.scope, threadId, threadAccountId: accountId, threadFolderId: folderId })
+    onScopeChange?.({ ...windowState.scope, threadId, threadAccountId: accountId, threadFolderId: folderId, searchQuery: list?.getSearchQuery() || '' })
   }
   async function run(action: () => Promise<unknown>) {
     try { await action() }
@@ -80,7 +80,7 @@
   }
   async function newWindow() {
     const { accountId, folderId, folderName, folderType } = windowState.scope
-    await run(() => OpenMailWindow(accountId, folderId, folderName, folderType, windowState.thread?.threadId || '', windowState.thread?.accountId || '', windowState.thread?.folderId || ''))
+    await run(() => OpenMailWindow(accountId, folderId, folderName, folderType, windowState.thread?.threadId || '', windowState.thread?.accountId || '', windowState.thread?.folderId || '', list?.getSearchQuery() || ''))
   }
   async function compose() {
     const accountId = accountStore.accounts.some(item => item.account.id === windowState.scope.accountId)
@@ -114,7 +114,7 @@
       list?.handleActionComplete(true)
     }))
   }
-  function closeReader() { readerOnly = false; windowState = { ...windowState, thread: null }; onScopeChange?.({ ...windowState.scope, threadId: undefined, threadAccountId: undefined, threadFolderId: undefined }); setFocusedPane('messageList') }
+  function closeReader() { readerOnly = false; windowState = { ...windowState, thread: null }; onScopeChange?.({ ...windowState.scope, threadId: undefined, threadAccountId: undefined, threadFolderId: undefined, searchQuery: list?.getSearchQuery() || '' }); setFocusedPane('messageList') }
   function keydown(event: KeyboardEvent) {
     if (!active || isInputElement(event.target) || isDialogGuardActive() || event.defaultPrevented) return
     if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 'n') { event.preventDefault(); if (embedded) onNewTab?.(); else void newWindow(); return }
@@ -138,6 +138,7 @@
   onMount(() => {
     setFocusedPane('messageList')
     void loadNavigation()
+    if (config.searchQuery) requestAnimationFrame(() => list?.setSearchQuery(config.searchQuery || ''))
   })
   $effect(() => { if (!embedded) WindowSetTitle(`${label(windowState.scope)} — Postilaatikko`) })
   $effect(() => {
@@ -167,6 +168,7 @@
     <section class="mail-list min-h-0 overflow-hidden border-r border-border" role="presentation" onclick={() => setFocusedPane('messageList')}>
       <MessageList bind:this={list} accountId={windowState.scope.accountId} folderId={windowState.scope.folderId} folderName={label(windowState.scope)} folderType={windowState.scope.folderType}
         isFocused={getFocusedPane() === 'messageList'} onConversationSelect={select} onReply={reply}
+        onSearchQueryChange={searchQuery => onScopeChange?.({ ...windowState.scope, searchQuery })}
         onRowActionComplete={auto => { if (auto) windowState = { ...windowState, thread: null } }}
         onBulkMarkRead={ids => void run(() => MarkAsRead(ids))} onBulkArchive={archive} />
     </section>

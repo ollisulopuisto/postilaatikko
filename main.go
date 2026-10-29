@@ -52,6 +52,7 @@ var (
 	readerThread        = flag.String("reader-thread", "", "Reader thread ID")
 	readerThreadAccount = flag.String("reader-thread-account", "", "Mail window selected thread account ID")
 	readerThreadFolder  = flag.String("reader-thread-folder", "", "Mail window selected thread folder ID")
+	readerSearch        = flag.String("reader-search", "", "Mail window search query")
 	readerFolderType    = flag.String("reader-folder-type", "", "Reader folder type")
 	composeMode         = flag.Bool("compose", false, "Run in composer mode (detached window)")
 	accountID           = flag.String("account", "", "Account ID for composer")
@@ -335,7 +336,7 @@ func runReaderMode() {
 		println("Error: reader requires account, folder, thread and IPC address")
 		os.Exit(1)
 	}
-	reader := app.NewReaderApp(app.ReaderConfig{MailWindow: *mailWindowMode, FolderName: *readerFolderName, AccountID: *accountID, FolderID: *readerFolder, ThreadID: *readerThread, ThreadAccountID: *readerThreadAccount, ThreadFolderID: *readerThreadFolder, FolderType: *readerFolderType, IPCAddress: *ipcAddress})
+	reader := app.NewReaderApp(app.ReaderConfig{MailWindow: *mailWindowMode, FolderName: *readerFolderName, AccountID: *accountID, FolderID: *readerFolder, ThreadID: *readerThread, ThreadAccountID: *readerThreadAccount, ThreadFolderID: *readerThreadFolder, SearchQuery: *readerSearch, FolderType: *readerFolderType, IPCAddress: *ipcAddress})
 	entry := "/reader.html"
 	width := 900
 	if *mailWindowMode {
