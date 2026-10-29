@@ -722,11 +722,11 @@ Each section is one reviewable task, not an instruction to implement the whole p
 
 ### UX-041: Folder content-policy controls and status
 
-**Effort:** Easy. **Suggested agent:** Luna High. **Dependencies:** UX-011, UX-040.
+**Effort:** Easy. **Suggested agent:** Luna High. **Dependencies:** UX-040. Existing folder context menus provide the account-scoped control surface; the drawer is not required.
 
-**Files:** `frontend/src/lib/components/sidebar/FolderContextMenu.svelte`; `frontend/src/lib/components/sidebar/FolderTreeItem.svelte`; `frontend/src/lib/components/settings/SettingsDialog.svelte`; `frontend/src/lib/i18n/locales/en.json`; `frontend/src/lib/i18n/locales/fi.json`.
+**Files:** `frontend/src/lib/components/sidebar/FolderContextMenu.svelte`; `frontend/src/lib/i18n/locales/en.json`; `frontend/src/lib/i18n/locales/fi.json`; generated Wails bindings for the UX-040 policy methods.
 
-**Deliverable / acceptance:** Add an understandable Automatically download message content toggle for real folders, with account scope and current state visible. Explain that attachments stay on demand and old history is not automatically backfilled. Reuse UX-040 operations, preserve explicit overrides across restart and keep controls available when the drawer is transient. Do not add attachment prefetch or a second sync service.
+**Deliverable / acceptance:** Add an understandable Automatically download message content toggle for real folders, with account scope and current effective state visible in the folder context menu. Explain that attachments stay on demand and old history is not automatically backfilled. Reuse UX-040 operations, preserve explicit overrides across restart, and provide a way to restore the inherited default. Do not add attachment prefetch or a second sync service.
 
 **Verification:** frontend type check/build; en/fi key parity; policy-toggle state test and actual account/folder/restart walkthrough.
 
