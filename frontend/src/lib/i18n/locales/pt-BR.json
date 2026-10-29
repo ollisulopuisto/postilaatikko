@@ -262,5 +262,25 @@
     "action": {
       "redo": "Redo"
     }
+  },
+  "macOSContacts": {
+    "title": "macOS Contacts",
+    "description": "Read contact names and email addresses for browsing and recipient suggestions. Make changes in Contacts.app. Manage access in macOS Privacy & Security → Contacts.",
+    "allow": "Allow Contacts access",
+    "permissionHelp": "Allow Postilaatikko in System Settings → Privacy & Security → Contacts, then check access again. Restrictions may be managed by your administrator.",
+    "search": "Search by name or email",
+    "browse": "Browse / refresh",
+    "checkAccess": "Check access",
+    "empty": "No matching contacts.",
+    "unnamed": "Unnamed contact",
+    "open": "Open in Contacts",
+    "truncated": "Showing a limited set of contacts. Narrow the search to find more.",
+    "status": {
+      "not-determined": "Permission has not been requested.",
+      "authorized": "Access allowed. Recipient suggestions include macOS Contacts.",
+      "limited": "Limited access. Only shared contacts are available.",
+      "denied": "Contacts access denied.",
+      "restricted": "Contacts access restricted."
+    }
   }
 }

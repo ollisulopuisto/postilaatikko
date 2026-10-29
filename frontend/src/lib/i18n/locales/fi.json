@@ -1432,5 +1432,25 @@
     "cancel": "Peruuta",
     "cancelled": "Lähetys peruttu - luonnos palautettu",
     "alreadySending": "Liian myöhäistä - lähetys on jo käynnissä"
+  },
+  "macOSContacts": {
+    "title": "macOS-yhteystiedot",
+    "description": "Lue nimiä ja sähköpostiosoitteita selaamista ja vastaanottajaehdotuksia varten. Tee muutokset Yhteystiedot-apissa. Hallitse käyttöoikeutta kohdassa Järjestelmäasetukset → Tietosuoja ja suojaus → Yhteystiedot.",
+    "allow": "Salli yhteystietojen käyttö",
+    "permissionHelp": "Salli Postilaatikko kohdassa Järjestelmäasetukset → Tietosuoja ja suojaus → Yhteystiedot ja tarkista käyttöoikeus uudelleen. Rajoitukset voivat olla ylläpitäjän asettamia.",
+    "search": "Hae nimellä tai sähköpostiosoitteella",
+    "browse": "Selaa / päivitä",
+    "checkAccess": "Tarkista käyttöoikeus",
+    "empty": "Yhteystietoja ei löytynyt.",
+    "unnamed": "Nimetön yhteystieto",
+    "open": "Avaa Yhteystiedoissa",
+    "truncated": "Näytetään rajattu joukko yhteystietoja. Löydät lisää tarkentamalla hakua.",
+    "status": {
+      "not-determined": "Käyttöoikeutta ei ole pyydetty.",
+      "authorized": "Käyttö sallittu. Vastaanottajaehdotukset sisältävät macOS-yhteystiedot.",
+      "limited": "Rajoitettu käyttöoikeus. Vain jaetut yhteystiedot ovat käytettävissä.",
+      "denied": "Yhteystietojen käyttö estetty.",
+      "restricted": "Yhteystietojen käyttöä on rajoitettu."
+    }
   }
 }

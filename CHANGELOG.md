@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Browse macOS Contacts in Settings → Contacts and include authorized addresses in main-window and detached-composer recipient suggestions. Request access only from an explicit action; open a person in Contacts.app for edits. Postilaatikko never writes native contacts. Settings explains denied access and reports lookup/open failures.
+
 - Show fully enumerated Gmail virtual-folder conversation/unread counts with progress and incomplete/error states, including saved-search queries. Reply/date counts reuse header metadata for flags to avoid redundant account scans. Continue non-Gmail searches through older UID pages and additional folders with retryable failures; complete non-Gmail conversation counts remain follow-up.
 - Add a New mail window action for parallel mail views, each with its own folder, search, selection, reader mode and list width. Replies reuse the detached composer; all windows share the existing mail services.
 - Reduce repeated pull-request CI installs/builds, select affected language checks conservatively, run frontend regression tests, and cancel superseded checks. Keep existing required status names and an explicit artifact-only macOS hotfix build with architecture selection.

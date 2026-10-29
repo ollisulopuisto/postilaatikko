@@ -11,12 +11,14 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/mail"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/hkdb/aerion/internal/logging"
+	"github.com/hkdb/aerion/internal/macoscontacts"
 	"github.com/rs/zerolog"
 )
 
@@ -28,10 +30,16 @@ var ErrContactExists = errors.New("contact already exists")
 // Store handles contact storage and retrieval against the unified
 // contact-record schema. The filesystem-based VCardScanner is held as an
 // optional secondary autocomplete source (unchanged by migration 31).
+type nativeContactReader interface {
+	Status() string
+	Search(string, int) (macoscontacts.Result, error)
+}
+
 type Store struct {
-	db           *sql.DB
-	vcardScanner *VCardScanner
-	log          zerolog.Logger
+	db             *sql.DB
+	vcardScanner   *VCardScanner
+	nativeContacts nativeContactReader
+	log            zerolog.Logger
 }
 
 // NewStore creates a new contact store.
@@ -46,6 +54,39 @@ func NewStore(db *sql.DB) *Store {
 // autocomplete source. Existing behavior preserved across migration 31.
 func (s *Store) SetVCardScanner(scanner *VCardScanner) {
 	s.vcardScanner = scanner
+}
+
+// SetMacOSContactsSource adds authorized, read-only native contacts to autocomplete.
+// Register before exposing the store to concurrent requests. No permission prompt occurs.
+func (s *Store) SetMacOSContactsSource(source *macoscontacts.Source) {
+	s.nativeContacts = source
+}
+
+func (s *Store) searchMacOSContacts(query string, limit int) []*Contact {
+	if s.nativeContacts == nil || len(strings.TrimSpace(query)) < 2 {
+		return nil
+	}
+	status := s.nativeContacts.Status()
+	if status != "authorized" && status != "limited" {
+		return nil
+	}
+	result, err := s.nativeContacts.Search(query, limit)
+	if err != nil {
+		s.log.Debug().Err(err).Msg("Native Contacts lookup unavailable")
+		return nil
+	}
+	contacts := make([]*Contact, 0)
+	for _, person := range result.People {
+		for _, raw := range person.Emails {
+			email := strings.TrimSpace(raw)
+			address, err := mail.ParseAddress(email)
+			if err != nil || address.Address != email {
+				continue
+			}
+			contacts = append(contacts, &Contact{Email: email, DisplayName: person.Name, Source: "macos"})
+		}
+	}
+	return contacts
 }
 
 // Search returns contacts matching the query for autocomplete. The unified
@@ -78,7 +119,7 @@ func (s *Store) Search(query string, limit int) ([]*Contact, error) {
 		}
 	}
 
-	merged := MergeResults(unified, vcardContacts)
+	merged := MergeResults(unified, vcardContacts, s.searchMacOSContacts(query, limit))
 	if len(merged) > limit {
 		merged = merged[:limit]
 	}
