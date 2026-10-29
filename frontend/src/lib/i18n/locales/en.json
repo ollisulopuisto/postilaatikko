@@ -1,4 +1,15 @@
 {
+  "mailWindow": {
+    "allMail": "All Mail",
+    "spam": "Spam",
+    "newWindow": "New mail window",
+    "folder": "Mail folder",
+    "compose": "New message",
+    "listWidth": "List width",
+    "focus": "Focus thread",
+    "selectMessage": "Select a conversation",
+    "messageUnavailable": "Message is unavailable"
+  },
   "spellcheck": {
     "title": "Spellcheck",
     "enable": "Check spelling",

@@ -177,7 +177,7 @@ Suggested model/effort is a dispatch recommendation, not an existing claim or mo
 | ID | Effort | Task | Dependencies / acceptance criteria |
 | --- | --- | --- | --- |
 | P-009 | Medium | Integrate macOS Contacts as a read-only source for browsing and recipient lookup/autocomplete. | Request Contacts permission when needed. Provide an action to open the selected person in Contacts for edits; do not write contact changes from Postilaatikko. |
-| P-013 | Large | Support multiple independent mail windows. | Preserve per-window navigation and selection state; detached compose already exists. |
+| P-013 | Large | Support multiple independent mail windows. Preserve per-window navigation and selection state; detached compose already exists. | Codex (Sol 6.1) / `codex/P-013-independent-mail-windows` / `/private/tmp/postilaatikko-p013` | In progress; authenticated child mail views, own navigation/selection/layout; base `4a234ef`. |
 | P-015 | Medium | Select signatures using sender, recipient, and message type. | Reuse configured sender identities and signatures; keep a manual override in the composer. |
 | P-016 | Medium | Add optional per-sender and rule-based notification controls. | Keep configurable and lower priority than core mail workflows. |
 | P-020 | Medium | Add full email templates to the composer. | Save and insert reusable subject/body templates; preserve recipient, sender identity, and unsaved draft fields when inserting. Keep separate from short quick replies in P-018. |

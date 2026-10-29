@@ -21,6 +21,8 @@ const readerCallType = "reader_call"
 
 // ReaderConfig fixes the selected thread independently of the main window.
 type ReaderConfig struct {
+	MailWindow bool   `json:"mailWindow"`
+	FolderName string `json:"folderName"`
 	AccountID  string `json:"accountId"`
 	FolderID   string `json:"folderId"`
 	ThreadID   string `json:"threadId"`
@@ -57,8 +59,14 @@ func StartReader(r *ReaderApp, ctx context.Context) {
 	}
 	r.client = ipc.NewClient(r.config.IPCAddress)
 	r.client.OnMessage(func(msg ipc.Message) {
-		if msg.Type == ipc.TypeShutdown {
+		switch msg.Type {
+		case ipc.TypeShutdown:
 			wailsRuntime.Quit(ctx)
+		case mailWindowEventType:
+			event, err := mailWindowEventFromMessage(msg)
+			if err == nil {
+				wailsRuntime.EventsEmit(ctx, event.Name, event.Data...)
+			}
 		}
 	})
 	connectCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -91,7 +99,11 @@ func (r *ReaderApp) Call(operation string, args json.RawMessage) (any, error) {
 	if r.client == nil {
 		return nil, errors.New("reader is not connected")
 	}
-	request, err := ipc.NewMessage(readerCallType, struct {
+	callType := readerCallType
+	if r.config.MailWindow {
+		callType = mailWindowCallType
+	}
+	request, err := ipc.NewMessage(callType, struct {
 		Operation string          `json:"operation"`
 		Args      json.RawMessage `json:"args"`
 	}{operation, args})
@@ -197,11 +209,15 @@ func (a *App) handleReaderCall(clientID string, msg ipc.Message) {
 	var result any
 	err := msg.ParsePayload(&request)
 	if err == nil {
-		result, err = readerbridge.Dispatch(a.readerMethods(), request.Operation, request.Args)
+		methods := a.readerMethods()
+		if msg.Type == mailWindowCallType {
+			methods = a.mailWindowMethods()
+		}
+		result, err = readerbridge.Dispatch(methods, request.Operation, request.Args)
 	}
-	reply, marshalErr := ipc.NewReply(msg, readerCallType, result)
+	reply, marshalErr := ipc.NewReply(msg, msg.Type, result)
 	if marshalErr != nil {
-		reply, _ = ipc.NewReply(msg, readerCallType, nil)
+		reply, _ = ipc.NewReply(msg, msg.Type, nil)
 		err = marshalErr
 	}
 	// Stay within the existing IPC frame limit; report oversize data explicitly.
