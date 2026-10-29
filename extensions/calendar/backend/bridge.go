@@ -627,6 +627,18 @@ func (b *CalendarBridge) Calendar_DismissAlarm(alarmID string) error {
 	return b.api.store.MarkAlarmDismissed(alarmID)
 }
 
+// Calendar_DetectDateTimes recognizes absolute date/time mentions in the
+// supplied message text and returns conservative "Add to Calendar"
+// candidates in document order. Parsing requires an explicit four-digit
+// year, honors fixed zone designators only, and never interprets relative
+// dates. Returns no mentions (not an error) when the extension is disabled.
+func (b *CalendarBridge) Calendar_DetectDateTimes(text string) ([]DateTimeMention, error) {
+	if b == nil || !b.gateEnabled() {
+		return nil, nil
+	}
+	return DetectDateTimes(text), nil
+}
+
 // Calendar_OpenURL opens the given URL in the user's system browser via
 // coreapi.UI.OpenURL → the host's hardened resolver (protocol allowlist,
 // Linux portal-first, xdg-open fallback). Used by EventDetail to make

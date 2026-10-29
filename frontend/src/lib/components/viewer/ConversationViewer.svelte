@@ -21,6 +21,10 @@
   import { getReaderMode, setReaderMode } from '$lib/stores/uiState.svelte'
   import Avatar from '$lib/components/kit/Avatar.svelte'
   import { toasts } from '$lib/stores/toast'
+  // @ts-ignore - wailsjs bindings
+  import { Calendar_DetectDateTimes, Calendar_CreateICSFromDetails } from '../../../../wailsjs/go/app/App'
+  // @ts-ignore - wailsjs path
+  import { backend as backendModels } from '../../../../wailsjs/go/models'
   import { setFocusedPane, isInputElement, isComposerOpen } from '$lib/stores/keyboard.svelte'
   import { ConfirmDialog } from '$lib/components/ui/confirm-dialog'
   import MessageContextMenu from '$lib/components/common/MessageContextMenu.svelte'
@@ -132,6 +136,11 @@
 
   // Track which messages are expanded (unread messages auto-expand)
   let expandedMessages = $state<Set<string>>(new Set())
+
+  // Date/time mentions recognized for the "Add to Calendar" handoff, deduped
+  // across the conversation's messages and rendered as chips under the subject.
+  type CalendarChip = backendModels.DateTimeMention & { formatted: string }
+  let calendarMentions = $state<CalendarChip[]>([])
 
   // Per-message override for the dark-mail-content filter. Runtime-only,
   // resets when the conversation changes. Truthy value = user explicitly
@@ -1343,6 +1352,73 @@
     return `<section class="msg">${header}<div class="body">${bodyHtml}</div></section>`
   }
 
+  // --- Add to Calendar handoff (P-022) -----------------------------------------
+
+  // Race token: only the latest detection run may publish mentions.
+  let calendarMentionsToken = 0
+
+  async function refreshCalendarMentions() {
+    const token = ++calendarMentionsToken
+    const convo = conversation
+    calendarMentions = []
+    if (!convo?.messages) {
+      return
+    }
+    const merged = new Map<string, backendModels.DateTimeMention>()
+    for (const msg of convo.messages) {
+      const text = (msg.bodyText || '').trim()
+      if (!text) {
+        continue
+      }
+      try {
+        const found = await Calendar_DetectDateTimes(text.slice(0, 20000))
+        for (const mention of found ?? []) {
+          const key = `${mention.startUnix}:${mention.endUnix}`
+          if (!merged.has(key)) {
+            merged.set(key, mention)
+          }
+        }
+      } catch (err) {
+        console.warn('calendar date detection failed for a message', err)
+      }
+    }
+    if (token !== calendarMentionsToken) {
+      return
+    }
+    const dateFmt = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' })
+    const dateTimeFmt = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+    calendarMentions = Array.from(merged.values()).slice(0, 8).map((mention) => ({
+      ...mention,
+      formatted: mention.isAllDay
+        ? dateFmt.format(new Date(mention.startUnix * 1000))
+        : dateTimeFmt.format(new Date(mention.startUnix * 1000)),
+    }))
+  }
+
+  $effect(() => {
+    // Re-run when the conversation or its message bodies change.
+    void conversation?.messages?.map((m) => m.bodyText ?? '').join('')
+    void refreshCalendarMentions()
+  })
+
+  async function addToCalendar(mention: CalendarChip) {
+    if (!conversation) {
+      return
+    }
+    try {
+      await Calendar_CreateICSFromDetails({
+        calendarId: '',
+        summary: conversation.subject || mention.rawText,
+        dtstartUnix: mention.startUnix,
+        dtendUnix: mention.endUnix,
+        isAllDay: mention.isAllDay,
+      } as backendModels.EventInput)
+    } catch (err) {
+      console.warn('calendar event handoff failed', err)
+      toasts.error($_('viewer.addToCalendarFailed'))
+    }
+  }
+
   function printDocument(subject: string, blocks: string[]) {
     const doc = `<!DOCTYPE html><html><head><meta charset="utf-8">
       <style>
@@ -1833,6 +1909,23 @@
         <h1 class="spark-conversation-subject text-xl font-semibold text-foreground mb-4">
           {conversation.subject || $_('viewer.noSubject')}
         </h1>
+
+        <!-- Add to Calendar chips for recognized date/time mentions -->
+        {#if calendarMentions.length > 0}
+          <div class="mb-4 flex flex-wrap gap-2">
+            {#each calendarMentions as mention (mention.startUnix + ':' + mention.endUnix)}
+              <button
+                class="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1 text-sm text-foreground hover:bg-muted transition-colors"
+                data-tooltip={$_('viewer.addToCalendar')}
+                aria-label={`${$_('viewer.addToCalendar')}: ${mention.formatted}`}
+                onclick={() => addToCalendar(mention)}
+              >
+                <Icon icon="mdi:calendar-plus" class="w-4 h-4 text-muted-foreground" />
+                {mention.formatted}
+              </button>
+            {/each}
+          </div>
+        {/if}
 
         <!-- Message Count Badge -->
         {#if conversation.messages && conversation.messages.length > 1}

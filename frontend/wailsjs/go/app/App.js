@@ -86,6 +86,10 @@ export function Calendar_DeleteSource(arg1) {
   return window['go']['app']['App']['Calendar_DeleteSource'](arg1);
 }
 
+export function Calendar_DetectDateTimes(arg1) {
+  return window['go']['app']['App']['Calendar_DetectDateTimes'](arg1);
+}
+
 export function Calendar_DismissAlarm(arg1) {
   return window['go']['app']['App']['Calendar_DismissAlarm'](arg1);
 }

@@ -67,6 +67,8 @@ export function Calendar_DeleteEvent(arg1:string,arg2:string):Promise<void>;
 
 export function Calendar_DeleteSource(arg1:string):Promise<void>;
 
+export function Calendar_DetectDateTimes(arg1:string):Promise<Array<backend.DateTimeMention>>;
+
 export function Calendar_DismissAlarm(arg1:string):Promise<void>;
 
 export function Calendar_ForceSyncSource(arg1:string):Promise<void>;

@@ -78,6 +78,8 @@
 - Updated visible window branding and release-note lookup to use Postilaatikko.
 - Kept the Edit Account dialog size and action buttons stable when switching tabs.
 - Show configured account names under Inbox and in account rows, falling back to the email address.
+- Added ICS event handoff: create an ICS event from structured date/time details and open it for review/import in the user's calendar application. No email timestamp detection (that is P-022).
+- Recognized date/time mentions in email bodies and offered "Add to Calendar" chips in the conversation viewer; parsing is conservative (explicit year required, fixed zone designators only) and opens the ICS event for review/import rather than adding silently.
 
 ## Postilaatikko — v0.3.11
 

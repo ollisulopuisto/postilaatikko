@@ -320,7 +320,9 @@
     "messageDetails": "Message details",
     "readerMode": "Reading mode",
     "readerConversation": "Conversation",
-    "readerTraditional": "Traditional"
+    "readerTraditional": "Traditional",
+    "addToCalendar": "Add to Calendar",
+    "addToCalendarFailed": "Could not create the calendar event"
   },
   "composer": {
     "newMessage": "New Message",
