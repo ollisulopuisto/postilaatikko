@@ -1643,4 +1643,16 @@ var migrations = []Migration{
    refreshed_at INTEGER NOT NULL
  );
  `},
+	{Version: 61, SQL: `
+	-- Explicit body-prefetch choices override the sidebar-derived default.
+	-- Absence of a row means inherit the default; attachments remain separate.
+	CREATE TABLE IF NOT EXISTS folder_content_policies (
+	  folder_id TEXT PRIMARY KEY REFERENCES folders(id) ON DELETE CASCADE,
+	  account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+	  body_prefetch INTEGER NOT NULL CHECK (body_prefetch IN (0, 1)),
+	  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+	);
+	CREATE INDEX IF NOT EXISTS idx_folder_content_policies_account
+	  ON folder_content_policies(account_id);
+	`},
 }
