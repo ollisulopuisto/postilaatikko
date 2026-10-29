@@ -170,6 +170,8 @@
     "filterLabel": "Filter",
     "filterAll": "All messages",
     "filterUnread": "Unread",
+    "filterReplyLater": "Reply Later",
+    "quickFilters": "Quick filters",
     "filterStarred": "Starred",
     "filterAttachments": "Has attachments",
     "noFilteredMessages": "No messages match the current filter",

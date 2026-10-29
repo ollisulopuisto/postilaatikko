@@ -170,6 +170,8 @@
     "filterLabel": "Suodatin",
     "filterAll": "Kaikki viestit",
     "filterUnread": "Lukemattomat",
+    "filterReplyLater": "Vastaa myöhemmin",
+    "quickFilters": "Pikasuodattimet",
     "filterStarred": "Tähdelliset",
     "filterAttachments": "Sisältää liitteitä",
     "noFilteredMessages": "Yksikään viesti ei vastaa nykyistä suodatinta",
