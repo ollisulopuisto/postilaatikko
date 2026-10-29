@@ -32,6 +32,15 @@
       input?.setSelectionRange(position, position)
     })
   }
+  function displaySnippet(value: string | undefined): string {
+    if (!value || !value.includes('&')) return value || ''
+    // Search snippets are plain text from mail providers, but some providers
+    // leave HTML entities escaped. Decode into an inert textarea so entities
+    // display normally without ever interpreting message content as HTML.
+    const decoder = document.createElement('textarea')
+    decoder.innerHTML = value
+    return decoder.value
+  }
   async function search(more = false) {
     const current = ++generation
     busy = true; error = ''; searched = true
@@ -47,35 +56,37 @@
   }
 </script>
 <Dialog.Root bind:open>
-  <Dialog.Content class="max-w-3xl max-h-[85vh] overflow-y-auto">
+  <Dialog.Content class="grid-rows-[auto_auto_minmax(0,1fr)] w-[calc(100vw-2rem)] max-w-4xl max-h-[85vh] overflow-hidden">
     <Dialog.Header><Dialog.Title>{$_('search.global')}</Dialog.Title></Dialog.Header>
-    <form class="flex gap-2" onsubmit={(event) => { event.preventDefault(); void search() }}>
-      <input bind:this={input} bind:value={query} oninput={() => { cursor = '' }} type="search" class="flex-1 min-w-0 rounded border border-border bg-background px-3 py-2" placeholder="is:unread label:work" aria-label={$_('search.global')} />
-      <select bind:value={accountId} class="max-w-40 rounded border border-border bg-background" aria-label={$_('search.accountScope')} onchange={() => void search()}>
+    <form class="flex min-w-0 flex-col gap-2 sm:flex-row" onsubmit={(event) => { event.preventDefault(); void search() }}>
+      <input bind:this={input} bind:value={query} oninput={() => { cursor = '' }} type="search" class="w-full min-w-0 flex-1 rounded border border-border bg-background px-3 py-2" placeholder="is:unread label:work" aria-label={$_('search.global')} />
+      <select bind:value={accountId} class="w-full min-w-0 rounded border border-border bg-background px-2 sm:w-40" aria-label={$_('search.accountScope')} onchange={() => void search()}>
         <option value="">{$_('search.allAccounts')}</option>
         {#each accountStore.accounts as item (item.account.id)}<option value={item.account.id}>{item.account.name || item.account.email}</option>{/each}
       </select>
-      <button type="submit" class="rounded bg-primary text-primary-foreground px-3">{$_('search.searchButton')}</button>
+      <button type="submit" class="shrink-0 rounded bg-primary px-3 py-2 text-primary-foreground">{$_('search.searchButton')}</button>
     </form>
+    <div class="min-h-0 min-w-0 overflow-y-auto overflow-x-hidden pr-1">
     <SearchOperators onInsert={insertOperator} />
-    <p class="text-xs text-muted-foreground">{$_('search.serverHint')}</p>
-    {#if error}<p role="alert" class="text-sm text-destructive">{error}</p>{/if}
+    <p class="my-2 text-xs leading-5 text-muted-foreground">{$_('search.serverHint')}</p>
+    {#if error}<p role="alert" class="break-words text-sm text-destructive">{error}</p>{/if}
     {#each issues as issue (issue.accountId + issue.message)}
-      <p class="text-xs text-destructive" role="status">{issue.accountName}: {issue.message}
+      <p class="mb-2 break-words text-xs text-destructive" role="status">{issue.accountName}: {issue.message}
         {#if issue.reauthorize}<button type="button" class="underline" onclick={() => ReauthorizeAccount(issue.accountId).then(() => search())}>{$_('search.reauthorize')}</button>{/if}
       </p>
     {/each}
-    <div class="space-y-1" aria-busy={busy}>
+    <div class="min-w-0 space-y-2" aria-busy={busy}>
       {#each results as item (`${item.accountId}:${item.threadId}`)}
-        <button type="button" class="w-full text-left rounded-lg border border-border p-3 hover:bg-muted" onclick={() => { onSelect(item.threadId, item.folderId || '', item.accountId || ''); open = false }}>
-          <span class="block text-sm font-medium">{item.subject || $_('messageList.noSubject')}</span>
-          <span class="block text-xs text-muted-foreground">{item.accountName} · {item.participants?.map(p => p.name || p.email).join(', ')} · {new Date(item.latestDate as unknown as string).toLocaleString()}</span>
-          <span class="block truncate text-sm text-muted-foreground">{item.snippet}</span>
+        <button type="button" class="block w-full min-w-0 overflow-hidden rounded-lg border border-border p-3 text-left hover:bg-muted" onclick={() => { onSelect(item.threadId, item.folderId || '', item.accountId || ''); open = false }}>
+          <span class="block truncate text-sm font-medium">{item.subject || $_('messageList.noSubject')}</span>
+          <span class="block truncate text-xs text-muted-foreground">{item.accountName} · {item.participants?.map(p => p.name || p.email).join(', ')} · {new Date(item.latestDate as unknown as string).toLocaleString()}</span>
+          <span class="block truncate text-sm text-muted-foreground">{displaySnippet(item.snippet)}</span>
         </button>
       {/each}
     </div>
     {#if searched && !busy && !error && results.length === 0}<p role="status" class="text-sm text-muted-foreground">{$_('search.noMatches')}</p>{/if}
     {#if busy}<p role="status" class="text-sm text-muted-foreground">{$_('common.loading')}</p>{/if}
     {#if cursor}<button type="button" disabled={busy} onclick={() => void search(true)} class="rounded border border-border px-3 py-2">{$_('search.loadMore')}</button>{/if}
+    </div>
   </Dialog.Content>
 </Dialog.Root>
