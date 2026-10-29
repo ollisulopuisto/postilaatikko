@@ -11,6 +11,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/mail"
 	"sort"
 	"strings"
 	"time"
@@ -19,7 +20,6 @@ import (
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/macoscontacts"
 	"github.com/rs/zerolog"
-	"net/mail"
 )
 
 // ErrContactExists is returned by Create when the email is already present

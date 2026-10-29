@@ -58,7 +58,11 @@
       await browse()
     } catch (err) {
       error = String(err)
-      status = await macOSContactsBackend().GetMacOSContactsStatus()
+      try {
+        status = await macOSContactsBackend().GetMacOSContactsStatus()
+      } catch (statusError) {
+        error = `${error} (${String(statusError)})`
+      }
     } finally {
       busy = false
     }
@@ -102,7 +106,7 @@
           <li class="flex items-center justify-between gap-3 py-2">
             <div class="min-w-0">
               <p class="truncate text-sm font-medium">{person.name || person.emails[0] || $_('macOSContacts.unnamed')}</p>
-              {#each person.emails as email}<p class="truncate text-xs text-muted-foreground">{email}</p>{/each}
+              {#each person.emails as email, index (email + ':' + index)}<p class="truncate text-xs text-muted-foreground">{email}</p>{/each}
             </div>
             <Button size="sm" variant="outline" onclick={() => openPerson(person.id)}>{$_('macOSContacts.open')}</Button>
           </li>
