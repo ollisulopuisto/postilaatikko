@@ -3,6 +3,7 @@
   import { OpenMailWindow } from '../wailsjs/go/app/App'
   import MailWindowApp from './MailWindowApp.svelte'
   import type { MailScope } from './lib/windows/mailWindow'
+  import type { NavigationEntry } from './lib/sidebar/cards'
   // Load offline icon data before anything else
   import { LAYOUT_SYMBOL, PERMANENT_DELETE } from '$lib/keyboard/shortcuts'
   import './lib/iconify-offline'
@@ -161,6 +162,32 @@
   function updateWorkspaceScope(id: string, scope: MailScope) {
     mailWorkspaceTabs = mailWorkspaceTabs.map(tab => tab.id === id ? { ...tab, scope } : tab)
   }
+
+  // Quick-access rail entries are global UI, but navigation belongs to the
+  // currently active mail workspace. The primary Sidebar listener is disabled
+  // while a secondary tab is active, so route those clicks to that tab here.
+  $effect(() => {
+    if (activeMailWorkspace === 'primary') return
+    const navigate = (event: Event) => {
+      const entry = (event as CustomEvent<NavigationEntry>).detail
+      if (!entry) return
+      let scope: MailScope
+      if (entry.kind === 'inboxes') {
+        scope = { accountId: 'unified', folderId: 'inbox', folderName: entry.name, folderType: 'inbox' }
+      } else if (entry.kind === 'system') {
+        scope = { accountId: 'unified', folderId: entry.folderType || 'inbox', folderName: entry.name, folderType: entry.folderType || 'inbox' }
+      } else if (entry.kind === 'virtual') {
+        scope = { accountId: 'virtual', folderId: entry.folderId || '', folderName: entry.name, folderType: 'virtual' }
+      } else {
+        const folderInfo = entry.accountId && entry.folderId ? findFolderById(entry.accountId, entry.folderId) : null
+        scope = { accountId: entry.accountId || '', folderId: entry.folderId || '', folderName: entry.name, folderType: folderInfo?.type || 'folder' }
+      }
+      updateWorkspaceScope(activeMailWorkspace, scope)
+      setActiveExtension('mail')
+    }
+    window.addEventListener('postilaatikko:navigate', navigate)
+    return () => window.removeEventListener('postilaatikko:navigate', navigate)
+  })
 
   // Selected conversation state
   let selectedThreadId = $state<string | null>(null)
@@ -1292,6 +1319,17 @@
           return
         case 'tab':
         case '`': {
+          // When mail workspaces are open, Ctrl/Cmd+Tab cycles those tabs;
+          // Ctrl/Cmd+Shift+Tab reverses. Ctrl+` remains the fallback reverse
+          // binding on WebKit builds that consume Shift+Tab before keydown.
+          if (isMailActive() && mailWorkspaceTabs.length > 0 && e.key.toLowerCase() === 'tab') {
+            e.preventDefault()
+            const order = ['primary', ...mailWorkspaceTabs.map(tab => tab.id)]
+            const currentIndex = Math.max(0, order.indexOf(activeMailWorkspace))
+            const step = e.shiftKey ? -1 : 1
+            switchMailWorkspace(order[(currentIndex + step + order.length) % order.length])
+            return
+          }
           // Cycle through rail items: Mail + enabled extensions.
           // Ctrl+Tab        → forward
           // Ctrl+`          → backward
@@ -2132,6 +2170,7 @@
       onclick={() => handlePaneClick('sidebar')}
     >
       <Sidebar
+        navigationEnabled={activeMailWorkspace === 'primary'}
         onGlobalSearch={() => showGlobalSearch = true}
         bind:this={sidebarRef}
         onFolderSelect={handleFolderSelect}
