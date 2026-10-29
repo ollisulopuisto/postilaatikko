@@ -138,8 +138,9 @@ test('MessageList header has the required refresh, badge, close, and filter matr
   const header = messageListSource.slice(headerStart, headerEnd)
 
   assert.equal((header.match(/onclick=\{refreshActiveSearch\}/g) ?? []).length, 1)
-  assert.match(header, /\{#if !isVirtualFolderView && !isSearchMode && \(syncing \|\| manualSyncing\)\}[\s\S]*?\{:else if !isVirtualFolderView && !isSearchMode\}/)
+  assert.match(header, /\{:else if !isVirtualFolderView && !isSearchMode && \(syncing \|\| manualSyncing\)\}[\s\S]*?\{:else if !isVirtualFolderView && !isSearchMode\}/)
   assert.match(header, /\{#if searchQuery\.trim\(\)\}[\s\S]*?onclick=\{refreshActiveSearch\}/)
+  assert.match(header, /\{#if isVirtualFolderView && !isSearchMode\}[\s\S]*?aria-busy=\{manualSyncing\}[\s\S]*?onclick=\{syncFolder\}/)
   assert.equal((header.match(/onclick=\{toggleSearch\}/g) ?? []).length, 1)
   assert.equal((header.match(/onclick=\{clearSearch\}/g) ?? []).length, 0)
   assert.equal((header.match(/title=\{\$_\('messageList\.filter'\)\}/g) ?? []).length, 1)

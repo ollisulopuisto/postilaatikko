@@ -146,6 +146,7 @@
     "virtualFolderSavedQuery": "Saved search"
   },
   "messageList": {
+    "refreshVirtualFolder": "Refresh virtual folder",
     "searchMessages": "Search messages...",
     "noMessages": "No messages in this folder",
     "selectFolder": "Select a folder to view messages",
