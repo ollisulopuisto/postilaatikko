@@ -44,7 +44,7 @@ Implement sidebar cards/rail shortcuts, then Gmail-first operations, global serv
 5. **Fast everyday mail:** preserve Gmail-style keyboard bindings and quick reply snippets; add full templates, Finnish-layout support and configurable bindings.
 6. **Better compose controls:** reuse cross-account sender identities and durable drafts, with signatures selected from sender, recipient and available context.
 7. **Cross-account automation:** extend the existing local rules when provider-side filters cannot cross accounts.
-8. **Multiple mail windows:** keep several mail views open for parallel reading and searching, each retaining its own layout/focus state.
+8. **Tabbed mail workspaces:** open independent mail views in tabs, preserve each tab’s folder/search/thread state, and detach a tab to a native window (P-043).
 9. **Smart notifications:** optional sender- and rule-based controls. Useful, but lower priority than the core workflows above.
 
 ### Product boundaries
@@ -98,7 +98,7 @@ Use the [task board](TASKS.md) for current claims and integration status; the [D
 - **Gmail API extensions.** Build on the existing Gmail server-side search/spam baseline while preserving IMAP support and distinguishing live-provider checks from compilation.
 - **Scheduled send.** Durable E2EE queue plus the always-on Mac Studio helper, retries, cancellation, and delivery status. The helper is the trusted endpoint; a future paid hosted sender needs a separate, clearly disclosed trust model.
 - **Calendar links from email.** Create a standard ICS event from a structured time, then recognize dates and times in email and offer the event for review/import in the installed calendar app.
-- **Multiple mail windows.** Support independent mail views and navigation state beyond the existing detached composer.
+- **Tabbed mail workspaces.** Open independent mail views in tabs, preserve each tab’s folder/search/thread state, and detach tabs to native windows; the primary workspace remains available (P-013/P-043).
 
 ## Must have
 
@@ -117,7 +117,7 @@ Use the [task board](TASKS.md) for current claims and integration status; the [D
 - **Gmail-native spam actions.** Existing v0.3.13 API baseline supports native spam/not-spam label operations with fallback. Verify actual provider behavior and undo; do not claim classifier-training guarantees without evidence.
 - **Quick replies and email templates.** Short snippets shipped in v0.3.13; full email templates remain P-020. Reuse them in inline/full compose while preserving sender, recipients and unsaved draft content.
 - **Calendar recognition.** Turn recognized date/time mentions in message content into an “Add to Calendar” action using the standard ICS event handoff. Open it for review/import and handle timezone ambiguity conservatively. Not started; build on `extensions/calendar`.
-- **Multiple mail windows.** Keep more than one mail window open for parallel reading and searching. P-013 has an independent mail-list/reader candidate in review; it reuses parent services and keeps navigation, selection and layout local to each window. Native lifecycle and real-mail checks remain before integration/release; the detached compose window already exists.
+- **Tabbed mail workspaces.** Open independent mail-list/reader workspaces in tabs by default, preserving each tab’s folder, search and thread state. Allow detaching a tab into its own native mail window. Limit the number of extra live readers to keep memory bounded. P-013 provides independent mail-window support; P-043 implements the tab shell and detach action. Native lifecycle and real-mail checks remain before release.
 
 ## Planned
 
