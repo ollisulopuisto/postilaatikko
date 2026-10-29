@@ -178,7 +178,7 @@ Suggested model/effort is a dispatch recommendation, not an existing claim or mo
 
 | ID | Effort | Task | Dependencies / acceptance criteria |
 | --- | --- | --- | --- |
-| P-009 | Medium | Integrate macOS Contacts as a read-only source for browsing and recipient lookup/autocomplete. | Codex / `codex/P-009-macos-contacts` / `/private/tmp/postilaatikko-p009` | In progress. Request Contacts permission when needed; provide an action to open the selected person in Contacts for edits; Postilaatikko never writes contacts. |
+| P-009 | Medium | Integrate macOS Contacts as a read-only source for browsing and recipient lookup/autocomplete. | Codex / `codex/P-009-macos-contacts` / `/private/tmp/postilaatikko-p009` | In progress; native permission/read boundary implemented with passing unit tests (browser/autocomplete integration next). Request Contacts permission when needed; provide an action to open the selected person in Contacts for edits; Postilaatikko never writes contacts. |
 | P-015 | Medium | Select signatures using sender, recipient, and message type. | Reuse configured sender identities and signatures; keep a manual override in the composer. |
 | P-016 | Medium | Add optional per-sender and rule-based notification controls. | Keep configurable and lower priority than core mail workflows. |
 | P-020 | Medium | Add full email templates to the composer. | Save and insert reusable subject/body templates; preserve recipient, sender identity, and unsaved draft fields when inserting. Keep separate from short quick replies in P-018. |

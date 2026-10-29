@@ -19,6 +19,8 @@
         <string>iconfile</string>
         <key>LSMinimumSystemVersion</key>
         <string>10.14.0</string>
+        <key>NSContactsUsageDescription</key>
+        <string>Postilaatikko reads contact names and email addresses for browsing and recipient suggestions. Edit contacts in Contacts.app.</string>
         <key>NSHighResolutionCapable</key>
         <string>true</string>
         <key>NSHumanReadableCopyright</key>
