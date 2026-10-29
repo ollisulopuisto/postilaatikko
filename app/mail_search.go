@@ -10,6 +10,7 @@ import (
 	"github.com/hkdb/aerion/internal/folder"
 	"github.com/hkdb/aerion/internal/gmail"
 	"github.com/hkdb/aerion/internal/message"
+	syncre "github.com/hkdb/aerion/internal/sync"
 	"github.com/hkdb/aerion/internal/virtualfolder"
 	"slices"
 	"sort"
@@ -238,45 +239,14 @@ func (a *App) SearchMail(req MailSearchRequest) (*MailSearchPage, error) {
 			}
 			c, err := a.syncEngine.GmailClient(ctx, acc.ID)
 			if errors.Is(err, gmail.ErrNotCapable) {
-				// IMAP remains available for other providers, across their real folders.
-				fs, e := a.folderStore.List(acc.ID)
+				convs, next, e := a.searchIMAPAccountPage(ctx, acc, vf, req.Query, token, limit)
 				if e != nil {
 					issue(e)
 					return
 				}
-				var convs []*message.Conversation
-				for _, f := range fs {
-					if vf != nil {
-						included := slices.Contains(vf.FolderIDs, f.ID)
-						if included == (vf.FolderMode == "exclude") {
-							continue
-						}
-					}
-					r, e := a.syncEngine.IMAPSearch(ctx, acc.ID, f.ID, req.Query, limit)
-					if e != nil {
-						issue(e)
-						continue
-					}
-					if r.TotalCount > len(r.Results) {
-						issue(fmt.Errorf("IMAP search returns a bounded window per folder; narrow the query for more matches"))
-					}
-					ms, e := a.syncEngine.CacheIMAPSearchHeaders(acc.ID, f.ID, r.Results)
-					if e != nil {
-						issue(e)
-						continue
-					}
-					for _, m := range ms {
-						unread := 0
-						if !m.IsRead {
-							unread = 1
-						}
-						convs = append(convs, &message.Conversation{ThreadID: m.ThreadID, Subject: m.Subject, Snippet: m.Snippet, LatestDate: m.Date, MessageIDs: []string{m.ID}, MessageCount: 1, UnreadCount: unread, AccountID: acc.ID, AccountName: acc.Name, FolderID: f.ID, Participants: []message.Address{{Name: m.FromName, Email: m.FromEmail}}})
-					}
-				}
-
 				mu.Lock()
 				result.Conversations = append(result.Conversations, convs...)
-				state.Pages[acc.ID] = "!done"
+				state.Pages[acc.ID] = next
 				mu.Unlock()
 				return
 			}
@@ -453,4 +423,61 @@ func (a *App) CancelMailSearch(sessionID string) {
 		job.cancel()
 		delete(a.mailSearchJobs, sessionID)
 	}
+}
+
+// imapAccountPage advances one folder at a time. A failed page retains its
+// original cursor, so retry cannot silently skip the folder or older messages.
+type imapAccountPage struct {
+	Folders []string                 `json:"f"`
+	Index   int                      `json:"i"`
+	Cursor  *syncre.IMAPSearchCursor `json:"c,omitempty"`
+}
+
+func (a *App) searchIMAPAccountPage(ctx context.Context, acc *account.Account, vf *virtualfolder.VirtualFolder, query, token string, limit int) ([]*message.Conversation, string, error) {
+	fs, err := a.folderStore.List(acc.ID)
+	if err != nil {
+		return nil, "", err
+	}
+	ids := []string{}
+	for _, f := range fs {
+		if vf != nil && slices.Contains(vf.FolderIDs, f.ID) == (vf.FolderMode == "exclude") {
+			continue
+		}
+		ids = append(ids, f.ID)
+	}
+	sort.Strings(ids)
+	state := imapAccountPage{Folders: ids}
+	if token != "" {
+		if json.Unmarshal([]byte(token), &state) != nil || !slices.Equal(state.Folders, ids) || state.Index < 0 || state.Index >= len(ids) {
+			return nil, "", fmt.Errorf("folder scope changed; restart search")
+		}
+	}
+	if len(ids) == 0 {
+		return nil, "!done", nil
+	}
+	page, err := a.syncEngine.SearchIMAPPage(ctx, acc.ID, ids[state.Index], query, state.Cursor, limit)
+	if err != nil {
+		return nil, "", err
+	}
+	ms, err := a.syncEngine.CacheIMAPSearchHeaders(acc.ID, ids[state.Index], page.Results)
+	if err != nil {
+		return nil, "", err
+	}
+	convs := []*message.Conversation{}
+	for _, m := range ms {
+		unread := 0
+		if !m.IsRead {
+			unread = 1
+		}
+		convs = append(convs, &message.Conversation{ThreadID: m.ThreadID, Subject: m.Subject, Snippet: m.Snippet, LatestDate: m.Date, MessageIDs: []string{m.ID}, MessageCount: 1, UnreadCount: unread, IsStarred: m.IsStarred, AccountID: acc.ID, AccountName: acc.Name, FolderID: m.FolderID, Participants: []message.Address{{Name: m.FromName, Email: m.FromEmail}}})
+	}
+	state.Cursor = page.Next
+	if page.Next == nil {
+		state.Index++
+	}
+	if state.Index == len(ids) {
+		return convs, "!done", nil
+	}
+	encoded, err := json.Marshal(state)
+	return convs, string(encoded), err
 }

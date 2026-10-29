@@ -25,6 +25,7 @@ type IMAPSearchResponse struct {
 // IMAPSearchResult represents a single IMAP server-side search result
 type IMAPSearchResult struct {
 	RFCMessageID string `json:"rfcMessageId,omitempty"`
+	InReplyTo    string `json:"inReplyTo,omitempty"`
 	UID          uint32 `json:"uid"`
 	MessageID    string `json:"messageId,omitempty"` // Local DB ID if exists
 	IsLocal      bool   `json:"isLocal"`             // Whether message exists in local DB
@@ -39,6 +40,7 @@ type IMAPSearchResult struct {
 	// Flags
 	IsRead         bool `json:"isRead"`
 	IsStarred      bool `json:"isStarred"`
+	IsAnswered     bool `json:"isAnswered"`
 	HasAttachments bool `json:"hasAttachments"`
 
 	// Context
@@ -295,6 +297,9 @@ func (e *Engine) fetchEnvelopesForSearch(ctx context.Context, client *imapclient
 
 			if envelope != nil {
 				r.RFCMessageID = envelope.MessageID
+				if len(envelope.InReplyTo) > 0 {
+					r.InReplyTo = envelope.InReplyTo[len(envelope.InReplyTo)-1]
+				}
 				r.Subject = envelope.Subject
 				r.Date = envelope.Date.UTC()
 				if len(envelope.From) > 0 {
@@ -309,6 +314,8 @@ func (e *Engine) fetchEnvelopesForSearch(ctx context.Context, client *imapclient
 					r.IsRead = true
 				case imap.FlagFlagged:
 					r.IsStarred = true
+				case imap.FlagAnswered:
+					r.IsAnswered = true
 				}
 			}
 
@@ -316,7 +323,7 @@ func (e *Engine) fetchEnvelopesForSearch(ctx context.Context, client *imapclient
 		}
 
 		if err := fetchCmd.Close(); err != nil {
-			e.log.Warn().Err(err).Msg("Envelope fetch close error in search")
+			return results, fmt.Errorf("search envelope fetch failed: %w", err)
 		}
 	}
 
@@ -485,13 +492,18 @@ func (e *Engine) CacheIMAPSearchHeaders(accountID, folderID string, hits []*IMAP
 			return nil, err
 		}
 		if m == nil {
-			m = &message.Message{AccountID: accountID, FolderID: folderID, UID: h.UID, MessageID: h.RFCMessageID, ThreadID: h.RFCMessageID, Subject: h.Subject, FromName: h.FromName, FromEmail: h.FromEmail, Date: h.Date, Snippet: h.Snippet, IsRead: h.IsRead, IsStarred: h.IsStarred}
+			m = &message.Message{AccountID: accountID, FolderID: folderID, UID: h.UID, MessageID: h.RFCMessageID, InReplyTo: h.InReplyTo, IsAnswered: h.IsAnswered, ThreadID: h.RFCMessageID, Subject: h.Subject, FromName: h.FromName, FromEmail: h.FromEmail, Date: h.Date, Snippet: h.Snippet, IsRead: h.IsRead, IsStarred: h.IsStarred}
 			if m.ThreadID == "" {
 				m.ThreadID = uuid.NewString()
 			}
 			if err = e.messageStore.Create(m); err != nil {
 				return nil, err
 			}
+		}
+		// Envelopes/flags are fresh even when the body is cached locally.
+		m.IsRead, m.IsStarred, m.IsAnswered = h.IsRead, h.IsStarred, h.IsAnswered
+		if err := e.messageStore.UpdateFlags(m.ID, m.IsRead, m.IsStarred, m.IsAnswered, m.IsForwarded, m.IsDraft, m.IsDeleted); err != nil {
+			return nil, err
 		}
 		result = append(result, m)
 	}

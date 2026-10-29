@@ -129,6 +129,8 @@ export function CancelMailSearch(arg1:string):Promise<void>;
 
 export function CancelOAuthFlow():Promise<void>;
 
+export function CancelVirtualFolderOnlineCount(arg1:string):Promise<void>;
+
 export function CheckForUpdates():Promise<string>;
 
 export function CheckRecipientCerts(arg1:Array<string>):Promise<Record<string, boolean>>;
@@ -446,6 +448,8 @@ export function GetUnifiedInboxUnreadCount():Promise<number>;
 export function GetVirtualFolderConversations(arg1:string,arg2:number,arg3:number,arg4:string):Promise<Array<message.Conversation>>;
 
 export function GetVirtualFolderCount(arg1:string):Promise<number>;
+
+export function GetVirtualFolderOnlineCount(arg1:string):Promise<app.VirtualFolderOnlineCount>;
 
 export function GetVirtualFolderSearchCount(arg1:string,arg2:string,arg3:string):Promise<number>;
 
@@ -780,6 +784,8 @@ export function StartContactsOnlyOAuthFlow(arg1:string):Promise<void>;
 export function StartCustomOAuthFlow(arg1:string,arg2:string,arg3:string,arg4:Array<string>,arg5:string,arg6:string):Promise<void>;
 
 export function StartOAuthFlow(arg1:string):Promise<void>;
+
+export function StartVirtualFolderOnlineCount(arg1:string,arg2:string):Promise<void>;
 
 export function SubscribeAllFolders(arg1:string):Promise<void>;
 

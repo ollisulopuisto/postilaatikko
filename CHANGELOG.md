@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- GLOBAL-002 candidate: enumerate Gmail virtual-folder conversation counts with explicit progress/completeness and continue non-Gmail searches through older UID pages and additional folders. Saved-query count reconciliation, broader continuation checks and non-Gmail conversation counts remain in progress.
+
 ## Postilaatikko v0.3.20
 
 - Add branching composer undo, per-keystroke autosave and a 30-second undo-send countdown.

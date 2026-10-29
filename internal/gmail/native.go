@@ -95,8 +95,11 @@ func (c *Client) Raw(ctx context.Context, id string) ([]byte, error) {
 	}
 	return raw, nil
 }
-func (c *Client) ThreadMetadata(ctx context.Context, id string) ([]Message, error) {
-	q := url.Values{"format": {"metadata"}, "metadataHeaders": metadataHeaders}
+func (c *Client) ThreadMetadata(ctx context.Context, id string, headers ...string) ([]Message, error) {
+	if len(headers) == 0 {
+		headers = metadataHeaders
+	}
+	q := url.Values{"format": {"metadata"}, "metadataHeaders": headers, "fields": {"messages(id,threadId,labelIds,snippet,internalDate,sizeEstimate,payload/headers)"}}
 	var r struct {
 		Messages []wireMessage `json:"messages"`
 	}

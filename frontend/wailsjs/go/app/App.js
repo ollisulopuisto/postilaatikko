@@ -210,6 +210,10 @@ export function CancelOAuthFlow() {
   return window['go']['app']['App']['CancelOAuthFlow']();
 }
 
+export function CancelVirtualFolderOnlineCount(arg1) {
+  return window['go']['app']['App']['CancelVirtualFolderOnlineCount'](arg1);
+}
+
 export function CheckForUpdates() {
   return window['go']['app']['App']['CheckForUpdates']();
 }
@@ -848,6 +852,10 @@ export function GetVirtualFolderConversations(arg1, arg2, arg3, arg4) {
 
 export function GetVirtualFolderCount(arg1) {
   return window['go']['app']['App']['GetVirtualFolderCount'](arg1);
+}
+
+export function GetVirtualFolderOnlineCount(arg1) {
+  return window['go']['app']['App']['GetVirtualFolderOnlineCount'](arg1);
 }
 
 export function GetVirtualFolderSearchCount(arg1, arg2, arg3) {
@@ -1520,6 +1528,10 @@ export function StartCustomOAuthFlow(arg1, arg2, arg3, arg4, arg5, arg6) {
 
 export function StartOAuthFlow(arg1) {
   return window['go']['app']['App']['StartOAuthFlow'](arg1);
+}
+
+export function StartVirtualFolderOnlineCount(arg1, arg2) {
+  return window['go']['app']['App']['StartVirtualFolderOnlineCount'](arg1, arg2);
 }
 
 export function SubscribeAllFolders(arg1) {

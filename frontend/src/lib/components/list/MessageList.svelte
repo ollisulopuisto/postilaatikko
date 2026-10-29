@@ -15,6 +15,7 @@
   import { app as searchModels } from '../../../../wailsjs/go/models'
 
   import { onMount, onDestroy } from 'svelte'
+  import OnlineViewCount from './OnlineViewCount.svelte'
   import Icon from '@iconify/svelte'
   import ConversationRow from './ConversationRow.svelte'
   import SearchOperators from '../common/SearchOperators.svelte'
@@ -22,7 +23,7 @@
   import { cn } from '$lib/utils'
   import { Button } from '$lib/components/ui/button'
   // @ts-ignore - wailsjs bindings
-  import { RefreshViewHeaders, SearchMail, CancelMailSearch, MoveToInboxWithUndo, GetConversations, GetConversationCount, SyncFolder, ForceSyncFolder, CancelFolderSync, SetMessageListSortOrder, GetUnifiedFolderConversations, GetUnifiedFolderCount, SearchConversations, SearchUnifiedFolder, GetSearchCount, GetSearchCountUnifiedFolder, SyncUnifiedFolder, EmptyUnifiedTrash, GetFTSIndexStatus, IsFTSIndexing, TrashWithUndo, DeletePermanently, EmptyTrash, UndoOperation, IMAPSearchFolder, IMAPSearchUnifiedInbox, FetchServerMessage, GetVirtualFolderConversations, GetVirtualFolderCount, GetVirtualFolderCachedView, SearchVirtualFolder } from '../../../../wailsjs/go/app/App'
+  import { RefreshViewHeaders, SearchMail, CancelMailSearch, MoveToInboxWithUndo, GetConversations, GetConversationCount, SyncFolder, ForceSyncFolder, CancelFolderSync, SetMessageListSortOrder, GetUnifiedFolderConversations, GetUnifiedFolderCount, SearchConversations, SearchUnifiedFolder, GetSearchCount, GetSearchCountUnifiedFolder, SyncUnifiedFolder, EmptyUnifiedTrash, GetFTSIndexStatus, IsFTSIndexing, TrashWithUndo, DeletePermanently, EmptyTrash, UndoOperation, IMAPSearchFolder, IMAPSearchUnifiedInbox, FetchServerMessage, GetVirtualFolderConversations, GetVirtualFolderCount, GetVirtualFolderCachedView } from '../../../../wailsjs/go/app/App'
   import { toasts } from '$lib/stores/toast'
   import { withShortcut, ariaKeyshortcuts, formatShortcut } from '$lib/keyboard/format'
   import ShortcutHint from '$lib/components/shortcuts/ShortcutHint.svelte'
@@ -81,8 +82,10 @@
   let conversations = $state<message.Conversation[]>([])
   let totalCount = $state(0)
   let virtualCursor = $state('')
+  let onlineCountRevision = $state(0)
   let virtualIssues = $state('')
   let virtualCacheRefreshedAt = $state<Date | null>(null)
+  let virtualQueryCursor = $state('')
   const virtualSearchSession = crypto.randomUUID()
   let loading = $state(false)
   let moveMutationInFlight = $state(false)
@@ -674,7 +677,7 @@
     prevFolderId = currentFolder
     loadGeneration++ // Invalidate any in-flight loads from the previous folder (#200)
     offset = 0
-    virtualCursor = ''; virtualIssues = ''
+    virtualCursor = ''; virtualIssues = ''; virtualQueryCursor = ''
     virtualCacheRefreshedAt = null
     void CancelMailSearch(virtualSearchSession)
     checkedThreadIds = new Set()
@@ -841,6 +844,7 @@
         // SearchMail result below replaces it. Only paint an empty list so a
         // background refresh never flickers visible rows backward.
         if (currentOffset === 0) {
+          onlineCountRevision++
           void GetVirtualFolderCachedView(folderId!).then((view: searchModels.VirtualFolderCachedView | null) => {
             if (generation !== loadGeneration || isSearchMode || !view) return
             virtualCacheRefreshedAt = view.refreshedAt ? new Date(view.refreshedAt) : null
@@ -1120,7 +1124,9 @@
       if (isVirtualFolderView) {
         const response = await SearchMail(new searchModels.MailSearchRequest({sessionId: virtualSearchSession, query, accountIds: [], virtualFolderId: folderId!, cursor: '', limit: PAGE_SIZE}))
         results = response.conversations || []
-        count = results.length
+        if (generation !== localSearchGeneration || query !== searchQuery.trim()) return
+        virtualQueryCursor = response.cursor || ''
+        count = results.length + (virtualQueryCursor ? 1 : 0)
         virtualIssues = (response.issues || []).map(item => `${item.accountName}: ${item.message}`).join(' · ')
 
       } else if (isUnifiedView) {
@@ -1174,7 +1180,12 @@
     try {
       let results: any[] = []
       if (isVirtualFolderView) {
-        results = await SearchVirtualFolder(folderId!, query, newOffset, PAGE_SIZE, 'unread')
+        if (!virtualQueryCursor) return
+        const response = await SearchMail(new searchModels.MailSearchRequest({ sessionId: virtualSearchSession, query, accountIds: [], virtualFolderId: folderId!, cursor: virtualQueryCursor, limit: PAGE_SIZE }))
+        if (generation !== localSearchGeneration || query !== searchQuery.trim()) return
+        results = response.conversations || []
+        virtualQueryCursor = response.cursor || ''
+        virtualIssues = (response.issues || []).map(item => `${item.accountName}: ${item.message}`).join(' · ')
       } else if (isUnifiedView) {
         results = await SearchUnifiedFolder(folderId!, query, newOffset, PAGE_SIZE, filterMode)
       } else if (accountId && folderId) {
@@ -1183,9 +1194,11 @@
 
       if (generation !== localSearchGeneration || query !== searchQuery.trim()) return
       if (results && results.length > 0) {
-        searchResults = [...searchResults, ...results]
+        const seen = new Set(searchResults.map(item => `${item.accountId}:${item.threadId}`))
+        searchResults = [...searchResults, ...results.filter(item => !seen.has(`${item.accountId}:${item.threadId}`))]
         searchOffset = newOffset
       }
+      if (isVirtualFolderView) searchTotalCount = searchResults.length + (virtualQueryCursor ? 1 : 0)
     } catch (err) {
       if (generation !== localSearchGeneration || query !== searchQuery.trim()) return
       console.error('Load more search results failed:', err)
@@ -2540,11 +2553,12 @@
     </div>
   {/if}
 
+  {#if isVirtualFolderView && folderId && !isSearchMode}<OnlineViewCount {folderId} revision={onlineCountRevision} />{/if}
   {#if virtualIssues}<p class="px-3 py-2 text-xs text-destructive" role="status">{virtualIssues}</p>{/if}
   {#if isVirtualFolderView && virtualCacheRefreshedAt && !isSearchMode}
     <p class="px-3 pb-1 text-[10px] text-muted-foreground" role="status">{$_('search.virtualFolderCacheUpdated', { values: { time: virtualCacheRefreshedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) } })}</p>
   {/if}
-  {#if isVirtualFolderView && virtualCursor && !loading && !virtualIssues}<button type="button" class="px-3 py-2 text-sm text-primary" onclick={loadNextPage}>{$_('search.loadMore')}</button>{/if}
+  {#if isVirtualFolderView && virtualCursor && !loading && !isSearchMode && !virtualIssues}<button type="button" class="px-3 py-2 text-sm text-primary" onclick={loadNextPage}>{$_('search.loadMore')}</button>{/if}
   <!-- Conversation List -->
   <div bind:this={listContainerRef} class="message-list-scroll flex-1 min-h-0 overflow-y-auto scrollbar-thin" onscroll={handleListScroll}>
     <div
