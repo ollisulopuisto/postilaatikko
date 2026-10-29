@@ -1267,7 +1267,7 @@
       content,
       signatureHtml,
       mode,
-      identity.signaturePlacement || 'above'
+      profile.signaturePlacement || 'above'
     )
 
     editor.commands.setContent(newContent)
