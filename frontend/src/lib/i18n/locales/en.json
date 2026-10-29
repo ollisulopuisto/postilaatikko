@@ -1254,6 +1254,8 @@
     "serverResultsCapped": "Showing {shown} of {total} results for \"{query}\"",
     "showAllResults": "Show all {total} results",
     "saveAsVirtualFolder": "Save as virtual folder",
+    "expandFolder": "Expand folder",
+    "collapseFolder": "Collapse folder",
     "virtualFolderCacheUpdated": "Virtual folder index updated {time}"
   },
   "responsive": {

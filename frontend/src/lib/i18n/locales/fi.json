@@ -1254,6 +1254,8 @@
     "serverResultsCapped": "Näytetään {shown} / {total} tuloksesta haulle ”{query}”",
     "showAllResults": "Näytä kaikki {total} tulosta",
     "saveAsVirtualFolder": "Tallenna virtuaalikansioksi",
+    "expandFolder": "Laajenna kansio",
+    "collapseFolder": "Pienennä kansio",
     "virtualFolderCacheUpdated": "Virtuaalikansion indeksi päivitetty {time}"
   },
   "responsive": {

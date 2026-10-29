@@ -1223,7 +1223,9 @@
     // Alt+M/Alt+C toggle the message list's folder picker. While it's open the
     // dialog guard below swallows all keys, so close/switch is handled here.
     if (messageListRef?.isFolderPickerOpen()) {
-      if (KEY.LIST_MOVE_TO(e)) {
+      // `v` is a Gmail move shortcut only outside the picker. In its search
+      // field it is ordinary text and must not close the dialog.
+      if (KEY.LIST_MOVE_TO(e) && e.key !== 'v') {
         e.preventDefault()
         messageListRef.toggleMoveToDialog()
         return
