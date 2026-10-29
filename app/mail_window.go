@@ -23,6 +23,7 @@ var mailWindowEvents = []string{
 	"messages:readChanged", "messages:starredChanged", "messages:moved", "messages:deleted",
 	"sync:progress", "fts:progress", "fts:complete", "fts:indexing", "contacts:changed",
 	"sent:synced", "network:online", "network:offline",
+	"virtualfolder:cacheUpdated",
 }
 
 type mailWindowEvent struct {
@@ -179,6 +180,8 @@ func (a *App) mailWindowMethods() map[string]any {
 		"GetVirtualFolderUnreadCounts":  a.GetVirtualFolderUnreadCounts,
 		"GetVirtualFolderConversations": a.GetVirtualFolderConversations,
 		"GetVirtualFolderCount":         a.GetVirtualFolderCount,
+		"GetVirtualFolderCachedView":    a.GetVirtualFolderCachedView,
+		"CreateVirtualFolder":           a.CreateVirtualFolder,
 		"SearchMail":                    a.SearchMail,
 		"CancelMailSearch":              a.CancelMailSearch,
 		"SearchConversations":           a.SearchConversations,

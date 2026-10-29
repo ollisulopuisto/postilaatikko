@@ -3,18 +3,18 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"github.com/hkdb/aerion/internal/appstate"
-	"github.com/hkdb/aerion/internal/database"
 	"path/filepath"
 	"testing"
 
+	"github.com/hkdb/aerion/internal/appstate"
+	"github.com/hkdb/aerion/internal/database"
 	"github.com/hkdb/aerion/internal/folder"
 	"github.com/hkdb/aerion/internal/ipc"
 )
 
 func TestMailWindowAllowlist(t *testing.T) {
 	methods := (&App{}).mailWindowMethods()
-	for _, name := range []string{"GetConversations", "GetConversation", "GetFolderTree", "SearchMail", "GetVirtualFolders", "RefreshViewHeaders", "OpenComposerWindow", "OpenReaderWindow", "OpenMailWindow", "MarkAsRead", "ArchiveWithUndo"} {
+	for _, name := range []string{"GetConversations", "GetConversation", "GetFolderTree", "SearchMail", "GetVirtualFolders", "GetVirtualFolderCachedView", "CreateVirtualFolder", "RefreshViewHeaders", "OpenComposerWindow", "OpenReaderWindow", "OpenMailWindow", "MarkAsRead", "ArchiveWithUndo"} {
 		if _, ok := methods[name]; !ok {
 			t.Errorf("mail operation unavailable: %s", name)
 		}
@@ -88,6 +88,9 @@ func TestMailWindowEventBounds(t *testing.T) {
 	if _, err := newMailWindowEvent("oauth:token", nil); err == nil {
 		t.Fatal("unexpected event forwarded")
 	}
+	if _, err := newMailWindowEvent("virtualfolder:cacheUpdated", []any{map[string]any{"virtualFolderId": "saved-search"}}); err != nil {
+		t.Fatalf("saved search updates unavailable: %v", err)
+	}
 }
 
 type mailWindowTestServer struct {
@@ -106,7 +109,7 @@ func TestMailWindowParentRejectsPrimaryStateWrites(t *testing.T) {
 	if err := db.Migrate(); err != nil {
 		t.Fatal(err)
 	}
-	store := appstate.NewStore(db)
+	store := appstate.NewStore(db.DB)
 	if err := store.SaveUIState(&appstate.UIState{SelectedFolderID: "primary-inbox", ListWidth: 420}); err != nil {
 		t.Fatal(err)
 	}

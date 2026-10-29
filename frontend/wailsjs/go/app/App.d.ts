@@ -443,6 +443,8 @@ export function GetUnifiedInboxCount(arg1:string):Promise<number>;
 
 export function GetUnifiedInboxUnreadCount():Promise<number>;
 
+export function GetVirtualFolderCachedView(arg1:string):Promise<app.VirtualFolderCachedView>;
+
 export function GetVirtualFolderConversations(arg1:string,arg2:number,arg3:number,arg4:string):Promise<Array<message.Conversation>>;
 
 export function GetVirtualFolderCount(arg1:string):Promise<number>;

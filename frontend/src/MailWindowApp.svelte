@@ -4,6 +4,7 @@
   import MessageList from './lib/components/list/MessageList.svelte'
   import ConversationViewer from './lib/components/viewer/ConversationViewer.svelte'
   import ToastContainer from './lib/components/ui/toast/ToastContainer.svelte'
+  import VirtualFolderDialog from './lib/components/sidebar/VirtualFolderDialog.svelte'
   import { _ } from './lib/i18n'
   import { accountStore } from './lib/stores/accounts.svelte'
   import { virtualFoldersStore } from './lib/stores/virtualFolders.svelte'
@@ -13,18 +14,23 @@
   import { createMailWindowState, navigateMailWindow, selectMailWindowConversation, type MailScope } from './lib/windows/mailWindow'
   import { toasts } from './lib/stores/toast'
   import { publishUndoOperationCreated, publishUndoOperationCompleted } from './lib/components/list/undoMutationEvents'
+  import { runMessageMutation } from './lib/components/list/mutationInFlight'
+  import type { virtualfolder } from '../wailsjs/go/models'
   import { GetAccounts, GetFolders, GetFolderTree, GetMessage, OpenMailWindow, OpenComposerWindow, MarkAsRead, ArchiveWithUndo, UndoOperation } from '../wailsjs/go/app/App'
   import { EventsEmit, WindowSetTitle } from '../wailsjs/runtime/runtime'
 
   let { config }: { config: MailScope } = $props()
   // A process per window gives each component/store its own search, checked
-  // rows, scroll memory and reader-mode windowState. Nothing here saves primary UI windowState.
+  // rows, scroll memory and reader mode. Primary UI state is never persisted.
   let windowState = $state(createMailWindowState(untrack(() => config)))
   let scopes = $state<MailScope[]>([])
   let loading = $state(true)
   let navigationError = $state('')
   let listWidth = $state(360)
   let readerOnly = $state(false)
+  let showVirtualFolderDialog = $state(false)
+  let pendingSearchQuery = $state('')
+  let pendingSearchFolderId = $state<string | null>(null)
   let list: MessageList | undefined
   let viewer = $state<ConversationViewer | undefined>(undefined)
   const scopeKey = (scope: MailScope) => JSON.stringify([scope.accountId, scope.folderId])
@@ -94,7 +100,7 @@
     list?.handleActionComplete(false)
   }
   async function archive(ids: string[]) {
-    await run(async () => {
+    await run(() => runMessageMutation(ids, async () => {
       const result = await ArchiveWithUndo(ids)
       const operation = result.operationId
       publishUndoOperationCreated(operation, ids, 'archive')
@@ -104,7 +110,7 @@
         refresh()
       }) }])
       list?.handleActionComplete(true)
-    })
+    }))
   }
   function closeReader() { readerOnly = false; windowState = { ...windowState, thread: null }; setFocusedPane('messageList') }
   function keydown(event: KeyboardEvent) {
@@ -130,9 +136,16 @@
   onMount(() => {
     setFocusedPane('messageList')
     void loadNavigation()
-
   })
   $effect(() => { WindowSetTitle(`${label(windowState.scope)} — Postilaatikko`) })
+  $effect(() => {
+    const request = virtualFoldersStore.saveSearchRequest
+    if (!request) return
+    virtualFoldersStore.clearSaveSearchRequest()
+    pendingSearchQuery = request.query
+    pendingSearchFolderId = request.folderId
+    showVirtualFolderDialog = true
+  })
 </script>
 
 <svelte:window onkeydown={keydown} onfocus={() => { refresh(); void loadNavigation() }} />
@@ -157,17 +170,21 @@
     </section>
     <section class="mail-reader flex-1 min-w-0 min-h-0" role="presentation" onclick={() => setFocusedPane('viewer')}>
       {#if windowState.thread}
-        <ConversationViewer bind:this={viewer} threadId={windowState.thread.threadId} folderId={windowState.thread.folderId} accountId={windowState.thread.accountId} folderType={windowState.scope.folderType}
+        {@const thread = windowState.thread}
+        <ConversationViewer bind:this={viewer} threadId={thread.threadId} folderId={thread.folderId} accountId={thread.accountId} folderType={windowState.scope.folderType}
           isFocused={getFocusedPane() === 'viewer'} showBackButton onBack={closeReader} onReply={reply}
-          onEditDraft={draftId => run(() => OpenComposerWindow(windowState.thread!.accountId, 'new', '', draftId, ''))}
+          onEditDraft={draftId => run(() => OpenComposerWindow(thread.accountId, 'new', '', draftId, ''))}
           onToggleThreadFocus={() => readerOnly = !readerOnly} inFocusMode={readerOnly}
           onActionComplete={() => list?.handleActionComplete(true)}
-          onComposeToAddress={address => run(() => OpenComposerWindow(windowState.thread!.accountId, 'new', '', '', `mailto:${encodeURIComponent(address)}`))} />
+          onComposeToAddress={address => run(() => OpenComposerWindow(thread.accountId, 'new', '', '', `mailto:${encodeURIComponent(address)}`))} />
       {:else}<div class="h-full flex items-center justify-center text-muted-foreground text-sm">{$_('mailWindow.selectMessage')}</div>{/if}
     </section>
   </main>
 </div>
 <ToastContainer />
+<VirtualFolderDialog bind:open={showVirtualFolderDialog} virtualFolder={null} accounts={accountStore.accounts}
+  initialSearchQuery={pendingSearchQuery} initialFolderId={pendingSearchFolderId}
+  onSave={async value => { await virtualFoldersStore.save(value as virtualfolder.VirtualFolder); await loadNavigation() }} />
 <style>
   .mail-list { width: var(--list-width); flex-shrink: 0; }
   .reader-only .mail-list { display: none; }
