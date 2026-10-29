@@ -78,10 +78,6 @@ func (a *App) DeleteVirtualFolder(id string) error {
 
 // GetVirtualFolderConversations returns conversations matching a virtual folder's criteria
 func (a *App) GetVirtualFolderConversations(virtualFolderID string, offset, limit int, sortOrder string) ([]*message.Conversation, error) {
-	storedQuery := ""
-	if vf, err := a.virtualFolderStore.Get(virtualFolderID); err == nil && vf != nil {
-		storedQuery = vf.SearchQuery
-	}
 	if a.syncEngine != nil {
 		result := []*message.Conversation{}
 		cursor := ""
@@ -89,7 +85,8 @@ func (a *App) GetVirtualFolderConversations(virtualFolderID string, offset, limi
 			limit = 50
 		}
 		for pages := 0; pages < 100; pages++ {
-			page, err := a.SearchMail(MailSearchRequest{VirtualFolderID: virtualFolderID, Query: storedQuery, Cursor: cursor, Limit: 100})
+			// SearchMail applies the folder's saved search query itself.
+			page, err := a.SearchMail(MailSearchRequest{VirtualFolderID: virtualFolderID, Cursor: cursor, Limit: 100})
 			if err != nil {
 				return nil, err
 			}
