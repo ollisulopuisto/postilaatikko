@@ -20,6 +20,7 @@ import (
 	"github.com/hkdb/aerion/internal/imap"
 	"github.com/hkdb/aerion/internal/ipc"
 	"github.com/hkdb/aerion/internal/logging"
+	"github.com/hkdb/aerion/internal/macoscontacts"
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/oauth2"
 	"github.com/hkdb/aerion/internal/pgp"
@@ -163,6 +164,7 @@ func (c *ComposerApp) Startup(ctx context.Context) {
 	c.folderStore = folder.NewStore(db)
 	c.messageStore = message.NewStore(db)
 	c.contactStore = contact.NewStore(db.DB)
+	c.contactStore.SetMacOSContactsSource(macoscontacts.New())
 
 	// Initialize vCard scanner for contact autocomplete (shared .vcf files)
 	vcardScanner := contact.NewVCardScanner(contact.DefaultVCardPaths(), 20*time.Minute)

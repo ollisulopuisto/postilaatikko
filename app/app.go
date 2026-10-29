@@ -34,6 +34,7 @@ import (
 	"github.com/hkdb/aerion/internal/ipc"
 	"github.com/hkdb/aerion/internal/kit/davutil"
 	"github.com/hkdb/aerion/internal/logging"
+	"github.com/hkdb/aerion/internal/macoscontacts"
 	"github.com/hkdb/aerion/internal/mailfilter"
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/notification"
@@ -600,6 +601,7 @@ func (a *App) Startup(ctx context.Context) {
 	a.filterStore = mailfilter.NewStore(db)
 	a.attachmentStore = message.NewAttachmentStore(db)
 	a.contactStore = contact.NewStore(db.DB)
+	a.contactStore.SetMacOSContactsSource(macoscontacts.New())
 	a.draftStore = draft.NewStore(db)
 	a.settingsStore = settings.NewStore(db)
 	a.appStateStore = appstate.NewStore(db.DB)
