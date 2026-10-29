@@ -651,6 +651,17 @@
   color: hsl(var(--primary));
 }
 
+.navigation-entry-label {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: normal;
+  line-height: 1.15rem;
+}
+
 /* Folder rows reserve a leading chevron column. Reserve that same column for
    the top-level destinations so every primary icon shares one visual axis. */
 .spark-sidebar-rebuilt:not(.spark-sidebar-collapsed) .sidebar-primary-navigation > .sidebar-primary-link {

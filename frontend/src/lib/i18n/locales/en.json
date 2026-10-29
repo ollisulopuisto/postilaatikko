@@ -66,6 +66,7 @@
     "back": "Back",
     "next": "Next",
     "done": "Done",
+    "moreActions": "More actions",
     "confirm": "Confirm",
     "saveChanges": "Save Changes",
     "none": "None"
@@ -151,6 +152,9 @@
     "virtualFolderSearchFolders": "Search folders",
     "virtualFolderRefreshFolders": "Refresh folder list",
     "virtualFolderRefreshFailed": "Could not refresh Gmail labels. Try again.",
+    "virtualFolderVisibleSelection": "{selected} of {total} shown selected",
+    "virtualFolderSelectVisible": "Select shown",
+    "virtualFolderClearVisible": "Clear shown",
     "deleteVirtualFolderTitle": "Delete virtual folder?",
     "deleteVirtualFolderDescription": "“{name}” will be removed. Its member folders and their messages are not changed.",
     "virtualFolderNoFolderMatches": "No folders match your search.",

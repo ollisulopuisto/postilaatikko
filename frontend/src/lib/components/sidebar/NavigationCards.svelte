@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from '@iconify/svelte'
+  import { DropdownMenu } from 'bits-ui'
   import { navigationCards as nav } from '$lib/stores/navigationCards.svelte'
   import { _ } from '$lib/i18n'
   import type { NavigationCard, NavigationEntry } from '$lib/sidebar/cards'
@@ -70,16 +71,9 @@
               <div class="group flex items-center gap-1 px-2 py-0.5" role="group" aria-label={entry.name} draggable={editing}
                 ondragstart={(event) => dragEntry(event, id)}
                 ondragover={(event) => event.preventDefault()} ondrop={(event) => drop(event, card.id, index)}>
-                {#if !editing}
-                  <span class="inline-flex h-5 w-4 shrink-0 cursor-grab items-center justify-center text-muted-foreground/60 opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
-                    draggable="true" role="button" tabindex="-1" aria-label={$_('navigation.dragEntry')}
-                    ondragstart={(event) => dragEntry(event, id)}>
-                    <Icon icon="mdi:drag-vertical" class="h-4 w-4" />
-                  </span>
-                {/if}
                 <button type="button" class="sidebar-primary-link min-w-0 flex-1 {selectedFolderId === entry.folderId || (entry.kind === 'system' && selectedFolderId === entry.folderType) || (entry.kind === 'inboxes' && selectedFolderId === 'inbox') ? 'sidebar-primary-link-selected' : ''}" onclick={() => onSelect(entry)} title={entry.path || entry.name} aria-label={entry.name}>
                   <Icon icon={entry.folderType === 'replyLater' ? 'mdi:clock-outline' : entry.kind === 'virtual' ? 'mdi:folder-multiple-outline' : entry.kind === 'inboxes' ? 'mdi:inbox-multiple-outline' : 'mdi:folder-outline'} class="h-5 w-5 shrink-0" />
-                  <span class="min-w-0 whitespace-normal break-words leading-tight line-clamp-2">{entry.name}</span>
+                  <span class="navigation-entry-label min-w-0 flex-1 whitespace-normal break-words leading-tight line-clamp-2">{entry.name}</span>
                   {#if entry.count !== undefined}<span class="ml-auto shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground">{entry.count}</span>{/if}
                 </button>
                 {#if !editing}
@@ -90,9 +84,29 @@
                     <Icon icon={isQuick(id) ? 'mdi:star' : 'mdi:star-outline'} />
                   </button>
                 {/if}
-                {#if entry.kind === 'virtual'}
-                  <button type="button" class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-muted" aria-label={`Edit ${entry.name}`} onclick={() => onEdit?.(entry)}><Icon icon="mdi:pencil-outline" /></button>
-                  <button type="button" class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded opacity-0 group-hover:opacity-100 focus-visible:opacity-100 hover:bg-muted" aria-label={`Delete ${entry.name}`} onclick={() => onDelete?.(entry)}><Icon icon="mdi:delete-outline" /></button>
+                {#if entry.kind === 'virtual' && !editing}
+                  <DropdownMenu.Root>
+                    <DropdownMenu.Trigger
+                      class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label={$_('common.moreActions')}
+                      title={$_('common.moreActions')}
+                    >
+                      <Icon icon="mdi:dots-horizontal" class="h-4 w-4" />
+                    </DropdownMenu.Trigger>
+                    <DropdownMenu.Portal>
+                      <DropdownMenu.Content align="end" side="right" sideOffset={4} class="z-50 min-w-[160px] rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md">
+                        <DropdownMenu.Item onSelect={() => onEdit?.(entry)} class="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent focus:text-accent-foreground">
+                          <Icon icon="mdi:pencil-outline" class="mr-2 h-4 w-4" />{$_('common.edit')}
+                        </DropdownMenu.Item>
+                        <DropdownMenu.Item onSelect={() => onDelete?.(entry)} class="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm text-destructive outline-none focus:bg-accent focus:text-accent-foreground">
+                          <Icon icon="mdi:delete-outline" class="mr-2 h-4 w-4" />{$_('common.delete')}
+                        </DropdownMenu.Item>
+                      </DropdownMenu.Content>
+                    </DropdownMenu.Portal>
+                  </DropdownMenu.Root>
+                {:else if entry.kind === 'virtual'}
+                  <button type="button" class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-muted" aria-label={`Edit ${entry.name}`} onclick={() => onEdit?.(entry)}><Icon icon="mdi:pencil-outline" /></button>
+                  <button type="button" class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-muted" aria-label={`Delete ${entry.name}`} onclick={() => onDelete?.(entry)}><Icon icon="mdi:delete-outline" /></button>
                 {/if}
                 {#if editing}
                   <button type="button" class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-muted" aria-label={$_('navigation.quickAccess')} aria-pressed={nav.state.quick.includes(id)} disabled={!nav.state.quick.includes(id) && nav.state.quick.length >= 10} onclick={() => nav.toggleQuick(id)}><Icon icon={nav.state.quick.includes(id) ? 'mdi:star' : 'mdi:star-outline'} /></button>
