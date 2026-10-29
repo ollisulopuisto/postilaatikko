@@ -4,9 +4,20 @@
   import * as Select from '$lib/components/ui/select'
   import { Button } from '$lib/components/ui/button'
   import { folder, account } from '../../../../wailsjs/go/models'
-  import { GetFolders } from '../../../../wailsjs/go/app/App'
+  import { GetFolderTree } from '../../../../wailsjs/go/app/App'
   import { _ } from '$lib/i18n'
   import { filterFolders, type FolderChoice } from '$lib/sidebar/folderSearch'
+
+  interface PickerNode {
+    folder: FolderChoice
+    children: PickerNode[]
+  }
+  interface PickerRow {
+    kind: 'account' | 'folder'
+    account: account.Account
+    node?: PickerNode
+    depth?: number
+  }
 
   interface Props {
     open: boolean
@@ -19,43 +30,97 @@
   let { open = $bindable(false), title, initialAccountId, accounts, excludeFolderId = '', onSelect }: Props = $props()
   let searchQuery = $state('')
   let selectedAccountId = $state('all')
-  let folders = $state<FolderChoice[]>([])
+  let folderTrees = $state<Record<string, PickerNode[]>>({})
   let foldersLoading = $state(false)
   let failedAccounts = $state<string[]>([])
+  let expandedFolders = $state<Record<string, boolean>>({})
   let focusedIndex = $state(-1)
   let searchInput = $state<HTMLInputElement | null>(null)
   let listEl = $state<HTMLDivElement | null>(null)
   let active = $state(false)
   let generation = 0
 
-  // GetFolders reads local metadata only. One unavailable account does not hide others.
+  function mapTree(nodes: folder.FolderTree[], acc: account.Account): PickerNode[] {
+    return (nodes || []).flatMap(tree => {
+      if (!tree.folder) return mapTree(tree.children || [], acc)
+      const item = tree.folder
+      const choice: FolderChoice = {
+        id: item.id,
+        name: item.name,
+        path: item.path,
+        type: item.type,
+        accountId: acc.id,
+        accountName: acc.name,
+        accountEmail: acc.email,
+        label: `${acc.name} ${acc.email} ${item.path} ${item.name}`,
+      }
+      return [{ folder: choice, children: mapTree(tree.children || [], acc) }]
+    })
+  }
+
   $effect(() => {
     if (!open) { generation++; searchQuery = ''; active = false; return }
     const current = ++generation
     selectedAccountId = 'all'
     foldersLoading = true
-    folders = []
+    folderTrees = {}
     failedAccounts = []
-    const jobs = accounts.map(async item => {
-      const result = await GetFolders(item.id)
-      return (result || []).map((f: folder.Folder): FolderChoice => ({ id: f.id, name: f.name, path: f.path, type: f.type, accountId: item.id, accountName: item.name, accountEmail: item.email, label: `${item.name} ${item.email} ${f.path} ${f.name}` }))
-    })
+    const jobs = accounts.map(async item => ({ account: item, nodes: mapTree(await GetFolderTree(item.id), item) }))
     Promise.allSettled(jobs).then(results => {
       if (current !== generation || !open) return
-      folders = results.flatMap(result => result.status === 'fulfilled' ? result.value : [])
+      folderTrees = Object.fromEntries(results.flatMap(result => result.status === 'fulfilled' ? [[result.value.account.id, result.value.nodes]] : []))
       failedAccounts = results.flatMap((result, index) => result.status === 'rejected' ? [accounts[index].name] : [])
       foldersLoading = false
     })
     const timer = setTimeout(() => { active = true; searchInput?.focus() }, 0)
     return () => clearTimeout(timer)
   })
+
   const sourceAccount = $derived(accounts.find(item => item.id === initialAccountId))
-  const allMatches = $derived(filterFolders(folders.filter(item => item.id !== excludeFolderId && (selectedAccountId === 'all' || item.accountId === selectedAccountId)), searchQuery)
-    .sort((a, b) => Number(b.accountId === initialAccountId) - Number(a.accountId === initialAccountId) || a.accountName.localeCompare(b.accountName) || a.accountEmail.localeCompare(b.accountEmail) || a.accountId.localeCompare(b.accountId) || a.path.localeCompare(b.path)))
-  const displayFolders = $derived(allMatches.slice(0, 200))
+  const allFolders = $derived(accounts.flatMap(item => flatten(folderTrees[item.id] || [])))
+  const matchingFolders = $derived(filterFolders(allFolders.filter(item => item.id !== excludeFolderId && (selectedAccountId === 'all' || item.accountId === selectedAccountId)), searchQuery))
+  const matchingIDs = $derived(new Set(matchingFolders.map(item => item.id)))
+  const visibleRows = $derived(buildRows())
+  const displayFolders = $derived(visibleRows.flatMap(row => row.kind === 'folder' && row.node ? [row.node.folder] : []))
+
+  function flatten(nodes: PickerNode[]): FolderChoice[] {
+    return nodes.flatMap(node => [node.folder, ...flatten(node.children)])
+  }
+
+  function subtreeMatches(node: PickerNode): boolean {
+    return matchingIDs.has(node.folder.id) || node.children.some(subtreeMatches)
+  }
+
+  function appendRows(rows: PickerRow[], nodes: PickerNode[], acc: account.Account, depth: number, searching: boolean) {
+    for (const node of nodes) {
+      const hasMatch = subtreeMatches(node)
+      if (searching && !hasMatch) continue
+      rows.push({ kind: 'folder', account: acc, node, depth })
+      if (node.children.length && (searching || expandedFolders[node.folder.id])) {
+        appendRows(rows, node.children, acc, depth + 1, searching)
+      }
+    }
+  }
+
+  function buildRows(): PickerRow[] {
+    const rows: PickerRow[] = []
+    const searching = searchQuery.trim().length > 0
+    for (const acc of accounts) {
+      if (selectedAccountId !== 'all' && selectedAccountId !== acc.id) continue
+      const accountRows: PickerRow[] = []
+      appendRows(accountRows, folderTrees[acc.id] || [], acc, 0, searching)
+      if (!accountRows.length) continue
+      rows.push({ kind: 'account', account: acc }, ...accountRows)
+    }
+    return rows
+  }
+
   $effect(() => { void displayFolders; focusedIndex = displayFolders.length ? 0 : -1 })
-  $effect(() => { if (focusedIndex >= 0) listEl?.querySelectorAll('button')[focusedIndex]?.scrollIntoView({ block: 'nearest' }) })
+  $effect(() => { if (focusedIndex >= 0) listEl?.querySelectorAll<HTMLElement>('[role="option"]')[focusedIndex]?.scrollIntoView({ block: 'nearest' }) })
+
   function select(item: FolderChoice) { onSelect(item.id, item.name, item.accountId) }
+  function toggleExpanded(item: FolderChoice) { expandedFolders[item.id] = !expandedFolders[item.id] }
+
   function handleKeydown(event: KeyboardEvent) {
     if (!open || !active || event.altKey || event.metaKey || event.ctrlKey) return
     const target = event.target as HTMLElement | null
@@ -64,9 +129,26 @@
       event.preventDefault(); event.stopPropagation()
       if (displayFolders.length) focusedIndex = (focusedIndex + (event.key === 'ArrowDown' ? 1 : -1) + displayFolders.length) % displayFolders.length
     }
+    if (target !== searchInput && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+      const row = (target as HTMLElement).closest<HTMLElement>('[data-folder-id]')
+      const id = row?.dataset.folderId
+      const item = displayFolders.find(folder => folder.id === id)
+      const hasChildren = item ? (findNode(folderTrees[item.accountId] || [], item.id)?.children.length ?? 0) > 0 : false
+      if (item && hasChildren && event.key === 'ArrowRight' && !expandedFolders[item.id]) { event.preventDefault(); event.stopPropagation(); toggleExpanded(item) }
+      if (item && hasChildren && event.key === 'ArrowLeft' && expandedFolders[item.id]) { event.preventDefault(); event.stopPropagation(); toggleExpanded(item) }
+    }
     if (event.key === 'Enter' && focusedIndex >= 0 && displayFolders[focusedIndex]) {
       event.preventDefault(); event.stopPropagation(); select(displayFolders[focusedIndex])
     }
+  }
+
+  function findNode(nodes: PickerNode[], id: string): PickerNode | null {
+    for (const node of nodes) {
+      if (node.folder.id === id) return node
+      const found = findNode(node.children, id)
+      if (found) return found
+    }
+    return null
   }
 </script>
 
@@ -90,30 +172,37 @@
     <div bind:this={listEl} class="border border-border rounded-md max-h-72 overflow-y-auto" role="listbox" aria-label={title} aria-busy={foldersLoading}>
       {#if foldersLoading}
         <p class="p-3 text-sm text-muted-foreground">{$_('common.loading')}</p>
-      {:else}
-        {#each displayFolders as item, index (item.id)}
-          {#if index === 0 || displayFolders[index - 1].accountId !== item.accountId}
-            <div class="px-3 pt-4 pb-2" data-account-heading={item.accountId}>
-              <p class="text-sm font-medium text-muted-foreground">{item.accountName || item.accountEmail}</p>
-              <p class="text-xs text-muted-foreground">{item.accountEmail}</p>
-              {#if item.accountId !== initialAccountId}
-                <p class="mt-1 text-xs text-amber-700 dark:text-amber-300" data-cross-account>
-                  {$_('search.crossAccount')}: {sourceAccount?.name || sourceAccount?.email || initialAccountId} → {item.accountName || item.accountEmail}
-                </p>
+      {:else if visibleRows.length}
+        {#each visibleRows as row (row.kind === 'account' ? `account:${row.account.id}` : row.node!.folder.id)}
+          {#if row.kind === 'account'}
+            <div class="px-3 pt-4 pb-2" data-account-heading={row.account.id}>
+              <p class="text-sm font-medium text-muted-foreground">{row.account.name || row.account.email}</p>
+              <p class="text-xs text-muted-foreground">{row.account.email}</p>
+            </div>
+          {:else if row.node}
+            {@const item = row.node.folder}
+            {@const hasChildren = row.node.children.length > 0}
+            <div class="flex items-center pr-2 hover:bg-muted/50 {displayFolders[focusedIndex]?.id === item.id ? 'bg-muted/50' : ''}" style={`padding-left: ${12 + (row.depth || 0) * 20}px`} data-folder-id={item.id}>
+              {#if hasChildren}
+                <button type="button" class="h-8 w-7 shrink-0 grid place-items-center text-muted-foreground hover:text-foreground" aria-label={$_(expandedFolders[item.id] || searchQuery.trim() ? 'search.collapseFolder' : 'search.expandFolder')} aria-expanded={!!(expandedFolders[item.id] || searchQuery.trim())} onclick={() => toggleExpanded(item)}>
+                  <Icon icon={expandedFolders[item.id] || searchQuery.trim() ? 'mdi:chevron-down' : 'mdi:chevron-right'} class="w-4 h-4" />
+                </button>
+              {:else}
+                <span class="w-7 shrink-0"></span>
               {/if}
+              <button type="button" role="option" aria-selected={displayFolders[focusedIndex]?.id === item.id}
+                class="min-w-0 flex-1 flex gap-2 items-start py-2 text-left"
+                aria-label={`${item.path || item.name} · ${item.accountName} · ${item.accountEmail}`}
+                onclick={() => select(item)}>
+                <Icon icon="mdi:folder-outline" class="w-4 h-4 shrink-0 mt-0.5" />
+                <span class="min-w-0 flex-1 text-sm break-words">{item.name || item.path}{#if searchQuery.trim() && item.path !== item.name}<span class="block text-xs text-muted-foreground">{item.path}</span>{/if}</span>
+              </button>
             </div>
           {/if}
-          <button type="button" role="option" aria-selected={index === focusedIndex}
-            class="w-full flex gap-2 items-start px-5 py-2 text-left hover:bg-muted/50 {index === focusedIndex ? 'bg-muted/50' : ''}"
-            aria-label={`${item.path || item.name} · ${item.accountName} · ${item.accountEmail}`}
-            onclick={() => select(item)}>
-            <Icon icon="mdi:folder-outline" class="w-4 h-4 shrink-0 mt-0.5" />
-            <span class="min-w-0 flex-1 text-sm break-words">{item.path || item.name}</span>
-          </button>
-        {:else}<p class="p-3 text-sm text-muted-foreground">{$_('contextMenu.noFoldersAvailable')}</p>{/each}
-      {/if}
+        {/each}
+      {:else}<p class="p-3 text-sm text-muted-foreground">{$_('contextMenu.noFoldersAvailable')}</p>{/if}
     </div>
-    {#if allMatches.length > 200}<p class="text-xs text-muted-foreground">{$_('search.refineFolders')}</p>{/if}
+    {#if matchingFolders.length > 200}<p class="text-xs text-muted-foreground">{$_('search.refineFolders')}</p>{/if}
     <Dialog.Footer><Button variant="outline" onclick={() => (open = false)}>{$_('common.cancel')}</Button></Dialog.Footer>
   </Dialog.Content>
 </Dialog.Root>

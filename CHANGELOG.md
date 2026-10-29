@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Browse nested folders in the cross-account move/copy picker and keep Gmail's `v` shortcut from closing it while typing a destination.
+
 ## Postilaatikko 2026.10.29.1
 
 - Replace half-second dialog-guard polling in message lists and readers with event-driven refreshes when the last blocking dialog closes.
