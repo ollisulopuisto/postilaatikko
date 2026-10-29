@@ -546,9 +546,21 @@ Each section is one reviewable task, not an instruction to implement the whole p
 
 **Files:** `frontend/src/lib/components/sidebar/Sidebar.svelte`; `frontend/src/lib/components/viewer/ConversationMessage.svelte`; `frontend/src/lib/stores/replyQueue.svelte.ts (create)`; `internal/automation/v1/reply_queue.go (create)`. Paths marked create are proposed; inspect the integrated base before creating an equivalent second module.
 
-**Deliverable / acceptance:** Expose queue add/remove beside messages, a moveable system view and count, plus the same operations to authorized agents. Add quick filters for unread messages and explicit Reply Later queue membership within the current folder. Distinguish Reply Later, Snooze and Send Later in names and effects. Show empty/loading/error states and recover hidden navigation. The queue is a normal mail view that can be opened in a tab/window; it does not need a modal or separate window of its own.
+**Deliverable / acceptance:** Expose queue add/remove beside messages, a moveable system view and count, plus the same operations to authorized agents. Distinguish Reply Later, Snooze and Send Later in names and effects. Show empty/loading/error states and recover hidden navigation. The queue is a normal mail view that can be opened in a tab/window; it does not need a modal or separate window of its own. Folder quick filters are delivered independently in UX-043 so they can ship without waiting for the broader sidebar and agent API work.
 
 **Verification:** queue/API adapter tests; frontend build; restart and keyboard queue management walkthrough.
+
+<a id="ux-043"></a>
+
+### UX-043: Folder-level quick filters
+
+**Effort:** Easy. **Suggested agent:** Luna High. **Dependencies:** UX-025.
+
+**Files:** `frontend/src/lib/components/list/MessageList.svelte`; `internal/message/store.go`; `docs/plans/2026-10-26-conversation-navigation-agent-api.md`; `TASKS.md`; Finnish and English locale files.
+
+**Deliverable / acceptance:** Put visible quick filter controls in the active folder list for unread conversations and explicit Reply Later queue members. Filters operate on complete folder/unified-folder result sets, including matching counts and search results, rather than only the loaded page. Filter selection is scoped to the active mail workspace and resets safely when navigating to a new folder. Virtual-folder online filtering is not part of this slice unless its provider query path can apply the same complete-set semantics without downloading message bodies or truncating results.
+
+**Verification:** focused Go query checks and frontend build; no body fetches. Confirm switching folders clears the old list while the new filtered result loads.
 
 <a id="ux-027"></a>
 
