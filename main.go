@@ -44,22 +44,24 @@ func init() {
 
 // Command-line flags
 var (
-	debugMode        = flag.Bool("debug", false, "Enable debug logging")
-	mailWindowMode   = flag.Bool("mail-window", false, "Open an independent mail window")
-	readerFolderName = flag.String("reader-folder-name", "", "Initial mail folder name")
-	readerMode       = flag.Bool("reader", false, "Open a detached thread reader")
-	readerFolder     = flag.String("reader-folder", "", "Reader folder ID")
-	readerThread     = flag.String("reader-thread", "", "Reader thread ID")
-	readerFolderType = flag.String("reader-folder-type", "", "Reader folder type")
-	composeMode      = flag.Bool("compose", false, "Run in composer mode (detached window)")
-	accountID        = flag.String("account", "", "Account ID for composer")
-	ipcAddress       = flag.String("ipc-address", "", "IPC server address to connect to")
-	mode             = flag.String("mode", "new", "Compose mode: new, reply, reply-all, forward")
-	messageID        = flag.String("message-id", "", "Original message ID for reply/forward")
-	draftID          = flag.String("draft-id", "", "Draft ID to resume editing")
-	mailtoFlag       = flag.String("mailto", "", "Mailto URL to open in composer (detached mode)")
-	dbusNotify       = flag.Bool("dbus-notify", false, "Use direct D-Bus notifications instead of portal (Linux only)")
-	versionFlag      = flag.Bool("version", false, "Show version and exit")
+	debugMode           = flag.Bool("debug", false, "Enable debug logging")
+	mailWindowMode      = flag.Bool("mail-window", false, "Open an independent mail window")
+	readerFolderName    = flag.String("reader-folder-name", "", "Initial mail folder name")
+	readerMode          = flag.Bool("reader", false, "Open a detached thread reader")
+	readerFolder        = flag.String("reader-folder", "", "Reader folder ID")
+	readerThread        = flag.String("reader-thread", "", "Reader thread ID")
+	readerThreadAccount = flag.String("reader-thread-account", "", "Mail window selected thread account ID")
+	readerThreadFolder  = flag.String("reader-thread-folder", "", "Mail window selected thread folder ID")
+	readerFolderType    = flag.String("reader-folder-type", "", "Reader folder type")
+	composeMode         = flag.Bool("compose", false, "Run in composer mode (detached window)")
+	accountID           = flag.String("account", "", "Account ID for composer")
+	ipcAddress          = flag.String("ipc-address", "", "IPC server address to connect to")
+	mode                = flag.String("mode", "new", "Compose mode: new, reply, reply-all, forward")
+	messageID           = flag.String("message-id", "", "Original message ID for reply/forward")
+	draftID             = flag.String("draft-id", "", "Draft ID to resume editing")
+	mailtoFlag          = flag.String("mailto", "", "Mailto URL to open in composer (detached mode)")
+	dbusNotify          = flag.Bool("dbus-notify", false, "Use direct D-Bus notifications instead of portal (Linux only)")
+	versionFlag         = flag.Bool("version", false, "Show version and exit")
 )
 
 // DebugMode returns whether debug logging is enabled
@@ -333,7 +335,7 @@ func runReaderMode() {
 		println("Error: reader requires account, folder, thread and IPC address")
 		os.Exit(1)
 	}
-	reader := app.NewReaderApp(app.ReaderConfig{MailWindow: *mailWindowMode, FolderName: *readerFolderName, AccountID: *accountID, FolderID: *readerFolder, ThreadID: *readerThread, FolderType: *readerFolderType, IPCAddress: *ipcAddress})
+	reader := app.NewReaderApp(app.ReaderConfig{MailWindow: *mailWindowMode, FolderName: *readerFolderName, AccountID: *accountID, FolderID: *readerFolder, ThreadID: *readerThread, ThreadAccountID: *readerThreadAccount, ThreadFolderID: *readerThreadFolder, FolderType: *readerFolderType, IPCAddress: *ipcAddress})
 	entry := "/reader.html"
 	width := 900
 	if *mailWindowMode {

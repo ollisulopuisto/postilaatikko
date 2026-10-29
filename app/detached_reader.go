@@ -21,13 +21,15 @@ const readerCallType = "reader_call"
 
 // ReaderConfig fixes the selected thread independently of the main window.
 type ReaderConfig struct {
-	MailWindow bool   `json:"mailWindow"`
-	FolderName string `json:"folderName"`
-	AccountID  string `json:"accountId"`
-	FolderID   string `json:"folderId"`
-	ThreadID   string `json:"threadId"`
-	FolderType string `json:"folderType"`
-	IPCAddress string `json:"-"`
+	MailWindow      bool   `json:"mailWindow"`
+	FolderName      string `json:"folderName"`
+	AccountID       string `json:"accountId"`
+	FolderID        string `json:"folderId"`
+	ThreadID        string `json:"threadId"`
+	ThreadAccountID string `json:"threadAccountId"`
+	ThreadFolderID  string `json:"threadFolderId"`
+	FolderType      string `json:"folderType"`
+	IPCAddress      string `json:"-"`
 }
 
 // ReaderApp owns a window and authenticated IPC only: no database or sync engine.

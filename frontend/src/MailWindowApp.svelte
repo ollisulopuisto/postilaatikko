@@ -19,7 +19,7 @@
   import { GetAccounts, GetFolders, GetFolderTree, GetMessage, OpenMailWindow, OpenComposerWindow, MarkAsRead, MarkAsUnread, Star, Unstar, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ArchiveWithUndo, UndoOperation } from '../wailsjs/go/app/App'
   import { EventsEmit, WindowSetTitle } from '../wailsjs/runtime/runtime'
 
-  let { config }: { config: MailScope } = $props()
+  let { config, embedded = false, active = true, onScopeChange, onNewTab }: { config: MailScope; embedded?: boolean; active?: boolean; onScopeChange?: (scope: MailScope) => void; onNewTab?: () => void } = $props()
   // A process per window gives each component/store its own search, checked
   // rows, scroll memory and reader mode. Primary UI state is never persisted.
   let windowState = $state(createMailWindowState(untrack(() => config)))
@@ -66,11 +66,13 @@
     const scope = scopes.find(scope => scopeKey(scope) === value)
     if (!scope) return
     windowState = navigateMailWindow(windowState, scope)
+    onScopeChange?.({ ...scope, ...(windowState.thread ? { threadId: windowState.thread.threadId, threadAccountId: windowState.thread.accountId, threadFolderId: windowState.thread.folderId } : {}) })
     readerOnly = false
     setFocusedPane('messageList')
   }
   function select(threadId: string, folderId: string, accountId: string) {
     windowState = selectMailWindowConversation(windowState, threadId, folderId, accountId)
+    onScopeChange?.({ ...windowState.scope, threadId, threadAccountId: accountId, threadFolderId: folderId })
   }
   async function run(action: () => Promise<unknown>) {
     try { await action() }
@@ -78,7 +80,7 @@
   }
   async function newWindow() {
     const { accountId, folderId, folderName, folderType } = windowState.scope
-    await run(() => OpenMailWindow(accountId, folderId, folderName, folderType))
+    await run(() => OpenMailWindow(accountId, folderId, folderName, folderType, windowState.thread?.threadId || '', windowState.thread?.accountId || '', windowState.thread?.folderId || ''))
   }
   async function compose() {
     const accountId = accountStore.accounts.some(item => item.account.id === windowState.scope.accountId)
@@ -146,10 +148,10 @@
       }))
     }
   }
-  function closeReader() { readerOnly = false; windowState = { ...windowState, thread: null }; setFocusedPane('messageList') }
+  function closeReader() { readerOnly = false; windowState = { ...windowState, thread: null }; onScopeChange?.({ ...windowState.scope, threadId: undefined, threadAccountId: undefined, threadFolderId: undefined }); setFocusedPane('messageList') }
   function keydown(event: KeyboardEvent) {
-    if (isInputElement(event.target) || isDialogGuardActive() || event.defaultPrevented) return
-    if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 'n') { event.preventDefault(); void newWindow(); return }
+    if (!active || isInputElement(event.target) || isDialogGuardActive() || event.defaultPrevented) return
+    if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 'n') { event.preventDefault(); if (embedded) onNewTab?.(); else void newWindow(); return }
     if (event.ctrlKey || event.metaKey || event.altKey) return
     if (event.key === 'Escape') { closeReader(); return }
     if (event.key === '/') { event.preventDefault(); list?.toggleSearchFocus(); return }
@@ -171,7 +173,7 @@
     setFocusedPane('messageList')
     void loadNavigation()
   })
-  $effect(() => { WindowSetTitle(`${label(windowState.scope)} — Postilaatikko`) })
+  $effect(() => { if (!embedded) WindowSetTitle(`${label(windowState.scope)} — Postilaatikko`) })
   $effect(() => {
     const request = virtualFoldersStore.saveSearchRequest
     if (!request) return
@@ -182,8 +184,8 @@
   })
 </script>
 
-<svelte:window onkeydown={keydown} onfocus={() => { refresh(); void loadNavigation() }} />
-<div class="mail-window h-screen flex flex-col overflow-hidden bg-background text-foreground">
+<svelte:window onkeydown={keydown} onfocus={() => { if (active) { refresh(); void loadNavigation() } }} />
+<div class="mail-window {embedded ? 'h-full' : 'h-screen'} flex flex-col overflow-hidden bg-background text-foreground">
   <header class="flex items-center gap-2 border-b border-border p-2">
     <select class="min-w-0 flex-1 rounded border border-border bg-background p-2 text-sm" aria-label={$_('mailWindow.folder')} value={currentKey} onchange={event => navigate(event.currentTarget.value)} disabled={loading}>
       {#if !scopes.some(scope => scopeKey(scope) === currentKey)}<option value={currentKey}>{label(windowState.scope)}</option>{/if}
