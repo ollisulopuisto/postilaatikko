@@ -18,15 +18,15 @@ Add JSON-backed `SignatureRules` to `Identity` and `IdentityConfig`, defaulting 
 
 ### Task 2: Add a deterministic selector
 
-**Files:** new pure Go selector helper under `internal/account/`; focused unit tests.
+**Files:** new pure TypeScript selector helper under `frontend/src/lib/components/composer/`; focused frontend coverage.
 
 Select only from the selected sender identity's rules. Consider all To/Cc/Bcc recipients. Prefer exact-address rules over domain rules, then configuration order; unsupported/empty context falls back to the existing signature. New, reply, reply-all and forward remain distinct modes.
 
 ### Task 3: Add rule editing to identity settings
 
-**Files:** `frontend/src/lib/components/settings/account/IdentityEditor.svelte`; localized strings; settings tests.
+**Files:** `frontend/src/lib/components/settings/account/IdentityEditor.svelte`; English and Finnish localized strings; settings checks.
 
-Allow adding, editing, reordering and removing rules. Each rule exposes recipient address/domain matching, message type, HTML/text signature and placement. The existing signature editor remains the fallback. Keep the UI keyboard-accessible and avoid changing account editor geometry unnecessarily.
+Allow adding, editing, reordering and removing rules. Each rule exposes recipient address/domain matching, message type, HTML/text signature, placement and separator. The existing signature editor remains the fallback. Keep the UI keyboard-accessible and avoid changing account editor geometry unnecessarily.
 
 ### Task 4: Apply rules in compose without losing edits
 
@@ -37,5 +37,7 @@ Resolve the initial signature after identity, compose mode and initial recipient
 ### Task 5: Verify and checkpoint
 
 Run focused account-store/selector tests, signature composer tests, Svelte checks, changed-file lint and production build. Confirm legacy identities still use their original signature and manual edits survive recipient changes. Commit storage, UI, and composer checkpoints separately; update `TASKS.md` with exact verification and remaining platform checks.
+
+**Current implementation note (2026-10-29):** storage and round-trip validation are committed. The selector is implemented in TypeScript and used by both rich-text and plain-text compose paths. This worktree has no frontend `node_modules`, and the sandbox cannot download packages, so Svelte checks and frontend tests have not been run locally; CI should perform them after the implementation is pushed.
 
 **Acceptance:** Rules choose by sender identity, recipient and message type; rule order is deterministic; no matching rule uses the current identity signature; changing recipients updates only an untouched automatic signature; manually edited content remains intact; existing identities/drafts migrate without data loss.
