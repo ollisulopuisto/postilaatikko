@@ -18,6 +18,7 @@
   import OnlineViewCount from './OnlineViewCount.svelte'
   import Icon from '@iconify/svelte'
   import ConversationRow from './ConversationRow.svelte'
+  import ActionBar from '../kit/ActionBar.svelte'
   import SearchOperators from '../common/SearchOperators.svelte'
   import { DropdownMenu } from 'bits-ui'
   import { cn } from '$lib/utils'
@@ -25,7 +26,7 @@
   // @ts-ignore - wailsjs bindings
   import { RefreshViewHeaders, SearchMail, CancelMailSearch, MoveToInboxWithUndo, GetConversations, GetConversationCount, SyncFolder, ForceSyncFolder, CancelFolderSync, SetMessageListSortOrder, GetUnifiedFolderConversations, GetUnifiedFolderCount, SearchConversations, SearchUnifiedFolder, GetSearchCount, GetSearchCountUnifiedFolder, SyncUnifiedFolder, EmptyUnifiedTrash, GetFTSIndexStatus, IsFTSIndexing, TrashWithUndo, DeletePermanently, EmptyTrash, UndoOperation, IMAPSearchFolder, IMAPSearchUnifiedInbox, FetchServerMessage, GetVirtualFolderConversations, GetVirtualFolderCount, GetVirtualFolderCachedView } from '../../../../wailsjs/go/app/App'
   import { toasts } from '$lib/stores/toast'
-  import { withShortcut, ariaKeyshortcuts, formatShortcut } from '$lib/keyboard/format'
+  import { withShortcut, ariaKeyshortcuts } from '$lib/keyboard/format'
   import ShortcutHint from '$lib/components/shortcuts/ShortcutHint.svelte'
   import { _ } from '$lib/i18n'
   import { ConfirmDialog } from '$lib/components/ui/confirm-dialog'
@@ -45,6 +46,7 @@
   import { removeServerSearchResults, restoreSearchResults, serverSearchResultIdentity, ServerSearchRequestState, updateServerSearchCounts } from './serverSearchResults'
   import { publishUndoOperationCompleted, publishUndoOperationCreated, UNDO_OPERATION_COMPLETED_EVENT, UNDO_OPERATION_CREATED_EVENT, type UndoOperationCreatedDetail } from './undoMutationEvents'
   import { runMessageMutation } from './mutationInFlight'
+  import { openCommandPalette } from '$lib/stores/commandPalette.svelte'
 
   interface Props {
     accountId?: string | null
@@ -55,7 +57,8 @@
     onReply?: (mode: 'reply' | 'reply-all' | 'forward', messageId: string) => void
     onRowActionComplete?: (autoSelectNext: boolean) => void
     onBulkMarkRead?: (messageIds: string[]) => void
-    onBulkArchive?: (messageIds: string[]) => void | Promise<void>
+    onBulkAction?: (actionId: string, options?: { permanent?: boolean }) => unknown
+    enableCommandPalette?: boolean
     isFocused?: boolean
     isFlashing?: boolean
     showFolderToggle?: boolean
@@ -71,7 +74,8 @@
     onReply,
     onRowActionComplete,
     onBulkMarkRead,
-    onBulkArchive,
+    onBulkAction,
+    enableCommandPalette = true,
     isFocused: _isFocused = false,
     isFlashing = false,
     showFolderToggle = false,
@@ -2005,16 +2009,25 @@
     return rowRefs[selectedThreadId] ?? null
   }
 
+  function getMoveTargetRowRef(): ConversationRow | null {
+    if (selectedThreadId && checkedThreadIds.has(selectedThreadId) && rowRefs[selectedThreadId]) {
+      return rowRefs[selectedThreadId]
+    }
+    const firstCheckedThread = checkedThreadIds.values().next().value
+    if (firstCheckedThread) return rowRefs[firstCheckedThread] ?? null
+    return getFocusedRowRef()
+  }
+
   export function isFolderPickerOpen(): boolean {
     return getFocusedRowRef()?.isFolderPickerOpen() ?? false
   }
 
   export function toggleMoveToDialog() {
-    getFocusedRowRef()?.toggleFolderPicker('move')
+    getMoveTargetRowRef()?.toggleFolderPicker('move')
   }
 
   export function toggleCopyToDialog() {
-    getFocusedRowRef()?.toggleFolderPicker('copy')
+    getMoveTargetRowRef()?.toggleFolderPicker('copy')
   }
 
   // Permanent delete confirmation state
@@ -2036,6 +2049,7 @@
           publishUndoOperationCreated(operationID, messageIds, 'move-to-inbox')
           let toastId = ''
           toastId = toasts.success($_('toast.movedTo', { values: { folder: $_('sidebar.inbox') } }), operationID ? [{ label: $_('common.undo'), onClick: () => handleUndo(toastId, operationID) }] : [])
+          clearChecked()
           handleActionComplete(true)
         } finally {
           moveMutationInFlight = false
@@ -2169,18 +2183,51 @@
     })
   }
 
-  async function handleBulkArchive() {
-    const messageIds = [...selectedMessageIds]
-    moveMutationInFlight = true
-    try {
-      await onBulkArchive?.(messageIds)
-    } catch (err) {
-      // The owner callback retains its existing error/toast handling.
-      console.error('Bulk archive failed:', err)
-    } finally {
-      moveMutationInFlight = false
+  function runSelectedAction(actionId: string) {
+    if (actionId === 'mail.moveToInbox') {
+      void handleMoveToInbox()
+      return
     }
+    if (actionId === 'mail.spam') {
+      void onBulkAction?.(actionId)
+      return
+    }
+    void onBulkAction?.(actionId, { permanent: folderType === 'trash' })
   }
+
+  const selectionActions = $derived.by(() => {
+    const actions = [
+      {
+        id: selectedHasUnread ? 'mail.markRead' : 'mail.markUnread',
+        label: $_(selectedHasUnread ? 'viewer.markAsRead' : 'viewer.markAsUnread'),
+        icon: selectedHasUnread ? 'mdi:email-open-outline' : 'mdi:email-outline',
+        shortcut: selectedHasUnread ? 'mail.markRead' : 'mail.markUnread',
+      },
+      {
+        id: 'mail.star',
+        label: $_(selectedHasUnstarred ? 'viewer.star' : 'viewer.removeStar'),
+        icon: selectedHasUnstarred ? 'mdi:star-outline' : 'mdi:star-off-outline',
+        shortcut: 'mail.star',
+      },
+      { id: 'mail.moveTo', label: $_('contextMenu.moveTo'), icon: 'mdi:folder-move-outline', shortcut: 'mail.moveTo' },
+    ]
+    if (folderType !== 'trash') {
+      actions.push({ id: 'mail.archive', label: $_('viewer.archive'), icon: 'mdi:archive-outline', shortcut: 'mail.archive' })
+      actions.push({
+        id: 'mail.spam',
+        label: $_(folderType === 'spam' ? 'contextMenu.markAsNotSpam' : 'contextMenu.markAsSpam'),
+        icon: folderType === 'spam' ? 'mdi:shield-check-outline' : 'mdi:alert-octagon-outline',
+        shortcut: 'mail.spam',
+      })
+    }
+    actions.push({
+      id: 'mail.trash',
+      label: $_(folderType === 'trash' ? 'viewer.deletePermanently' : 'viewer.delete'),
+      icon: folderType === 'trash' ? 'mdi:delete-forever-outline' : 'mdi:delete-outline',
+      shortcut: folderType === 'trash' ? 'mail.deletePermanently' : 'mail.trash',
+    })
+    return actions
+  })
 
   // Scroll to a specific index in the list
   function scrollToIndex(index: number) {
@@ -2503,23 +2550,17 @@
   {/if}
 
   {#if checkedThreadIds.size > 0}
-    <div class="flex items-center gap-2 border-b border-border bg-muted/40 px-4 py-2" role="toolbar" aria-label={$_('messageList.selectedActions')}>
-      <span class="mr-auto text-sm font-medium text-foreground">{$_('messageList.selectedCount', { values: { count: checkedThreadIds.size } })}</span>
-      <button class="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" onclick={() => onBulkMarkRead?.(selectedMessageIds)}>
-        <Icon icon="mdi:check-circle-outline" class="h-4 w-4" /> {$_('common.done')}
-      </button>
-      {#if folderType === 'trash'}
-        <button class="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm hover:bg-muted" onclick={handleMoveToInbox} disabled={moveMutationInFlight}>
-          <Icon icon="mdi:inbox-arrow-down-outline" class="h-4 w-4" /> {$_('viewer.moveToInbox')}
-        </button>
-      {/if}
-      <button class="inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title={withShortcut($_('viewer.archive'), 'mail.archive')} onclick={handleBulkArchive} disabled={moveMutationInFlight}>
-        <Icon icon="mdi:archive-outline" class="h-4 w-4" /> {$_('viewer.archive')}
-      </button>
-      <button class="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title={`${$_('common.close')} (${formatShortcut('list.escape')})`} aria-label={$_('common.close')} onclick={clearSelection}>
-        <Icon icon="mdi:close" class="h-4 w-4" />
-      </button>
-    </div>
+    <ActionBar
+      count={checkedThreadIds.size}
+      actions={folderType === 'trash'
+        ? [{ id: 'mail.moveToInbox', label: $_('viewer.moveToInbox'), icon: 'mdi:inbox-arrow-down-outline' }, ...selectionActions]
+        : selectionActions}
+      disabled={moveMutationInFlight}
+      onAction={runSelectedAction}
+      onMove={toggleMoveToDialog}
+      onMore={enableCommandPalette ? openCommandPalette : undefined}
+      onClear={clearSelection}
+    />
   {/if}
 
   <!-- Empty Trash bar (only shown when viewing trash folder with messages, not in search mode) -->

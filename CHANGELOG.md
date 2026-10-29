@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Complete bulk message actions: select multiple conversations and apply read/unread, star, archive, move, spam or delete across every message they contain. The selection bar adapts to Spam and Trash folders, and More opens the command palette without dropping the selection.
 ## Postilaatikko v0.3.21
 
 - Add opt-in, read-only macOS Contacts browsing and recipient autocomplete; open a selected person in Contacts.app to edit.
