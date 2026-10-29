@@ -117,7 +117,7 @@ Use the [task board](TASKS.md) for current claims and integration status; the [D
 - **Gmail-native spam actions.** Existing v0.3.13 API baseline supports native spam/not-spam label operations with fallback. Verify actual provider behavior and undo; do not claim classifier-training guarantees without evidence.
 - **Quick replies and email templates.** Short snippets shipped in v0.3.13; full email templates remain P-020. Reuse them in inline/full compose while preserving sender, recipients and unsaved draft content.
 - **Calendar recognition.** Turn recognized date/time mentions in message content into an “Add to Calendar” action using the standard ICS event handoff. Open it for review/import and handle timezone ambiguity conservatively. Not started; build on `extensions/calendar`.
-- **Multiple mail windows.** Keep more than one mail window open for parallel reading and searching. P-013 has an independent mail-list/reader candidate in review; it reuses parent services and keeps navigation, selection and layout local to each window. Native lifecycle and real-mail checks remain before integration/release; the detached compose window already exists.
+- **Tabbed mail workspaces.** Open independent mail-list/reader workspaces in tabs by default, preserving each tab’s folder, search and thread state. Allow detaching a tab into its own native mail window. Bound the number of live tabs to keep memory predictable. P-013 provides the independent mail-window foundation; P-043 tracks the tab shell and detach action.
 
 ## Planned
 
@@ -131,7 +131,7 @@ Use the [task board](TASKS.md) for current claims and integration status; the [D
 ## Open questions
 
 - **Paid hosted scheduled send.** It may serve users without an always-on computer, but the service would have to access message content and sending credentials at delivery time. Decide whether to offer this separate, non-E2EE trust mode; keep the initial Mac Studio helper mode E2EE.
-- **Later layout options.** Whether to add saved-view tabs, hide empty views, per-view reader overrides or incoming-mail presentation schedules. Do not block the accepted core UI/API work on these decisions.
+- **Later layout options.** Whether to add saved-view tabs, hide empty views, per-view reader overrides or incoming-mail presentation schedules. Mail workspace tabs are accepted and tracked separately in P-043. Do not block the accepted core UI/API work on these decisions.
 
 ## Parked
 
