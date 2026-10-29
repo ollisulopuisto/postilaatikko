@@ -1213,7 +1213,20 @@
     const quoteIndexes = [content.indexOf('<blockquote'), content.search(/wrote:\s*(<br[^>]*>)?\s*<\/p>/i)]
       .filter(index => index > markerIndex)
     const quoteBoundary = quoteIndexes.length ? Math.min(...quoteIndexes) : content.length
-    return signaturePlainText(content.slice(markerIndex, quoteBoundary)).includes(lastAutoSignatureText)
+    const visible = signaturePlainText(content.slice(markerIndex, quoteBoundary))
+      .replace(/\u200B/g, '').replace(/^--\s*/, '').trim()
+    return visible === lastAutoSignatureText
+  }
+
+  function generatedPlainSignatureIsUntouched(content: string, expected: string): boolean {
+    const marker = '\u200B\u200B\u200B'
+    const markerIndex = content.indexOf(marker)
+    if (!expected || markerIndex < 0) return false
+    const quoteIndexes = [content.search(/^.*wrote:\s*$/m), content.indexOf('---------- Forwarded message ----------')]
+      .filter(index => index > markerIndex)
+    const quoteBoundary = quoteIndexes.length ? Math.min(...quoteIndexes) : content.length
+    const actual = content.slice(markerIndex + marker.length, quoteBoundary).replace(/\r\n/g, '\n').trim()
+    return actual === expected.replace(/\r\n/g, '\n').trim()
   }
 
   function appendSignatureForIdentity(identity: account.Identity) {
@@ -1287,14 +1300,16 @@
       const marker = '\u200B\u200B\u200B'
       const content = plainTextContent
       if (lastAutoPlainSignatureText) {
-        const previousGeneratedSignature = `${marker}${lastAutoPlainSignatureText}`
-        if (!content.includes(previousGeneratedSignature)) {
+        if (!generatedPlainSignatureIsUntouched(content, lastAutoPlainSignatureText)) {
           // The user edited or removed the generated plain-text signature.
           lastAppliedSignatureKey = choiceKey
           lastAutoPlainSignatureText = ''
           return
         }
-        plainTextContent = content.replace(previousGeneratedSignature, '').replace(/\n{3,}/g, '\n\n')
+        const signatureStart = content.indexOf(marker)
+        const signatureEnd = signatureStart + marker.length + lastAutoPlainSignatureText.length
+        plainTextContent = content.slice(0, signatureStart) + content.slice(signatureEnd)
+        plainTextContent = plainTextContent.replace(/\n{3,}/g, '\n\n')
       }
       appendSignatureForIdentity(identity)
       return
@@ -1425,8 +1440,11 @@
     // preserve that manual choice across sender changes.
     if (isPlainTextMode) {
       const oldSignature = `\u200B\u200B\u200B${lastAutoPlainSignatureText}`
-      if (lastAutoPlainSignatureText && plainTextContent.includes(oldSignature)) {
-        plainTextContent = plainTextContent.replace(oldSignature, '').replace(/\n{3,}/g, '\n\n')
+      if (lastAutoPlainSignatureText && generatedPlainSignatureIsUntouched(plainTextContent, lastAutoPlainSignatureText)) {
+        const signatureStart = plainTextContent.indexOf('\u200B\u200B\u200B')
+        const signatureEnd = signatureStart + oldSignature.length
+        plainTextContent = plainTextContent.slice(0, signatureStart) + plainTextContent.slice(signatureEnd)
+        plainTextContent = plainTextContent.replace(/\n{3,}/g, '\n\n')
       } else if (lastAutoPlainSignatureText) {
         lastAppliedSignatureKey = signatureChoiceKey(newIdentity, currentSignatureProfile(newIdentity).ruleId)
         lastAutoPlainSignatureText = ''
