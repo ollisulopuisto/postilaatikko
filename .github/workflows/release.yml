@@ -27,12 +27,6 @@ jobs:
           - os: ubuntu-22.04-arm
             platform: linux
             arch: arm64
-          - os: macos-latest
-            platform: darwin
-            arch: amd64
-          - os: macos-latest
-            platform: darwin
-            arch: arm64
           - os: windows-latest
             platform: windows
             arch: amd64
@@ -109,29 +103,6 @@ jobs:
 
           rm -rf dist-package
 
-      - name: Build (macOS)
-        if: matrix.platform == 'darwin'
-        env:
-          GOARCH: ${{ matrix.arch }}
-        run: |
-          make build
-          cd build/bin
-          APP_BUNDLE="postilaatikko.app"
-          APP_NAME="Postilaatikko"
-          ZIP_NAME="Postilaatikko-darwin-${{ matrix.arch }}.zip"
-          zip -r "${ZIP_NAME}" "${APP_BUNDLE}"
-
-          # Include an Applications alias for the standard drag-and-drop install flow.
-          VOL_NAME="Postilaatikko"
-          DMG_NAME="Postilaatikko-${{ github.ref_name }}-darwin-${{ matrix.arch }}.dmg"
-          mkdir -p dmg-staging
-          cp -R "${APP_BUNDLE}" "dmg-staging/${APP_NAME}.app"
-          ln -s /Applications dmg-staging/Applications
-          hdiutil create -volname "${VOL_NAME}" -srcfolder dmg-staging \
-            -ov -format UDZO -o "${DMG_NAME}"
-          rm -rf dmg-staging "${APP_BUNDLE}"
-          ls -lh "${DMG_NAME}" "${ZIP_NAME}"
-
       - name: Build (Windows)
         if: matrix.platform == 'windows'
         shell: pwsh
@@ -171,7 +142,14 @@ jobs:
           if ! gh release view "$TAG_NAME" >/dev/null 2>&1; then
             gh release create "$TAG_NAME" \
               --title "Postilaatikko $TAG_NAME" \
-              --generate-notes
+              --generate-notes || true
+            for attempt in 1 2 3 4 5; do
+              if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+                break
+              fi
+              sleep 2
+            done
+            gh release view "$TAG_NAME" >/dev/null
           fi
 
           # Artifact path layout varies by platform; collect release files recursively.
