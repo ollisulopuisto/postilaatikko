@@ -777,6 +777,10 @@ export function SetStartHidden(arg1:boolean):Promise<void>;
 
 export function SetTermsAccepted(arg1:boolean):Promise<void>;
 
+export function GetFolderContentPolicy(arg1:string,arg2:string):Promise<any>;
+
+export function SetFolderContentPolicy(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function SetThemeMode(arg1:string):Promise<void>;
 
 export function ShowWindow():Promise<void>;

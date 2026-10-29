@@ -4,10 +4,13 @@
   import {
     ContextMenuContent,
     ContextMenuItem,
+    ContextMenuSeparator,
   } from '$lib/components/ui/context-menu'
   import {
     MarkAllFolderMessagesAsRead,
     MarkAllFolderMessagesAsUnread,
+    GetFolderContentPolicy,
+    SetFolderContentPolicy,
   } from '../../../../wailsjs/go/app/App'
   import { toasts } from '$lib/stores/toast'
   import { sidebarPins } from '$lib/stores/sidebarPins.svelte'
@@ -18,7 +21,7 @@
     folderId: string
     // Set together to offer pinning the folder to the sidebar (P-007).
     accountId?: string
-    folder?: { id: string; path: string; name: string }
+    folder?: { id: string; path: string; name: string; type?: string }
     children?: Snippet
   }
 
@@ -30,10 +33,40 @@
   }: Props = $props()
 
   let pinned = $derived(accountId !== undefined && sidebarPins.has(accountId, folderId))
+  let policy = $state<{ bodyPrefetch: boolean; explicit: boolean; source: string } | null>(null)
+  let policyLoading = $state(false)
+  let policySaving = $state(false)
 
   function handleTogglePin() {
     if (!accountId || !folder) return
     sidebarPins.toggle(accountId, folder)
+  }
+
+  async function loadContentPolicy() {
+    if (!accountId || !folder) return
+    policyLoading = true
+    try {
+      policy = await GetFolderContentPolicy(accountId, folderId)
+    } catch (err) {
+      console.error('Failed to load folder content policy:', err)
+      policy = null
+    } finally {
+      policyLoading = false
+    }
+  }
+
+  async function setContentPolicy(mode: 'enabled' | 'disabled' | 'inherit') {
+    if (!accountId || !folder || policySaving) return
+    policySaving = true
+    try {
+      await SetFolderContentPolicy(accountId, folderId, mode)
+      await loadContentPolicy()
+    } catch (err) {
+      console.error('Failed to update folder content policy:', err)
+      toasts.error($_('toast.failedToSave'))
+    } finally {
+      policySaving = false
+    }
   }
 
   async function handleMarkAllRead() {
@@ -57,7 +90,7 @@
   }
 </script>
 
-<ContextMenuPrimitive.Root>
+<ContextMenuPrimitive.Root onOpenChange={(open: boolean) => { if (open) void loadContentPolicy() }}>
   <ContextMenuPrimitive.Trigger>
     {#if children}
       {@render children()}
@@ -74,6 +107,23 @@
       {$_('contextMenu.markAllAsUnread')}
     </ContextMenuItem>
     {#if accountId !== undefined && folder !== undefined}
+      <ContextMenuSeparator />
+      <ContextMenuItem
+        disabled={policyLoading || policySaving || policy === null}
+        onSelect={() => void setContentPolicy(policy?.bodyPrefetch ? 'disabled' : 'enabled')}
+      >
+        <Icon icon={policy?.bodyPrefetch ? 'mdi:check-circle-outline' : 'mdi:circle-outline'} class="mr-2 h-4 w-4" />
+        {$_('contextMenu.autoDownloadContent')}
+      </ContextMenuItem>
+      <ContextMenuItem disabled class="whitespace-normal text-xs text-muted-foreground">
+        {policyLoading ? $_('common.loading') : $_('contextMenu.autoDownloadContentHelp')}
+      </ContextMenuItem>
+      {#if policy?.explicit}
+        <ContextMenuItem disabled={policySaving} onSelect={() => void setContentPolicy('inherit')}>
+          <Icon icon="mdi:restore" class="mr-2 h-4 w-4" />
+          {$_('contextMenu.useDefaultContentPolicy')}
+        </ContextMenuItem>
+      {/if}
       <ContextMenuItem onSelect={handleTogglePin}>
         <Icon icon={pinned ? 'mdi:pin-off-outline' : 'mdi:pin-outline'} class="mr-2 h-4 w-4" />
         {pinned ? $_('contextMenu.unpinFromSidebar') : $_('contextMenu.pinToSidebar')}
