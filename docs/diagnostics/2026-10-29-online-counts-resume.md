@@ -4,7 +4,7 @@ Base: fetched `origin/main` at `1817a78` (2026-10-29). New isolated branch `code
 
 Reapplied committed count jobs/UI and IMAP decreasing-UID continuation from `e9f9be5`, preserving current main's Gmail shared quota budget, thread-list implementation, saved-search virtual-folder query, cached first paint and cache refresh timestamp. Only one `Threads` implementation remains.
 
-The requested durable WIP checkpoint was pushed as `fa03f94`. Follow-up reconciliation fixes saved-query count membership, duplicate scan progress, redundant flag enumeration when header metadata is already required, and false completeness after cancellation at the last enumeration page. Each of those cases failed before its fix and passed afterward.
+The requested durable WIP checkpoint was pushed as `fa03f94`; the verified reconciliation is `581c6f8`. Follow-up reconciliation fixes saved-query count membership, duplicate scan progress, redundant flag enumeration when header metadata is already required, and false completeness after cancellation at the last enumeration page. Each of those cases failed before its fix and passed afterward.
 
 Verification for the recovered slice:
 
