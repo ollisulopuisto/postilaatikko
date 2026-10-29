@@ -1959,3 +1959,42 @@ mark {
     margin-top: 1rem;
   }
 }
+
+/* Compact sidebar footer: one row of icon buttons instead of stacked rows. */
+.sidebar-bottom-row {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.sidebar-bottom-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  flex-shrink: 0;
+  border-radius: 0.55rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.sidebar-bottom-button:hover {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+}
+
+.sidebar-bottom-row .sidebar-settings-error {
+  position: absolute;
+  top: 0.2rem;
+  right: 0.2rem;
+  margin-left: 0;
+}
+
+.spark-sidebar-rebuilt.spark-sidebar-collapsed .sidebar-bottom-row {
+  flex-direction: column;
+}
+
+.spark-sidebar-rebuilt.spark-sidebar-collapsed .sidebar-bottom-row .flex-1 {
+  display: none;
+}
