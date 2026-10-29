@@ -2,6 +2,7 @@ package account
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -12,6 +13,25 @@ import (
 // Store provides account storage operations
 type Store struct {
 	db *database.DB
+}
+
+func encodeSignatureRules(rules []SignatureRule) (string, error) {
+	encoded, err := json.Marshal(rules)
+	if err != nil {
+		return "", fmt.Errorf("failed to encode contextual signature rules: %w", err)
+	}
+	return string(encoded), nil
+}
+
+func decodeSignatureRules(encoded string) ([]SignatureRule, error) {
+	rules := []SignatureRule{}
+	if encoded == "" {
+		return rules, nil
+	}
+	if err := json.Unmarshal([]byte(encoded), &rules); err != nil {
+		return nil, fmt.Errorf("failed to decode contextual signature rules: %w", err)
+	}
+	return rules, nil
 }
 
 // Default colors for accounts (used for auto-assignment)
@@ -548,7 +568,7 @@ func (s *Store) GetIdentities(accountID string) ([]*Identity, error) {
 	rows, err := s.db.Query(`
 		SELECT id, account_id, email, name, is_default, signature_html, signature_text,
 			signature_enabled, signature_for_new, signature_for_reply, signature_for_forward,
-			signature_placement, signature_separator, order_index, created_at, updated_at
+			signature_placement, signature_separator, signature_rules, order_index, created_at, updated_at
 		FROM identities WHERE account_id = ? ORDER BY order_index
 	`, accountID)
 	if err != nil {
@@ -559,13 +579,13 @@ func (s *Store) GetIdentities(accountID string) ([]*Identity, error) {
 	var identities []*Identity
 	for rows.Next() {
 		identity := &Identity{}
-		var sigHTML, sigText, placement sql.NullString
+		var sigHTML, sigText, placement, signatureRules sql.NullString
 		var updatedAt sql.NullTime
 		err := rows.Scan(
 			&identity.ID, &identity.AccountID, &identity.Email, &identity.Name,
 			&identity.IsDefault, &sigHTML, &sigText,
 			&identity.SignatureEnabled, &identity.SignatureForNew, &identity.SignatureForReply, &identity.SignatureForForward,
-			&placement, &identity.SignatureSeparator, &identity.OrderIndex, &identity.CreatedAt, &updatedAt,
+			&placement, &identity.SignatureSeparator, &signatureRules, &identity.OrderIndex, &identity.CreatedAt, &updatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan identity: %w", err)
@@ -573,6 +593,10 @@ func (s *Store) GetIdentities(accountID string) ([]*Identity, error) {
 		identity.SignatureHTML = sigHTML.String
 		identity.SignatureText = sigText.String
 		identity.SignaturePlacement = placement.String
+		identity.SignatureRules, err = decodeSignatureRules(signatureRules.String)
+		if err != nil {
+			return nil, err
+		}
 		if identity.SignaturePlacement == "" {
 			identity.SignaturePlacement = "above"
 		}
@@ -591,17 +615,18 @@ func (s *Store) GetIdentities(accountID string) ([]*Identity, error) {
 func (s *Store) GetIdentity(id string) (*Identity, error) {
 	identity := &Identity{}
 	var sigHTML, sigText, placement sql.NullString
+	var signatureRules sql.NullString
 	var updatedAt sql.NullTime
 	err := s.db.QueryRow(`
 		SELECT id, account_id, email, name, is_default, signature_html, signature_text,
 			signature_enabled, signature_for_new, signature_for_reply, signature_for_forward,
-			signature_placement, signature_separator, order_index, created_at, updated_at
+			signature_placement, signature_separator, signature_rules, order_index, created_at, updated_at
 		FROM identities WHERE id = ?
 	`, id).Scan(
 		&identity.ID, &identity.AccountID, &identity.Email, &identity.Name,
 		&identity.IsDefault, &sigHTML, &sigText,
 		&identity.SignatureEnabled, &identity.SignatureForNew, &identity.SignatureForReply, &identity.SignatureForForward,
-		&placement, &identity.SignatureSeparator, &identity.OrderIndex, &identity.CreatedAt, &updatedAt,
+		&placement, &identity.SignatureSeparator, &signatureRules, &identity.OrderIndex, &identity.CreatedAt, &updatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, ErrIdentityNotFound
@@ -612,6 +637,10 @@ func (s *Store) GetIdentity(id string) (*Identity, error) {
 	identity.SignatureHTML = sigHTML.String
 	identity.SignatureText = sigText.String
 	identity.SignaturePlacement = placement.String
+	identity.SignatureRules, err = decodeSignatureRules(signatureRules.String)
+	if err != nil {
+		return nil, err
+	}
 	if identity.SignaturePlacement == "" {
 		identity.SignaturePlacement = "above"
 	}
@@ -626,6 +655,10 @@ func (s *Store) GetIdentity(id string) (*Identity, error) {
 // CreateIdentity creates a new identity for an account
 func (s *Store) CreateIdentity(accountID string, config *IdentityConfig) (*Identity, error) {
 	if err := config.Validate(); err != nil {
+		return nil, err
+	}
+	signatureRules, err := encodeSignatureRules(config.SignatureRules)
+	if err != nil {
 		return nil, err
 	}
 
@@ -644,6 +677,7 @@ func (s *Store) CreateIdentity(accountID string, config *IdentityConfig) (*Ident
 		IsDefault:           false, // New identities are not default
 		SignatureHTML:       config.SignatureHTML,
 		SignatureText:       config.SignatureText,
+		SignatureRules:      config.SignatureRules,
 		SignatureEnabled:    config.SignatureEnabled,
 		SignatureForNew:     config.SignatureForNew,
 		SignatureForReply:   config.SignatureForReply,
@@ -655,17 +689,17 @@ func (s *Store) CreateIdentity(accountID string, config *IdentityConfig) (*Ident
 		UpdatedAt:           now,
 	}
 
-	_, err := s.db.Exec(`
+	_, err = s.db.Exec(`
 		INSERT INTO identities (
 			id, account_id, email, name, is_default, signature_html, signature_text,
 			signature_enabled, signature_for_new, signature_for_reply, signature_for_forward,
-			signature_placement, signature_separator, order_index, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			signature_placement, signature_separator, signature_rules, order_index, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		identity.ID, identity.AccountID, identity.Email, identity.Name, identity.IsDefault,
 		nullableString(identity.SignatureHTML), nullableString(identity.SignatureText),
 		identity.SignatureEnabled, identity.SignatureForNew, identity.SignatureForReply, identity.SignatureForForward,
-		identity.SignaturePlacement, identity.SignatureSeparator, identity.OrderIndex, identity.CreatedAt, identity.UpdatedAt,
+		identity.SignaturePlacement, identity.SignatureSeparator, signatureRules, identity.OrderIndex, identity.CreatedAt, identity.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create identity: %w", err)
@@ -677,6 +711,10 @@ func (s *Store) CreateIdentity(accountID string, config *IdentityConfig) (*Ident
 // UpdateIdentity updates an existing identity
 func (s *Store) UpdateIdentity(id string, config *IdentityConfig) (*Identity, error) {
 	if err := config.Validate(); err != nil {
+		return nil, err
+	}
+	signatureRules, err := encodeSignatureRules(config.SignatureRules)
+	if err != nil {
 		return nil, err
 	}
 
@@ -691,12 +729,12 @@ func (s *Store) UpdateIdentity(id string, config *IdentityConfig) (*Identity, er
 		UPDATE identities SET
 			email = ?, name = ?, signature_html = ?, signature_text = ?,
 			signature_enabled = ?, signature_for_new = ?, signature_for_reply = ?, signature_for_forward = ?,
-			signature_placement = ?, signature_separator = ?, updated_at = ?
+			signature_placement = ?, signature_separator = ?, signature_rules = ?, updated_at = ?
 		WHERE id = ?
 	`,
 		config.Email, config.Name, nullableString(config.SignatureHTML), nullableString(config.SignatureText),
 		config.SignatureEnabled, config.SignatureForNew, config.SignatureForReply, config.SignatureForForward,
-		config.SignaturePlacement, config.SignatureSeparator, now, id,
+		config.SignaturePlacement, config.SignatureSeparator, signatureRules, now, id,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update identity: %w", err)
@@ -706,6 +744,7 @@ func (s *Store) UpdateIdentity(id string, config *IdentityConfig) (*Identity, er
 	existing.Name = config.Name
 	existing.SignatureHTML = config.SignatureHTML
 	existing.SignatureText = config.SignatureText
+	existing.SignatureRules = config.SignatureRules
 	existing.SignatureEnabled = config.SignatureEnabled
 	existing.SignatureForNew = config.SignatureForNew
 	existing.SignatureForReply = config.SignatureForReply
