@@ -136,6 +136,7 @@
     onBack?: () => void
     collapsed?: boolean
     onToggleCollapsed?: () => void
+    navigationEnabled?: boolean
   }
 
   let {
@@ -155,6 +156,7 @@
     onBack,
     collapsed = false,
     onToggleCollapsed,
+    navigationEnabled = true,
   }: Props = $props()
 
   // Dialog state
@@ -195,8 +197,6 @@
 
   // Load accounts and contact sources on mount
   onMount(() => {
-    const navigate = (event: Event) => selectNavigationEntry((event as CustomEvent<NavigationEntry>).detail)
-    window.addEventListener('postilaatikko:navigate', navigate)
     // Load accounts, then trigger comprehensive sync on launch
     accountStore.load().then(async () => {
       try {
@@ -208,6 +208,12 @@
 
     contactSourcesStore.load()
     void virtualFoldersStore.load()
+  })
+
+  $effect(() => {
+    if (!navigationEnabled) return
+    const navigate = (event: Event) => selectNavigationEntry((event as CustomEvent<NavigationEntry>).detail)
+    window.addEventListener('postilaatikko:navigate', navigate)
     return () => window.removeEventListener('postilaatikko:navigate', navigate)
   })
 

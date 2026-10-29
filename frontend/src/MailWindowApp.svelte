@@ -28,6 +28,8 @@
   let navigationError = $state('')
   let listWidth = $state(360)
   let readerOnly = $state(false)
+  let folderBrowserOpen = $state(false)
+  let folderSearch = $state('')
   let showVirtualFolderDialog = $state(false)
   let pendingSearchQuery = $state('')
   let pendingSearchFolderId = $state<string | null>(null)
@@ -35,6 +37,12 @@
   let viewer = $state<ConversationViewer | undefined>(undefined)
   const scopeKey = (scope: MailScope) => JSON.stringify([scope.accountId, scope.folderId])
   const currentKey = $derived(scopeKey(windowState.scope))
+  const scopeGroups = $derived([
+    { id: 'unified', name: $_('navigation.virtualCard'), items: scopes.filter(scope => scope.accountId === 'unified' || scope.accountId === 'virtual') },
+    ...accountStore.accounts.map(item => ({ id: item.account.id, name: item.account.name || item.account.email, items: scopes.filter(scope => scope.accountId === item.account.id) })),
+  ].map(group => ({ ...group, items: group.items.filter(scope => !folderSearch.trim() || `${label(scope)} ${group.name}`.toLocaleLowerCase().includes(folderSearch.trim().toLocaleLowerCase())) })).filter(group => group.items.length))
+
+  $effect(() => { if (embedded) folderBrowserOpen = true })
 
   function label(scope: MailScope) {
     if (scope.accountId === 'unified' && scope.folderType === 'all') return $_('mailWindow.allMail')
@@ -70,6 +78,12 @@
     readerOnly = false
     setFocusedPane('messageList')
   }
+  $effect(() => {
+    if (scopeKey(config) === scopeKey(windowState.scope)) return
+    windowState = navigateMailWindow(windowState, config)
+    readerOnly = false
+    setFocusedPane('messageList')
+  })
   function select(threadId: string, folderId: string, accountId: string) {
     windowState = selectMailWindowConversation(windowState, threadId, folderId, accountId)
     onScopeChange?.({ ...windowState.scope, threadId, threadAccountId: accountId, threadFolderId: folderId, searchQuery: list?.getSearchQuery() || '' })
@@ -188,6 +202,9 @@
 <svelte:window onkeydown={keydown} onfocus={() => { if (active) { refresh(); void loadNavigation() } }} />
 <div class="mail-window {embedded ? 'h-full' : 'h-screen'} flex flex-col overflow-hidden bg-background text-foreground">
   <header class="flex items-center gap-2 border-b border-border p-2">
+    {#if embedded}
+      <button type="button" class="rounded p-2 hover:bg-muted" aria-label={$_('mailWindow.folder')} aria-expanded={folderBrowserOpen} title={$_('mailWindow.folder')} onclick={() => folderBrowserOpen = !folderBrowserOpen}><Icon icon="mdi:folder-open-outline" width="20" /></button>
+    {/if}
     <select class="min-w-0 flex-1 rounded border border-border bg-background p-2 text-sm" aria-label={$_('mailWindow.folder')} value={currentKey} onchange={event => navigate(event.currentTarget.value)} disabled={loading}>
       {#if !scopes.some(scope => scopeKey(scope) === currentKey)}<option value={currentKey}>{label(windowState.scope)}</option>{/if}
       {#each scopes as scope (scopeKey(scope))}<option value={scopeKey(scope)}>{label(scope)}</option>{/each}
@@ -198,7 +215,24 @@
     {#if windowState.thread}<button class="rounded p-2 hover:bg-muted" onclick={() => readerOnly = !readerOnly} aria-pressed={readerOnly} title={$_('mailWindow.focus')} aria-label={$_('mailWindow.focus')}><Icon icon="mdi:arrow-expand" width="20" /></button>{/if}
   </header>
   {#if navigationError}<div role="alert" class="p-2 text-sm">{navigationError}<button class="underline ml-2" onclick={loadNavigation}>{$_('common.retry')}</button></div>{/if}
-  <main class:reader-only={readerOnly} class:has-thread={!!windowState.thread} class="flex flex-1 min-h-0 overflow-hidden" style={`--list-width: ${listWidth}px`}>
+  <div class="flex flex-1 min-h-0 overflow-hidden">
+  {#if embedded && folderBrowserOpen}
+    <aside class="w-64 shrink-0 min-h-0 overflow-y-auto border-r border-border bg-muted/20 p-2" aria-label={$_('mailWindow.folder')}>
+      <input type="search" bind:value={folderSearch} class="mb-2 h-9 w-full rounded border border-border bg-background px-2 text-sm" aria-label={$_('common.search')} placeholder={$_('common.search')} />
+      {#if loading}<p class="p-2 text-sm text-muted-foreground">{$_('common.loading')}</p>{/if}
+      {#each scopeGroups as group (group.id)}
+        <section class="mb-3">
+          <h2 class="px-2 py-1 text-xs font-semibold text-muted-foreground">{group.name}</h2>
+          {#each group.items as scope (scopeKey(scope))}
+            <button type="button" class="w-full truncate rounded px-2 py-1.5 text-left text-sm hover:bg-muted {currentKey === scopeKey(scope) ? 'bg-primary/10 font-medium' : ''}"
+              style={`padding-left: ${8 + (scope.folderType === 'folder' ? Math.max(0, scope.folderName.split('/').length - 1) * 12 : 0)}px`}
+              aria-current={currentKey === scopeKey(scope) ? 'page' : undefined} onclick={() => navigate(scopeKey(scope))}>{label(scope)}</button>
+          {/each}
+        </section>
+      {/each}
+    </aside>
+  {/if}
+  <main class:reader-only={readerOnly} class:has-thread={!!windowState.thread} class="flex flex-1 min-w-0 min-h-0 overflow-hidden" style={`--list-width: ${listWidth}px`}>
     <section class="mail-list min-h-0 overflow-hidden border-r border-border" role="presentation" onclick={() => setFocusedPane('messageList')}>
       <MessageList bind:this={list} accountId={windowState.scope.accountId} folderId={windowState.scope.folderId} folderName={label(windowState.scope)} folderType={windowState.scope.folderType}
         isFocused={getFocusedPane() === 'messageList'} onConversationSelect={select} onReply={reply}
@@ -218,6 +252,7 @@
       {:else}<div class="h-full flex items-center justify-center text-muted-foreground text-sm">{$_('mailWindow.selectMessage')}</div>{/if}
     </section>
   </main>
+  </div>
 </div>
 <ToastContainer />
 <VirtualFolderDialog bind:open={showVirtualFolderDialog} virtualFolder={null} accounts={accountStore.accounts}
