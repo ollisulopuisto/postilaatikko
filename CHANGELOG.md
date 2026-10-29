@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Add a New mail window action for parallel mail views, each with its own folder, search, selection, reader mode and list width. Replies reuse the detached composer; all windows share the existing mail services.
+
 ## Postilaatikko v0.3.20
 
 - Add branching composer undo, per-keystroke autosave and a 30-second undo-send countdown.
