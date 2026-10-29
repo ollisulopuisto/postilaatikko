@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Reduce repeated pull-request CI installs/builds, select affected language checks conservatively, run frontend regression tests, and cancel superseded checks. Keep existing required status names and an explicit artifact-only macOS hotfix build with architecture selection.
+
 ## Postilaatikko v0.3.20
 
 - Add branching composer undo, per-keystroke autosave and a 30-second undo-send countdown.
