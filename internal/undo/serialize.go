@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/hkdb/aerion/internal/replylater"
 )
 
 // Durable command types stored in mailbox_undo_commands.type.
 const (
-	commandTypeFlag = "flag"
-	commandTypeMove = "move"
+	commandTypeFlag       = "flag"
+	commandTypeMove       = "move"
+	commandTypeReplyLater = "reply-later"
 )
 
 type flagPayload struct {
@@ -31,6 +34,13 @@ type movePayload struct {
 	DestFolderID   string                `json:"destFolderId"`
 	Description    string                `json:"description"`
 	CreatedAt      time.Time             `json:"createdAt"`
+}
+
+type replyLaterPayload struct {
+	Ref         replylater.Ref `json:"ref"`
+	Previous    bool           `json:"previous"`
+	Description string         `json:"description"`
+	CreatedAt   time.Time      `json:"createdAt"`
 }
 
 // marshalCommand converts a command to its durable type tag + JSON payload.
@@ -65,6 +75,14 @@ func marshalCommand(cmd Command) (string, []byte, bool) {
 			return "", nil, false
 		}
 		return commandTypeMove, payload, true
+	case *ReplyLaterChangeCommand:
+		payload, err := json.Marshal(replyLaterPayload{
+			Ref: c.ref, Previous: c.inQueue, Description: c.description, CreatedAt: c.createdAt,
+		})
+		if err != nil {
+			return "", nil, false
+		}
+		return commandTypeReplyLater, payload, true
 	default:
 		return "", nil, false
 	}
@@ -90,6 +108,18 @@ func rehydrateCommand(cmdType string, payload []byte, ctx context.Context, undoC
 			return nil, fmt.Errorf("decode move command: %w", err)
 		}
 		cmd := NewMoveCommand(undoCtx, p.AccountID, p.Identities, p.SourceFolderID, p.DestFolderID, p.Description)
+		cmd.createdAt = p.CreatedAt
+		return cmd, nil
+	case commandTypeReplyLater:
+		var p replyLaterPayload
+		if err := json.Unmarshal(payload, &p); err != nil {
+			return nil, fmt.Errorf("decode Reply Later command: %w", err)
+		}
+		ctx, ok := undoCtx.(ReplyLaterContext)
+		if !ok {
+			return nil, fmt.Errorf("undo context does not support Reply Later")
+		}
+		cmd := NewReplyLaterChangeCommand(ctx, p.Ref, p.Previous, p.Description)
 		cmd.createdAt = p.CreatedAt
 		return cmd, nil
 	default:

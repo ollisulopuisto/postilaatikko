@@ -532,9 +532,9 @@ Each section is one reviewable task, not an instruction to implement the whole p
 
 **Effort:** Medium. **Suggested agent:** Sol 6.1 Medium. **Dependencies:** UX-002, UX-016.
 
-**Files:** `internal/replyqueue/model.go (create)`; `internal/replyqueue/store.go (create)`; `internal/replyqueue/store_test.go (create)`; `internal/database/migrations.go`; `app/reply_queue.go (create)`. Paths marked create are proposed; inspect the integrated base before creating an equivalent second module.
+**Files:** `internal/replylater/store.go (create)`; `internal/undo/reply_later.go (create)`; `internal/undo/serialize.go`; `internal/database/migrations.go`; `app/reply_later.go (create)`; `app/app.go`.
 
-**Deliverable / acceptance:** Persist stable conversation references and queue membership/order across accounts. Add/remove/list are idempotent; marking Reply Later never changes Inbox membership/read status or schedules delivery. Preserve missing/stale references visibly and migrate safely.
+**Deliverable / acceptance:** Persist stable conversation references and queue membership/order across accounts. Add/remove/list are idempotent and queue membership changes participate in the normal durable undo flow. Marking Reply Later never changes Inbox membership/read status or schedules delivery. Queue membership is explicit and is not inferred from provider replied/unreplied flags. Preserve missing/stale references for the UI to report and migrate safely. UX-027 owns completion semantics after sending; this task never removes queue entries implicitly.
 
 **Verification:** go test ./internal/replyqueue; migration/restart/account-disable and duplicate enqueue cases.
 
@@ -546,7 +546,7 @@ Each section is one reviewable task, not an instruction to implement the whole p
 
 **Files:** `frontend/src/lib/components/sidebar/Sidebar.svelte`; `frontend/src/lib/components/viewer/ConversationMessage.svelte`; `frontend/src/lib/stores/replyQueue.svelte.ts (create)`; `internal/automation/v1/reply_queue.go (create)`. Paths marked create are proposed; inspect the integrated base before creating an equivalent second module.
 
-**Deliverable / acceptance:** Expose queue add/remove beside messages, a moveable system view and count, plus the same operations to authorized agents. Distinguish Reply Later, Snooze and Send Later in names and effects. Show empty/loading/error states and recover hidden navigation.
+**Deliverable / acceptance:** Expose queue add/remove beside messages, a moveable system view and count, plus the same operations to authorized agents. Add quick filters for unread messages and explicit Reply Later queue membership within the current folder. Distinguish Reply Later, Snooze and Send Later in names and effects. Show empty/loading/error states and recover hidden navigation. The queue is a normal mail view that can be opened in a tab/window; it does not need a modal or separate window of its own.
 
 **Verification:** queue/API adapter tests; frontend build; restart and keyboard queue management walkthrough.
 

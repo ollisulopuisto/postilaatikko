@@ -1655,4 +1655,16 @@ var migrations = []Migration{
 	CREATE INDEX IF NOT EXISTS idx_folder_content_policies_account
 	  ON folder_content_policies(account_id);
 	`},
+	{Version: 62, SQL: `
+	-- Explicit personal triage queue. Keep references even when the underlying
+	-- conversation is temporarily absent from the local index.
+	CREATE TABLE IF NOT EXISTS reply_later_queue (
+	  account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+	  conversation_id TEXT NOT NULL,
+	  added_at TEXT NOT NULL DEFAULT (datetime('now')),
+	  PRIMARY KEY (account_id, conversation_id)
+	);
+	CREATE INDEX IF NOT EXISTS idx_reply_later_queue_added
+	  ON reply_later_queue(added_at DESC);
+	`},
 }
