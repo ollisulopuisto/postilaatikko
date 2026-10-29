@@ -51,6 +51,7 @@
     removeSignatureFromContent,
     hasSignatureMarker,
   } from './composerSignature'
+  import { resolveSignatureRule } from './contextualSignature'
   import * as Select from '$lib/components/ui/select'
   import * as AlertDialog from '$lib/components/ui/alert-dialog'
   import Switch from '$lib/components/ui/switch/Switch.svelte'
@@ -112,6 +113,9 @@
   let allGroups = $state<app.AccountIdentityGroup[]>([])  // All accounts + identities (main window only)
   let identities = $state<account.Identity[]>([])  // Flat list of all identities (union)
   let selectedIdentityId = $state<string>('')
+  let signatureSelectionReady = $state(false)
+  let lastAppliedSignatureKey = ''
+  let lastAutoSignatureText = ''
 
   // Derive the active account ID from the selected identity's accountId.
   // Falls back to the prop accountId if no identity is selected yet.
@@ -220,6 +224,20 @@
         scheduledDraftState = jobs.find(job => job.draftId === id && !['cancelled', 'failed'].includes(job.state))?.state || ''
       }).catch(() => { scheduledDraftState = '' })
     })
+  })
+
+  // Contextual signatures follow the current sender, recipients, and compose mode.
+  // The resolver only replaces a signature that still matches the last generated
+  // signature, so editing the inserted signature turns it into a manual override.
+  $effect(() => {
+    const signatureInputs = [
+      selectedIdentityId,
+      getDisplayMode(),
+      ...[...toRecipients, ...ccRecipients, ...bccRecipients].map(item => item.address || ''),
+    ]
+    void signatureInputs
+    if (!signatureSelectionReady || !editor) return
+    untrack(() => syncContextualSignature())
   })
   let saveStatus = $state<'idle' | 'saving' | 'saved' | 'error'>('idle')
 
@@ -1090,6 +1108,7 @@
           appendSignatureForIdentity(identity)
         }
       }
+      signatureSelectionReady = true
       if (initialMessage) {
         // Capture only after restored state and the initial signature settle.
         lastContent = getContentHash()
@@ -1154,14 +1173,57 @@
   }
 
   // Append signature for the current identity based on compose mode
+  function currentSignatureProfile(identity: account.Identity) {
+    const mode = getDisplayMode()
+    const recipients = [...toRecipients, ...ccRecipients, ...bccRecipients]
+    const rule = resolveSignatureRule(identity.signatureRules as any, mode, recipients)
+    if (!rule) return { profile: identity, ruleId: '' }
+
+    const signatureHtml = rule.signatureHtml || plainTextToHtml(rule.signatureText || '')
+    const profile = {
+      ...identity,
+      signatureHtml,
+      signatureText: rule.signatureText || '',
+      signatureEnabled: Boolean(signatureHtml),
+      signatureForNew: true,
+      signatureForReply: true,
+      signatureForForward: true,
+      signaturePlacement: rule.signaturePlacement || identity.signaturePlacement,
+      signatureSeparator: Boolean(rule.signatureSeparator),
+    } as account.Identity
+    return { profile, ruleId: rule.id }
+  }
+
+  function signatureChoiceKey(identity: account.Identity, ruleId: string) {
+    const recipients = [...toRecipients, ...ccRecipients, ...bccRecipients]
+      .map(item => (item.address || '').trim().toLowerCase()).filter(Boolean).sort()
+    return JSON.stringify([identity.id, ruleId, getDisplayMode(), recipients])
+  }
+
+  function signaturePlainText(html: string): string {
+    const container = document.createElement('div')
+    container.innerHTML = html
+    return (container.textContent || '').replace(/\s+/g, ' ').trim()
+  }
+
   function appendSignatureForIdentity(identity: account.Identity) {
     if (!editor) return
 
     const mode = getDisplayMode()
-    if (!shouldAppendSignature(identity, mode)) return
+    const { profile, ruleId } = currentSignatureProfile(identity)
+    const choiceKey = signatureChoiceKey(identity, ruleId)
+    if (!shouldAppendSignature(profile, mode)) {
+      lastAppliedSignatureKey = choiceKey
+      lastAutoSignatureText = ''
+      return
+    }
 
-    const signatureHtml = buildSignatureHtml(identity)
-    if (!signatureHtml) return
+    const signatureHtml = buildSignatureHtml(profile)
+    if (!signatureHtml) {
+      lastAppliedSignatureKey = choiceKey
+      lastAutoSignatureText = ''
+      return
+    }
 
     const content = editor.getHTML()
     const newContent = insertSignatureIntoContent(
@@ -1172,6 +1234,38 @@
     )
 
     editor.commands.setContent(newContent)
+    lastAppliedSignatureKey = choiceKey
+    lastAutoSignatureText = signaturePlainText(profile.signatureHtml || '')
+  }
+
+  function syncContextualSignature() {
+    const identity = identities.find(item => item.id === selectedIdentityId)
+    if (!identity || !editor) return
+    const { ruleId } = currentSignatureProfile(identity)
+    const choiceKey = signatureChoiceKey(identity, ruleId)
+    if (choiceKey === lastAppliedSignatureKey) return
+
+    const content = editor.getHTML()
+    if (!hasSignatureMarker(content) && lastAutoSignatureText) {
+      // A missing marker means the user removed the generated signature.
+      lastAppliedSignatureKey = choiceKey
+      lastAutoSignatureText = ''
+      return
+    }
+    if (hasSignatureMarker(content)) {
+      const markerIndex = content.indexOf('\u200B\u200B\u200B')
+      const quoteIndexes = [content.indexOf('<blockquote'), content.search(/wrote:\s*(<br[^>]*>)?\s*<\/p>/i)]
+        .filter(index => index > markerIndex)
+      const quoteBoundary = quoteIndexes.length ? Math.min(...quoteIndexes) : content.length
+      const visible = signaturePlainText(content.slice(markerIndex, quoteBoundary))
+      if (!lastAutoSignatureText || markerIndex < 0 || !visible.includes(lastAutoSignatureText)) {
+        // The signature was loaded from a draft or edited by the user. Preserve it.
+        lastAppliedSignatureKey = choiceKey
+        return
+      }
+      editor.commands.setContent(removeSignatureFromContent(content))
+    }
+    appendSignatureForIdentity(identity)
   }
 
   // Update security bar visibility based on the selected identity's email
