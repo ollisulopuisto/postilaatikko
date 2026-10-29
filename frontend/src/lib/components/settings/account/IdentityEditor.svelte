@@ -165,6 +165,14 @@
     signatureRules = [...signatureRules]
   }
 
+  function moveSignatureRule(index: number, offset: -1 | 1) {
+    const target = index + offset
+    if (target < 0 || target >= signatureRules.length) return
+    const reordered = [...signatureRules]
+    ;[reordered[index], reordered[target]] = [reordered[target], reordered[index]]
+    signatureRules = reordered
+  }
+
   function handleCancel() {
     open = false
     onClose?.()
@@ -386,40 +394,57 @@
         <div class="border-t border-border pt-4 space-y-4">
           <div class="flex items-center justify-between gap-3">
             <div>
-              <Label class="font-medium">Contextual signatures</Label>
-              <p class="text-xs text-muted-foreground">Choose a signature for a recipient or domain and message type. The identity signature remains the fallback.</p>
+              <Label class="font-medium">{$_('identity.contextualSignatures')}</Label>
+              <p class="text-xs text-muted-foreground">{$_('identity.contextualSignaturesHelp')}</p>
             </div>
             <Button type="button" variant="outline" size="sm" onclick={addSignatureRule} disabled={signatureRules.length >= 32}>
-              <Icon icon="mdi:plus" class="w-4 h-4 mr-1" /> Add rule
+              <Icon icon="mdi:plus" class="w-4 h-4 mr-1" /> {$_('identity.addSignatureRule')}
             </Button>
           </div>
 
           {#each signatureRules as rule, index (rule.id)}
             <section class="rounded-md border border-border p-3 space-y-3">
               <div class="flex items-center gap-2">
-                <input type="checkbox" bind:checked={rule.enabled} aria-label="Enable signature rule" class="w-4 h-4 accent-primary" />
-                <Input bind:value={rule.name} aria-label="Rule name" class="flex-1" />
-                <Button type="button" variant="ghost" size="sm" onclick={() => signatureRules = signatureRules.filter((_, i) => i !== index)} aria-label="Remove signature rule">
+                <input type="checkbox" bind:checked={rule.enabled} aria-label={$_('identity.signatureRuleEnabled')} class="w-4 h-4 accent-primary" />
+                <Input bind:value={rule.name} aria-label={$_('identity.signatureRuleName')} class="flex-1" />
+                <Button type="button" variant="ghost" size="sm" disabled={index === 0} onclick={() => moveSignatureRule(index, -1)} aria-label={$_('identity.moveRuleUp')}>
+                  <Icon icon="mdi:arrow-up" class="w-4 h-4" />
+                </Button>
+                <Button type="button" variant="ghost" size="sm" disabled={index === signatureRules.length - 1} onclick={() => moveSignatureRule(index, 1)} aria-label={$_('identity.moveRuleDown')}>
+                  <Icon icon="mdi:arrow-down" class="w-4 h-4" />
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onclick={() => signatureRules = signatureRules.filter((_, i) => i !== index)} aria-label={$_('identity.removeSignatureRule')}>
                   <Icon icon="mdi:delete-outline" class="w-4 h-4" />
                 </Button>
               </div>
               <div class="space-y-1">
-                <Label>Recipients or domains</Label>
+                <Label>{$_('identity.signatureRuleRecipients')}</Label>
                 <Input value={rule.recipients.join(', ')} oninput={(event) => updateRuleRecipients(rule, event.currentTarget.value)} placeholder="person@example.org, @example.net" />
-                <p class="text-xs text-muted-foreground">Separate matches with commas. A domain starts with @.</p>
+                <p class="text-xs text-muted-foreground">{$_('identity.signatureRuleRecipientsHelp')}</p>
               </div>
               <div class="flex flex-wrap gap-x-4 gap-y-2">
                 {#each messageTypes as mode}
                   <label class="flex items-center gap-2 text-sm">
                     <input type="checkbox" checked={rule.messageTypes.includes(mode)} onchange={(event) => toggleRuleMessageType(rule, mode, event.currentTarget.checked)} class="w-4 h-4 accent-primary" />
-                    {mode}
+                    {$_(`identity.signatureRule${mode === 'new' ? 'New' : mode === 'reply' ? 'Reply' : mode === 'reply-all' ? 'ReplyAll' : 'Forward'}`)}
                   </label>
                 {/each}
               </div>
               <div class="space-y-2">
-                <Label>Signature</Label>
+                <Label>{$_('identity.signatureRuleContent')}</Label>
                 <SignatureEditor value={rule.signatureHtml} placeholder="Enter this rule's signature..." onchange={(html) => { rule.signatureHtml = html; signatureRules = [...signatureRules] }} />
-                <textarea bind:value={rule.signatureText} aria-label="Plain-text contextual signature" placeholder="Plain-text version (optional)" class="w-full min-h-[60px] p-2 text-sm bg-background border border-input rounded-md resize-y font-mono"></textarea>
+                <textarea bind:value={rule.signatureText} aria-label={$_('identity.signatureRuleContent')} placeholder={$_('identity.signatureRulePlainText')} class="w-full min-h-[60px] p-2 text-sm bg-background border border-input rounded-md resize-y font-mono"></textarea>
+              </div>
+              <div class="space-y-2">
+                <Label>{$_('identity.signaturePlacementLabel')}</Label>
+                <div class="flex flex-wrap gap-4">
+                  <label class="flex items-center gap-2 text-sm"><input type="radio" name={`signature-placement-${rule.id}`} value="above" bind:group={rule.signaturePlacement} class="accent-primary" />{$_('identity.aboveQuotedText')}</label>
+                  <label class="flex items-center gap-2 text-sm"><input type="radio" name={`signature-placement-${rule.id}`} value="below" bind:group={rule.signaturePlacement} class="accent-primary" />{$_('identity.belowQuotedText')}</label>
+                </div>
+                <label class="flex items-center gap-2 text-sm">
+                  <input type="checkbox" bind:checked={rule.signatureSeparator} class="accent-primary" />
+                  {$_('identity.addSeparator')}
+                </label>
               </div>
             </section>
           {/each}
