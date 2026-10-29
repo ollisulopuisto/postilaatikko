@@ -1,4 +1,5 @@
-Postilaatikko 0.3.20 sidebar, composer-undo attachment and durable mailbox-undo test build, built on GitHub from current main (ccd355b).
+Postilaatikko 0.3.20 sidebar, composer-undo attachment and durable mailbox-undo test build, built on GitHub from main.
+Feature baseline ccd355b (sidebar #52 and mailbox undo #53 merges); the exact source SHA is the main commit that includes these notes, visible in the build workflow run.
 Choose arm64 for Apple Silicon (including Mac Studio), amd64 for Intel.
 Open the DMG and drag Postilaatikko onto Applications.
 
@@ -10,4 +11,4 @@ Open the DMG and drag Postilaatikko onto Applications.
 
 Verified with full Go tests including migration and undo regression fixtures, frontend type/lint/unit checks and production build. Native packaging runs in the existing GitHub mac workflow. Native runtime (install, launch, WKWebView behavior) remains unverified until this DMG is checked on a device — please report any startup or window problems before wider use.
 
-Cache schema advances to 59; older binaries reject newer caches. Built from current main; unmerged branch work (such as saved-search virtual folders, schema 60) is not included. Send Later's existing live delivery/pairing/recovery acceptance gates remain open.
+Cache schema advances to 59; older binaries reject newer caches. Unmerged branch work (such as saved-search virtual folders, schema 60) is not included. Send Later's existing live delivery/pairing/recovery acceptance gates remain open.
