@@ -45,6 +45,8 @@ func init() {
 // Command-line flags
 var (
 	debugMode        = flag.Bool("debug", false, "Enable debug logging")
+	mailWindowMode   = flag.Bool("mail-window", false, "Open an independent mail window")
+	readerFolderName = flag.String("reader-folder-name", "", "Initial mail folder name")
 	readerMode       = flag.Bool("reader", false, "Open a detached thread reader")
 	readerFolder     = flag.String("reader-folder", "", "Reader folder ID")
 	readerThread     = flag.String("reader-thread", "", "Reader thread ID")
@@ -92,7 +94,7 @@ func main() {
 		}
 	}
 
-	if *readerMode {
+	if *readerMode || *mailWindowMode {
 		runReaderMode()
 		return
 	}
@@ -327,14 +329,20 @@ func (h *composerAssetHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 // runReaderMode reuses the parent services through authenticated IPC, without
 // opening another database, sync engine or single-instance lock.
 func runReaderMode() {
-	if *accountID == "" || *readerFolder == "" || *readerThread == "" || *ipcAddress == "" {
+	if *accountID == "" || *readerFolder == "" || (!*mailWindowMode && *readerThread == "") || *ipcAddress == "" {
 		println("Error: reader requires account, folder, thread and IPC address")
 		os.Exit(1)
 	}
-	reader := app.NewReaderApp(app.ReaderConfig{AccountID: *accountID, FolderID: *readerFolder, ThreadID: *readerThread, FolderType: *readerFolderType, IPCAddress: *ipcAddress})
+	reader := app.NewReaderApp(app.ReaderConfig{MailWindow: *mailWindowMode, FolderName: *readerFolderName, AccountID: *accountID, FolderID: *readerFolder, ThreadID: *readerThread, FolderType: *readerFolderType, IPCAddress: *ipcAddress})
+	entry := "/reader.html"
+	width := 900
+	if *mailWindowMode {
+		entry = "/mail-window.html"
+		width = 1280
+	}
 	err := wails.Run(&options.App{
-		Title: "Postilaatikko", Width: 900, Height: 800, MinWidth: 480, MinHeight: 400,
-		AssetServer:      &assetserver.Options{Handler: &composerAssetHandler{assets: assets, entry: "/reader.html"}},
+		Title: "Postilaatikko", Width: width, Height: 800, MinWidth: 480, MinHeight: 400,
+		AssetServer:      &assetserver.Options{Handler: &composerAssetHandler{assets: assets, entry: entry}},
 		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
 		OnStartup:        func(ctx context.Context) { app.StartReader(reader, ctx) },
 		OnShutdown:       func(context.Context) { app.ShutdownReader(reader) },

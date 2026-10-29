@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from '@iconify/svelte'
+  import { OpenMailWindow } from '../wailsjs/go/app/App'
   // Load offline icon data before anything else
   import { LAYOUT_SYMBOL, PERMANENT_DELETE } from '$lib/keyboard/shortcuts'
   import './lib/iconify-offline'
@@ -2010,6 +2011,13 @@
     <TitleBar onClose={handleClose} />
   {/if}
 
+  {#if getActiveExtension() === 'mail'}
+    <div class="flex justify-end border-b border-border px-2 py-1">
+      <button class="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted" onclick={() => OpenMailWindow(selectedAccountId || '', selectedFolderId || '', selectedFolderName, selectedFolderType || 'inbox').catch(error => toasts.error(String(error)))}>
+        <Icon icon="mdi:open-in-new" width="16" />{$_('mailWindow.newWindow')}
+      </button>
+    </div>
+  {/if}
   <!-- Main Content -->
   <div class="flex flex-1 min-h-0 overflow-hidden relative">
     <ExtensionRail />

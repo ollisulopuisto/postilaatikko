@@ -445,6 +445,8 @@ export function GetUnifiedInboxCount(arg1:string):Promise<number>;
 
 export function GetUnifiedInboxUnreadCount():Promise<number>;
 
+export function GetVirtualFolderCachedView(arg1:string):Promise<app.VirtualFolderCachedView>;
+
 export function GetVirtualFolderConversations(arg1:string,arg2:number,arg3:number,arg4:string):Promise<Array<message.Conversation>>;
 
 export function GetVirtualFolderCount(arg1:string):Promise<number>;
@@ -848,3 +850,5 @@ export function PutDraftAttachmentBlob(arg1: string, arg2: string, arg3: string)
 export function GetDraftAttachmentBlob(arg1: string): Promise<any>;
 
 export function DraftHistoryCommitBlobs(arg1: string, arg2: string, arg3: string, arg4: string, arg5: string[]): Promise<string>;
+
+export function OpenMailWindow(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;

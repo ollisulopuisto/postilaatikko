@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 - Show fully enumerated Gmail virtual-folder conversation/unread counts with progress and incomplete/error states, including saved-search queries. Reply/date counts reuse header metadata for flags to avoid redundant account scans. Continue non-Gmail searches through older UID pages and additional folders with retryable failures; complete non-Gmail conversation counts remain follow-up.
+- Add a New mail window action for parallel mail views, each with its own folder, search, selection, reader mode and list width. Replies reuse the detached composer; all windows share the existing mail services.
 
 ## Postilaatikko v0.3.20
 

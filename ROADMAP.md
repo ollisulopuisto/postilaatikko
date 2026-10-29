@@ -117,7 +117,7 @@ Use the [task board](TASKS.md) for current claims and integration status; the [D
 - **Gmail-native spam actions.** Existing v0.3.13 API baseline supports native spam/not-spam label operations with fallback. Verify actual provider behavior and undo; do not claim classifier-training guarantees without evidence.
 - **Quick replies and email templates.** Short snippets shipped in v0.3.13; full email templates remain P-020. Reuse them in inline/full compose while preserving sender, recipients and unsaved draft content.
 - **Calendar recognition.** Turn recognized date/time mentions in message content into an “Add to Calendar” action using the standard ICS event handoff. Open it for review/import and handle timezone ambiguity conservatively. Not started; build on `extensions/calendar`.
-- **Multiple mail windows.** Keep more than one mail window open for parallel reading and searching. Not started; the detached compose window already exists.
+- **Multiple mail windows.** Keep more than one mail window open for parallel reading and searching. P-013 has an independent mail-list/reader candidate in review; it reuses parent services and keeps navigation, selection and layout local to each window. Native lifecycle and real-mail checks remain before integration/release; the detached compose window already exists.
 
 ## Planned
 

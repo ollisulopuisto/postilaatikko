@@ -874,6 +874,8 @@ export namespace app {
 		}
 	}
 	export class ReaderConfig {
+	    mailWindow: boolean;
+	    folderName: string;
 	    accountId: string;
 	    folderId: string;
 	    threadId: string;
@@ -885,6 +887,8 @@ export namespace app {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.mailWindow = source["mailWindow"];
+	        this.folderName = source["folderName"];
 	        this.accountId = source["accountId"];
 	        this.folderId = source["folderId"];
 	        this.threadId = source["threadId"];
