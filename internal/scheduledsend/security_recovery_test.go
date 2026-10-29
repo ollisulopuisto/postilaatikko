@@ -3,6 +3,7 @@ package scheduledsend
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -157,7 +158,7 @@ func reopenHelperQueue(t *testing.T, store *Store) *Store {
 	if err := store.db.QueryRow("PRAGMA database_list").Scan(&index, &name, &path); err != nil {
 		t.Fatal(err)
 	}
-	other, err := OpenStore(strings.TrimSuffix(path, "/scheduledsend.db"), store.helper)
+	other, err := OpenStore(filepath.Dir(path), store.helper)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,5 +216,44 @@ func TestRecoveryConcurrentClaimAndCancellation(t *testing.T) {
 	status, err := other.GetStatus(ctx, command.JobID)
 	if err != nil || status.State != Sent || status.Attempts != 1 {
 		t.Fatalf("completed claim: %+v %v", status, err)
+	}
+}
+
+func TestRecoveryAcceptedSendWithFailedCompletionWrite(t *testing.T) {
+	ctx := context.Background()
+	store, client, helper := baselineQueue(t)
+	command := baselineCommand()
+	if _, err := store.Accept(ctx, baselineSeal(t, command, client, helper)); err != nil {
+		t.Fatal(err)
+	}
+	// Inject a real persistence failure after provider acceptance, without
+	// breaking the earlier atomic claim or relying on timing/disk capacity.
+	if _, err := store.db.Exec(`CREATE TRIGGER fail_completion BEFORE UPDATE OF state ON jobs
+		WHEN NEW.state = 'sent' BEGIN SELECT RAISE(FAIL, 'injected completion failure'); END`); err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	worker := Worker{Store: store, Transport: baselineTransport(func(context.Context, Delivery) error { calls++; return nil })}
+	if processed, err := worker.ProcessNext(ctx); err == nil || !processed {
+		t.Fatalf("completion failure not surfaced: %v %v", processed, err)
+	}
+	status, err := store.GetStatus(ctx, command.JobID)
+	if err != nil || status.State != Sending {
+		t.Fatalf("failed completion lost claim: %+v %v", status, err)
+	}
+	if _, err := store.db.Exec("DROP TRIGGER fail_completion"); err != nil {
+		t.Fatal(err)
+	}
+	other := reopenHelperQueue(t, store)
+	if err := other.recoverInterrupted(ctx, time.Now().Add(16*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	worker.Store = other
+	if processed, err := worker.ProcessNext(ctx); err != nil || processed {
+		t.Fatalf("accepted mail retried after storage failure: %v %v", processed, err)
+	}
+	status, err = other.GetStatus(ctx, command.JobID)
+	if err != nil || status.State != Unknown || status.Code != "interrupted_delivery" || calls != 1 {
+		t.Fatalf("completion recovery: %+v %v, delivery calls %d", status, err, calls)
 	}
 }

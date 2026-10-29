@@ -71,7 +71,6 @@ func TestSecurityStatusCannotOverwriteConfirmedCancellation(t *testing.T) {
 	store, client, helper := baselineQueue(t)
 	statusReady, releaseStatus := make(chan struct{}), make(chan struct{})
 	var release sync.Once
-	defer release.Do(func() { close(releaseStatus) })
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -98,7 +97,10 @@ func TestSecurityStatusCannotOverwriteConfirmedCancellation(t *testing.T) {
 		w.WriteHeader(response.Code)
 		_, _ = w.Write(response.Body.Bytes())
 	}))
-	defer server.Close()
+	defer func() {
+		release.Do(func() { close(releaseStatus) })
+		server.Close()
+	}()
 	local := securityClientStore(t, server.URL, helper)
 	job, err := local.Schedule(ctx, "local-account", "draft", "fingerprint", *baselineCommand().Delivery, client)
 	if err != nil {

@@ -1,6 +1,6 @@
 # Send Later with a Mac Studio helper
 
-P-011 has a review-stage helper/SMTP path, composer controls, and a paged Scheduled view. It is not marked complete or released: live delivery, keychain/login lifecycle, failure recovery and security regression verification are still outstanding. The initial transport is a direct helper connection; there is no hosted relay or paid hosted sender in this implementation.
+P-011 has a review-stage helper/SMTP path, composer controls, and a paged Scheduled view. It is not marked complete or released: live delivery, keychain/login lifecycle, native failure recovery and independent security review are still outstanding. Automated queue/recovery regressions now cover the boundaries listed below. The initial transport is a direct helper connection; there is no hosted relay or paid hosted sender in this implementation.
 
 ## Set up the Studio
 
@@ -94,4 +94,13 @@ Use `--outcome failed` only after confirming the provider did **not** accept the
 
 E2EE protects composing-device ↔ trusted-helper content and status responses, including recipients, attachments, account choice and due time. Public keys, sizes and traffic timing remain visible to a relay. Helper-local status metadata is not sent in plaintext. Private keys use the OS keyring without plaintext fallback; mail credentials remain on Studio in its existing credential store.
 
-Static paired keys do not provide forward secrecy for previously captured ciphertext. This does not itself encrypt ordinary outbound email for its final recipient; existing S/MIME/PGP settings are applied before scheduling. Live/helper login verification, tampering/replay/cancellation/duplicate-send regression checks, key rotation and security review remain required before release. See the [implementation plan](plans/2026-10-24-send-later.md) for the complete checklist.
+Static paired keys do not provide forward secrecy for previously captured ciphertext. This does not itself encrypt ordinary outbound email for its final recipient; existing S/MIME/PGP settings are applied before scheduling. Live/helper login verification, provider fault checks, key rotation and independent security review remain required before release. Automated regression coverage is described below; it does not establish real delivery or a complete security audit. See the [implementation plan](plans/2026-10-24-send-later.md) for the complete checklist.
+
+
+## Automated verification and native acceptance
+
+P-011-SEC adds real encrypted-command and SQLite tests for lost durable acknowledgements with exact-byte retry, old receipt rejection on fresh queries, cross-client ownership, stale status after confirmed cancellation, cross-process Send Now/schedule arbitration, and concurrent helper claim/cancel/reschedule behavior. Recovery tests cover active-claim grace periods, stale worker completion, revision-bound manual resolution, transport failure classes and retry limits, and an injected database completion-write failure after provider acceptance. Ambiguous acceptance never automatically retries; recoverable encrypted payloads remain available.
+
+A regression using a temporary app database and an in-process mock keyring reproduced missing Gmail OAuth credentials incorrectly becoming `outcome_unknown` before any provider submission. Local credential lookup/refresh failures now retain the authorization-required classification, consistent with SMTP. This test does not access the login keychain or a real account.
+
+The Mac Studio acceptance gate remains open: verify direct and remote paired delivery with the mail UI closed; cancellation/rescheduling before and during provider submission; sleep/offline missed times; helper termination/restart and reboot/login-agent recovery; locked/missing keys and expired/revoked credentials; ambiguous provider acceptance; Sent-copy failure and draft cleanup racing live edits. Check real Gmail/SMTP/IMAP, recipient/Bcc/attachment fidelity and provider Sent evidence. Automated SQLite and HTTP fault injection cannot substitute for those checks. See the [P-011-SEC handoff](diagnostics/2026-10-29-send-later-security-recovery.md) for reproducible commands and limits.
