@@ -1589,4 +1589,58 @@ var migrations = []Migration{
    created_at TEXT NOT NULL DEFAULT (datetime('now'))
  );
  `},
+	{Version: 58, SQL: `
+ -- Attachment blobs for the composer draft undo history. PR #45's store code
+ -- references these tables but the migration itself never landed on main, so
+ -- blob-backed snapshot/restore/clear paths failed on migrated databases.
+ CREATE TABLE IF NOT EXISTS draft_attachment_blobs (
+   hash TEXT PRIMARY KEY,
+   name TEXT NOT NULL DEFAULT '',
+   mime TEXT NOT NULL DEFAULT '',
+   size INTEGER NOT NULL DEFAULT 0,
+   content BLOB NOT NULL,
+   created_at TEXT NOT NULL DEFAULT (datetime('now'))
+ );
+ CREATE TABLE IF NOT EXISTS draft_history_node_blobs (
+   node_id TEXT NOT NULL REFERENCES draft_history_nodes(node_id) ON DELETE CASCADE,
+   blob_hash TEXT NOT NULL REFERENCES draft_attachment_blobs(hash),
+   PRIMARY KEY (node_id, blob_hash)
+ );
+ `},
+	{Version: 59, SQL: `
+ -- Durable mailbox undo history ("eternal undo" first step: 24h retention).
+ -- One row per undoable command in global push order; expiry is derived from
+ -- created_at plus the stack timeout at load time, so retention changes need
+ -- no schema change. message_ids holds local database IDs only (safe
+ -- identifiers), never RFC822 headers or content.
+ CREATE TABLE IF NOT EXISTS mailbox_undo_commands (
+   seq INTEGER PRIMARY KEY AUTOINCREMENT,
+   operation_id TEXT NOT NULL,
+   action TEXT NOT NULL DEFAULT '',
+   message_ids TEXT NOT NULL DEFAULT '[]',
+   type TEXT NOT NULL,
+   payload TEXT NOT NULL,
+   created_at TEXT NOT NULL
+ );
+ CREATE INDEX IF NOT EXISTS idx_mailbox_undo_commands_op ON mailbox_undo_commands(operation_id);
+ CREATE INDEX IF NOT EXISTS idx_mailbox_undo_commands_created ON mailbox_undo_commands(created_at);
+ `},
+	{Version: 60, SQL: `
+ -- Saved searches as virtual folders: a virtual folder can carry a text query,
+ -- and its ordered conversation index is cached so the folder opens instantly.
+ -- The cache is refreshed in the background and on demand; membership can lag
+ -- live data until the next refresh, which the UI shows via refreshed_at.
+ ALTER TABLE virtual_folders ADD COLUMN search_query TEXT NOT NULL DEFAULT '';
+ CREATE TABLE IF NOT EXISTS virtual_folder_cache (
+   virtual_folder_id TEXT NOT NULL REFERENCES virtual_folders(id) ON DELETE CASCADE,
+   position INTEGER NOT NULL,
+   account_id TEXT NOT NULL,
+   conversation_id TEXT NOT NULL,
+   PRIMARY KEY (virtual_folder_id, position)
+ );
+ CREATE TABLE IF NOT EXISTS virtual_folder_cache_meta (
+   virtual_folder_id TEXT PRIMARY KEY REFERENCES virtual_folders(id) ON DELETE CASCADE,
+   refreshed_at INTEGER NOT NULL
+ );
+ `},
 }

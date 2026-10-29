@@ -609,6 +609,43 @@ export namespace app {
 		    return a;
 		}
 	}
+	export class VirtualFolderCachedView {
+	    virtualFolderId: string;
+	    conversations: message.Conversation[];
+	    // Go type: time
+	    refreshedAt: any;
+	    hasCache: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new VirtualFolderCachedView(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.virtualFolderId = source["virtualFolderId"];
+	        this.conversations = this.convertValues(source["conversations"], message.Conversation);
+	        this.refreshedAt = this.convertValues(source["refreshedAt"], null);
+	        this.hasCache = source["hasCache"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class MailSearchRequest {
 	    sessionId: string;
 	    query: string;
@@ -3886,6 +3923,7 @@ export namespace virtualfolder {
 	    replyStatus: string;
 	    starStatus: string;
 	    dateWindow: string;
+	    searchQuery: string;
 	    // Go type: time
 	    createdAt: any;
 	    // Go type: time
@@ -3906,6 +3944,7 @@ export namespace virtualfolder {
 	        this.replyStatus = source["replyStatus"];
 	        this.starStatus = source["starStatus"];
 	        this.dateWindow = source["dateWindow"];
+	        this.searchQuery = source["searchQuery"];
 	        this.createdAt = this.convertValues(source["createdAt"], null);
 	        this.updatedAt = this.convertValues(source["updatedAt"], null);
 	    }

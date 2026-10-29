@@ -220,7 +220,7 @@ func TestMigrationV32_LocalRecordIDsRewrittenToUUIDs(t *testing.T) {
 	if _, err := db.Exec(`ALTER TABLE contact_sources DROP COLUMN password_storage`); err != nil {
 		t.Fatalf("drop contact_sources.password_storage for re-migrate: %v", err)
 	}
-	for _, col := range []string{"folder_mode", "read_status", "reply_status", "star_status", "date_window"} {
+	for _, col := range []string{"folder_mode", "read_status", "reply_status", "star_status", "date_window", "search_query"} {
 		if _, err := db.Exec(`ALTER TABLE virtual_folders DROP COLUMN ` + col); err != nil {
 			t.Fatalf("drop virtual_folders.%s for re-migrate: %v", col, err)
 		}
@@ -401,7 +401,7 @@ func TestMigrationV33_CleansExistingOrphans(t *testing.T) {
 	if _, err := db.Exec(`ALTER TABLE contact_sources DROP COLUMN password_storage`); err != nil {
 		t.Fatalf("drop contact_sources.password_storage for re-migrate: %v", err)
 	}
-	for _, col := range []string{"folder_mode", "read_status", "reply_status", "star_status", "date_window"} {
+	for _, col := range []string{"folder_mode", "read_status", "reply_status", "star_status", "date_window", "search_query"} {
 		if _, err := db.Exec(`ALTER TABLE virtual_folders DROP COLUMN ` + col); err != nil {
 			t.Fatalf("drop virtual_folders.%s for re-migrate: %v", col, err)
 		}

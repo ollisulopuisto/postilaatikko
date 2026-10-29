@@ -29,7 +29,13 @@ export function normalizeCards(raw: string, entries: NavigationEntry[]): Navigat
     const group = entry.kind === 'virtual' || entry.kind === 'inboxes' ? 'virtual' : entry.kind === 'folder' ? 'pinned' : ['archive', 'spam', 'snoozed'].includes(entry.folderType || '') ? 'secondary' : 'primary'
     cards.find(c => c.id === group)!.entries.push(entry.id)
   }
-  const quick = [...new Set(Array.isArray(saved.quick) ? saved.quick.filter(id => valid.has(id)) : entries.filter(e => e.kind === 'folder').map(e => e.id))].slice(0, 10)
+  // A missing quick list means the layout predates favorites: seed the rail
+  // with the primary destinations. An explicitly saved (even empty) list is
+  // respected so a user who removed every favorite keeps the rail empty.
+  const fallback = ['inboxes', 'starred', 'drafts', 'sent']
+    .filter(id => valid.has(id))
+    .concat(entries.filter(e => e.kind === 'folder').map(e => e.id))
+  const quick = [...new Set(Array.isArray(saved.quick) ? saved.quick.filter(id => valid.has(id)) : fallback)].slice(0, 10)
   return { version: 1, cards, quick, showApps: saved.showApps === true }
 }
 export function moveEntry(state: NavigationCards, id: string, cardId: string, index: number): NavigationCards {

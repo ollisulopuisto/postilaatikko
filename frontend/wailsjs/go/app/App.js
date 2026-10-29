@@ -838,6 +838,10 @@ export function GetUnifiedInboxUnreadCount() {
   return window['go']['app']['App']['GetUnifiedInboxUnreadCount']();
 }
 
+export function GetVirtualFolderCachedView(arg1) {
+  return window['go']['app']['App']['GetVirtualFolderCachedView'](arg1);
+}
+
 export function GetVirtualFolderConversations(arg1, arg2, arg3, arg4) {
   return window['go']['app']['App']['GetVirtualFolderConversations'](arg1, arg2, arg3, arg4);
 }
@@ -852,6 +856,10 @@ export function GetVirtualFolderSearchCount(arg1, arg2, arg3) {
 
 export function GetVirtualFolderUnreadCounts() {
   return window['go']['app']['App']['GetVirtualFolderUnreadCounts']();
+}
+
+export function RefreshVirtualFolderCache(arg1) {
+  return window['go']['app']['App']['RefreshVirtualFolderCache'](arg1);
 }
 
 export function GetVirtualFolders() {

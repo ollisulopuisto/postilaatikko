@@ -13,9 +13,20 @@ class VirtualFoldersStore {
   folders = $state<virtualfolder.VirtualFolder[]>([])
   unreadCounts = $state<Record<string, number>>({})
   loading = $state(false)
+  // A "save search as virtual folder" request from the message list; the
+  // sidebar owns the dialog and consumes this.
+  saveSearchRequest = $state<{ query: string; folderId: string | null } | null>(null)
   private loaded = false
   private eventsInitialized = false
   private refreshTimer: ReturnType<typeof setTimeout> | undefined
+
+  requestSaveSearch(query: string, folderId: string | null = null): void {
+    this.saveSearchRequest = { query, folderId }
+  }
+
+  clearSaveSearchRequest(): void {
+    this.saveSearchRequest = null
+  }
 
   async load(force = false): Promise<void> {
     if (this.loading || (this.loaded && !force)) return

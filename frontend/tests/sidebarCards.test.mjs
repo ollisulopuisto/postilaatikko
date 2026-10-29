@@ -30,3 +30,11 @@ test('number shortcuts use key position and ignore Shift/Alt', () => {
   assert.equal(shortcutIndex({code:'Digit0',key:'0',metaKey:false,ctrlKey:true,shiftKey:false,altKey:false}, false),9)
   assert.equal(shortcutIndex({code:'Digit1',key:'1',metaKey:true,shiftKey:true}, true),-1)
 })
+test('missing quick list seeds primary destinations and pins', () => {
+  const state = normalizeCards('', entries)
+  assert.deepEqual(state.quick, ['inboxes', 'sent', 'folder:a:f'])
+})
+test('an explicitly saved empty quick list stays empty', () => {
+  const state = normalizeCards(JSON.stringify({ quick: [] }), entries)
+  assert.deepEqual(state.quick, [])
+})

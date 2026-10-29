@@ -130,7 +130,9 @@
     "deleteVirtualFolderDescription": "“{name}” poistetaan. Sen kansioita ja niiden viestejä ei muuteta.",
     "virtualFolderNoFolderMatches": "Haulla ei löytynyt kansioita.",
     "virtualFolderChooseFolder": "Valitse vähintään yksi kansio.",
-    "virtualFolderSaveFailed": "Virtuaalikansion tallennus epäonnistui."
+    "virtualFolderSaveFailed": "Virtuaalikansion tallennus epäonnistui.",
+    "bottomActions": "Pikatoiminnot",
+    "virtualFolderSavedQuery": "Tallennettu haku"
   },
   "messageList": {
     "searchMessages": "Etsi viestejä...",
@@ -1150,7 +1152,10 @@
     "addGroup": "Lisää ryhmä",
     "showApps": "Näytä Yhteystiedot ja Kalenteri palkissa",
     "addVirtual": "Uusi virtuaalikansio",
-    "allInboxes": "Kaikki saapuneet"
+    "allInboxes": "Kaikki saapuneet",
+    "favorite": "Vaihda suosikkia",
+    "dragCard": "Vedä korttia järjestääksesi",
+    "dragEntry": "Vedä siirtääksesi"
   },
   "search": {
     "operators": "Hakuoperaattorit",
@@ -1186,7 +1191,9 @@
     "serverSearching": "Etsitään palvelimelta...",
     "notSyncedLocally": "(ei synkronoitu paikallisesti)",
     "serverResultsCapped": "Näytetään {shown} / {total} tuloksesta haulle ”{query}”",
-    "showAllResults": "Näytä kaikki {total} tulosta"
+    "showAllResults": "Näytä kaikki {total} tulosta",
+    "saveAsVirtualFolder": "Tallenna virtuaalikansioksi",
+    "virtualFolderCacheUpdated": "Virtuaalikansion indeksi päivitetty {time}"
   },
   "responsive": {
     "back": "Takaisin",
