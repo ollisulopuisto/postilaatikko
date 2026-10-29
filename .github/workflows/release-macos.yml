@@ -1,0 +1,106 @@
+name: Release for macOS
+
+on:
+  push:
+    tags: 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-publish:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-latest
+          - arch: amd64
+            runner: macos-26-intel
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      GOARCH: ${{ matrix.arch }}
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v6
+
+      - name: Validate release version
+        run: ./scripts/version.sh check "${{ github.ref_name }}"
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Cache Wails CLI
+        id: wails
+        uses: actions/cache@v4
+        with:
+          path: ~/go/bin/wails
+          key: wails-${{ runner.os }}-${{ runner.arch }}-go1.26-v2.15.0
+
+      - name: Install Wails CLI
+        if: steps.wails.outputs.cache-hit != 'true'
+        run: env -u GOARCH go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend
+
+      - name: Build macOS app
+        run: make build
+
+      - name: Verify app signature
+        run: codesign --verify --deep --strict build/bin/postilaatikko.app
+
+      - name: Create drag-and-drop DMG and ZIP
+        run: |
+          cd build/bin
+          APP_BUNDLE="postilaatikko.app"
+          ZIP_NAME="Postilaatikko-darwin-${GOARCH}.zip"
+          DMG_NAME="Postilaatikko-${{ github.ref_name }}-darwin-${GOARCH}.dmg"
+          zip -r "$ZIP_NAME" "$APP_BUNDLE"
+          mkdir -p dmg-staging
+          cp -R "$APP_BUNDLE" dmg-staging/Postilaatikko.app
+          ln -s /Applications dmg-staging/Applications
+          hdiutil create \
+            -volname "Postilaatikko" \
+            -srcfolder dmg-staging \
+            -ov \
+            -format UDZO \
+            "$DMG_NAME"
+          hdiutil verify "$DMG_NAME"
+          rm -rf dmg-staging
+          ls -lh "$DMG_NAME" "$ZIP_NAME"
+
+      - name: Ensure release exists and publish this architecture
+        run: |
+          TAG_NAME="${{ github.ref_name }}"
+          if ! gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            gh release create "$TAG_NAME" \
+              --title "Postilaatikko $TAG_NAME" \
+              --generate-notes || true
+            for attempt in 1 2 3 4 5; do
+              if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+                break
+              fi
+              sleep 2
+            done
+            gh release view "$TAG_NAME" >/dev/null
+          fi
+          gh release upload "$TAG_NAME" \
+            "build/bin/Postilaatikko-${TAG_NAME}-darwin-${GOARCH}.dmg" \
+            "build/bin/Postilaatikko-darwin-${GOARCH}.zip" \
+            --clobber
