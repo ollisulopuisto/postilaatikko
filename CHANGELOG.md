@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- GLOBAL-002 candidate: enumerate Gmail virtual-folder conversation counts with explicit progress/completeness and continue non-Gmail searches through older UID pages and additional folders. Saved-query count reconciliation, broader continuation checks and non-Gmail conversation counts remain in progress.
+- Show fully enumerated Gmail virtual-folder conversation/unread counts with progress and incomplete/error states, including saved-search queries. Reply/date counts reuse header metadata for flags to avoid redundant account scans. Continue non-Gmail searches through older UID pages and additional folders with retryable failures; complete non-Gmail conversation counts remain follow-up.
 
 ## Postilaatikko v0.3.20
 

@@ -4,6 +4,15 @@ Base: fetched `origin/main` at `1817a78` (2026-10-29). New isolated branch `code
 
 Reapplied committed count jobs/UI and IMAP decreasing-UID continuation from `e9f9be5`, preserving current main's Gmail shared quota budget, thread-list implementation, saved-search virtual-folder query, cached first paint and cache refresh timestamp. Only one `Threads` implementation remains.
 
-Verification at the requested durable WIP checkpoint: `go test ./internal/gmail ./internal/sync ./app` passes. This is not review-ready: saved-query online counts are still being reconciled; frontend checks, broader continuation regressions and full Go suite remain.
+The requested durable WIP checkpoint was pushed as `fa03f94`. Follow-up reconciliation fixes saved-query count membership, duplicate scan progress, redundant flag enumeration when header metadata is already required, and false completeness after cancellation at the last enumeration page. Each of those cases failed before its fix and passed afterward.
 
-Remaining whole-task gates: exact non-Gmail conversation counts/whole-thread criteria, completed-count reuse/invalidation, large-mailbox quota measurements and native/live Gmail/IMAP testing. Unsupported count providers report incomplete. No main merge, release or DMG is claimed.
+Verification for the recovered slice:
+
+- Full `go test ./...` passes after building the required frontend embed assets. An initial full-suite attempt before the frontend build failed only on the absent `frontend/dist` embed; it was rerun successfully.
+- Affected Gmail/sync/app race tests pass; `go vet ./app ./internal/gmail ./internal/sync` and whitespace checks pass.
+- Protocol fixture verifies 12 independent results across two non-Gmail accounts/two folders, account-qualified identities, unchanged retry continuation after a server SEARCH failure, and no body/BINARY content fetches. Existing protocol tests cover UIDVALIDITY changes, cancellation and decreasing UID pages.
+- Job fixture verifies saved-query scope, successful counts, cancellation/release and unknown-view rejection. Mixed providers preserve successful Gmail totals while reporting incomplete; disabled accounts are excluded.
+- All 178 frontend tests pass; Svelte check reports zero errors and the two existing titlebar ARIA warnings. Changed-component ESLint and production build pass (existing chunk-size and annotation advisories).
+- No native app, live provider or current-branch browser smoke is claimed.
+
+Remaining whole-task gates: exact non-Gmail conversation counts/whole-thread criteria (IMAP pages still return message-level matches), completed-count reuse/invalidation and coalescing (view reloads currently restart count enumeration), large-mailbox quota measurements, criteria-edit cursor invalidation, and native/live Gmail/IMAP testing. Provider pages are not an atomic mailbox snapshot; arrivals/deletions can require refresh. Unsupported count providers report incomplete. No main merge, release or DMG is claimed.

@@ -84,7 +84,7 @@ func (a *App) StartVirtualFolderOnlineCount(sessionID, virtualFolderID string) e
 			client, countErr := a.syncEngine.GmailClient(ctx, acc.ID)
 			var count gmail.ThreadCount
 			if countErr == nil {
-				count, countErr = client.CountThreads(ctx, gmail.CountQuery{MembershipQuery: gmailViewQuery("", scope[acc.ID], vf.FolderMode == "exclude"), ReadStatus: vf.ReadStatus, StarStatus: vf.StarStatus, ReplyStatus: vf.ReplyStatus, Cutoff: cutoff}, func(progress gmail.ThreadCount) {
+				count, countErr = client.CountThreads(ctx, gmail.CountQuery{MembershipQuery: gmailViewQuery(vf.SearchQuery, scope[acc.ID], vf.FolderMode == "exclude"), ReadStatus: vf.ReadStatus, StarStatus: vf.StarStatus, ReplyStatus: vf.ReplyStatus, Cutoff: cutoff}, func(progress gmail.ThreadCount) {
 					a.viewCountMu.Lock()
 					job.state.Total = total + progress.Total
 					job.state.Unread = unread + progress.Unread
@@ -119,6 +119,7 @@ func (a *App) StartVirtualFolderOnlineCount(sessionID, virtualFolderID string) e
 	return nil
 }
 
+// GetVirtualFolderOnlineCount returns an isolated snapshot of the window count job.
 func (a *App) GetVirtualFolderOnlineCount(sessionID string) (VirtualFolderOnlineCount, error) {
 	a.viewCountMu.Lock()
 	defer a.viewCountMu.Unlock()

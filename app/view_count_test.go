@@ -35,7 +35,7 @@ func TestOnlineCountJobScopeCompletionAndCancellation(t *testing.T) {
 		}
 	}
 	a := &App{ctx: context.Background(), accountStore: account.NewStore(db), folderStore: folder.NewStore(db), virtualFolderStore: virtualfolder.NewStore(db)}
-	if err = a.virtualFolderStore.Create(&virtualfolder.VirtualFolder{ID: "v", Name: "Family", FolderIDs: []string{"f"}, FolderMode: "include"}); err != nil {
+	if err = a.virtualFolderStore.Create(&virtualfolder.VirtualFolder{ID: "v", Name: "Family", FolderIDs: []string{"f"}, FolderMode: "include", SearchQuery: "from:friend@example.org"}); err != nil {
 		t.Fatal(err)
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +48,7 @@ func TestOnlineCountJobScopeCompletionAndCancellation(t *testing.T) {
 			_, _ = w.Write([]byte(`{"threads":[{"id":"one"}]}`))
 			return
 		}
-		if r.URL.Query().Get("q") != `(label:"Family")` {
+		if r.URL.Query().Get("q") != `(from:friend@example.org) (label:"Family")` {
 			t.Errorf("scope %q", r.URL.Query().Get("q"))
 		}
 		_, _ = w.Write([]byte(`{"threads":[{"id":"one"},{"id":"two"}],"resultSizeEstimate":500}`))
@@ -79,6 +79,43 @@ func TestOnlineCountJobScopeCompletionAndCancellation(t *testing.T) {
 		}
 		if time.Now().After(deadline) {
 			t.Fatal("count did not complete")
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	// Adding an unsupported provider must preserve Gmail's result while reporting
+	// the whole view incomplete. A disabled account must not create an issue.
+	for _, stmt := range []string{
+		`INSERT INTO accounts(id,name,email,imap_host,smtp_host,username,auth_type,enabled) VALUES('other','Other','o@example.org','example.org','example.org','o','password',1)`,
+		`INSERT INTO accounts(id,name,email,imap_host,smtp_host,username,auth_type,enabled) VALUES('disabled','Disabled','d@example.org','example.org','example.org','d','password',0)`,
+		`INSERT INTO folders(id,account_id,name,path,folder_type) VALUES('other-folder','other','Inbox','INBOX','inbox')`,
+		`INSERT INTO folders(id,account_id,name,path,folder_type) VALUES('disabled-folder','disabled','Inbox','INBOX','inbox')`,
+	} {
+		if _, err = db.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = a.virtualFolderStore.Update(&virtualfolder.VirtualFolder{ID: "v", Name: "Mixed", FolderIDs: []string{"f", "other-folder", "disabled-folder"}, FolderMode: "include", SearchQuery: "from:friend@example.org"}); err != nil {
+		t.Fatal(err)
+	}
+	if err = a.StartVirtualFolderOnlineCount("mixed", "v"); err != nil {
+		t.Fatal(err)
+	}
+	defer a.CancelVirtualFolderOnlineCount("mixed")
+	deadline = time.Now().Add(3 * time.Second)
+	for {
+		state, err := a.GetVirtualFolderOnlineCount("mixed")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !state.Running {
+			if state.Complete || state.Total != 2 || state.Unread != 1 || len(state.Issues) != 1 || state.Issues[0].AccountID != "other" {
+				t.Fatalf("unsupported account claimed complete or lost successful counts: %+v", state)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("mixed count did not complete")
 		}
 		time.Sleep(time.Millisecond)
 	}

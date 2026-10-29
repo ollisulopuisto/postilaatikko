@@ -52,6 +52,9 @@ func (c *Client) CountThreads(ctx context.Context, q CountQuery, progress func(T
 				visit(id)
 			}
 			report()
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			if page.NextPageToken == "" {
 				return nil
 			}
@@ -62,7 +65,13 @@ func (c *Client) CountThreads(ctx context.Context, q CountQuery, progress func(T
 			token = page.NextPageToken
 		}
 	}
-	if err := enumerate(q.MembershipQuery, func(id string) { members[id] = 0; result.Scanned++ }); err != nil {
+	if err := enumerate(q.MembershipQuery, func(id string) {
+		if _, exists := members[id]; exists {
+			return
+		}
+		members[id] = 0
+		result.Scanned++
+	}); err != nil {
 		return result, err
 	}
 	if len(members) == 0 {
@@ -70,27 +79,27 @@ func (c *Client) CountThreads(ctx context.Context, q CountQuery, progress func(T
 		report()
 		return result, nil
 	}
-	if err := enumerate("is:unread", func(id string) {
-		if flags, ok := members[id]; ok {
-			members[id] = flags | 1
-		}
-	}); err != nil {
-		return result, err
-	}
-	if q.StarStatus == "starred" || q.StarStatus == "unstarred" {
-		if err := enumerate("is:starred", func(id string) {
-			if flags, ok := members[id]; ok {
-				members[id] = flags | 2
-			}
-		}); err != nil {
-			return result, err
-		}
-	}
 	acceptsFlags := func(flags uint8) bool {
 		unread, starred := flags&1 != 0, flags&2 != 0
 		return !(q.ReadStatus == "unread" && !unread || q.ReadStatus == "read" && unread || q.StarStatus == "starred" && !starred || q.StarStatus == "unstarred" && starred)
 	}
 	if q.Cutoff.IsZero() && (q.ReplyStatus == "" || q.ReplyStatus == "all") {
+		if err := enumerate("is:unread", func(id string) {
+			if flags, ok := members[id]; ok {
+				members[id] = flags | 1
+			}
+		}); err != nil {
+			return result, err
+		}
+		if q.StarStatus == "starred" || q.StarStatus == "unstarred" {
+			if err := enumerate("is:starred", func(id string) {
+				if flags, ok := members[id]; ok {
+					members[id] = flags | 2
+				}
+			}); err != nil {
+				return result, err
+			}
+		}
 		for _, flags := range members {
 			if acceptsFlags(flags) {
 				result.Total++
@@ -160,10 +169,7 @@ func (c *Client) CountThreads(ctx context.Context, q CountQuery, progress func(T
 		}()
 	}
 send:
-	for id, flags := range members {
-		if !acceptsFlags(flags) {
-			continue
-		}
+	for id := range members {
 		select {
 		case jobs <- id:
 		case <-workCtx.Done():

@@ -3,6 +3,8 @@ package gmail
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -31,7 +33,7 @@ func TestCompleteThreadCountEnumeratesPagesAndIgnoresEstimate(t *testing.T) {
 		_, _ = w.Write([]byte(`{"threads":[{"id":"b"},{"id":"c"}],"resultSizeEstimate":9999}`))
 	})
 	count, err := c.CountThreads(context.Background(), CountQuery{MembershipQuery: `label:"Family"`}, nil)
-	if err != nil || !count.Complete || count.Total != 3 || count.Unread != 1 {
+	if err != nil || !count.Complete || count.Total != 3 || count.Unread != 1 || count.Scanned != 3 {
 		t.Fatalf("count: %+v %v", count, err)
 	}
 	if calls != 3 {
@@ -53,6 +55,10 @@ func TestCountFiltersAreThreadWideAcrossDifferentMessages(t *testing.T) {
 				threads = append(threads, map[string]string{"id": id})
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"threads": threads})
+			return
+		}
+		if r.URL.Path == "/threads/b" {
+			_, _ = w.Write([]byte(`{"messages":[{"id":"b","internalDate":"3000"}]}`))
 			return
 		}
 		if strings.HasPrefix(r.URL.Path, "/threads/") {
@@ -102,5 +108,50 @@ func TestCountSkipsThreadDeletedDuringHeaderEnumeration(t *testing.T) {
 	count, err := c.CountThreads(context.Background(), CountQuery{ReplyStatus: "replied"}, nil)
 	if err != nil || !count.Complete || count.Total != 0 {
 		t.Fatalf("deleted thread count: %+v %v", count, err)
+	}
+}
+
+func TestHeaderCountSkipsRedundantFlagEnumerations(t *testing.T) {
+	countQueries := []string{}
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/threads" {
+			countQueries = append(countQueries, r.URL.Query().Get("q"))
+			_, _ = w.Write([]byte(`{"threads":[{"id":"one"}]}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"messages":[{"id":"m","internalDate":"3000","labelIds":["UNREAD","STARRED","SENT"],"payload":{"headers":[{"name":"In-Reply-To","value":"<parent>"}]}}]}`))
+	})
+	count, err := c.CountThreads(context.Background(), CountQuery{MembershipQuery: "scope", ReadStatus: "unread", StarStatus: "starred", ReplyStatus: "replied"}, nil)
+	if err != nil || !count.Complete || count.Total != 1 || count.Unread != 1 {
+		t.Fatalf("count %+v %v", count, err)
+	}
+	if len(countQueries) != 1 || countQueries[0] != "scope" {
+		t.Fatalf("metadata already supplies flags; unnecessary account scans: %v", countQueries)
+	}
+}
+
+func TestCountCancelledAtLastPageCannotClaimCompleteness(t *testing.T) {
+	for _, empty := range []bool{true, false} {
+		t.Run(fmt.Sprint("empty=", empty), func(t *testing.T) {
+			c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+				if empty {
+					_, _ = w.Write([]byte(`{}`))
+					return
+				}
+				_, _ = w.Write([]byte(`{"threads":[{"id":"one"}]}`))
+			})
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			reports := 0
+			count, err := c.CountThreads(ctx, CountQuery{}, func(progress ThreadCount) {
+				reports++
+				if empty || reports == 2 {
+					cancel()
+				}
+			})
+			if !errors.Is(err, context.Canceled) || count.Complete {
+				t.Fatalf("cancelled final page claimed completeness: %+v %v", count, err)
+			}
+		})
 	}
 }
