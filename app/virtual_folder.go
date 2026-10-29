@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/message"
@@ -307,7 +306,7 @@ func (a *App) refreshVirtualFolderCache(vf *virtualfolder.VirtualFolder) error {
 		return err
 	}
 	if a.ctx != nil {
-		wailsRuntime.EventsEmit(a.ctx, "virtualfolder:cacheUpdated", map[string]interface{}{
+		a.emitRuntimeEvent("virtualfolder:cacheUpdated", map[string]interface{}{
 			"virtualFolderId": vf.ID,
 		})
 	}
