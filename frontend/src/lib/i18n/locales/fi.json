@@ -438,6 +438,9 @@
     "markAllAsUnread": "Merkitse kaikki lukemattomiksi",
     "pinToSidebar": "Kiinnitä sivupalkkiin",
     "unpinFromSidebar": "Poista kiinnitys sivupalkista",
+    "autoDownloadContent": "Lataa viestien sisältö automaattisesti",
+    "autoDownloadContentHelp": "Vain uudet viestit; liitteet ja vanhempi historia ladataan pyydettäessä.",
+    "useDefaultContentPolicy": "Käytä kansion oletusta",
     "noFoldersAvailable": "Ei kansioita saatavilla",
     "searchFolders": "Etsi kansioita...",
     "account": "Tili"

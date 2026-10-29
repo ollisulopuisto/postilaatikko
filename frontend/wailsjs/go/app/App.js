@@ -1510,6 +1510,14 @@ export function SetTermsAccepted(arg1) {
   return window['go']['app']['App']['SetTermsAccepted'](arg1);
 }
 
+export function GetFolderContentPolicy(arg1, arg2) {
+  return window['go']['app']['App']['GetFolderContentPolicy'](arg1, arg2);
+}
+
+export function SetFolderContentPolicy(arg1, arg2, arg3) {
+  return window['go']['app']['App']['SetFolderContentPolicy'](arg1, arg2, arg3);
+}
+
 export function SetThemeMode(arg1) {
   return window['go']['app']['App']['SetThemeMode'](arg1);
 }

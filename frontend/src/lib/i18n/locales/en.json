@@ -438,6 +438,9 @@
     "markAllAsUnread": "Mark All as Unread",
     "pinToSidebar": "Pin to sidebar",
     "unpinFromSidebar": "Unpin from sidebar",
+    "autoDownloadContent": "Automatically download message content",
+    "autoDownloadContentHelp": "New messages only; attachments and older history stay on demand.",
+    "useDefaultContentPolicy": "Use the folder default",
     "noFoldersAvailable": "No folders available",
     "searchFolders": "Search folders...",
     "account": "Account"
