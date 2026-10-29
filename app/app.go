@@ -41,6 +41,7 @@ import (
 	"github.com/hkdb/aerion/internal/oauth2"
 	"github.com/hkdb/aerion/internal/pgp"
 	"github.com/hkdb/aerion/internal/platform"
+	"github.com/hkdb/aerion/internal/replylater"
 	"github.com/hkdb/aerion/internal/settings"
 	"github.com/hkdb/aerion/internal/smime"
 	"github.com/hkdb/aerion/internal/sync"
@@ -219,6 +220,7 @@ type App struct {
 	accountStore        *account.Store
 	folderStore         *folder.Store
 	messageStore        *message.Store
+	replyLaterStore     *replylater.Store
 	replyContent        *replycontent.Service
 	virtualFolderStore  *virtualfolder.Store
 	filterStore         *mailfilter.Store
@@ -601,6 +603,7 @@ func (a *App) Startup(ctx context.Context) {
 	a.folderStore = folder.NewStore(db)
 	a.contentPolicyStore = folder.NewContentPolicyStore(db)
 	a.messageStore = message.NewStore(db)
+	a.replyLaterStore = replylater.NewStore(db)
 	a.replyContent = replycontent.NewService(replycontent.ServiceOptions{})
 	a.virtualFolderStore = virtualfolder.NewStore(db)
 	a.filterStore = mailfilter.NewStore(db)
