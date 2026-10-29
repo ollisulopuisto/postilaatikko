@@ -2197,20 +2197,20 @@
       {/if}
       {#if showSearch}
         <!-- Search input -->
-        <div class="flex items-center gap-1 bg-muted rounded-md px-2 flex-1">
+        <div class="flex min-w-0 flex-1 items-center gap-1 rounded-md bg-muted px-2">
           <Icon icon="mdi:magnify" class="w-4 h-4 text-muted-foreground flex-shrink-0" />
           <input
             bind:this={searchInputRef}
             type="text"
             placeholder={$_('messageList.searchMessages')}
-            class="bg-transparent border-none outline-none text-sm py-1.5 w-full min-w-[200px]"
+            class="bg-transparent border-none outline-none text-sm py-1.5 w-full min-w-[60px]"
             bind:value={searchQuery}
             oninput={handleSearchInput}
             onkeydown={handleSearchKeydown}
           />
           {#if searchQuery.trim()}
             <span
-              class="px-1.5 py-0.5 text-[10px] font-medium bg-primary/20 text-primary rounded-full flex-shrink-0"
+              class="min-w-0 truncate rounded-full bg-primary/20 px-1.5 py-0.5 text-[10px] font-medium text-primary"
               aria-label={searchSource === 'server' ? $_('search.server') : $_('search.localSearch')}
             >
               {#if searchSource === 'server'}
