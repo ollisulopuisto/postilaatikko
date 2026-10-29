@@ -1643,4 +1643,9 @@ var migrations = []Migration{
    refreshed_at INTEGER NOT NULL
  );
  `},
+	{Version: 61, SQL: `
+ -- Contextual signatures are stored as an ordered JSON list on the sender
+ -- identity. Existing signatures remain the fallback for legacy identities.
+ ALTER TABLE identities ADD COLUMN signature_rules TEXT NOT NULL DEFAULT '[]';
+ `},
 }
