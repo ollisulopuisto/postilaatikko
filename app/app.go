@@ -222,6 +222,7 @@ type App struct {
 	replyContent        *replycontent.Service
 	virtualFolderStore  *virtualfolder.Store
 	filterStore         *mailfilter.Store
+	contentPolicyStore  *folder.ContentPolicyStore
 	attachmentStore     *message.AttachmentStore
 	contactStore        *contact.Store
 	draftStore          *draft.Store
@@ -335,11 +336,14 @@ type App struct {
 	ftsIndexer *message.FTSIndexer
 
 	// Sync management - tracks active syncs per account for cancel-and-restart
-	syncContexts    map[string]context.CancelFunc // keyed by "accountID:folderID"
-	syncLastRequest map[string]time.Time          // last sync request time for debounce
-	syncCancelled   bool                          // set by CancelAllSyncs to stop SyncAllComplete loop
-	wakeSyncing     bool                          // guards syncAfterWake against concurrent calls
-	syncMu          goSync.Mutex                  // protects sync maps
+	syncContexts       map[string]context.CancelFunc // keyed by "accountID:folderID"
+	syncLastRequest    map[string]time.Time          // last sync request time for debounce
+	syncCancelled      bool                          // set by CancelAllSyncs to stop SyncAllComplete loop
+	wakeSyncing        bool                          // guards syncAfterWake against concurrent calls
+	syncMu             goSync.Mutex                  // protects sync maps
+	bodyPrefetchMu     goSync.Mutex
+	bodyPrefetchQueues map[string]*folderBodyPrefetchQueue
+	bodyPrefetchSlots  chan struct{}
 
 	// Move reconciliation is intentionally separate from regular sync.
 	// Rapid local-first actions (Done/Archive/Trash/Spam) are coalesced so
@@ -595,6 +599,7 @@ func (a *App) Startup(ctx context.Context) {
 	// Initialize stores
 	a.accountStore = account.NewStore(db)
 	a.folderStore = folder.NewStore(db)
+	a.contentPolicyStore = folder.NewContentPolicyStore(db)
 	a.messageStore = message.NewStore(db)
 	a.replyContent = replycontent.NewService(replycontent.ServiceOptions{})
 	a.virtualFolderStore = virtualfolder.NewStore(db)
@@ -673,7 +678,7 @@ func (a *App) Startup(ctx context.Context) {
 	a.syncEngine.SetGmailTokenSource(a.gmailTokenSource)
 
 	// Route newly synced messages through local cross-account filters.
-	a.syncEngine.SetNewMessageHandler(a.handleNewMessageForFilters)
+	a.syncEngine.SetNewMessageHandler(a.handleNewSyncedMessage)
 
 	// Set up sync progress callback to emit events to frontend
 	a.syncEngine.SetProgressCallback(func(progress sync.SyncProgress) {

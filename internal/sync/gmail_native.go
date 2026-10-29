@@ -264,8 +264,30 @@ func (e *Engine) syncGmailMessages(ctx context.Context, c *gmail.Client, f *fold
 	if err != nil {
 		return err
 	}
-	if _, err = e.cacheGmailMetadata(f.AccountID, f.ID, items); err != nil {
+	prior, err := e.messageStore.GmailFolderMessages(f.AccountID, f.ID)
+	if err != nil {
 		return err
+	}
+	saved, err := e.cacheGmailMetadata(f.AccountID, f.ID, items)
+	if err != nil {
+		return err
+	}
+	newMessageHandler := e.newMessageHandler
+	if newMessageHandler != nil {
+		for index, item := range items {
+			if _, existed := prior[item.ID]; existed || index >= len(saved) {
+				continue
+			}
+			msg := saved[index]
+			go func(msg *message.Message) {
+				defer func() {
+					if recovered := recover(); recovered != nil {
+						e.log.Error().Interface("panic", recovered).Str("folder", f.ID).Msg("New Gmail message handler panicked")
+					}
+				}()
+				newMessageHandler(f.AccountID, f.ID, msg)
+			}(msg)
+		}
 	}
 	if label != "" {
 		counts, err := c.Label(ctx, label)
