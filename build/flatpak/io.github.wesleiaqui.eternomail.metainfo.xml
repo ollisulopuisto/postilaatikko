@@ -309,7 +309,7 @@
   </provides>
 
   <releases>
-    <release version="0.3.20" date="2026-10-28">
+    <release version="0.3.21" date="2026-10-28">
       <description><p>Add branching composer history, per-keystroke autosave and an undo-send countdown; fix detached-window history, attachment membership and history cleanup.</p></description>
     </release>
     <release version="0.3.19" date="2026-10-28">

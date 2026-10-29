@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## Postilaatikko v0.3.21
+
+- Add opt-in, read-only macOS Contacts browsing and recipient autocomplete; open a selected person in Contacts.app to edit.
+- Recognize date/time mentions in messages and offer a reviewable Calendar event.
+- Open independent mail windows with their own navigation and layout.
+- Show Gmail online virtual-folder counts and continue IMAP searches across folders/pages.
+- Fix Send Later to report missing Gmail credentials as an authorization problem before sending. Add regression coverage for recovery, replay, cancellation, and concurrent actions.
+- Reduce repeated CI work and add an artifact-only macOS hotfix build path.
+
+
 - Report missing or unavailable helper-local Gmail OAuth credentials as requiring authorization in Send Later, preserving the encrypted job instead of claiming an unknown delivery outcome before submission.
 
 - Browse macOS Contacts in Settings → Contacts and include authorized addresses in main-window and detached-composer recipient suggestions. Request access only from an explicit action; open a person in Contacts.app for edits. Postilaatikko never writes native contacts. Settings explains denied access and reports lookup/open failures.
