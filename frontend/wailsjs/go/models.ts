@@ -3272,6 +3272,25 @@ export namespace settings {
 	    }
 	}
 
+	export class EmailTemplate {
+	    id: string;
+	    name: string;
+	    subject: string;
+	    body: string;
+
+	    static createFrom(source: any = {}) {
+	        return new EmailTemplate(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.subject = source["subject"];
+	        this.body = source["body"];
+	    }
+	}
+
 }
 
 export namespace smime {

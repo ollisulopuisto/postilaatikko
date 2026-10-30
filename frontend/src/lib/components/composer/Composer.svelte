@@ -5,7 +5,7 @@
   import { createComposerEditor } from './composerEditor'
   import PlainTextEditor from './PlainTextEditor.svelte'
   // @ts-ignore - Wails generated imports
-  import { smtp, account, app } from '../../../../wailsjs/go/models'
+  import { smtp, account, app, settings } from '../../../../wailsjs/go/models'
   // @ts-ignore - Wails runtime for events
   import { EventsOn, EventsOff } from '../../../../wailsjs/runtime/runtime.js'
   import { type ComposerApi, COMPOSER_API_KEY, createMainWindowApi } from '$lib/composerApi'
@@ -32,6 +32,7 @@
   import { DraftHistoryController } from './draftHistory'
   import EditorToolbar from './EditorToolbar.svelte'
   import QuickReplies from './QuickReplies.svelte'
+  import EmailTemplates from './EmailTemplates.svelte'
   import ComposerAttachmentList from './ComposerAttachmentList.svelte'
   import SendLaterDialog from './SendLaterDialog.svelte'
   import {
@@ -1170,6 +1171,12 @@
     } else {
       editor?.chain().focus().insertContent(plainTextToHtml(text)).run()
     }
+    scheduleDraftSave()
+  }
+
+  function insertEmailTemplate(template: settings.EmailTemplate) {
+    if (!subject.trim() && template.subject.trim()) subject = template.subject
+    if (template.body) insertQuickReply(template.body)
     scheduleDraftSave()
   }
 
@@ -2767,6 +2774,7 @@
         {#if !isCompact}{$_('composer.attachFiles')}{/if}
       </button>
       <QuickReplies onInsert={insertQuickReply} compact={isCompact} />
+      <EmailTemplates onInsert={insertEmailTemplate} compact={isCompact} />
       {#if isCompact}
         <button
           onclick={() => showFormatting = !showFormatting}
