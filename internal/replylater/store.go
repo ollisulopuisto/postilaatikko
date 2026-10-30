@@ -15,6 +15,10 @@ import (
 type Ref struct {
 	AccountID      string `json:"accountId"`
 	ConversationID string `json:"conversationId"`
+	// Indexed reports whether a message row for this conversation currently
+	// exists in the local message index. It is populated by List and lets the
+	// UI distinguish recoverable stale queue entries from unloaded pages.
+	Indexed bool `json:"indexed"`
 }
 
 // Store persists queue membership across app restarts.
@@ -70,7 +74,14 @@ func (s *Store) Contains(ref Ref) (bool, error) {
 // dropping a user's triage item.
 func (s *Store) List() ([]Ref, error) {
 	rows, err := s.db.QueryContext(context.Background(), `
-		SELECT account_id, conversation_id FROM reply_later_queue ORDER BY added_at DESC, account_id, conversation_id`)
+		SELECT rl.account_id, rl.conversation_id,
+			EXISTS (
+				SELECT 1 FROM messages m
+				WHERE m.account_id = rl.account_id
+				  AND (COALESCE(m.thread_id, m.id) = rl.conversation_id OR m.id = rl.conversation_id)
+			) AS indexed
+		FROM reply_later_queue rl
+		ORDER BY rl.added_at DESC, rl.account_id, rl.conversation_id`)
 	if err != nil {
 		return nil, fmt.Errorf("list Reply Later conversations: %w", err)
 	}
@@ -78,7 +89,7 @@ func (s *Store) List() ([]Ref, error) {
 	refs := make([]Ref, 0)
 	for rows.Next() {
 		var ref Ref
-		if err := rows.Scan(&ref.AccountID, &ref.ConversationID); err != nil {
+		if err := rows.Scan(&ref.AccountID, &ref.ConversationID, &ref.Indexed); err != nil {
 			return nil, fmt.Errorf("scan Reply Later conversation: %w", err)
 		}
 		refs = append(refs, ref)

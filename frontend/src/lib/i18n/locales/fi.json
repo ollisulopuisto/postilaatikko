@@ -169,7 +169,10 @@
       "remove": "Poista Vastaa myöhemmin -jonosta",
       "added": "Lisätty Vastaa myöhemmin -jonoon",
       "removed": "Poistettu Vastaa myöhemmin -jonosta",
-      "failed": "Vastaa myöhemmin -jonon päivitys epäonnistui"
+      "failed": "Vastaa myöhemmin -jonon päivitys epäonnistui",
+      "unavailable": "Tämä jonotettu keskustelu puuttuu paikallisesta viesti-indeksistä.",
+      "reference": "Keskustelun tunniste",
+      "unknownAccount": "Tili ei ole käytettävissä"
   },
   "messageList": {
     "refreshVirtualFolder": "Päivitä virtuaalikansio",
