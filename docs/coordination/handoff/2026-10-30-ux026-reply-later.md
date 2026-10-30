@@ -12,7 +12,7 @@ Use existing UX-025 durable membership and normal conversation list/viewer.
 
 ## Status
 
-Implementation checkpoint ready for compile checks. The original agent stopped at
+Implementation committed at `c576441`; ready for coordinator integration. The original agent stopped at
 its usage limit; Sol 6.1 Medium resumed the existing claimed worktree without
 resetting its changes.
 
@@ -42,4 +42,16 @@ resetting its changes.
   the current mail-list view can display only locally indexed conversations.
 - The external agent API adapter remains dependent on the authorized transport
   work; this task does not introduce an unauthenticated endpoint.
-- No tests were requested; targeted compilation/static checks follow.
+
+## Verification
+
+- `GOCACHE=/private/tmp/go-cache-postilaatikko-ux026 go build ./app`: passed.
+- `npx svelte-check --tsconfig ./tsconfig.json`: zero errors, two pre-existing
+  titlebar double-click accessibility warnings.
+- `npm run build`: passed; existing titlebar/PURE comment/chunk-size warnings.
+- `git diff --check`: passed.
+- Tests were not run under coordinator instruction. Live macOS/Gmail behavior
+  remains an installed-build acceptance check.
+- Origin/main advanced to `b8b954b` (PR #66) during implementation. This branch
+  remains on `c766bc3`; coordinator will resolve overlapping count/event/docs
+  changes during integration.
