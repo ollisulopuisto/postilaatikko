@@ -4,7 +4,7 @@
   // @ts-ignore - wailsjs bindings
   import { GetReaderIdentityEmails, GetConversation, GetReadReceiptResponsePolicy, SendReadReceipt, IgnoreReadReceipt, GetMessageSource, ProcessSMIMEMessage, ProcessPGPMessage, FetchMessageBody } from '../../../../wailsjs/go/app/App'
   // @ts-ignore - wailsjs bindings
-  import { MoveToInboxWithUndo, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, RemoveFromInboxWithUndo, TrashWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, DeletePermanently, UndoOperation } from '../../../../wailsjs/go/app/App'
+  import { MoveToInboxWithUndo, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, RemoveFromInboxWithUndo, TrashWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, DeletePermanently, ResolveMailActionTarget, UndoOperation } from '../../../../wailsjs/go/app/App'
   // @ts-ignore - wailsjs path
   import { EventsOn } from '../../../../wailsjs/runtime/runtime'
   // @ts-ignore - wailsjs path
@@ -125,6 +125,20 @@
   let emailBodyRefs = $state<Record<string, { getPrintableHtml(): Promise<string> }>>({})
   let loading = $state(false)
   let error = $state<string | null>(null)
+
+  async function resolveDisplayedMessageTarget(messageIds: string[]): Promise<string[]> {
+    if (!messageIds.length) return []
+    const owningAccountId = accountId || conversation?.messages?.[0]?.accountId
+    if (!owningAccountId) throw new Error('Cannot validate a message action without its account')
+    const displayedIds = new Set(conversation?.messages?.map((item) => item.id) ?? [])
+    if (messageIds.some((id) => !displayedIds.has(id))) {
+      throw new Error('Message action target is no longer in the displayed conversation')
+    }
+    return ResolveMailActionTarget({
+      kind: 'matched_messages',
+      messages: messageIds.map((messageId) => ({ accountId: owningAccountId, messageId })),
+    })
+  }
 
   // S/MIME on-view processing results per message
   let smimeResults = $state<Record<string, SMIMEViewResult>>({})
@@ -1044,8 +1058,9 @@
 
   async function handleMoveToInbox() {
     if (!conversation?.messages) return
-    const messageIds = conversation.messages.map(m => m.id)
+    let messageIds = conversation.messages.map(m => m.id)
     try {
+      messageIds = await resolveDisplayedMessageTarget(messageIds)
       await runMessageMutation(messageIds, async () => {
         moveMutationInFlight = true
         try {
@@ -1067,8 +1082,9 @@
 
   async function handleArchive() {
     if (!conversation?.messages) return
-    const messageIds = conversation.messages.map(m => m.id)
+    let messageIds = conversation.messages.map(m => m.id)
     try {
+      messageIds = await resolveDisplayedMessageTarget(messageIds)
       await runMessageMutation(messageIds, async () => {
         moveMutationInFlight = true
         try {
@@ -1090,8 +1106,9 @@
 
   async function handleDone() {
     if (!conversation?.messages) return
-    const messageIds = conversation.messages.map(m => m.id)
+    let messageIds = conversation.messages.map(m => m.id)
     try {
+      messageIds = await resolveDisplayedMessageTarget(messageIds)
       await runMessageMutation(messageIds, async () => {
         moveMutationInFlight = true
         try {
@@ -1119,8 +1136,9 @@
       showDeleteConfirm = true
     } else {
       // Move to trash (undoable)
-      const messageIds = conversation.messages.map(m => m.id)
+      let messageIds = conversation.messages.map(m => m.id)
       try {
+        messageIds = await resolveDisplayedMessageTarget(messageIds)
         await runMessageMutation(messageIds, async () => {
           moveMutationInFlight = true
           try {
@@ -1144,9 +1162,10 @@
 
   async function handleConfirmPermanentDelete() {
     if (!conversation?.messages) return
-    const messageIds = conversation.messages.map(m => m.id)
+    let messageIds = conversation.messages.map(m => m.id)
 
     try {
+      messageIds = await resolveDisplayedMessageTarget(messageIds)
       await runMessageMutation(messageIds, async () => {
         moveMutationInFlight = true
         try {
@@ -1215,8 +1234,9 @@
 
   async function handleSpam() {
     if (!conversation?.messages) return
-    const messageIds = conversation.messages.map(m => m.id)
+    let messageIds = conversation.messages.map(m => m.id)
     try {
+      messageIds = await resolveDisplayedMessageTarget(messageIds)
       await runMessageMutation(messageIds, async () => {
         moveMutationInFlight = true
         try {
@@ -1252,9 +1272,10 @@
 
     // Toggle based on current state - star if any unstarred, unstar if all starred
     const wasAllStarred = conversation.messages.every(m => m.isStarred)
-    const messageIds = conversation.messages.map(m => m.id)
+    let messageIds = conversation.messages.map(m => m.id)
 
     try {
+      messageIds = await resolveDisplayedMessageTarget(messageIds)
       await runMessageMutation(messageIds, async () => {
         if (wasAllStarred) {
           await Unstar(messageIds)
@@ -1278,9 +1299,10 @@
 
     // Toggle based on current state
     const allRead = conversation.messages.every(m => m.isRead)
-    const messageIds = conversation.messages.map(m => m.id)
+    let messageIds = conversation.messages.map(m => m.id)
 
     try {
+      messageIds = await resolveDisplayedMessageTarget(messageIds)
       await runMessageMutation(messageIds, async () => {
         // Explicit actions supersede the leave snapshot and remain immediate.
         pendingReadOnLeave.cancel(messageIds)
