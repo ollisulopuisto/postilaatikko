@@ -12,6 +12,24 @@ import (
 // unified navigation type. GetSpecialFolder is deliberately the single source
 // of truth: it honors an account's configured path before folder_type.
 func (a *App) unifiedSpecialFolders(folderType string) ([]*folder.Folder, error) {
+	if folderType == "replyLater" {
+		accounts, err := a.accountStore.List()
+		if err != nil {
+			return nil, err
+		}
+		folders := []*folder.Folder{}
+		for _, account := range accounts {
+			if !account.Enabled {
+				continue
+			}
+			items, err := a.folderStore.List(account.ID)
+			if err != nil {
+				return nil, err
+			}
+			folders = append(folders, items...)
+		}
+		return folders, nil
+	}
 	typeValue := folder.Type(folderType)
 	switch typeValue {
 	case folder.TypeInbox, folder.TypeDrafts, folder.TypeSent, folder.TypeTrash, folder.TypeStarred, folder.TypeArchive, folder.TypeSpam, folder.TypeAll:
@@ -51,6 +69,7 @@ func (a *App) unifiedSpecialFolderIDs(folderType string) ([]string, error) {
 }
 
 func (a *App) GetUnifiedFolderConversations(folderType string, offset, limit int, sortOrder, filterValue string) ([]*message.Conversation, error) {
+	filterValue = replyLaterViewFilter(folderType, filterValue)
 	if folderType == string(folder.TypeArchive) {
 		return a.listUnifiedArchived(offset, limit, sortOrder, filterValue)
 	}
@@ -115,6 +134,7 @@ func (a *App) listUnifiedArchived(offset, limit int, sortOrder, filterValue stri
 }
 
 func (a *App) GetUnifiedFolderCount(folderType, filterValue string) (int, error) {
+	filterValue = replyLaterViewFilter(folderType, filterValue)
 	if folderType == string(folder.TypeArchive) {
 		// The list path is authoritative for mixed physical/virtual archive
 		// sources; count it without exposing synthetic folder IDs.
@@ -129,6 +149,7 @@ func (a *App) GetUnifiedFolderCount(folderType, filterValue string) (int, error)
 }
 
 func (a *App) SearchUnifiedFolder(folderType, query string, offset, limit int, filterValue string) ([]*message.ConversationSearchResult, error) {
+	filterValue = replyLaterViewFilter(folderType, filterValue)
 	ids, err := a.unifiedSpecialFolderIDs(folderType)
 	if err != nil {
 		return nil, err
@@ -138,6 +159,7 @@ func (a *App) SearchUnifiedFolder(folderType, query string, offset, limit int, f
 }
 
 func (a *App) GetSearchCountUnifiedFolder(folderType, query, filterValue string) (int, error) {
+	filterValue = replyLaterViewFilter(folderType, filterValue)
 	ids, err := a.unifiedSpecialFolderIDs(folderType)
 	if err != nil {
 		return 0, err
@@ -149,6 +171,9 @@ func (a *App) GetSearchCountUnifiedFolder(folderType, query, filterValue string)
 // SyncUnifiedFolder syncs each represented real folder. It never passes a
 // synthetic navigation ID to the sync engine.
 func (a *App) SyncUnifiedFolder(folderType string) error {
+	if folderType == "replyLater" {
+		return nil
+	}
 	folders, err := a.unifiedSpecialFolders(folderType)
 	if err != nil {
 		return err
@@ -172,4 +197,16 @@ func (a *App) EmptyUnifiedTrash() error {
 		}
 	}
 	return nil
+}
+
+// replyLaterViewFilter keeps queue membership applied when quick filters or
+// local search further narrow the first-class queue view.
+func replyLaterViewFilter(folderType, filter string) string {
+	if folderType != "replyLater" {
+		return filter
+	}
+	if filter == "" || filter == "replyLater" {
+		return "replyLater"
+	}
+	return "replyLater+" + filter
 }

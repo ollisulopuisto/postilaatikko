@@ -17,6 +17,7 @@
   import { message } from '../../../../wailsjs/go/models'
   // @ts-ignore - wailsjs path
   import { OpenReaderWindow, MarkAsRead, MarkAsUnread, RemoveFromInboxWithUndo, UndoOperation } from '../../../../wailsjs/go/app/App'
+  import ReplyLaterButton from '$lib/components/common/ReplyLaterButton.svelte'
   import MessageContextMenu from '$lib/components/common/MessageContextMenu.svelte'
   import Avatar from '$lib/components/kit/Avatar.svelte'
   import { toasts } from '$lib/stores/toast'
@@ -481,6 +482,7 @@
 <MessageContextMenu
   bind:this={contextMenuRef}
   messageIds={contextMenuMessageIds}
+  conversationId={useMultiSelect ? undefined : conversation.threadId}
   {accountId}
   currentFolderId={folderId}
   {folderType}
@@ -665,6 +667,8 @@
             <Icon icon="mdi:paperclip" class="{densityClasses.icon[density]} text-muted-foreground" />
           {/if}
         </div>
+
+        <ReplyLaterButton {accountId} conversationId={conversation.threadId} />
 
         <!-- Date -->
         <span class="{densityClasses.dateText[density]} text-muted-foreground flex-shrink-0 ml-auto">

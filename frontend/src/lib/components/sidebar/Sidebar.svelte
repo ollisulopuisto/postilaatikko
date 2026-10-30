@@ -1,6 +1,7 @@
 <script lang="ts">
   import Icon from '@iconify/svelte'
   import NavigationCards from './NavigationCards.svelte'
+  import { replyLaterQueue } from '$lib/stores/replyLater.svelte'
   import { navigationCards } from '$lib/stores/navigationCards.svelte'
   import type { NavigationEntry } from '$lib/sidebar/cards'
   import { folderChoices, filterFolders } from '$lib/sidebar/folderSearch'
@@ -208,6 +209,7 @@
 
     contactSourcesStore.load()
     void virtualFoldersStore.load()
+    void replyLaterQueue.load().catch(() => {})
   })
 
   $effect(() => {
@@ -230,6 +232,7 @@
     void getUIStateVersion()
     const entries: NavigationEntry[] = [
       { id: 'inboxes', kind: 'inboxes', name: $_('navigation.allInboxes') },
+      { id: 'replyLater', kind: 'system', folderType: 'replyLater', name: $_('replyLater.title'), count: replyLaterQueue.ready ? replyLaterQueue.count : undefined },
       ...[...primaryFolders, ...secondaryFolders].map(item => ({ id: item.type, kind: 'system' as const, name: $_(item.label), folderType: item.type })),
       ...sidebarPins.list.map(pin => ({ id: `folder:${pin.accountId}:${pin.folderId}`, kind: 'folder' as const, accountId: pin.accountId, folderId: pin.folderId, name: pin.name, path: pin.path })),
       ...virtualFoldersStore.folders.map(item => ({ id: `virtual:${item.id}`, kind: 'virtual' as const, folderId: item.id, name: item.name })),
@@ -322,7 +325,7 @@
   }
 
   function selectPrimaryFolder(type: string) {
-    const label = [...primaryFolders, ...secondaryFolders].find(item => item.type === type)?.label || type
+    const label = type === 'replyLater' ? 'replyLater.title' : [...primaryFolders, ...secondaryFolders].find(item => item.type === type)?.label || type
     onUnifiedSpecialFolderSelect?.(type, label)
   }
 

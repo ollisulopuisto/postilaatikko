@@ -157,6 +157,14 @@
     "bottomActions": "Pikatoiminnot",
     "virtualFolderSavedQuery": "Tallennettu haku"
   },
+  "replyLater": {
+      "title": "Vastaa myöhemmin",
+      "add": "Lisää Vastaa myöhemmin -jonoon",
+      "remove": "Poista Vastaa myöhemmin -jonosta",
+      "added": "Lisätty Vastaa myöhemmin -jonoon",
+      "removed": "Poistettu Vastaa myöhemmin -jonosta",
+      "failed": "Vastaa myöhemmin -jonon päivitys epäonnistui"
+  },
   "messageList": {
     "searchMessages": "Etsi viestejä...",
     "noMessages": "Tässä kansiossa ei ole viestejä",

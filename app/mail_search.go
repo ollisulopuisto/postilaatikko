@@ -26,6 +26,7 @@ type MailSearchRequest struct {
 	VirtualFolderID string   `json:"virtualFolderId"`
 	Cursor          string   `json:"cursor"`
 	Limit           int      `json:"limit"`
+	Filter          string   `json:"filter"`
 }
 type MailSearchIssue struct {
 	AccountID   string `json:"accountId"`
@@ -41,6 +42,7 @@ type MailSearchPage struct {
 type mailCursor struct {
 	Query    string            `json:"q"`
 	Virtual  string            `json:"v"`
+	Filter   string            `json:"f,omitempty"`
 	Accounts []string          `json:"a"`
 	Pages    map[string]string `json:"p"`
 	Seen     map[string]bool   `json:"s"`
@@ -117,6 +119,30 @@ func matchesGmailThread(items []gmail.Message, vf *virtualfolder.VirtualFolder) 
 // SearchMail searches server metadata across enabled accounts. Body content is
 // never fetched here. Cursor pages keep per-account failures visible/retryable.
 func (a *App) SearchMail(req MailSearchRequest) (*MailSearchPage, error) {
+	switch req.Filter {
+	case "", "unread", "replyLater":
+	default:
+		return nil, fmt.Errorf("unsupported online filter")
+	}
+	queued := map[string]bool{}
+	if req.Filter == "replyLater" {
+		if a.replyLaterStore == nil {
+			return nil, fmt.Errorf("Reply Later queue is not ready")
+		}
+		refs, err := a.replyLaterStore.List()
+		if err != nil {
+			return nil, err
+		}
+		for _, ref := range refs {
+			queued[ref.AccountID+"\x00"+ref.ConversationID] = true
+		}
+	}
+	matchesFilter := func(conv *message.Conversation) bool {
+		if req.Filter == "unread" {
+			return conv.UnreadCount > 0
+		}
+		return req.Filter != "replyLater" || queued[conv.AccountID+"\x00"+conv.ThreadID]
+	}
 	ctx, cancel := context.WithTimeout(a.ctx, 90*time.Second)
 	defer cancel()
 	if len(req.SessionID) > 128 {
@@ -155,7 +181,7 @@ func (a *App) SearchMail(req MailSearchRequest) (*MailSearchPage, error) {
 		}
 	}
 	sort.Strings(ids)
-	state := mailCursor{Query: req.Query, Virtual: req.VirtualFolderID, Accounts: ids, Pages: map[string]string{}, Seen: map[string]bool{}}
+	state := mailCursor{Query: req.Query, Virtual: req.VirtualFolderID, Filter: req.Filter, Accounts: ids, Pages: map[string]string{}, Seen: map[string]bool{}}
 	if req.Cursor != "" {
 		if len(req.Cursor) > 512<<10 {
 			return nil, fmt.Errorf("search cursor too large; start a new search")
@@ -165,7 +191,7 @@ func (a *App) SearchMail(req MailSearchRequest) (*MailSearchPage, error) {
 			return nil, fmt.Errorf("invalid search cursor")
 		}
 		var saved mailCursor
-		if json.Unmarshal(decoded, &saved) != nil || saved.Query != req.Query || saved.Virtual != req.VirtualFolderID || !slices.Equal(saved.Accounts, ids) || saved.Pages == nil || saved.Seen == nil {
+		if json.Unmarshal(decoded, &saved) != nil || saved.Query != req.Query || saved.Virtual != req.VirtualFolderID || saved.Filter != req.Filter || !slices.Equal(saved.Accounts, ids) || saved.Pages == nil || saved.Seen == nil {
 			return nil, fmt.Errorf("search scope changed; start again")
 		}
 		state = saved
@@ -215,6 +241,21 @@ func (a *App) SearchMail(req MailSearchRequest) (*MailSearchPage, error) {
 			token = "!done"
 		}
 		mu.Unlock()
+		if req.Filter == "replyLater" {
+			hasQueued := false
+			for ref := range queued {
+				if strings.HasPrefix(ref, acc.ID+"\x00") {
+					hasQueued = true
+					break
+				}
+			}
+			if !hasQueued {
+				mu.Lock()
+				state.Pages[acc.ID] = "!done"
+				mu.Unlock()
+				token = "!done"
+			}
+		}
 		if token == "!done" {
 			continue
 		}
@@ -245,7 +286,11 @@ func (a *App) SearchMail(req MailSearchRequest) (*MailSearchPage, error) {
 					return
 				}
 				mu.Lock()
-				result.Conversations = append(result.Conversations, convs...)
+				for _, conv := range convs {
+					if matchesFilter(conv) {
+						result.Conversations = append(result.Conversations, conv)
+					}
+				}
 				state.Pages[acc.ID] = next
 				mu.Unlock()
 				return
@@ -266,12 +311,40 @@ func (a *App) SearchMail(req MailSearchRequest) (*MailSearchPage, error) {
 			}()
 
 			query := gmailViewQuery(req.Query, scope, vf != nil && vf.FolderMode == "exclude")
-			page, err := c.Threads(ctx, gmail.SearchRequest{Query: query, PageToken: token, Limit: min(limit, 25), IncludeSpamTrash: true})
+			if req.Filter == "unread" {
+				query += " is:unread"
+			}
+			pageLimit := min(limit, 25)
+			if req.Filter == "replyLater" {
+				pageLimit = 100
+			}
+			page, err := c.Threads(ctx, gmail.SearchRequest{Query: query, PageToken: token, Limit: pageLimit, IncludeSpamTrash: true})
 			if err != nil {
 				issue(err)
 				return
 			}
 			threadIDs := page.ThreadIDs
+			if req.Filter == "replyLater" {
+				// Intersect provider scope with explicit local queue membership before
+				// fetching metadata. Advance a bounded number of cheap ID pages so a
+				// sparse queue does not hydrate unrelated mail or exhaust quota.
+				for scan := 0; ; scan++ {
+					threadIDs = nil
+					for _, id := range page.ThreadIDs {
+						if queued[acc.ID+"\x00gmail:"+acc.ID+":"+id] {
+							threadIDs = append(threadIDs, id)
+						}
+					}
+					if len(threadIDs) > 0 || page.NextPageToken == "" || scan >= 9 {
+						break
+					}
+					page, err = c.Threads(ctx, gmail.SearchRequest{Query: query, PageToken: page.NextPageToken, Limit: pageLimit, IncludeSpamTrash: true})
+					if err != nil {
+						issue(err)
+						return
+					}
+				}
+			}
 			preferred := []string{}
 			for _, f := range scope {
 				preferred = append(preferred, f.ID)
@@ -373,7 +446,9 @@ func (a *App) SearchMail(req MailSearchRequest) (*MailSearchPage, error) {
 						}
 					}
 				}
-				convs = append(convs, conv)
+				if matchesFilter(conv) {
+					convs = append(convs, conv)
+				}
 				newSeen = append(newSeen, key)
 			}
 			mu.Lock()

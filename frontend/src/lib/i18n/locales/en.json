@@ -157,6 +157,14 @@
     "bottomActions": "Quick actions",
     "virtualFolderSavedQuery": "Saved search"
   },
+  "replyLater": {
+      "title": "Reply Later",
+      "add": "Add to Reply Later",
+      "remove": "Remove from Reply Later",
+      "added": "Added to Reply Later",
+      "removed": "Removed from Reply Later",
+      "failed": "Could not update Reply Later"
+  },
   "messageList": {
     "searchMessages": "Search messages...",
     "noMessages": "No messages in this folder",

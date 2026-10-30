@@ -4,6 +4,7 @@
 
 - Share exact online saved-view count scans across windows, isolate cancellation, and invalidate counts after mail changes or explicit refresh.
 - Keep Cmd-Z/Ctrl-Z and Edit → Undo on the latest mailbox action; add Edit → Undo History with a compact, privacy-minimal list and per-operation undo.
+- Add Reply Later controls on conversation rows and context menus, with an undoable sidebar queue and count. Apply unread and Reply Later quick filters to online virtual-folder results.
 
 ## Postilaatikko 2026.10.29.1
 

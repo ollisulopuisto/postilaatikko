@@ -653,6 +653,7 @@ export namespace app {
 	    virtualFolderId: string;
 	    cursor: string;
 	    limit: number;
+	    filter: string;
 
 	    static createFrom(source: any = {}) {
 	        return new MailSearchRequest(source);
@@ -666,6 +667,7 @@ export namespace app {
 	        this.virtualFolderId = source["virtualFolderId"];
 	        this.cursor = source["cursor"];
 	        this.limit = source["limit"];
+	        this.filter = source["filter"];
 	    }
 	}
 	export class MailtoData {

@@ -6,6 +6,7 @@ export interface NavigationEntry {
   folderId?: string
   path?: string
   folderType?: string
+  count?: number
 }
 export interface NavigationCard { id: string; name: string; hidden: boolean; collapsed: boolean; entries: string[] }
 export interface NavigationCards { version: 1; cards: NavigationCard[]; quick: string[]; showApps: boolean }

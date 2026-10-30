@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from '@iconify/svelte'
+  import { replyLaterQueue } from '$lib/stores/replyLater.svelte'
   import { ContextMenu as ContextMenuPrimitive } from 'bits-ui'
   import {
     ContextMenuContent,
@@ -35,6 +36,7 @@
   import { publishUndoOperationCompleted, publishUndoOperationCreated } from '$lib/components/list/undoMutationEvents'
 
   interface Props {
+    conversationId?: string
     messageIds: string[]
     accountId: string
     currentFolderId: string
@@ -48,6 +50,7 @@
   }
 
   let {
+    conversationId,
     messageIds,
     accountId,
     currentFolderId,
@@ -114,6 +117,7 @@
   function handleOpenChange(open: boolean) {
     if (open) {
       loadAccounts()
+      void replyLaterQueue.load().catch(() => {})
     }
     onOpenChange?.(open)
   }
@@ -152,6 +156,18 @@
     } finally {
       undoInFlight.delete(operationID)
     }
+  }
+
+  async function handleReplyLater() {
+    if (!conversationId) return
+    const inQueue = !replyLaterQueue.has(accountId, conversationId)
+    try {
+      const result = await replyLaterQueue.set(accountId, conversationId, inQueue)
+      if (!result?.changed) return
+      toasts.success($_(inQueue ? 'replyLater.added' : 'replyLater.removed'), [{
+        label: $_('common.undo'), onClick: () => { void UndoOperation(result.operationId).catch(() => toasts.error($_('toast.undoFailed'))) },
+      }])
+    } catch (err) { toasts.error(`${$_('replyLater.failed')}: ${String(err)}`) }
   }
 
   // Action handlers
@@ -390,6 +406,14 @@
         <Icon icon="mdi:share" class="mr-2 h-4 w-4" />
         {$_('contextMenu.forward')}
         <ShortcutHint id="mail.forward" />
+      </ContextMenuItem>
+      <ContextMenuSeparator />
+    {/if}
+
+    {#if conversationId}
+      <ContextMenuItem onSelect={handleReplyLater}>
+        <Icon icon="mdi:clock-outline" class="mr-2 h-4 w-4" />
+        {$_(replyLaterQueue.has(accountId, conversationId) ? 'replyLater.remove' : 'replyLater.add')}
       </ContextMenuItem>
       <ContextMenuSeparator />
     {/if}

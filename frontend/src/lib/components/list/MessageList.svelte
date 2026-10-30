@@ -531,8 +531,8 @@
       }
     })
 
-    EventsOn('replyLater:changed', () => {
-      if (filterMode === 'replyLater') scheduleReload()
+    stopReplyLaterListener = EventsOn('replyLater:changed', () => {
+      if (filterMode === 'replyLater' || (isUnifiedView && folderId === 'replyLater')) scheduleReload()
     })
 
     // Listen for message read-state changes. Star changes ride their own
@@ -617,12 +617,13 @@
   })
 
   let stopDialogGuardListener: (() => void) | null = null
+  let stopReplyLaterListener: (() => void) | null = null
 
   onDestroy(() => {
     void CancelMailSearch(virtualSearchSession)
     EventsOff('folder:synced')
     EventsOff('messages:updated')
-    EventsOff('replyLater:changed')
+    stopReplyLaterListener?.()
     EventsOff('messages:readChanged')
     EventsOff('messages:moved')
     EventsOff('messages:deleted')
@@ -884,7 +885,7 @@
         // Instant first paint from the cached virtual-folder index; the live
         // SearchMail result below replaces it. Only paint an empty list so a
         // background refresh never flickers visible rows backward.
-        if (currentOffset === 0) {
+        if (currentOffset === 0 && !filterMode) {
           onlineCountRevision++
           void GetVirtualFolderCachedView(folderId!).then((view: searchModels.VirtualFolderCachedView | null) => {
             if (generation !== loadGeneration || isSearchMode || !view) return
@@ -896,7 +897,7 @@
             }
           }).catch((cacheError: unknown) => console.warn('Virtual folder cache view failed:', cacheError))
         }
-        const response = await SearchMail(new searchModels.MailSearchRequest({sessionId: virtualSearchSession, query: '', accountIds: [], virtualFolderId: folderId!, cursor: currentOffset === 0 ? '' : virtualCursor, limit: Math.min(limit, 100)}))
+        const response = await SearchMail(new searchModels.MailSearchRequest({sessionId: virtualSearchSession, query: '', accountIds: [], virtualFolderId: folderId!, filter: filterMode, cursor: currentOffset === 0 ? '' : virtualCursor, limit: Math.min(limit, 100)}))
         if (generation !== loadGeneration || isSearchMode) return
         virtualCursor = response.cursor || ''
         virtualIssues = (response.issues || []).map(item => `${item.accountName}: ${item.message}`).join(' · ')
@@ -909,7 +910,7 @@
           for (const prior of conversations) if (failedAccounts.has(prior.accountId || '') && !keys.has(`${prior.accountId}:${prior.threadId}`)) items.push(prior)
         }
         const view = virtualFoldersStore.folders.find(item => item.id === folderId)
-        conversations = currentOffset === 0 ? retainReadSelection(conversations, items, selectedThreadId, view?.readStatus === 'unread' && lastLoadedFolderId === folderId) : [...new Map([...conversations, ...items].map(c => [`${c.accountId}:${c.threadId}`, c])).values()]
+        conversations = currentOffset === 0 ? retainReadSelection(conversations, items, selectedThreadId, (view?.readStatus === 'unread' || filterMode === 'unread') && lastLoadedFolderId === folderId) : [...new Map([...conversations, ...items].map(c => [`${c.accountId}:${c.threadId}`, c])).values()]
         listError = conversations.length === 0 && virtualIssues ? virtualIssues : null
         totalCount = conversations.length + (virtualCursor ? 1 : 0)
         if (currentOffset === 0 && (!selectedThreadId || !conversations.some(c => c.threadId === selectedThreadId))) selectedThreadId = conversations[0]?.threadId || null
@@ -1168,7 +1169,7 @@
       let count = 0
 
       if (isVirtualFolderView) {
-        const response = await SearchMail(new searchModels.MailSearchRequest({sessionId: virtualSearchSession, query, accountIds: [], virtualFolderId: folderId!, cursor: '', limit: PAGE_SIZE}))
+        const response = await SearchMail(new searchModels.MailSearchRequest({sessionId: virtualSearchSession, query, accountIds: [], virtualFolderId: folderId!, filter: filterMode, cursor: '', limit: PAGE_SIZE}))
         results = response.conversations || []
         if (generation !== localSearchGeneration || query !== searchQuery.trim()) return
         virtualQueryCursor = response.cursor || ''
@@ -1227,7 +1228,7 @@
       let results: any[] = []
       if (isVirtualFolderView) {
         if (!virtualQueryCursor) return
-        const response = await SearchMail(new searchModels.MailSearchRequest({ sessionId: virtualSearchSession, query, accountIds: [], virtualFolderId: folderId!, cursor: virtualQueryCursor, limit: PAGE_SIZE }))
+        const response = await SearchMail(new searchModels.MailSearchRequest({ sessionId: virtualSearchSession, query, accountIds: [], virtualFolderId: folderId!, filter: filterMode, cursor: virtualQueryCursor, limit: PAGE_SIZE }))
         if (generation !== localSearchGeneration || query !== searchQuery.trim()) return
         results = response.conversations || []
         virtualQueryCursor = response.cursor || ''
@@ -1754,7 +1755,13 @@
   // Set filter mode and reload
   function setFilter(mode: string) {
     filterMode = mode
+    loadGeneration++
+    virtualCursor = ''; virtualQueryCursor = ''; virtualIssues = ''
+    conversations = []
+    totalCount = 0
+    checkedThreadIds = new Set()
     offset = 0
+    void CancelMailSearch(virtualSearchSession)
     if (isSearchMode) {
       // App-local queue membership cannot be expressed in IMAP SEARCH. Use the
       // local, filter-aware search path while a quick filter is active.
@@ -2510,7 +2517,7 @@
     </div>
   </div>
 
-  {#if folderId && !isVirtualFolderView}
+  {#if folderId}
     <div class="flex items-center gap-2 overflow-x-auto border-b border-border px-3 py-2" aria-label={$_('messageList.quickFilters')}>
       <button
         type="button"
@@ -2674,7 +2681,7 @@
     </div>
   {/if}
 
-  {#if isVirtualFolderView && folderId && !isSearchMode}<OnlineViewCount {folderId} revision={onlineCountRevision} />{/if}
+  {#if isVirtualFolderView && folderId && !isSearchMode && !filterMode}<OnlineViewCount {folderId} revision={onlineCountRevision} />{/if}
   {#if virtualIssues}<p class="px-3 py-2 text-xs text-destructive" role="status">{virtualIssues}</p>{/if}
   {#if isVirtualFolderView && virtualCacheRefreshedAt && !isSearchMode}
     <p class="px-3 pb-1 text-[10px] text-muted-foreground" role="status">{$_('search.virtualFolderCacheUpdated', { values: { time: virtualCacheRefreshedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) } })}</p>

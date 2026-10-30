@@ -34,6 +34,18 @@ func NewStore(db *database.DB) *Store {
 // filterHavingClause returns a HAVING clause for conversation-level filtering.
 // prefix is the message-table alias for the surrounding query (normally "m.").
 func filterHavingClause(filter, prefix string) string {
+	if strings.Contains(filter, "+") {
+		conditions := []string{}
+		for _, part := range strings.Split(filter, "+") {
+			if clause := filterHavingClause(part, prefix); clause != "" {
+				conditions = append(conditions, strings.TrimPrefix(clause, " HAVING "))
+			}
+		}
+		if len(conditions) == 0 {
+			return ""
+		}
+		return " HAVING " + strings.Join(conditions, " AND ")
+	}
 	if prefix == "" {
 		prefix = "m."
 	}
@@ -54,6 +66,13 @@ func filterHavingClause(filter, prefix string) string {
 // filterWhereClause returns a WHERE condition for count queries.
 // prefix is the message-table alias for the surrounding query (normally "m.").
 func filterWhereClause(filter, prefix string) string {
+	if strings.Contains(filter, "+") {
+		clause := ""
+		for _, part := range strings.Split(filter, "+") {
+			clause += filterWhereClause(part, prefix)
+		}
+		return clause
+	}
 	if prefix == "" {
 		prefix = "m."
 	}
