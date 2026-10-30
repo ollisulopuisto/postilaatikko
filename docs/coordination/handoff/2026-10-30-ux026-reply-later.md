@@ -55,3 +55,14 @@ resetting its changes.
 - Origin/main advanced to `b8b954b` (PR #66) during implementation. This branch
   remains on `c766bc3`; coordinator will resolve overlapping count/event/docs
   changes during integration.
+
+## Coordinator integration checkpoint (2026-10-30)
+
+- Cherry-picked UX-026 onto current `origin/main` `b8b954b` in the combined
+  candidate branch `codex/integration-reply-undo`, commit `6081465`.
+- Combined with UX-044 Undo History (`f5ec230`), including the newer main's
+  runtime event invalidation for shared online counts. `go build ./...`,
+  Svelte check (0 errors; two existing titlebar warnings), frontend production
+  build, version validation and `git diff --check` pass.
+- UX-026's API adapter and stale local conversation rendering limitations above
+  remain. Live Gmail and native-menu behavior still need installed-build review.
