@@ -718,6 +718,10 @@ export function GetRunBackground() {
   return window['go']['app']['App']['GetRunBackground']();
 }
 
+export function GetSmartNotificationSettings() {
+  return window['go']['app']['App']['GetSmartNotificationSettings']();
+}
+
 export function GetSMIMECertificateForEmail(arg1, arg2) {
   return window['go']['app']['App']['GetSMIMECertificateForEmail'](arg1, arg2);
 }
@@ -1476,6 +1480,10 @@ export function SetReadReceiptResponsePolicy(arg1) {
 
 export function SetRunBackground(arg1) {
   return window['go']['app']['App']['SetRunBackground'](arg1);
+}
+
+export function SaveSmartNotificationSettings(arg1) {
+  return window['go']['app']['App']['SaveSmartNotificationSettings'](arg1);
 }
 
 export function SetSMIMEEncryptPolicy(arg1, arg2) {

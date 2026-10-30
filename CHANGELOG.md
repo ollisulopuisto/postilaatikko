@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Add optional local smart-notification controls with sender/domain mute and allow rules; rules inspect bounded message headers only.
 - Refresh Gmail labels from the virtual-folder editor, and apply Gmail label scopes correctly to online virtual-folder searches.
 - Add ordered contextual signature rules for sender, recipient, and message type, with placement controls and manual-edit preservation.
 - Add bulk select/clear controls to virtual-folder setup, wrap long sidebar labels, and make the cross-account move picker a searchable expandable folder tree.

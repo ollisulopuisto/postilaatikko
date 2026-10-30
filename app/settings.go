@@ -299,6 +299,16 @@ func (a *App) DeleteQuickReply(id string) error {
 	return a.settingsStore.DeleteQuickReply(id)
 }
 
+// GetSmartNotificationSettings returns local desktop notification controls.
+func (a *App) GetSmartNotificationSettings() (settings.SmartNotificationSettings, error) {
+	return a.settingsStore.GetSmartNotificationSettings()
+}
+
+// SaveSmartNotificationSettings persists local desktop notification controls.
+func (a *App) SaveSmartNotificationSettings(prefs settings.SmartNotificationSettings) error {
+	return a.settingsStore.SaveSmartNotificationSettings(prefs)
+}
+
 // GetLanguage returns the saved language preference (locale code)
 // Returns empty string if not set (frontend defaults to English)
 func (a *App) GetLanguage() (string, error) {

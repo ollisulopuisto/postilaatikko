@@ -384,6 +384,8 @@ export function GetReplyContent(arg1:string,arg2:string,arg3:string,arg4:boolean
 
 export function GetRunBackground():Promise<boolean>;
 
+export function GetSmartNotificationSettings():Promise<settings.SmartNotificationSettings>;
+
 export function GetSMIMECertificateForEmail(arg1:string,arg2:string):Promise<smime.Certificate>;
 
 export function GetSMIMEEncryptPolicy(arg1:string):Promise<string>;
@@ -761,6 +763,8 @@ export function SetPGPSignPolicy(arg1:string,arg2:string):Promise<void>;
 export function SetReadReceiptResponsePolicy(arg1:string):Promise<void>;
 
 export function SetRunBackground(arg1:boolean):Promise<void>;
+
+export function SaveSmartNotificationSettings(arg1:settings.SmartNotificationSettings):Promise<void>;
 
 export function SetSMIMEEncryptPolicy(arg1:string,arg2:string):Promise<void>;
 

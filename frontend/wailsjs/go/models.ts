@@ -3271,6 +3271,45 @@ export namespace settings {
 	        this.body = source["body"];
 	    }
 	}
+	export class NotificationRule {
+	    id: string;
+	    scope: string;
+	    match: string;
+	    action: string;
+
+	    static createFrom(source: any = {}) {
+	        return new NotificationRule(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.scope = source["scope"];
+	        this.match = source["match"];
+	        this.action = source["action"];
+	    }
+	}
+	export class SmartNotificationSettings {
+	    enabled: boolean;
+	    rules: NotificationRule[];
+
+	    static createFrom(source: any = {}) {
+	        return new SmartNotificationSettings(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.rules = this.convertValues(source["rules"], NotificationRule);
+	    }
+
+	    convertValues(a: any, classs: any): any {
+	        if (!a) return a;
+	        if (a.slice && a.map) return (a as any[]).map(elem => this.convertValues(elem, classs));
+	        if (typeof a === "object") return new classs(a);
+	        return a;
+	    }
+	}
 
 }
 

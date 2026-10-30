@@ -470,6 +470,12 @@ func (a *App) handleNewMailNotification(info sync.NewMailInfo) {
 		Int("count", info.Count).
 		Msg("New mail notification")
 
+	prefs, prefsErr := a.settingsStore.GetSmartNotificationSettings()
+	if prefsErr == nil && !prefs.Enabled {
+		log.Debug().Msg("New-mail notification suppressed by global setting")
+		return
+	}
+
 	// Get the most recent conversation for the notification
 	var subject, fromName, fromEmail, threadID string
 
@@ -487,6 +493,47 @@ func (a *App) handleNewMailNotification(info sync.NewMailInfo) {
 				fromEmail = conv.Participants[0].Email
 			}
 		}
+	}
+
+	// Apply sender/domain rules using only the already-synced message headers.
+	// Bound the lookup so a large burst never turns a notification into an
+	// unbounded database scan. If the header window is incomplete, keep the
+	// notification: suppressing mail based on a partial sample could hide a
+	// sender the user explicitly allowed.
+	if prefsErr == nil && len(prefs.Rules) > 0 && info.Count > 0 {
+		const maxNotificationHeaders = 100
+		limit := info.Count
+		if limit > maxNotificationHeaders {
+			limit = maxNotificationHeaders
+		}
+		headers, headerErr := a.messageStore.ListByFolder(info.FolderID, 0, limit)
+		if headerErr != nil {
+			log.Warn().Err(headerErr).Msg("Could not read headers for notification rules; allowing notification")
+		} else if len(headers) > 0 {
+			if info.Count > len(headers) {
+				log.Debug().Int("newCount", info.Count).Int("headerCount", len(headers)).Msg("Notification rule sample incomplete; allowing notification")
+			} else {
+				allowed := false
+				for _, header := range headers {
+					if prefs.ShouldNotify(header.FromEmail) {
+						allowed = true
+						if subject == "" || info.Count == 1 {
+							subject = header.Subject
+							fromName = header.FromName
+							fromEmail = header.FromEmail
+						}
+						break
+					}
+				}
+				if !allowed {
+					log.Debug().Int("count", info.Count).Msg("New-mail notification suppressed by sender rules")
+					return
+				}
+			}
+		}
+	}
+	if prefsErr != nil {
+		log.Warn().Err(prefsErr).Msg("Could not load notification preferences; using existing notification behavior")
 	}
 
 	// Send system notification
