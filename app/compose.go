@@ -886,6 +886,7 @@ func (a *App) PrepareReply(messageID, mode string) (*smtp.ComposeMessage, error)
 
 	return &smtp.ComposeMessage{
 		From:        from,
+		ReplyMode:   mode,
 		To:          to,
 		Cc:          cc,
 		Subject:     subject,

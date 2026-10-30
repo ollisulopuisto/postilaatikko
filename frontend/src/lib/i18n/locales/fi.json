@@ -1490,7 +1490,18 @@
     "countdown": "Lähetetään {seconds} s kuluttua",
     "cancel": "Peruuta",
     "cancelled": "Lähetys peruttu - luonnos palautettu",
-    "alreadySending": "Liian myöhäistä - lähetys on jo käynnissä"
+    "alreadySending": "Liian myöhäistä - lähetys on jo käynnissä",
+    "reply": "Vastaus",
+    "replyAll": "Vastaa kaikille",
+    "scheduled": "Ajastettu viesti",
+    "to": "Vastaanottaja",
+    "cc": "Kopio",
+    "bcc": "Piilokopio",
+    "from": "Lähettäjä",
+    "sending": "Lähetetään…",
+    "deliveryMayHaveStarted": "Lähetys on alkanut. Viesti saattaa jo olla matkalla vastaanottajille; muokkaus ei ole enää käytettävissä.",
+    "deliveryUncertain": "Lähetys ei päättynyt normaalisti, joten viesti on saattanut lähteä. Luonnos on edelleen käytettävissä.",
+    "editRecipients": "Muokkaa vastaanottajia"
   },
   "macOSContacts": {
     "title": "macOS-yhteystiedot",

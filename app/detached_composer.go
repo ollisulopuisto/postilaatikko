@@ -988,6 +988,7 @@ func (c *ComposerApp) buildReplyMessage(msg *message.Message, mode string) *smtp
 
 	return &smtp.ComposeMessage{
 		From:      from,
+		ReplyMode: mode,
 		To:        to,
 		Cc:        cc,
 		Subject:   subject,

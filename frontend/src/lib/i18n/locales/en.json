@@ -1490,7 +1490,18 @@
     "countdown": "Sending in {seconds}s",
     "cancel": "Cancel",
     "cancelled": "Send cancelled - draft restored",
-    "alreadySending": "Too late - the send already started"
+    "alreadySending": "Too late - the send already started",
+    "reply": "Reply",
+    "replyAll": "Reply All",
+    "scheduled": "Scheduled send",
+    "to": "To",
+    "cc": "Cc",
+    "bcc": "Bcc",
+    "from": "From",
+    "sending": "Sending…",
+    "deliveryMayHaveStarted": "Delivery has started. It may already reach recipients; editing is no longer available.",
+    "deliveryUncertain": "The send did not complete normally, so delivery may already have happened. The draft is still available.",
+    "editRecipients": "Edit recipients"
   },
   "macOSContacts": {
     "title": "macOS Contacts",

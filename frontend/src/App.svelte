@@ -207,6 +207,7 @@
   let composerAccountId = $state<string | null>(null)
   let composerInitialMessage = $state<smtp.ComposeMessage | null>(null)
   let composerDraftId = $state<string | null>(null)
+  let composerFocusRecipients = $state(false)
   let composerImagesLoaded = $state(false)
 
   // Mirror composer visibility into the keyboard store so the viewer can
@@ -482,16 +483,18 @@
       // The send attempt is over; the draft row is untouched and reopenable.
       await CompletePendingSend(ps.id).catch(() => {})
       pendingRemove(ps.id)
-      addToast({ type: 'error', message: String(err) })
+      addToast({ type: 'error', message: `${$_('pendingSend.deliveryUncertain')} ${String(err)}` })
     }
   }
 
-  async function pendingCancel(ps: PendingSendItem) {
+  async function pendingCancel(ps: PendingSendItem, editRecipients = false) {
     try {
       await CancelPendingSend(ps.id)
       pendingRemove(ps.id)
       addToast({ type: 'info', message: $_('pendingSend.cancelled') })
-      if (ps.draftId) await handleEditDraft(ps.draftId)
+      if (ps.draftId) {
+        await handleEditDraft(ps.draftId, { accountId: ps.accountId, focusRecipients: editRecipients })
+      }
     } catch {
       pendingRemove(ps.id)
       addToast({ type: 'error', message: $_('pendingSend.alreadySending') })
@@ -500,6 +503,15 @@
 
   function pendingRemaining(ps: PendingSendItem): number {
     return Math.max(0, Math.ceil((new Date(ps.dispatchAt).getTime() - pendingNow) / 1000))
+  }
+
+  function pendingPayload(ps: PendingSendItem): smtp.ComposeMessage | null {
+    try { return new smtp.ComposeMessage(JSON.parse(ps.payload)) } catch { return null }
+  }
+
+  function pendingRecipientSummary(ps: PendingSendItem, field: 'to' | 'cc' | 'bcc'): string {
+    const addresses = pendingPayload(ps)?.[field] || []
+    return addresses.map(address => address.name ? `${address.name} <${address.address}>` : address.address).filter(Boolean).join(', ')
   }
 
   onDestroy(() => {
@@ -984,9 +996,9 @@
   }
 
   // Handle edit draft (opens composer with existing draft)
-  async function handleEditDraft(draftId: string) {
+  async function handleEditDraft(draftId: string, options: { accountId?: string; focusRecipients?: boolean } = {}) {
     // Use conversation's account ID, fall back to selected account or first account
-    const accountId = resolveAccountId(selectedConversationAccountId) || resolveAccountId(selectedAccountId)
+    const accountId = resolveAccountId(options.accountId || null) || resolveAccountId(selectedConversationAccountId) || resolveAccountId(selectedAccountId)
     if (!accountId) return
 
     try {
@@ -999,6 +1011,7 @@
       composerAccountId = accountId
       composerInitialMessage = draft.message || null
       composerDraftId = draft.draftId
+      composerFocusRecipients = options.focusRecipients ?? false
       showComposer = true
     } catch (err) {
       console.error('Failed to load draft:', err)
@@ -1112,6 +1125,7 @@
   // Close composer
   function closeComposer() {
     showComposer = false
+    composerFocusRecipients = false
     composerAccountId = null
     composerInitialMessage = null
   }
@@ -2336,6 +2350,7 @@
           accountId={composerAccountId}
           initialMessage={composerInitialMessage}
           draftId={composerDraftId}
+          focusRecipients={composerFocusRecipients}
           imagesLoaded={composerImagesLoaded}
           onClose={closeComposer}
           onSent={closeComposer}
@@ -2372,17 +2387,41 @@
 
 <!-- Command palette (Cmd+P / Ctrl+P, Alfred style quick launcher). -->
 {#if pendingSends.length > 0}
-  <div class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-full border border-border bg-popover px-4 py-2 shadow-lg" role="status" aria-live="polite">
-    <Icon icon="mdi:send-clock-outline" class="w-4 h-4 text-muted-foreground" />
-    <span class="text-sm">{$_('pendingSend.countdown', { values: { seconds: pendingRemaining(pendingSends[0]) } })}</span>
-    <div class="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
-      <div class="h-full bg-primary transition-all" style="width: {Math.min(100, (pendingRemaining(pendingSends[0]) / 30) * 100)}%"></div>
-    </div>
-    <button
-      class="rounded-full px-2.5 py-1 text-sm font-medium hover:bg-muted disabled:opacity-50"
-      disabled={pendingSends[0].dispatching}
-      onclick={() => void pendingCancel(pendingSends[0])}
-    >{$_('pendingSend.cancel')}</button>
+  <div class="fixed bottom-4 left-1/2 z-50 flex max-h-[45vh] w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 flex-col gap-2 overflow-y-auto" aria-live="polite">
+    {#each pendingSends as pendingSend (pendingSend.id)}
+      {@const payload = pendingPayload(pendingSend)}
+      <section class="rounded-xl border border-border bg-popover p-3 shadow-lg" role="status">
+        <div class="flex items-center gap-2">
+          <Icon icon="mdi:send-clock-outline" class="h-4 w-4 shrink-0 text-muted-foreground" />
+          <strong class="text-sm">{payload?.reply_mode === 'reply-all' ? $_('pendingSend.replyAll') : payload?.reply_mode === 'reply' ? $_('pendingSend.reply') : $_('pendingSend.scheduled')}</strong>
+          <span class="ml-auto text-sm">{pendingSend.dispatching ? $_('pendingSend.sending') : $_('pendingSend.countdown', { values: { seconds: pendingRemaining(pendingSend) } })}</span>
+        </div>
+        {#if payload?.from?.address}
+          <p class="mt-2 break-words text-xs text-muted-foreground"><span class="font-medium">{$_('pendingSend.from')}:</span> {payload.from.name ? `${payload.from.name} <${payload.from.address}>` : payload.from.address}</p>
+        {/if}
+        {#if pendingSend.dispatching}
+          <p class="mt-2 text-xs text-destructive">{$_('pendingSend.deliveryMayHaveStarted')}</p>
+        {/if}
+        {#if pendingRecipientSummary(pendingSend, 'to')}
+          <p class="mt-2 break-words text-xs text-muted-foreground"><span class="font-medium">{$_('pendingSend.to')}:</span> {pendingRecipientSummary(pendingSend, 'to')}</p>
+        {/if}
+        {#if pendingRecipientSummary(pendingSend, 'cc')}
+          <p class="break-words text-xs text-muted-foreground"><span class="font-medium">{$_('pendingSend.cc')}:</span> {pendingRecipientSummary(pendingSend, 'cc')}</p>
+        {/if}
+        {#if pendingRecipientSummary(pendingSend, 'bcc')}
+          <p class="break-words text-xs text-muted-foreground"><span class="font-medium">{$_('pendingSend.bcc')}:</span> {pendingRecipientSummary(pendingSend, 'bcc')}</p>
+        {/if}
+        <div class="mt-2 flex items-center gap-2">
+          <div class="h-1.5 min-w-8 flex-1 overflow-hidden rounded-full bg-muted">
+            <div class="h-full bg-primary transition-all" style="width: {Math.min(100, (pendingRemaining(pendingSend) / 30) * 100)}%"></div>
+          </div>
+          {#if pendingSend.draftId}
+            <button class="rounded-md px-2.5 py-1 text-sm font-medium hover:bg-muted disabled:opacity-50" disabled={pendingSend.dispatching} onclick={() => void pendingCancel(pendingSend, true)}>{$_('pendingSend.editRecipients')}</button>
+          {/if}
+          <button class="rounded-md px-2.5 py-1 text-sm font-medium hover:bg-muted disabled:opacity-50" disabled={pendingSend.dispatching} onclick={() => void pendingCancel(pendingSend)}>{$_('pendingSend.cancel')}</button>
+        </div>
+      </section>
+    {/each}
   </div>
 {/if}
 

@@ -300,6 +300,7 @@ func (ops *draftOps) saveDraftToDB(accountID string, localDraft *draft.Draft, ms
 		localDraft.BodyHTML = enc.bodyHTML
 		localDraft.BodyText = enc.bodyText
 		localDraft.InReplyToID = msg.InReplyTo
+		localDraft.ReplyType = msg.ReplyMode
 		localDraft.IdentityID = ops.resolveIdentityID(accountID, msg)
 		localDraft.SignMessage = msg.SignMessage
 		localDraft.Encrypted = enc.encrypted
@@ -336,6 +337,7 @@ func (ops *draftOps) saveDraftToDB(accountID string, localDraft *draft.Draft, ms
 		BodyHTML:         enc.bodyHTML,
 		BodyText:         enc.bodyText,
 		InReplyToID:      msg.InReplyTo,
+		ReplyType:        msg.ReplyMode,
 		IdentityID:       ops.resolveIdentityID(accountID, msg),
 		SignMessage:      msg.SignMessage,
 		Encrypted:        enc.encrypted,
@@ -723,6 +725,7 @@ func (ops *draftOps) toComposeMessage(d *draft.Draft) *smtp.ComposeMessage {
 	return &smtp.ComposeMessage{
 		From:              smtp.Address{Address: identityEmail},
 		IdentityID:        d.IdentityID,
+		ReplyMode:         d.ReplyType,
 		To:                parseAddressList(d.ToList),
 		Cc:                parseAddressList(d.CcList),
 		Bcc:               parseAddressList(d.BccList),

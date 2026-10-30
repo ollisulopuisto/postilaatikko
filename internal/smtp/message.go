@@ -61,12 +61,15 @@ type ComposeMessage struct {
 	From Address `json:"from"`
 	// IdentityID is the canonical local identity selected by the composer. It is
 	// draft metadata only and is not emitted as an email header.
-	IdentityID string    `json:"identity_id,omitempty"`
-	To         []Address `json:"to"`
-	Cc         []Address `json:"cc"`
-	Bcc        []Address `json:"bcc"`
-	ReplyTo    *Address  `json:"reply_to,omitempty"`
-	Subject    string    `json:"subject"`
+	IdentityID string `json:"identity_id,omitempty"`
+	// ReplyMode preserves the user's explicit reply/reply-all/forward choice in
+	// local drafts. It is draft metadata only and is not emitted as a header.
+	ReplyMode string    `json:"reply_mode,omitempty"`
+	To        []Address `json:"to"`
+	Cc        []Address `json:"cc"`
+	Bcc       []Address `json:"bcc"`
+	ReplyTo   *Address  `json:"reply_to,omitempty"`
+	Subject   string    `json:"subject"`
 
 	// Content
 	TextBody string `json:"text_body"` // Plain text version
