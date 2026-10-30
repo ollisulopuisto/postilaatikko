@@ -878,6 +878,10 @@ export function RefreshVirtualFolderCache(arg1) {
   return window['go']['app']['App']['RefreshVirtualFolderCache'](arg1);
 }
 
+export function SyncVirtualFolder(arg1) {
+  return window['go']['app']['App']['SyncVirtualFolder'](arg1);
+}
+
 export function GetVirtualFolders() {
   return window['go']['app']['App']['GetVirtualFolders']();
 }

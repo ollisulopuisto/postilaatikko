@@ -2,16 +2,79 @@ package app
 
 import (
 	"fmt"
-	"github.com/hkdb/aerion/internal/folder"
+	"sort"
+	"strings"
 	"time"
+
+	"github.com/hkdb/aerion/internal/folder"
 )
+
+// refreshVirtualFolderHeadersInBackground refreshes only message headers for a
+// virtual folder's real member folders. Gmail views are already queried live
+// through the Gmail API by SearchMail, so they do not need a second sync here.
+func (a *App) refreshVirtualFolderHeadersInBackground(virtualFolderID string) error {
+	key := "virtual:" + virtualFolderID
+	a.refreshMu.Lock()
+	if a.refreshLast == nil {
+		a.refreshLast = map[string]time.Time{}
+		a.refreshActive = map[string]bool{}
+	}
+	if a.refreshActive[key] || time.Since(a.refreshLast[key]) < 30*time.Second {
+		a.refreshMu.Unlock()
+		return nil
+	}
+	a.refreshActive[key] = true
+	a.refreshMu.Unlock()
+
+	go func() {
+		defer recoverPanic("app.refresh", "virtual-folder headers")
+		defer func() {
+			a.refreshMu.Lock()
+			delete(a.refreshActive, key)
+			a.refreshMu.Unlock()
+		}()
+
+		err := a.SyncVirtualFolder(virtualFolderID)
+		a.refreshMu.Lock()
+		a.refreshLast[key] = time.Now()
+		a.refreshMu.Unlock()
+		if err != nil {
+			a.emitRuntimeEvent("virtualfolder:refreshError", map[string]string{
+				"virtualFolderId": virtualFolderID,
+				"error":           err.Error(),
+			})
+		} else {
+			a.emitRuntimeEvent("virtualfolder:refreshComplete", map[string]string{"virtualFolderId": virtualFolderID})
+		}
+	}()
+	return nil
+}
+
+func virtualFolderRefreshError(virtualFolderID string, errorsByFolder map[string]error) error {
+	if len(errorsByFolder) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(errorsByFolder))
+	for id := range errorsByFolder {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	parts := make([]string, 0, len(ids))
+	for _, id := range ids {
+		parts = append(parts, id+": "+errorsByFolder[id].Error())
+	}
+	return fmt.Errorf("virtual folder %q partially refreshed: %s", virtualFolderID, strings.Join(parts, "; "))
+}
 
 // RefreshViewHeaders is nonblocking and coalesced. Opening a folder never clears
 // its cache or cancels a manual sync. Metadata events update the visible list.
 func (a *App) RefreshViewHeaders(accountID, folderID string) error {
-	if accountID == "virtual" || (accountID == "unified" && folderID == "replyLater") {
+	if accountID == "virtual" {
+		return a.refreshVirtualFolderHeadersInBackground(folderID)
+	}
+	if accountID == "unified" && folderID == "replyLater" {
 		return nil
-	} // virtual views already perform a server query
+	}
 	if accountID == "unified" {
 		accounts, err := a.accountStore.List()
 		if err != nil {

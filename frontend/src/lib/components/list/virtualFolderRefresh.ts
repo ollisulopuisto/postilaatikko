@@ -5,10 +5,16 @@ export async function refreshVirtualView(steps: {
   reset: () => void
   reload: () => Promise<unknown>
 }): Promise<void> {
-  await steps.refreshCache()
+  let refreshError: unknown
+  try {
+    await steps.refreshCache()
+  } catch (error) {
+    refreshError = error
+  }
   if (!steps.isCurrent()) return
   steps.reset()
   await steps.reload()
+  if (refreshError) throw refreshError
 }
 
 /** Cancellation is expected when a newer search replaces a provider request. */

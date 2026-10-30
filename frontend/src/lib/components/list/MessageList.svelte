@@ -28,7 +28,7 @@
   import { cn } from '$lib/utils'
   import { Button } from '$lib/components/ui/button'
   // @ts-ignore - wailsjs bindings
-  import { RefreshViewHeaders, SearchMail, CancelMailSearch, MoveToInboxWithUndo, GetConversations, GetConversationCount, SyncFolder, ForceSyncFolder, CancelFolderSync, SetMessageListSortOrder, GetUnifiedFolderConversations, GetUnifiedFolderCount, SearchConversations, SearchUnifiedFolder, GetSearchCount, GetSearchCountUnifiedFolder, SyncUnifiedFolder, EmptyUnifiedTrash, GetFTSIndexStatus, IsFTSIndexing, TrashWithUndo, DeletePermanently, EmptyTrash, UndoOperation, IMAPSearchFolder, IMAPSearchUnifiedInbox, FetchServerMessage, GetVirtualFolderConversations, GetVirtualFolderCount, GetVirtualFolderCachedView, RefreshVirtualFolderCache } from '../../../../wailsjs/go/app/App'
+  import { RefreshViewHeaders, SearchMail, CancelMailSearch, MoveToInboxWithUndo, GetConversations, GetConversationCount, SyncFolder, ForceSyncFolder, CancelFolderSync, SetMessageListSortOrder, GetUnifiedFolderConversations, GetUnifiedFolderCount, SearchConversations, SearchUnifiedFolder, GetSearchCount, GetSearchCountUnifiedFolder, SyncUnifiedFolder, SyncVirtualFolder, EmptyUnifiedTrash, GetFTSIndexStatus, IsFTSIndexing, TrashWithUndo, DeletePermanently, EmptyTrash, UndoOperation, IMAPSearchFolder, IMAPSearchUnifiedInbox, FetchServerMessage, GetVirtualFolderConversations, GetVirtualFolderCount, GetVirtualFolderCachedView } from '../../../../wailsjs/go/app/App'
   import { toasts } from '$lib/stores/toast'
   import { withShortcut, ariaKeyshortcuts } from '$lib/keyboard/format'
   import ShortcutHint from '$lib/components/shortcuts/ShortcutHint.svelte'
@@ -522,8 +522,20 @@
     // The backend refreshes cached virtual-folder indexes in the background;
     // reload an open view when its index changes.
     EventsOn('virtualfolder:cacheUpdated', (data: { virtualFolderId: string }) => {
-      if (isVirtualFolderView && folderId === data.virtualFolderId && !searchQuery.trim() && !manualSyncing) {
-        scheduleReload()
+      if (isVirtualFolderView && folderId === data.virtualFolderId) {
+        if (!manualSyncing) {
+          if (!searchQuery.trim()) scheduleReload()
+        }
+      }
+    })
+
+    EventsOn('virtualfolder:refreshComplete', (data: { virtualFolderId: string }) => {
+      if (isVirtualFolderView && folderId === data.virtualFolderId) virtualIssues = ''
+    })
+
+    EventsOn('virtualfolder:refreshError', (data: { virtualFolderId: string; error: string }) => {
+      if (isVirtualFolderView && folderId === data.virtualFolderId) {
+        virtualIssues = data.error
       }
     })
 
@@ -1040,7 +1052,7 @@
       listError = null
       try {
         await refreshVirtualView({
-          refreshCache: () => RefreshVirtualFolderCache(view),
+          refreshCache: () => SyncVirtualFolder(view),
           isCurrent: () => folderId === view && generation === loadGeneration && !isSearchMode,
           reset: () => {
             offset = 0
@@ -1048,9 +1060,10 @@
           },
           reload: () => loadConversations(Math.max(conversations.length, PAGE_SIZE)),
         })
+        virtualIssues = ''
       } catch (err) {
         if (folderId === view && generation === loadGeneration && !isExpectedSearchCancellation(err)) {
-          listError = $_('viewer.failedToLoadMessages')
+          virtualIssues = String(err)
         }
       } finally {
         manualSyncing = false
