@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Add an opt-in, loopback-only local Agent API listener with per-client capability tokens, one-time credential display, revocation, request limits, and browser-origin protections. The listener currently exposes only authenticated API capability discovery; mailbox endpoints follow in UX-021.
 - Refresh Gmail labels from the virtual-folder editor, and apply Gmail label scopes correctly to online virtual-folder searches.
 - Add ordered contextual signature rules for sender, recipient, and message type, with placement controls and manual-edit preservation.
 - Add bulk select/clear controls to virtual-folder setup, wrap long sidebar labels, and make the cross-account move picker a searchable expandable folder tree.

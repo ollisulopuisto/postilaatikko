@@ -314,6 +314,10 @@ export function CreateFilterRule(arg1) {
   return window['go']['app']['App']['CreateFilterRule'](arg1);
 }
 
+export function CreateAgentAPIClient(arg1, arg2) {
+  return window['go']['app']['App']['CreateAgentAPIClient'](arg1, arg2);
+}
+
 export function CreateIdentity(arg1, arg2) {
   return window['go']['app']['App']['CreateIdentity'](arg1, arg2);
 }
@@ -434,6 +438,10 @@ export function GetAccount(arg1) {
   return window['go']['app']['App']['GetAccount'](arg1);
 }
 
+export function GetAgentAPIStatus() {
+  return window['go']['app']['App']['GetAgentAPIStatus']();
+}
+
 export function GetAccountFoldersForMapping(arg1) {
   return window['go']['app']['App']['GetAccountFoldersForMapping'](arg1);
 }
@@ -444,6 +452,10 @@ export function GetAccountProfilePhotos(arg1) {
 
 export function GetAccounts() {
   return window['go']['app']['App']['GetAccounts']();
+}
+
+export function ListAgentAPIClients() {
+  return window['go']['app']['App']['ListAgentAPIClients']();
 }
 
 export function GetAllAccountIdentities() {
@@ -1416,6 +1428,14 @@ export function SetDefaultSMIMECertificate(arg1, arg2) {
 
 export function SetExtensionEnabled(arg1, arg2) {
   return window['go']['app']['App']['SetExtensionEnabled'](arg1, arg2);
+}
+
+export function SetAgentAPIEnabled(arg1) {
+  return window['go']['app']['App']['SetAgentAPIEnabled'](arg1);
+}
+
+export function RevokeAgentAPIClient(arg1) {
+  return window['go']['app']['App']['RevokeAgentAPIClient'](arg1);
 }
 
 export function SetLanguage(arg1) {

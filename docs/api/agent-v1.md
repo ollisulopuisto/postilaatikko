@@ -1,9 +1,9 @@
 # Local Agent API v1
 
-Status: contract proposal for UX-019. This document defines the external agent
-contract; UX-019 does not start a listener. External access is unavailable until
-the separately reviewed UX-020 local transport is integrated and explicitly
-enabled by the user.
+Status: UX-019 contract and UX-020 local transport are implemented. The
+listener remains disabled by default. UX-020 currently exposes only
+`GET /v1/capabilities`; mailbox, search, thread, and mutation endpoints remain
+future work under UX-021 and later tasks.
 
 ## Trust and enablement
 
@@ -17,7 +17,7 @@ enabled by the user.
 - The transport rejects non-loopback connections, unexpected `Host` values,
   browser-origin requests and cross-origin preflights. It does not enable CORS.
   These checks are enforced by UX-020; binding to loopback alone is not treated
-  as browser-request protection.
+  as browser-request protection. These checks are implemented by UX-020.
 - API clients cannot obtain Gmail OAuth tokens, SMTP passwords, encryption
   keys, or another client's API credential.
 
@@ -31,6 +31,34 @@ response fields and handle unknown error codes as a generic failure.
 
 `GET /v1/capabilities` returns the server's API version and the authenticated
 client's granted capabilities. It does not reveal any secret.
+
+## UX-020 local listener
+
+The Wails app exposes `GetAgentAPIStatus`, `SetAgentAPIEnabled`,
+`CreateAgentAPIClient`, `ListAgentAPIClients`, and `RevokeAgentAPIClient` for a
+future Settings UI. The API can be enabled only by an explicit call to
+`SetAgentAPIEnabled(true)`; it does not start on first launch. The listener
+binds to `127.0.0.1` on an ephemeral port, and `GetAgentAPIStatus` reports the
+current address while it is running. Disabling the API or shutting down the app
+closes the listener.
+
+Client creation accepts an explicit list of known capabilities and returns a
+random bearer token once. The token is stored in the platform credential store
+and is never returned by status/list calls. Revocation immediately removes the
+grant from the in-memory registry and deletes its protected credential. Until
+UX-021 registers mail routes, the only useful HTTP request is:
+
+```http
+GET /v1/capabilities HTTP/1.1
+Host: 127.0.0.1:<reported-port>
+Authorization: Bearer <client credential>
+```
+
+The transport enforces a 1 MiB request-body limit, bounded headers and
+timeouts, rejects query-string credentials and browser-origin headers, and
+returns safe v1 error envelopes with request IDs. Logs contain request IDs and
+error codes, not authorization values or request bodies. No wildcard CORS is
+enabled.
 
 ## Capabilities
 

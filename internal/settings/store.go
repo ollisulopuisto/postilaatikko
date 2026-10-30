@@ -40,6 +40,7 @@ const (
 	KeyShowViewerCircles          = "show_viewer_circles"
 	KeyLastSeenVersion            = "last_seen_version"       // for "What's new in this version" launch dialog
 	KeyOAuthWarningDisabled       = "oauth_warning_disabled"  // user toggled "Don't show again" on the missing-OAuth-creds launch warning
+	KeyAgentAPIEnabled            = "agent_api_enabled"       // opt-in local automation HTTP listener
 	KeySpellcheckEnabled          = "spellcheck_enabled"      // composer spellcheck master toggle (defaults on)
 	KeySpellcheckLanguages        = "spellcheck_languages"    // JSON array of enabled dictionary codes, e.g. ["en","de"]
 	KeySpellcheckCustomWords      = "spellcheck_custom_words" // JSON array of user-added dictionary words

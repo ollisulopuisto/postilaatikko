@@ -273,6 +273,60 @@ export namespace account {
 
 export namespace app {
 
+	export class AgentAPIClientInfo {
+	    id: string;
+	    name: string;
+	    capabilities: string[];
+	    createdAt: string;
+
+	    static createFrom(source: any = {}) {
+	        return new AgentAPIClientInfo(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.capabilities = source["capabilities"];
+	        this.createdAt = source["createdAt"];
+	    }
+	}
+	export class AgentAPIStatus {
+	    enabled: boolean;
+	    address: string;
+	    clients: AgentAPIClientInfo[];
+
+	    static createFrom(source: any = {}) {
+	        return new AgentAPIStatus(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.address = source["address"];
+	        this.clients = this.convertValues(source["clients"], AgentAPIClientInfo);
+	    }
+
+	    convertValues(a: any, classs: any): any {
+	        if (!a) return a;
+	        return a.map((elem: any) => new classs(elem));
+	    }
+	}
+	export class AgentAPIClientCredential {
+	    client: AgentAPIClientInfo;
+	    token: string;
+
+	    static createFrom(source: any = {}) {
+	        return new AgentAPIClientCredential(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.client = source["client"] ? new AgentAPIClientInfo(source["client"]) : undefined;
+	        this.token = source["token"];
+	    }
+	}
+
 	export class AccountIdentityGroup {
 	    account?: account.Account;
 	    identities: account.Identity[];

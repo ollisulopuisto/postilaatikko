@@ -182,6 +182,8 @@ export function CopyToFolder(arg1:Array<string>,arg2:string):Promise<void>;
 
 export function CreateFilterRule(arg1:mailfilter.Rule):Promise<void>;
 
+export function CreateAgentAPIClient(arg1:string,arg2:Array<string>):Promise<app.AgentAPIClientCredential>;
+
 export function CreateIdentity(arg1:string,arg2:account.IdentityConfig):Promise<account.Identity>;
 
 export function CreateVirtualFolder(arg1:virtualfolder.VirtualFolder):Promise<void>;
@@ -242,11 +244,15 @@ export function GetAccentBarUnread():Promise<boolean>;
 
 export function GetAccount(arg1:string):Promise<account.Account>;
 
+export function GetAgentAPIStatus():Promise<app.AgentAPIStatus>;
+
 export function GetAccountFoldersForMapping(arg1:string):Promise<Array<folder.Folder>>;
 
 export function GetAccountProfilePhotos(arg1:Array<string>):Promise<Array<contact.ContactPhoto>>;
 
 export function GetAccounts():Promise<Array<account.Account>>;
+
+export function ListAgentAPIClients():Promise<Array<app.AgentAPIClientInfo>>;
 
 export function GetAllAccountIdentities():Promise<Array<app.AccountIdentityGroup>>;
 
@@ -731,6 +737,10 @@ export function SetDefaultPGPKey(arg1:string,arg2:string):Promise<void>;
 export function SetDefaultSMIMECertificate(arg1:string,arg2:string):Promise<void>;
 
 export function SetExtensionEnabled(arg1:string,arg2:boolean):Promise<void>;
+
+export function SetAgentAPIEnabled(arg1:boolean):Promise<void>;
+
+export function RevokeAgentAPIClient(arg1:string):Promise<void>;
 
 export function SetLanguage(arg1:string):Promise<void>;
 

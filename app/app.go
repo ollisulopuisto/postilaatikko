@@ -17,6 +17,7 @@ import (
 	extcontactsbe "github.com/hkdb/aerion/extensions/contacts/backend"
 	"github.com/hkdb/aerion/internal/account"
 	"github.com/hkdb/aerion/internal/appstate"
+	"github.com/hkdb/aerion/internal/automation"
 	"github.com/hkdb/aerion/internal/carddav"
 	"github.com/hkdb/aerion/internal/certificate"
 	"github.com/hkdb/aerion/internal/contact"
@@ -313,6 +314,11 @@ type App struct {
 	// IPC for multi-window support (composer windows)
 	ipcServer   ipc.Server
 	ipcTokenMgr *ipc.TokenManager
+
+	// Optional authenticated local automation API
+	automationMu       goSync.Mutex
+	automationRegistry *automation.Registry
+	automationServer   *automation.Server
 
 	// OAuth2 manager
 	oauth2Manager *oauth2.Manager
@@ -615,6 +621,7 @@ func (a *App) Startup(ctx context.Context) {
 	a.settingsStore = settings.NewStore(db)
 	a.appStateStore = appstate.NewStore(db.DB)
 	a.imageAllowlistStore = settings.NewImageAllowlistStore(db)
+	a.initAutomationAPI(ctx)
 
 	// Scale database connection pool based on number of accounts
 	a.updateDBConnectionPool()
@@ -1084,6 +1091,9 @@ func (a *App) Shutdown(ctx context.Context) {
 func (a *App) shutdown(ctx context.Context) {
 	a.clearContactOAuth()
 	log := logging.WithComponent("app")
+	if err := a.stopAutomationAPI(); err != nil {
+		log.Warn().Err(err).Msg("Local automation API shutdown failed")
+	}
 
 	// Broadcast shutdown to all composer windows
 	if a.ipcServer != nil {
