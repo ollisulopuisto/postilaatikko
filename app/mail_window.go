@@ -25,6 +25,8 @@ var mailWindowEvents = []string{
 	"sync:progress", "fts:progress", "fts:complete", "fts:indexing", "contacts:changed",
 	"sent:synced", "network:online", "network:offline",
 	"virtualfolder:cacheUpdated",
+	"virtualfolder:refreshError",
+	"virtualfolder:refreshComplete",
 }
 
 type mailWindowEvent struct {
@@ -202,6 +204,7 @@ func (a *App) mailWindowMethods() map[string]any {
 		"GetFTSIndexStatus":             a.GetFTSIndexStatus,
 		"IsFTSIndexing":                 a.IsFTSIndexing,
 		"RefreshViewHeaders":            a.RefreshViewHeaders,
+		"SyncVirtualFolder":             a.SyncVirtualFolder,
 		"SyncFolder":                    a.SyncFolder,
 		"ForceSyncFolder":               a.ForceSyncFolder,
 		"CancelFolderSync":              a.CancelFolderSync,

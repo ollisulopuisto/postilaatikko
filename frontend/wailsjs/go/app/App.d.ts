@@ -613,6 +613,8 @@ export function RebuildFTSIndex(arg1:string):Promise<void>;
 
 export function RefreshViewHeaders(arg1:string,arg2:string):Promise<void>;
 
+export function SyncVirtualFolder(arg1:string):Promise<void>;
+
 export function RefreshWindowConstraints():Promise<void>;
 
 export function RemoveAccount(arg1:string):Promise<void>;

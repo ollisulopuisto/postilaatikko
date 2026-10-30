@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/hkdb/aerion/internal/account"
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/virtualfolder"
@@ -281,6 +283,83 @@ func (a *App) RefreshVirtualFolderCache(virtualFolderID string) error {
 		return fmt.Errorf("virtual folder not found: %s", virtualFolderID)
 	}
 	return a.refreshVirtualFolderCache(vf)
+}
+
+// SyncVirtualFolder refreshes member-folder headers and then rebuilds the
+// virtual-folder cache. It is intentionally header-only; message bodies and
+// attachments remain on demand. Gmail members are searched through the Gmail
+// API when the view reloads, so only non-Gmail folders need IMAP sync here.
+func (a *App) SyncVirtualFolder(virtualFolderID string) error {
+	vf, err := a.virtualFolderStore.Get(virtualFolderID)
+	if err != nil {
+		return fmt.Errorf("failed to get virtual folder: %w", err)
+	}
+	if vf == nil {
+		return fmt.Errorf("virtual folder not found: %s", virtualFolderID)
+	}
+
+	refreshErrors := map[string]error{}
+	if a.syncEngine != nil {
+		folderIDs, resolveErr := a.virtualFolderStore.QueryFolderIDs(vf)
+		if resolveErr != nil {
+			return fmt.Errorf("failed to resolve virtual folder members: %w", resolveErr)
+		}
+
+		type member struct{ accountID, folderID, label string }
+		members := make([]member, 0, len(folderIDs))
+		for _, folderID := range folderIDs {
+			f, getErr := a.folderStore.Get(folderID)
+			if getErr != nil {
+				refreshErrors[folderID] = getErr
+				continue
+			}
+			if f == nil {
+				continue // a deleted selected folder is no longer a member
+			}
+			acc, getErr := a.accountStore.Get(f.AccountID)
+			if getErr != nil {
+				refreshErrors[folderID] = getErr
+				continue
+			}
+			if acc == nil || !acc.Enabled {
+				continue
+			}
+			if acc.AuthType == account.AuthOAuth2 && strings.EqualFold(acc.IMAPHost, gmailIMAPHost) {
+				continue
+			}
+			members = append(members, member{accountID: f.AccountID, folderID: f.ID, label: acc.Name + "/" + f.Path})
+		}
+
+		// Bound parallel IMAP work so a broad exclude-mode view does not start
+		// one network operation per folder at once.
+		const maxConcurrentFolderRefreshes = 3
+		sem := make(chan struct{}, maxConcurrentFolderRefreshes)
+		var wg sync.WaitGroup
+		var mu sync.Mutex
+		for _, item := range members {
+			item := item
+			sem <- struct{}{}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer func() { <-sem }()
+				// Do not cancel an existing user-initiated sync; its completion
+				// event will refresh the visible virtual view after this cache pass.
+				if syncErr := a.syncFolder(item.accountID, item.folderID, false); syncErr != nil {
+					mu.Lock()
+					refreshErrors[item.label] = syncErr
+					mu.Unlock()
+				}
+			}()
+		}
+		wg.Wait()
+	}
+
+	cacheErr := a.RefreshVirtualFolderCache(virtualFolderID)
+	if cacheErr != nil {
+		return cacheErr
+	}
+	return virtualFolderRefreshError(virtualFolderID, refreshErrors)
 }
 
 // refreshVirtualFolderCache recomputes and stores the cached index for one
