@@ -423,6 +423,9 @@
     html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; /* Chrome/Safari/WebKit */ }
     body { padding: 16px; }
     img { max-width: 100%; height: auto; }
+    /* HTML emails often use fixed-width tables that overflow a narrow reader
+       pane. Shrink them to fit instead of forcing a horizontal scrollbar. */
+    table { max-width: 100%; }
     img.eterno-link-favicon { display: inline-block; width: 1em; height: 1em; min-width: 0; min-height: 0; margin: 0 0.26em 0 0; vertical-align: -0.14em; object-fit: contain; }
     /* Ensure empty paragraphs (blank lines) render with visible height */
     p:empty { min-height: 1em; }
