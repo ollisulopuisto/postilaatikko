@@ -1985,14 +1985,25 @@
     toggleStar: (ids, star) => handleBulkToggleStar(ids, star),
     trash: (ids, permanent) => messageListRef?.requestDelete(ids, permanent),
     applyTarget: async (actionId, target, options, desiredState) => {
-      const ids = await resolveActionTarget(target)
-      switch (actionId) {
-        case 'mail.archive': return handleBulkArchive(ids)
-        case 'mail.spam': return handleBulkSpam(ids)
-        case 'mail.markRead': return handleBulkMarkRead(ids)
-        case 'mail.markUnread': return handleBulkMarkUnread(ids)
-        case 'mail.star': return handleBulkToggleStar(ids, desiredState === true)
-        case 'mail.trash': return messageListRef?.requestDelete(ids, options?.permanent === true)
+      try {
+        const ids = await resolveActionTarget(target)
+        switch (actionId) {
+          case 'mail.archive': return handleBulkArchive(ids)
+          case 'mail.spam': return handleBulkSpam(ids)
+          case 'mail.markRead': return handleBulkMarkRead(ids)
+          case 'mail.markUnread': return handleBulkMarkUnread(ids)
+          case 'mail.star': return handleBulkToggleStar(ids, desiredState === true)
+          case 'mail.trash': return messageListRef?.requestDelete(ids, options?.permanent === true)
+        }
+      } catch (error) {
+        console.error('Mail action target validation failed:', error)
+        const errorKey = actionId === 'mail.archive' ? 'toast.failedToArchive'
+          : actionId === 'mail.spam' ? 'toast.failedToMarkAsSpam'
+          : actionId === 'mail.markRead' ? 'toast.failedToMarkAsRead'
+          : actionId === 'mail.markUnread' ? 'toast.failedToMarkAsUnread'
+          : actionId === 'mail.star' ? 'toast.failedToUpdateStar'
+          : 'toast.failedToDelete'
+        toasts.error($_(errorKey))
       }
     },
   }
