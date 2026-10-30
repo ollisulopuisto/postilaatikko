@@ -13,6 +13,7 @@
 </script>
 
 <script lang="ts">
+  import { refreshVirtualView, isExpectedSearchCancellation } from './virtualFolderRefresh'
   import { retainReadSelection } from '$lib/sidebar/virtualView'
   import { app as searchModels } from '../../../../wailsjs/go/models'
 
@@ -26,7 +27,7 @@
   import { cn } from '$lib/utils'
   import { Button } from '$lib/components/ui/button'
   // @ts-ignore - wailsjs bindings
-  import { RefreshViewHeaders, SearchMail, CancelMailSearch, MoveToInboxWithUndo, GetConversations, GetConversationCount, SyncFolder, ForceSyncFolder, CancelFolderSync, SetMessageListSortOrder, GetUnifiedFolderConversations, GetUnifiedFolderCount, SearchConversations, SearchUnifiedFolder, GetSearchCount, GetSearchCountUnifiedFolder, SyncUnifiedFolder, EmptyUnifiedTrash, GetFTSIndexStatus, IsFTSIndexing, TrashWithUndo, DeletePermanently, EmptyTrash, UndoOperation, IMAPSearchFolder, IMAPSearchUnifiedInbox, FetchServerMessage, GetVirtualFolderConversations, GetVirtualFolderCount, GetVirtualFolderCachedView } from '../../../../wailsjs/go/app/App'
+  import { RefreshViewHeaders, SearchMail, CancelMailSearch, MoveToInboxWithUndo, GetConversations, GetConversationCount, SyncFolder, ForceSyncFolder, CancelFolderSync, SetMessageListSortOrder, GetUnifiedFolderConversations, GetUnifiedFolderCount, SearchConversations, SearchUnifiedFolder, GetSearchCount, GetSearchCountUnifiedFolder, SyncUnifiedFolder, EmptyUnifiedTrash, GetFTSIndexStatus, IsFTSIndexing, TrashWithUndo, DeletePermanently, EmptyTrash, UndoOperation, IMAPSearchFolder, IMAPSearchUnifiedInbox, FetchServerMessage, GetVirtualFolderConversations, GetVirtualFolderCount, GetVirtualFolderCachedView, RefreshVirtualFolderCache } from '../../../../wailsjs/go/app/App'
   import { toasts } from '$lib/stores/toast'
   import { withShortcut, ariaKeyshortcuts } from '$lib/keyboard/format'
   import ShortcutHint from '$lib/components/shortcuts/ShortcutHint.svelte'
@@ -518,7 +519,7 @@
     // The backend refreshes cached virtual-folder indexes in the background;
     // reload an open view when its index changes.
     EventsOn('virtualfolder:cacheUpdated', (data: { virtualFolderId: string }) => {
-      if (isVirtualFolderView && folderId === data.virtualFolderId && !searchQuery.trim()) {
+      if (isVirtualFolderView && folderId === data.virtualFolderId && !searchQuery.trim() && !manualSyncing) {
         scheduleReload()
       }
     })
@@ -999,6 +1000,7 @@
       if (generation !== loadGeneration || isSearchMode) {
         return
       }
+      if (isExpectedSearchCancellation(err)) return
       console.error('Failed to load messages:', err)
       listError = $_('viewer.failedToLoadMessages')
     } finally {
@@ -1029,7 +1031,27 @@
     }
 
     if (isVirtualFolderView) {
-      await loadConversations(Math.max(conversations.length, PAGE_SIZE))
+      const view = folderId!
+      const generation = loadGeneration
+      manualSyncing = true
+      listError = null
+      try {
+        await refreshVirtualView({
+          refreshCache: () => RefreshVirtualFolderCache(view),
+          isCurrent: () => folderId === view && generation === loadGeneration && !isSearchMode,
+          reset: () => {
+            offset = 0
+            virtualCursor = ''
+          },
+          reload: () => loadConversations(Math.max(conversations.length, PAGE_SIZE)),
+        })
+      } catch (err) {
+        if (folderId === view && generation === loadGeneration && !isExpectedSearchCancellation(err)) {
+          listError = $_('viewer.failedToLoadMessages')
+        }
+      } finally {
+        manualSyncing = false
+      }
       return
     }
 
@@ -1202,6 +1224,7 @@
       if (generation !== localSearchGeneration || query !== searchQuery.trim() || searchSource !== 'local') {
         return
       }
+      if (isExpectedSearchCancellation(err)) return
       console.error('Search failed:', err)
       localSearchError = $_('viewer.failedToLoadMessages')
     } finally {
@@ -1248,6 +1271,7 @@
       if (isVirtualFolderView) searchTotalCount = searchResults.length + (virtualQueryCursor ? 1 : 0)
     } catch (err) {
       if (generation !== localSearchGeneration || query !== searchQuery.trim()) return
+      if (isExpectedSearchCancellation(err)) return
       console.error('Load more search results failed:', err)
       localSearchError = $_('viewer.failedToLoadMessages')
     } finally {
@@ -2398,7 +2422,18 @@
       {/if}
     </div>
     <div class="flex items-center gap-1">
-      {#if !isVirtualFolderView && !isSearchMode && (syncing || manualSyncing)}
+      {#if isVirtualFolderView && !isSearchMode}
+        <button
+          class="p-2 rounded-md hover:bg-muted transition-colors disabled:opacity-50"
+          title={$_('messageList.refreshVirtualFolder')}
+          aria-label={$_('messageList.refreshVirtualFolder')}
+          aria-busy={manualSyncing}
+          disabled={manualSyncing || loading}
+          onclick={syncFolder}
+        >
+          <Icon icon="mdi:refresh" class={manualSyncing ? 'w-5 h-5 text-muted-foreground animate-spin' : 'w-5 h-5 text-muted-foreground'} />
+        </button>
+      {:else if !isVirtualFolderView && !isSearchMode && (syncing || manualSyncing)}
         <!-- While syncing, show spinning icon that cancels on click -->
         <button
           class="p-2 rounded-md hover:bg-muted transition-colors"

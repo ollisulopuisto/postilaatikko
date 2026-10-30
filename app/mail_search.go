@@ -470,6 +470,11 @@ func (a *App) SearchMail(req MailSearchRequest) (*MailSearchPage, error) {
 		}()
 	}
 	wg.Wait()
+	// A superseded or canceled view is not a provider failure. Do not return
+	// account issues (or partial rows) for a request that no longer owns the UI.
+	if errors.Is(ctx.Err(), context.Canceled) {
+		return nil, ctx.Err()
+	}
 	sort.Slice(result.Conversations, func(i, j int) bool {
 		return result.Conversations[i].LatestDate.After(result.Conversations[j].LatestDate)
 	})

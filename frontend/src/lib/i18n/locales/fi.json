@@ -166,6 +166,7 @@
       "failed": "Vastaa myöhemmin -jonon päivitys epäonnistui"
   },
   "messageList": {
+    "refreshVirtualFolder": "Päivitä virtuaalikansio",
     "searchMessages": "Etsi viestejä...",
     "noMessages": "Tässä kansiossa ei ole viestejä",
     "selectFolder": "Valitse kansio nähdäksesi viestit",
