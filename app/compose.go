@@ -671,7 +671,7 @@ func (a *App) syncSentFolder(accountID string) error {
 	}
 
 	// Emit synced event
-	wailsRuntime.EventsEmit(a.ctx, "folder:synced", map[string]interface{}{
+	a.emitRuntimeEvent("folder:synced", map[string]interface{}{
 		"accountId": accountID,
 		"folderId":  sentFolder.ID,
 	})

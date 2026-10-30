@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -34,11 +35,13 @@ func TestOnlineCountJobScopeCompletionAndCancellation(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	a := &App{ctx: context.Background(), accountStore: account.NewStore(db), folderStore: folder.NewStore(db), virtualFolderStore: virtualfolder.NewStore(db)}
+	a := &App{ctx: context.Background(), accountStore: account.NewStore(db), folderStore: folder.NewStore(db), virtualFolderStore: virtualfolder.NewStore(db), messageStore: message.NewStore(db), runtimeEventEmitter: func(string, ...interface{}) {}}
 	if err = a.virtualFolderStore.Create(&virtualfolder.VirtualFolder{ID: "v", Name: "Family", FolderIDs: []string{"f"}, FolderMode: "include", SearchQuery: "from:friend@example.org"}); err != nil {
 		t.Fatal(err)
 	}
+	var calls atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
 		if r.URL.Path != "/threads" {
 			t.Errorf("unexpected content fetch: %s", r.URL)
 			w.WriteHeader(500)
@@ -81,6 +84,43 @@ func TestOnlineCountJobScopeCompletionAndCancellation(t *testing.T) {
 			t.Fatal("count did not complete")
 		}
 		time.Sleep(time.Millisecond)
+	}
+
+	// Completed exact results survive window closure and are shared, not rescanned.
+	before := calls.Load()
+	if err = a.StartVirtualFolderOnlineCount("second", "v"); err != nil {
+		t.Fatal(err)
+	}
+	state, err := a.GetVirtualFolderOnlineCount("second")
+	if err != nil || !state.Complete || state.Total != 2 || state.SessionID != "second" || calls.Load() != before {
+		t.Fatal("completed scan not reused", state, err)
+	}
+	a.CancelVirtualFolderOnlineCount("window")
+	state, err = a.GetVirtualFolderOnlineCount("second")
+	if err != nil || !state.Complete {
+		t.Fatal("closing first subscriber lost result")
+	}
+	a.CancelVirtualFolderOnlineCount("second")
+	// Manual refresh has to bypass a completed shared result.
+	if err = a.RefreshVirtualFolderCache("v"); err != nil {
+		t.Fatal(err)
+	}
+	if err = a.StartVirtualFolderOnlineCount("window", "v"); err != nil {
+		t.Fatal(err)
+	}
+	deadline = time.Now().Add(3 * time.Second)
+	for {
+		state, _ = a.GetVirtualFolderOnlineCount("window")
+		if !state.Running {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("fresh scan timed out")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if !state.Complete || calls.Load() <= before {
+		t.Fatal("manual refresh reused stale result")
 	}
 
 	// Adding an unsupported provider must preserve Gmail's result while reporting

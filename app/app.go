@@ -233,15 +233,16 @@ type App struct {
 	imageAllowlistStore *settings.ImageAllowlistStore
 
 	// IMAP
-	imapPool       *imap.Pool
-	syncEngine     *sync.Engine
-	refreshMu      goSync.Mutex
-	refreshLast    map[string]time.Time
-	refreshActive  map[string]bool
-	mailSearchMu   goSync.Mutex
-	mailSearchJobs map[string]*mailSearchJob
-	viewCountMu    goSync.Mutex
-	viewCountJobs  map[string]*viewCountJob
+	imapPool        *imap.Pool
+	syncEngine      *sync.Engine
+	refreshMu       goSync.Mutex
+	refreshLast     map[string]time.Time
+	refreshActive   map[string]bool
+	mailSearchMu    goSync.Mutex
+	mailSearchJobs  map[string]*mailSearchJob
+	viewCountMu     goSync.Mutex
+	viewCountJobs   map[string]*viewCountJob
+	viewCountShared map[string]*viewCountJob
 
 	// Background sync (polling + IDLE)
 	syncScheduler *sync.Scheduler
@@ -685,6 +686,7 @@ func (a *App) Startup(ctx context.Context) {
 
 	// Set up sync progress callback to emit events to frontend
 	a.syncEngine.SetProgressCallback(func(progress sync.SyncProgress) {
+		a.invalidateViewCounts()
 		wailsRuntime.EventsEmit(ctx, "sync:progress", map[string]interface{}{
 			"accountId": progress.AccountID,
 			"folderId":  progress.FolderID,

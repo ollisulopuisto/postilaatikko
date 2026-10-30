@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/virtualfolder"
@@ -273,6 +272,7 @@ func (a *App) GetVirtualFolderCachedView(virtualFolderID string) (*VirtualFolder
 // notifies the frontend. Used by the background refresher and available for a
 // manual refresh.
 func (a *App) RefreshVirtualFolderCache(virtualFolderID string) error {
+	a.invalidateViewCounts()
 	vf, err := a.virtualFolderStore.Get(virtualFolderID)
 	if err != nil {
 		return fmt.Errorf("failed to get virtual folder: %w", err)

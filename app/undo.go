@@ -15,6 +15,10 @@ import (
 // ============================================================================
 
 func (a *App) emitRuntimeEvent(eventName string, data ...interface{}) {
+	switch eventName {
+	case "messages:readChanged", "messages:starredChanged", "messages:moved", "messages:deleted", "folders:countsChanged", "folder:synced", "undo:completed":
+		a.invalidateViewCounts()
+	}
 	if a.runtimeEventEmitter != nil {
 		a.runtimeEventEmitter(eventName, data...)
 		return

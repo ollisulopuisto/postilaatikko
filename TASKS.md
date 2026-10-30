@@ -204,3 +204,9 @@ Suggested model/effort is a dispatch recommendation, not an existing claim or mo
 | P-034 | Medium | Attachment context menus and a frontend consumer for extension context-menu items (design D-001 §3.b(iv), §5.1). | Depends on P-031. Attachments: Open, Save, Save all, Copy file name, Import `.ics` to calendar. Read `RegisterContextMenuItem` registrations for the `message-row` target and render them as `ActionDef`s in message menus; hide items from disabled extensions. |
 | P-022 | Medium | Recognize date/time mentions in email and offer an "Add to Calendar" action. | OpenCode / `agent/p022-datetime-recognition` / worktree `../postilaatikko-p022` | Review; based on `agent/p012-ics-event-handoff` |
 | P-024 | Easy | Localize hard-coded accessibility labels in the shared UI kit. | Replace English-only labels in `kit/DetailOverlay.svelte` and `kit/RichTextEditor.svelte` with i18n keys, adding translations while preserving locale key parity. Keep the change scoped to labels and help text. |
+
+## Approved follow-up 2026-10-30
+
+| ID | Status | Owner / branch / worktree | Scope |
+| --- | --- | --- | --- |
+| COUNT-REUSE | Review (local only) | Instinct / agent/approved-post-followup / post-work | Shared exact Gmail online-count scans/results, isolated subscribers, criteria/account keys, mutation invalidation and explicit refresh bypass. Separate from P-047; no merge/release/native claim. |
