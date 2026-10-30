@@ -48,7 +48,7 @@ type mailCursor struct {
 	Seen     map[string]bool   `json:"s"`
 }
 
-// Gmail scope clauses preserve exact label paths, including spaces and Unicode.
+// Gmail scope clauses use Gmail search syntax for user labels.
 // Multiple includes are ORed, never passed as labelIds (which are ANDed).
 func gmailScopeClause(f *folder.Folder) string {
 	switch f.Type {
@@ -69,7 +69,10 @@ func gmailScopeClause(f *folder.Folder) string {
 	case folder.TypeArchive:
 		return "(-in:inbox -in:spam -in:trash)"
 	}
-	return `label:"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(f.Path) + `"`
+	// Gmail search lowercases label names and represents spaces as hyphens.
+	// Keep nested-label separators and Unicode characters intact.
+	token := strings.NewReplacer(" ", "-", `"`, "", "(", "", ")", "", "{", "", "}", "").Replace(strings.ToLower(f.Path))
+	return "label:" + token
 }
 func gmailViewQuery(query string, folders []*folder.Folder, exclude bool) string {
 	parts := []string{}

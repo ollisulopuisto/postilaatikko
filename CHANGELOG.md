@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Refresh Gmail labels from the virtual-folder editor, and apply Gmail label scopes correctly to online virtual-folder searches.
+
 ## Postilaatikko 2026.10.30
 
 - Add Reply Later controls on conversation rows and context menus, with an undoable sidebar queue and count. Apply unread and Reply Later quick filters to online virtual-folder results.

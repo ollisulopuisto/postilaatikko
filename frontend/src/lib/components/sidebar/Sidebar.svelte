@@ -33,6 +33,7 @@
   import { sidebarLayout } from '$lib/stores/sidebarLayout.svelte'
   import { isFolderFavorite, favoritesFull, toggleFolderFavorite } from '$lib/sidebar/favorites'
   import type { virtualfolder } from '../../../../wailsjs/go/models'
+  import { SyncFolders } from '../../../../wailsjs/go/app/App'
 
   // Folder item type for flat navigation list
   interface FolderNavItem {
@@ -277,6 +278,22 @@
     pendingVirtualFolderFolderId = null
     editingVirtualFolder = item
     showVirtualFolderDialog = true
+  }
+
+  async function refreshVirtualFolderFolders() {
+    const gmailAccounts = accountStore.accounts.filter(item =>
+      item.account.enabled && item.account.imapHost?.toLowerCase() === 'imap.gmail.com',
+    )
+    const outcomes = await Promise.allSettled(gmailAccounts.map(async item => {
+      try {
+        await SyncFolders(item.account.id)
+      } finally {
+        await accountStore.loadFolders(item.account.id)
+      }
+    }))
+    if (outcomes.some(outcome => outcome.status === 'rejected')) {
+      throw new Error('One or more Gmail label lists could not be refreshed')
+    }
   }
 
   // "Save as virtual folder" requests arrive from the message list's search
@@ -763,6 +780,7 @@
   accounts={accountStore.accounts}
   initialSearchQuery={pendingVirtualFolderQuery}
   initialFolderId={pendingVirtualFolderFolderId}
+  onRefreshFolders={refreshVirtualFolderFolders}
   onSave={(value) => virtualFoldersStore.save(value as virtualfolder.VirtualFolder)}
 />
 
