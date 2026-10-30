@@ -144,7 +144,7 @@ test('App specific Archive/Spam toasts use returned tokens while Ctrl+Z remains 
   assert.match(appSource, /case 'z':[\s\S]*?handleGlobalUndo\(\)/)
 })
 
-test('App-owned message mutations share one guard without nesting the MessageList callback', () => {
+test('App-owned message mutations share one guard through the list action executor', () => {
   for (const handler of [
     'handleBulkArchive',
     'handleBulkSpam',
@@ -156,9 +156,10 @@ test('App-owned message mutations share one guard without nesting the MessageLis
     assert.match(extractFunction(appSource, handler), /runMessageMutation\(messageIds,/)
   }
 
-  const listArchive = extractFunction(messageListSource, 'handleBulkArchive')
-  assert.match(listArchive, /await onBulkArchive\?\.\(messageIds\)/)
-  assert.doesNotMatch(listArchive, /runMessageMutation\(/)
+  assert.match(extractFunction(appSource, 'runListAction'), /runActionOnTarget\(/)
+  assert.match(messageListSource, /onBulkAction\?: \(actionId: string/)
+  assert.match(messageListSource, /onBulkAction\?\.\(actionId\)/)
+  assert.doesNotMatch(messageListSource, /function handleBulkArchive\(/)
 })
 
 test('remaining explicit row, list, and viewer mutations use the shared guard', () => {

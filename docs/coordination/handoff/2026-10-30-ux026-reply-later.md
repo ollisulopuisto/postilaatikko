@@ -66,3 +66,8 @@ resetting its changes.
   build, version validation and `git diff --check` pass.
 - UX-026's API adapter and stale local conversation rendering limitations above
   remain. Live Gmail and native-menu behavior still need installed-build review.
+
+### CI integration follow-up
+
+- PR #68 exposed a stale `targetedUndoConsumers` assertion that expected the removed `MessageList.handleBulkArchive` callback. Updated the regression check to assert the current `runListAction`/`onBulkAction` delegation contract instead.
+- Targeted verification: `node --test frontend/tests/targetedUndoConsumers.test.mjs` (9 passed); `git diff --check` passed.
