@@ -2,6 +2,7 @@
 
 Base: `origin/main` at `2da8001` (PR #72 integrated).
 Branch: `codex/UX-026-queue-api-recovery`.
+Implementation commit: `eee2a75`.
 
 ## Delivered in this follow-up
 
