@@ -189,6 +189,57 @@ func TestIdentityConfigValidate(t *testing.T) {
 	}
 }
 
+func TestIdentitySignatureRulesRoundTrip(t *testing.T) {
+	db := openTestDB(t)
+	store := NewStore(db)
+	account, err := store.Create(validAccountConfig())
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules := []SignatureRule{{
+		ID:                 "work-domain",
+		Name:               "Work",
+		Enabled:            true,
+		Recipients:         []string{"@example.org", "person@example.net"},
+		MessageTypes:       []string{MessageTypeNew, MessageTypeReply},
+		SignatureHTML:      "<p>Work signature</p>",
+		SignatureText:      "Work signature",
+		SignaturePlacement: "above",
+		SignatureSeparator: true,
+	}}
+	created, err := store.CreateIdentity(account.ID, &IdentityConfig{
+		Email: "alias@example.com", Name: "Work alias", SignatureRules: rules,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(created.SignatureRules) != 1 || created.SignatureRules[0].ID != "work-domain" {
+		t.Fatalf("created rules = %#v", created.SignatureRules)
+	}
+	loaded, err := store.GetIdentity(created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.SignatureRules) != 1 || loaded.SignatureRules[0].SignatureText != "Work signature" {
+		t.Fatalf("loaded rules = %#v", loaded.SignatureRules)
+	}
+}
+
+func TestIdentityConfigRejectsInvalidSignatureRule(t *testing.T) {
+	config := &IdentityConfig{
+		Email: "test@example.com",
+		Name:  "Test User",
+		SignatureRules: []SignatureRule{{
+			ID: "bad", Name: "Bad", Enabled: true,
+			Recipients:   []string{"not-an-address"},
+			MessageTypes: []string{MessageTypeNew}, SignatureHTML: "<p>Hi</p>",
+		}},
+	}
+	if err := config.Validate(); err == nil {
+		t.Fatal("Validate() accepted invalid signature-rule recipient")
+	}
+}
+
 func TestGetFolderMapping(t *testing.T) {
 	acct := &Account{
 		SentFolderPath:    "Sent",

@@ -51,6 +51,7 @@
     removeSignatureFromContent,
     hasSignatureMarker,
   } from './composerSignature'
+  import { resolveSignatureRule } from './contextualSignature'
   import * as Select from '$lib/components/ui/select'
   import * as AlertDialog from '$lib/components/ui/alert-dialog'
   import Switch from '$lib/components/ui/switch/Switch.svelte'
@@ -112,6 +113,10 @@
   let allGroups = $state<app.AccountIdentityGroup[]>([])  // All accounts + identities (main window only)
   let identities = $state<account.Identity[]>([])  // Flat list of all identities (union)
   let selectedIdentityId = $state<string>('')
+  let signatureSelectionReady = $state(false)
+  let lastAppliedSignatureKey = ''
+  let lastAutoSignatureText = ''
+  let lastAutoPlainSignatureText = ''
 
   // Derive the active account ID from the selected identity's accountId.
   // Falls back to the prop accountId if no identity is selected yet.
@@ -220,6 +225,20 @@
         scheduledDraftState = jobs.find(job => job.draftId === id && !['cancelled', 'failed'].includes(job.state))?.state || ''
       }).catch(() => { scheduledDraftState = '' })
     })
+  })
+
+  // Contextual signatures follow the current sender, recipients, and compose mode.
+  // The resolver only replaces a signature that still matches the last generated
+  // signature, so editing the inserted signature turns it into a manual override.
+  $effect(() => {
+    const signatureInputs = [
+      selectedIdentityId,
+      getDisplayMode(),
+      ...[...toRecipients, ...ccRecipients, ...bccRecipients].map(item => item.address || ''),
+    ]
+    void signatureInputs
+    if (!signatureSelectionReady || (!editor && !isPlainTextMode)) return
+    untrack(() => syncContextualSignature())
   })
   let saveStatus = $state<'idle' | 'saving' | 'saved' | 'error'>('idle')
 
@@ -1076,7 +1095,7 @@
     setTimeout(() => {
       const identity = identities.find(i => i.id === selectedIdentityId)
       if (identity) {
-        const content = editor?.getHTML() || ''
+        const content = isPlainTextMode ? plainTextContent : (editor?.getHTML() || '')
         // Don't append if signature marker already exists in the user's compose area.
         // Only check content before the quoted section — markers inside quoted history
         // (from previous replies with signatures) should not prevent injection.
@@ -1086,10 +1105,11 @@
         const boundaries = [quoteIdx, wroteIdx, fwdIdx].filter(i => i > -1)
         const quoteBoundary = boundaries.length > 0 ? Math.min(...boundaries) : content.length
         const preQuoteContent = content.substring(0, quoteBoundary)
-        if (!hasSignatureMarker(preQuoteContent)) {
+        if (!(isPlainTextMode ? hasSignatureMarker(content) : hasSignatureMarker(preQuoteContent))) {
           appendSignatureForIdentity(identity)
         }
       }
+      signatureSelectionReady = true
       if (initialMessage) {
         // Capture only after restored state and the initial signature settle.
         lastContent = getContentHash()
@@ -1154,24 +1174,163 @@
   }
 
   // Append signature for the current identity based on compose mode
+  function currentSignatureProfile(identity: account.Identity) {
+    const mode = getDisplayMode()
+    const recipients = [...toRecipients, ...ccRecipients, ...bccRecipients]
+    const rule = resolveSignatureRule(identity.signatureRules as any, mode, recipients)
+    if (!rule) return { profile: identity, ruleId: '' }
+
+    const signatureHtml = rule.signatureHtml || plainTextToHtml(rule.signatureText || '')
+    const profile = {
+      ...identity,
+      signatureHtml,
+      signatureText: rule.signatureText || '',
+      signatureEnabled: Boolean(signatureHtml),
+      signatureForNew: true,
+      signatureForReply: true,
+      signatureForForward: true,
+      signaturePlacement: rule.signaturePlacement || identity.signaturePlacement,
+      signatureSeparator: Boolean(rule.signatureSeparator),
+    } as account.Identity
+    return { profile, ruleId: rule.id }
+  }
+
+  function signatureChoiceKey(identity: account.Identity, ruleId: string) {
+    const recipients = [...toRecipients, ...ccRecipients, ...bccRecipients]
+      .map(item => (item.address || '').trim().toLowerCase()).filter(Boolean).sort()
+    return JSON.stringify([identity.id, ruleId, getDisplayMode(), recipients])
+  }
+
+  function signaturePlainText(html: string): string {
+    const container = document.createElement('div')
+    container.innerHTML = html
+    return (container.textContent || '').replace(/\s+/g, ' ').trim()
+  }
+
+  function generatedRichSignatureIsUntouched(content: string): boolean {
+    const markerIndex = content.indexOf('\u200B\u200B\u200B')
+    if (!lastAutoSignatureText || markerIndex < 0) return false
+    const quoteIndexes = [content.indexOf('<blockquote'), content.search(/wrote:\s*(<br[^>]*>)?\s*<\/p>/i)]
+      .filter(index => index > markerIndex)
+    const quoteBoundary = quoteIndexes.length ? Math.min(...quoteIndexes) : content.length
+    const visible = signaturePlainText(content.slice(markerIndex, quoteBoundary))
+      .replace(/\u200B/g, '').replace(/^--\s*/, '').trim()
+    return visible === lastAutoSignatureText
+  }
+
+  function generatedPlainSignatureIsUntouched(content: string, expected: string): boolean {
+    const marker = '\u200B\u200B\u200B'
+    const markerIndex = content.indexOf(marker)
+    if (!expected || markerIndex < 0) return false
+    const quoteIndexes = [content.search(/^.*wrote:\s*$/m), content.indexOf('---------- Forwarded message ----------')]
+      .filter(index => index > markerIndex)
+    const quoteBoundary = quoteIndexes.length ? Math.min(...quoteIndexes) : content.length
+    const actual = content.slice(markerIndex + marker.length, quoteBoundary).replace(/\r\n/g, '\n').trim()
+    return actual === expected.replace(/\r\n/g, '\n').trim()
+  }
+
   function appendSignatureForIdentity(identity: account.Identity) {
+    const mode = getDisplayMode()
+    const { profile, ruleId } = currentSignatureProfile(identity)
+    const choiceKey = signatureChoiceKey(identity, ruleId)
+    if (!shouldAppendSignature(profile, mode)) {
+      lastAppliedSignatureKey = choiceKey
+      lastAutoSignatureText = ''
+      lastAutoPlainSignatureText = ''
+      return
+    }
+
+    if (isPlainTextMode) {
+      const signatureText = (profile.signatureText || htmlToPlainText(profile.signatureHtml || '')).trim()
+      if (!signatureText) {
+        lastAppliedSignatureKey = choiceKey
+        lastAutoPlainSignatureText = ''
+        return
+      }
+      const content = plainTextContent
+      const signature = `\u200B\u200B\u200B${signatureText}`
+      const wroteIndex = content.search(/^.*wrote:\s*$/m)
+      const forwardedIndex = content.indexOf('---------- Forwarded message ----------')
+      const quoteBoundaries = [wroteIndex, forwardedIndex].filter(index => index >= 0)
+      let nextContent: string
+      if (profile.signaturePlacement !== 'below' && quoteBoundaries.length) {
+        const boundary = Math.min(...quoteBoundaries)
+        nextContent = `${content.slice(0, boundary).replace(/\s*$/, '')}\n\n${signature}\n\n${content.slice(boundary)}`
+      } else {
+        nextContent = `${content.replace(/\s*$/, '')}\n\n${signature}`
+      }
+      plainTextContent = nextContent
+      lastAppliedSignatureKey = choiceKey
+      lastAutoPlainSignatureText = signatureText
+      lastAutoSignatureText = signatureText
+      return
+    }
+
     if (!editor) return
 
-    const mode = getDisplayMode()
-    if (!shouldAppendSignature(identity, mode)) return
-
-    const signatureHtml = buildSignatureHtml(identity)
-    if (!signatureHtml) return
+    const signatureHtml = buildSignatureHtml(profile)
+    if (!signatureHtml) {
+      lastAppliedSignatureKey = choiceKey
+      lastAutoSignatureText = ''
+      return
+    }
 
     const content = editor.getHTML()
     const newContent = insertSignatureIntoContent(
       content,
       signatureHtml,
       mode,
-      identity.signaturePlacement || 'above'
+      profile.signaturePlacement || 'above'
     )
 
     editor.commands.setContent(newContent)
+    lastAppliedSignatureKey = choiceKey
+    lastAutoSignatureText = signaturePlainText(profile.signatureHtml || '')
+    lastAutoPlainSignatureText = ''
+  }
+
+  function syncContextualSignature() {
+    const identity = identities.find(item => item.id === selectedIdentityId)
+    if (!identity || (!editor && !isPlainTextMode)) return
+    const { ruleId } = currentSignatureProfile(identity)
+    const choiceKey = signatureChoiceKey(identity, ruleId)
+    if (choiceKey === lastAppliedSignatureKey) return
+
+    if (isPlainTextMode) {
+      const marker = '\u200B\u200B\u200B'
+      const content = plainTextContent
+      if (lastAutoPlainSignatureText) {
+        if (!generatedPlainSignatureIsUntouched(content, lastAutoPlainSignatureText)) {
+          // The user edited or removed the generated plain-text signature.
+          lastAppliedSignatureKey = choiceKey
+          lastAutoPlainSignatureText = ''
+          return
+        }
+        const signatureStart = content.indexOf(marker)
+        const signatureEnd = signatureStart + marker.length + lastAutoPlainSignatureText.length
+        plainTextContent = content.slice(0, signatureStart) + content.slice(signatureEnd)
+        plainTextContent = plainTextContent.replace(/\n{3,}/g, '\n\n')
+      }
+      appendSignatureForIdentity(identity)
+      return
+    }
+
+    const content = editor.getHTML()
+    if (!hasSignatureMarker(content) && lastAutoSignatureText) {
+      // A missing marker means the user removed the generated signature.
+      lastAppliedSignatureKey = choiceKey
+      lastAutoSignatureText = ''
+      return
+    }
+    if (hasSignatureMarker(content)) {
+      if (!generatedRichSignatureIsUntouched(content)) {
+        // The signature was loaded from a draft or edited by the user. Preserve it.
+        lastAppliedSignatureKey = choiceKey
+        return
+      }
+      editor.commands.setContent(removeSignatureFromContent(content))
+    }
+    appendSignatureForIdentity(identity)
   }
 
   // Update security bar visibility based on the selected identity's email
@@ -1250,7 +1409,7 @@
     const oldAccountId = activeAccountId
     selectedIdentityId = newIdentityId
 
-    if (!editor || !newIdentity) return
+    if (!newIdentity) return
 
     // If account changed, reload read receipt policy and migrate draft
     if (newIdentity.accountId !== oldAccountId) {
@@ -1277,11 +1436,38 @@
     // Update security bars for the new identity (uses activeAccountId which is now updated)
     updateSecurityForIdentity(newIdentity.email)
 
-    // Remove old signature and apply new one
-    const content = removeSignatureFromContent(editor.getHTML())
-    editor.commands.setContent(content)
-
-    appendSignatureForIdentity(newIdentity)
+    // Replace only the signature we inserted. If the user edited or removed it,
+    // preserve that manual choice across sender changes.
+    if (isPlainTextMode) {
+      const oldSignature = `\u200B\u200B\u200B${lastAutoPlainSignatureText}`
+      if (lastAutoPlainSignatureText && generatedPlainSignatureIsUntouched(plainTextContent, lastAutoPlainSignatureText)) {
+        const signatureStart = plainTextContent.indexOf('\u200B\u200B\u200B')
+        const signatureEnd = signatureStart + oldSignature.length
+        plainTextContent = plainTextContent.slice(0, signatureStart) + plainTextContent.slice(signatureEnd)
+        plainTextContent = plainTextContent.replace(/\n{3,}/g, '\n\n')
+      } else if (lastAutoPlainSignatureText) {
+        lastAppliedSignatureKey = signatureChoiceKey(newIdentity, currentSignatureProfile(newIdentity).ruleId)
+        lastAutoPlainSignatureText = ''
+        lastAutoSignatureText = ''
+        scheduleDraftSave()
+        return
+      }
+      lastAutoPlainSignatureText = ''
+      lastAutoSignatureText = ''
+      appendSignatureForIdentity(newIdentity)
+    } else if (editor) {
+      const content = editor.getHTML()
+      if (hasSignatureMarker(content) && generatedRichSignatureIsUntouched(content)) {
+        editor.commands.setContent(removeSignatureFromContent(content))
+      } else if (lastAutoSignatureText || hasSignatureMarker(content)) {
+        lastAppliedSignatureKey = signatureChoiceKey(newIdentity, currentSignatureProfile(newIdentity).ruleId)
+        lastAutoSignatureText = ''
+        lastAutoPlainSignatureText = ''
+        scheduleDraftSave()
+        return
+      }
+      appendSignatureForIdentity(newIdentity)
+    }
     scheduleDraftSave()
   }
 

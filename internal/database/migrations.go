@@ -1667,4 +1667,9 @@ var migrations = []Migration{
 	CREATE INDEX IF NOT EXISTS idx_reply_later_queue_added
 	  ON reply_later_queue(added_at DESC);
 	`},
+	{Version: 63, SQL: `
+	-- Contextual signatures are stored as an ordered JSON list on the sender
+	-- identity. Existing signatures remain the fallback for legacy identities.
+	ALTER TABLE identities ADD COLUMN signature_rules TEXT NOT NULL DEFAULT '[]';
+	`},
 }

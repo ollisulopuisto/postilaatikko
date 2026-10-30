@@ -180,6 +180,7 @@ export namespace account {
 	    isDefault: boolean;
 	    signatureHtml?: string;
 	    signatureText?: string;
+	    signatureRules?: any[];
 	    signatureEnabled: boolean;
 	    signatureForNew: boolean;
 	    signatureForReply: boolean;
@@ -205,6 +206,7 @@ export namespace account {
 	        this.isDefault = source["isDefault"];
 	        this.signatureHtml = source["signatureHtml"];
 	        this.signatureText = source["signatureText"];
+	        this.signatureRules = source["signatureRules"];
 	        this.signatureEnabled = source["signatureEnabled"];
 	        this.signatureForNew = source["signatureForNew"];
 	        this.signatureForReply = source["signatureForReply"];
@@ -239,6 +241,7 @@ export namespace account {
 	    name: string;
 	    signatureHtml?: string;
 	    signatureText?: string;
+	    signatureRules?: any[];
 	    signatureEnabled: boolean;
 	    signatureForNew: boolean;
 	    signatureForReply: boolean;
@@ -256,6 +259,7 @@ export namespace account {
 	        this.name = source["name"];
 	        this.signatureHtml = source["signatureHtml"];
 	        this.signatureText = source["signatureText"];
+	        this.signatureRules = source["signatureRules"];
 	        this.signatureEnabled = source["signatureEnabled"];
 	        this.signatureForNew = source["signatureForNew"];
 	        this.signatureForReply = source["signatureForReply"];

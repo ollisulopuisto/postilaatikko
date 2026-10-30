@@ -2,13 +2,15 @@
   import Icon from '@iconify/svelte'
 
   interface Props {
-    icon: string
+    icon: string | null
+    initial?: string
+    color?: string
     label: string
     active: boolean
     onclick: () => void
   }
 
-  const { icon, label, active, onclick }: Props = $props()
+  const { icon, initial, color, label, active, onclick }: Props = $props()
 </script>
 
 <button
@@ -21,5 +23,9 @@
   aria-pressed={active}
   {onclick}
 >
-  <Icon {icon} width="22" height="22" />
+  {#if initial}
+    <span class="flex h-7 w-7 items-center justify-center rounded-full border border-white/15 text-[10px] font-semibold leading-none text-white shadow-sm" style:background-color={color || 'hsl(var(--primary))'}>{initial}</span>
+  {:else if icon}
+    <Icon {icon} width="22" height="22" />
+  {/if}
 </button>
