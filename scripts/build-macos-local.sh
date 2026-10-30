@@ -72,7 +72,14 @@ fi
 xcode-select -p >/dev/null 2>&1 || fail "Install Xcode Command Line Tools, then run: xcode-select --install"
 xcrun --sdk macosx --show-sdk-path >/dev/null 2>&1 || fail "The macOS SDK is unavailable. Check your Xcode Command Line Tools installation."
 
-go_version="$(go env GOVERSION)"
+if [[ -n "${GOROOT:-}" && ! -d "$GOROOT" ]]; then
+  printf 'Warning: ignoring stale GOROOT=%s; Go will locate its toolchain automatically.\n' "$GOROOT" >&2
+  unset GOROOT
+fi
+
+if ! go_version="$(go env GOVERSION 2>&1)"; then
+  fail "Go could not start: $go_version. Check the Go installation and remove any invalid GOROOT override."
+fi
 if [[ ! "$go_version" =~ ^go([0-9]+)\.([0-9]+) ]]; then
   fail "Could not parse Go version '$go_version'; install Go 1.26 or newer."
 fi

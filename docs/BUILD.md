@@ -37,6 +37,13 @@ Run `./scripts/build-macos-local.sh --help` for options. This local build is
 not notarized and does not publish a GitHub release. For the published DMG,
 use the repository's GitHub Actions release workflow.
 
+If Go reports `cannot find GOROOT directory`, an old `GOROOT` override may be
+left in the shell environment. The script ignores it when its directory no
+longer exists. To fix the shell for other Go commands too, run `unset GOROOT`
+and remove any stale `export GOROOT=...` line from your shell startup files.
+The build workflow pins Node.js 24; switch to Node 24 before running the script
+if your active `node --version` reports another major version.
+
 ### 🔨 Building from Source
 ---
 
