@@ -169,7 +169,10 @@
       "remove": "Remove from Reply Later",
       "added": "Added to Reply Later",
       "removed": "Removed from Reply Later",
-      "failed": "Could not update Reply Later"
+      "failed": "Could not update Reply Later",
+      "unavailable": "This queued conversation is missing from the local mail index.",
+      "reference": "Conversation reference",
+      "unknownAccount": "Account unavailable"
   },
   "messageList": {
     "refreshVirtualFolder": "Refresh virtual folder",

@@ -3,9 +3,30 @@ package app
 import (
 	"fmt"
 
+	agentapi "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/replylater"
 	"github.com/hkdb/aerion/internal/undo"
 )
+
+// newReplyLaterAutomationAPI builds the transport-independent API adapter for
+// an already authenticated automation caller. The local API transport owns
+// authentication and capability grants; this method never creates a listener.
+func (a *App) newReplyLaterAutomationAPI(authorizer agentapi.Authorizer) *agentapi.ReplyLaterAdapter {
+	return agentapi.NewReplyLaterAdapter(replyLaterAutomationOperations{app: a}, authorizer)
+}
+
+type replyLaterAutomationOperations struct{ app *App }
+
+var _ agentapi.ReplyLaterOperations = replyLaterAutomationOperations{}
+
+func (ops replyLaterAutomationOperations) GetReplyLaterQueue() ([]replylater.Ref, error) {
+	return ops.app.GetReplyLaterQueue()
+}
+
+func (ops replyLaterAutomationOperations) ChangeReplyLaterWithUndo(accountID, conversationID string, inQueue bool) (bool, string, error) {
+	result, err := ops.app.ChangeReplyLaterWithUndo(accountID, conversationID, inQueue)
+	return result.Changed, result.OperationID, err
+}
 
 // GetReplyLaterQueue returns explicit triage references, including references
 // whose conversation is not currently present in the local message index.

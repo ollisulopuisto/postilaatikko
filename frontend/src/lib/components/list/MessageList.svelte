@@ -21,6 +21,7 @@
   import OnlineViewCount from './OnlineViewCount.svelte'
   import Icon from '@iconify/svelte'
   import ConversationRow from './ConversationRow.svelte'
+  import ReplyLaterUnavailable from './ReplyLaterUnavailable.svelte'
   import ActionBar from '../kit/ActionBar.svelte'
   import SearchOperators from '../common/SearchOperators.svelte'
   import { DropdownMenu } from 'bits-ui'
@@ -43,6 +44,7 @@
   import { domainFromEmail, senderLogos } from '$lib/stores/senderLogos.svelte'
   import { accountStore } from '$lib/stores/accounts.svelte'
   import { virtualFoldersStore } from '$lib/stores/virtualFolders.svelte'
+  import { replyLaterQueue } from '$lib/stores/replyLater.svelte'
   import { getLayoutMode, hideViewer } from '$lib/stores/layout.svelte'
   import { isDialogGuardActive, onDialogGuardChange } from '$lib/stores/dialogGuard'
   import { captureAutoSelectNext, findAutoSelectNext, flattenVisibleInboxGroups } from './autoSelectNext'
@@ -185,6 +187,7 @@
   const inboxDisplayLabel = $derived(inboxDisplayOptions.find(option => option.id === inboxDisplayMode)?.label ?? $_('inbox.categories'))
 
   onMount(() => {
+    void replyLaterQueue.load().catch(() => {})
     initializeInboxDisplayPreferences()
     inboxDisplayMode = getInboxDisplayMode()
     const handleInboxDisplayChange = (event: Event) => {
@@ -1434,6 +1437,11 @@
 
   // Check if we're in search mode with results
   const isSearchMode = $derived(showSearch && searchQuery.trim().length > 0)
+  const unavailableReplyLaterRefs = $derived(
+    isUnifiedView && folderId === 'replyLater' && !isSearchMode && replyLaterQueue.ready
+      ? replyLaterQueue.refs.filter(ref => ref.indexed === false)
+      : []
+  )
   const visibleError = $derived(
     isSearchMode
       ? (searchSource === 'server' ? serverSearchError : localSearchError)
@@ -2728,11 +2736,19 @@
       class={cn(
         'message-list-card',
         !loading && !visibleError && !isSearchMode && conversations.length === 0 &&
+          unavailableReplyLaterRefs.length === 0 &&
           'flex items-center justify-center'
       )}
       class:inbox-category-list={canUseInboxDisplay && conversations.length > 0 && inboxDisplayMode === 'categories'}
       class:inbox-chronological-list={canUseInboxDisplay && conversations.length > 0 && inboxDisplayMode === 'chronological'}
     >
+    {#if unavailableReplyLaterRefs.length > 0}
+      <section class="py-1" aria-label={$_('replyLater.unavailable')}>
+        {#each unavailableReplyLaterRefs as entry (`${entry.accountId}:${entry.conversationId}`)}
+          <ReplyLaterUnavailable {entry} />
+        {/each}
+      </section>
+    {/if}
     {#if loading && conversations.length === 0 && !isSearchMode}
       <div class="flex items-center justify-center h-32">
         <Icon icon="mdi:loading" class="w-6 h-6 animate-spin text-muted-foreground" />
@@ -2898,7 +2914,7 @@
           </div>
         {/if}
       {/if}
-    {:else if conversations.length === 0 && filterMode}
+    {:else if conversations.length === 0 && unavailableReplyLaterRefs.length === 0 && filterMode}
       <div class="flex flex-col items-center justify-center h-full text-muted-foreground">
         <Icon icon="mdi:filter-off-outline" class="w-12 h-12 mb-2" />
         <p>{$_('messageList.noFilteredMessages')}</p>
@@ -2909,7 +2925,7 @@
           {$_('messageList.filterAll')}
         </button>
       </div>
-    {:else if conversations.length === 0}
+    {:else if conversations.length === 0 && unavailableReplyLaterRefs.length === 0}
       <div class="flex flex-col items-center justify-center text-muted-foreground">
         <Icon icon="mdi:inbox-outline" class="w-12 h-12 mb-2" />
         <p>{$_('messageList.noMessages')}</p>

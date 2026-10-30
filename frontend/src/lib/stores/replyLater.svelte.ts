@@ -1,7 +1,7 @@
 import { ChangeReplyLaterWithUndo, GetReplyLaterQueue } from '../../../wailsjs/go/app/App'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
 
-export interface ReplyLaterRef { accountId: string; conversationId: string }
+export interface ReplyLaterRef { accountId: string; conversationId: string; indexed?: boolean }
 type MembershipEvent = ReplyLaterRef & { inQueue: boolean }
 const key = (ref: ReplyLaterRef) => JSON.stringify([ref.accountId, ref.conversationId])
 let refs = $state<ReplyLaterRef[]>([])
@@ -12,14 +12,18 @@ let loading: Promise<void> | null = null
 let subscribed = false
 
 function update(ref: ReplyLaterRef, inQueue: boolean) {
+  const existing = refs.find(item => key(item) === key(ref))
   refs = refs.filter(item => key(item) !== key(ref))
-  if (inQueue) refs = [ref, ...refs]
+  if (inQueue) refs = [{ ...existing, ...ref, indexed: ref.indexed ?? existing?.indexed }, ...refs]
 }
 
 async function load(force = false): Promise<void> {
   if (!subscribed) {
     subscribed = true
     EventsOn('replyLater:changed', (event: MembershipEvent) => update(event, event.inQueue))
+    EventsOn('folder:synced', (event: { accountId: string }) => {
+      if (refs.some(ref => ref.accountId === event.accountId)) void load(true).catch(() => {})
+    })
   }
   if (loading) return loading
   if (ready && !force) return
