@@ -11,11 +11,6 @@ import (
 	"github.com/hkdb/aerion/internal/replylater"
 )
 
-const (
-	CapabilityMailRead  = "mail.read"
-	CapabilityMailWrite = "mail.write"
-)
-
 var (
 	ErrCapabilityDenied = errors.New("automation capability denied")
 	ErrUnavailable      = errors.New("Reply Later automation is unavailable")
@@ -75,11 +70,11 @@ func (a *ReplyLaterAdapter) Remove(ctx context.Context, ref replylater.Ref) (Cha
 	return ChangeResult{Changed: changed, OperationID: operationID}, err
 }
 
-func (a *ReplyLaterAdapter) require(ctx context.Context, capability string) error {
+func (a *ReplyLaterAdapter) require(ctx context.Context, capability Capability) error {
 	if a == nil || a.operations == nil || a.authorizer == nil {
 		return ErrUnavailable
 	}
-	if err := a.authorizer.RequireCapability(ctx, capability); err != nil {
+	if err := a.authorizer.RequireCapability(ctx, string(capability)); err != nil {
 		return fmt.Errorf("%w: %s", ErrCapabilityDenied, capability)
 	}
 	return nil
