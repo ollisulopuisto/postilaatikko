@@ -792,6 +792,25 @@
     )]
   )
 
+  // Keep account identity attached to list targets. Message IDs are local DB
+  // keys, but the explicit operation contract must still prove which account
+  // each selected copy belongs to before a mutation runs.
+  function refsForConversation(conversation: any): { accountId: string; messageId: string }[] {
+    const owningAccountId = conversation.accountId || accountId || ''
+    if (!owningAccountId) return []
+    const ids: string[] = conversation.messageIds || conversation.messages?.map((message: any) => message.id) || []
+    return ids.map((messageId) => ({ accountId: owningAccountId, messageId }))
+  }
+
+  const selectedMessageRefs = $derived(
+    [...new Map(
+      [...conversations, ...searchResults, ...serverSearchResults]
+        .filter((conversation) => checkedThreadIds.has(conversation.threadId))
+        .flatMap((conversation: any) => refsForConversation(conversation))
+        .map((ref) => [`${ref.accountId}:${ref.messageId}`, ref] as const)
+    ).values()]
+  )
+
   // Aggregated star/read state for multi-select context menu
   // Show "Star" if any selected is unstarred, show "Mark as Read" if any selected is unread
   const selectedHasUnstarred = $derived(
@@ -1972,6 +1991,16 @@
     const conv = activeList.find(c => c.threadId === selectedThreadId) as any
     if (!conv) return []
     return conv.messageIds || conv.messages?.map((m: any) => m.id) || []
+  }
+
+  export function getSelectedMessageRefs(): { accountId: string; messageId: string }[] {
+    if (!selectedThreadId) return []
+    const conversation = activeList.find((item) => item.threadId === selectedThreadId) as any
+    return conversation ? refsForConversation(conversation) : []
+  }
+
+  export function getCheckedMessageRefs(): { accountId: string; messageId: string }[] {
+    return selectedMessageRefs
   }
 
   // Get account and folder info for the keyboard-focused thread (for unified inbox)

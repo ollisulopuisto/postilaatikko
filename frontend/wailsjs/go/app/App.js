@@ -1202,6 +1202,10 @@ export function RemoveFromInboxWithUndo(arg1) {
   return window['go']['app']['App']['RemoveFromInboxWithUndo'](arg1);
 }
 
+export function ResolveMailActionTarget(arg1) {
+  return window['go']['app']['App']['ResolveMailActionTarget'](arg1);
+}
+
 export function RemoveImageAllowlist(arg1) {
   return window['go']['app']['App']['RemoveImageAllowlist'](arg1);
 }

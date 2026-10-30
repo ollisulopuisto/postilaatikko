@@ -8,16 +8,25 @@ import type { ListTarget, ListTargetSource } from './types'
  */
 export function resolveListTarget(source: ListTargetSource): ListTarget {
   if (source.hasChecked()) {
+    const refs = source.checkedRefs?.() ?? []
     return {
       kind: 'checked',
       messageIds: source.checkedIds(),
+      actionTarget: refs.length ? { kind: 'matched_messages', messages: refs } : null,
       star: source.checkedHasUnstarred(),
       read: source.checkedHasUnread(),
     }
   }
   const focused = source.focusedIds()
   if (focused.length > 0) {
-    return { kind: 'focused', messageIds: focused, star: !source.selectedStarred(), read: source.selectedUnread() }
+    const refs = source.focusedRefs?.() ?? []
+    return {
+      kind: 'focused',
+      messageIds: focused,
+      actionTarget: refs.length ? { kind: 'matched_messages', messages: refs } : null,
+      star: !source.selectedStarred(),
+      read: source.selectedUnread(),
+    }
   }
-  return { kind: 'none', messageIds: [], star: true, read: false }
+  return { kind: 'none', messageIds: [], actionTarget: null, star: true, read: false }
 }

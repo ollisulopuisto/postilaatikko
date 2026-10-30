@@ -24,6 +24,7 @@ import {appstate} from '../models';
 import {platform} from '../models';
 import {sync} from '../models';
 import {draft} from '../models';
+import {operations} from '../models';
 
 export function AcceptCertificate(arg1:string,arg2:certificate.CertificateInfo,arg3:boolean):Promise<void>;
 
@@ -622,6 +623,8 @@ export function RemoveAccount(arg1:string):Promise<void>;
 export function RemoveFromInbox(arg1:Array<string>):Promise<void>;
 
 export function RemoveFromInboxWithUndo(arg1:Array<string>):Promise<app.UndoableActionResult>;
+
+export function ResolveMailActionTarget(arg1:operations.Target):Promise<Array<string>>;
 
 export function RemoveImageAllowlist(arg1:number):Promise<void>;
 

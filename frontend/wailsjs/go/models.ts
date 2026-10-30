@@ -4070,3 +4070,61 @@ export namespace virtualfolder {
 
 }
 
+export namespace operations {
+
+	export class MessageRef {
+	    accountId: string;
+	    messageId: string;
+
+	    static createFrom(source: any = {}) {
+	        return new MessageRef(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.accountId = source["accountId"];
+	        this.messageId = source["messageId"];
+	    }
+	}
+
+	export class ThreadRef {
+	    accountId: string;
+	    threadId: string;
+
+	    static createFrom(source: any = {}) {
+	        return new ThreadRef(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.accountId = source["accountId"];
+	        this.threadId = source["threadId"];
+	    }
+	}
+
+	export class Target {
+	    kind: string;
+	    messages?: MessageRef[];
+	    thread?: ThreadRef;
+
+	    static createFrom(source: any = {}) {
+	        return new Target(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.messages = this.convertValues(source["messages"], MessageRef);
+	        this.thread = this.convertValues(source["thread"], ThreadRef);
+	    }
+
+	    convertValues(a: any, classs: any, asMap: boolean = false): any {
+	        if (!a) return a;
+	        if (a.slice && a.map) return (a as any[]).map(elem => this.convertValues(elem, classs));
+	        if (typeof a === "object") return new classs(a);
+	        return a;
+	    }
+	}
+
+}
+

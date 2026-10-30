@@ -2711,6 +2711,37 @@ func (s *Store) GetByIDs(ids []string) ([]*Message, error) {
 	return messages, nil
 }
 
+// GetMessageIDsInThread returns local message IDs for one account-qualified
+// thread. It deliberately compares the thread column (or the singleton
+// fallback) instead of treating a thread ID as a message ID.
+func (s *Store) GetMessageIDsInThread(accountID, threadID string) ([]string, error) {
+	if strings.TrimSpace(accountID) == "" || strings.TrimSpace(threadID) == "" {
+		return nil, fmt.Errorf("accountId and threadId are required")
+	}
+	rows, err := s.db.Query(`
+		SELECT id FROM messages
+		WHERE account_id = ? AND COALESCE(thread_id, id) = ?
+		ORDER BY date ASC, id ASC
+	`, accountID, threadID)
+	if err != nil {
+		return nil, fmt.Errorf("query thread message IDs: %w", err)
+	}
+	defer rows.Close()
+
+	ids := make([]string, 0, 4)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan thread message ID: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate thread message IDs: %w", err)
+	}
+	return ids, nil
+}
+
 // SearchConversations searches for conversations in a folder using FTS5
 // Returns conversations with highlighted text and the total count
 func (s *Store) SearchConversations(folderID, query string, offset, limit int, filter string) ([]*ConversationSearchResult, int, error) {

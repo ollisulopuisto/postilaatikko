@@ -61,12 +61,12 @@
   import { openCommandPalette, registerCommandAvailability, registerCommandHandler } from '$lib/stores/commandPalette.svelte'
   import { LIST_ACTIONS, getListAction, runListAction as runActionOnTarget } from '$lib/actions/listActions'
   import { resolveListTarget } from '$lib/actions/target'
-  import type { ListTarget, MessageActionExecutor, RunOptions } from '$lib/actions/types'
+  import type { ActionTarget, ListTarget, MessageActionExecutor, RunOptions } from '$lib/actions/types'
   import { initLayout, getLayoutMode, getResponsiveView, showViewer, hideViewer, showSidebar, hideSidebar, isResponsive } from '$lib/stores/layout.svelte'
   import { publishUndoOperationCompleted, publishUndoOperationCreated } from '$lib/components/list/undoMutationEvents'
   import { runMessageMutation } from '$lib/components/list/mutationInFlight'
   // @ts-ignore - wailsjs path
-  import { PrepareReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, ClearDraftHistory, SendMessageWithDraftGuard, CancelPendingSend, CompletePendingSend, ListPendingSends, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, UndoOperation, UndoLatestWithResult, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, OpenComposerWindow, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
+  import { PrepareReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, ClearDraftHistory, SendMessageWithDraftGuard, CancelPendingSend, CompletePendingSend, ListPendingSends, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ResolveMailActionTarget, UndoOperation, UndoLatestWithResult, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, OpenComposerWindow, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
   // @ts-ignore - wailsjs path
   import { smtp, folder, certificate } from '../wailsjs/go/models'
   // @ts-ignore - wailsjs runtime
@@ -1961,12 +1961,20 @@
     return resolveListTarget({
       hasChecked: () => messageListRef?.hasCheckedMessages() ?? false,
       checkedIds: () => messageListRef?.getCheckedMessageIds() ?? [],
+      checkedRefs: () => messageListRef?.getCheckedMessageRefs() ?? [],
       focusedIds: () => messageListRef?.getSelectedMessageIds() ?? [],
+      focusedRefs: () => messageListRef?.getSelectedMessageRefs() ?? [],
       checkedHasUnstarred: () => messageListRef?.getCheckedHasUnstarred() ?? false,
       selectedStarred: () => messageListRef?.isSelectedStarred() ?? false,
       checkedHasUnread: () => messageListRef?.getCheckedHasUnread() ?? false,
       selectedUnread: () => messageListRef?.isSelectedUnread() ?? false,
     })
+  }
+
+  async function resolveActionTarget(target: ActionTarget): Promise<string[]> {
+    // The backend validates account ownership and resolves whole-thread targets
+    // to message IDs. Existing mutations then retain their undo and sync paths.
+    return ResolveMailActionTarget(target)
   }
 
   const listActionExecutor: MessageActionExecutor = {
@@ -1976,6 +1984,17 @@
     markUnread: (ids) => handleBulkMarkUnread(ids),
     toggleStar: (ids, star) => handleBulkToggleStar(ids, star),
     trash: (ids, permanent) => messageListRef?.requestDelete(ids, permanent),
+    applyTarget: async (actionId, target, options, desiredState) => {
+      const ids = await resolveActionTarget(target)
+      switch (actionId) {
+        case 'mail.archive': return handleBulkArchive(ids)
+        case 'mail.spam': return handleBulkSpam(ids)
+        case 'mail.markRead': return handleBulkMarkRead(ids)
+        case 'mail.markUnread': return handleBulkMarkUnread(ids)
+        case 'mail.star': return handleBulkToggleStar(ids, desiredState === true)
+        case 'mail.trash': return messageListRef?.requestDelete(ids, options?.permanent === true)
+      }
+    },
   }
 
   function runListAction(id: string, options?: RunOptions) {
