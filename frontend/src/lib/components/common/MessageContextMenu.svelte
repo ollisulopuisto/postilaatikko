@@ -21,6 +21,7 @@
     DeletePermanently,
     MoveToFolderWithUndo,
     CopyToFolder,
+    ResolveMailActionTarget,
     UndoOperation,
   } from '../../../../wailsjs/go/app/App'
   // @ts-ignore - wailsjs path
@@ -96,6 +97,16 @@
   const isSpamFolder = $derived(folderType === 'spam')
   const isSingleMessage = $derived(messageIds.length === 1)
   const undoInFlight = new Set<string>()
+
+  async function resolveActionMessages(): Promise<string[]> {
+    if (!messageIds.length) return []
+    if (!accountId) throw new Error('Cannot validate a message action without its account')
+    const messages = messageIds.map((messageId) => ({ accountId, messageId }))
+    return ResolveMailActionTarget({
+      kind: messages.length === 1 ? 'message' : 'matched_messages',
+      messages,
+    })
+  }
 
   // Load accounts when context menu opens (used by FolderPickerDialog's dropdown)
   async function loadAccounts() {
@@ -191,8 +202,9 @@
 
   async function handleMoveToInbox() {
     try {
-      await runMessageMutation(messageIds, async () => {
-        const result = await MoveToInboxWithUndo(messageIds)
+      const targetIds = await resolveActionMessages()
+      await runMessageMutation(targetIds, async () => {
+        const result = await MoveToInboxWithUndo(targetIds)
         if (result.coalesced) return
         showTargetedUndoToast($_('toast.movedTo', { values: { folder: $_('sidebar.inbox') } }), result.operationId, 'move-to-inbox')
         onActionComplete?.(true)
@@ -205,8 +217,9 @@
 
   async function handleArchive() {
     try {
-      await runMessageMutation(messageIds, async () => {
-        const result = await ArchiveWithUndo(messageIds)
+      const targetIds = await resolveActionMessages()
+      await runMessageMutation(targetIds, async () => {
+        const result = await ArchiveWithUndo(targetIds)
         if (result.coalesced) return
         showTargetedUndoToast($_('toast.archived'), result.operationId, 'archive')
         onActionComplete?.(true)
@@ -222,8 +235,9 @@
       showDeleteConfirm = true
     } else {
       try {
-        await runMessageMutation(messageIds, async () => {
-          const result = await TrashWithUndo(messageIds)
+        const targetIds = await resolveActionMessages()
+        await runMessageMutation(targetIds, async () => {
+          const result = await TrashWithUndo(targetIds)
           if (result.coalesced) return
           const toastMsg = result.movedToTrash ? $_('toast.movedToTrash') : $_('toast.deletedFromFolder')
           showTargetedUndoToast(toastMsg, result.operationId, 'trash', result.movedToTrash)
@@ -238,8 +252,9 @@
 
   async function handleConfirmPermanentDelete() {
     try {
-      await runMessageMutation(messageIds, async () => {
-        await DeletePermanently(messageIds)
+      const targetIds = await resolveActionMessages()
+      await runMessageMutation(targetIds, async () => {
+        await DeletePermanently(targetIds)
         toasts.success($_('toast.permanentlyDeleted'))
         showDeleteConfirm = false
         onActionComplete?.(true)
@@ -253,17 +268,18 @@
 
   async function handleSpam() {
     try {
-      await runMessageMutation(messageIds, async () => {
+      const targetIds = await resolveActionMessages()
+      await runMessageMutation(targetIds, async () => {
         if (isSpamFolder) {
           // If we're in spam folder, mark as NOT spam
-          const result = await MarkAsNotSpamWithUndo(messageIds)
+          const result = await MarkAsNotSpamWithUndo(targetIds)
           if (result.coalesced) return
           showTargetedUndoToast($_('toast.markedAsNotSpam'), result.operationId, 'mark-as-not-spam')
           onActionComplete?.(true)
           return
         }
         // Otherwise, mark as spam
-        const result = await MarkAsSpamWithUndo(messageIds)
+        const result = await MarkAsSpamWithUndo(targetIds)
         if (result.coalesced) return
         const toastMsg = result.movedToSpam ? $_('toast.markedAsSpam') : $_('toast.deletedFromFolder')
         showTargetedUndoToast(toastMsg, result.operationId, 'mark-as-spam', result.movedToSpam)
@@ -277,12 +293,13 @@
 
   async function handleToggleStar() {
     try {
-      await runMessageMutation(messageIds, async () => {
+      const targetIds = await resolveActionMessages()
+      await runMessageMutation(targetIds, async () => {
         if (isStarred) {
-          await Unstar(messageIds)
+          await Unstar(targetIds)
           toasts.success($_('toast.starRemoved'))
         } else {
-          await Star(messageIds)
+          await Star(targetIds)
           toasts.success($_('toast.starred'))
         }
         onActionComplete?.()
@@ -295,12 +312,13 @@
 
   async function handleToggleRead() {
     try {
-      await runMessageMutation(messageIds, async () => {
+      const targetIds = await resolveActionMessages()
+      await runMessageMutation(targetIds, async () => {
         if (isRead) {
-          await MarkAsUnread(messageIds)
+          await MarkAsUnread(targetIds)
           toasts.success($_('toast.markedAsUnread'))
         } else {
-          await MarkAsRead(messageIds)
+          await MarkAsRead(targetIds)
           toasts.success($_('toast.markedAsRead'))
         }
         onActionComplete?.()
@@ -356,8 +374,9 @@
 
   async function handleMoveTo(destFolderId: string, folderName: string) {
     try {
-      await runMessageMutation(messageIds, async () => {
-        const result = await MoveToFolderWithUndo(messageIds, destFolderId)
+      const targetIds = await resolveActionMessages()
+      await runMessageMutation(targetIds, async () => {
+        const result = await MoveToFolderWithUndo(targetIds, destFolderId)
         if (result.coalesced) return
         showTargetedUndoToast($_('toast.movedTo', { values: { folder: folderName } }), result.operationId, 'move-to-folder')
         onActionComplete?.(true)
@@ -370,8 +389,9 @@
 
   async function handleCopyTo(destFolderId: string, folderName: string) {
     try {
-      await runMessageMutation(messageIds, async () => {
-        await CopyToFolder(messageIds, destFolderId)
+      const targetIds = await resolveActionMessages()
+      await runMessageMutation(targetIds, async () => {
+        await CopyToFolder(targetIds, destFolderId)
         toasts.success($_('toast.copyingTo', { values: { folder: folderName } }))
         // CopyToFolder syncs in background; sidebar count + dest folder list refresh ride on folder:synced.
       })
