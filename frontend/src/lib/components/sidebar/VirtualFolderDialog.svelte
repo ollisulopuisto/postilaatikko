@@ -15,6 +15,7 @@
     // Prefill when creating a virtual folder from an active search.
     initialSearchQuery?: string
     initialFolderId?: string | null
+    onRefreshFolders: () => Promise<void>
     onSave: (value: {
       id: string
       name: string
@@ -29,7 +30,7 @@
     }) => Promise<void>
   }
 
-  let { open = $bindable(false), virtualFolder, accounts, initialSearchQuery = '', initialFolderId = null, onSave }: Props = $props()
+  let { open = $bindable(false), virtualFolder, accounts, initialSearchQuery = '', initialFolderId = null, onRefreshFolders, onSave }: Props = $props()
   let name = $state('')
   let selectedIDs = $state<string[]>([])
   let folderMode = $state('include')
@@ -39,6 +40,7 @@
   let dateWindow = $state('all')
   let searchQuery = $state('')
   let saving = $state(false)
+  let refreshing = $state(false)
   let error = $state('')
   let folderQuery = $state('')
 
@@ -83,6 +85,19 @@
 
   function toggleFolder(id: string) {
     selectedIDs = selectedIDs.includes(id) ? selectedIDs.filter((item) => item !== id) : [...selectedIDs, id]
+  }
+
+  async function refreshFolders() {
+    refreshing = true
+    error = ''
+    try {
+      await onRefreshFolders()
+    } catch (cause) {
+      console.error('Failed to refresh Gmail labels:', cause)
+      error = $_('sidebar.virtualFolderRefreshFailed')
+    } finally {
+      refreshing = false
+    }
   }
 
   async function submit() {
@@ -179,14 +194,19 @@
       </label>
     </div>
     <p class="text-xs text-muted-foreground">{$_('sidebar.virtualFolderCriteriaHelp')}</p>
-    <input
-      type="search"
-      bind:value={folderQuery}
-      placeholder={$_('sidebar.virtualFolderSearchFolders')}
-      aria-label={$_('sidebar.virtualFolderSearchFolders')}
-      disabled={selectableFolders.length === 0}
-      class="h-9 rounded-md border border-input bg-background px-3 text-sm"
-    />
+    <div class="flex gap-2">
+      <input
+        type="search"
+        bind:value={folderQuery}
+        placeholder={$_('sidebar.virtualFolderSearchFolders')}
+        aria-label={$_('sidebar.virtualFolderSearchFolders')}
+        disabled={selectableFolders.length === 0}
+        class="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm"
+      />
+      <Button variant="outline" size="icon" disabled={refreshing} onclick={refreshFolders} title={$_('sidebar.virtualFolderRefreshFolders')} aria-label={$_('sidebar.virtualFolderRefreshFolders')}>
+        <Icon icon={refreshing ? 'mdi:loading' : 'mdi:refresh'} class={refreshing ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
+      </Button>
+    </div>
     <div class="max-h-72 overflow-y-auto rounded-md border border-border p-2">
       {#if selectableFolders.length === 0}
         <p class="p-3 text-sm text-muted-foreground">{$_('sidebar.virtualFolderNoFolders')}</p>

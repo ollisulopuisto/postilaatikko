@@ -149,6 +149,8 @@
     "virtualFolderCriteriaHelp": "Filters apply to the conversation list and search. Dates use the conversation's latest activity.",
     "virtualFolderNoFolders": "Folders are still loading, or no folders are available.",
     "virtualFolderSearchFolders": "Search folders",
+    "virtualFolderRefreshFolders": "Refresh folder list",
+    "virtualFolderRefreshFailed": "Could not refresh Gmail labels. Try again.",
     "deleteVirtualFolderTitle": "Delete virtual folder?",
     "deleteVirtualFolderDescription": "“{name}” will be removed. Its member folders and their messages are not changed.",
     "virtualFolderNoFolderMatches": "No folders match your search.",
