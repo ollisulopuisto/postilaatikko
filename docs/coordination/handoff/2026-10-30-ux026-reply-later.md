@@ -71,3 +71,5 @@ resetting its changes.
 
 - PR #68 exposed a stale `targetedUndoConsumers` assertion that expected the removed `MessageList.handleBulkArchive` callback. Updated the regression check to assert the current `runListAction`/`onBulkAction` delegation contract instead.
 - Targeted verification: `node --test frontend/tests/targetedUndoConsumers.test.mjs` (9 passed); `git diff --check` passed.
+- A second CI rerun exposed another stale regression-test harness: `clearSearch` now notifies the optional `onSearchQueryChange` callback. Added the no-op callback to that isolated harness; no production behavior changed.
+- Targeted verification now covers both affected files: `node --test frontend/tests/searchMutationFlow.test.mjs frontend/tests/targetedUndoConsumers.test.mjs` (15 passed).

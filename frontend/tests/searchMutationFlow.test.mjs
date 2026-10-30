@@ -194,6 +194,7 @@ test('the single Search close control runs one reset and restores normal-list st
     let serverResultFetchGeneration = 8
     let serverSearchSelectionLocked = true
     let searchDebounceTimer = null
+    const onSearchQueryChange = () => {}
     let cancelCalls = 0
     const serverSearchRequestState = { cancel() { cancelCalls += 1 } }
     let searchInputRef = null
