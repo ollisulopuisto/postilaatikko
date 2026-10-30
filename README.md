@@ -62,6 +62,10 @@ Build a production binary with:
 make build
 ```
 
+On macOS, `./scripts/build-macos-local.sh` builds the app and a drag-and-drop
+DMG with an `/Applications` shortcut. See [docs/BUILD.md](docs/BUILD.md) for
+prerequisites and options.
+
 Some OAuth integrations need provider client configuration for development; see `.env.example`. Never commit credentials or local `.env` files.
 
 ## Contributing

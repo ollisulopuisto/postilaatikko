@@ -2,6 +2,41 @@
 
 Set .env file
 
+## Local macOS app and DMG
+
+On a Mac with Xcode Command Line Tools, Go 1.26+, and Node.js 24 installed, run
+the repository script from the repository root:
+
+```bash
+./scripts/build-macos-local.sh
+```
+
+The script installs the pinned Wails CLI and frontend dependencies, builds and
+ad-hoc signs the app for the Mac's native architecture, then creates and verifies
+a drag-and-drop DMG. The DMG includes `Postilaatikko.app` and an `Applications`
+shortcut. Artifacts are written to `build/bin/`:
+
+- `postilaatikko.app`
+- `Postilaatikko-macos-arm64.dmg` on Apple Silicon, or
+  `Postilaatikko-macos-amd64.dmg` on Intel
+
+For a faster repeat build when frontend dependencies have not changed, skip the
+lockfile install:
+
+```bash
+./scripts/build-macos-local.sh --skip-npm-ci
+```
+
+To build only the app without creating a DMG:
+
+```bash
+./scripts/build-macos-local.sh --app-only
+```
+
+Run `./scripts/build-macos-local.sh --help` for options. This local build is
+not notarized and does not publish a GitHub release. For the published DMG,
+use the repository's GitHub Actions release workflow.
+
 ### 🔨 Building from Source
 ---
 
