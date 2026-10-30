@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Share exact online saved-view count scans across windows, isolate cancellation, and invalidate counts after mail changes or explicit refresh.
+
 ## Postilaatikko 2026.10.29.1
 
 - Replace half-second dialog-guard polling in message lists and readers with event-driven refreshes when the last blocking dialog closes.

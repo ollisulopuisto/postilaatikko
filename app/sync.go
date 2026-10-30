@@ -206,14 +206,14 @@ func (a *App) syncFolder(accountID, folderID string, restart bool) error {
 			Str("folderID", folderID).
 			Int("unreadCount", folderObj.UnreadCount).
 			Msg("Emitting folders:countsChanged after sync")
-		wailsRuntime.EventsEmit(a.ctx, "folders:countsChanged", map[string]int{
+		a.emitRuntimeEvent("folders:countsChanged", map[string]int{
 			folderID: folderObj.UnreadCount,
 		})
 	}
 
 	// Header and flag sync is complete. Full content stays on the server until
 	// a conversation is opened and FetchMessageBody is requested.
-	wailsRuntime.EventsEmit(a.ctx, "folder:synced", map[string]interface{}{
+	a.emitRuntimeEvent("folder:synced", map[string]interface{}{
 		"accountId": accountID,
 		"folderId":  folderID,
 	})
@@ -401,7 +401,7 @@ func (a *App) SyncAllComplete() error {
 				}
 				inbox, inboxErr := a.folderStore.GetByType(acc.ID, folder.TypeInbox)
 				if inboxErr == nil && inbox != nil {
-					wailsRuntime.EventsEmit(a.ctx, "folder:synced", map[string]interface{}{
+					a.emitRuntimeEvent("folder:synced", map[string]interface{}{
 						"accountId": acc.ID,
 						"folderId":  inbox.ID,
 					})

@@ -42,7 +42,7 @@ func (a *App) initBackgroundSync(ctx context.Context) {
 			})
 			return
 		}
-		wailsRuntime.EventsEmit(a.ctx, "folder:synced", map[string]interface{}{
+		a.emitRuntimeEvent("folder:synced", map[string]interface{}{
 			"accountId": accountID,
 			"folderId":  folderID,
 		})
@@ -50,7 +50,7 @@ func (a *App) initBackgroundSync(ctx context.Context) {
 		// scheduled sync (the manual SyncFolder path emits this at
 		// app/sync.go:110; the scheduler path was missing it).
 		if folderObj, ferr := a.folderStore.Get(folderID); ferr == nil && folderObj != nil {
-			wailsRuntime.EventsEmit(a.ctx, "folders:countsChanged", map[string]int{
+			a.emitRuntimeEvent("folders:countsChanged", map[string]int{
 				folderID: folderObj.UnreadCount,
 			})
 		}
@@ -251,7 +251,7 @@ func (a *App) handleIdleNewMail(event imap.MailEvent) {
 		log.Error().Err(err).Str("accountID", event.AccountID).Msg("Failed to sync after IDLE notification")
 		// Emit folder:synced to clear syncing state even on error
 		if folderID != "" {
-			wailsRuntime.EventsEmit(a.ctx, "folder:synced", map[string]interface{}{
+			a.emitRuntimeEvent("folder:synced", map[string]interface{}{
 				"accountId": event.AccountID,
 				"folderId":  folderID,
 			})
@@ -262,12 +262,12 @@ func (a *App) handleIdleNewMail(event imap.MailEvent) {
 	// The IDLE path refreshed headers and flags. Complete the visible sync and
 	// update unread badges without downloading message bodies.
 	if folderID != "" {
-		wailsRuntime.EventsEmit(a.ctx, "folder:synced", map[string]interface{}{
+		a.emitRuntimeEvent("folder:synced", map[string]interface{}{
 			"accountId": event.AccountID,
 			"folderId":  folderID,
 		})
 		if updatedFolder, err := a.folderStore.Get(folderID); err == nil && updatedFolder != nil {
-			wailsRuntime.EventsEmit(a.ctx, "folders:countsChanged", map[string]int{
+			a.emitRuntimeEvent("folders:countsChanged", map[string]int{
 				folderID: updatedFolder.UnreadCount,
 			})
 		}
@@ -392,7 +392,7 @@ func (a *App) reconcileInboxFlags(accountID string, attempt int) {
 	// Always emit folder:synced: SyncFolderFlags emits the progress that drives
 	// the sidebar indicator, so we emit the matching completion (clears the bar)
 	// and reload the message list with the updated flags.
-	wailsRuntime.EventsEmit(a.ctx, "folder:synced", map[string]interface{}{
+	a.emitRuntimeEvent("folder:synced", map[string]interface{}{
 		"accountId": accountID,
 		"folderId":  folderID,
 	})
@@ -404,7 +404,7 @@ func (a *App) reconcileInboxFlags(accountID string, attempt int) {
 
 	// Update the sidebar unread badge.
 	if updated, ferr := a.folderStore.Get(folderID); ferr == nil && updated != nil {
-		wailsRuntime.EventsEmit(a.ctx, "folders:countsChanged", map[string]int{
+		a.emitRuntimeEvent("folders:countsChanged", map[string]int{
 			folderID: updated.UnreadCount,
 		})
 	}
@@ -443,7 +443,7 @@ func (a *App) handleIdleExpunge(accountID string) {
 	// Always emit folder:synced: the sync emits progress that drives the sidebar
 	// indicator, so we emit the matching completion (clears the bar) and reload
 	// the message list with any deleted rows removed.
-	wailsRuntime.EventsEmit(a.ctx, "folder:synced", map[string]interface{}{
+	a.emitRuntimeEvent("folder:synced", map[string]interface{}{
 		"accountId": accountID,
 		"folderId":  folderID,
 	})
@@ -455,7 +455,7 @@ func (a *App) handleIdleExpunge(accountID string) {
 
 	// Update the sidebar unread badge.
 	if updated, ferr := a.folderStore.Get(folderID); ferr == nil && updated != nil {
-		wailsRuntime.EventsEmit(a.ctx, "folders:countsChanged", map[string]int{
+		a.emitRuntimeEvent("folders:countsChanged", map[string]int{
 			folderID: updated.UnreadCount,
 		})
 	}
