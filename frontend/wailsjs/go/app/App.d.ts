@@ -437,6 +437,8 @@ export function GetUIState():Promise<appstate.UIState>;
 
 export function GetUndoDescription():Promise<string>;
 
+export function GetUndoHistory(arg1:number):Promise<app.UndoHistoryEntry[]>;
+
 export function GetUnifiedFolderConversations(arg1:string,arg2:number,arg3:number,arg4:string,arg5:string):Promise<Array<message.Conversation>>;
 
 export function GetUnifiedFolderCount(arg1:string,arg2:string):Promise<number>;

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Keep Cmd-Z/Ctrl-Z and Edit → Undo on the latest mailbox action; add Edit → Undo History with a compact, privacy-minimal list and per-operation undo.
+
 ## Postilaatikko 2026.10.29.1
 
 - Replace half-second dialog-guard polling in message lists and readers with event-driven refreshes when the last blocking dialog closes.

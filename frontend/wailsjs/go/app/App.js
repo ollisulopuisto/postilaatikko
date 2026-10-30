@@ -826,6 +826,10 @@ export function GetUndoDescription() {
   return window['go']['app']['App']['GetUndoDescription']();
 }
 
+export function GetUndoHistory(arg1) {
+  return window['go']['app']['App']['GetUndoHistory'](arg1);
+}
+
 export function GetUnifiedFolderConversations(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['app']['App']['GetUnifiedFolderConversations'](arg1, arg2, arg3, arg4, arg5);
 }

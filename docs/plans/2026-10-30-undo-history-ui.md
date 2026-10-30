@@ -35,3 +35,16 @@ Do not add redo, branching, a new retention policy, or a message-content view.
 If current storage cannot provide an accurate ordered list of operation-level
 summaries and availability, add the smallest read-only API needed without
 changing undo semantics.
+
+## Implementation checkpoint (2026-10-30)
+
+- History reads the existing durable undo stack, groups multi-command actions,
+  returns newest first, and caps the result at 100 rows. The UI requests at
+  most 50 and includes no message IDs, addresses, or body content.
+- Cmd-Z/Ctrl-Z and native Edit → Undo share global LIFO. Toast and history-row
+  Undo remain operation-scoped. The Undo History dialog is mounted separately
+  from the shortcuts overlay and opens from the native Edit menu.
+- Verification: frontend Svelte check reports zero errors and two existing
+  title-bar warnings; shortcut checks pass. The frontend check emitted a Vite
+  WebSocket `EPERM` warning in the sandbox. Go and production builds passed
+  earlier in this task branch. Live macOS menu behavior is still unverified.

@@ -1051,6 +1051,29 @@ export namespace app {
 	        this.description = source["description"];
 	    }
 	}
+	export class UndoHistoryEntry {
+	    operationId: string;
+	    action: string;
+	    description: string;
+	    createdAt: string;
+	    expiresAt: string;
+	    messageCount: number;
+
+	    static createFrom(source: any = {}) {
+	        return new UndoHistoryEntry(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.operationId = source["operationId"];
+	        this.action = source["action"];
+	        this.description = source["description"];
+	        this.createdAt = source["createdAt"];
+	        this.expiresAt = source["expiresAt"];
+	        this.messageCount = source["messageCount"];
+	    }
+
+	}
 	export class UndoableActionResult {
 	    operationId: string;
 	    coalesced: boolean;
