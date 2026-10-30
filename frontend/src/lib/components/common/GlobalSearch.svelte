@@ -69,6 +69,7 @@
     <div class="min-h-0 min-w-0 overflow-y-auto overflow-x-hidden pr-1">
     <SearchOperators onInsert={insertOperator} />
     <p class="my-2 text-xs leading-5 text-muted-foreground">{$_('search.serverHint')}</p>
+    <p class="mb-2 text-xs text-muted-foreground">{$_('search.opExample')}</p>
     {#if error}<p role="alert" class="break-words text-sm text-destructive">{error}</p>{/if}
     {#each issues as issue (issue.accountId + issue.message)}
       <p class="mb-2 break-words text-xs text-destructive" role="status">{issue.accountName}: {issue.message}

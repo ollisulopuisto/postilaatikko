@@ -2444,9 +2444,6 @@
             </button>
           {/if}
         </div>
-        {#if preferServerSearch || isVirtualFolderView}
-          <SearchOperators onInsert={insertSearchOperator} popup />
-        {/if}
       {:else}
         {#if folderType === 'inbox'}
           <button
@@ -2601,6 +2598,12 @@
       </button>
     </div>
   </div>
+
+  {#if showSearch && (preferServerSearch || isVirtualFolderView)}
+    <div class="min-w-0 overflow-hidden border-b border-border">
+      <SearchOperators onInsert={insertSearchOperator} compact />
+    </div>
+  {/if}
 
   {#if folderId}
     <div class="flex items-center gap-2 overflow-x-auto border-b border-border px-3 py-2" aria-label={$_('messageList.quickFilters')}>

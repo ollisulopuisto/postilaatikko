@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Replace the persistent search-operator disclosure with visible quick-filter chips in global search and server-backed folder search, including unread/read, sender/recipient, labels, attachments, exclusion and date operators.
 - Refresh Gmail labels from the virtual-folder editor, and apply Gmail label scopes correctly to online virtual-folder searches.
 - Add ordered contextual signature rules for sender, recipient, and message type, with placement controls and manual-edit preservation.
 - Add bulk select/clear controls to virtual-folder setup, wrap long sidebar labels, and make the cross-account move picker a searchable expandable folder tree.
