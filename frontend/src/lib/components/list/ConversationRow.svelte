@@ -14,7 +14,7 @@
   import { formatRelativeDate } from '$lib/utils/date'
   import { _ } from '$lib/i18n'
   // @ts-ignore - wailsjs path
-  import { message } from '../../../../wailsjs/go/models'
+  import { message, folder } from '../../../../wailsjs/go/models'
   // @ts-ignore - wailsjs path
   import { OpenReaderWindow, MarkAsRead, MarkAsUnread, RemoveFromInboxWithUndo, UndoOperation } from '../../../../wailsjs/go/app/App'
   import ReplyLaterButton from '$lib/components/common/ReplyLaterButton.svelte'
@@ -23,9 +23,9 @@
   import { toasts } from '$lib/stores/toast'
   import { getAccentBarUnread, getShowMessageListCircles, getShowMessageListProfilePics, getAlwaysShowMessageCheckbox } from '$lib/stores/settings.svelte'
   import { getLayoutMode } from '$lib/stores/layout.svelte'
+  import { accountStore, isConfiguredAccountEmail } from '$lib/stores/accounts.svelte'
   import { contactPhotos } from '$lib/stores/contactPhotos.svelte'
   import { domainFromEmail, senderLogos } from '$lib/stores/senderLogos.svelte'
-  import { isConfiguredAccountEmail } from '$lib/stores/accounts.svelte'
   import { publishUndoOperationCompleted, publishUndoOperationCreated } from './undoMutationEvents'
   import { isRowOpenTarget } from '../viewer/bubbleLayout'
   import { runMessageMutation } from './mutationInFlight'
@@ -80,8 +80,26 @@
     onDelete,
   }: Props = $props()
 
-  // Check if we're in search mode (have highlighted content)
-  const isSearchResult = $derived(!!highlightedSubject || !!highlightedSnippet)
+  // Resolve the folder name for this row. In unified inbox, virtual folder and
+  // All Inboxes views each conversation can live in a different folder, so we
+  // look the folder name up from the account's folder tree. Falls back to the
+  // searchFolderName passed by search results, then to an empty string.
+  const folderName = $derived(() => {
+    if (searchFolderName) return searchFolderName
+    const account = accountStore.accounts.find((item) => item.account.id === accountId)
+    if (!account) return ''
+    const found = findFolderInTree(account.folders || [], folderId)
+    return found?.name || ''
+  })
+
+  function findFolderInTree(trees: folder.FolderTree[], id: string): folder.Folder | null {
+    for (const tree of trees) {
+      if (tree.folder?.id === id) return tree.folder
+      const child = findFolderInTree(tree.children || [], id)
+      if (child) return child
+    }
+    return null
+  }
 
   // Forward keyboard access (Alt+M / Alt+C) to this row's context-menu folder picker
   let contextMenuRef: MessageContextMenu | null = null
@@ -645,14 +663,15 @@
           </span>
         {/if}
 
-        <!-- Folder Badge (for search results) -->
-        {#if isSearchResult && searchFolderName}
+        <!-- Folder badge (shown for unified inbox, virtual folders and All
+             Inboxes where each conversation can live in a different folder) -->
+        {#if folderName}
           <span
             class="flex-shrink-0 {densityClasses.badge[density]} rounded bg-muted/50 text-muted-foreground flex items-center gap-1"
-            title={$_('messageList.foundIn', { values: { folder: searchFolderName } })}
+            title={$_('messageList.foundIn', { values: { folder: folderName } })}
           >
             <Icon icon="mdi:folder-outline" class="w-3 h-3" />
-            {searchFolderName}
+            {folderName}
           </span>
         {/if}
 
