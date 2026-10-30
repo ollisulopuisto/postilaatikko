@@ -51,7 +51,7 @@ func TestOnlineCountJobScopeCompletionAndCancellation(t *testing.T) {
 			_, _ = w.Write([]byte(`{"threads":[{"id":"one"}]}`))
 			return
 		}
-		if r.URL.Query().Get("q") != `(from:friend@example.org) (label:"Family")` {
+		if r.URL.Query().Get("q") != `(from:friend@example.org) (label:family)` {
 			t.Errorf("scope %q", r.URL.Query().Get("q"))
 		}
 		_, _ = w.Write([]byte(`{"threads":[{"id":"one"},{"id":"two"}],"resultSizeEstimate":500}`))

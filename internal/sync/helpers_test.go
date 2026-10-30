@@ -58,3 +58,44 @@ func TestStripHTMLTags_Empty(t *testing.T) {
 		t.Errorf("stripHTMLTags('') = %q, want empty string", result)
 	}
 }
+
+func TestStripHTMLTags_RemovesScriptContent(t *testing.T) {
+	result := stripHTMLTags("<script>()=>{if(le())return le();const Y=Gt.accounts.find(U=>l</script>Real text")
+
+	if strings.Contains(result, "if(le())") {
+		t.Errorf("snippet should not leak <script> JavaScript, got %q", result)
+	}
+	if !strings.Contains(result, "Real text") {
+		t.Errorf("snippet should keep real text, got %q", result)
+	}
+}
+
+func TestStripHTMLTags_RemovesStyleContent(t *testing.T) {
+	result := stripHTMLTags("<style>body{color:red;}</style>Real text")
+
+	if strings.Contains(result, "color:red") {
+		t.Errorf("snippet should not leak <style> CSS, got %q", result)
+	}
+	if !strings.Contains(result, "Real text") {
+		t.Errorf("snippet should keep real text, got %q", result)
+	}
+}
+
+func TestStripHTMLTags_DecodesHTMLEntities(t *testing.T) {
+	result := stripHTMLTags("&quot;LEGO Boost roboottisarja&quot; &amp; &lt;test&gt;")
+
+	if result != `"LEGO Boost roboottisarja" & <test>` {
+		t.Errorf("stripHTMLTags entities = %q, want %q", result, `"LEGO Boost roboottisarja" & <test>`)
+	}
+}
+
+func TestStripHTMLTags_RemovesComments(t *testing.T) {
+	result := stripHTMLTags("<!-- conditional comment -->Real text")
+
+	if strings.Contains(result, "comment") {
+		t.Errorf("snippet should not leak HTML comments, got %q", result)
+	}
+	if !strings.Contains(result, "Real text") {
+		t.Errorf("snippet should keep real text, got %q", result)
+	}
+}

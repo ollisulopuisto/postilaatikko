@@ -12,7 +12,7 @@ import (
 func TestGmailVirtualFolderUnionAndExclusion(t *testing.T) {
 	fs := []*folder.Folder{{Path: "perhe/aarni", Type: folder.TypeFolder}, {Path: "perhe/bisnes hedda", Type: folder.TypeFolder}}
 	q := gmailViewQuery("is:unread", fs, false)
-	if !strings.Contains(q, `label:"perhe/aarni" OR label:"perhe/bisnes hedda"`) {
+	if !strings.Contains(q, `label:perhe/aarni OR label:perhe/bisnes-hedda`) {
 		t.Fatal(q)
 	}
 	excluded := gmailViewQuery("", fs, true)

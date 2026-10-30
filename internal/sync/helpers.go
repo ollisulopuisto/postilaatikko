@@ -3,6 +3,7 @@ package sync
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"strings"
 	"time"
 
@@ -107,20 +108,99 @@ func generateSnippet(body string, maxLen int) string {
 	return text
 }
 
-// stripHTMLTags removes HTML tags for generating snippets
+// stripHTMLTags removes HTML tags (and the contents of <script>, <style> and
+// <noscript> elements) and decodes HTML entities so the result is safe to use
+// as a plain-text message preview snippet.
 func stripHTMLTags(s string) string {
 	var result strings.Builder
-	inTag := false
-	for _, r := range s {
-		if r == '<' {
-			inTag = true
-		} else if r == '>' {
-			inTag = false
-		} else if !inTag {
-			result.WriteRune(r)
+	skipBlock := "" // "script"/"style"/"noscript": skip until its close tag
+
+	i := 0
+	for i < len(s) {
+		if skipBlock != "" {
+			if i+1 < len(s) && s[i] == '<' {
+				if name, end := readTagName(s, i+1); strings.EqualFold(name, "/"+skipBlock) {
+					skipBlock = ""
+					i = end
+					continue
+				}
+			}
+			i++
+			continue
 		}
+		if s[i] == '<' {
+			name, end := readTagName(s, i+1)
+			lower := strings.ToLower(name)
+			if strings.HasPrefix(lower, "/") {
+				// Closing tag: only ends a skipped block.
+				if skipBlock != "" && strings.EqualFold(strings.TrimPrefix(lower, "/"), skipBlock) {
+					skipBlock = ""
+				}
+			} else if lower == "script" || lower == "style" || lower == "noscript" {
+				skipBlock = lower
+			}
+			// Void tags and normal elements are fully consumed by readTagName,
+			// so nothing is written for them.
+			i = end
+			continue
+		}
+		result.WriteRune(rune(s[i]))
+		i++
 	}
-	return result.String()
+	return html.UnescapeString(result.String())
+}
+
+// readTagName reads an HTML tag starting at s[start] (the character after '<').
+// It returns the tag name (including a leading '/' for closing tags) and the
+// index of the first character after the closing '>', or len(s) when the tag
+// is not terminated. Quoted attribute values are respected so a '>' inside an
+// attribute does not terminate the tag early.
+func readTagName(s string, start int) (string, int) {
+	i := start
+	for i < len(s) && (s[i] == ' ' || s[i] == '\t' || s[i] == '\n' || s[i] == '\r') {
+		i++
+	}
+	nameStart := i
+	for i < len(s) {
+		c := s[i]
+		if c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '>' || c == '=' {
+			break
+		}
+		i++
+	}
+	name := s[nameStart:i]
+
+	inQuote := byte(0)
+	for i < len(s) {
+		c := s[i]
+		if inQuote != 0 {
+			if c == inQuote {
+				inQuote = 0
+			}
+			i++
+			continue
+		}
+		if c == '"' || c == '\'' {
+			inQuote = c
+			i++
+			continue
+		}
+		if c == '>' {
+			return name, i + 1
+		}
+		i++
+	}
+	return name, len(s)
+}
+
+// isVoidTag reports whether name is an HTML void (self-closing) element that
+// never wraps text content.
+func isVoidTag(name string) bool {
+	switch name {
+	case "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr":
+		return true
+	}
+	return false
 }
 
 // convertFolderType converts IMAP folder type to our folder type
