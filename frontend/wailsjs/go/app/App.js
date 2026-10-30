@@ -1673,3 +1673,10 @@ export function DraftHistoryCommitBlobs(arg1, arg2, arg3, arg4, arg5) {
 export function OpenMailWindow(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
   return window['go']['app']['App']['OpenMailWindow'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
 }
+
+export function GetReplyLaterQueue() {
+  return window['go']['app']['App']['GetReplyLaterQueue']();
+}
+export function ChangeReplyLaterWithUndo(accountId, conversationId, inQueue) {
+  return window['go']['app']['App']['ChangeReplyLaterWithUndo'](accountId, conversationId, inQueue);
+}

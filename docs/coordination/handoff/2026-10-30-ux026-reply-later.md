@@ -12,5 +12,34 @@ Use existing UX-025 durable membership and normal conversation list/viewer.
 
 ## Status
 
-Claim published before implementation. No tests requested; compile/static checks
-will be recorded with the final handoff.
+Implementation checkpoint ready for compile checks. The original agent stopped at
+its usage limit; Sol 6.1 Medium resumed the existing claimed worktree without
+resetting its changes.
+
+## Implemented
+
+- Conversation-row clock control and single-conversation context-menu action add
+  or remove explicit Reply Later membership, with operation-targeted Undo.
+- Reply Later appears in the Mail card, can be moved/hidden/pinned like other
+  entries, and displays the durable queue count. It opens through the existing
+  generic unified-folder callback; no App.svelte change is required.
+- Unified Reply Later list/count/search apply queue membership across enabled
+  accounts. The view does not trigger a full sync across every folder.
+- Virtual-folder quick filters now pass unread/Reply Later to online search.
+  Queue membership is intersected before Gmail metadata hydration, and provider
+  ID scans are bounded to ten pages per request. Filtered virtual views bypass
+  the unfiltered cached first paint and full-view online counter.
+- Queue operations emit `replyLater:changed` and `undo:history-changed`.
+- Mail-window scope/RPC allowlists support Reply Later; membership changes are
+  forwarded to independent mail windows.
+
+## Integration hooks and remaining limits
+
+- UX-044 owns App.svelte and undo history. Merge this branch with its work;
+  `undo:history-changed` is already emitted after queue operations are pushed.
+- Keep the existing generic `onUnifiedSpecialFolderSelect` callback unchanged.
+- Queue refs whose local conversation no longer exists stay durable and counted;
+  the current mail-list view can display only locally indexed conversations.
+- The external agent API adapter remains dependent on the authorized transport
+  work; this task does not introduce an unauthenticated endpoint.
+- No tests were requested; targeted compilation/static checks follow.

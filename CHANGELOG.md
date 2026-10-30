@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Add Reply Later controls on conversation rows and context menus, with an undoable sidebar queue and count. Apply unread and Reply Later quick filters to online virtual-folder results.
+
 ## Postilaatikko 2026.10.29.1
 
 - Replace half-second dialog-guard polling in message lists and readers with event-driven refreshes when the last blocking dialog closes.

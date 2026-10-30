@@ -9,7 +9,7 @@ import (
 // RefreshViewHeaders is nonblocking and coalesced. Opening a folder never clears
 // its cache or cancels a manual sync. Metadata events update the visible list.
 func (a *App) RefreshViewHeaders(accountID, folderID string) error {
-	if accountID == "virtual" {
+	if accountID == "virtual" || (accountID == "unified" && folderID == "replyLater") {
 		return nil
 	} // virtual views already perform a server query
 	if accountID == "unified" {
