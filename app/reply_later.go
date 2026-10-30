@@ -16,6 +16,7 @@ func (a *App) GetReplyLaterQueue() ([]replylater.Ref, error) {
 	return a.replyLaterStore.List()
 }
 
+// GetReplyLaterCount returns the number of explicit queued conversations.
 func (a *App) GetReplyLaterCount() (int, error) {
 	if a.replyLaterStore == nil {
 		return 0, fmt.Errorf("Reply Later queue is not ready")
@@ -31,36 +32,49 @@ func (a *App) IsReplyLater(accountID, conversationID string) (bool, error) {
 	return a.replyLaterStore.Contains(replylater.Ref{AccountID: accountID, ConversationID: conversationID})
 }
 
-// AddReplyLater adds a conversation to the personal triage queue. Repeated
-// adds are harmless and do not create redundant undo entries.
-func (a *App) AddReplyLater(accountID, conversationID string) (bool, error) {
-	if a.replyLaterStore == nil {
-		return false, fmt.Errorf("Reply Later queue is not ready")
-	}
-	ref := replylater.Ref{AccountID: accountID, ConversationID: conversationID}
-	changed, err := a.replyLaterStore.Add(ref)
-	if err != nil || !changed {
-		return changed, err
-	}
-	a.emitReplyLaterChanged(ref, true)
-	a.undoStack.PushOperation("", undo.NewReplyLaterChangeCommand(a, ref, false, "Added to Reply Later"), undo.OperationMetadata{Action: "reply-later-add"})
-	return true, nil
+// ReplyLaterChangeResult exposes a targeted undo token for one queue change.
+type ReplyLaterChangeResult struct {
+	Changed     bool   `json:"changed"`
+	OperationID string `json:"operationId"`
 }
 
-// RemoveReplyLater removes a conversation from the triage queue. It leaves
-// message flags and provider state untouched.
+// AddReplyLater adds a conversation to the personal triage queue.
+func (a *App) AddReplyLater(accountID, conversationID string) (bool, error) {
+	result, err := a.ChangeReplyLaterWithUndo(accountID, conversationID, true)
+	return result.Changed, err
+}
+
+// RemoveReplyLater removes a conversation without changing provider flags.
 func (a *App) RemoveReplyLater(accountID, conversationID string) (bool, error) {
+	result, err := a.ChangeReplyLaterWithUndo(accountID, conversationID, false)
+	return result.Changed, err
+}
+
+// ChangeReplyLaterWithUndo sets explicit membership and returns the normal
+// operation-scoped undo token. Duplicate calls do not create duplicate history.
+func (a *App) ChangeReplyLaterWithUndo(accountID, conversationID string, inQueue bool) (ReplyLaterChangeResult, error) {
 	if a.replyLaterStore == nil {
-		return false, fmt.Errorf("Reply Later queue is not ready")
+		return ReplyLaterChangeResult{}, fmt.Errorf("Reply Later queue is not ready")
 	}
 	ref := replylater.Ref{AccountID: accountID, ConversationID: conversationID}
-	changed, err := a.replyLaterStore.Remove(ref)
-	if err != nil || !changed {
-		return changed, err
+	var changed bool
+	var err error
+	if inQueue {
+		changed, err = a.replyLaterStore.Add(ref)
+	} else {
+		changed, err = a.replyLaterStore.Remove(ref)
 	}
-	a.emitReplyLaterChanged(ref, false)
-	a.undoStack.PushOperation("", undo.NewReplyLaterChangeCommand(a, ref, true, "Removed from Reply Later"), undo.OperationMetadata{Action: "reply-later-remove"})
-	return true, nil
+	if err != nil || !changed {
+		return ReplyLaterChangeResult{Changed: changed}, err
+	}
+	description, action := "Added to Reply Later", "reply-later-add"
+	if !inQueue {
+		description, action = "Removed from Reply Later", "reply-later-remove"
+	}
+	operationID := a.undoStack.PushOperation("", undo.NewReplyLaterChangeCommand(a, ref, !inQueue, description), undo.OperationMetadata{Action: action})
+	a.emitReplyLaterChanged(ref, inQueue)
+	a.emitRuntimeEvent("undo:history-changed")
+	return ReplyLaterChangeResult{Changed: true, OperationID: operationID}, nil
 }
 
 // SetReplyLaterMembership is the undo-context operation for restoring a

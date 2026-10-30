@@ -437,6 +437,8 @@ export function GetUIState():Promise<appstate.UIState>;
 
 export function GetUndoDescription():Promise<string>;
 
+export function GetUndoHistory(arg1:number):Promise<app.UndoHistoryEntry[]>;
+
 export function GetUnifiedFolderConversations(arg1:string,arg2:number,arg3:number,arg4:string,arg5:string):Promise<Array<message.Conversation>>;
 
 export function GetUnifiedFolderCount(arg1:string,arg2:string):Promise<number>;
@@ -858,3 +860,6 @@ export function GetDraftAttachmentBlob(arg1: string): Promise<any>;
 export function DraftHistoryCommitBlobs(arg1: string, arg2: string, arg3: string, arg4: string, arg5: string[]): Promise<string>;
 
 export function OpenMailWindow(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string,arg6:string,arg7:string,arg8:string):Promise<void>;
+
+export function GetReplyLaterQueue():Promise<Array<{accountId:string;conversationId:string}>>;
+export function ChangeReplyLaterWithUndo(accountId:string,conversationId:string,inQueue:boolean):Promise<{changed:boolean;operationId:string}>;

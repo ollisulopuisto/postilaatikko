@@ -120,6 +120,7 @@ func (a *App) moveGmailMessages(msgs []*message.Message, dest *folder.Folder, re
 			captured := append([]string(nil), ids...)
 			cmd := &gmailUndo{BaseCommand: undo.NewBaseCommand("Move to " + dest.Name), reverse: func() error { _, err := a.moveToFolder(captured, previous, false, ""); return err }}
 			operationID = a.undoStack.PushOperation(operationID, cmd, undo.OperationMetadata{Action: "move-to-folder", MessageIDs: ids})
+			a.emitRuntimeEvent("undo:history-changed")
 		}
 	}
 	return operationID, nil

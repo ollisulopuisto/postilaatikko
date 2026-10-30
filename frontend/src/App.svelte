@@ -14,6 +14,7 @@
   import Sidebar from './lib/components/sidebar/Sidebar.svelte'
   import GlobalSearch from './lib/components/common/GlobalSearch.svelte'
   let showGlobalSearch = $state(false)
+  let showUndoHistory = $state(false)
   import ScheduledPane from './lib/components/scheduled/ScheduledPane.svelte'
   import MessageList from './lib/components/list/MessageList.svelte'
   import ConversationViewer from './lib/components/viewer/ConversationViewer.svelte'
@@ -28,6 +29,7 @@
   import ExtensionSettingsDialog from './lib/components/settings/ExtensionSettingsDialog.svelte'
   import ExtensionRail from './lib/components/rail/ExtensionRail.svelte'
   import ShortcutsDialog from './lib/components/shortcuts/ShortcutsDialog.svelte'
+  import UndoHistoryPanel from './lib/components/common/UndoHistoryPanel.svelte'
   import CommandPalette from './lib/components/command/CommandPalette.svelte'
   import ContactsPane from '$extensions/contacts/frontend/components/ContactsPane.svelte'
   import CalendarPane from '$extensions/calendar/frontend/components/CalendarPane.svelte'
@@ -194,9 +196,10 @@
   let selectedConversationFolderId = $state<string | null>(null)
   let selectedConversationAccountId = $state<string | null>(null)
   // Read-state changes are intentionally excluded from the backend's global
-  // undo stack (automatic read timers would otherwise pollute it). Keep the
-  // last explicit bulk action locally so its toast and Ctrl+Z can undo it.
+  // undo stack (automatic read timers would otherwise pollute it). Keep a
+  // targeted toast undo without diverting Cmd-Z/Ctrl-Z from global LIFO.
   let lastFlagUndo = $state<{ messageIds: string[], restoreRead: boolean } | null>(null)
+  let globalUndoInFlight = false
   const targetedUndoInFlight = new Set<string>()
 
   // Composer state
@@ -504,6 +507,12 @@
   })
 
   onMount(async () => {
+    EventsOn('undo:history-open', () => {
+      setActiveExtension('mail')
+      showUndoHistory = true
+    })
+    EventsOn('undo:requested', () => { void handleGlobalUndo() })
+
     // Listen for notification click events from backend
     try {
       pendingSends = await ListPendingSends() as PendingSendItem[]
@@ -1434,11 +1443,7 @@
           return
         case 'z':
           e.preventDefault()
-          if (lastFlagUndo) {
-            handleUndoLastFlag()
-          } else {
-            handleGlobalUndo()
-          }
+          handleGlobalUndo()
           return
         case 'l':
           e.preventDefault()
@@ -1822,11 +1827,7 @@
         return
       case 'z':
         e.preventDefault()
-        if (lastFlagUndo) {
-          handleUndoLastFlag()
-        } else {
-          handleGlobalUndo()
-        }
+        handleGlobalUndo()
         return
       case 'm':
         if (!KEY.LIST_TOGGLE_READ(e)) return
@@ -2099,8 +2100,11 @@
     }
   }
 
-  // Ctrl+Z is the true global LIFO path; toast Undo uses handleTargetedUndo.
+  // Cmd-Z/Ctrl-Z and Edit > Undo share the global LIFO path; history rows and
+  // action toasts use operation-scoped UndoOperation instead.
   async function handleGlobalUndo() {
+    if (globalUndoInFlight) return
+    globalUndoInFlight = true
     try {
       const result = await UndoLatestWithResult()
       publishUndoOperationCompleted(result.operationId)
@@ -2108,6 +2112,8 @@
     } catch (err) {
       console.error('Undo failed:', err)
       addToast({ type: 'error', message: $_('toast.undoFailed') })
+    } finally {
+      globalUndoInFlight = false
     }
   }
 </script>
@@ -2330,6 +2336,7 @@
 {#if shortcutsOverlay.open}
   <ShortcutsDialog />
 {/if}
+<UndoHistoryPanel bind:open={showUndoHistory} />
 
 <!-- Command palette (Cmd+P / Ctrl+P, Alfred style quick launcher). -->
 {#if pendingSends.length > 0}

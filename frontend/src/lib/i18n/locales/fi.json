@@ -4,6 +4,18 @@
     "complete": "{total} keskustelua · {unread} lukematta",
     "incomplete": "Palvelimen laskenta on kesken"
   },
+  "undoHistory": {
+    "title": "Kumoushistoria",
+    "description": "Viimeisimmät sähköpostitoiminnot, jotka voit vielä kumota. Cmd-Z Macissa (Ctrl-Z muilla alustoilla) kumoaa aina viimeisimmän toiminnon.",
+    "loading": "Ladataan kumoushistoriaa…",
+    "empty": "Kumottavia toimintoja ei ole.",
+    "loadFailed": "Kumoushistoriaa ei voitu ladata.",
+    "retry": "Yritä uudelleen",
+    "undo": "Kumoa",
+    "minutesLeft": "Kumous käytettävissä vielä {count} min",
+    "hoursLeft": "Kumous käytettävissä vielä {count} h",
+    "messages": "{count} viestiä"
+  },
   "mailWindow": {
     "allMail": "Kaikki viestit",
     "spam": "Roskaposti",
@@ -144,6 +156,14 @@
     "virtualFolderSaveFailed": "Virtuaalikansion tallennus epäonnistui.",
     "bottomActions": "Pikatoiminnot",
     "virtualFolderSavedQuery": "Tallennettu haku"
+  },
+  "replyLater": {
+      "title": "Vastaa myöhemmin",
+      "add": "Lisää Vastaa myöhemmin -jonoon",
+      "remove": "Poista Vastaa myöhemmin -jonosta",
+      "added": "Lisätty Vastaa myöhemmin -jonoon",
+      "removed": "Poistettu Vastaa myöhemmin -jonosta",
+      "failed": "Vastaa myöhemmin -jonon päivitys epäonnistui"
   },
   "messageList": {
     "searchMessages": "Etsi viestejä...",

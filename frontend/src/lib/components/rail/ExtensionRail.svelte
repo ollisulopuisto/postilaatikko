@@ -9,7 +9,7 @@
   const systemIcons: Record<string, string> = {
     inbox: 'mdi:inbox-outline', starred: 'mdi:pin-outline', drafts: 'mdi:file-outline',
     sent: 'mdi:send-outline', trash: 'mdi:delete-outline', archive: 'mdi:archive-outline',
-    spam: 'mdi:alert-octagon-outline', snoozed: 'mdi:clock-outline', all: 'mdi:email-multiple-outline',
+    replyLater: 'mdi:clock-outline', spam: 'mdi:alert-octagon-outline', snoozed: 'mdi:clock-outline', all: 'mdi:email-multiple-outline',
   }
   function quickIcon(entry: { kind: string; folderType?: string }): string {
     if (entry.kind === 'inboxes') return 'mdi:inbox-multiple-outline'

@@ -15,6 +15,7 @@ import (
 	"github.com/hkdb/aerion/internal/platform"
 	"github.com/hkdb/aerion/internal/settings"
 	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/menu"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/linux"
@@ -143,6 +144,22 @@ func runMainMode(mailtoData *app.MailtoData, rawMailtoArg string) {
 	application.SingleInstanceLock = lock
 	application.WindowDecorationStatus = platform.NewWindowDecorationStatus(preference, effectiveMode, capabilities)
 
+	editMenu := menu.NewMenuFromItems(
+		menu.Text("Undo", nil, func(*menu.CallbackData) { application.RequestUndoFromMenu() }),
+		menu.Separator(),
+		menu.Text("Undo History…", nil, func(*menu.CallbackData) { application.RequestUndoHistoryFromMenu() }),
+		menu.Separator(),
+		menu.Text("Cut", nil, func(*menu.CallbackData) { application.RunEditMenuCommand("cut") }),
+		menu.Text("Copy", nil, func(*menu.CallbackData) { application.RunEditMenuCommand("copy") }),
+		menu.Text("Paste", nil, func(*menu.CallbackData) { application.RunEditMenuCommand("paste") }),
+		menu.Separator(),
+		menu.Text("Select All", nil, func(*menu.CallbackData) { application.RunEditMenuCommand("selectAll") }),
+	)
+	applicationMenu := menu.NewMenuFromItems(menu.AppMenu(), menu.SubMenu("Edit", editMenu))
+	if effectiveMode == platform.TitleBarModeNative {
+		applicationMenu.Append(menu.WindowMenu())
+	}
+
 	// Store mailto data if provided (will be used after startup)
 	if mailtoData != nil {
 		application.PendingMailto = mailtoData
@@ -171,6 +188,7 @@ func runMainMode(mailtoData *app.MailtoData, rawMailtoArg string) {
 		Frameless:                effectiveMode != platform.TitleBarModeNative,
 		StartHidden:              true, // Hide until frontend is ready to prevent white flash
 		EnableDefaultContextMenu: true,
+		Menu:                     applicationMenu,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},

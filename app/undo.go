@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/hkdb/aerion/internal/imap"
 	"github.com/hkdb/aerion/internal/logging"
@@ -30,6 +31,16 @@ func (a *App) emitRuntimeEvent(eventName string, data ...interface{}) {
 type UndoLatestResult struct {
 	OperationID string `json:"operationId"`
 	Description string `json:"description"`
+}
+
+// UndoHistoryEntry is the safe, compact summary exposed to the UI.
+type UndoHistoryEntry struct {
+	OperationID  string    `json:"operationId"`
+	Action       string    `json:"action"`
+	Description  string    `json:"description"`
+	CreatedAt    time.Time `json:"createdAt"`
+	ExpiresAt    time.Time `json:"expiresAt"`
+	MessageCount int       `json:"messageCount"`
 }
 
 type undoFolderDiagnostics interface {
@@ -137,6 +148,46 @@ func (a *App) UndoOperation(operationID string) (string, error) {
 	a.emitRuntimeEvent("undo:completed", description)
 	log.Info().Str("operationId", operationID).Str("action", description).Msg("UNDO DONE")
 	return description, nil
+}
+
+// GetUndoHistory returns at most 100 active mailbox operations, newest first.
+func (a *App) GetUndoHistory(limit int) []UndoHistoryEntry {
+	if a.undoStack == nil {
+		return []UndoHistoryEntry{}
+	}
+	rows := a.undoStack.History(limit)
+	out := make([]UndoHistoryEntry, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, UndoHistoryEntry{
+			OperationID:  row.OperationID,
+			Action:       row.Action,
+			Description:  row.Description,
+			CreatedAt:    row.CreatedAt,
+			ExpiresAt:    row.ExpiresAt,
+			MessageCount: row.MessageCount,
+		})
+	}
+	return out
+}
+
+// RequestUndoHistoryFromMenu routes the native Edit menu item to the active UI.
+func (a *App) RequestUndoHistoryFromMenu() {
+	a.emitRuntimeEvent("undo:history-open")
+}
+
+// RequestUndoFromMenu routes the native Edit > Undo item through the same UI
+// path as Cmd-Z so selection reconciliation and feedback remain consistent.
+func (a *App) RequestUndoFromMenu() {
+	a.emitRuntimeEvent("undo:requested")
+}
+
+// RunEditMenuCommand preserves standard text editing actions in the custom
+// native Edit menu. Commands are a fixed allowlist, never caller-provided JS.
+func (a *App) RunEditMenuCommand(command string) {
+	switch command {
+	case "cut", "copy", "paste", "selectAll":
+		wailsRuntime.WindowExecJS(a.ctx, "document.execCommand('"+command+"')")
+	}
 }
 
 // CanUndo returns true if there's an action that can be undone

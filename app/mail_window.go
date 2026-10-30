@@ -103,7 +103,7 @@ func (a *App) OpenMailWindow(accountID, folderID, folderName, folderType, thread
 		folderName = view.Name
 	case accountID == "unified":
 		switch folderID {
-		case "inbox", "sent", "drafts", "trash", "spam", "archive", "all", "starred":
+		case "inbox", "sent", "drafts", "trash", "spam", "archive", "all", "starred", "replyLater":
 		default:
 			return errors.New("unknown unified folder")
 		}
@@ -180,6 +180,7 @@ func (a *App) mailWindowMethods() map[string]any {
 		"GetVirtualFolders":             a.GetVirtualFolders,
 		"GetVirtualFolderUnreadCounts":  a.GetVirtualFolderUnreadCounts,
 		"GetReplyLaterQueue":            a.GetReplyLaterQueue,
+		"ChangeReplyLaterWithUndo":      a.ChangeReplyLaterWithUndo,
 		"GetReplyLaterCount":            a.GetReplyLaterCount,
 		"IsReplyLater":                  a.IsReplyLater,
 		"AddReplyLater":                 a.AddReplyLater,
