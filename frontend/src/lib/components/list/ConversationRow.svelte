@@ -16,7 +16,7 @@
   // @ts-ignore - wailsjs path
   import { message, folder } from '../../../../wailsjs/go/models'
   // @ts-ignore - wailsjs path
-  import { OpenReaderWindow, MarkAsRead, MarkAsUnread, RemoveFromInboxWithUndo, UndoOperation } from '../../../../wailsjs/go/app/App'
+  import { OpenReaderWindow, MarkAsRead, MarkAsUnread, RemoveFromInboxWithUndo, ResolveMailActionTarget, UndoOperation } from '../../../../wailsjs/go/app/App'
   import ReplyLaterButton from '$lib/components/common/ReplyLaterButton.svelte'
   import MessageContextMenu from '$lib/components/common/MessageContextMenu.svelte'
   import Avatar from '$lib/components/kit/Avatar.svelte'
@@ -241,13 +241,14 @@
   async function handleDoneClick(e: MouseEvent) {
     e.stopPropagation()
     try {
+      const messageIds = await resolveOwnMessageTarget()
       await runMessageMutation(ownMessageIds, async () => {
         moveMutationInFlight = true
         try {
-          const result = await RemoveFromInboxWithUndo(ownMessageIds)
+          const result = await RemoveFromInboxWithUndo(messageIds)
           if (result.coalesced) return
           const operationID = result.operationId
-          publishUndoOperationCreated(operationID, ownMessageIds, 'remove-from-inbox')
+          publishUndoOperationCreated(operationID, messageIds, 'remove-from-inbox')
           let toastId = ''
           toastId = toasts.success($_('toast.archived'), operationID ? [{ label: $_('common.undo'), onClick: () => handleUndo(toastId, operationID) }] : [])
           onActionComplete?.(true)
@@ -265,12 +266,13 @@
     e.stopPropagation()
     const markingAsUnread = ownIsRead
     try {
+      const messageIds = await resolveOwnMessageTarget()
       await runMessageMutation(ownMessageIds, async () => {
         if (markingAsUnread) {
-          await MarkAsUnread(ownMessageIds)
+          await MarkAsUnread(messageIds)
           toasts.success($_('toast.markedAsUnread'))
         } else {
-          await MarkAsRead(ownMessageIds)
+          await MarkAsRead(messageIds)
           toasts.success($_('toast.markedAsRead'))
         }
         readOverride = !markingAsUnread
@@ -314,6 +316,15 @@
   const ownMessageIds = $derived(
     conversation.messageIds || conversation.messages?.map((m) => m.id) || []
   )
+
+  async function resolveOwnMessageTarget(): Promise<string[]> {
+    const owningAccountId = conversation.accountId || accountId
+    if (!owningAccountId) throw new Error('Cannot validate a message action without its account')
+    return ResolveMailActionTarget({
+      kind: 'matched_messages',
+      messages: ownMessageIds.map((messageId) => ({ accountId: owningAccountId, messageId })),
+    })
+  }
 
   // Determine star/read state from this conversation
   const ownIsStarred = $derived(conversation.isStarred ?? false)

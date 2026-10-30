@@ -5,11 +5,29 @@
 /** Where a list action's targets came from. */
 export type ListTargetKind = 'checked' | 'focused' | 'none'
 
+/** A backend-safe target; IDs are always qualified by their owning account. */
+export type ActionTarget =
+  | { kind: 'message'; messages: [MessageRef]; thread?: never }
+  | { kind: 'matched_messages'; messages: MessageRef[]; thread?: never }
+  | { kind: 'thread'; messages?: never; thread: ThreadRef }
+
+export interface MessageRef {
+  accountId: string
+  messageId: string
+}
+
+export interface ThreadRef {
+  accountId: string
+  threadId: string
+}
+
 /** The messages a list action applies to, plus the star value those messages imply. */
 export interface ListTarget {
   kind: ListTargetKind
   /** Local MESSAGE ids (never thread ids). Empty when kind is 'none'. */
   messageIds: string[]
+  /** Account-qualified snapshot sent to the backend before any mutation. */
+  actionTarget: ActionTarget | null
   /** What the star action should set: true stars them, false unstars them. */
   star: boolean
   /** What the read toggle should set: true marks them read, false marks them unread. */
@@ -20,8 +38,10 @@ export interface ListTarget {
 export interface ListTargetSource {
   hasChecked(): boolean
   checkedIds(): string[]
+  checkedRefs?(): MessageRef[]
   /** The keyboard-focused / selected row's message ids. */
   focusedIds(): string[]
+  focusedRefs?(): MessageRef[]
   /** True when at least one checked message is not starred. */
   checkedHasUnstarred(): boolean
   /** True when the focused row is starred. */
@@ -49,6 +69,8 @@ export interface MessageActionExecutor {
   markUnread(messageIds: string[]): unknown
   toggleStar(messageIds: string[], star: boolean): unknown
   trash(messageIds: string[], permanent: boolean): unknown
+  /** Production executor path; legacy executor methods keep pure callers small. */
+  applyTarget?(actionId: string, target: ActionTarget, options?: RunOptions, desiredState?: boolean): unknown
 }
 
 export interface RunOptions {

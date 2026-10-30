@@ -15,6 +15,7 @@ import (
 	"github.com/hkdb/aerion/internal/imap"
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/message"
+	"github.com/hkdb/aerion/internal/operations"
 	"github.com/hkdb/aerion/internal/undo"
 )
 
@@ -56,6 +57,14 @@ func (a *App) withIMAPRetry(accountID string, op func(conn *imap.Client) error) 
 // ============================================================================
 // Message Actions API - Exposed to frontend via Wails bindings
 // ============================================================================
+
+// ResolveMailActionTarget validates a UI's explicit, account-qualified target
+// and returns the local message IDs expected by the existing undoable mutation
+// APIs. This is a resolution step only; callers still use the established
+// mutation methods so sync, events and undo retain their existing semantics.
+func (a *App) ResolveMailActionTarget(target operations.Target) ([]string, error) {
+	return operations.Resolve(target, a.messageStore)
+}
 
 // UndoableActionResult identifies the undo operation registered by an action.
 type UndoableActionResult struct {
