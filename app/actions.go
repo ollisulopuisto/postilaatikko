@@ -524,6 +524,7 @@ func (a *App) moveToFolder(messageIDs []string, destFolderID string, recordUndo 
 				Action:     "move:" + string(destFolder.Type),
 				MessageIDs: messageIDs,
 			})
+			a.emitRuntimeEvent("undo:history-changed")
 			cmd.SetOperationID(operationID)
 			cmd.SetTracedMove(func(messageIDs []string, destinationFolderID, tracedOperationID string) error {
 				return a.runUndoMoveMutation(messageIDs, destinationFolderID, tracedOperationID)

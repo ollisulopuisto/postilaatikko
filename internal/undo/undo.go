@@ -97,6 +97,17 @@ type OperationMetadata struct {
 	MessageIDs []string
 }
 
+// HistoryEntry is a privacy-minimal summary of one undoable mailbox action.
+// It deliberately omits message IDs and mail content.
+type HistoryEntry struct {
+	OperationID  string    `json:"operationId"`
+	Action       string    `json:"action"`
+	Description  string    `json:"description"`
+	CreatedAt    time.Time `json:"createdAt"`
+	ExpiresAt    time.Time `json:"expiresAt"`
+	MessageCount int       `json:"messageCount"`
+}
+
 func newOperationID() string {
 	bytes := make([]byte, 16)
 	if _, err := rand.Read(bytes); err != nil {
@@ -439,4 +450,48 @@ func (s *Stack) Size() int {
 	defer s.mu.Unlock()
 	s.cleanExpired()
 	return len(s.commands)
+}
+
+// History returns the newest active user operations first. Multiple commands
+// grouped under one operation ID are represented by one row. The result is
+// bounded to keep the desktop panel inexpensive even with a long retention
+// window.
+func (s *Stack) History(limit int) []HistoryEntry {
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cleanExpired()
+	operationRows := make(map[string]int, min(limit, len(s.commands)))
+	operationMessages := make(map[string]map[string]struct{}, min(limit, len(s.commands)))
+	rows := make([]HistoryEntry, 0, min(limit, len(s.commands)))
+	for i := len(s.commands) - 1; i >= 0; i-- {
+		item := s.commands[i]
+		index, found := operationRows[item.operationID]
+		if !found {
+			if len(rows) == limit {
+				continue
+			}
+			index = len(rows)
+			operationRows[item.operationID] = index
+			operationMessages[item.operationID] = make(map[string]struct{}, len(item.messageIDs))
+			rows = append(rows, HistoryEntry{
+				OperationID: item.operationID,
+				Action:      item.action,
+				Description: item.command.Description(),
+				CreatedAt:   item.command.CreatedAt(),
+				ExpiresAt:   item.expiresAt,
+			})
+		}
+		ids := operationMessages[item.operationID]
+		for _, id := range item.messageIDs {
+			if _, exists := ids[id]; exists {
+				continue
+			}
+			ids[id] = struct{}{}
+			rows[index].MessageCount++
+		}
+	}
+	return rows
 }
