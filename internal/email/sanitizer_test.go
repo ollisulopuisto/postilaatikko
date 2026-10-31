@@ -132,3 +132,41 @@ func TestExtractPlainTextFromHTML_Entities(t *testing.T) {
 		t.Fatalf("expected '& <' in result, got: %s", result)
 	}
 }
+
+var benchSampleHTML = `
+<html>
+<head>
+  <style>
+    body { font-family: sans-serif; color: #333; }
+    .header { font-size: 18px; font-weight: bold; }
+  </style>
+  <script>console.log("tracking pixel");</script>
+</head>
+<body background="https://tracker.example.com/bg.jpg">
+  <div class="header">Hello User,</div>
+  <p>Thank you for subscribing to our newsletter! Here is your daily digest.</p>
+  <div style="background: url('https://tracker.example.com/css-bg.png'); padding: 10px;">
+    <p>Check out our latest post on <a href="https://example.com/post">our blog</a>.</p>
+    <img src="https://images.example.com/photo1.jpg" width="300" height="200" alt="Photo 1" />
+    <br/>
+    <img src="https://images.example.com/photo2.jpg" width="300" height="200" alt="Photo 2" />
+    <img src="cid:local_attachment_id" alt="Embedded" />
+  </div>
+  <p>Reach us at &amp; support &lt;help@example.com&gt; or call &#39;555-0199&#39;.</p>
+</body>
+</html>
+`
+
+func BenchmarkBlockRemoteImages(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = BlockRemoteImages(benchSampleHTML)
+	}
+}
+
+func BenchmarkExtractPlainTextFromHTML(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = ExtractPlainTextFromHTML(benchSampleHTML)
+	}
+}
