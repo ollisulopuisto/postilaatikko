@@ -23,5 +23,5 @@ import "C"
 // PrefersWindowTabs follows macOS's System Settings > Desktop & Dock tab
 // preference for the current window.
 func PrefersWindowTabs(fullscreen bool) bool {
-	return C.postilaatikkoPrefersWindowTabs(C.BOOL(fullscreen)) != 0
+	return bool(C.postilaatikkoPrefersWindowTabs(C.BOOL(fullscreen)))
 }
