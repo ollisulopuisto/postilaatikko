@@ -9,6 +9,7 @@
 - Fix message-list folder badges showing internal JavaScript source instead of the folder name.
 - Open double-clicked conversations in a tab when macOS's Desktop & Dock preference calls for tabs; avoid blocking detached mail-window startup on the primary window's UI state.
 - Reorder favorite destinations in the left quick-access rail; Cmd/Ctrl+1…0 follows the displayed order.
+- Allow hidden, idle Postilaatikko windows to enter App Nap while IMAP IDLE watches remain connected; keep process assertions limited to active sync and send work.
 - Refresh Gmail labels from the virtual-folder editor, and apply Gmail label scopes correctly to online virtual-folder searches.
 - Add ordered contextual signature rules for sender, recipient, and message type, with placement controls and manual-edit preservation.
 - Add bulk select/clear controls to virtual-folder setup, wrap long sidebar labels, and make the cross-account move picker a searchable expandable folder tree.
