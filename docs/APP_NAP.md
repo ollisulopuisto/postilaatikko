@@ -16,14 +16,13 @@ the app is *temporarily* ineligible for App Nap only while they run:
 
 Deliberately *not* asserted:
 
-- **IMAP IDLE / new-mail notification watches.** App Nap does not close
-  sockets; it lowers scheduling priority, so a notification can arrive
-  late while napped — delayed, not lost. This is a deliberate tradeoff,
-  not a settled one: asserting here would keep the app out of App Nap
-  whenever a watch is armed and mostly void the power saving. If timely
-  background notifications matter more than the battery saving, the
-  alternative is holding a background assertion while an IDLE watch is
-  armed — say the word and it flips.
+- **IMAP IDLE / new-mail notification watches.** An armed IDLE watch
+  holds an `ActivityBackground` assertion, because timely new-mail
+  notifications are the default expectation and App Nap lowers the
+  process's scheduling priority while the socket stays open. This
+  deliberately limits the power saving: the app is un-nappable whenever
+  at least one account is watching. The assertion is background-only —
+  the display and the machine still sleep normally.
 - **Send Later delivery.** Scheduled sends are delivered by the separate
   `postilaatikko-helper` process. App Nap's candidacy rules are
   app-centric (foreground, windows, audible), so the helper is not itself
