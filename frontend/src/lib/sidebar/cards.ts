@@ -10,7 +10,7 @@ export interface NavigationEntry {
 }
 export interface NavigationCard { id: string; name: string; hidden: boolean; collapsed: boolean; entries: string[] }
 export interface NavigationCards { version: 1; cards: NavigationCard[]; quick: string[]; showApps: boolean }
-const defaults = [ ['virtual', 'Virtual folders'], ['primary', 'Mail'], ['secondary', 'More'], ['pinned', 'Pinned folders'] ]
+const defaults = [ ['virtual', 'Virtual folders'], ['primary', 'Mail'], ['secondary', 'More'], ['pinned', 'Pinned folders'], ['favorites', 'Starred folders'] ]
 export function normalizeCards(raw: string, entries: NavigationEntry[]): NavigationCards {
   let saved: Partial<NavigationCards> = {}
   try { saved = JSON.parse(raw) || {} } catch { /* First use or stale preference. */ }
