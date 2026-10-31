@@ -86,7 +86,7 @@
   // All Inboxes views each conversation can live in a different folder, so we
   // look the folder name up from the account's folder tree. Falls back to the
   // searchFolderName passed by search results, then to an empty string.
-  const folderName = $derived(() => {
+  const folderName = $derived.by(() => {
     if (searchFolderName) return searchFolderName
     const account = accountStore.accounts.find((item) => item.account.id === accountId)
     if (!account) return ''
