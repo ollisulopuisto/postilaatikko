@@ -225,6 +225,10 @@ func TestMigrationV32_LocalRecordIDsRewrittenToUUIDs(t *testing.T) {
 			t.Fatalf("drop virtual_folders.%s for re-migrate: %v", col, err)
 		}
 	}
+	// Same for v63's signature_rules on identities.
+	if _, err := db.Exec(`ALTER TABLE identities DROP COLUMN signature_rules`); err != nil {
+		t.Fatalf("drop identities.signature_rules for re-migrate: %v", err)
+	}
 
 	// Re-run migrations — migration 32 should rewrite the seeded local- id.
 	if err := db.Migrate(); err != nil {
@@ -405,6 +409,10 @@ func TestMigrationV33_CleansExistingOrphans(t *testing.T) {
 		if _, err := db.Exec(`ALTER TABLE virtual_folders DROP COLUMN ` + col); err != nil {
 			t.Fatalf("drop virtual_folders.%s for re-migrate: %v", col, err)
 		}
+	}
+	// Same for v63's signature_rules on identities.
+	if _, err := db.Exec(`ALTER TABLE identities DROP COLUMN signature_rules`); err != nil {
+		t.Fatalf("drop identities.signature_rules for re-migrate: %v", err)
 	}
 
 	// Seed: orphan state row whose addressbook doesn't exist. Pre-migration,
