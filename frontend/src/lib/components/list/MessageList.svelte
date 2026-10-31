@@ -59,6 +59,7 @@
     folderName?: string
     folderType?: string
     onConversationSelect?: (threadId: string, folderId: string, accountId: string) => void
+    onOpenInTab?: (accountId: string, folderId: string, threadId: string, folderType: string, subject: string) => void
     onReply?: (mode: 'reply' | 'reply-all' | 'forward', messageId: string) => void
     onRowActionComplete?: (autoSelectNext: boolean) => void
     onBulkMarkRead?: (messageIds: string[]) => void
@@ -77,6 +78,7 @@
     folderName = 'Inbox',
     folderType = 'inbox',
     onConversationSelect,
+    onOpenInTab,
     onReply,
     onRowActionComplete,
     onBulkMarkRead,
@@ -2861,6 +2863,7 @@
               isNonLocal={result._isLocal === false}
               searchFolderName={result.folderName}
               searchFolderType={result.folderType}
+              onOpenInTab={onOpenInTab}
               onSelect={(e) => selectConversation(result.threadId, index, e)}
               onCheck={(checked, e) => handleCheck(result.threadId, checked, index, e)}
               onClearSelection={clearSelection}
@@ -2933,6 +2936,7 @@
             highlightedFromName={result.highlightedFromName}
             searchFolderName={result.folderName}
             searchFolderType={result.folderType}
+            onOpenInTab={onOpenInTab}
             onSelect={(e) => selectConversation(result.threadId, index, e)}
             onCheck={(checked, e) => handleCheck(result.threadId, checked, index, e)}
             onClearSelection={clearSelection}
@@ -3028,6 +3032,7 @@
                   accountId={isUnifiedView || isVirtualFolderView ? convAccountId : accountId!}
                   folderId={isUnifiedView || isVirtualFolderView ? convFolderId : folderId!}
                   folderType={isVirtualFolderView ? folderTypesByID[convFolderId] || 'folder' : folderType}
+                  onOpenInTab={onOpenInTab}
                   {selectedMessageIds}
                   selectedIsStarred={!selectedHasUnstarred}
                   selectedIsRead={!selectedHasUnread}
@@ -3070,6 +3075,7 @@
           accountId={isUnifiedView || isVirtualFolderView ? convAccountId : accountId!}
           folderId={isUnifiedView || isVirtualFolderView ? convFolderId : folderId!}
           folderType={isVirtualFolderView ? folderTypesByID[convFolderId] || 'folder' : folderType}
+          onOpenInTab={onOpenInTab}
           {selectedMessageIds}
           selectedIsStarred={!selectedHasUnstarred}
           selectedIsRead={!selectedHasUnread}
