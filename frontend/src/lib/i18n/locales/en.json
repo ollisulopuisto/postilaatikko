@@ -353,6 +353,8 @@
     "hideSignature": "Hide signature",
     "showFullMessage": "Show original",
     "showSplitMessage": "Show new text only",
+    "fitWideEmail": "Fit email to width",
+    "viewEmailOriginalSize": "View email at original size",
     "reactions": "Reactions",
     "showReactionMessages": "Show reaction messages",
     "messageDetails": "Message details",

@@ -32,6 +32,8 @@
   let imagesBlocked = $state(true)
   let iframeElement = $state<HTMLIFrameElement | null>(null)
   let iframeReady = $state(false)
+  let wideEmailCanFit = $state(false)
+  let wideEmailIsFit = $state(true)
 
   // Inline attachment state
   let inlineAttachments = $state<Record<string, string>>({})
@@ -207,17 +209,55 @@
 `
 
     const iframeScript = `
+      var fitToWidth = true;
+      var fitScale = 1;
+      var layoutFrame = 0;
+
       function sendHeight() {
-        var height = document.body.scrollHeight;
+        var bodyRect = document.body.getBoundingClientRect();
+        var height = Math.ceil(bodyRect.height);
         window.parent.postMessage({ type: 'iframe-height', height: height }, '*');
+      }
+
+      function updateLayout() {
+        var body = document.body;
+        var root = document.documentElement;
+        body.style.transform = 'none';
+        body.style.width = 'auto';
+
+        var naturalWidth = Math.max(body.scrollWidth, root.scrollWidth);
+        var availableWidth = root.clientWidth;
+        var canFit = naturalWidth > availableWidth + 2;
+        fitScale = fitToWidth && canFit ? availableWidth / naturalWidth : 1;
+
+        body.style.transformOrigin = 'top left';
+        body.style.width = fitScale < 1 ? naturalWidth + 'px' : 'auto';
+        body.style.transform = fitScale < 1 ? 'scale(' + fitScale + ')' : 'none';
+        root.style.overflowX = fitToWidth ? 'hidden' : 'auto';
+        body.style.overflowX = fitToWidth ? 'hidden' : 'auto';
+
+        window.parent.postMessage({
+          type: 'iframe-layout',
+          canFit: canFit,
+          fitToWidth: fitToWidth
+        }, '*');
+        sendHeight();
+      }
+
+      function scheduleLayout() {
+        if (layoutFrame) cancelAnimationFrame(layoutFrame);
+        layoutFrame = requestAnimationFrame(function() {
+          layoutFrame = 0;
+          updateLayout();
+        });
       }
       
       function attachImageHandlers() {
         document.querySelectorAll('img').forEach(function(img) {
           if (!img.dataset.heightHandlerAttached) {
             img.dataset.heightHandlerAttached = 'true';
-            img.onload = sendHeight;
-            img.onerror = sendHeight;
+            img.onload = scheduleLayout;
+            img.onerror = scheduleLayout;
           }
         });
       }
@@ -245,6 +285,11 @@
       }
       
       window.addEventListener('message', function(e) {
+        if (e.data?.type === 'set-email-fit' && typeof e.data.fitToWidth === 'boolean') {
+          fitToWidth = e.data.fitToWidth;
+          scheduleLayout();
+          return;
+        }
         if (e.data?.type === 'select-all') {
           var range = document.createRange();
           range.selectNodeContents(document.body);
@@ -274,9 +319,9 @@
           });
           if (replaced > 0) {
             attachImageHandlers();
-            setTimeout(sendHeight, 50);
-            setTimeout(sendHeight, 150);
-            setTimeout(sendHeight, 300);
+            setTimeout(scheduleLayout, 50);
+            setTimeout(scheduleLayout, 150);
+            setTimeout(scheduleLayout, 300);
           }
         }
         if (e.data?.type === 'request-print-html') {
@@ -289,14 +334,13 @@
       window.addEventListener('load', function() {
         decorateTextLinks();
         attachImageHandlers();
-        sendHeight();
+        scheduleLayout();
         window.parent.postMessage({ type: 'iframe-ready' }, '*');
       });
       
-      window.addEventListener('resize', sendHeight);
-      new ResizeObserver(sendHeight).observe(document.body);
-      setTimeout(sendHeight, 50);
-      setTimeout(sendHeight, 200);
+      window.addEventListener('resize', scheduleLayout);
+      setTimeout(scheduleLayout, 50);
+      setTimeout(scheduleLayout, 200);
       
       document.addEventListener('auxclick', function(e) { e.preventDefault(); });
       document.addEventListener('click', function(e) {
@@ -446,11 +490,8 @@
       font-family: system-ui, sans-serif;
       font-size: 14px; line-height: 1.5;
       color: #1a1a0a; background-color: white;
-      overflow-x: auto; word-wrap: break-word;
-      scrollbar-width: none; /* Firefox */
-      -ms-overflow-style: none; /* IE/Edge */
+      overflow-x: hidden; word-wrap: break-word;
     }
-    html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; /* Chrome/Safari/WebKit */ }
     body { padding: 16px; }
     img { max-width: 100%; height: auto; }
     /* HTML emails often use fixed-width tables that overflow a narrow reader
@@ -520,6 +561,9 @@ ${processedHtml}
 
     if (event.data?.type === 'iframe-height' && iframeElement) {
       iframeElement.style.height = `${event.data.height + (compact ? 4 : 20)}px`
+    } else if (event.data?.type === 'iframe-layout') {
+      wideEmailCanFit = Boolean(event.data.canFit)
+      wideEmailIsFit = Boolean(event.data.fitToWidth)
     } else if (event.data?.type === 'iframe-ready') {
       iframeReady = true
     } else if (event.data?.type === 'open-link') {
@@ -585,6 +629,11 @@ ${processedHtml}
         ctxMenuVisible = true
       }
     }
+  }
+
+  function toggleWideEmailFit() {
+    wideEmailIsFit = !wideEmailIsFit
+    iframeElement?.contentWindow?.postMessage({ type: 'set-email-fit', fitToWidth: wideEmailIsFit }, '*')
   }
 
   function sendInlineImagesToIframe(images: Record<string, string>) {
@@ -683,6 +732,8 @@ ${processedHtml}
 
     // Reset state (was in separate effect — merged to avoid race)
     iframeReady = false
+    wideEmailCanFit = false
+    wideEmailIsFit = true
     lastSentMessageId = null
     inlineAttachments = {}
     imagesBlocked = true
@@ -748,6 +799,8 @@ ${processedHtml}
     const applyDarken = darken
 
     if (iframeElement && html) {
+      wideEmailCanFit = false
+      wideEmailIsFit = true
       const content = buildIframeContent(html, applyDarken)
       iframeElement.srcdoc = content
       iframeReady = false
@@ -830,6 +883,20 @@ ${processedHtml}
 
 <div class="email-body relative">
   {#if bodyHtml}
+    {#if wideEmailCanFit}
+      <div class="flex justify-end pb-1">
+        <button
+          type="button"
+          class="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={wideEmailIsFit ? $_('viewer.viewEmailOriginalSize') : $_('viewer.fitWideEmail')}
+          title={wideEmailIsFit ? $_('viewer.viewEmailOriginalSize') : $_('viewer.fitWideEmail')}
+          onclick={toggleWideEmailFit}
+        >
+          <Icon icon={wideEmailIsFit ? 'mdi:arrow-expand-horizontal' : 'mdi:fit-to-screen-outline'} class="mr-1 inline-block h-4 w-4 align-text-bottom" />
+          {wideEmailIsFit ? $_('viewer.viewEmailOriginalSize') : $_('viewer.fitWideEmail')}
+        </button>
+      </div>
+    {/if}
     {#if hasRemoteImages && imagesBlocked}
       <div class="flex items-center gap-2 px-3 py-2 mb-3 rounded-md bg-yellow-500/10 border border-yellow-500/30 text-sm">
         <Icon icon="mdi:image-off" class="w-4 h-4 text-yellow-600 flex-shrink-0" />

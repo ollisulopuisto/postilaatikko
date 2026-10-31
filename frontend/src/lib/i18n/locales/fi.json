@@ -353,6 +353,8 @@
     "hideSignature": "Piilota allekirjoitus",
     "showFullMessage": "Näytä alkuperäinen",
     "showSplitMessage": "Näytä vain uusi teksti",
+    "fitWideEmail": "Sovita sähköposti leveyteen",
+    "viewEmailOriginalSize": "Näytä sähköposti alkuperäisessä koossa",
     "reactions": "Reaktiot",
     "showReactionMessages": "Näytä reaktioviestit",
     "messageDetails": "Viestin tiedot",
