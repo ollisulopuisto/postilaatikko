@@ -210,6 +210,8 @@ Suggested model/effort is a dispatch recommendation, not an existing claim or mo
 | P-022 | Medium | Recognize date/time mentions in email and offer an "Add to Calendar" action. | OpenCode / `agent/p022-datetime-recognition` / worktree `../postilaatikko-p022` | Review; based on `agent/p012-ics-event-handoff` |
 | P-024 | Easy | Localize hard-coded accessibility labels in the shared UI kit. | Replace English-only labels in `kit/DetailOverlay.svelte` and `kit/RichTextEditor.svelte` with i18n keys, adding translations while preserving locale key parity. Keep the change scoped to labels and help text. |
 
+| P-050 | Large | Sidebar rebuild: hide Contacts/Calendar from leftmost rail (preference defaulting to off), add most-used folders with Cmd/Ctrl+1…0 shortcuts, add draggable/collapsible/hidable Group cards in the second sidebar (starred/drafts/sent/trash; archived/blocked/snoozed; virtual folders; starred folders), allow moving folders between groups, persist order/visibility. | PR #77 (open): rail shortcuts + hide-extensions-by-default done; sidebar groups UI pending. `agent/sidebar-rebuild-groups` / commit `590eba1`. |
+
 ## Approved follow-up 2026-10-30
 
 | ID | Status | Owner / branch / worktree | Scope |
