@@ -28,6 +28,9 @@ async function bootstrap() {
   host.go.app.App = new Proxy({}, { get: (_target, operation: string) => {
     // Reader-only preference changes must never persist the main window layout.
     if (operation === 'SaveUIState') return async () => undefined
+    // The detached reader has no independent layout to restore. Avoid blocking
+    // its first paint on a parent database read for the main window's UI state.
+    if (operation === 'GetUIState') return async () => ({})
     return (...args: unknown[]) => backend.Call(operation, args)
   } })
   const config = await backend.GetConfig()
