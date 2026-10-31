@@ -14,10 +14,13 @@ const (
 	// work the user is not watching (a scheduled mail sync).
 	ActivityBackground ActivityOptions = 0x000000FF
 	// ActivityUserInitiated matches
-	// NSActivityUserInitiatedAllowingIdleSystemSleep: App Nap and display
-	// sleep are prevented, but the machine may still sleep on idle. Use
-	// for short work the user is actively waiting for (an outgoing send).
-	ActivityUserInitiated ActivityOptions = (1 << 40) | (1 << 14)
+	// NSActivityUserInitiatedAllowingIdleSystemSleep (0x00FFFFFF in the
+	// macOS SDK NSProcessInfo.h): App Nap is prevented; idle display and
+	// system sleep are NOT (the machine may still sleep on idle). Use for
+	// short work the user is actively waiting for (an outgoing send).
+	// (1<<40)|(1<<14) would have been IdleDisplaySleepDisabled |
+	// SuddenTerminationDisabled: wrong on both axes.
+	ActivityUserInitiated ActivityOptions = 0x00FFFFFF
 )
 
 // Activity is one held power assertion. End releases it; End is idempotent
