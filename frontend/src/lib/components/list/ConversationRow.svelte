@@ -53,6 +53,7 @@
     onActionComplete?: (autoSelectNext?: boolean) => void
     onReply?: (mode: 'reply' | 'reply-all' | 'forward', messageId: string) => void
     onDelete?: (messageIds: string[]) => void  // Swipe-left delete (routes through MessageList.requestDelete)
+    onOpenInTab?: (accountId: string, folderId: string, threadId: string, folderType: string, subject: string) => void
   }
 
   let {
@@ -78,6 +79,7 @@
     onActionComplete,
     onReply,
     onDelete,
+    onOpenInTab,
   }: Props = $props()
 
   // Resolve the folder name for this row. In unified inbox, virtual folder and
@@ -531,6 +533,10 @@
     ondblclick={async (event) => {
       if (!isRowOpenTarget(event.target, event.currentTarget)) return
       event.preventDefault()
+      if (onOpenInTab) {
+        onOpenInTab(accountId, folderId, conversation.threadId, folderType, conversation.subject || '')
+        return
+      }
       try { await OpenReaderWindow(accountId, folderId, conversation.threadId, folderType) }
       catch (error) { toasts.error(String(error)) }
     }}

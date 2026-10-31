@@ -814,3 +814,5 @@ v0.1.39 is a major milestone that includes some remaining originally planned bas
 ---
 
 - First release - ALPHA
+
+- Double-clicking a message opens its thread in an in-app tab when macOS is set to prefer tabs; the tab keeps the thread's account and folder scope.
