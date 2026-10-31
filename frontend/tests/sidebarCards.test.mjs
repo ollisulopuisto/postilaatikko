@@ -38,3 +38,30 @@ test('an explicitly saved empty quick list stays empty', () => {
   const state = normalizeCards(JSON.stringify({ quick: [] }), entries)
   assert.deepEqual(state.quick, [])
 })
+test('defaults include a favorites card for starred folders', () => {
+  const state = normalizeCards('', entries)
+  assert.ok(state.cards.some(c => c.id === 'favorites'), 'favorites card exists in defaults')
+  const favorites = state.cards.find(c => c.id === 'favorites')
+  assert.equal(favorites?.hidden, false)
+  assert.equal(favorites?.collapsed, false)
+  assert.deepEqual(favorites?.entries, [])
+})
+test('default groupings place system folders in primary and secondary cards', () => {
+  const all = [
+    { id: 'inboxes', kind: 'inboxes', name: 'All Inboxes' },
+    { id: 'starred', kind: 'system', name: 'Starred', folderType: 'starred' },
+    { id: 'drafts', kind: 'system', name: 'Drafts', folderType: 'drafts' },
+    { id: 'sent', kind: 'system', name: 'Sent', folderType: 'sent' },
+    { id: 'trash', kind: 'system', name: 'Trash', folderType: 'trash' },
+    { id: 'archive', kind: 'system', name: 'Archived', folderType: 'archive' },
+    { id: 'spam', kind: 'system', name: 'Blocked', folderType: 'spam' },
+    { id: 'snoozed', kind: 'system', name: 'Snoozed', folderType: 'snoozed' },
+  ]
+  const state = normalizeCards('', all)
+  const primary = state.cards.find(c => c.id === 'primary')
+  const secondary = state.cards.find(c => c.id === 'secondary')
+  const virtual = state.cards.find(c => c.id === 'virtual')
+  assert.deepEqual(primary?.entries, ['starred', 'drafts', 'sent', 'trash'])
+  assert.deepEqual(secondary?.entries, ['archive', 'spam', 'snoozed'])
+  assert.deepEqual(virtual?.entries, ['inboxes'])
+})

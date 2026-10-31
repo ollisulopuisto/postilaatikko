@@ -6,7 +6,7 @@
   import type { NavigationCard, NavigationEntry } from '$lib/sidebar/cards'
   let { selectedFolderId = null, onSelect, onEdit, onDelete }: { selectedFolderId?: string | null; onSelect: (entry: NavigationEntry) => void; onEdit?: (entry: NavigationEntry) => void; onDelete?: (entry: NavigationEntry) => void } = $props()
   function cardName(card: NavigationCard): string {
-    const names: Record<string, [string, string]> = { virtual: ['Virtual folders', 'navigation.virtualCard'], primary: ['Mail', 'navigation.mailCard'], secondary: ['More', 'navigation.moreCard'], pinned: ['Pinned folders', 'navigation.pinnedCard'] }
+    const names: Record<string, [string, string]> = { virtual: ['Virtual folders', 'navigation.virtualCard'], primary: ['Mail', 'navigation.mailCard'], secondary: ['More', 'navigation.moreCard'], pinned: ['Pinned folders', 'navigation.pinnedCard'], favorites: ['Starred folders', 'navigation.favoritesCard'] }
     return names[card.id]?.[0] === card.name ? $_(names[card.id][1]) : card.name
   }
   let editing = $state(false)
