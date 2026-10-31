@@ -12,6 +12,7 @@ import (
 	"github.com/emersion/go-imap/v2/imapclient"
 	"github.com/emersion/go-sasl"
 	"github.com/hkdb/aerion/internal/logging"
+	"github.com/hkdb/aerion/internal/platform"
 	"github.com/rs/zerolog"
 )
 
@@ -57,6 +58,9 @@ type IdleConnection struct {
 	accountID      string
 	accountName    string
 	config         IdleConfig
+	// activities keeps an armed IDLE watch out of App Nap (macOS);
+	// nil = no-op. Timely new-mail notifications are the default.
+	activities *platform.ActivityManager
 	getCredentials func(accountID string) (*ClientConfig, error)
 	isConnected    func() bool // optional: wait for connectivity before reconnecting
 	log            zerolog.Logger
@@ -150,6 +154,14 @@ func (ic *IdleConnection) Stop() {
 
 // run is the main IDLE loop
 func (ic *IdleConnection) run(ctx context.Context) {
+	// While this watch is armed, keep the process out of App Nap: a napped
+	// app has its scheduling priority lowered and timers coalesced, which
+	// delays new-mail notifications the user expects to be timely. The
+	// background option prevents App Nap only - the display and the
+	// machine still sleep on their normal schedule. This deliberately
+	// limits the power saving; see docs/APP_NAP.md.
+	act := ic.activities.BeginBackground("Watching for new mail (IMAP IDLE)")
+	defer act.End()
 	defer func() {
 		ic.mu.Lock()
 		ic.running = false
@@ -478,6 +490,7 @@ func (ic *IdleConnection) idleCycle(ctx context.Context) error {
 // IdleManager manages IDLE connections for multiple accounts
 type IdleManager struct {
 	config         IdleConfig
+	activities     *platform.ActivityManager
 	getCredentials func(accountID string) (*ClientConfig, error)
 	isConnected    func() bool // optional: propagated to connections
 	log            zerolog.Logger
@@ -537,6 +550,14 @@ func (m *IdleManager) Stop() {
 	m.log.Info().Msg("IDLE manager stopped")
 }
 
+// SetActivityManager lets the app share its power-assertion manager, so an
+// armed IDLE watch keeps the process out of App Nap. Nil is a safe no-op.
+func (m *IdleManager) SetActivityManager(a *platform.ActivityManager) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.activities = a
+}
+
 // Events returns the channel for receiving mail events
 func (m *IdleManager) Events() <-chan MailEvent {
 	return m.events
@@ -564,6 +585,7 @@ func (m *IdleManager) StartAccount(accountID, accountName string) {
 	// Create and start IDLE connection
 	conn := newIdleConnection(accountID, accountName, m.config, m.getCredentials)
 	conn.isConnected = m.isConnected
+	conn.activities = m.activities
 	m.connections[accountID] = conn
 
 	conn.Start(m.ctx, m.events)

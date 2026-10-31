@@ -69,6 +69,7 @@ func (a *App) initBackgroundSync(ctx context.Context) {
 	// Initialize the IDLE manager for real-time push notifications
 	idleConfig := imap.DefaultIdleConfig()
 	a.idleManager = imap.NewIdleManager(idleConfig, a.getIMAPCredentials)
+	a.idleManager.SetActivityManager(a.activities)
 
 	// Wire up network connectivity check so IDLE skips reconnects when offline
 	if a.networkMonitor != nil {
