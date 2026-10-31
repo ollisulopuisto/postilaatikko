@@ -17,12 +17,17 @@ the app is *temporarily* ineligible for App Nap only while they run:
 Deliberately *not* asserted:
 
 - **IMAP IDLE / new-mail notification watches.** App Nap does not close
-  sockets; it lowers scheduling priority, so a notification can arrive a
-  few seconds late while napped, never lost. Asserting here would keep
-  the app out of App Nap permanently and void the power saving.
+  sockets; it lowers scheduling priority, so a notification can arrive
+  late while napped — delayed, not lost. This is a deliberate tradeoff,
+  not a settled one: asserting here would keep the app out of App Nap
+  whenever a watch is armed and mostly void the power saving. If timely
+  background notifications matter more than the battery saving, the
+  alternative is holding a background assertion while an IDLE watch is
+  armed — say the word and it flips.
 - **Send Later delivery.** Scheduled sends are delivered by the separate
-  `postilaatikko-helper` process, which is not an app and is never
-  napped. The main app's nap state does not affect it.
+  `postilaatikko-helper` process. App Nap's candidacy rules are
+  app-centric (foreground, windows, audible), so the helper is not itself
+  a candidate; the main app's nap state does not affect it.
 - **Periodic sync ticks themselves.** A napped app's tickers coalesce,
   so a hidden, idle app syncs less often; it catches up on the next
   assertion, wake, or foreground. This is the intended saving.
