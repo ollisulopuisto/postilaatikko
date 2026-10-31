@@ -260,6 +260,11 @@ func (a *App) SendMessageWithDraftGuard(accountID string, message smtp.ComposeMe
 	if err := guardScheduledDraft(a.ctx, a.paths.Data, accountID, draftID); err != nil {
 		return err
 	}
+	// A dispatch can run while the window is hidden (the Undo Send
+	// countdown's frontend timer fires then): the SMTP exchange must not
+	// be throttled mid-flight by App Nap.
+	act := a.activities.BeginUserInitiated("Sending email")
+	defer act.End()
 	return a.SendMessage(accountID, message)
 }
 

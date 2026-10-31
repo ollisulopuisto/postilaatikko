@@ -12,6 +12,11 @@ package app
 //   - Cancel deletes the pending row; the draft is then reopened.
 //   - A restart never auto-sends: ExpirePendingSends marks leftover rows
 //     expired at startup and the draft simply reappears in Drafts.
+//   - The countdown timer lives in the WKWebView, which macOS throttles
+//     together with the rest of the app under App Nap. Each queued row
+//     holds a short user-initiated activity so the dispatch fires on
+//     time even when the window is hidden; the assertion ends with the
+//     row (dispatch, cancel or expiry).
 //
 // Concurrency: QueuePendingSend rejects a second pending send for the same
 // draft (Cmd-Enter pressed twice), so the safety window can never be
@@ -26,6 +31,7 @@ import (
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/hkdb/aerion/internal/ipc"
+	"github.com/hkdb/aerion/internal/platform"
 )
 
 // PendingSend is the durable record of one queued send.
@@ -78,12 +84,52 @@ func (a *App) QueuePendingSend(accountID, draftID, payload string) (string, erro
 	if err := tx.Commit(); err != nil {
 		return "", err
 	}
+	a.holdPendingSendActivity(id)
 	wailsRuntime.EventsEmit(a.ctx, "pending-send:queued", PendingSend{
 		ID: id, AccountID: accountID, DraftID: draftID, Payload: payload,
 		DispatchAt: dispatchAt.Format(time.RFC3339Nano), State: "pending",
 		CreatedAt: now.Format(time.RFC3339Nano),
 	})
 	return id, nil
+}
+
+// holdPendingSendActivity keeps the process out of App Nap until the row
+// dispatches, so the frontend-owned countdown timer is not coalesced by
+// the OS into firing late.
+func (a *App) holdPendingSendActivity(id string) {
+	if a.activities == nil {
+		return
+	}
+	act := a.activities.BeginUserInitiated("Sending email after Undo Send countdown")
+	a.pendingSendActivitiesMu.Lock()
+	if old := a.pendingSendActivities[id]; old != nil {
+		old.End()
+	}
+	a.pendingSendActivities[id] = act
+	a.pendingSendActivitiesMu.Unlock()
+}
+
+// releasePendingSendActivity ends the row's countdown assertion, if any.
+func (a *App) releasePendingSendActivity(id string) {
+	a.pendingSendActivitiesMu.Lock()
+	act := a.pendingSendActivities[id]
+	delete(a.pendingSendActivities, id)
+	a.pendingSendActivitiesMu.Unlock()
+	if act != nil {
+		act.End()
+	}
+}
+
+// releaseAllPendingSendActivities ends every countdown assertion (startup
+// expiry and shutdown).
+func (a *App) releaseAllPendingSendActivities() {
+	a.pendingSendActivitiesMu.Lock()
+	acts := a.pendingSendActivities
+	a.pendingSendActivities = make(map[string]*platform.Activity)
+	a.pendingSendActivitiesMu.Unlock()
+	for _, act := range acts {
+		act.End()
+	}
 }
 
 // CancelPendingSend removes a pending send that has not dispatched. The
@@ -106,6 +152,7 @@ func (a *App) CancelPendingSend(id string) error {
 // CompletePendingSend removes the row after a successful dispatch. Called
 // by the frontend only after the send call returned without error.
 func (a *App) CompletePendingSend(id string) error {
+	a.releasePendingSendActivity(id)
 	_, err := a.db.Exec(`DELETE FROM pending_sends WHERE id = ?`, id)
 	return err
 }
@@ -134,6 +181,7 @@ func (a *App) ListPendingSends() ([]*PendingSend, error) {
 // ExpirePendingSends marks every leftover pending row expired. Called at
 // startup: a restart NEVER auto-sends; the draft reappears in Drafts.
 func (a *App) ExpirePendingSends() error {
+	a.releaseAllPendingSendActivities()
 	_, err := a.db.Exec(`UPDATE pending_sends SET state = 'expired' WHERE state = 'pending'`)
 	return err
 }
