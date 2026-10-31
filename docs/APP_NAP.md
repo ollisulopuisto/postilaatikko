@@ -42,8 +42,8 @@ Deliberately *not* asserted:
   after Undo Send countdown").
 - With accounts connected but no sync or send active, an armed IMAP IDLE
   connection should not add a Postilaatikko assertion to `pmset -g assertions`.
-- Activity Monitor's **App Nap** column shows **No** only while one of
-  the operations above is active; **Yes** when the app is hidden and
-  idle.
+- In Activity Monitor, verify **App Nap: Yes** after the app is hidden or
+  fully obscured and idle long enough for macOS's heuristics to apply. It
+  should remain **No** while one of the operations above is active.
 
 On Linux and Windows the manager is a no-op; behavior there is unchanged.
