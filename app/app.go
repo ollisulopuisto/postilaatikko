@@ -254,7 +254,7 @@ type App struct {
 	// pendingSendActivities tracks the one countdown activity per queued
 	// Undo Send row, keyed by pending-send ID.
 	pendingSendActivitiesMu goSync.Mutex
-	pendingSendActivities   map[string]*platform.Activity
+	pendingSendActivities   map[string]pendingSendActivity
 	idleManager             *imap.IdleManager
 
 	// Credentials (keyring with fallback)
@@ -416,7 +416,7 @@ func NewApp(debugModeFn func() bool, useDirectDBus bool) *App {
 		useDirectDBus:         useDirectDBus,
 		moveMutationFlights:   make(map[string]*moveMutationFlight),
 		activities:            platform.NewActivityManager(),
-		pendingSendActivities: make(map[string]*platform.Activity),
+		pendingSendActivities: make(map[string]pendingSendActivity),
 	}
 }
 

@@ -31,7 +31,6 @@ import (
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/hkdb/aerion/internal/ipc"
-	"github.com/hkdb/aerion/internal/platform"
 )
 
 // PendingSend is the durable record of one queued send.
@@ -43,6 +42,10 @@ type PendingSend struct {
 	DispatchAt string `json:"dispatchAt"`
 	State      string `json:"state"` // pending | expired
 	CreatedAt  string `json:"createdAt"`
+}
+
+type pendingSendActivity interface {
+	End()
 }
 
 // PendingSendDelay is the user-approved safety window.
@@ -125,7 +128,7 @@ func (a *App) releasePendingSendActivity(id string) {
 func (a *App) releaseAllPendingSendActivities() {
 	a.pendingSendActivitiesMu.Lock()
 	acts := a.pendingSendActivities
-	a.pendingSendActivities = make(map[string]*platform.Activity)
+	a.pendingSendActivities = make(map[string]pendingSendActivity)
 	a.pendingSendActivitiesMu.Unlock()
 	for _, act := range acts {
 		act.End()
@@ -145,7 +148,8 @@ func (a *App) CancelPendingSend(id string) error {
 	if n == 0 {
 		return fmt.Errorf("pending send: %q is not pending (already sent or cancelled)", id)
 	}
-	wailsRuntime.EventsEmit(a.ctx, "pending-send:cancelled", id)
+	a.releasePendingSendActivity(id)
+	a.emitRuntimeEvent("pending-send:cancelled", id)
 	return nil
 }
 

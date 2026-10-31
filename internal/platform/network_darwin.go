@@ -35,7 +35,7 @@ static void startNetworkMonitor(void) {
 static void stopNetworkMonitor(void) {
     if (monitor != NULL) {
         nw_path_monitor_cancel(monitor);
-        nw_release(monitor);
+        // ARC releases the retained monitor when the static reference is cleared.
         monitor = NULL;
     }
     // dispatch queue is released by ARC / when no longer referenced
