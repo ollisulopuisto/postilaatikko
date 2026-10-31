@@ -8,6 +8,24 @@ import (
 	"github.com/microcosm-cc/bluemonday"
 )
 
+// Pre-compiled regular expressions for HTML sanitization and extraction.
+// Pre-compiling these regular expressions at package initialization avoids
+// recompiling regex patterns repeatedly on every email rendering, sanitization,
+// and plain-text extraction call, significantly reducing CPU cycles and memory allocations.
+var (
+	scriptTagRe = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
+	styleTagRe  = regexp.MustCompile(`(?is)<style[^>]*>.*?</style>`)
+	imgRemoteRe = regexp.MustCompile(`(?i)<img([^>]*)\ssrc=["'](https?://[^"']+)["']([^>]*)>`)
+	imgSrcRe    = regexp.MustCompile(`(?i)src=["'](https?://[^"']+)["']`)
+	cssURLRe    = regexp.MustCompile(`(?i)url\(\s*(?:['"]|&#(?:39|x27|34|x22);|&(?:apos|quot);)?\s*https?://[^)]*?(?:['"]|&#(?:39|x27|34|x22);|&(?:apos|quot);)?\s*\)`)
+	bgAttrRe    = regexp.MustCompile(`(?i)\bbackground\s*=\s*["'](https?://[^"']+)["']`)
+	blockTagsRe = regexp.MustCompile(`(?i)</(p|div|br|h[1-6]|li|tr)>`)
+	brTagsRe    = regexp.MustCompile(`(?i)<br[^>]*>`)
+	tagRe       = regexp.MustCompile(`<[^>]*>`)
+	wsRe        = regexp.MustCompile(`[ \t]+`)
+	nlRe        = regexp.MustCompile(`\n{3,}`)
+)
+
 // Sanitizer provides HTML email sanitization
 type Sanitizer struct {
 	policy      *bluemonday.Policy
@@ -170,27 +188,22 @@ func (s *Sanitizer) SanitizeForEvent(html string) string {
 
 // removeScriptTags removes all script tags and their content
 func removeScriptTags(html string) string {
-	re := regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
-	return re.ReplaceAllString(html, "")
+	return scriptTagRe.ReplaceAllString(html, "")
 }
 
 // removeStyleTags removes all style tags and their content
 // Note: This removes <style> blocks but preserves inline style attributes
 func removeStyleTags(html string) string {
-	re := regexp.MustCompile(`(?is)<style[^>]*>.*?</style>`)
-	return re.ReplaceAllString(html, "")
+	return styleTagRe.ReplaceAllString(html, "")
 }
 
 // BlockRemoteImages replaces remote image sources with a placeholder SVG,
 // storing the original URL in a data-original-src attribute for later restoration.
 func BlockRemoteImages(html string) string {
 	// Match img tags with http/https sources
-	re := regexp.MustCompile(`(?i)<img([^>]*)\ssrc=["'](https?://[^"']+)["']([^>]*)>`)
-
-	result := re.ReplaceAllStringFunc(html, func(match string) string {
+	result := imgRemoteRe.ReplaceAllStringFunc(html, func(match string) string {
 		// Extract the original src
-		srcRe := regexp.MustCompile(`(?i)src=["'](https?://[^"']+)["']`)
-		srcMatch := srcRe.FindStringSubmatch(match)
+		srcMatch := imgSrcRe.FindStringSubmatch(match)
 		if len(srcMatch) < 2 {
 			return match
 		}
@@ -198,16 +211,14 @@ func BlockRemoteImages(html string) string {
 		originalSrc := srcMatch[1]
 
 		// Replace with a placeholder, storing original URL in data attribute
-		return srcRe.ReplaceAllString(match, `src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect fill='%23ddd' width='100' height='100'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23666' font-size='12'%3EImage blocked%3C/text%3E%3C/svg%3E" data-original-src="`+escapeHTML(originalSrc)+`"`)
+		return imgSrcRe.ReplaceAllString(match, `src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect fill='%23ddd' width='100' height='100'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='%23666' font-size='12'%3EImage blocked%3C/text%3E%3C/svg%3E" data-original-src="`+escapeHTML(originalSrc)+`"`)
 	})
 
 	// Block remote URLs in CSS url() references (background-image, background, etc.)
 	// Handles all quote encodings: raw, decimal (&#39;/&#34;), hex (&#x27;/&#x22;), named (&apos;/&quot;)
-	cssURLRe := regexp.MustCompile(`(?i)url\(\s*(?:['"]|&#(?:39|x27|34|x22);|&(?:apos|quot);)?\s*https?://[^)]*?(?:['"]|&#(?:39|x27|34|x22);|&(?:apos|quot);)?\s*\)`)
 	result = cssURLRe.ReplaceAllString(result, `url()`)
 
 	// Block HTML background attribute with remote URLs
-	bgAttrRe := regexp.MustCompile(`(?i)\bbackground\s*=\s*["'](https?://[^"']+)["']`)
 	result = bgAttrRe.ReplaceAllString(result, `background=""`)
 
 	return result
@@ -230,15 +241,12 @@ func ExtractPlainTextFromHTML(html string) string {
 	html = removeStyleTags(html)
 
 	// Convert common block elements to newlines
-	blockTags := regexp.MustCompile(`(?i)</(p|div|br|h[1-6]|li|tr)>`)
-	html = blockTags.ReplaceAllString(html, "\n")
+	html = blockTagsRe.ReplaceAllString(html, "\n")
 
 	// Handle <br> tags
-	brTags := regexp.MustCompile(`(?i)<br[^>]*>`)
-	html = brTags.ReplaceAllString(html, "\n")
+	html = brTagsRe.ReplaceAllString(html, "\n")
 
 	// Remove all remaining HTML tags
-	tagRe := regexp.MustCompile(`<[^>]*>`)
 	text := tagRe.ReplaceAllString(html, "")
 
 	// Decode common HTML entities
@@ -250,11 +258,9 @@ func ExtractPlainTextFromHTML(html string) string {
 	text = strings.ReplaceAll(text, "&#39;", "'")
 
 	// Collapse multiple whitespace
-	wsRe := regexp.MustCompile(`[ \t]+`)
 	text = wsRe.ReplaceAllString(text, " ")
 
 	// Collapse multiple newlines
-	nlRe := regexp.MustCompile(`\n{3,}`)
 	text = nlRe.ReplaceAllString(text, "\n\n")
 
 	return strings.TrimSpace(text)
