@@ -246,7 +246,16 @@ type App struct {
 
 	// Background sync (polling + IDLE)
 	syncScheduler *sync.Scheduler
-	idleManager   *imap.IdleManager
+
+	// activities keeps time-critical background work (in-flight syncs,
+	// outgoing sends, the Undo Send countdown) out of App Nap on macOS;
+	// between those the app stays nappable. Never nil after NewApp.
+	activities *platform.ActivityManager
+	// pendingSendActivities tracks the one countdown activity per queued
+	// Undo Send row, keyed by pending-send ID.
+	pendingSendActivitiesMu goSync.Mutex
+	pendingSendActivities   map[string]*platform.Activity
+	idleManager             *imap.IdleManager
 
 	// Credentials (keyring with fallback)
 	credStore *credentials.Store
@@ -403,9 +412,11 @@ type App struct {
 // NewApp creates a new App application struct
 func NewApp(debugModeFn func() bool, useDirectDBus bool) *App {
 	return &App{
-		debugMode:           debugModeFn,
-		useDirectDBus:       useDirectDBus,
-		moveMutationFlights: make(map[string]*moveMutationFlight),
+		debugMode:             debugModeFn,
+		useDirectDBus:         useDirectDBus,
+		moveMutationFlights:   make(map[string]*moveMutationFlight),
+		activities:            platform.NewActivityManager(),
+		pendingSendActivities: make(map[string]*platform.Activity),
 	}
 }
 
@@ -1108,6 +1119,9 @@ func (a *App) shutdown(ctx context.Context) {
 		a.syncScheduler.Stop()
 		log.Info().Msg("Email sync scheduler stopped")
 	}
+
+	// Release any pending-send countdown power assertions
+	a.releaseAllPendingSendActivities()
 
 	// Stop IDLE manager
 	if a.idleManager != nil {

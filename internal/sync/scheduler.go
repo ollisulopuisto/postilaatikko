@@ -11,6 +11,7 @@ import (
 	"github.com/hkdb/aerion/internal/account"
 	"github.com/hkdb/aerion/internal/folder"
 	"github.com/hkdb/aerion/internal/logging"
+	"github.com/hkdb/aerion/internal/platform"
 	"github.com/rs/zerolog"
 )
 
@@ -59,6 +60,9 @@ type Scheduler struct {
 	// Per-account cancellation for running syncs
 	syncCancels  map[string]context.CancelFunc
 	syncCancelMu sync.Mutex
+
+	// activities keeps an in-flight sync out of App Nap (macOS); nil = no-op.
+	activities *platform.ActivityManager
 }
 
 // NewScheduler creates a new sync scheduler
@@ -89,6 +93,14 @@ func (s *Scheduler) SetSyncCompletedCallback(callback SyncCompletedCallback) {
 // connection attempts and unnecessary error logging.
 func (s *Scheduler) SetConnectivityCheck(check func() bool) {
 	s.isConnected = check
+}
+
+// SetActivityManager lets the app share its power-assertion manager. While
+// set, each in-flight account sync holds a background activity so App Nap
+// cannot throttle a half-finished sync; between syncs the app stays
+// nappable, which is the power saving the OS feature exists for.
+func (s *Scheduler) SetActivityManager(m *platform.ActivityManager) {
+	s.activities = m
 }
 
 // Start starts the background sync scheduler
@@ -281,6 +293,10 @@ func (s *Scheduler) syncAccountInbox(parent context.Context, acc *account.Accoun
 		delete(s.syncing, acc.ID)
 		s.syncingMu.Unlock()
 	}()
+
+	// Hold the process out of App Nap for the duration of the sync itself.
+	act := s.activities.BeginBackground("Syncing email")
+	defer act.End()
 
 	s.log.Info().Str("account_id", acc.ID).Msg("Starting scheduled sync for INBOX")
 

@@ -26,6 +26,7 @@ func (a *App) initBackgroundSync(ctx context.Context) {
 
 	// Initialize the sync scheduler for periodic polling
 	a.syncScheduler = sync.NewScheduler(a.syncEngine, a.accountStore, a.folderStore)
+	a.syncScheduler.SetActivityManager(a.activities)
 
 	// Set callback for new mail notifications
 	a.syncScheduler.SetNewMailCallback(func(info sync.NewMailInfo) {
