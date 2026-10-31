@@ -23,8 +23,10 @@ async function bootstrap() {
   }
   const backend = host.go.app.ReaderApp
   const config = await backend.GetConfig()
-  const initialState = await backend.Call('GetUIState', [])
-  host.go.app.App = createMailWindowBackend(backend, initialState)
+  // Detached windows own their UI state in this process. Reading the primary
+  // window's state over IPC here delays first paint and can stall behind
+  // database work, leaving a blank window until the IPC deadline expires.
+  host.go.app.App = createMailWindowBackend(backend, {})
   await initI18n()
   const theme = await loadSettings()
   await Promise.all([loadUIState(), loadImageAllowlist()])

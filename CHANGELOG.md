@@ -817,3 +817,4 @@ v0.1.39 is a major milestone that includes some remaining originally planned bas
 - First release - ALPHA
 
 - Double-clicking a message opens its thread in an in-app tab when macOS is set to prefer tabs; the tab keeps the thread's account and folder scope.
+- Detached mail and reader windows no longer wait for the primary window's database-backed UI state before first paint; each keeps its UI state local.
