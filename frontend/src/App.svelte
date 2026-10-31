@@ -2014,10 +2014,10 @@
         console.error('Mail action target validation failed:', error)
         const errorKey = actionId === 'mail.archive' ? 'toast.failedToArchive'
           : actionId === 'mail.spam' ? 'toast.failedToMarkAsSpam'
-          : actionId === 'mail.markRead' ? 'toast.failedToMarkAsRead'
-          : actionId === 'mail.markUnread' ? 'toast.failedToMarkAsUnread'
-          : actionId === 'mail.star' ? 'toast.failedToUpdateStar'
-          : 'toast.failedToDelete'
+            : actionId === 'mail.markRead' ? 'toast.failedToMarkAsRead'
+              : actionId === 'mail.markUnread' ? 'toast.failedToMarkAsUnread'
+                : actionId === 'mail.star' ? 'toast.failedToUpdateStar'
+                  : 'toast.failedToDelete'
         toasts.error($_(errorKey))
       }
     },
