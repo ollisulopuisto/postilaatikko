@@ -46,6 +46,18 @@ test('defaults include a favorites card for starred folders', () => {
   assert.equal(favorites?.collapsed, false)
   assert.deepEqual(favorites?.entries, [])
 })
+test('reset restores default cards including favorites', () => {
+  const all = [
+    { id: 'inboxes', kind: 'inboxes', name: 'All Inboxes' },
+    { id: 'starred', kind: 'system', name: 'Starred', folderType: 'starred' },
+    { id: 'drafts', kind: 'system', name: 'Drafts', folderType: 'drafts' },
+  ]
+  // reset() calls normalizeCards with empty raw, so all defaults come back visible
+  const reset = normalizeCards('', all)
+  assert.ok(reset.cards.some(c => c.id === 'favorites'), 'favorites card present after reset')
+  assert.ok(!reset.cards.find(c => c.id === 'primary')?.hidden, 'primary visible after reset')
+  assert.ok(!reset.cards.find(c => c.id === 'secondary')?.hidden, 'secondary visible after reset')
+})
 test('default groupings place system folders in primary and secondary cards', () => {
   const all = [
     { id: 'inboxes', kind: 'inboxes', name: 'All Inboxes' },

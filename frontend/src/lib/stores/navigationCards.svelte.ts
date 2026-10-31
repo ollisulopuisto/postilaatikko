@@ -14,4 +14,5 @@ export const navigationCards = {
   toggleQuick(id: string) { commit({ ...state, quick: state.quick.includes(id) ? state.quick.filter(e => e !== id) : [...state.quick, id].slice(0, 10) }) },
   patchCard(id: string, patch: Partial<NavigationCards['cards'][number]>) { commit({ ...state, cards: state.cards.map(c => c.id === id ? { ...c, ...patch } : c) }) },
   navigate(entry: NavigationEntry) { window.dispatchEvent(new CustomEvent('postilaatikko:navigate', { detail: entry })) },
+  reset() { commit(normalizeCards('', entries)) },
 }
