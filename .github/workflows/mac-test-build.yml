@@ -1,30 +1,36 @@
 name: Mac test build
 
 on:
-  push:
-    branches:
-      - 'codex/BUILD-001-reader-test'
-      - 'codex/READER-002-contrast-quoted-headers'
-      - 'codex/READER-003-identities-reactions'
-      - 'codex/GLOBAL-001-api-search'
-      - 'codex/GLOBAL-003-gmail-live-repair'
+  # Test installers are intentionally on demand: each run uses a native Mac
+  # runner and can publish a prerelease. Ordinary PR checks run in ci.yml.
   workflow_dispatch:
+    inputs:
+      architecture:
+        description: 'DMG architecture to build'
+        type: choice
+        options: [arm64, amd64]
+        default: arm64
+        required: true
+      run_checks:
+        description: 'Run frontend and backend suites before packaging (leave off when this commit already passed CI)'
+        type: boolean
+        default: false
+        required: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: mac-test-${{ github.ref }}
+  group: mac-test-${{ github.ref }}-${{ inputs.architecture || 'arm64' }}
   cancel-in-progress: true
 
 jobs:
   dmg:
-    name: macOS ${{ matrix.arch }} DMG
-    runs-on: macos-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [arm64, amd64]
+    name: macOS ${{ inputs.architecture || 'arm64' }} test DMG
+    runs-on: ${{ inputs.architecture == 'amd64' && 'macos-26-intel' || 'macos-latest' }}
+    timeout-minutes: 30
+    env:
+      TARGET_ARCH: ${{ inputs.architecture || 'arm64' }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -36,29 +42,46 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - name: Install dependencies
+      - name: Cache Wails CLI
+        id: wails
+        uses: actions/cache@v4
+        with:
+          path: ~/go/bin/wails
+          key: wails-${{ runner.os }}-${{ runner.arch }}-go1.26-v2.15.0
+      - name: Install Wails CLI
+        if: steps.wails.outputs.cache-hit != 'true'
+        run: env -u GOARCH go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend
+      - name: Verify version
+        run: ./scripts/version.sh check
+      - name: Record source and validation mode
+        env:
+          BUILD_SHA: ${{ github.sha }}
+          RUN_CHECKS: ${{ inputs.run_checks }}
         run: |
-          go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
-          npm ci --prefix frontend
-      - name: Verify version and frontend
+          {
+            echo '### On-demand test installer'
+            echo "Source: $BUILD_SHA"
+            echo "Architecture: $TARGET_ARCH"
+            echo "Frontend/backend suites: $RUN_CHECKS"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify frontend
+        if: ${{ inputs.run_checks }}
         run: |
-          ./scripts/version.sh check
           npm run check --prefix frontend
           npm test --prefix frontend
       - name: Verify backend
+        if: ${{ inputs.run_checks }}
         run: |
           go test ./internal/gmail ./internal/email/reactions ./internal/email/replycontent ./internal/database ./internal/message ./internal/sync ./internal/readerbridge ./internal/scheduledsend ./internal/draft ./internal/ipc
           go test ./app
       - name: Build and sign app
-        env:
-          TARGET_ARCH: ${{ matrix.arch }}
         run: |
           wails build -tags webkit2_41 -platform "darwin/${TARGET_ARCH}"
           codesign --force --deep --sign - build/bin/postilaatikko.app
           codesign --verify --deep --strict build/bin/postilaatikko.app
       - name: Package DMG
-        env:
-          TARGET_ARCH: ${{ matrix.arch }}
         run: |
           VERSION="$(cat VERSION)"
           mkdir -p build/dmg-staging
@@ -69,7 +92,7 @@ jobs:
           hdiutil verify "build/bin/Postilaatikko-${VERSION}-test-${TARGET_ARCH}.dmg"
       - uses: actions/upload-artifact@v7
         with:
-          name: Postilaatikko-test-${{ matrix.arch }}
+          name: Postilaatikko-test-${{ env.TARGET_ARCH }}
           path: build/bin/Postilaatikko-*.dmg
           if-no-files-found: error
           retention-days: 14
@@ -98,5 +121,5 @@ jobs:
           TAG="v${VERSION}-test.${BUILD_NUMBER}"
           gh release create "$TAG" installers/*.dmg \
             --target "$BUILD_SHA" --prerelease \
-            --title "Postilaatikko ${VERSION} Gmail/sidebar test ${BUILD_NUMBER}" \
+            --title "Postilaatikko ${VERSION} test ${BUILD_NUMBER}" \
             --notes-file docs/releases/reader-test.md
