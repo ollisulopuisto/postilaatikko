@@ -1294,6 +1294,7 @@
   },
   "whatsNew": {
     "title": "Mitä uutta?",
+    "historyTitle": "Mitä uutta Postilaatikossa",
     "welcome": "Tervetuloa käyttämään Postilaatikon versiota v{version}!",
     "fallback": "Tämä versio on valmis käytettäväksi. Avaa täysi muutosloki nähdäksesi julkaisun lisätiedot.",
     "fullChangelog": "Katso täysi muutosloki:"

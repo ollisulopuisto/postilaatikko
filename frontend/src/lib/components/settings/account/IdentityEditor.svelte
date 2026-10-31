@@ -423,7 +423,7 @@
                 <p class="text-xs text-muted-foreground">{$_('identity.signatureRuleRecipientsHelp')}</p>
               </div>
               <div class="flex flex-wrap gap-x-4 gap-y-2">
-                {#each messageTypes as mode}
+                {#each messageTypes as mode (mode)}
                   <label class="flex items-center gap-2 text-sm">
                     <input type="checkbox" checked={rule.messageTypes.includes(mode)} onchange={(event) => toggleRuleMessageType(rule, mode, event.currentTarget.checked)} class="w-4 h-4 accent-primary" />
                     {$_(`identity.signatureRule${mode === 'new' ? 'New' : mode === 'reply' ? 'Reply' : mode === 'reply-all' ? 'ReplyAll' : 'Forward'}`)}

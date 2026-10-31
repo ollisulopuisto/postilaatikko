@@ -24,6 +24,7 @@
   import TermsDialog from './lib/components/TermsDialog.svelte'
   import OAuthMissingDialog from './lib/components/OAuthMissingDialog.svelte'
   import WhatsNewDialog from './lib/components/WhatsNewDialog.svelte'
+  import { shouldShowAfterLaunch } from './lib/utils/whatsNew'
   import UpdateAvailableNotice from './lib/components/UpdateAvailableNotice.svelte'
   import CertificateDialog from './lib/components/settings/CertificateDialog.svelte'
   import ExtensionSettingsDialog from './lib/components/settings/ExtensionSettingsDialog.svelte'
@@ -280,6 +281,8 @@
   // What's New (per-version) dialog state
   let showWhatsNewDialog = $state(false)
   let whatsNewVersion = $state('')
+  let whatsNewLastSeen = $state('')
+  let whatsNewHistory = $state(false)
   let pendingWhatsNew = $state(false)
 
   // Certificate TOFU state (for background sync cert errors)
@@ -388,7 +391,13 @@
     }
 
     showWhatsNewDialog = false
+    whatsNewHistory = false
     void advanceStartupDialogs()
+  }
+
+  function closeWhatsNewHistory() {
+    showWhatsNewDialog = false
+    whatsNewHistory = false
   }
 
   // Certificate TOFU handlers for background sync
@@ -512,6 +521,10 @@
       showUndoHistory = true
     })
     EventsOn('undo:requested', () => { void handleGlobalUndo() })
+    EventsOn('whatsnew:requested', () => {
+      whatsNewHistory = true
+      showWhatsNewDialog = true
+    })
 
     // Listen for notification click events from backend
     try {
@@ -689,8 +702,10 @@
     try {
       const appInfo = await GetAppInfo()
       const lastSeen = await GetLastSeenVersion()
-      if (lastSeen !== appInfo.version) {
+      if (shouldShowAfterLaunch(appInfo.version, lastSeen)) {
         whatsNewVersion = appInfo.version
+        whatsNewLastSeen = lastSeen
+        whatsNewHistory = false
         pendingWhatsNew = true
       }
     } catch (err) {
@@ -1999,10 +2014,10 @@
         console.error('Mail action target validation failed:', error)
         const errorKey = actionId === 'mail.archive' ? 'toast.failedToArchive'
           : actionId === 'mail.spam' ? 'toast.failedToMarkAsSpam'
-          : actionId === 'mail.markRead' ? 'toast.failedToMarkAsRead'
-          : actionId === 'mail.markUnread' ? 'toast.failedToMarkAsUnread'
-          : actionId === 'mail.star' ? 'toast.failedToUpdateStar'
-          : 'toast.failedToDelete'
+            : actionId === 'mail.markRead' ? 'toast.failedToMarkAsRead'
+              : actionId === 'mail.markUnread' ? 'toast.failedToMarkAsUnread'
+                : actionId === 'mail.star' ? 'toast.failedToUpdateStar'
+                  : 'toast.failedToDelete'
         toasts.error($_(errorKey))
       }
     },
@@ -2420,7 +2435,10 @@
   <WhatsNewDialog
     bind:open={showWhatsNewDialog}
     version={whatsNewVersion}
+    lastSeen={whatsNewLastSeen}
+    history={whatsNewHistory}
     onAcknowledge={acknowledgeWhatsNew}
+    onClose={closeWhatsNewHistory}
   />
 {/if}
 
