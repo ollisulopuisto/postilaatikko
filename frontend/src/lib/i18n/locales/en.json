@@ -1294,6 +1294,7 @@
   },
   "whatsNew": {
     "title": "What's new?",
+    "historyTitle": "What's new in Postilaatikko",
     "welcome": "Welcome to Postilaatikko v{version}!",
     "fallback": "This version is ready to use. Open the full changelog for release details.",
     "fullChangelog": "See the full changelog:"

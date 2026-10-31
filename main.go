@@ -155,7 +155,10 @@ func runMainMode(mailtoData *app.MailtoData, rawMailtoArg string) {
 		menu.Separator(),
 		menu.Text("Select All", nil, func(*menu.CallbackData) { application.RunEditMenuCommand("selectAll") }),
 	)
-	applicationMenu := menu.NewMenuFromItems(menu.AppMenu(), menu.SubMenu("Edit", editMenu))
+	helpMenu := menu.NewMenuFromItems(
+		menu.Text("What's New…", nil, func(*menu.CallbackData) { application.RequestWhatsNewFromMenu() }),
+	)
+	applicationMenu := menu.NewMenuFromItems(menu.AppMenu(), menu.SubMenu("Edit", editMenu), menu.SubMenu("Help", helpMenu))
 	if effectiveMode == platform.TitleBarModeNative {
 		applicationMenu.Append(menu.WindowMenu())
 	}
