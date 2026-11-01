@@ -9,6 +9,12 @@
 - Refresh Gmail labels from the virtual-folder editor, and apply Gmail label scopes correctly to online virtual-folder searches.
 - Add ordered contextual signature rules for sender, recipient, and message type, with placement controls and manual-edit preservation.
 - Add bulk select/clear controls to virtual-folder setup, wrap long sidebar labels, and make the cross-account move picker a searchable expandable folder tree.
+- Restore Cmd+C and the standard Edit menu copy command for selected text in the email reader.
+
+## Postilaatikko 2026.11.01.1
+
+- Integrate the latest main-branch changes for tab-aware double-click opening, favorite ordering and shortcuts, message-list folder labels, and non-blocking detached-window startup.
+- Restore copy shortcuts for selected email text and include the Intel macOS build compatibility fix.
 
 ## Postilaatikko 2026.10.30
 
