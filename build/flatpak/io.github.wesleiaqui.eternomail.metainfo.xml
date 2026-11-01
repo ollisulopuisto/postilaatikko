@@ -309,6 +309,14 @@
   </provides>
 
   <releases>
+    <release version="2026.11.01" date="2026-11-01">
+      <description><ul>
+        <li>Open double-clicked messages in tabs when macOS is configured for tabs, and navigate favorites in their saved order.</li>
+        <li>Fix message-list folder names and improve Gmail label selection and virtual-folder searches.</li>
+        <li>Add contextual signature rules and improve folder pickers for large and nested account lists.</li>
+        <li>Move messages from the focused conversation reader with the same folder picker as the message list.</li>
+      </ul></description>
+    </release>
     <release version="2026.10.30" date="2026-10-30">
       <description><ul>
         <li>Open independent mail workspaces in tabs and detach a tab into its own window.</li>
