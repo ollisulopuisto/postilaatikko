@@ -1967,20 +1967,60 @@ func (s *Store) FindThreadID(accountID, messageID, inReplyTo string, references 
 		return messageID, nil
 	}
 
-	// Check if any of the references match existing messages
-	for _, ref := range allRefs {
-		// Check with and without angle brackets since DB might have either format
-		var existingThreadID sql.NullString
+	// Check if any of the references match existing messages.
+	// Performance optimization: Instead of issuing sequential N+1 QueryRow calls
+	// (one per reference in allRefs), execute a single batched query with IN (...)
+	// covering all candidate message IDs and brackets variants.
+	candidateMap := make(map[string]int) // maps candidate ID variant -> rank (earliest in allRefs wins)
+	candidateValues := make([]string, 0, len(allRefs)*3)
+	for idx, ref := range allRefs {
+		trimmed := strings.TrimPrefix(strings.TrimSuffix(ref, ">"), "<")
+		variants := [3]string{ref, "<" + ref + ">", trimmed}
+		for _, v := range variants {
+			if _, exists := candidateMap[v]; !exists {
+				candidateMap[v] = idx
+				candidateValues = append(candidateValues, v)
+			}
+		}
+	}
 
-		// Try exact match first
-		err := s.db.QueryRow(
-			"SELECT COALESCE(thread_id, id) FROM messages WHERE account_id = ? AND (message_id = ? OR message_id = ? OR message_id = ?) LIMIT 1",
-			accountID, ref, "<"+ref+">", strings.TrimPrefix(strings.TrimSuffix(ref, ">"), "<"),
-		).Scan(&existingThreadID)
+	placeholders := make([]string, len(candidateValues))
+	args := make([]any, 0, len(candidateValues)+1)
+	args = append(args, accountID)
+	for i, v := range candidateValues {
+		placeholders[i] = "?"
+		args = append(args, v)
+	}
 
-		if err == nil && existingThreadID.Valid && existingThreadID.String != "" {
-			// Normalize the returned thread ID too
-			return normalizeMessageID(existingThreadID.String), nil
+	batchQuery := fmt.Sprintf(
+		"SELECT message_id, COALESCE(thread_id, id) FROM messages WHERE account_id = ? AND message_id IN (%s)",
+		strings.Join(placeholders, ", "),
+	)
+
+	rows, err := s.db.Query(batchQuery, args...)
+	if err == nil {
+		defer rows.Close()
+
+		bestRank := len(allRefs) + 1
+		var bestThreadID string
+
+		for rows.Next() {
+			var msgID string
+			var existingThreadID sql.NullString
+			if err := rows.Scan(&msgID, &existingThreadID); err == nil && existingThreadID.Valid && existingThreadID.String != "" {
+				if rank, ok := candidateMap[msgID]; ok && rank < bestRank {
+					bestRank = rank
+					bestThreadID = existingThreadID.String
+					if bestRank == 0 {
+						// Earliest possible priority match found, no other candidate can beat rank 0
+						break
+					}
+				}
+			}
+		}
+
+		if bestRank <= len(allRefs) && bestThreadID != "" {
+			return normalizeMessageID(bestThreadID), nil
 		}
 	}
 
