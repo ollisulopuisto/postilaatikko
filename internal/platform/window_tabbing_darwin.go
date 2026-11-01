@@ -7,14 +7,17 @@ package platform
 #cgo LDFLAGS: -framework AppKit
 #import <AppKit/AppKit.h>
 
-static BOOL postilaatikkoPrefersWindowTabs(BOOL fullscreen) {
+// The Go boundary uses int: C BOOL is _Bool on Apple silicon but signed
+// char on Intel, so converting a Go bool directly compiles on one
+// architecture and not the other.
+static int postilaatikkoPrefersWindowTabs(int fullscreen) {
 	switch ([NSWindow userTabbingPreference]) {
 	case NSWindowUserTabbingPreferenceAlways:
-		return YES;
+		return 1;
 	case NSWindowUserTabbingPreferenceInFullScreen:
 		return fullscreen;
 	default:
-		return NO;
+		return 0;
 	}
 }
 */
@@ -23,5 +26,9 @@ import "C"
 // PrefersWindowTabs follows macOS's System Settings > Desktop & Dock tab
 // preference for the current window.
 func PrefersWindowTabs(fullscreen bool) bool {
-	return bool(C.postilaatikkoPrefersWindowTabs(C.BOOL(fullscreen)))
+	fs := C.int(0)
+	if fullscreen {
+		fs = 1
+	}
+	return C.postilaatikkoPrefersWindowTabs(fs) != 0
 }
