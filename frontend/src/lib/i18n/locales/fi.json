@@ -1223,7 +1223,8 @@
     "allInboxes": "Kaikki saapuneet",
     "favorite": "Vaihda suosikkia",
     "dragCard": "Vedä korttia järjestääksesi",
-    "dragEntry": "Vedä siirtääksesi"
+    "dragEntry": "Vedä siirtääksesi",
+    "dragQuick": "Vedä suosikkeja järjestääksesi"
   },
   "search": {
     "operators": "Hakuoperaattorit",

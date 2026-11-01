@@ -5,6 +5,7 @@
   import { navigationCards as nav } from '$lib/stores/navigationCards.svelte'
   import { shortcutIndex } from '$lib/sidebar/cards'
   import { _ } from '$lib/i18n'
+  let draggedQuickId = $state<string | null>(null)
   const mac = /Mac|iPhone|iPad/.test(navigator.platform)
   const systemIcons: Record<string, string> = {
     inbox: 'mdi:inbox-outline', starred: 'mdi:pin-outline', drafts: 'mdi:file-outline',
@@ -33,6 +34,19 @@
     const index = shortcutIndex(event, mac), entry = nav.quick[index]
     if (entry) { event.preventDefault(); event.stopPropagation(); nav.navigate(entry) }
   }
+  function startQuickDrag(id: string, event: DragEvent) {
+    draggedQuickId = id
+    event.dataTransfer?.setData('text/plain', id)
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
+  }
+  function dropQuick(id: string, event: DragEvent) {
+    event.preventDefault()
+    const moving = event.dataTransfer?.getData('text/plain') || draggedQuickId
+    if (!moving || moving === id) return
+    const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect()
+    nav.moveQuick(moving, id, event.clientY >= bounds.top + bounds.height / 2)
+    draggedQuickId = null
+  }
 </script>
 <svelte:window onkeydown={keydown} />
 <nav class="flex flex-col items-stretch w-12 flex-shrink-0 bg-muted/30 border-r border-border pt-2" aria-label={$_('navigation.quickAccess')}>
@@ -42,8 +56,14 @@
       icon={quickIcon(entry)}
       initial={entry.kind === 'folder' || entry.kind === 'virtual' ? favoriteInitial(entry.name) : undefined}
       color={entry.kind === 'folder' || entry.kind === 'virtual' ? favoriteColor(entry.id) : undefined}
-      label={`${entry.name} (${mac ? '⌘' : 'Ctrl+'}${(index + 1) % 10})`}
+      label={`${entry.name} (${mac ? '⌘' : 'Ctrl+'}${(index + 1) % 10}) · ${$_('navigation.dragQuick')}`}
       active={false}
+      quickId={entry.id}
+      draggable
+      ondragstart={event => startQuickDrag(entry.id, event)}
+      ondragover={event => event.preventDefault()}
+      ondrop={event => dropQuick(entry.id, event)}
+      ondragend={() => draggedQuickId = null}
       onclick={() => nav.navigate(entry)}
     />
   {/each}

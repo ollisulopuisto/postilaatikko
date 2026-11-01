@@ -465,6 +465,7 @@ export function GetVirtualFolderUnreadCounts():Promise<Record<string, number>>;
 export function GetVirtualFolders():Promise<Array<virtualfolder.VirtualFolder>>;
 
 export function GetWindowDecorationStatus():Promise<platform.WindowDecorationStatus>;
+export function GetOpenReaderInTabPreference():Promise<boolean>;
 
 export function HasPGPKey(arg1:string):Promise<boolean>;
 

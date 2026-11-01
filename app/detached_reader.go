@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/hkdb/aerion/internal/ipc"
+	"github.com/hkdb/aerion/internal/platform"
 	"github.com/hkdb/aerion/internal/readerbridge"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -204,6 +205,17 @@ func (a *App) OpenReaderWindow(accountID, folderID, threadID, folderType string)
 	return nil
 }
 
+// GetOpenReaderInTabPreference reports whether macOS's current window-tab
+// preference favors opening a thread in the app's tabbed workspace. In the
+// "In Full Screen" setting, AppKit only enables tabs while this window is full
+// screen.
+func (a *App) GetOpenReaderInTabPreference() bool {
+	if a == nil || a.ctx == nil {
+		return platform.PrefersWindowTabs(false)
+	}
+	return platform.PrefersWindowTabs(wailsRuntime.WindowIsFullscreen(a.ctx))
+}
+
 func (a *App) handleReaderCall(clientID string, msg ipc.Message) {
 	var request struct {
 		Operation string          `json:"operation"`
@@ -266,6 +278,7 @@ func (a *App) readerMethods() map[string]any {
 		"GetMessageListSortOrder":       a.GetMessageListSortOrder,
 		"GetMessageSource":              a.GetMessageSource,
 		"GetNativeTitleBar":             a.GetNativeTitleBar,
+		"GetOpenReaderInTabPreference":   a.GetOpenReaderInTabPreference,
 		"GetReadReceiptResponsePolicy":  a.GetReadReceiptResponsePolicy,
 		"GetReplyContent":               a.GetReplyContent,
 		"GetRunBackground":              a.GetRunBackground,

@@ -67,7 +67,7 @@
   import { publishUndoOperationCompleted, publishUndoOperationCreated } from '$lib/components/list/undoMutationEvents'
   import { runMessageMutation } from '$lib/components/list/mutationInFlight'
   // @ts-ignore - wailsjs path
-  import { PrepareReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, ClearDraftHistory, SendMessageWithDraftGuard, CancelPendingSend, CompletePendingSend, ListPendingSends, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ResolveMailActionTarget, UndoOperation, UndoLatestWithResult, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, OpenComposerWindow, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
+  import { PrepareReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, ClearDraftHistory, SendMessageWithDraftGuard, CancelPendingSend, CompletePendingSend, ListPendingSends, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ResolveMailActionTarget, UndoOperation, UndoLatestWithResult, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, OpenComposerWindow, OpenReaderWindow, GetOpenReaderInTabPreference, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
   // @ts-ignore - wailsjs path
   import { smtp, folder, certificate } from '../wailsjs/go/models'
   // @ts-ignore - wailsjs runtime
@@ -100,6 +100,7 @@
   const maxMailWorkspaceTabs = 4
   let mailWorkspaceTabs = $state<MailWorkspaceTab[]>([])
   let activeMailWorkspace = $state('primary')
+  let preferReaderTabs = $state(false)
   // Track where the selection came from: 'unified' for unified section, 'account' for account tree
   let selectionSource = $state<'unified' | 'account' | null>(null)
 
@@ -123,6 +124,7 @@
   }
 
   function workspaceLabel(scope: MailScope): string {
+    if (scope.threadId && scope.threadSubject) return scope.threadSubject
     if (scope.accountId !== 'unified') return scope.folderName || $_('mailWindow.folder')
     const key = ({ inbox: 'allInboxes', archive: 'archived' } as Record<string, string>)[scope.folderType] || scope.folderType
     return $_(`sidebar.${key}`)
@@ -136,6 +138,27 @@
     const tab = { id: crypto.randomUUID(), scope: { ...currentMailScope() } }
     mailWorkspaceTabs = [...mailWorkspaceTabs, tab]
     switchMailWorkspace(tab.id)
+  }
+
+  function openReaderScope(scope: MailScope) {
+    if (preferReaderTabs) {
+      if (mailWorkspaceTabs.length >= maxMailWorkspaceTabs) {
+        toasts.error($_('mailWindow.tabLimit', { values: { count: maxMailWorkspaceTabs } }))
+        return
+      }
+      const tab = { id: crypto.randomUUID(), scope: { ...scope } }
+      mailWorkspaceTabs = [...mailWorkspaceTabs, tab]
+      switchMailWorkspace(tab.id)
+      return
+    }
+    if (!scope.threadId) return
+    void OpenReaderWindow(scope.threadAccountId || scope.accountId, scope.threadFolderId || scope.folderId, scope.threadId, scope.folderType)
+      .catch(error => toasts.error(String(error)))
+  }
+
+  function openListThreadInTab(accountId: string, folderId: string, threadId: string, folderType: string, subject: string) {
+    const scope = currentMailScope()
+    openReaderScope({ ...scope, threadId, threadAccountId: accountId, threadFolderId: folderId, threadSubject: subject })
   }
 
   function switchMailWorkspace(id: string) {
@@ -516,6 +539,7 @@
   })
 
   onMount(async () => {
+    void GetOpenReaderInTabPreference().then(value => { preferReaderTabs = value }).catch(() => { preferReaderTabs = false })
     EventsOn('undo:history-open', () => {
       setActiveExtension('mail')
       showUndoHistory = true
@@ -2299,6 +2323,7 @@
         folderName={selectedFolderName}
         folderType={selectedFolderType || 'inbox'}
         onConversationSelect={handleConversationSelect}
+        onOpenInTab={openListThreadInTab}
         onReply={handleReply}
         onRowActionComplete={handleMessageListActionComplete}
         onBulkMarkRead={handleBulkMarkRead}
@@ -2355,7 +2380,7 @@
     {#if getActiveExtension() === 'mail'}
       {#each mailWorkspaceTabs as tab (tab.id)}
         <div class="flex-1 min-w-0 min-h-0 overflow-hidden" style:display={activeMailWorkspace === tab.id ? 'flex' : 'none'}>
-          <MailWindowApp config={tab.scope} embedded active={activeMailWorkspace === tab.id} onScopeChange={scope => updateWorkspaceScope(tab.id, scope)} onNewTab={openWorkspaceTab} />
+          <MailWindowApp config={tab.scope} embedded active={activeMailWorkspace === tab.id} onScopeChange={scope => updateWorkspaceScope(tab.id, scope)} onNewTab={openWorkspaceTab} onOpenInTab={openReaderScope} />
         </div>
       {/each}
     {/if}

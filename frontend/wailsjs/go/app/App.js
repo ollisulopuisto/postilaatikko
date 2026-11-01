@@ -890,6 +890,10 @@ export function GetWindowDecorationStatus() {
   return window['go']['app']['App']['GetWindowDecorationStatus']();
 }
 
+export function GetOpenReaderInTabPreference() {
+  return window['go']['app']['App']['GetOpenReaderInTabPreference']();
+}
+
 export function HasPGPKey(arg1) {
   return window['go']['app']['App']['HasPGPKey'](arg1);
 }

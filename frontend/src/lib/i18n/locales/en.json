@@ -1223,7 +1223,8 @@
     "allInboxes": "All Inboxes",
     "favorite": "Toggle favorite",
     "dragCard": "Drag card to reorder",
-    "dragEntry": "Drag to move"
+    "dragEntry": "Drag to move",
+    "dragQuick": "Drag to reorder favorites"
   },
   "search": {
     "operators": "Search operators",
