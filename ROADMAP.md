@@ -45,7 +45,7 @@ Implement sidebar cards/rail shortcuts, then Gmail-first operations, global serv
 4. **Reliable virtual folders and the accepted UI/API design:** first verify the empty-folder repair in the actual installed build, then implement D-002 backend contracts/query/extraction and agent access before dependent presentation. Add the navigation drawer, conversation/Traditional toggle, thread focus and nearby actions in small increments.
 5. **Fast everyday mail:** preserve Gmail-style keyboard bindings and quick reply snippets; add full templates, Finnish-layout support and configurable bindings.
 6. **Better compose controls:** reuse cross-account sender identities and durable drafts, with signatures selected from sender, recipient and available context.
-7. **Cross-account automation:** extend the existing local rules when provider-side filters cannot cross accounts.
+7. **Cross-account automation:** extend the existing local rules when provider-side filters cannot cross accounts. For moves, show likely destinations in the folder picker based on the user's history; after a repeated similar move (initial threshold: two), offer an optional automation setup with explicit match toggles such as sender, recipients, and subject. Do not prompt after every move or interrupt with a modal.
 8. **Tabbed mail workspaces:** open independent mail views in tabs, preserve each tab’s folder/search/thread state, and detach a tab to a native window (P-043).
 9. **Smart notifications:** optional sender- and rule-based controls. Useful, but lower priority than the core workflows above.
 
