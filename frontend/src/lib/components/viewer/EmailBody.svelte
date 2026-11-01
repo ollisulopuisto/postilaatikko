@@ -1,7 +1,7 @@
 <script lang="ts">
   import Icon from '@iconify/svelte'
   import { normalizeConversationHtml } from './conversationHtml'
-  import { ClipboardSetText } from '../../../../wailsjs/runtime/runtime'
+  import { BrowserOpenURL, ClipboardSetText } from '../../../../wailsjs/runtime/runtime'
   import { GetInlineAttachments, AddImageAllowlist, OpenURL, SetAlwaysLoadImages } from '../../../../wailsjs/go/app/App'
   import { linkifyText, isAllowedEmailURL } from '../../utils/emailLinks'
   import { hasBlockedRemoteImages, restoreBlockedImages } from '../../utils/blockedImages'
