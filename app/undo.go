@@ -186,7 +186,9 @@ func (a *App) RequestUndoFromMenu() {
 func (a *App) RunEditMenuCommand(command string) {
 	switch command {
 	case "cut", "copy", "paste", "selectAll":
-		wailsRuntime.WindowExecJS(a.ctx, "document.execCommand('"+command+"')")
+		// Reader selections belong to a sandboxed iframe, not the parent
+		// document. Route native Edit menu commands to that focused frame.
+		wailsRuntime.WindowExecJS(a.ctx, "(() => { const active = document.activeElement; if (active instanceof HTMLIFrameElement && active.contentWindow) { active.contentWindow.postMessage({ type: 'native-edit-command', command: '"+command+"' }, '*'); } else { document.execCommand('"+command+"'); } })()")
 	}
 }
 
