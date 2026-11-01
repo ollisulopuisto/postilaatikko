@@ -170,3 +170,11 @@ func BenchmarkExtractPlainTextFromHTML(b *testing.B) {
 		_ = ExtractPlainTextFromHTML(benchSampleHTML)
 	}
 }
+
+func BenchmarkEscapeHTML(b *testing.B) {
+	sample := `https://images.example.com/photo?user=test&width=300&height=200&title="Profile"&desc='A <cool> photo'`
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = escapeHTML(sample)
+	}
+}

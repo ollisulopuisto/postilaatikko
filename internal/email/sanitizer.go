@@ -24,6 +24,27 @@ var (
 	tagRe       = regexp.MustCompile(`<[^>]*>`)
 	wsRe        = regexp.MustCompile(`[ \t]+`)
 	nlRe        = regexp.MustCompile(`\n{3,}`)
+
+	// htmlAttrEscaper replaces HTML special characters for attributes in a single pass,
+	// avoiding multiple intermediate string allocations.
+	htmlAttrEscaper = strings.NewReplacer(
+		"&", "&amp;",
+		"<", "&lt;",
+		">", "&gt;",
+		`"`, "&quot;",
+		"'", "&#39;",
+	)
+
+	// htmlEntityReplacer decodes common HTML entities in a single pass instead of
+	// multiple sequential strings.ReplaceAll scans across the entire text buffer.
+	htmlEntityReplacer = strings.NewReplacer(
+		"&nbsp;", " ",
+		"&amp;", "&",
+		"&lt;", "<",
+		"&gt;", ">",
+		"&quot;", `"`,
+		"&#39;", "'",
+	)
 )
 
 // Sanitizer provides HTML email sanitization
@@ -224,14 +245,10 @@ func BlockRemoteImages(html string) string {
 	return result
 }
 
-// escapeHTML escapes HTML special characters for use in attributes
+// escapeHTML escapes HTML special characters for use in attributes.
+// Uses a pre-allocated strings.Replacer to escape all 5 special characters in a single pass.
 func escapeHTML(s string) string {
-	s = strings.ReplaceAll(s, "&", "&amp;")
-	s = strings.ReplaceAll(s, "<", "&lt;")
-	s = strings.ReplaceAll(s, ">", "&gt;")
-	s = strings.ReplaceAll(s, `"`, "&quot;")
-	s = strings.ReplaceAll(s, "'", "&#39;")
-	return s
+	return htmlAttrEscaper.Replace(s)
 }
 
 // ExtractPlainTextFromHTML converts HTML to plain text
@@ -249,13 +266,8 @@ func ExtractPlainTextFromHTML(html string) string {
 	// Remove all remaining HTML tags
 	text := tagRe.ReplaceAllString(html, "")
 
-	// Decode common HTML entities
-	text = strings.ReplaceAll(text, "&nbsp;", " ")
-	text = strings.ReplaceAll(text, "&amp;", "&")
-	text = strings.ReplaceAll(text, "&lt;", "<")
-	text = strings.ReplaceAll(text, "&gt;", ">")
-	text = strings.ReplaceAll(text, "&quot;", `"`)
-	text = strings.ReplaceAll(text, "&#39;", "'")
+	// Decode common HTML entities in a single pass via pre-configured replacer
+	text = htmlEntityReplacer.Replace(text)
 
 	// Collapse multiple whitespace
 	text = wsRe.ReplaceAllString(text, " ")
