@@ -53,6 +53,7 @@
     onActionComplete?: (autoSelectNext?: boolean) => void
     onReply?: (mode: 'reply' | 'reply-all' | 'forward', messageId: string) => void
     onDelete?: (messageIds: string[]) => void  // Swipe-left delete (routes through MessageList.requestDelete)
+    onOpenInTab?: (accountId: string, folderId: string, threadId: string, folderType: string, subject: string) => void
   }
 
   let {
@@ -78,13 +79,14 @@
     onActionComplete,
     onReply,
     onDelete,
+    onOpenInTab,
   }: Props = $props()
 
   // Resolve the folder name for this row. In unified inbox, virtual folder and
   // All Inboxes views each conversation can live in a different folder, so we
   // look the folder name up from the account's folder tree. Falls back to the
   // searchFolderName passed by search results, then to an empty string.
-  const folderName = $derived(() => {
+  const folderName = $derived.by(() => {
     if (searchFolderName) return searchFolderName
     const account = accountStore.accounts.find((item) => item.account.id === accountId)
     if (!account) return ''
@@ -531,6 +533,10 @@
     ondblclick={async (event) => {
       if (!isRowOpenTarget(event.target, event.currentTarget)) return
       event.preventDefault()
+      if (onOpenInTab) {
+        onOpenInTab(accountId, folderId, conversation.threadId, folderType, conversation.subject || '')
+        return
+      }
       try { await OpenReaderWindow(accountId, folderId, conversation.threadId, folderType) }
       catch (error) { toasts.error(String(error)) }
     }}

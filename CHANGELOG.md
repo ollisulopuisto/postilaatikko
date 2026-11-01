@@ -3,9 +3,18 @@
 ## [Unreleased]
 
 - Open the move-to-folder / copy-to-folder picker for the open conversation from the focused reader with `v` / Alt+M / Alt+C, so Gmail-style message actions work from both the message list and the reader. Single-key shortcuts stay disabled in editable fields and while composing.
+- Fix message-list folder badges showing internal JavaScript source instead of the folder name.
+- Open double-clicked conversations in a tab when macOS's Desktop & Dock preference calls for tabs; avoid blocking detached mail-window startup on the primary window's UI state.
+- Reorder favorite destinations in the left quick-access rail; Cmd/Ctrl+1…0 follows the displayed order.
 - Refresh Gmail labels from the virtual-folder editor, and apply Gmail label scopes correctly to online virtual-folder searches.
 - Add ordered contextual signature rules for sender, recipient, and message type, with placement controls and manual-edit preservation.
 - Add bulk select/clear controls to virtual-folder setup, wrap long sidebar labels, and make the cross-account move picker a searchable expandable folder tree.
+- Restore Cmd+C and the standard Edit menu copy command for selected text in the email reader.
+
+## Postilaatikko 2026.11.01.1
+
+- Integrate the latest main-branch changes for tab-aware double-click opening, favorite ordering and shortcuts, message-list folder labels, and non-blocking detached-window startup.
+- Restore copy shortcuts for selected email text and include the Intel macOS build compatibility fix.
 
 ## Postilaatikko 2026.10.30
 
@@ -815,3 +824,6 @@ v0.1.39 is a major milestone that includes some remaining originally planned bas
 ---
 
 - First release - ALPHA
+
+- Double-clicking a message opens its thread in an in-app tab when macOS is set to prefer tabs; the tab keeps the thread's account and folder scope.
+- Detached mail and reader windows no longer wait for the primary window's database-backed UI state before first paint; each keeps its UI state local.

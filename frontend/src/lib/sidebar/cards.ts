@@ -53,14 +53,18 @@ export function moveCard(state: NavigationCards, id: string, delta: number): Nav
   return { ...state, cards }
 }
 export function quickEntries(state: NavigationCards, entries: NavigationEntry[]): NavigationEntry[] {
-  const favorites = new Set(state.quick)
   const byId = new Map(entries.map(entry => [entry.id, entry]))
-  // Shortcut slots and the quick rail follow the visible sidebar order, so
-  // Cmd/Ctrl+1…0 always target the first ten starred entries top-to-bottom.
-  return state.cards.flatMap(card => card.entries)
-    .filter(id => favorites.has(id))
-    .flatMap(id => byId.has(id) ? [byId.get(id)!] : [])
-    .slice(0, 10)
+  // The explicit favorite order is shared by the rail and Cmd/Ctrl+1…0.
+  return state.quick.flatMap(id => byId.has(id) ? [byId.get(id)!] : []).slice(0, 10)
+}
+export function moveQuickEntry(state: NavigationCards, id: string, targetId: string, after: boolean): NavigationCards {
+  const quick = [...state.quick]
+  const from = quick.indexOf(id)
+  if (from < 0 || !quick.includes(targetId) || id === targetId) return state
+  quick.splice(from, 1)
+  const target = quick.indexOf(targetId)
+  quick.splice(target + (after ? 1 : 0), 0, id)
+  return { ...state, quick }
 }
 export function shortcutIndex(event: {code?: string; key: string; metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean; altKey?: boolean}, mac: boolean): number {
   if (!(mac ? event.metaKey : event.ctrlKey) || event.shiftKey || event.altKey) return -1

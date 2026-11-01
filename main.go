@@ -16,6 +16,7 @@ import (
 	"github.com/hkdb/aerion/internal/settings"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/menu"
+	"github.com/wailsapp/wails/v2/pkg/menu/keys"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/linux"
@@ -149,11 +150,11 @@ func runMainMode(mailtoData *app.MailtoData, rawMailtoArg string) {
 		menu.Separator(),
 		menu.Text("Undo History…", nil, func(*menu.CallbackData) { application.RequestUndoHistoryFromMenu() }),
 		menu.Separator(),
-		menu.Text("Cut", nil, func(*menu.CallbackData) { application.RunEditMenuCommand("cut") }),
-		menu.Text("Copy", nil, func(*menu.CallbackData) { application.RunEditMenuCommand("copy") }),
-		menu.Text("Paste", nil, func(*menu.CallbackData) { application.RunEditMenuCommand("paste") }),
+		menu.Text("Cut", keys.CmdOrCtrl("x"), func(*menu.CallbackData) { application.RunEditMenuCommand("cut") }),
+		menu.Text("Copy", keys.CmdOrCtrl("c"), func(*menu.CallbackData) { application.RunEditMenuCommand("copy") }),
+		menu.Text("Paste", keys.CmdOrCtrl("v"), func(*menu.CallbackData) { application.RunEditMenuCommand("paste") }),
 		menu.Separator(),
-		menu.Text("Select All", nil, func(*menu.CallbackData) { application.RunEditMenuCommand("selectAll") }),
+		menu.Text("Select All", keys.CmdOrCtrl("a"), func(*menu.CallbackData) { application.RunEditMenuCommand("selectAll") }),
 	)
 	helpMenu := menu.NewMenuFromItems(
 		menu.Text("What's New…", nil, func(*menu.CallbackData) { application.RequestWhatsNewFromMenu() }),

@@ -1,6 +1,7 @@
 <script lang="ts">
   import Icon from '@iconify/svelte'
   import { normalizeConversationHtml } from './conversationHtml'
+  import { ClipboardSetText } from '../../../../wailsjs/runtime/runtime'
   import { GetInlineAttachments, AddImageAllowlist, OpenURL, SetAlwaysLoadImages } from '../../../../wailsjs/go/app/App'
   import { linkifyText, isAllowedEmailURL } from '../../utils/emailLinks'
   import { hasBlockedRemoteImages, restoreBlockedImages } from '../../utils/blockedImages'
@@ -344,6 +345,27 @@
         }, '*');
       });
 
+      // The reader selection belongs to this sandboxed document. Route a
+      // native Edit > Copy menu command here instead of copying from the empty
+      // parent document.
+      window.addEventListener('message', function(e) {
+        if (e.data && e.data.type === 'native-edit-command' && e.data.command === 'copy') {
+          var selection = window.getSelection();
+          var text = selection ? selection.toString() : '';
+          if (text) window.parent.postMessage({ type: 'copy-selected-text', text: text }, '*');
+          return;
+        }
+        if (e.data && e.data.type === 'native-edit-command' && e.data.command === 'selectAll') {
+          var range = document.createRange();
+          range.selectNodeContents(document.body);
+          var selection = window.getSelection();
+          if (selection) {
+            selection.removeAllRanges();
+            selection.addRange(range);
+          }
+        }
+      });
+
       // The message body lives in a sandboxed iframe, so unmodified Gmail-style
       // shortcuts would otherwise never reach the app's global key handler.
       // Forward those shortcuts from non-interactive body content; links and
@@ -355,6 +377,15 @@
       ]);
       document.addEventListener('keydown', function(e) {
         var interactiveTarget = isInteractiveElement(e.target);
+        if (!interactiveTarget && (e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'c') {
+          var selectedText = window.getSelection();
+          var text = selectedText ? selectedText.toString() : '';
+          if (text) {
+            e.preventDefault();
+            window.parent.postMessage({ type: 'copy-selected-text', text: text }, '*');
+            return;
+          }
+        }
         var isUnmodifiedShortcut = !e.altKey && !e.ctrlKey && !e.metaKey && forwardedShortcutKeys.has(e.key);
         if (!interactiveTarget && (e.altKey || e.ctrlKey || e.metaKey || isUnmodifiedShortcut)) {
           // For pane navigation, blur inside iframe first
@@ -493,6 +524,10 @@ ${processedHtml}
       iframeReady = true
     } else if (event.data?.type === 'open-link') {
       handleLinkClick(event.data.url as string)
+    } else if (event.data?.type === 'copy-selected-text' && typeof event.data.text === 'string') {
+      ClipboardSetText(event.data.text).catch((err) => {
+        console.error('[EmailBody] Failed to copy selected text:', err)
+      })
     } else if (event.data?.type === 'iframe-keydown') {
       // Handle Alt+arrow/hjkl directly for pane navigation
       if (event.data.altKey) {

@@ -6,6 +6,7 @@ export interface MailScope {
   threadId?: string
   threadAccountId?: string
   threadFolderId?: string
+  threadSubject?: string
   searchQuery?: string
 }
 export interface MailThread { accountId: string; folderId: string; threadId: string }

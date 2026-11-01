@@ -4,7 +4,7 @@ import ts from 'typescript'
 import { readFile } from 'node:fs/promises'
 const source = await readFile(new URL('../src/lib/sidebar/cards.ts', import.meta.url), 'utf8')
 const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } })
-const { normalizeCards, moveEntry, moveCard, quickEntries, shortcutIndex } = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`)
+const { normalizeCards, moveEntry, moveCard, moveQuickEntry, quickEntries, shortcutIndex } = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`)
 const entries = [{ id: 'inboxes', kind: 'inboxes', name: 'All Inboxes' }, { id: 'sent', kind: 'system', name: 'Sent', folderType: 'sent' }, { id: 'folder:a:f', kind: 'folder', accountId: 'a', folderId: 'f', name: 'Work', path: 'Work' }]
 test('migration groups inboxes, system folders and pins with apps off', () => {
   const state = normalizeCards('', entries)
@@ -37,6 +37,12 @@ test('missing quick list seeds primary destinations and pins', () => {
 test('an explicitly saved empty quick list stays empty', () => {
   const state = normalizeCards(JSON.stringify({ quick: [] }), entries)
   assert.deepEqual(state.quick, [])
+})
+test('reordering quick favorites updates the same order used by number shortcuts', () => {
+  const state = normalizeCards(JSON.stringify({ quick: ['inboxes', 'sent', 'folder:a:f'] }), entries)
+  const changed = moveQuickEntry(state, 'folder:a:f', 'inboxes', false)
+  assert.deepEqual(quickEntries(changed, entries).map(entry => entry.id), ['folder:a:f', 'inboxes', 'sent'])
+  assert.deepEqual(quickEntries(state, entries).map(entry => entry.id), ['inboxes', 'sent', 'folder:a:f'])
 })
 test('defaults include a favorites card for starred folders', () => {
   const state = normalizeCards('', entries)

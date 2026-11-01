@@ -19,7 +19,7 @@
   import { GetAccounts, GetFolders, GetFolderTree, GetMessage, OpenMailWindow, OpenComposerWindow, MarkAsRead, MarkAsUnread, Star, Unstar, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ArchiveWithUndo, UndoOperation } from '../wailsjs/go/app/App'
   import { EventsEmit, WindowSetTitle } from '../wailsjs/runtime/runtime'
 
-  let { config, embedded = false, active = true, onScopeChange, onNewTab }: { config: MailScope; embedded?: boolean; active?: boolean; onScopeChange?: (scope: MailScope) => void; onNewTab?: () => void } = $props()
+  let { config, embedded = false, active = true, onScopeChange, onNewTab, onOpenInTab }: { config: MailScope; embedded?: boolean; active?: boolean; onScopeChange?: (scope: MailScope) => void; onNewTab?: () => void; onOpenInTab?: (scope: MailScope) => void } = $props()
   // A process per window gives each component/store its own search, checked
   // rows, scroll memory and reader mode. Primary UI state is never persisted.
   let windowState = $state(createMailWindowState(untrack(() => config)))
@@ -45,6 +45,7 @@
   $effect(() => { if (embedded) folderBrowserOpen = true })
 
   function label(scope: MailScope) {
+    if (scope.threadId && scope.threadSubject) return scope.threadSubject
     if (scope.accountId === 'unified' && scope.folderType === 'all') return $_('mailWindow.allMail')
     if (scope.accountId === 'unified' && scope.folderType === 'spam') return $_('mailWindow.spam')
     if (scope.accountId === 'unified') return $_(`sidebar.${({ inbox: 'allInboxes', archive: 'archived' }[scope.folderType] || scope.folderType)}`)
@@ -235,7 +236,7 @@
   <main class:reader-only={readerOnly} class:has-thread={!!windowState.thread} class="flex flex-1 min-w-0 min-h-0 overflow-hidden" style={`--list-width: ${listWidth}px`}>
     <section class="mail-list min-h-0 overflow-hidden border-r border-border" role="presentation" onclick={() => setFocusedPane('messageList')}>
       <MessageList bind:this={list} accountId={windowState.scope.accountId} folderId={windowState.scope.folderId} folderName={label(windowState.scope)} folderType={windowState.scope.folderType}
-        isFocused={getFocusedPane() === 'messageList'} onConversationSelect={select} onReply={reply}
+        isFocused={getFocusedPane() === 'messageList'} onConversationSelect={select} onOpenInTab={(accountId, folderId, threadId, folderType, subject) => onOpenInTab?.({ ...windowState.scope, threadId, threadAccountId: accountId, threadFolderId: folderId, folderType, threadSubject: subject })} onReply={reply}
         onSearchQueryChange={searchQuery => onScopeChange?.({ ...windowState.scope, searchQuery })}
         onRowActionComplete={auto => { if (auto) windowState = { ...windowState, thread: null } }}
         onBulkMarkRead={ids => void run(() => MarkAsRead(ids))} onBulkAction={bulkAction} enableCommandPalette={false} />
