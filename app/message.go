@@ -108,7 +108,14 @@ func (a *App) GetConversations(accountID, folderID string, offset, limit int, so
 		}
 		return a.messageStore.ListVirtualArchivedConversations([]string{allMail.ID}, offset, limit, sortOrder, filter)
 	}
-	return a.messageStore.ListConversationsByFolder(folderID, offset, limit, sortOrder, filter)
+	conversations, err := a.messageStore.ListConversationsByFolder(folderID, offset, limit, sortOrder, filter)
+	if err != nil {
+		return nil, err
+	}
+	// Return headers first; body prefetch runs asynchronously and the policy
+	// keeps non-sidebar folders header-only.
+	go a.enqueueFolderConversationPrefetch(accountID, folderID, conversations)
+	return conversations, nil
 }
 
 // GetConversationCount returns the total conversation count for a folder
@@ -128,7 +135,12 @@ func (a *App) GetConversationCount(accountID, folderID, filter string) (int, err
 
 // GetUnifiedInboxConversations returns conversations from all inbox folders across all accounts
 func (a *App) GetUnifiedInboxConversations(offset, limit int, sortOrder, filter string) ([]*message.Conversation, error) {
-	return a.messageStore.ListConversationsUnifiedInbox(offset, limit, sortOrder, filter)
+	conversations, err := a.messageStore.ListConversationsUnifiedInbox(offset, limit, sortOrder, filter)
+	if err != nil {
+		return nil, err
+	}
+	go a.enqueueUnifiedInboxConversationPrefetch(conversations)
+	return conversations, nil
 }
 
 // GetUnifiedInboxCount returns the total conversation count across all inbox folders

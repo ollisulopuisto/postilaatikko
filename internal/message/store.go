@@ -576,6 +576,25 @@ func (s *Store) Get(id string) (*Message, error) {
 	return m, nil
 }
 
+// NeedsBodyFetch reports whether an account-qualified message exists and is
+// still header-only. It avoids loading cached body text/HTML merely to inspect
+// the body_fetched flag during background prefetch.
+func (s *Store) NeedsBodyFetch(accountID, messageID string) (bool, error) {
+	if accountID == "" || messageID == "" {
+		return false, nil
+	}
+	var needsFetch bool
+	err := s.db.QueryRow(`
+		SELECT EXISTS(
+			SELECT 1 FROM messages
+			WHERE account_id = ? AND id = ? AND body_fetched = 0
+		)`, accountID, messageID).Scan(&needsFetch)
+	if err != nil {
+		return false, fmt.Errorf("check message body fetch state: %w", err)
+	}
+	return needsFetch, nil
+}
+
 // GetByUID returns a message by folder ID and UID
 func (s *Store) GetByUID(folderID string, uid uint32) (*Message, error) {
 	query := `

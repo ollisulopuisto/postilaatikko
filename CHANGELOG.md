@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Warm a bounded first page of message bodies asynchronously when opening Inbox, Starred, pinned folders, or All Inboxes; headers render immediately, and other folders plus attachments stay on demand.
 - Open the move-to-folder / copy-to-folder picker for the open conversation from the focused reader with `v` / Alt+M / Alt+C, so Gmail-style message actions work from both the message list and the reader. Single-key shortcuts stay disabled in editable fields and while composing.
 - Fix message-list folder badges showing internal JavaScript source instead of the folder name.
 - Open double-clicked conversations in a tab when macOS's Desktop & Dock preference calls for tabs; avoid blocking detached mail-window startup on the primary window's UI state.
