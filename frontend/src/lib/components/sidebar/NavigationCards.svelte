@@ -105,8 +105,8 @@
                     </DropdownMenu.Portal>
                   </DropdownMenu.Root>
                 {:else if entry.kind === 'virtual'}
-                  <button type="button" class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-muted" aria-label={`Edit ${entry.name}`} onclick={() => onEdit?.(entry)}><Icon icon="mdi:pencil-outline" /></button>
-                  <button type="button" class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-muted" aria-label={`Delete ${entry.name}`} onclick={() => onDelete?.(entry)}><Icon icon="mdi:delete-outline" /></button>
+                  <button type="button" class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-muted focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Edit ${entry.name}`} title={`Edit ${entry.name}`} onclick={() => onEdit?.(entry)}><Icon icon="mdi:pencil-outline" /></button>
+                  <button type="button" class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-muted focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Delete ${entry.name}`} title={`Delete ${entry.name}`} onclick={() => onDelete?.(entry)}><Icon icon="mdi:delete-outline" /></button>
                 {/if}
                 {#if editing}
                   <button type="button" class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-muted" aria-label={$_('navigation.quickAccess')} aria-pressed={nav.state.quick.includes(id)} disabled={!nav.state.quick.includes(id) && nav.state.quick.length >= 10} onclick={() => nav.toggleQuick(id)}><Icon icon={nav.state.quick.includes(id) ? 'mdi:star' : 'mdi:star-outline'} /></button>
