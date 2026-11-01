@@ -1,8 +1,8 @@
 # Local branch audit — 2026-11-01
 
 This is the disposition of every local branch after the coordinator cleanup.
-Local `main` includes the current `origin/main` plus five reviewed release
-candidate commits; it has not been pushed. Local-only changes to this audit,
+Local `main` includes the current `origin/main` plus reviewed release candidates
+and coordinator commits; it has not been pushed. Local-only changes to this audit,
 `TASKS.md`, and `ROADMAP.md` are being committed separately. The untracked
 `tags.png` is user data and was left untouched.
 
@@ -11,7 +11,7 @@ candidate commits; it has not been pushed. Local-only changes to this audit,
 | Branch | Disposition |
 | --- | --- |
 | `agent/P-021-viewer-shortcuts` | Keep with its worktree. Open PR #86; review/fix the current lint failure and retain the live macOS verification gate. |
-| `agent/P-043-tabbed-mail-workspaces` | Keep branch; worktree was clean and removed. Five unique commits remain outside main. Automatic review blocked deleting it because doing so risked losing unmerged implementation. Reassess its unique patches before any retirement. |
+| `codex/P043-close-out` | Keep until the documentation close-out commit `666e9f7` is integrated into local main; P-043 behavior is already present in main. |
 | `codex/CI-003-on-demand-macos-test-build` | Keep with active worktree; CI optimization task. |
 | `codex/FACET-001-visible-search-facets` | Keep with active worktree; search UI task. |
 | `codex/GLOBAL-002-online-counts` | Keep as an older recovery checkpoint; incomplete follow-up exists remotely. |
@@ -44,6 +44,7 @@ their superseding PR/state:
 
 - `agent/P-015-contextual-signatures` — integrated through PR #72.
 - `agent/P-030-bulk-message-actions` — superseded by the integrated main state.
+- `agent/P-043-tabbed-mail-workspaces` — its older implementation was fully superseded by current main: tabbed workspaces (`76c1cd0`), detached search/thread state (`af35980`), active-tab navigation and folder browser (`011a3f6`), and instant reader-tab/macOS detach behavior (`9c3dffc`, `3b917fb`, `a41f682`). The branch had five unique commit objects, but no remaining user-visible behavior absent from main; no code was cherry-picked to avoid regressing later UI changes. Local branch retired after this comparison; remote branch left untouched.
 - `codex/P-045-virtual-folder-picker`, `codex/P-046-folder-picker-tree-hotkeys` — integrated through PR #72.
 - `agent/UX-040-folder-content-policy`, `agent/UX-041-folder-content-controls`, `agent/UX-043-folder-quick-filters` — superseded/integrated through PR #72.
 - `codex/UX-001-finish-virtual-folder`, `codex/UX-019-agent-api-design` — integrated or superseded by later API work on main.
@@ -55,6 +56,8 @@ their superseding PR/state:
 - `agent/p023-contacts-aria-labels` — the same accessible labels are already present in the Contacts component on main.
 - `codex/PR-077-repair` — documentation-only reconciliation for closed/superseded PR #77.
 - `codex/INT-DISPATCH-UX008-update` — stale coordination snapshot; its TASKS rewrite would discard unrelated task history, so it was not merged.
+
+P-043 close-out: current main initializes detached mail workspaces from the selected thread and restores the search query (`app/detached_reader.go`, `app/mail_window.go`, `main.go`, `frontend/src/MailWindowApp.svelte`, `frontend/src/lib/windows/mailWindow.ts`, and `MessageList.svelte`). The task's requested behavior is complete; the retired `agent/P-043-tabbed-mail-workspaces` branch was redundant history, not missing implementation. The documentation-only close-out commit is on `codex/P043-close-out` pending integration.
 
 The local `main` branch is intentionally ahead of `origin/main`; this cleanup
 does not publish or release those commits. No remaining local branch is
