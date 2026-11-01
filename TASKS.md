@@ -22,7 +22,7 @@
 
 These tasks started in the primary checkout before `AGENTS.md` established worktree isolation. Do not join that checkout; the coordinator owns these changes.
 
-| REL-2026.11.01.2 | Easy | Prepare a CalVer release from current main: synchronize version metadata and release notes, validate, tag, and launch the GitHub DMG release workflow. | Codex / `codex/RELEASE-2026.11.01.2` / `/private/tmp/postilaatikko-release-2026.11.01.2` | In progress |
+| REL-2026.11.01.2 | Easy | Prepare a CalVer release from current main: synchronize version metadata and release notes, validate, tag, and launch the GitHub DMG release workflow. | Codex / `codex/RELEASE-2026.11.01.2` / `/private/tmp/postilaatikko-release-2026.11.01.2`; commit `dd5c7b9`, tag `v2026.11.01.2`; both macOS DMGs uploaded | Done |
 
 | ID | Effort | Task | Owner / branch | Status |
 | --- | --- | --- | --- | --- |
