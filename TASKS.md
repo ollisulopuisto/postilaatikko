@@ -22,6 +22,8 @@
 
 These tasks started in the primary checkout before `AGENTS.md` established worktree isolation. Do not join that checkout; the coordinator owns these changes.
 
+| REL-2026.11.01.2 | Easy | Prepare a CalVer release from current main: synchronize version metadata and release notes, validate, tag, and launch the GitHub DMG release workflow. | Codex / `codex/RELEASE-2026.11.01.2` / `/private/tmp/postilaatikko-release-2026.11.01.2` | In progress |
+
 | ID | Effort | Task | Owner / branch | Status |
 | --- | --- | --- | --- | --- |
 | P-001 | Easy | Add Finnish core and extension translations, locale registration, and key/placeholder parity. | Coordinator / `main` primary checkout | Done (v0.3.12) |
