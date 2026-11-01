@@ -11,6 +11,7 @@ import (
 )
 
 const maxQueuedFolderBodyPrefetch = 128
+const maxFolderPageBodyPrefetch = 50
 
 type folderBodyPrefetchQueue struct {
 	accountID string
@@ -119,11 +120,99 @@ func (a *App) handleNewSyncedMessage(accountID, folderID string, msg *message.Me
 }
 
 func (a *App) enqueueFolderBodyPrefetch(accountID, folderID, messageID string) {
-	if messageID == "" || a.syncEngine == nil || a.ctx == nil {
+	a.enqueueFolderBodyPrefetchBatch(accountID, folderID, []string{messageID}, false)
+}
+
+// enqueueFolderConversationPrefetch warms a bounded page of message bodies
+// after the local conversation headers have already been returned to the UI.
+// It prioritizes this opened page over pending sync work in the same folder.
+func (a *App) enqueueFolderConversationPrefetch(accountID, folderID string, conversations []*message.Conversation) {
+	ids := make([]string, 0, maxFolderPageBodyPrefetch)
+	seen := make(map[string]bool, maxFolderPageBodyPrefetch)
+	// Round-robin through each conversation's messages so one long thread
+	// cannot consume the entire page budget.
+	for messageIndex := 0; len(ids) < maxFolderPageBodyPrefetch; messageIndex++ {
+		foundAtIndex := false
+		for _, conversation := range conversations {
+			if conversation == nil || messageIndex >= len(conversation.MessageIDs) {
+				continue
+			}
+			foundAtIndex = true
+			id := conversation.MessageIDs[messageIndex]
+			if id == "" || seen[id] {
+				continue
+			}
+			seen[id] = true
+			ids = append(ids, id)
+			if len(ids) == maxFolderPageBodyPrefetch {
+				break
+			}
+		}
+		if !foundAtIndex {
+			break
+		}
+	}
+	a.enqueueFolderBodyPrefetchBatch(accountID, folderID, ids, true)
+}
+
+func (a *App) enqueueUnifiedInboxConversationPrefetch(conversations []*message.Conversation) {
+	type folderKey struct{ accountID, folderID string }
+	byFolder := make(map[folderKey][]string)
+	seen := make(map[string]bool, maxFolderPageBodyPrefetch)
+	total := 0
+	// The unified page has one overall budget. A per-folder cap would multiply
+	// work by the number of accounts represented in All Inboxes.
+	for messageIndex := 0; total < maxFolderPageBodyPrefetch; messageIndex++ {
+		foundAtIndex := false
+		for _, conversation := range conversations {
+			if conversation == nil || conversation.AccountID == "" || conversation.FolderID == "" || messageIndex >= len(conversation.MessageIDs) {
+				continue
+			}
+			foundAtIndex = true
+			messageID := conversation.MessageIDs[messageIndex]
+			if messageID == "" || seen[messageID] {
+				continue
+			}
+			seen[messageID] = true
+			key := folderKey{accountID: conversation.AccountID, folderID: conversation.FolderID}
+			byFolder[key] = append(byFolder[key], messageID)
+			total++
+			if total == maxFolderPageBodyPrefetch {
+				break
+			}
+		}
+		if !foundAtIndex {
+			break
+		}
+	}
+	for key, messageIDs := range byFolder {
+		a.enqueueFolderBodyPrefetchBatch(key.accountID, key.folderID, messageIDs, true)
+	}
+}
+
+func (a *App) enqueueFolderBodyPrefetchBatch(accountID, folderID string, messageIDs []string, prioritize bool) {
+	if len(messageIDs) == 0 || a.syncEngine == nil || a.ctx == nil {
 		return
 	}
 	policy, err := a.GetFolderContentPolicy(accountID, folderID)
-	if err != nil || !policy.BodyPrefetch {
+	if err != nil {
+		log := logging.WithComponent("app.body-prefetch")
+		log.Warn().Err(err).Str("folder", folderID).Msg("Could not check folder body-prefetch policy")
+		return
+	}
+	if !policy.BodyPrefetch {
+		return
+	}
+	validIDs := make([]string, 0, len(messageIDs))
+	seen := make(map[string]bool, len(messageIDs))
+	for _, messageID := range messageIDs {
+		if messageID == "" || seen[messageID] {
+			continue
+		}
+		seen[messageID] = true
+		validIDs = append(validIDs, messageID)
+	}
+	if len(validIDs) == 0 {
 		return
 	}
 	key := accountID + ":" + folderID
@@ -141,19 +230,32 @@ func (a *App) enqueueFolderBodyPrefetch(accountID, folderID, messageID string) {
 		queue = &folderBodyPrefetchQueue{accountID: accountID, folderID: folderID, ctx: ctx, cancel: cancel, pending: make(map[string]bool)}
 		a.bodyPrefetchQueues[key] = queue
 	}
-	if queue.pending[messageID] {
-		a.bodyPrefetchMu.Unlock()
-		return
+	queued := make([]string, 0, len(validIDs))
+	queueFull := false
+	for _, messageID := range validIDs {
+		if queue.pending[messageID] {
+			continue
+		}
+		if len(queue.pending) >= maxQueuedFolderBodyPrefetch {
+			queueFull = true
+			break
+		}
+		queue.pending[messageID] = true
+		queued = append(queued, messageID)
 	}
-	if len(queue.pending) >= maxQueuedFolderBodyPrefetch {
-		a.bodyPrefetchMu.Unlock()
-		log := logging.WithComponent("app.body-prefetch")
-		log.Warn().Str("folder", folderID).Msg("Body prefetch queue full; leaving message on the server until opened")
-		return
+	if prioritize {
+		queue.ids = append(queued, queue.ids...)
+	} else {
+		queue.ids = append(queue.ids, queued...)
 	}
-	queue.pending[messageID] = true
-	queue.ids = append(queue.ids, messageID)
 	a.bodyPrefetchMu.Unlock()
+	if queueFull {
+		log := logging.WithComponent("app.body-prefetch")
+		log.Warn().Str("folder", folderID).Msg("Body prefetch queue full; remaining messages stay fetchable on demand")
+	}
+	if len(queued) == 0 {
+		return
+	}
 	if start {
 		go a.runFolderBodyPrefetch(key, queue)
 	}
@@ -182,8 +284,11 @@ func (a *App) runFolderBodyPrefetch(key string, queue *folderBodyPrefetchQueue) 
 		}
 		policy, err := a.GetFolderContentPolicy(queue.accountID, queue.folderID)
 		if err == nil && policy.BodyPrefetch && queue.ctx.Err() == nil {
-			msg, getErr := a.messageStore.Get(messageID)
-			if getErr == nil && msg != nil && msg.AccountID == queue.accountID && !msg.BodyFetched {
+			needsFetch, getErr := a.messageStore.NeedsBodyFetch(queue.accountID, messageID)
+			if getErr != nil {
+				log.Warn().Err(getErr).Str("folder", queue.folderID).Msg("Could not check cached message body")
+			}
+			if getErr == nil && needsFetch {
 				if _, fetchErr := a.syncEngine.FetchMessageBody(queue.ctx, queue.accountID, messageID); fetchErr != nil && queue.ctx.Err() == nil {
 					log.Warn().Err(fetchErr).Str("folder", queue.folderID).Msg("Automatic body prefetch failed; message remains fetchable on demand")
 				}

@@ -2,8 +2,26 @@ export function escapeEmailText(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 }
 
+// Validate URL schemes and structure to prevent argument injection,
+// file/script execution, and malformed inputs.
 export function isAllowedEmailURL(value: string): boolean {
-  try { return ['http:', 'https:', 'mailto:'].includes(new URL(value).protocol) } catch { return false }
+  if (!value || typeof value !== 'string') return false
+  if (/[\r\n]/.test(value) || value.includes('\0')) return false
+  try {
+    const parsed = new URL(value.trim())
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      // Must have a non-empty hostname that does not start with a dash
+      // to avoid CLI flag/argument injection in URL handlers (e.g. xdg-open/open).
+      return !!parsed.hostname && !parsed.hostname.startsWith('-')
+    }
+    if (parsed.protocol === 'mailto:') {
+      // Reject bare 'mailto:' without address or query
+      return !!parsed.pathname || !!parsed.search
+    }
+    return false
+  } catch {
+    return false
+  }
 }
 
 // Match raw text once: never run a second replacement over generated markup.
