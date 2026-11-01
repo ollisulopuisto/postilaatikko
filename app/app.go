@@ -1308,22 +1308,24 @@ func (a *App) OpenURL(url string) error {
 	return nil
 }
 
-// isAllowedProtocol checks if a URL uses an allowed protocol
-// Prevents file:// URLs and other potentially dangerous schemes
-func isAllowedProtocol(url string) bool {
-	// Common safe protocols for an email client
-	allowedPrefixes := []string{
-		"http://",
-		"https://",
-		"mailto:",
-		// Note: We could add more if needed, but being conservative
+// isAllowedProtocol validates that a URL uses a safe, permitted scheme
+// (http, https, or mailto) and has a valid structure, preventing file://
+// and other dangerous execution schemes.
+func isAllowedProtocol(rawURL string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return false
 	}
 
-	for _, prefix := range allowedPrefixes {
-		if len(url) >= len(prefix) && url[:len(prefix)] == prefix {
-			return true
-		}
+	scheme := strings.ToLower(parsed.Scheme)
+	switch scheme {
+	case "http", "https":
+		// Require a non-empty host to prevent malformed or relative URLs
+		return parsed.Host != ""
+	case "mailto":
+		// mailto URLs may not have Host (e.g., mailto:user@example.com or mailto:?subject=...)
+		return parsed.Opaque != "" || parsed.Path != "" || parsed.RawQuery != ""
+	default:
+		return false
 	}
-
-	return false
 }

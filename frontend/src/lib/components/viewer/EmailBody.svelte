@@ -1,7 +1,6 @@
 <script lang="ts">
   import Icon from '@iconify/svelte'
   import { normalizeConversationHtml } from './conversationHtml'
-  import { BrowserOpenURL } from '../../../../wailsjs/runtime/runtime'
   import { GetInlineAttachments, AddImageAllowlist, OpenURL, SetAlwaysLoadImages } from '../../../../wailsjs/go/app/App'
   import { linkifyText, isAllowedEmailURL } from '../../utils/emailLinks'
   import { hasBlockedRemoteImages, restoreBlockedImages } from '../../utils/blockedImages'
@@ -478,13 +477,6 @@ ${processedHtml}
         toasts.info($_('toast.linkOpened'))
       } catch (err) {
         console.error('[EmailBody] OpenURL failed:', err)
-        // Fallback to direct BrowserOpenURL
-        try {
-          BrowserOpenURL(url)
-          toasts.info($_('toast.linkOpened'))
-        } catch (err2) {
-          console.error('[EmailBody] BrowserOpenURL also failed:', err2)
-        }
       }
     } catch {
       console.error('[EmailBody] Invalid URL')

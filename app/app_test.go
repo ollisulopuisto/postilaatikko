@@ -91,3 +91,35 @@ func TestParseMailtoURL_NoAddress(t *testing.T) {
 		t.Errorf("Subject = %q, want %q", result.Subject, "Hello")
 	}
 }
+
+func TestIsAllowedProtocol(t *testing.T) {
+	tests := []struct {
+		url     string
+		allowed bool
+	}{
+		{"http://example.com", true},
+		{"https://example.com", true},
+		{"HTTP://example.com", true},
+		{"HTTPS://example.com/path?foo=bar", true},
+		{"mailto:user@example.com", true},
+		{"mailto:?subject=Test", true},
+		{"MAILTO:user@example.com", true},
+		{"file:///etc/passwd", false},
+		{"javascript:alert(1)", false},
+		{"data:text/html,<script>alert(1)</script>", false},
+		{"custom:something", false},
+		{"http://", false},
+		{"https://", false},
+		{"", false},
+		{"   ", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.url, func(t *testing.T) {
+			got := isAllowedProtocol(tc.url)
+			if got != tc.allowed {
+				t.Errorf("isAllowedProtocol(%q) = %v, want %v", tc.url, got, tc.allowed)
+			}
+		})
+	}
+}
