@@ -1616,17 +1616,27 @@
       }
 
       // Alt+M / Alt+C — move/copy folder picker for the keyboard-focused
-      // message. Open path only: the picker sets the dialog guard, so the
-      // close/switch press is handled pre-guard near the top of this handler.
+      // message. From the focused viewer this opens the picker for the open
+      // conversation instead of the message list. Open path only: the picker
+      // sets the dialog guard, so the close/switch press is handled pre-guard
+      // near the top of this handler.
       if (KEY.LIST_MOVE_TO(e)) {
         if (!isMailActive()) return
         e.preventDefault()
+        if (focusedPane === 'viewer' && selectedThreadId) {
+          viewerRef?.toggleFolderPicker('move')
+          return
+        }
         messageListRef?.toggleMoveToDialog()
         return
       }
       if (KEY.LIST_COPY_TO(e)) {
         if (!isMailActive()) return
         e.preventDefault()
+        if (focusedPane === 'viewer' && selectedThreadId) {
+          viewerRef?.toggleFolderPicker('copy')
+          return
+        }
         messageListRef?.toggleCopyToDialog()
         return
       }
@@ -1791,6 +1801,10 @@
       case 'v':
         if (!isMailActive()) return
         e.preventDefault()
+        if (focusedPane === 'viewer' && selectedThreadId) {
+          viewerRef?.toggleFolderPicker('move')
+          return
+        }
         messageListRef?.toggleMoveToDialog()
         return
       case 'r': {

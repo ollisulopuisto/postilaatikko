@@ -4,11 +4,11 @@
   // @ts-ignore - wailsjs bindings
   import { GetReaderIdentityEmails, GetConversation, GetReadReceiptResponsePolicy, SendReadReceipt, IgnoreReadReceipt, GetMessageSource, ProcessSMIMEMessage, ProcessPGPMessage, FetchMessageBody } from '../../../../wailsjs/go/app/App'
   // @ts-ignore - wailsjs bindings
-  import { MoveToInboxWithUndo, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, RemoveFromInboxWithUndo, TrashWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, DeletePermanently, ResolveMailActionTarget, UndoOperation } from '../../../../wailsjs/go/app/App'
+  import { MoveToInboxWithUndo, GetAccounts, MoveToFolderWithUndo, CopyToFolder, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, RemoveFromInboxWithUndo, TrashWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, DeletePermanently, ResolveMailActionTarget, UndoOperation } from '../../../../wailsjs/go/app/App'
   // @ts-ignore - wailsjs path
   import { EventsOn } from '../../../../wailsjs/runtime/runtime'
   // @ts-ignore - wailsjs path
-  import { message as messageModels } from '../../../../wailsjs/go/models'
+  import { message as messageModels, account } from '../../../../wailsjs/go/models'
   import AttachmentList from './AttachmentList.svelte'
   import ConversationMessage from './ConversationMessage.svelte'
   import { reactionLayout } from './reactionLayout'
@@ -28,9 +28,10 @@
   import { setFocusedPane, isInputElement, isComposerOpen } from '$lib/stores/keyboard.svelte'
   import { ConfirmDialog } from '$lib/components/ui/confirm-dialog'
   import MessageContextMenu from '$lib/components/common/MessageContextMenu.svelte'
+  import FolderPickerDialog from '$lib/components/common/FolderPickerDialog.svelte'
   import { withShortcut, ariaKeyshortcuts } from '$lib/keyboard/format'
   import { _ } from '$lib/i18n'
-  import { isDialogGuardActive, onDialogGuardChange } from '$lib/stores/dialogGuard'
+  import { isDialogGuardActive, onDialogGuardChange, dialogGuardOpen, dialogGuardClose } from '$lib/stores/dialogGuard'
   import { getShowViewerCircles, getDarkMailContent, getMarkAsReadDelay } from '$lib/stores/settings.svelte'
   import { getIsDarkActive } from '$lib/stores/theme.svelte'
   import { contactPhotos } from '$lib/stores/contactPhotos.svelte'
@@ -126,6 +127,23 @@
   let loading = $state(false)
   let error = $state<string | null>(null)
 
+  // Folder-picker state for moving/copying the open conversation from the
+  // keyboard (`v` / Alt+M / Alt+C) while the viewer is focused.
+  let accounts = $state<account.Account[]>([])
+  let accountsLoaded = $state(false)
+  let accountsLoading = $state(false)
+  let showFolderPicker = $state(false)
+  let folderPickerMode = $state<'move' | 'copy'>('move')
+
+  // Keep the folder-picker dialog behind the modal guard so its keys are not
+  // swallowed by the global mail handler while it is open.
+  $effect(() => {
+    if (showFolderPicker) {
+      dialogGuardOpen()
+      return () => dialogGuardClose()
+    }
+  })
+
   async function resolveDisplayedMessageTarget(messageIds: string[]): Promise<string[]> {
     if (!messageIds.length) return []
     const owningAccountId = accountId || conversation?.messages?.[0]?.accountId
@@ -138,6 +156,67 @@
       kind: 'matched_messages',
       messages: messageIds.map((messageId) => ({ accountId: owningAccountId, messageId })),
     })
+  }
+
+  async function loadAccounts() {
+    if (accountsLoaded || accountsLoading) return
+    accountsLoading = true
+    try {
+      const result = await GetAccounts()
+      accounts = result || []
+      accountsLoaded = true
+    } catch (err) {
+      console.error('Failed to load accounts:', err)
+    } finally {
+      accountsLoading = false
+    }
+  }
+
+  // Open the move/copy folder picker for the open conversation. Used by the
+  // viewer-focused `v` / Alt+M / Alt+C shortcuts routed from App.svelte.
+  export function toggleFolderPicker(mode: 'move' | 'copy') {
+    if (showFolderPicker && folderPickerMode === mode) {
+      showFolderPicker = false
+      return
+    }
+    if (showFolderPicker) {
+      folderPickerMode = mode
+      return
+    }
+    loadAccounts()
+    folderPickerMode = mode
+    showFolderPicker = true
+  }
+
+  async function handleFolderSelected(destFolderId: string, _folderName: string, _destAccountId: string) {
+    showFolderPicker = false
+    if (!conversation?.messages) return
+    let messageIds = conversation.messages.map((m) => m.id)
+    try {
+      messageIds = await resolveDisplayedMessageTarget(messageIds)
+      if (folderPickerMode === 'move') {
+        await runMessageMutation(messageIds, async () => {
+          moveMutationInFlight = true
+          try {
+            const result = await MoveToFolderWithUndo(messageIds, destFolderId)
+            if (result.coalesced) return
+            publishUndoOperationCreated(result.operationId, messageIds, 'move-to-folder')
+            showUndoableSuccess($_('toast.movedTo', { values: { folder: _folderName } }), result.operationId)
+            onActionComplete?.(true)
+          } finally {
+            moveMutationInFlight = false
+          }
+        })
+      } else {
+        await runMessageMutation(messageIds, async () => {
+          await CopyToFolder(messageIds, destFolderId)
+          toasts.success($_('toast.copyingTo', { values: { folder: _folderName } }))
+        })
+      }
+    } catch (err) {
+      console.error('Move failed:', err)
+      toasts.error($_('toast.failedToMove'))
+    }
   }
 
   // S/MIME on-view processing results per message
@@ -2404,6 +2483,16 @@
     </div>
   {/if}
 </div>
+
+<!-- Move / copy folder picker for the open conversation (`v` / Alt+M / Alt+C) -->
+<FolderPickerDialog
+  bind:open={showFolderPicker}
+  title={$_(folderPickerMode === 'move' ? 'contextMenu.moveTo' : 'contextMenu.copyTo')}
+  initialAccountId={accountId || ''}
+  {accounts}
+  excludeFolderId={folderId || ''}
+  onSelect={handleFolderSelected}
+/>
 
 <!-- Permanent Delete Confirmation Dialog -->
 <ConfirmDialog
