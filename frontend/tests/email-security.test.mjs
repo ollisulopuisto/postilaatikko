@@ -19,8 +19,31 @@ test('linkification escapes attributes and does not create nested links', () => 
   assert.ok(result.includes('&quot;'))
 })
 test('email URL schemes cannot launch local files or scripts', () => {
-  for (const url of ['javascript:alert(1)', 'file:///etc/passwd', 'data:text/html,x', 'custom:exec']) assert.equal(isAllowedEmailURL(url), false)
-  for (const url of ['https://example.com', 'http://example.com', 'mailto:user@example.com']) assert.equal(isAllowedEmailURL(url), true)
+  for (const url of [
+    'javascript:alert(1)',
+    'file:///etc/passwd',
+    'data:text/html,x',
+    'custom:exec',
+    'mailto:',
+    'http://-flag',
+    'https://--version',
+    'http://',
+    'https://',
+    'http://user@example.com\r\ninjected',
+    '',
+    '   '
+  ]) {
+    assert.equal(isAllowedEmailURL(url), false, `expected ${url} to be rejected`)
+  }
+  for (const url of [
+    'https://example.com',
+    'http://example.com',
+    'mailto:user@example.com',
+    'mailto:?subject=Test',
+    'https://example.com/path?foo=bar#hash'
+  ]) {
+    assert.equal(isAllowedEmailURL(url), true, `expected ${url} to be allowed`)
+  }
 })
 test('clearing attachments invalidates outstanding requests', () => {
   cache.setCache('old-message', { cid: 'secret-image' })
