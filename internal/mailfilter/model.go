@@ -1,13 +1,12 @@
-// Package mailfilter provides local cross-account filter rules that match
-// incoming messages and route them to a folder on another account.
+// Package mailfilter provides local rules that route incoming messages to a folder.
 package mailfilter
 
 import (
 	"time"
 )
 
-// Rule is a local cross-account routing rule. A message is routed when the
-// rule is enabled, the message is on a different account than the
+// Rule is a local routing rule. A message is routed when the
+// rule is enabled, the message is not already in the destination folder, the
 // destination folder, any account/folder scope holds, and every non-empty
 // criterion list contains at least one pattern that matches.
 type Rule struct {
@@ -29,7 +28,7 @@ type Rule struct {
 	ToContains      []string `json:"toContains"`
 	SubjectContains []string `json:"subjectContains"`
 
-	// DestFolderID is the folder (on another account) the message is moved to.
+	// DestFolderID is the folder the message is moved to.
 	DestFolderID string `json:"destFolderId"`
 
 	CreatedAt time.Time `json:"createdAt"`

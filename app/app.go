@@ -224,6 +224,7 @@ type App struct {
 	replyContent        *replycontent.Service
 	virtualFolderStore  *virtualfolder.Store
 	filterStore         *mailfilter.Store
+	moveFilterHistory   *mailfilter.MoveHistory
 	contentPolicyStore  *folder.ContentPolicyStore
 	attachmentStore     *message.AttachmentStore
 	contactStore        *contact.Store
@@ -619,6 +620,7 @@ func (a *App) Startup(ctx context.Context) {
 	a.replyContent = replycontent.NewService(replycontent.ServiceOptions{})
 	a.virtualFolderStore = virtualfolder.NewStore(db)
 	a.filterStore = mailfilter.NewStore(db)
+	a.moveFilterHistory = mailfilter.NewMoveHistory(db)
 	a.attachmentStore = message.NewAttachmentStore(db)
 	a.contactStore = contact.NewStore(db.DB)
 	a.contactStore.SetMacOSContactsSource(macoscontacts.New())

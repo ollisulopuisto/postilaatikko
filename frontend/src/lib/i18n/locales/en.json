@@ -1,4 +1,21 @@
 {
+  "suggestedFilter": {
+    "title": "Suggested move filter",
+    "description": "Based on repeated moves from",
+    "andHint": "Enabled fields must all match. Separate alternatives with commas.",
+    "name": "Filter name",
+    "sender": "Sender",
+    "senderValues": "Sender values, comma separated",
+    "recipient": "Recipient (To/Cc)",
+    "recipientValues": "Recipient values, comma separated",
+    "subject": "Subject",
+    "subjectValues": "Subject values, comma separated",
+    "preview": "Preview matches",
+    "matches": "matching messages",
+    "dismiss": "Dismiss",
+    "create": "Create filter",
+    "gmailDeferred": "Gmail-native filters will be available after you grant the separate Gmail filter permission."
+  },
   "onlineCount": {
     "counting": "Counting online conversations…",
     "complete": "{total} conversations · {unread} unread",

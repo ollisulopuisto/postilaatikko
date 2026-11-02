@@ -15,9 +15,9 @@ import (
 //   - each non-empty criterion list passes when at least one of its patterns
 //     is a substring of the corresponding header data (from: sender address
 //     and name; to: every To and Cc address and name; subject: subject line);
-//   - a message already on the destination account never matches, because
-//     cross-account routing is the only supported action.
-func Match(rule *Rule, m *Message, destAccountID string) bool {
+//   - same-account routing is allowed only for an explicitly scoped source
+//     folder and never when the message is already in the destination folder.
+func Match(rule *Rule, m *Message, destAccountID string, destinationFolderID ...string) bool {
 	if rule == nil || m == nil {
 		return false
 	}
@@ -25,7 +25,9 @@ func Match(rule *Rule, m *Message, destAccountID string) bool {
 		return false
 	}
 	if m.AccountID == destAccountID {
-		return false
+		if len(rule.FolderIDs) == 0 || len(destinationFolderID) == 0 || m.FolderID == destinationFolderID[0] {
+			return false
+		}
 	}
 	if rule.AccountID != "" && rule.AccountID != m.AccountID {
 		return false

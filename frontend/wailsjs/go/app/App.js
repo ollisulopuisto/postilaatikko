@@ -314,6 +314,19 @@ export function CreateFilterRule(arg1) {
   return window['go']['app']['App']['CreateFilterRule'](arg1);
 }
 
+export function GetPendingMoveFilterSuggestions() {
+  return window['go']['app']['App']['GetPendingMoveFilterSuggestions']();
+}
+export function DismissMoveFilterSuggestion(arg1) {
+  return window['go']['app']['App']['DismissMoveFilterSuggestion'](arg1);
+}
+export function CreateSuggestedMoveFilter(arg1, arg2) {
+  return window['go']['app']['App']['CreateSuggestedMoveFilter'](arg1, arg2);
+}
+export function PreviewSuggestedMoveFilter(arg1, arg2) {
+  return window['go']['app']['App']['PreviewSuggestedMoveFilter'](arg1, arg2);
+}
+
 export function CreateIdentity(arg1, arg2) {
   return window['go']['app']['App']['CreateIdentity'](arg1, arg2);
 }

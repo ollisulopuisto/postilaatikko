@@ -181,6 +181,10 @@ export function Contacts_UpdateContact(arg1:string,arg2:v1.ContactPatch):Promise
 export function CopyToFolder(arg1:Array<string>,arg2:string):Promise<void>;
 
 export function CreateFilterRule(arg1:mailfilter.Rule):Promise<void>;
+export function GetPendingMoveFilterSuggestions():Promise<Array<any>>;
+export function DismissMoveFilterSuggestion(arg1:string):Promise<void>;
+export function CreateSuggestedMoveFilter(arg1:any,arg2:mailfilter.Rule):Promise<void>;
+export function PreviewSuggestedMoveFilter(arg1:any,arg2:mailfilter.Rule):Promise<Array<any>>;
 
 export function CreateIdentity(arg1:string,arg2:account.IdentityConfig):Promise<account.Identity>;
 

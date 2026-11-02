@@ -1672,4 +1672,29 @@ var migrations = []Migration{
 	-- identity. Existing signatures remain the fallback for legacy identities.
 	ALTER TABLE identities ADD COLUMN signature_rules TEXT NOT NULL DEFAULT '[]';
 	`},
+	{Version: 64, SQL: `
+	-- Bounded, local-only header samples from explicit user moves power reviewed
+	-- filter suggestions. Bodies and attachment content are never recorded.
+	CREATE TABLE IF NOT EXISTS mail_filter_move_history (
+	  id INTEGER PRIMARY KEY AUTOINCREMENT,
+	  action_id TEXT NOT NULL,
+	  account_id TEXT NOT NULL,
+	  folder_id TEXT NOT NULL,
+	  dest_folder_id TEXT NOT NULL,
+	  from_name TEXT NOT NULL DEFAULT '',
+	  from_email TEXT NOT NULL DEFAULT '',
+	  to_list TEXT NOT NULL DEFAULT '[]',
+	  cc_list TEXT NOT NULL DEFAULT '[]',
+	  subject TEXT NOT NULL DEFAULT '',
+	  moved_at TEXT NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_mail_filter_move_history_scope
+	  ON mail_filter_move_history(account_id, dest_folder_id, moved_at DESC);
+	CREATE TABLE IF NOT EXISTS mail_filter_suggestions (
+	  suggestion_key TEXT PRIMARY KEY,
+	  state TEXT NOT NULL DEFAULT 'pending',
+	  payload_json TEXT NOT NULL,
+	  updated_at TEXT NOT NULL
+	);
+	`},
 }

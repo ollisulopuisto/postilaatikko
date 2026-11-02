@@ -1,4 +1,21 @@
 {
+  "suggestedFilter": {
+    "title": "Ehdotettu siirtosuodatin",
+    "description": "Perustuu toistuviin siirtoihin tililtä",
+    "andHint": "Kaikkien valittujen ehtojen on täytyttävä. Erota vaihtoehdot pilkuilla.",
+    "name": "Suodattimen nimi",
+    "sender": "Lähettäjä",
+    "senderValues": "Lähettäjät pilkuilla eroteltuina",
+    "recipient": "Vastaanottaja (To/Cc)",
+    "recipientValues": "Vastaanottajat pilkuilla eroteltuina",
+    "subject": "Aihe",
+    "subjectValues": "Aiheet pilkuilla eroteltuina",
+    "preview": "Esikatsele osumat",
+    "matches": "osuvaa viestiä",
+    "dismiss": "Ohita",
+    "create": "Luo suodatin",
+    "gmailDeferred": "Gmailin omat suodattimet tulevat käyttöön, kun annat erillisen Gmail-suodatinluvan."
+  },
   "onlineCount": {
     "counting": "Lasketaan keskusteluja palvelimelta…",
     "complete": "{total} keskustelua · {unread} lukematta",

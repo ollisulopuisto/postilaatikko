@@ -15,6 +15,7 @@
   import GlobalSearch from './lib/components/common/GlobalSearch.svelte'
   let showGlobalSearch = $state(false)
   let showUndoHistory = $state(false)
+  let suggestedMoveFilters = $state<any[]>([])
   import ScheduledPane from './lib/components/scheduled/ScheduledPane.svelte'
   import MessageList from './lib/components/list/MessageList.svelte'
   import ConversationViewer from './lib/components/viewer/ConversationViewer.svelte'
@@ -31,6 +32,7 @@
   import ExtensionRail from './lib/components/rail/ExtensionRail.svelte'
   import ShortcutsDialog from './lib/components/shortcuts/ShortcutsDialog.svelte'
   import UndoHistoryPanel from './lib/components/common/UndoHistoryPanel.svelte'
+  import SuggestedFilterDialog from './lib/components/filter/SuggestedFilterDialog.svelte'
   import CommandPalette from './lib/components/command/CommandPalette.svelte'
   import ContactsPane from '$extensions/contacts/frontend/components/ContactsPane.svelte'
   import CalendarPane from '$extensions/calendar/frontend/components/CalendarPane.svelte'
@@ -67,7 +69,7 @@
   import { publishUndoOperationCompleted, publishUndoOperationCreated } from '$lib/components/list/undoMutationEvents'
   import { runMessageMutation } from '$lib/components/list/mutationInFlight'
   // @ts-ignore - wailsjs path
-  import { PrepareReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, ClearDraftHistory, SendMessageWithDraftGuard, CancelPendingSend, CompletePendingSend, ListPendingSends, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ResolveMailActionTarget, UndoOperation, UndoLatestWithResult, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, OpenComposerWindow, OpenReaderWindow, GetOpenReaderInTabPreference, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
+  import { PrepareReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, ClearDraftHistory, SendMessageWithDraftGuard, CancelPendingSend, CompletePendingSend, ListPendingSends, GetPendingMoveFilterSuggestions, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ResolveMailActionTarget, UndoOperation, UndoLatestWithResult, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, OpenComposerWindow, OpenReaderWindow, GetOpenReaderInTabPreference, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
   // @ts-ignore - wailsjs path
   import { smtp, folder, certificate } from '../wailsjs/go/models'
   // @ts-ignore - wailsjs runtime
@@ -539,6 +541,13 @@
   })
 
   onMount(async () => {
+    try {
+      const suggestions = await GetPendingMoveFilterSuggestions()
+      suggestedMoveFilters = suggestions ?? []
+    } catch { /* older backend without move-filter suggestions */ }
+    EventsOn('filters:suggestionAvailable', (suggestion: any) => {
+      if (!suggestedMoveFilters.some(item => item.key === suggestion.key)) suggestedMoveFilters = [...suggestedMoveFilters, suggestion]
+    })
     void GetOpenReaderInTabPreference().then(value => { preferReaderTabs = value }).catch(() => { preferReaderTabs = false })
     EventsOn('undo:history-open', () => {
       setActiveExtension('mail')
@@ -2423,6 +2432,11 @@
   <ShortcutsDialog />
 {/if}
 <UndoHistoryPanel bind:open={showUndoHistory} />
+{#if suggestedMoveFilters.length > 0}
+  {#key suggestedMoveFilters[0].key}
+    <SuggestedFilterDialog suggestion={suggestedMoveFilters[0]} onClose={() => { suggestedMoveFilters = suggestedMoveFilters.slice(1) }} />
+  {/key}
+{/if}
 
 <!-- Command palette (Cmd+P / Ctrl+P, Alfred style quick launcher). -->
 {#if pendingSends.length > 0}

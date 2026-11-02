@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Suggest editable local move-filter drafts after repeated moves; preview header-only matches and confirm before routing future mail.
+
 ## Postilaatikko 2026.11.01.2
 
 - Warm a bounded first page of message bodies asynchronously when opening Inbox, Starred, pinned folders, or All Inboxes; headers render immediately, and other folders plus attachments stay on demand.

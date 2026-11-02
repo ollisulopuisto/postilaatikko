@@ -8,9 +8,12 @@ import (
 	stdlog "log"
 	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	goImap "github.com/emersion/go-imap/v2"
+	"github.com/google/uuid"
+	"github.com/hkdb/aerion/internal/account"
 	"github.com/hkdb/aerion/internal/folder"
 	"github.com/hkdb/aerion/internal/imap"
 	"github.com/hkdb/aerion/internal/logging"
@@ -358,10 +361,47 @@ func (a *App) MoveToFolder(messageIDs []string, destFolderID string) error {
 
 // MoveToFolderWithUndo moves messages and atomically returns its undo operation.
 func (a *App) MoveToFolderWithUndo(messageIDs []string, destFolderID string) (UndoableActionResult, error) {
+	var moved []*message.Message
 	_, operationID, coalesced, err := a.runMoveMutation(messageIDs, "move-to-folder", func() (bool, string, error) {
+		if len(messageIDs) > 0 && a.messageStore != nil {
+			moved, _ = a.messageStore.GetByIDs(messageIDs)
+		}
 		op, moveErr := a.moveToFolder(messageIDs, destFolderID, true, "")
 		return false, op, moveErr
 	})
+	if err == nil && len(moved) > 0 && a.moveFilterHistory != nil {
+		actionID := uuid.NewString()
+		if recordErr := a.moveFilterHistory.Record(actionID, destFolderID, moved); recordErr != nil {
+			logging.WithComponent("app.filters").Warn().Err(recordErr).Msg("Failed to record user move for filter suggestions")
+		} else {
+			seen := make(map[string]struct{})
+			for _, sample := range moved {
+				if sample == nil {
+					continue
+				}
+				if _, ok := seen[sample.AccountID]; ok {
+					continue
+				}
+				seen[sample.AccountID] = struct{}{}
+				suggestion, suggestErr := a.moveFilterHistory.SuggestionForRecentMove(actionID, sample.AccountID, destFolderID)
+				if suggestErr != nil {
+					logging.WithComponent("app.filters").Warn().Err(suggestErr).Msg("Failed to derive move filter suggestion")
+					continue
+				}
+				if suggestion != nil {
+					dest, destErr := a.folderStore.Get(destFolderID)
+					if destErr == nil && dest != nil {
+						suggestion.DestAccountID = dest.AccountID
+					}
+					if acct, accountErr := a.accountStore.Get(sample.AccountID); accountErr == nil && acct != nil {
+						suggestion.RequiresGmailFilter = destErr == nil && dest != nil && dest.AccountID == sample.AccountID && acct.AuthType == account.AuthOAuth2 && strings.EqualFold(acct.IMAPHost, "imap.gmail.com")
+					}
+					a.emitRuntimeEvent("filters:suggestionAvailable", suggestion)
+					break
+				}
+			}
+		}
+	}
 	return UndoableActionResult{OperationID: operationID, Coalesced: coalesced}, err
 }
 
