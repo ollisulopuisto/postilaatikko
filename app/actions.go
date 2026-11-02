@@ -364,7 +364,7 @@ func (a *App) MoveToFolderWithUndo(messageIDs []string, destFolderID string) (Un
 	var moved []*message.Message
 	_, operationID, coalesced, err := a.runMoveMutation(messageIDs, "move-to-folder", func() (bool, string, error) {
 		if len(messageIDs) > 0 && a.messageStore != nil {
-			moved, _ = a.messageStore.GetByIDs(messageIDs)
+			moved, _ = a.messageStore.GetMoveFilterHeadersByIDs(messageIDs)
 		}
 		op, moveErr := a.moveToFolder(messageIDs, destFolderID, true, "")
 		return false, op, moveErr

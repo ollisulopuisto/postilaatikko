@@ -138,6 +138,49 @@ func (s *Store) ListByFolder(folderID string, offset, limit int) ([]*MessageHead
 	return messages, nil
 }
 
+// GetMoveFilterHeadersByIDs returns only envelope columns used by local move
+// filter suggestions. It deliberately does not select snippets or message bodies.
+func (s *Store) GetMoveFilterHeadersByIDs(ids []string) ([]*Message, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	rows, err := s.db.Query(`SELECT id,account_id,folder_id,subject,from_name,from_email,to_list,cc_list FROM messages WHERE id IN (`+placeholders+`)`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query move filter headers: %w", err)
+	}
+	defer rows.Close()
+	var out []*Message
+	for rows.Next() {
+		m := &Message{}
+		var subject, fromName, fromEmail, toList, ccList sql.NullString
+		if err := rows.Scan(&m.ID, &m.AccountID, &m.FolderID, &subject, &fromName, &fromEmail, &toList, &ccList); err != nil {
+			return nil, err
+		}
+		if subject.Valid {
+			m.Subject = subject.String
+		}
+		if fromName.Valid {
+			m.FromName = fromName.String
+		}
+		if fromEmail.Valid {
+			m.FromEmail = fromEmail.String
+		}
+		if toList.Valid {
+			m.ToList = toList.String
+		}
+		if ccList.Valid {
+			m.CcList = ccList.String
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
 // preferNativeGmailCopy hides only an unmapped legacy copy when the same
 // account and folder also contain a Gmail API copy with the same Message-ID.
 // Both cache rows remain intact, including any downloaded body or attachments.
