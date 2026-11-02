@@ -10,7 +10,7 @@ and coordinator commits; it has not been pushed. Local-only changes to this audi
 
 | Branch | Disposition |
 | --- | --- |
-| `agent/P-021-viewer-shortcuts` | Keep with its worktree. Open PR #86; review/fix the current lint failure and retain the live macOS verification gate. |
+| `agent/P-021-viewer-shortcuts` | PR #86 is merged; local branch deleted. Its clean worktree is detached at main to preserve untracked `frontend/node_modules`. |
 | `codex/P043-close-out` | Keep until the documentation close-out commit `666e9f7` is integrated into local main; P-043 behavior is already present in main. |
 | `codex/CI-003-on-demand-macos-test-build` | Keep with active worktree; CI optimization task. |
 | `codex/FACET-001-visible-search-facets` | Keep with active worktree; search UI task. |
@@ -57,9 +57,27 @@ their superseding PR/state:
 - `codex/PR-077-repair` — documentation-only reconciliation for closed/superseded PR #77.
 - `codex/INT-DISPATCH-UX008-update` — stale coordination snapshot; its TASKS rewrite would discard unrelated task history, so it was not merged.
 
-P-043 close-out: current main initializes detached mail workspaces from the selected thread and restores the search query (`app/detached_reader.go`, `app/mail_window.go`, `main.go`, `frontend/src/MailWindowApp.svelte`, `frontend/src/lib/windows/mailWindow.ts`, and `MessageList.svelte`). The task's requested behavior is complete; the retired `agent/P-043-tabbed-mail-workspaces` branch was redundant history, not missing implementation. The documentation-only close-out commit is on `codex/P043-close-out` pending integration.
+P-043 close-out: current main initializes detached mail workspaces from the selected thread and restores the search query (`app/detached_reader.go`, `app/mail_window.go`, `main.go`, `frontend/src/MailWindowApp.svelte`, `frontend/src/lib/windows/mailWindow.ts`, and `MessageList.svelte`). The task's requested behavior is complete; the retired `agent/P-043-tabbed-mail-workspaces` branch was redundant history, not missing implementation. The documentation-only close-out commit was integrated into local main on 2026-11-02; its local branch and worktree were removed.
 
 The local `main` branch is intentionally ahead of `origin/main`; this cleanup
 does not publish or release those commits. No remaining local branch is
 unclassified: all kept branches appear above, and the listed retired branches
 were removed.
+
+
+## Follow-up — 2026-11-02
+
+Local `main` was fast-forwarded from its prior checkpoint to `origin/main`, then advanced through isolated integration branch `codex/merge-worktrees-2026-11-02` (now deleted). No push or release was made.
+
+Integrated in the follow-up:
+
+- P-055 wide-email fitting and P-059 duplicate-path removal in the move picker. Source-branch frontend build/diff checks passed for P-055; the live WKWebView/real-message check remains. P-059 had a clean diff check; tests were not run.
+- NAP-002 Undo Send cancellation cleanup and NAP-003 unasserted IMAP IDLE. Their source branches record passing Go regression suites; native Activity Monitor verification remains.
+- P-057’s agreed scope and P-043’s documentation close-out.
+- P-021 and KBD-001 behavior were already present on origin/main (PR #86 and `ec8e3ac` respectively); task rows now record the integration state.
+
+Retired local branches after checking integration or supersession: `codex/CMD-001-command-catalog`, `codex/KBD-002-forward-delete`, `agent/P-021-viewer-shortcuts`, `codex/KEYBOARD-COPY-001`, `codex/NAP-002-app-nap-tests`, `codex/NAP-003-unasserted-imap-idle`, `codex/P-055-responsive-email`, `codex/P-057-smart-move-rules`, `codex/P-058-inbox-body-prefetch`, `codex/P-059-folder-picker-path-label`, `codex/P043-close-out`, `codex/RELEASE-2026.11.01`, `codex/RELEASE-2026.11.01.1`, `codex/RELEASE-2026.11.01.2`, and the integration branch. Release tags are retained; remote branches were not deleted.
+
+Retained review/active work: `codex/CI-003-on-demand-macos-test-build`, `codex/FACET-001-visible-search-facets`, `codex/P-016-smart-notifications`, `codex/P-020-email-templates`, `codex/P-054-sidebar-body-prefetch`, `codex/UX-020-local-api-listener`, and `codex/UX-042-reply-all-safety`. Also retained are the GLOBAL-002 recovery branch, archived P-037/P-038/P-039 branches, and the 2026.10.31 release-evidence branches. These were left intact because they are incomplete, under review, or preserve release/recovery evidence.
+
+The detached P-021 worktree remains only to preserve its untracked `frontend/node_modules`; the primary checkout’s untracked `tags.png` also remains untouched. Local `main` is ahead of `origin/main` and remains unpublished.
