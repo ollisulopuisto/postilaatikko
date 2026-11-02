@@ -195,7 +195,7 @@
                 aria-label={`${item.path || item.name} · ${item.accountName} · ${item.accountEmail}`}
                 onclick={() => select(item)}>
                 <Icon icon="mdi:folder-outline" class="w-4 h-4 shrink-0 mt-0.5" />
-                <span class="min-w-0 flex-1 text-sm break-words">{item.name || item.path}{#if searchQuery.trim() && item.path !== item.name}<span class="block text-xs text-muted-foreground">{item.path}</span>{/if}</span>
+                <span class="min-w-0 flex-1 text-sm break-words">{item.name || item.path}</span>
               </button>
             </div>
           {/if}
