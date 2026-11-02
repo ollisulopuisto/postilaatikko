@@ -25,7 +25,7 @@ Principle: request nothing new in this stage.
 | IMAP/SMTP (existing) | `https://mail.google.com/` | Keep. Required as long as IMAP is used. |
 | Search with `q` (P-010) | `gmail.readonly` (or `gmail.modify`, or `mail.google.com`) | Covered by the existing grant. `gmail.metadata` is **not** acceptable: `q` is rejected under it. |
 | Spam / not-spam via label change (P-019) | `gmail.modify` | Covered by the existing grant. |
-| Settings (filters, aliases, signatures) | `gmail.settings.basic` | Out of scope here; needs a separate consent when someone claims it. |
+| Settings (filters, aliases, signatures) | `gmail.settings.basic` | Not implemented by the current Gmail API integration. P-060 tracks user-triggered incremental consent and Gmail-native filter create/list/delete; do not request this scope during normal mail setup. |
 
 Consequences:
 
