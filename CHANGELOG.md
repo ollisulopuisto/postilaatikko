@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Fit wide HTML email content to the reader pane, with an original-size option for fixed-layout messages.
+- Hide the duplicate full-path subtitle in the cross-account move picker.
+- Let hidden, idle windows enter App Nap while IMAP IDLE watches remain connected; keep assertions for active sync and send work.
+- Release the App Nap assertion when an Undo Send countdown is cancelled.
+
 ## Postilaatikko 2026.11.01.2
 
 - Warm a bounded first page of message bodies asynchronously when opening Inbox, Starred, pinned folders, or All Inboxes; headers render immediately, and other folders plus attachments stay on demand.
@@ -9,12 +14,10 @@
 - Fix message-list folder badges showing internal JavaScript source instead of the folder name.
 - Open double-clicked conversations in a tab when macOS's Desktop & Dock preference calls for tabs; avoid blocking detached mail-window startup on the primary window's UI state.
 - Reorder favorite destinations in the left quick-access rail; Cmd/Ctrl+1…0 follows the displayed order.
-- Allow hidden, idle Postilaatikko windows to enter App Nap while IMAP IDLE watches remain connected; keep process assertions limited to active sync and send work.
 - Refresh Gmail labels from the virtual-folder editor, and apply Gmail label scopes correctly to online virtual-folder searches.
 - Add ordered contextual signature rules for sender, recipient, and message type, with placement controls and manual-edit preservation.
 - Add bulk select/clear controls to virtual-folder setup, wrap long sidebar labels, and make the cross-account move picker a searchable expandable folder tree.
 - Restore Cmd+C and the standard Edit menu copy command for selected text in the email reader.
-- Release the App Nap assertion when an Undo Send countdown is cancelled, and route its event through the app lifecycle bridge.
 
 ## Postilaatikko 2026.10.30
 

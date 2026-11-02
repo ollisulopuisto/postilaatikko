@@ -46,4 +46,6 @@ Deliberately *not* asserted:
   fully obscured and idle long enough for macOS's heuristics to apply. It
   should remain **No** while one of the operations above is active.
 
+Regression coverage: `app/pending_send_activity_test.go` verifies Undo Send completion, cancellation, and startup expiry release their tracked activities. `internal/platform/activity_test.go` verifies manager release pairing and idempotence. `internal/imap/appnap_policy_test.go` guards against adding a long-lived assertion for an armed IDLE watch.
+
 On Linux and Windows the manager is a no-op; behavior there is unchanged.
