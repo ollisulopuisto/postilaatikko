@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Open double-clicked conversations in reader-only tabs; keep folder browsing in workspace tabs and detach reader tabs into reader windows.
+
 ## Postilaatikko 2026.11.03
 
 - Keep Gmail replies in the original conversation by sending with Gmail's provider thread ID, including replies reopened from drafts.

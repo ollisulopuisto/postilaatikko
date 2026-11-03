@@ -222,6 +222,8 @@ Suggested model/effort is a dispatch recommendation, not an existing claim or mo
 
 ## Unclaimed
 
+| READER-TAB-001 | Medium | Double-click opens a reader-only conversation tab; keep folder workspaces distinct and detach readers as reader windows. | Codex / `agent/READER-TAB-001-message-only` / `/private/tmp/postilaatikko-reader-tab001` | Review; based on `origin/main` `65b2149`. Reader tabs omit navigation/list mounting, retain account-qualified thread targets, and detach to reader windows. Folder tabs use folder labels; reader tabs use subjects. Svelte check (0 errors/warnings), changed-file ESLint, Vite build, 2 mail-window tests, 8 shortcut tests, and diff check pass. Live WKWebView interaction remains unverified. |
+
 | ID | Effort | Task | Dependencies / acceptance criteria |
 | --- | --- | --- | --- |
 | P-063 | Medium | Rebalance message-row space around subject, time, sender, and status metadata; clear PR #95 lint/type-check failures. | Codex / `codex/P-063-message-row-priorities` / `/private/tmp/postilaatikko-p063-message-row-priorities` | Review; implementation `9fe4bdc` plus CI fixes `55c5f37` and pending regression-test cleanup. `npm run lint`, `npm run check` (svelte-check: 0 errors, 0 warnings; 8 shortcut checks pass), `npm test` (203/203), `npm run build`, and `git diff --check` pass. Wails target calls instantiate the generated model; composer signature-rule typing/editor narrowing fixed; detached mail-window refresh prop supplied; title-bar controls are keyboard-accessible. Virtual-folder refresh now preserves results on index failure; test fixtures track the current sync API and changelog headings. |
