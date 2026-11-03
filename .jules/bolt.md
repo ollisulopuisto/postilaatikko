@@ -1,3 +1,0 @@
-## 2026-11-03 - HTML sanitization regex pre-check precision
-**Learning:** Pre-check string filters like `containsFoldASCII` intended to guard expensive regex passes become ineffective if the searched token is too broad (e.g. searching `"background"` rather than `background\s*=` matches CSS and common English prose, triggering full regex sweeps). Furthermore, all remote asset patterns require `http://` or `https://`, making a scheme-level pre-filter an ideal zero-allocation early exit.
-**Action:** When designing early-return pre-filters for regex or AST parsers, ensure the fast-path token is specific enough to avoid false positives on common prose and CSS, and check mandatory URI schemes before scanning tag names.
