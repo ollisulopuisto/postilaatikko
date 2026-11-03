@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Show unread message counts beside sidebar destinations, with total counts when nothing is unread.
+
 ## Postilaatikko 2026.11.03
 
 - Keep Gmail replies in the original conversation by sending with Gmail's provider thread ID, including replies reopened from drafts.
