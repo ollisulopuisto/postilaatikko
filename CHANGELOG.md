@@ -7,6 +7,7 @@
 - Open double-clicked conversations in reader-only tabs; keep folder browsing in workspace tabs and detach reader tabs into reader windows.
 - Continue editing a draft directly from its message in conversation view.
 - Suggest message participants while composing, using indexed headers only; keep explicit address-book authorization separate.
+- Skip remote-image sanitization work for messages without remote image URLs, while retaining existing blocking behavior.
 
 ## Postilaatikko 2026.11.03
 
