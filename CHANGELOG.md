@@ -8,6 +8,7 @@
 - Continue editing a draft directly from its message in conversation view.
 - Suggest message participants while composing, using indexed headers only; keep explicit address-book authorization separate.
 - Skip remote-image sanitization work for messages without remote image URLs, while retaining existing blocking behavior.
+- Restore draft-history attachments over the composer bridge as base64 content, and ignore unsupported signature-rule message types when loading identities.
 
 ## Postilaatikko 2026.11.03
 
