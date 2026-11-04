@@ -7,6 +7,15 @@
   // ignored until the list has been vertically quiet for a beat, so scroll
   // residue can't accumulate into a swipe.
   let lastVerticalWheelAt = 0
+  let pendingSingleClickTimer: ReturnType<typeof setTimeout> | null = null
+  let pendingSingleClickOwner: symbol | null = null
+
+  function cancelPendingSingleClick(owner?: symbol) {
+    if (owner && pendingSingleClickOwner !== owner) return
+    if (pendingSingleClickTimer) clearTimeout(pendingSingleClickTimer)
+    pendingSingleClickTimer = null
+    pendingSingleClickOwner = null
+  }
 </script>
 
 <script lang="ts">
@@ -398,7 +407,7 @@
   let touchAxis: 'none' | 'h' | 'v' = 'none'
   let touchFired = false
   let swipeConsumedClick = false
-  let pendingSingleClick: ReturnType<typeof setTimeout> | null = null
+  const singleClickOwner = Symbol('conversation-row')
   let wheelAccum = 0
   let wheelStreak = 0
   let wheelResetTimer: ReturnType<typeof setTimeout> | null = null
@@ -509,19 +518,20 @@
       swipeConsumedClick = false
       return
     }
-    if (pendingSingleClick) clearTimeout(pendingSingleClick)
-    pendingSingleClick = null
+    cancelPendingSingleClick()
     // A double click opens a reader-only tab. Delay the single-click load just
     // long enough to avoid starting a duplicate conversation fetch first.
     if (e.detail > 1) return
-    pendingSingleClick = setTimeout(() => {
-      pendingSingleClick = null
+    pendingSingleClickOwner = singleClickOwner
+    pendingSingleClickTimer = setTimeout(() => {
+      pendingSingleClickTimer = null
+      pendingSingleClickOwner = null
       onSelect(e)
     }, 220)
   }
 
   onDestroy(() => {
-    if (pendingSingleClick) clearTimeout(pendingSingleClick)
+    cancelPendingSingleClick(singleClickOwner)
   })
 </script>
 
@@ -548,8 +558,7 @@
     ondblclick={async (event) => {
       if (!isRowOpenTarget(event.target, event.currentTarget)) return
       event.preventDefault()
-      if (pendingSingleClick) clearTimeout(pendingSingleClick)
-      pendingSingleClick = null
+      cancelPendingSingleClick()
       if (onOpenInTab) {
         onOpenInTab(accountId, folderId, conversation.threadId, folderType, conversation.subject || '')
         return
