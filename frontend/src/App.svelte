@@ -42,7 +42,7 @@
   import { loadImageAllowlist } from '$lib/stores/imageAllowlist.svelte'
   import { initializeUpdateChecker } from '$lib/stores/updateChecker.svelte'
   import { initTheme, applyTheme, applyThemeFromMode, getIsDarkActive, handleSystemThemeEvent, handleMediaQueryChange } from '$lib/stores/theme.svelte'
-  import { loadUIState, saveUIState, paneConstraints, getActiveExtension, setActiveExtension, getSidebarWidth, isSidebarCollapsed, setSidebarCollapsed } from '$lib/stores/uiState.svelte'
+  import { loadUIState, saveUIState, paneConstraints, getActiveExtension, setActiveExtension } from '$lib/stores/uiState.svelte'
   import { setPendingDeepLink } from '$lib/stores/extensionDeepLink.svelte'
   import {
     type FocusablePane,
@@ -246,16 +246,6 @@
     messageListRef?.setQuickFilter(mode)
   }
 
-  function triageStatusRow() {
-    const options = [
-      { id: 'all', mode: '', label: $_('triage.all') },
-      { id: 'unread', mode: 'unread', label: $_('triage.unread') },
-      { id: 'readLater', mode: null, label: $_('triage.readLater') },
-      { id: 'replyLater', mode: 'replyLater', label: $_('triage.replyLater') },
-    ] as const
-    return options
-  }
-
   function closeWorkspaceTab(id: string) {
     const index = mailWorkspaceTabs.findIndex(tab => tab.id === id)
     if (index < 0) return
@@ -280,9 +270,11 @@
     mailWorkspaceTabs = mailWorkspaceTabs.map(tab => tab.id === id ? { ...tab, scope } : tab)
   }
 
-  function updateActiveReaderScope(scope: MailScope) {
-    const tab = mailWorkspaceTabs.find(item => item.id === activeMailWorkspace)
-    if (tab) updateWorkspaceScope(tab.id, scope)
+  function returnToPrimaryContextForFolderNavigation() {
+    if (activeMailWorkspace === 'primary') return
+    activeMailWorkspace = 'primary'
+    primaryMailScope = null
+    primaryContextPaneMode = 'messages'
   }
 
   // Quick-access rail entries are global UI, but navigation belongs to the
@@ -876,10 +868,8 @@
     // render synchronously when the layout mounts.
     await refreshExtensionRegistry()
 
-    // Restore pane widths (already validated/clamped by loadUIState)
-    sidebarWidth = uiState.sidebarWidth
+    // Restore the context pane width (already validated/clamped by loadUIState)
     listWidth = uiState.listWidth
-    sidebarCollapsed = isSidebarCollapsed()
 
     // Restore folder selection if valid
     if (uiState.selectedAccountId && uiState.selectedFolderId) {
@@ -1015,6 +1005,7 @@
     folderName: string,
     folderType: string
   ) {
+    returnToPrimaryContextForFolderNavigation()
     contextPaneMode = 'messages'
     if (selectedAccountId !== accountId) clearInlineAttachmentCache()
     selectedAccountId = accountId
@@ -1025,7 +1016,6 @@
     selectedThreadId = null // Clear conversation selection when changing folders
     selectedConversationFolderId = null
     selectedConversationAccountId = null
-    updateActiveReaderScope({ accountId, folderId, folderName, folderType, searchQuery: '' })
     hideSidebar()
 
     // Persist state
@@ -1048,6 +1038,7 @@
     folderName: string,
     folderType: string
   ) {
+    returnToPrimaryContextForFolderNavigation()
     contextPaneMode = 'messages'
     if (selectedAccountId !== accountId) clearInlineAttachmentCache()
     selectedAccountId = accountId
@@ -1058,7 +1049,6 @@
     selectedThreadId = null
     selectedConversationFolderId = null
     selectedConversationAccountId = null
-    updateActiveReaderScope({ accountId, folderId, folderName, folderType, searchQuery: '' })
     hideSidebar()
 
     // Persist state
@@ -1081,6 +1071,7 @@
   // Top-level special folders are synthetic aggregate views; child rows keep
   // selecting their real account/folder pair.
   function handleUnifiedSpecialFolderSelect(folderType: string, displayName: string) {
+    returnToPrimaryContextForFolderNavigation()
     contextPaneMode = 'messages'
     clearInlineAttachmentCache()
     selectedAccountId = 'unified'
@@ -1093,7 +1084,6 @@
     selectedThreadId = null
     selectedConversationFolderId = null
     selectedConversationAccountId = null
-    updateActiveReaderScope({ accountId: 'unified', folderId: folderType, folderName: $_(displayName), folderType, searchQuery: '' })
     hideSidebar()
 
     // Persist state
@@ -1291,24 +1281,7 @@
   }
 
   // Pane sizing state
-  let sidebarWidth = $state(320)
   let listWidth = $state(360)
-  let sidebarCollapsed = $state(true)
-
-  // Keep the divider-driven layout in sync with the size preset selected in
-  // Settings → General. Manual resizing writes to the same reactive value.
-  $effect(() => {
-    sidebarWidth = getSidebarWidth()
-  })
-
-  function toggleSidebarCollapsed() {
-    sidebarCollapsed = !sidebarCollapsed
-    // Keep the selected size when the navigation is restored. The density
-    // preset controls the complete scale of the sidebar, not only its width.
-    if (!sidebarCollapsed) sidebarWidth = getSidebarWidth()
-    setSidebarCollapsed(sidebarCollapsed)
-    saveUIState({ sidebarWidth })
-  }
 
   // Resizing state
   let isResizingList = $state(false)
@@ -2389,9 +2362,10 @@
       onclick={() => handlePaneClick('sidebar')}
     >
       <div class="flex min-h-10 shrink-0 items-center gap-1 overflow-x-auto border-b border-border px-2 py-1" aria-label={$_('messageList.quickFilters')}>
-        {#each triageStatusRow() as item (item.id)}
-          <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors {triageStatus === item.id ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'} disabled={item.mode === null} aria-pressed={triageStatus === item.id} title={item.mode === null ? $_('triage.readLaterPending') : item.label} onclick={() => item.mode !== null && selectTriageFilter(item.mode)}>{item.label}</button>
-        {/each}
+        <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium {triageStatus === 'all' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'all'} onclick={() => selectTriageFilter('')}>{$_('triage.all')}</button>
+        <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium {triageStatus === 'unread' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'unread'} onclick={() => selectTriageFilter('unread')}>{$_('triage.unread')}</button>
+        <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium border-border text-muted-foreground opacity-50" disabled title={$_('triage.readLaterPending')}>{$_('triage.readLater')}</button>
+        <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium {triageStatus === 'replyLater' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'replyLater'} onclick={() => selectTriageFilter('replyLater')}>{$_('triage.replyLater')}</button>
         <button type="button" class="ml-auto shrink-0 rounded p-1.5 text-muted-foreground hover:bg-muted" aria-pressed={contextPaneAutoHide} title={contextPaneAutoHide ? $_('triage.keepContextVisible') : $_('triage.autoHideContext')} onclick={toggleContextPaneAutoHide}><Icon icon={contextPaneAutoHide ? 'mdi:pin-outline' : 'mdi:pin-off-outline'} width="16" /></button>
       </div>
       <Sidebar
@@ -2411,8 +2385,8 @@
         isFlashing={isPaneFlashing('sidebar')}
         showBackButton={getLayoutMode() === 'narrow'}
         onBack={hideSidebar}
-        collapsed={sidebarCollapsed}
-        onToggleCollapsed={toggleSidebarCollapsed}
+        collapsed={false}
+        showCollapseControl={false}
       />
     </aside>
 
@@ -2443,9 +2417,10 @@
       onclick={() => handlePaneClick('messageList')}
     >
       <div class="flex min-h-10 shrink-0 items-center gap-1 overflow-x-auto border-b border-border px-2 py-1" aria-label={$_('messageList.quickFilters')}>
-        {#each triageStatusRow() as item (item.id)}
-          <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors {triageStatus === item.id ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'} disabled={item.mode === null} aria-pressed={triageStatus === item.id} title={item.mode === null ? $_('triage.readLaterPending') : item.label} onclick={() => item.mode !== null && selectTriageFilter(item.mode)}>{item.label}</button>
-        {/each}
+        <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium {triageStatus === 'all' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'all'} onclick={() => selectTriageFilter('')}>{$_('triage.all')}</button>
+        <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium {triageStatus === 'unread' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'unread'} onclick={() => selectTriageFilter('unread')}>{$_('triage.unread')}</button>
+        <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium border-border text-muted-foreground opacity-50" disabled title={$_('triage.readLaterPending')}>{$_('triage.readLater')}</button>
+        <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium {triageStatus === 'replyLater' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'replyLater'} onclick={() => selectTriageFilter('replyLater')}>{$_('triage.replyLater')}</button>
         <button type="button" class="ml-auto shrink-0 rounded p-1.5 text-muted-foreground hover:bg-muted" aria-pressed={contextPaneAutoHide} title={contextPaneAutoHide ? $_('triage.keepContextVisible') : $_('triage.autoHideContext')} onclick={toggleContextPaneAutoHide}><Icon icon={contextPaneAutoHide ? 'mdi:pin-outline' : 'mdi:pin-off-outline'} width="16" /></button>
       </div>
       <div class="flex-1 min-h-0">
@@ -2489,8 +2464,8 @@
       data-pane="viewer"
       onclick={() => handlePaneClick('viewer')}
     >
-      {#if mailWorkspaceTabs.some(tab => tab.kind === 'reader')}
-        <div class="flex min-h-10 shrink-0 items-center gap-1 overflow-x-auto border-b border-border px-2 py-1" role="tablist" aria-label={$_('mailWindow.workspaces')}>
+      <div class="flex min-h-10 shrink-0 items-center gap-1 overflow-hidden border-b border-border px-2 py-1">
+        <div class="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" role="tablist" aria-label={$_('mailWindow.workspaces')}>
           {#each mailWorkspaceTabs.filter(tab => tab.kind === 'reader') as tab (tab.id)}
             <div class="flex shrink-0 items-center rounded {activeMailWorkspace === tab.id ? 'bg-muted' : 'hover:bg-muted/60'}">
               <button type="button" role="tab" aria-selected={activeMailWorkspace === tab.id} class="max-w-48 truncate px-3 py-1.5 text-sm {activeMailWorkspace === tab.id ? 'font-medium' : 'text-muted-foreground'}" title={workspaceLabel(tab.scope, true)} onclick={() => switchMailWorkspace(tab.id)}>{workspaceLabel(tab.scope, true)}</button>
@@ -2500,11 +2475,11 @@
               <button type="button" class="rounded p-1 text-muted-foreground hover:bg-background" title={$_('mailWindow.closeTab')} aria-label={$_('mailWindow.closeTab')} onclick={() => closeWorkspaceTab(tab.id)}><Icon icon="mdi:close" width="16" /></button>
             </div>
           {/each}
-          <button class="ml-auto flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted" onclick={() => OpenMailWindow(selectedAccountId || '', selectedFolderId || '', selectedFolderName, selectedFolderType || 'inbox', selectedThreadId || '', selectedConversationAccountId || '', selectedConversationFolderId || '', messageListRef?.getSearchQuery() || '').catch(error => toasts.error(String(error)))}>
-            <Icon icon="mdi:open-in-new" width="16" />{$_('mailWindow.newWindow')}
-          </button>
         </div>
-      {/if}
+        <button class="flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted" onclick={() => OpenMailWindow(selectedAccountId || '', selectedFolderId || '', selectedFolderName, selectedFolderType || 'inbox', selectedThreadId || '', selectedConversationAccountId || '', selectedConversationFolderId || '', messageListRef?.getSearchQuery() || '').catch(error => toasts.error(String(error)))}>
+            <Icon icon="mdi:open-in-new" width="16" />{$_('mailWindow.newWindow')}
+        </button>
+      </div>
       {#if activeMailWorkspace === 'primary'}
       <ConversationViewer
         bind:this={viewerRef}
@@ -2537,7 +2512,7 @@
     </main>
     </div>
     {#if showComposer && composerAccountId}
-      <div class="compact-composer-host" style:--composer-left-clearance={getLayoutMode() === 'full' ? `${(sidebarCollapsed ? 56 : sidebarWidth) + 80}px` : '16px'}>
+      <div class="compact-composer-host" style:--composer-left-clearance={getLayoutMode() === 'full' ? `${(contextPaneVisible ? listWidth : 0) + 64}px` : '16px'}>
         <Composer
           accountId={composerAccountId}
           initialMessage={composerInitialMessage}

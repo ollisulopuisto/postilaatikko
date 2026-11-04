@@ -137,6 +137,7 @@
     showBackButton?: boolean
     onBack?: () => void
     collapsed?: boolean
+    showCollapseControl?: boolean
     onToggleCollapsed?: () => void
     navigationEnabled?: boolean
   }
@@ -157,6 +158,7 @@
     showBackButton = false,
     onBack,
     collapsed = false,
+    showCollapseControl = true,
     onToggleCollapsed,
     navigationEnabled = true,
   }: Props = $props()
@@ -663,10 +665,12 @@
           <Icon icon="mdi:folder-multiple-outline" class="h-6 w-6" />
           <span data-sidebar-label>{$_('sidebar.allFolders')}</span>
         </button>
-        <button type="button" class="sidebar-collapse-nav-button" style:order="100" onclick={onToggleCollapsed} title={collapsed ? $_('sidebar.expand') : $_('sidebar.collapse')} aria-label={collapsed ? $_('sidebar.expand') : $_('sidebar.collapse')}>
-          <Icon icon={collapsed ? 'mdi:chevron-double-right' : 'mdi:chevron-double-left'} class="h-5 w-5" />
-          <span data-sidebar-label>{collapsed ? $_('sidebar.expand') : $_('sidebar.collapse')}</span>
-        </button>
+        {#if showCollapseControl}
+          <button type="button" class="sidebar-collapse-nav-button" style:order="100" onclick={onToggleCollapsed} title={collapsed ? $_('sidebar.expand') : $_('sidebar.collapse')} aria-label={collapsed ? $_('sidebar.expand') : $_('sidebar.collapse')}>
+            <Icon icon={collapsed ? 'mdi:chevron-double-right' : 'mdi:chevron-double-left'} class="h-5 w-5" />
+            <span data-sidebar-label>{collapsed ? $_('sidebar.expand') : $_('sidebar.collapse')}</span>
+          </button>
+        {/if}
       </nav>
     {/if}
   </div>
