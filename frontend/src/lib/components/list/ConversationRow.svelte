@@ -10,6 +10,7 @@
 </script>
 
 <script lang="ts">
+  import { onDestroy } from 'svelte'
   import Icon from '@iconify/svelte'
   import { formatRelativeDate } from '$lib/utils/date'
   import { decodeHtmlEntities } from '$lib/utils/decodeHtmlEntities'
@@ -397,6 +398,7 @@
   let touchAxis: 'none' | 'h' | 'v' = 'none'
   let touchFired = false
   let swipeConsumedClick = false
+  let pendingSingleClick: ReturnType<typeof setTimeout> | null = null
   let wheelAccum = 0
   let wheelStreak = 0
   let wheelResetTimer: ReturnType<typeof setTimeout> | null = null
@@ -507,8 +509,20 @@
       swipeConsumedClick = false
       return
     }
-    onSelect(e)
+    if (pendingSingleClick) clearTimeout(pendingSingleClick)
+    pendingSingleClick = null
+    // A double click opens a reader-only tab. Delay the single-click load just
+    // long enough to avoid starting a duplicate conversation fetch first.
+    if (e.detail > 1) return
+    pendingSingleClick = setTimeout(() => {
+      pendingSingleClick = null
+      onSelect(e)
+    }, 220)
   }
+
+  onDestroy(() => {
+    if (pendingSingleClick) clearTimeout(pendingSingleClick)
+  })
 </script>
 
 <MessageContextMenu
@@ -534,6 +548,8 @@
     ondblclick={async (event) => {
       if (!isRowOpenTarget(event.target, event.currentTarget)) return
       event.preventDefault()
+      if (pendingSingleClick) clearTimeout(pendingSingleClick)
+      pendingSingleClick = null
       if (onOpenInTab) {
         onOpenInTab(accountId, folderId, conversation.threadId, folderType, conversation.subject || '')
         return

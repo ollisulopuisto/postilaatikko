@@ -37,6 +37,7 @@
   import { KEY } from '$lib/keyboard/shortcuts'
   import * as AlertDialog from '$lib/components/ui/alert-dialog'
   import { accountStore } from '$lib/stores/accounts.svelte'
+  import { virtualFoldersStore } from '$lib/stores/virtualFolders.svelte'
   import { addToast, toasts } from '$lib/stores/toast'
   import { loadSettings, getThemeMode, getShowTitleBar, getNativeTitleBar, getComposerMode, getMailtoMode } from '$lib/stores/settings.svelte'
   import { loadImageAllowlist } from '$lib/stores/imageAllowlist.svelte'
@@ -185,7 +186,7 @@
     activeMailWorkspace = id
     if (id === 'primary') {
       if (primaryMailScope) {
-        selectedAccountId = primaryMailScope.accountId === 'unified' ? null : primaryMailScope.accountId
+        selectedAccountId = primaryMailScope.accountId
         selectedFolderId = primaryMailScope.folderId
         selectedFolderName = primaryMailScope.folderName || selectedFolderName
         selectedFolderType = primaryMailScope.folderType
@@ -199,7 +200,7 @@
     }
     const tab = mailWorkspaceTabs.find(item => item.id === id)
     if (tab) {
-      selectedAccountId = tab.scope.accountId === 'unified' ? null : tab.scope.accountId
+      selectedAccountId = tab.scope.accountId
       selectedFolderId = tab.scope.folderId
       selectedFolderName = tab.scope.folderName || selectedFolderName
       selectedFolderType = tab.scope.folderType
@@ -300,7 +301,7 @@
       primaryMailScope = null
       primaryContextPaneMode = 'messages'
       contextPaneMode = 'messages'
-      selectedAccountId = scope.accountId === 'unified' ? null : scope.accountId
+      selectedAccountId = scope.accountId
       selectedFolderId = scope.folderId
       selectedFolderName = scope.folderName || 'Inbox'
       selectedFolderType = scope.folderType
@@ -1942,6 +1943,10 @@
         return
       case 'v':
         if (!isMailActive()) return
+        // Reader-only tabs own their viewer shortcut handler. Let that
+        // embedded viewer open the picker instead of routing to the hidden
+        // primary conversation viewer.
+        if (activeMailWorkspace !== 'primary') return
         e.preventDefault()
         if (focusedPane === 'viewer' && selectedThreadId) {
           viewerRef?.toggleFolderPicker('move')
@@ -2361,11 +2366,11 @@
       role="presentation"
       onclick={() => handlePaneClick('sidebar')}
     >
-      <div class="flex min-h-10 shrink-0 items-center gap-1 overflow-x-auto border-b border-border px-2 py-1" aria-label={$_('messageList.quickFilters')}>
-        <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium {triageStatus === 'all' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'all'} onclick={() => selectTriageFilter('')}>{$_('triage.all')}</button>
-        <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium {triageStatus === 'unread' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'unread'} onclick={() => selectTriageFilter('unread')}>{$_('triage.unread')}</button>
-        <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium {triageStatus === 'readLater' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'readLater'} onclick={() => selectTriageFilter('readLater')}>{$_('triage.readLater')}</button>
-        <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium {triageStatus === 'replyLater' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'replyLater'} onclick={() => selectTriageFilter('replyLater')}>{$_('triage.replyLater')}</button>
+      <div class="grid min-h-10 shrink-0 grid-cols-[repeat(4,minmax(0,1fr))_auto] items-center gap-1 overflow-hidden border-b border-border px-2 py-1" aria-label={$_('messageList.quickFilters')}>
+        <button type="button" class="min-w-0 rounded-full border px-1.5 py-1 text-center text-[11px] leading-tight font-medium {triageStatus === 'all' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'all'} onclick={() => selectTriageFilter('')}>{$_('triage.all')}</button>
+        <button type="button" class="min-w-0 rounded-full border px-1.5 py-1 text-center text-[11px] leading-tight font-medium {triageStatus === 'unread' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'unread'} onclick={() => selectTriageFilter('unread')}>{$_('triage.unread')}</button>
+        <button type="button" class="min-w-0 rounded-full border px-1.5 py-1 text-center text-[11px] leading-tight font-medium {triageStatus === 'readLater' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'readLater'} onclick={() => selectTriageFilter('readLater')}>{$_('triage.readLater')}</button>
+        <button type="button" class="min-w-0 rounded-full border px-1.5 py-1 text-center text-[11px] leading-tight font-medium {triageStatus === 'replyLater' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'replyLater'} onclick={() => selectTriageFilter('replyLater')}>{$_('triage.replyLater')}</button>
         <button type="button" class="ml-auto shrink-0 rounded p-1.5 text-muted-foreground hover:bg-muted" aria-pressed={contextPaneAutoHide} title={contextPaneAutoHide ? $_('triage.keepContextVisible') : $_('triage.autoHideContext')} onclick={toggleContextPaneAutoHide}><Icon icon={contextPaneAutoHide ? 'mdi:pin-outline' : 'mdi:pin-off-outline'} width="16" /></button>
       </div>
       <Sidebar
@@ -2416,11 +2421,11 @@
       tabindex="-1"
       onclick={() => handlePaneClick('messageList')}
     >
-      <div class="flex min-h-10 shrink-0 items-center gap-1 overflow-x-auto border-b border-border px-2 py-1" aria-label={$_('messageList.quickFilters')}>
-        <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium {triageStatus === 'all' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'all'} onclick={() => selectTriageFilter('')}>{$_('triage.all')}</button>
-        <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium {triageStatus === 'unread' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'unread'} onclick={() => selectTriageFilter('unread')}>{$_('triage.unread')}</button>
-        <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium {triageStatus === 'readLater' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'readLater'} onclick={() => selectTriageFilter('readLater')}>{$_('triage.readLater')}</button>
-        <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium {triageStatus === 'replyLater' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'replyLater'} onclick={() => selectTriageFilter('replyLater')}>{$_('triage.replyLater')}</button>
+      <div class="grid min-h-10 shrink-0 grid-cols-[repeat(4,minmax(0,1fr))_auto] items-center gap-1 overflow-hidden border-b border-border px-2 py-1" aria-label={$_('messageList.quickFilters')}>
+        <button type="button" class="min-w-0 rounded-full border px-1.5 py-1 text-center text-[11px] leading-tight font-medium {triageStatus === 'all' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'all'} onclick={() => selectTriageFilter('')}>{$_('triage.all')}</button>
+        <button type="button" class="min-w-0 rounded-full border px-1.5 py-1 text-center text-[11px] leading-tight font-medium {triageStatus === 'unread' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'unread'} onclick={() => selectTriageFilter('unread')}>{$_('triage.unread')}</button>
+        <button type="button" class="min-w-0 rounded-full border px-1.5 py-1 text-center text-[11px] leading-tight font-medium {triageStatus === 'readLater' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'readLater'} onclick={() => selectTriageFilter('readLater')}>{$_('triage.readLater')}</button>
+        <button type="button" class="min-w-0 rounded-full border px-1.5 py-1 text-center text-[11px] leading-tight font-medium {triageStatus === 'replyLater' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'replyLater'} onclick={() => selectTriageFilter('replyLater')}>{$_('triage.replyLater')}</button>
         <button type="button" class="ml-auto shrink-0 rounded p-1.5 text-muted-foreground hover:bg-muted" aria-pressed={contextPaneAutoHide} title={contextPaneAutoHide ? $_('triage.keepContextVisible') : $_('triage.autoHideContext')} onclick={toggleContextPaneAutoHide}><Icon icon={contextPaneAutoHide ? 'mdi:pin-outline' : 'mdi:pin-off-outline'} width="16" /></button>
       </div>
       <div class="flex-1 min-h-0">
@@ -2496,6 +2501,7 @@
         showBackButton={isResponsive()}
         onBack={() => { focusMode = 'off'; focusedMessageIdInFocus = null; hideViewer() }}
         isViewerVisible={activeMailWorkspace === 'primary' && getActiveExtension() === 'mail' && (focusMode !== 'off' || !isResponsive() || getResponsiveView() === 'viewer')}
+        deferMarkAsReadUntilLeave={triageStatus === 'unread' || (selectedFolderType === 'virtual' && virtualFoldersStore.folders.find(item => item.id === selectedFolderId)?.readStatus === 'unread')}
         inFocusMode={focusMode !== 'off'}
         focusModeKind={focusMode === 'off' ? null : focusMode}
         focusedMessageIdInFocus={focusedMessageIdInFocus}
@@ -2505,7 +2511,7 @@
       {:else}
         {#each mailWorkspaceTabs.filter(tab => tab.kind === 'reader') as tab (tab.id)}
           <div class="flex w-full flex-1 min-w-0 min-h-0 overflow-hidden" style:display={activeMailWorkspace === tab.id ? 'flex' : 'none'}>
-            <MailWindowApp config={tab.scope} embedded readerTab onCloseTab={() => closeWorkspaceTab(tab.id)} active={activeMailWorkspace === tab.id} onScopeChange={scope => updateWorkspaceScope(tab.id, scope)} onNewTab={openWorkspaceTab} onOpenInTab={openReaderScope} />
+            <MailWindowApp config={tab.scope} embedded readerTab deferMarkAsReadUntilLeave={triageStatus === 'unread' || (tab.scope.folderType === 'virtual' && virtualFoldersStore.folders.find(item => item.id === tab.scope.folderId)?.readStatus === 'unread')} onCloseTab={() => closeWorkspaceTab(tab.id)} active={activeMailWorkspace === tab.id} onScopeChange={scope => updateWorkspaceScope(tab.id, scope)} onNewTab={openWorkspaceTab} onOpenInTab={openReaderScope} />
           </div>
         {/each}
       {/if}

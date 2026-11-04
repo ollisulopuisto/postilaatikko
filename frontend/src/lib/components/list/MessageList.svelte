@@ -1006,7 +1006,13 @@
         return
       }
 
-      conversations = convList || []
+      const previousConversations = conversations
+      conversations = retainReadSelection(
+        previousConversations,
+        convList || [],
+        selectedThreadId,
+        (filterMode === 'unread' || (isVirtualFolderView && virtualFoldersStore.folders.find(item => item.id === folderId)?.readStatus === 'unread')) && lastLoadedFolderId === folderId,
+      )
       totalCount = conversations.length
       listRendered = true
       if (resolvedCount !== null) totalCount = resolvedCount

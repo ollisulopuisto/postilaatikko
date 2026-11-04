@@ -55,6 +55,8 @@
     onBack?: () => void
     /** True while the mail viewer is actually visible, including responsive layouts. */
     isViewerVisible?: boolean
+    /** Defer automatic read changes while an unread-only list owns the selection. */
+    deferMarkAsReadUntilLeave?: boolean
     // Focus mode (whole thread or single message takes full window)
     inFocusMode?: boolean
     focusModeKind?: 'thread' | 'message' | null
@@ -77,6 +79,7 @@
     showBackButton = false,
     onBack,
     isViewerVisible = true,
+    deferMarkAsReadUntilLeave = false,
     inFocusMode = false,
     focusModeKind = null,
     focusedMessageIdInFocus = null,
@@ -301,6 +304,7 @@
 
   function scheduleMarkAsRead() {
     clearMarkAsReadTimer()
+    if (deferMarkAsReadUntilLeave) return
     const delay = getMarkAsReadDelay()
     if (delay === 0) {
       markCurrentPendingAsRead()
@@ -317,7 +321,7 @@
   function handleReadOnLeave() {
     clearMarkAsReadTimer()
     const delay = getMarkAsReadDelay()
-    if (delay === -2) {
+    if (deferMarkAsReadUntilLeave || delay === -2) {
       finalizeReadOnLeave()
     } else {
       pendingReadOnLeave.clear()
@@ -555,6 +559,13 @@
 
   $effect(() => {
     if (!isViewerVisible) handleReadOnLeave()
+  })
+
+  let wasDeferringReadForUnreadView = false
+  $effect(() => {
+    const shouldDefer = deferMarkAsReadUntilLeave
+    if (wasDeferringReadForUnreadView && !shouldDefer) handleReadOnLeave()
+    wasDeferringReadForUnreadView = shouldDefer
   })
 
   // Debounced refresh: coalesces rapid sync events (e.g. folder:synced + messages:updated)

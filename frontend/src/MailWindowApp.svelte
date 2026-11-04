@@ -19,7 +19,7 @@
   import { GetAccounts, GetFolders, GetFolderTree, GetMessage, OpenMailWindow, OpenComposerWindow, MarkAsRead, MarkAsUnread, Star, Unstar, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ArchiveWithUndo, UndoOperation } from '../wailsjs/go/app/App'
   import { EventsEmit, WindowSetTitle } from '../wailsjs/runtime/runtime'
 
-  let { config, embedded = false, readerTab = false, onCloseTab, active = true, onScopeChange, onNewTab, onOpenInTab }: { config: MailScope; embedded?: boolean; readerTab?: boolean; onCloseTab?: () => void; active?: boolean; onScopeChange?: (scope: MailScope) => void; onNewTab?: () => void; onOpenInTab?: (scope: MailScope) => void } = $props()
+  let { config, embedded = false, readerTab = false, deferMarkAsReadUntilLeave = false, onCloseTab, active = true, onScopeChange, onNewTab, onOpenInTab }: { config: MailScope; embedded?: boolean; readerTab?: boolean; deferMarkAsReadUntilLeave?: boolean; onCloseTab?: () => void; active?: boolean; onScopeChange?: (scope: MailScope) => void; onNewTab?: () => void; onOpenInTab?: (scope: MailScope) => void } = $props()
   // A process per window gives each component/store its own search, checked
   // rows, scroll memory and reader mode. Primary UI state is never persisted.
   let windowState = $state(createMailWindowState(untrack(() => config)))
@@ -181,6 +181,7 @@
     if (event.key === '/') { event.preventDefault(); list?.toggleSearchFocus(); return }
     if (event.key === 'c') { event.preventDefault(); void compose(); return }
     if (getFocusedPane() === 'viewer') {
+      if (event.key === 'v') { event.preventDefault(); viewer?.toggleFolderPicker('move'); return }
       if (event.key === 'r') { event.preventDefault(); viewer?.reply(); return }
       if (event.key === 'a') { event.preventDefault(); viewer?.replyAll(); return }
       if (event.key === 'f') { event.preventDefault(); viewer?.forward(); return }
@@ -258,7 +259,7 @@
       {#if windowState.thread}
         {@const thread = windowState.thread}
         <ConversationViewer bind:this={viewer} threadId={thread.threadId} folderId={thread.folderId} accountId={thread.accountId} folderType={windowState.scope.folderType}
-          isViewerVisible={active} isFocused={active && getFocusedPane() === 'viewer'} showBackButton onBack={closeReader} onReply={reply}
+          isViewerVisible={active} deferMarkAsReadUntilLeave={deferMarkAsReadUntilLeave} isFocused={active && getFocusedPane() === 'viewer'} showBackButton onBack={closeReader} onReply={reply}
           onEditDraft={draftId => run(() => OpenComposerWindow(thread.accountId, 'new', '', draftId, ''))}
           onToggleThreadFocus={readerTab ? undefined : () => readerOnly = !readerOnly} inFocusMode={readerOnly}
           onActionComplete={() => list?.handleActionComplete(true)}
