@@ -98,6 +98,23 @@ func filterWhereClause(filter, prefix string) string {
 	return clause + snoozed
 }
 
+func snoozedViewHavingClause(filter string) string {
+	if strings.Contains(filter, "+") {
+		parts := strings.Split(filter, "+")
+		clauses := make([]string, 0, len(parts))
+		for _, part := range parts { if clause := snoozedViewHavingClause(part); clause != "" { clauses = append(clauses, strings.TrimPrefix(clause," HAVING ")) } }
+		if len(clauses)==0 { return "" }; return " HAVING "+strings.Join(clauses," AND ")
+	}
+	switch filter {
+	case "unread": return " HAVING SUM(CASE WHEN m.is_read=0 THEN 1 ELSE 0 END)>0"
+	case "starred": return " HAVING MAX(CASE WHEN m.is_starred=1 THEN 1 ELSE 0 END)=1"
+	case "attachments": return " HAVING MAX(CASE WHEN m.has_attachments=1 THEN 1 ELSE 0 END)=1"
+	case "replyLater": return " HAVING MAX(CASE WHEN EXISTS(SELECT 1 FROM reply_later_queue rl WHERE rl.account_id=m.account_id AND rl.conversation_id=COALESCE(m.thread_id,m.id)) THEN 1 ELSE 0 END)=1"
+	case "readLater": return " HAVING MAX(CASE WHEN EXISTS(SELECT 1 FROM read_later_queue rl WHERE rl.account_id=m.account_id AND rl.conversation_id=COALESCE(m.thread_id,m.id)) THEN 1 ELSE 0 END)=1"
+	default: return ""
+	}
+}
+
 // ListByFolder returns message headers for a folder with pagination
 func (s *Store) ListByFolder(folderID string, offset, limit int) ([]*MessageHeader, error) {
 	query := `
@@ -240,7 +257,7 @@ func (s *Store) ListReadLaterConversations(offset, limit int, sortOrder, filter 
 	return scanConversations(rows)
 }
 
-func (s *Store) ListSnoozedConversations(offset, limit int, sortOrder string) ([]*Conversation, error) {
+func (s *Store) ListSnoozedConversations(offset, limit int, sortOrder, filter string) ([]*Conversation, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	orderClause := "ORDER BY latest_date DESC"
@@ -255,7 +272,7 @@ func (s *Store) ListSnoozedConversations(offset, limit int, sortOrder string) ([
 	 FROM snoozed_conversations sz JOIN messages m ON m.account_id=sz.account_id
 	 AND COALESCE(m.thread_id,m.id)=sz.conversation_id JOIN folders f ON m.folder_id=f.id
 	 JOIN accounts a ON f.account_id=a.id AND a.enabled=1 WHERE julianday(sz.wake_at)>julianday('now')
-	 GROUP BY COALESCE(m.thread_id,m.id),a.id ` + orderClause + ` LIMIT ? OFFSET ?`
+		 GROUP BY COALESCE(m.thread_id,m.id),a.id` + snoozedViewHavingClause(filter) + ` ` + orderClause + ` LIMIT ? OFFSET ?`
 	rows, err := s.db.QueryContext(ctx, query, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query snoozed conversations: %w", err)
@@ -264,10 +281,11 @@ func (s *Store) ListSnoozedConversations(offset, limit int, sortOrder string) ([
 	return scanConversations(rows)
 }
 
-func (s *Store) CountSnoozedConversations() (int, error) {
+func (s *Store) CountSnoozedConversations(filter string) (int, error) {
 	var count int
-	err := s.db.QueryRow(`SELECT COUNT(DISTINCT sz.account_id||'-'||sz.conversation_id) FROM snoozed_conversations sz
-	 WHERE julianday(sz.wake_at)>julianday('now') AND EXISTS(SELECT 1 FROM messages m WHERE m.account_id=sz.account_id AND COALESCE(m.thread_id,m.id)=sz.conversation_id)`).Scan(&count)
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM (SELECT sz.account_id,sz.conversation_id FROM snoozed_conversations sz
+	 JOIN messages m ON m.account_id=sz.account_id AND COALESCE(m.thread_id,m.id)=sz.conversation_id
+	 WHERE julianday(sz.wake_at)>julianday('now') GROUP BY sz.account_id,sz.conversation_id`+snoozedViewHavingClause(filter)+`)`).Scan(&count)
 	return count, err
 }
 

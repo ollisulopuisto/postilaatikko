@@ -83,7 +83,7 @@ func (a *App) GetUnifiedFolderConversations(folderType string, offset, limit int
 		return a.messageStore.ListReadLaterConversations(offset, limit, sortOrder, filterValue)
 	}
 	if folderType == "snoozed" {
-		return a.messageStore.ListSnoozedConversations(offset, limit, sortOrder)
+		return a.messageStore.ListSnoozedConversations(offset, limit, sortOrder, filterValue)
 	}
 	if folderType == string(folder.TypeArchive) {
 		return a.listUnifiedArchived(offset, limit, sortOrder, filterValue)
@@ -157,7 +157,7 @@ func (a *App) GetUnifiedFolderCount(folderType, filterValue string) (int, error)
 		return a.messageStore.CountReadLaterConversations(filterValue)
 	}
 	if folderType == "snoozed" {
-		return a.messageStore.CountSnoozedConversations()
+		return a.messageStore.CountSnoozedConversations(filterValue)
 	}
 	if folderType == string(folder.TypeArchive) {
 		// The list path is authoritative for mixed physical/virtual archive
