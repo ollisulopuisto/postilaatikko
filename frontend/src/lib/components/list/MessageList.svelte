@@ -161,7 +161,7 @@
   let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
   // Filter state
-  let filterMode = $state<string>('')  // '' | 'unread' | 'replyLater' | 'starred' | 'attachments'
+  let filterMode = $state<string>('')  // '' | 'unread' | 'readLater' | 'replyLater' | 'starred' | 'attachments'
 
   type InboxDisplayGroup = {
     id: string
@@ -407,6 +407,7 @@
     switch (filterMode) {
       case 'unread': return $_('messageList.filterUnread')
       case 'replyLater': return $_('messageList.filterReplyLater')
+      case 'readLater': return $_('messageList.filterReadLater')
       case 'starred': return $_('messageList.filterStarred')
       case 'attachments': return $_('messageList.filterAttachments')
       default: return ''
@@ -417,6 +418,7 @@
     { value: '', label: $_('messageList.filterAll') },
     { value: 'unread', label: $_('messageList.filterUnread'), separator: true },
     { value: 'replyLater', label: $_('messageList.filterReplyLater') },
+    { value: 'readLater', label: $_('messageList.filterReadLater') },
     { value: 'starred', label: $_('messageList.filterStarred') },
     { value: 'attachments', label: $_('messageList.filterAttachments') },
   ])
@@ -552,6 +554,12 @@
     stopReplyLaterListener = EventsOn('replyLater:changed', () => {
       if (filterMode === 'replyLater' || (isUnifiedView && folderId === 'replyLater')) scheduleReload()
     })
+
+    EventsOn('readLater:changed', () => {
+      if (filterMode === 'readLater' || (isUnifiedView && folderId === 'readLater')) scheduleReload()
+    })
+    EventsOn('snooze:changed', () => scheduleReload())
+    EventsOn('snooze:expired', () => scheduleReload())
 
     // Listen for message read-state changes. Star changes ride their own
     // `messages:starredChanged` event and don't affect unread counts here.
@@ -2611,6 +2619,15 @@
 
   {#if folderId}
     <div class="flex items-center gap-2 overflow-x-auto border-b border-border px-3 py-2" aria-label={$_('messageList.quickFilters')}>
+      <button
+        type="button"
+        class="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors {filterMode === 'readLater' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}"
+        aria-pressed={filterMode === 'readLater'}
+        onclick={() => setFilter(filterMode === 'readLater' ? '' : 'readLater')}
+      >
+        <Icon icon="mdi:book-clock-outline" class="h-3.5 w-3.5" />
+        {$_('messageList.filterReadLater')}
+      </button>
       <button
         type="button"
         class="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors {filterMode === 'unread' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}"

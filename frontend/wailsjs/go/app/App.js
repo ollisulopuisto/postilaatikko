@@ -1753,3 +1753,43 @@ export function UpdateScheduledMessage(arg1, arg2) {
 export function UpdateVirtualFolder(arg1) {
   return window['go']['app']['App']['UpdateVirtualFolder'](arg1);
 }
+
+export function GetReadLaterQueue() {
+  return window['go']['app']['App']['GetReadLaterQueue']();
+}
+
+export function GetReadLaterCount() {
+  return window['go']['app']['App']['GetReadLaterCount']();
+}
+
+export function IsReadLater(arg1, arg2) {
+  return window['go']['app']['App']['IsReadLater'](arg1, arg2);
+}
+
+export function ChangeReadLater(arg1, arg2, arg3) {
+  return window['go']['app']['App']['ChangeReadLater'](arg1, arg2, arg3);
+}
+
+export function AddReadLater(arg1, arg2) {
+  return window['go']['app']['App']['AddReadLater'](arg1, arg2);
+}
+
+export function RemoveReadLater(arg1, arg2) {
+  return window['go']['app']['App']['RemoveReadLater'](arg1, arg2);
+}
+
+export function SnoozeConversation(arg1, arg2, arg3) {
+  return window['go']['app']['App']['SnoozeConversation'](arg1, arg2, arg3);
+}
+
+export function UnsnoozeConversation(arg1, arg2) {
+  return window['go']['app']['App']['UnsnoozeConversation'](arg1, arg2);
+}
+
+export function GetSnoozedConversations() {
+  return window['go']['app']['App']['GetSnoozedConversations']();
+}
+
+export function GetSnoozedCount() {
+  return window['go']['app']['App']['GetSnoozedCount']();
+}

@@ -904,3 +904,23 @@ export function UpdateLocalFlags(arg1:Array<string>,arg2:any,arg3:any):Promise<v
 export function UpdateScheduledMessage(arg1:string,arg2:string):Promise<app.ScheduleResult>;
 
 export function UpdateVirtualFolder(arg1:virtualfolder.VirtualFolder):Promise<void>;
+
+export function GetReadLaterQueue():Promise<Array<{accountId:string,conversationId:string,wakeAt?:string}>>;
+
+export function GetReadLaterCount():Promise<number>;
+
+export function IsReadLater(arg1:string,arg2:string):Promise<boolean>;
+
+export function ChangeReadLater(arg1:string,arg2:string,arg3:boolean):Promise<boolean>;
+
+export function AddReadLater(arg1:string,arg2:string):Promise<boolean>;
+
+export function RemoveReadLater(arg1:string,arg2:string):Promise<boolean>;
+
+export function SnoozeConversation(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function UnsnoozeConversation(arg1:string,arg2:string):Promise<boolean>;
+
+export function GetSnoozedConversations():Promise<Array<{accountId:string,conversationId:string,wakeAt?:string}>>;
+
+export function GetSnoozedCount():Promise<number>;

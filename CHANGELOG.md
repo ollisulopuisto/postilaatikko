@@ -4,6 +4,7 @@
 
 - Let conversation-mode email cards use the full available reader width.
 - Add an Archive + mark as read action alongside Archive in message context menus.
+- Keep Read Later and Reply Later as explicit Gmail label-backed queues while preserving local queues for other providers; hide messages locally until a snooze deadline expires.
 
 ## Postilaatikko 2026.11.04
 - Avoid integer-overflowing capacity calculations while matching email thread references.

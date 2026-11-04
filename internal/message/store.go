@@ -35,6 +35,10 @@ func NewStore(db *database.DB) *Store {
 // filterHavingClause returns a HAVING clause for conversation-level filtering.
 // prefix is the message-table alias for the surrounding query (normally "m.").
 func filterHavingClause(filter, prefix string) string {
+	if prefix == "" {
+		prefix = "m."
+	}
+	snoozed := fmt.Sprintf("MAX(CASE WHEN EXISTS (SELECT 1 FROM snoozed_conversations sz WHERE sz.account_id=%saccount_id AND sz.conversation_id=COALESCE(%sthread_id,%sid) AND julianday(sz.wake_at)>julianday('now')) THEN 1 ELSE 0 END)=0", prefix, prefix, prefix)
 	if strings.Contains(filter, "+") {
 		conditions := []string{}
 		for _, part := range strings.Split(filter, "+") {
@@ -42,31 +46,35 @@ func filterHavingClause(filter, prefix string) string {
 				conditions = append(conditions, strings.TrimPrefix(clause, " HAVING "))
 			}
 		}
-		if len(conditions) == 0 {
-			return ""
-		}
+		conditions = append(conditions, snoozed)
 		return " HAVING " + strings.Join(conditions, " AND ")
 	}
-	if prefix == "" {
-		prefix = "m."
-	}
+	var clause string
 	switch filter {
 	case "unread":
-		return fmt.Sprintf(" HAVING SUM(CASE WHEN %sis_read = 0 THEN 1 ELSE 0 END) > 0", prefix)
+		clause = fmt.Sprintf("SUM(CASE WHEN %sis_read = 0 THEN 1 ELSE 0 END) > 0", prefix)
 	case "starred":
-		return fmt.Sprintf(" HAVING MAX(CASE WHEN %sis_starred = 1 THEN 1 ELSE 0 END) = 1", prefix)
+		clause = fmt.Sprintf("MAX(CASE WHEN %sis_starred = 1 THEN 1 ELSE 0 END) = 1", prefix)
 	case "attachments":
-		return fmt.Sprintf(" HAVING MAX(CASE WHEN %shas_attachments = 1 THEN 1 ELSE 0 END) = 1", prefix)
+		clause = fmt.Sprintf("MAX(CASE WHEN %shas_attachments = 1 THEN 1 ELSE 0 END) = 1", prefix)
 	case "replyLater":
-		return fmt.Sprintf(" HAVING SUM(CASE WHEN EXISTS (SELECT 1 FROM reply_later_queue rl WHERE rl.account_id = %saccount_id AND rl.conversation_id = COALESCE(%sthread_id, %sid)) THEN 1 ELSE 0 END) > 0", prefix, prefix, prefix)
-	default:
-		return ""
+		clause = fmt.Sprintf("SUM(CASE WHEN EXISTS (SELECT 1 FROM reply_later_queue rl WHERE rl.account_id = %saccount_id AND rl.conversation_id = COALESCE(%sthread_id, %sid)) THEN 1 ELSE 0 END) > 0", prefix, prefix, prefix)
+	case "readLater":
+		clause = fmt.Sprintf("SUM(CASE WHEN EXISTS (SELECT 1 FROM read_later_queue rl WHERE rl.account_id = %saccount_id AND rl.conversation_id = COALESCE(%sthread_id, %sid)) THEN 1 ELSE 0 END) > 0", prefix, prefix, prefix)
 	}
+	if clause == "" {
+		clause = "1=1"
+	}
+	return " HAVING " + clause + " AND " + snoozed
 }
 
 // filterWhereClause returns a WHERE condition for count queries.
 // prefix is the message-table alias for the surrounding query (normally "m.").
 func filterWhereClause(filter, prefix string) string {
+	if prefix == "" {
+		prefix = "m."
+	}
+	snoozed := fmt.Sprintf(" AND NOT EXISTS (SELECT 1 FROM snoozed_conversations sz WHERE sz.account_id=%saccount_id AND sz.conversation_id=COALESCE(%sthread_id,%sid) AND julianday(sz.wake_at)>julianday('now'))", prefix, prefix, prefix)
 	if strings.Contains(filter, "+") {
 		clause := ""
 		for _, part := range strings.Split(filter, "+") {
@@ -74,21 +82,20 @@ func filterWhereClause(filter, prefix string) string {
 		}
 		return clause
 	}
-	if prefix == "" {
-		prefix = "m."
-	}
+	var clause string
 	switch filter {
 	case "unread":
-		return fmt.Sprintf(" AND %sis_read = 0", prefix)
+		clause = fmt.Sprintf(" AND %sis_read = 0", prefix)
 	case "starred":
-		return fmt.Sprintf(" AND %sis_starred = 1", prefix)
+		clause = fmt.Sprintf(" AND %sis_starred = 1", prefix)
 	case "attachments":
-		return fmt.Sprintf(" AND %shas_attachments = 1", prefix)
+		clause = fmt.Sprintf(" AND %shas_attachments = 1", prefix)
 	case "replyLater":
-		return fmt.Sprintf(" AND EXISTS (SELECT 1 FROM reply_later_queue rl WHERE rl.account_id = %saccount_id AND rl.conversation_id = COALESCE(%sthread_id, %sid))", prefix, prefix, prefix)
-	default:
-		return ""
+		clause = fmt.Sprintf(" AND EXISTS (SELECT 1 FROM reply_later_queue rl WHERE rl.account_id = %saccount_id AND rl.conversation_id = COALESCE(%sthread_id, %sid))", prefix, prefix, prefix)
+	case "readLater":
+		clause = fmt.Sprintf(" AND EXISTS (SELECT 1 FROM read_later_queue rl WHERE rl.account_id = %saccount_id AND rl.conversation_id = COALESCE(%sthread_id, %sid))", prefix, prefix, prefix)
 	}
+	return clause + snoozed
 }
 
 // ListByFolder returns message headers for a folder with pagination
@@ -203,6 +210,65 @@ func (s *Store) ListReplyLaterConversations(offset, limit int, sortOrder, filter
 	}
 	defer rows.Close()
 	return scanConversations(rows)
+}
+
+// ListReadLaterConversations uses the indexed local mirror of explicit queue
+// membership, just like Reply Later. Gmail label state is synchronized by the
+// app before this virtual view is loaded.
+func (s *Store) ListReadLaterConversations(offset, limit int, sortOrder, filter string) ([]*Conversation, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	orderClause := "ORDER BY latest_date DESC"
+	if sortOrder == "oldest" {
+		orderClause = "ORDER BY latest_date ASC"
+	}
+	query := `
+		SELECT COALESCE(m.thread_id,m.id), MIN(m.subject), MAX(m.snippet), COUNT(*),
+		 SUM(CASE WHEN m.is_read=0 THEN 1 ELSE 0 END), MAX(CASE WHEN m.has_attachments=1 THEN 1 ELSE 0 END),
+		 MAX(CASE WHEN m.is_starred=1 THEN 1 ELSE 0 END), MAX(m.date), GROUP_CONCAT(m.id),
+		 MAX(CASE WHEN m.smime_encrypted=1 OR m.pgp_encrypted=1 THEN 1 ELSE 0 END), MAX(m.inbox_category),
+		 a.id,a.name,a.color,f.id,json_group_array(DISTINCT json_object('name',m.from_name,'email',m.from_email))
+		FROM read_later_queue rl JOIN messages m ON m.account_id=rl.account_id
+		 AND (m.thread_id=rl.conversation_id OR (m.thread_id IS NULL AND m.id=rl.conversation_id))
+		JOIN folders f ON m.folder_id=f.id JOIN accounts a ON f.account_id=a.id AND a.enabled=1
+		GROUP BY COALESCE(m.thread_id,m.id),a.id` + filterHavingClause(filter, "m.") + ` ` + orderClause + ` LIMIT ? OFFSET ?`
+	rows, err := s.db.QueryContext(ctx, query, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query Read Later conversations: %w", err)
+	}
+	defer rows.Close()
+	return scanConversations(rows)
+}
+
+func (s *Store) ListSnoozedConversations(offset, limit int, sortOrder string) ([]*Conversation, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	orderClause := "ORDER BY latest_date DESC"
+	if sortOrder == "oldest" {
+		orderClause = "ORDER BY latest_date ASC"
+	}
+	query := `SELECT COALESCE(m.thread_id,m.id),MIN(m.subject),MAX(m.snippet),COUNT(*),
+	 SUM(CASE WHEN m.is_read=0 THEN 1 ELSE 0 END),MAX(CASE WHEN m.has_attachments=1 THEN 1 ELSE 0 END),
+	 MAX(CASE WHEN m.is_starred=1 THEN 1 ELSE 0 END),MAX(m.date),GROUP_CONCAT(m.id),
+	 MAX(CASE WHEN m.smime_encrypted=1 OR m.pgp_encrypted=1 THEN 1 ELSE 0 END),MAX(m.inbox_category),
+	 a.id,a.name,a.color,f.id,json_group_array(DISTINCT json_object('name',m.from_name,'email',m.from_email))
+	 FROM snoozed_conversations sz JOIN messages m ON m.account_id=sz.account_id
+	 AND COALESCE(m.thread_id,m.id)=sz.conversation_id JOIN folders f ON m.folder_id=f.id
+	 JOIN accounts a ON f.account_id=a.id AND a.enabled=1 WHERE julianday(sz.wake_at)>julianday('now')
+	 GROUP BY COALESCE(m.thread_id,m.id),a.id ` + orderClause + ` LIMIT ? OFFSET ?`
+	rows, err := s.db.QueryContext(ctx, query, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query snoozed conversations: %w", err)
+	}
+	defer rows.Close()
+	return scanConversations(rows)
+}
+
+func (s *Store) CountSnoozedConversations() (int, error) {
+	var count int
+	err := s.db.QueryRow(`SELECT COUNT(DISTINCT sz.account_id||'-'||sz.conversation_id) FROM snoozed_conversations sz
+	 WHERE julianday(sz.wake_at)>julianday('now') AND EXISTS(SELECT 1 FROM messages m WHERE m.account_id=sz.account_id AND COALESCE(m.thread_id,m.id)=sz.conversation_id)`).Scan(&count)
+	return count, err
 }
 
 // ListVirtualArchivedConversations lists Gmail-style archived messages from
@@ -353,6 +419,21 @@ func (s *Store) CountReplyLaterConversations(filter string) (int, error) {
 	var count int
 	if err := s.db.QueryRowContext(ctx, query).Scan(&count); err != nil {
 		return 0, fmt.Errorf("failed to count Reply Later conversations: %w", err)
+	}
+	return count, nil
+}
+
+func (s *Store) CountReadLaterConversations(filter string) (int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	var count int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT COALESCE(m.thread_id,m.id)||'-'||a.id)
+	 FROM read_later_queue rl JOIN messages m ON m.account_id=rl.account_id
+	 AND (m.thread_id=rl.conversation_id OR (m.thread_id IS NULL AND m.id=rl.conversation_id))
+	 JOIN folders f ON m.folder_id=f.id JOIN accounts a ON f.account_id=a.id AND a.enabled=1
+	 WHERE 1=1`+filterWhereClause(filter, "m.")).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count Read Later conversations: %w", err)
 	}
 	return count, nil
 }
