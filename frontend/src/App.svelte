@@ -1,6 +1,5 @@
 <script lang="ts">
   import Icon from '@iconify/svelte'
-  import { OpenMailWindow } from '../wailsjs/go/app/App'
   import MailWindowApp from './MailWindowApp.svelte'
   import type { MailScope } from './lib/windows/mailWindow'
   import type { NavigationEntry } from './lib/sidebar/cards'
@@ -67,7 +66,7 @@
   import { publishUndoOperationCompleted, publishUndoOperationCreated } from '$lib/components/list/undoMutationEvents'
   import { runMessageMutation } from '$lib/components/list/mutationInFlight'
   // @ts-ignore - wailsjs path
-  import { PrepareReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, ClearDraftHistory, SendMessageWithDraftGuard, CancelPendingSend, CompletePendingSend, ListPendingSends, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ResolveMailActionTarget, UndoOperation, UndoLatestWithResult, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, OpenComposerWindow, OpenReaderWindow, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
+  import { PrepareReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, ClearDraftHistory, SendMessageWithDraftGuard, CancelPendingSend, CompletePendingSend, ListPendingSends, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ResolveMailActionTarget, UndoOperation, UndoLatestWithResult, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, OpenComposerWindow, OpenMailWindow, OpenReaderWindow, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
   // @ts-ignore - wailsjs path
   import { smtp, folder, certificate, operations } from '../wailsjs/go/models'
   // @ts-ignore - wailsjs runtime
@@ -96,10 +95,14 @@
   let selectedFolderId = $state<string | null>(null)
   let selectedFolderName = $state('Inbox')
   let selectedFolderType = $state<string | null>(null)
-  type MailWorkspaceTab = { id: string; kind: 'workspace' | 'reader'; scope: MailScope }
+  let contextPaneMode = $state<'folders' | 'messages'>('messages')
+  let triageStatus = $state<'all' | 'unread' | 'readLater' | 'replyLater'>('all')
+  type MailWorkspaceTab = { id: string; kind: 'reader'; scope: MailScope }
   const maxMailWorkspaceTabs = 4
   let mailWorkspaceTabs = $state<MailWorkspaceTab[]>([])
   let activeMailWorkspace = $state('primary')
+  let primaryMailScope: MailScope | null = null
+  let primaryContextPaneMode: 'folders' | 'messages' = 'messages'
   // Track where the selection came from: 'unified' for unified section, 'account' for account tree
   let selectionSource = $state<'unified' | 'account' | null>(null)
 
@@ -145,22 +148,23 @@
     return key ? $_(key) : storedName || 'Inbox'
   }
 
-  function addMailTab(scope: MailScope, kind: MailWorkspaceTab['kind']) {
+  function addMailTab(scope: MailScope) {
     if (mailWorkspaceTabs.length >= maxMailWorkspaceTabs) {
       toasts.error($_('mailWindow.tabLimit', { values: { count: maxMailWorkspaceTabs } }))
       return
     }
-    const tab = { id: crypto.randomUUID(), kind, scope: { ...scope } }
+    const tab: MailWorkspaceTab = { id: crypto.randomUUID(), kind: 'reader', scope: { ...scope } }
     mailWorkspaceTabs = [...mailWorkspaceTabs, tab]
     switchMailWorkspace(tab.id)
   }
 
   function openWorkspaceTab() {
-    addMailTab(currentMailScope(), 'workspace')
+    const scope = currentMailScope()
+    if (scope.threadId) openReaderScope(scope)
   }
 
   function openReaderScope(scope: MailScope) {
-    if (scope.threadId) addMailTab(scope, 'reader')
+    if (scope.threadId) addMailTab(scope)
   }
 
   function openListThreadInTab(accountId: string, folderId: string, threadId: string, folderType: string, subject: string) {
@@ -169,8 +173,60 @@
   }
 
   function switchMailWorkspace(id: string) {
+    if (activeMailWorkspace === 'primary' && id !== 'primary') {
+      primaryMailScope = currentMailScope()
+      primaryContextPaneMode = contextPaneMode
+    }
     activeMailWorkspace = id
-    setFocusedPane(mailWorkspaceTabs.find(tab => tab.id === id)?.kind === 'reader' ? 'viewer' : 'messageList')
+    if (id === 'primary') {
+      if (primaryMailScope) {
+        selectedAccountId = primaryMailScope.accountId === 'unified' ? null : primaryMailScope.accountId
+        selectedFolderId = primaryMailScope.folderId
+        selectedFolderName = primaryMailScope.folderName || selectedFolderName
+        selectedFolderType = primaryMailScope.folderType
+        selectedThreadId = primaryMailScope.threadId || null
+        selectedConversationAccountId = primaryMailScope.threadAccountId || null
+        selectedConversationFolderId = primaryMailScope.threadFolderId || null
+      }
+      contextPaneMode = primaryContextPaneMode
+      setFocusedPane('messageList')
+      return
+    }
+    const tab = mailWorkspaceTabs.find(item => item.id === id)
+    if (tab) {
+      selectedAccountId = tab.scope.accountId === 'unified' ? null : tab.scope.accountId
+      selectedFolderId = tab.scope.folderId
+      selectedFolderName = tab.scope.folderName || selectedFolderName
+      selectedFolderType = tab.scope.folderType
+      selectedThreadId = tab.scope.threadId || null
+      selectedConversationAccountId = tab.scope.threadAccountId || tab.scope.accountId
+      selectedConversationFolderId = tab.scope.threadFolderId || tab.scope.folderId
+      contextPaneMode = 'messages'
+      setFocusedPane('viewer')
+      return
+    }
+    setFocusedPane('messageList')
+  }
+
+  function showFolderBrowser() {
+    contextPaneMode = 'folders'
+    setFocusedPane('sidebar')
+  }
+
+  function selectTriageFilter(mode: '' | 'unread' | 'replyLater') {
+    contextPaneMode = 'messages'
+    triageStatus = mode === 'unread' ? 'unread' : mode === 'replyLater' ? 'replyLater' : 'all'
+    messageListRef?.setQuickFilter(mode)
+  }
+
+  function triageStatusRow() {
+    const options = [
+      { id: 'all', mode: '', label: $_('triage.all') },
+      { id: 'unread', mode: 'unread', label: $_('triage.unread') },
+      { id: 'readLater', mode: null, label: $_('triage.readLater') },
+      { id: 'replyLater', mode: 'replyLater', label: $_('triage.replyLater') },
+    ] as const
+    return options
   }
 
   function closeWorkspaceTab(id: string) {
@@ -187,11 +243,8 @@
     if (!tab) return
     try {
       const { accountId, folderId, folderName, folderType } = tab.scope
-      if (tab.kind === 'reader' && tab.scope.threadId) {
-        await OpenReaderWindow(tab.scope.threadAccountId || accountId, tab.scope.threadFolderId || folderId, tab.scope.threadId, folderType)
-      } else {
-        await OpenMailWindow(accountId, folderId, folderName, folderType, tab.scope.threadId || '', tab.scope.threadAccountId || '', tab.scope.threadFolderId || '', tab.scope.searchQuery || '')
-      }
+      if (!tab.scope.threadId) return
+      await OpenReaderWindow(tab.scope.threadAccountId || accountId, tab.scope.threadFolderId || folderId, tab.scope.threadId, folderType)
       closeWorkspaceTab(id)
     } catch (error) { toasts.error(String(error)) }
   }
@@ -200,9 +253,14 @@
     mailWorkspaceTabs = mailWorkspaceTabs.map(tab => tab.id === id ? { ...tab, scope } : tab)
   }
 
+  function updateActiveReaderScope(scope: MailScope) {
+    const tab = mailWorkspaceTabs.find(item => item.id === activeMailWorkspace)
+    if (tab) updateWorkspaceScope(tab.id, scope)
+  }
+
   // Quick-access rail entries are global UI, but navigation belongs to the
-  // currently active mail workspace. The primary Sidebar listener is disabled
-  // while a secondary tab is active, so route those clicks to that tab here.
+  // primary folder view. Choosing one while a reader tab is active returns to
+  // the persistent folder/message context and leaves the email tab open.
   $effect(() => {
     if (activeMailWorkspace === 'primary') return
     const navigate = (event: Event) => {
@@ -219,8 +277,18 @@
         const folderInfo = entry.accountId && entry.folderId ? findFolderById(entry.accountId, entry.folderId) : null
         scope = { accountId: entry.accountId || '', folderId: entry.folderId || '', folderName: entry.name, folderType: folderInfo?.type || 'folder' }
       }
-      if (mailWorkspaceTabs.find(tab => tab.id === activeMailWorkspace)?.kind === 'reader') addMailTab(scope, 'workspace')
-      else updateWorkspaceScope(activeMailWorkspace, scope)
+      activeMailWorkspace = 'primary'
+      primaryMailScope = null
+      primaryContextPaneMode = 'messages'
+      contextPaneMode = 'messages'
+      selectedAccountId = scope.accountId === 'unified' ? null : scope.accountId
+      selectedFolderId = scope.folderId
+      selectedFolderName = scope.folderName || 'Inbox'
+      selectedFolderType = scope.folderType
+      selectedThreadId = null
+      selectedConversationAccountId = null
+      selectedConversationFolderId = null
+      selectionSource = scope.accountId === 'unified' ? 'unified' : 'account'
       setActiveExtension('mail')
     }
     window.addEventListener('postilaatikko:navigate', navigate)
@@ -917,6 +985,7 @@
     folderName: string,
     folderType: string
   ) {
+    contextPaneMode = 'messages'
     if (selectedAccountId !== accountId) clearInlineAttachmentCache()
     selectedAccountId = accountId
     selectedFolderId = folderId
@@ -926,6 +995,7 @@
     selectedThreadId = null // Clear conversation selection when changing folders
     selectedConversationFolderId = null
     selectedConversationAccountId = null
+    updateActiveReaderScope({ accountId, folderId, folderName, folderType, searchQuery: '' })
     hideSidebar()
 
     // Persist state
@@ -948,6 +1018,7 @@
     folderName: string,
     folderType: string
   ) {
+    contextPaneMode = 'messages'
     if (selectedAccountId !== accountId) clearInlineAttachmentCache()
     selectedAccountId = accountId
     selectedFolderId = folderId
@@ -957,6 +1028,7 @@
     selectedThreadId = null
     selectedConversationFolderId = null
     selectedConversationAccountId = null
+    updateActiveReaderScope({ accountId, folderId, folderName, folderType, searchQuery: '' })
     hideSidebar()
 
     // Persist state
@@ -979,6 +1051,7 @@
   // Top-level special folders are synthetic aggregate views; child rows keep
   // selecting their real account/folder pair.
   function handleUnifiedSpecialFolderSelect(folderType: string, displayName: string) {
+    contextPaneMode = 'messages'
     clearInlineAttachmentCache()
     selectedAccountId = 'unified'
     selectedFolderId = folderType
@@ -990,6 +1063,7 @@
     selectedThreadId = null
     selectedConversationFolderId = null
     selectedConversationAccountId = null
+    updateActiveReaderScope({ accountId: 'unified', folderId: folderType, folderName: $_(displayName), folderType, searchQuery: '' })
     hideSidebar()
 
     // Persist state
@@ -1009,6 +1083,15 @@
     selectedThreadId = threadId
     selectedConversationFolderId = folderId
     selectedConversationAccountId = accountId
+    const activeTab = mailWorkspaceTabs.find(tab => tab.id === activeMailWorkspace)
+    if (activeTab?.kind === 'reader') {
+      updateWorkspaceScope(activeTab.id, {
+        ...activeTab.scope,
+        threadId,
+        threadAccountId: accountId,
+        threadFolderId: folderId,
+      })
+    }
     showViewer()
 
     // Persist state
@@ -1198,14 +1281,7 @@
   }
 
   // Resizing state
-  let isResizingSidebar = $state(false)
   let isResizingList = $state(false)
-
-  function startResizeSidebar(e: MouseEvent) {
-    if (isResponsive()) return
-    isResizingSidebar = true
-    e.preventDefault()
-  }
 
   function startResizeList(e: MouseEvent) {
     if (isResponsive()) return
@@ -1214,9 +1290,7 @@
   }
 
   function handleMouseMove(e: MouseEvent) {
-    if (isResizingSidebar) {
-      sidebarWidth = Math.max(paneConstraints.sidebar.min, Math.min(paneConstraints.sidebar.max, e.clientX))
-    } else if (isResizingList) {
+    if (isResizingList) {
       // Measure from the list pane's real rendered position instead of
       // subtracting the configured sidebar width. The configured value is
       // different from the rendered 56px width when the sidebar is collapsed,
@@ -1231,10 +1305,7 @@
 
   function handleMouseUp() {
     // Save pane widths if we were resizing
-    if (isResizingSidebar || isResizingList) {
-      saveUIState({ sidebarWidth, listWidth })
-    }
-    isResizingSidebar = false
+    if (isResizingList) saveUIState({ listWidth })
     isResizingList = false
   }
 
@@ -2255,26 +2326,6 @@
     <TitleBar onClose={handleClose} />
   {/if}
 
-  {#if getActiveExtension() === 'mail'}
-    <div class="flex min-h-10 items-center gap-1 overflow-x-auto border-b border-border px-2 py-1" role="tablist" aria-label={$_('mailWindow.workspaces')}>
-      <button type="button" role="tab" aria-selected={activeMailWorkspace === 'primary'} class="max-w-52 truncate rounded px-3 py-1.5 text-sm {activeMailWorkspace === 'primary' ? 'bg-muted font-medium' : 'text-muted-foreground hover:bg-muted/60'}" title={selectedFolderName} onclick={() => switchMailWorkspace('primary')}>{selectedFolderName || $_('mailWindow.primaryWorkspace')}</button>
-      {#each mailWorkspaceTabs as tab (tab.id)}
-        <div class="flex shrink-0 items-center rounded {activeMailWorkspace === tab.id ? 'bg-muted' : 'hover:bg-muted/60'}">
-          <button type="button" role="tab" aria-selected={activeMailWorkspace === tab.id} class="max-w-48 truncate px-3 py-1.5 text-sm {activeMailWorkspace === tab.id ? 'font-medium' : 'text-muted-foreground'}" title={workspaceLabel(tab.scope, tab.kind === 'reader')} onclick={() => switchMailWorkspace(tab.id)}>{workspaceLabel(tab.scope, tab.kind === 'reader')}</button>
-          {#if activeMailWorkspace === tab.id}
-            <button type="button" class="rounded p-1 text-muted-foreground hover:bg-background" title={$_('mailWindow.detachTab')} aria-label={$_('mailWindow.detachTab')} onclick={() => void detachWorkspaceTab(tab.id)}><Icon icon="mdi:open-in-new" width="16" /></button>
-          {/if}
-          <button type="button" class="rounded p-1 text-muted-foreground hover:bg-background" title={$_('mailWindow.closeTab')} aria-label={$_('mailWindow.closeTab')} onclick={() => closeWorkspaceTab(tab.id)}><Icon icon="mdi:close" width="16" /></button>
-        </div>
-      {/each}
-      <button type="button" class="rounded p-1.5 text-muted-foreground hover:bg-muted disabled:opacity-40" title={$_('mailWindow.newTab')} aria-label={$_('mailWindow.newTab')} disabled={mailWorkspaceTabs.length >= maxMailWorkspaceTabs} onclick={openWorkspaceTab}><Icon icon="mdi:plus" width="18" /></button>
-      <div class="ml-auto flex shrink-0 items-center">
-      <button class="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted" onclick={() => OpenMailWindow(selectedAccountId || '', selectedFolderId || '', selectedFolderName, selectedFolderType || 'inbox', selectedThreadId || '', selectedConversationAccountId || '', selectedConversationFolderId || '', messageListRef?.getSearchQuery() || '').catch(error => toasts.error(String(error)))}>
-        <Icon icon="mdi:open-in-new" width="16" />{$_('mailWindow.newWindow')}
-      </button>
-      </div>
-    </div>
-  {/if}
   <!-- Main Content -->
   <div class="flex flex-1 min-h-0 overflow-hidden relative">
     <ExtensionRail />
@@ -2296,16 +2347,22 @@
          every extension switch was leaking state (zombie listeners) and pinning
          the main thread on the second mount. display:contents keeps the flex
          children as direct flex items so the layout doesn't shift. -->
-    <div style:display={getActiveExtension() === 'mail' && activeMailWorkspace === 'primary' ? 'contents' : 'none'}>
+    <div style:display={getActiveExtension() === 'mail' ? 'contents' : 'none'}>
     <!-- Sidebar (Folder List) -->
     <aside
-      class="spark-sidebar-host {getLayoutMode() === 'narrow' ? `responsive-sidebar-overlay w-72 border-r border-border bg-background ${getResponsiveView() === 'sidebar' ? 'responsive-sidebar-visible' : ''}` : 'flex-shrink-0 border-r border-border bg-muted/30'}"
-      style="{getLayoutMode() === 'full' ? `width: ${sidebarCollapsed ? 56 : sidebarWidth}px` : ''}"
+      class="spark-sidebar-host flex-col {getLayoutMode() === 'narrow' ? `responsive-sidebar-overlay w-72 border-r border-border bg-background ${getResponsiveView() === 'sidebar' ? 'responsive-sidebar-visible' : ''}` : 'flex-shrink-0 border-r border-border bg-muted/30'}"
+      style="{getLayoutMode() === 'full' ? `width: ${listWidth}px` : ''}"
+      style:display={contextPaneMode === 'folders' ? 'flex' : 'none'}
       role="presentation"
       onclick={() => handlePaneClick('sidebar')}
     >
+      <div class="flex min-h-10 shrink-0 items-center gap-1 overflow-x-auto border-b border-border px-2 py-1" aria-label={$_('messageList.quickFilters')}>
+        {#each triageStatusRow() as item (item.id)}
+          <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors {triageStatus === item.id ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'} disabled={item.mode === null} aria-pressed={triageStatus === item.id} title={item.mode === null ? $_('triage.readLaterPending') : item.label} onclick={() => item.mode !== null && selectTriageFilter(item.mode)}>{item.label}</button>
+        {/each}
+      </div>
       <Sidebar
-        navigationEnabled={activeMailWorkspace === 'primary'}
+        navigationEnabled={true}
         onGlobalSearch={() => showGlobalSearch = true}
         bind:this={sidebarRef}
         onFolderSelect={handleFolderSelect}
@@ -2339,44 +2396,42 @@
     {/if}
 
     <!-- Sidebar Resize Handle -->
-    {#if getLayoutMode() === 'full' && !sidebarCollapsed}
-    <button
-      type="button"
-      class="w-1 cursor-col-resize hover:bg-primary/20 active:bg-primary/40 transition-colors border-0 p-0 {isResizingSidebar
-        ? 'bg-primary/40'
-        : ''}"
-      onmousedown={startResizeSidebar}
-      aria-label={$_('aria.resizeSidebar')}
-    ></button>
-    {/if}
-
     <!-- Message List -->
     <section
       bind:this={messageListContainerRef}
-      class="spark-mail-list-pane min-h-0 overflow-hidden {isResponsive() ? 'flex-1 min-w-0 border-r border-border bg-background' : 'flex-shrink-0 border-r border-border bg-background'}"
+      class="spark-mail-list-pane min-h-0 flex flex-col overflow-hidden {isResponsive() ? 'flex-1 min-w-0 border-r border-border bg-background' : 'flex-shrink-0 border-r border-border bg-background'}"
       style="{getLayoutMode() === 'full' ? `width: ${listWidth}px` : ''}"
+      style:display={contextPaneMode === 'messages' ? 'flex' : 'none'}
       role="presentation"
       data-pane="messageList"
       tabindex="-1"
       onclick={() => handlePaneClick('messageList')}
     >
-      <MessageList
-        bind:this={messageListRef}
-        accountId={selectedAccountId}
-        folderId={selectedFolderId}
-        folderName={selectedFolderName}
-        folderType={selectedFolderType || 'inbox'}
-        onConversationSelect={handleConversationSelect}
-        onOpenInTab={openListThreadInTab}
-        onReply={handleReply}
-        onRowActionComplete={handleMessageListActionComplete}
-        onBulkMarkRead={handleBulkMarkRead}
-        onBulkAction={(id, options) => runListAction(id, options)}
-        isFocused={activeMailWorkspace === 'primary' && getFocusedPane() === 'messageList'}
-        isFlashing={isPaneFlashing('messageList')}
-        showFolderToggle={getLayoutMode() === 'narrow'}
-        onToggleSidebar={showSidebar}
-      />
+      <div class="flex min-h-10 shrink-0 items-center gap-1 overflow-x-auto border-b border-border px-2 py-1" aria-label={$_('messageList.quickFilters')}>
+        {#each triageStatusRow() as item (item.id)}
+          <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors {triageStatus === item.id ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'} disabled={item.mode === null} aria-pressed={triageStatus === item.id} title={item.mode === null ? $_('triage.readLaterPending') : item.label} onclick={() => item.mode !== null && selectTriageFilter(item.mode)}>{item.label}</button>
+        {/each}
+      </div>
+      <div class="flex-1 min-h-0">
+        <MessageList
+          bind:this={messageListRef}
+          accountId={selectedAccountId}
+          folderId={selectedFolderId}
+          folderName={selectedFolderName}
+          folderType={selectedFolderType || 'inbox'}
+          onConversationSelect={handleConversationSelect}
+          onOpenInTab={openListThreadInTab}
+          onReply={handleReply}
+          onRowActionComplete={handleMessageListActionComplete}
+          onBulkMarkRead={handleBulkMarkRead}
+          onBulkAction={(id, options) => runListAction(id, options)}
+          isFocused={activeMailWorkspace === 'primary' && getFocusedPane() === 'messageList'}
+          isFlashing={isPaneFlashing('messageList')}
+          showFolderToggle={true}
+          onToggleSidebar={showFolderBrowser}
+          showQuickFilters={false}
+        />
+      </div>
     </section>
 
     <!-- List Resize Handle -->
@@ -2393,11 +2448,28 @@
 
     <!-- Conversation Viewer -->
     <main
-      class="spark-viewer-pane min-h-0 overflow-hidden {viewerIsOverlay ? `responsive-viewer-overlay bg-background ${viewerIsVisible ? 'responsive-viewer-visible' : ''}` : 'flex-1 min-w-0 bg-background'}"
+      class="spark-viewer-pane flex flex-col min-h-0 overflow-hidden {viewerIsOverlay ? `responsive-viewer-overlay bg-background ${viewerIsVisible ? 'responsive-viewer-visible' : ''}` : 'flex-1 min-w-0 bg-background'}"
       role="presentation"
       data-pane="viewer"
       onclick={() => handlePaneClick('viewer')}
     >
+      {#if mailWorkspaceTabs.some(tab => tab.kind === 'reader')}
+        <div class="flex min-h-10 shrink-0 items-center gap-1 overflow-x-auto border-b border-border px-2 py-1" role="tablist" aria-label={$_('mailWindow.workspaces')}>
+          {#each mailWorkspaceTabs.filter(tab => tab.kind === 'reader') as tab (tab.id)}
+            <div class="flex shrink-0 items-center rounded {activeMailWorkspace === tab.id ? 'bg-muted' : 'hover:bg-muted/60'}">
+              <button type="button" role="tab" aria-selected={activeMailWorkspace === tab.id} class="max-w-48 truncate px-3 py-1.5 text-sm {activeMailWorkspace === tab.id ? 'font-medium' : 'text-muted-foreground'}" title={workspaceLabel(tab.scope, true)} onclick={() => switchMailWorkspace(tab.id)}>{workspaceLabel(tab.scope, true)}</button>
+              {#if activeMailWorkspace === tab.id}
+                <button type="button" class="rounded p-1 text-muted-foreground hover:bg-background" title={$_('mailWindow.detachTab')} aria-label={$_('mailWindow.detachTab')} onclick={() => void detachWorkspaceTab(tab.id)}><Icon icon="mdi:open-in-new" width="16" /></button>
+              {/if}
+              <button type="button" class="rounded p-1 text-muted-foreground hover:bg-background" title={$_('mailWindow.closeTab')} aria-label={$_('mailWindow.closeTab')} onclick={() => closeWorkspaceTab(tab.id)}><Icon icon="mdi:close" width="16" /></button>
+            </div>
+          {/each}
+          <button class="ml-auto flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted" onclick={() => OpenMailWindow(selectedAccountId || '', selectedFolderId || '', selectedFolderName, selectedFolderType || 'inbox', selectedThreadId || '', selectedConversationAccountId || '', selectedConversationFolderId || '', messageListRef?.getSearchQuery() || '').catch(error => toasts.error(String(error)))}>
+            <Icon icon="mdi:open-in-new" width="16" />{$_('mailWindow.newWindow')}
+          </button>
+        </div>
+      {/if}
+      {#if activeMailWorkspace === 'primary'}
       <ConversationViewer
         bind:this={viewerRef}
         threadId={selectedThreadId}
@@ -2419,15 +2491,15 @@
         onToggleThreadFocus={toggleThreadFocus}
         onToggleMessageFocus={toggleMessageFocus}
       />
+      {:else}
+        {#each mailWorkspaceTabs.filter(tab => tab.kind === 'reader') as tab (tab.id)}
+          <div class="flex w-full flex-1 min-w-0 min-h-0 overflow-hidden" style:display={activeMailWorkspace === tab.id ? 'flex' : 'none'}>
+            <MailWindowApp config={tab.scope} embedded readerTab onCloseTab={() => closeWorkspaceTab(tab.id)} active={activeMailWorkspace === tab.id} onScopeChange={scope => updateWorkspaceScope(tab.id, scope)} onNewTab={openWorkspaceTab} onOpenInTab={openReaderScope} />
+          </div>
+        {/each}
+      {/if}
     </main>
     </div>
-    {#if getActiveExtension() === 'mail'}
-      {#each mailWorkspaceTabs as tab (tab.id)}
-        <div class="flex w-full flex-1 min-w-0 min-h-0 overflow-hidden" style:display={activeMailWorkspace === tab.id ? 'flex' : 'none'}>
-          <MailWindowApp config={tab.scope} embedded readerTab={tab.kind === 'reader'} onCloseTab={() => closeWorkspaceTab(tab.id)} active={activeMailWorkspace === tab.id} onScopeChange={scope => updateWorkspaceScope(tab.id, scope)} onNewTab={openWorkspaceTab} onOpenInTab={openReaderScope} />
-        </div>
-      {/each}
-    {/if}
     {#if showComposer && composerAccountId}
       <div class="compact-composer-host" style:--composer-left-clearance={getLayoutMode() === 'full' ? `${(sidebarCollapsed ? 56 : sidebarWidth) + 80}px` : '16px'}>
         <Composer
@@ -2445,7 +2517,7 @@
 </div>
 
 <!-- Resize cursor overlay when dragging -->
-{#if isResizingSidebar || isResizingList}
+{#if isResizingList}
   <div class="fixed inset-0 cursor-col-resize z-50"></div>
 {/if}
 

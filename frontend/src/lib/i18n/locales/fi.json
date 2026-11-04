@@ -4,6 +4,13 @@
     "complete": "{total} keskustelua · {unread} lukematta",
     "incomplete": "Palvelimen laskenta on kesken"
   },
+  "triage": {
+    "all": "Kaikki",
+    "unread": "Lukemattomat",
+    "readLater": "Lue myöhemmin",
+    "replyLater": "Vastaa myöhemmin",
+    "readLaterPending": "Lue myöhemmin -jono on työn alla"
+  },
   "undoHistory": {
     "title": "Kumoushistoria",
     "description": "Viimeisimmät sähköpostitoiminnot, jotka voit vielä kumota. Cmd-Z Macissa (Ctrl-Z muilla alustoilla) kumoaa aina viimeisimmän toiminnon.",

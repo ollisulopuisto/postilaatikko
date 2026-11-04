@@ -70,6 +70,7 @@
     isFlashing?: boolean
     showFolderToggle?: boolean
     onToggleSidebar?: () => void
+    showQuickFilters?: boolean
   }
 
   let {
@@ -89,6 +90,7 @@
     isFlashing = false,
     showFolderToggle = false,
     onToggleSidebar,
+    showQuickFilters = true,
   }: Props = $props()
 
   // State
@@ -1839,6 +1841,11 @@
     loadConversations()
   }
 
+  export function setQuickFilter(mode: '' | 'unread' | 'replyLater') {
+    if (!['', 'unread', 'replyLater'].includes(mode)) return
+    setFilter(mode)
+  }
+
   // Calculate total unread count
   const unreadCount = $derived(
     conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0)
@@ -2609,7 +2616,7 @@
     </div>
   </div>
 
-  {#if folderId}
+  {#if folderId && showQuickFilters}
     <div class="flex items-center gap-2 overflow-x-auto border-b border-border px-3 py-2" aria-label={$_('messageList.quickFilters')}>
       <button
         type="button"
