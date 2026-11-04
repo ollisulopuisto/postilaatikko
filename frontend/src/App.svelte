@@ -240,9 +240,9 @@
     }
   }
 
-  function selectTriageFilter(mode: '' | 'unread' | 'replyLater') {
+  function selectTriageFilter(mode: '' | 'unread' | 'readLater' | 'replyLater') {
     contextPaneMode = 'messages'
-    triageStatus = mode === 'unread' ? 'unread' : mode === 'replyLater' ? 'replyLater' : 'all'
+    triageStatus = mode === 'unread' ? 'unread' : mode === 'readLater' ? 'readLater' : mode === 'replyLater' ? 'replyLater' : 'all'
     messageListRef?.setQuickFilter(mode)
   }
 
@@ -2364,7 +2364,7 @@
       <div class="flex min-h-10 shrink-0 items-center gap-1 overflow-x-auto border-b border-border px-2 py-1" aria-label={$_('messageList.quickFilters')}>
         <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium {triageStatus === 'all' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'all'} onclick={() => selectTriageFilter('')}>{$_('triage.all')}</button>
         <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium {triageStatus === 'unread' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'unread'} onclick={() => selectTriageFilter('unread')}>{$_('triage.unread')}</button>
-        <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium border-border text-muted-foreground opacity-50" disabled title={$_('triage.readLaterPending')}>{$_('triage.readLater')}</button>
+        <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium {triageStatus === 'readLater' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'readLater'} onclick={() => selectTriageFilter('readLater')}>{$_('triage.readLater')}</button>
         <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium {triageStatus === 'replyLater' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'replyLater'} onclick={() => selectTriageFilter('replyLater')}>{$_('triage.replyLater')}</button>
         <button type="button" class="ml-auto shrink-0 rounded p-1.5 text-muted-foreground hover:bg-muted" aria-pressed={contextPaneAutoHide} title={contextPaneAutoHide ? $_('triage.keepContextVisible') : $_('triage.autoHideContext')} onclick={toggleContextPaneAutoHide}><Icon icon={contextPaneAutoHide ? 'mdi:pin-outline' : 'mdi:pin-off-outline'} width="16" /></button>
       </div>
@@ -2419,7 +2419,7 @@
       <div class="flex min-h-10 shrink-0 items-center gap-1 overflow-x-auto border-b border-border px-2 py-1" aria-label={$_('messageList.quickFilters')}>
         <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium {triageStatus === 'all' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'all'} onclick={() => selectTriageFilter('')}>{$_('triage.all')}</button>
         <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium {triageStatus === 'unread' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'unread'} onclick={() => selectTriageFilter('unread')}>{$_('triage.unread')}</button>
-        <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium border-border text-muted-foreground opacity-50" disabled title={$_('triage.readLaterPending')}>{$_('triage.readLater')}</button>
+        <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium {triageStatus === 'readLater' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'readLater'} onclick={() => selectTriageFilter('readLater')}>{$_('triage.readLater')}</button>
         <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium {triageStatus === 'replyLater' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-pressed={triageStatus === 'replyLater'} onclick={() => selectTriageFilter('replyLater')}>{$_('triage.replyLater')}</button>
         <button type="button" class="ml-auto shrink-0 rounded p-1.5 text-muted-foreground hover:bg-muted" aria-pressed={contextPaneAutoHide} title={contextPaneAutoHide ? $_('triage.keepContextVisible') : $_('triage.autoHideContext')} onclick={toggleContextPaneAutoHide}><Icon icon={contextPaneAutoHide ? 'mdi:pin-outline' : 'mdi:pin-off-outline'} width="16" /></button>
       </div>

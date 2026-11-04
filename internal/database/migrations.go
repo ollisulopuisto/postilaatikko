@@ -1672,4 +1672,29 @@ var migrations = []Migration{
 	-- identity. Existing signatures remain the fallback for legacy identities.
 	ALTER TABLE identities ADD COLUMN signature_rules TEXT NOT NULL DEFAULT '[]';
 	`},
+	{Version: 64, SQL: `
+	-- Gmail label IDs are per-account provider metadata; local queue membership
+	-- mirrors Gmail for fast views and remains authoritative for other providers.
+	CREATE TABLE IF NOT EXISTS gmail_triage_labels (
+	  account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+	  queue TEXT NOT NULL CHECK(queue IN ('read-later','reply-later')),
+	  label_id TEXT NOT NULL,
+	  PRIMARY KEY(account_id, queue)
+	);
+	CREATE TABLE IF NOT EXISTS read_later_queue (
+	  account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+	  conversation_id TEXT NOT NULL,
+	  added_at TEXT NOT NULL DEFAULT (datetime('now')),
+	  PRIMARY KEY(account_id, conversation_id)
+	);
+	CREATE INDEX IF NOT EXISTS idx_read_later_queue_added ON read_later_queue(added_at DESC);
+	CREATE TABLE IF NOT EXISTS snoozed_conversations (
+	  account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+	  conversation_id TEXT NOT NULL,
+	  wake_at TEXT NOT NULL,
+	  added_at TEXT NOT NULL DEFAULT (datetime('now')),
+	  PRIMARY KEY(account_id, conversation_id)
+	);
+	CREATE INDEX IF NOT EXISTS idx_snoozed_conversations_wake ON snoozed_conversations(wake_at);
+	`},
 }
