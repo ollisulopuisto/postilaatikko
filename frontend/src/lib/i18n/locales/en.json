@@ -9,7 +9,9 @@
     "unread": "Unread",
     "readLater": "Read later",
     "replyLater": "Reply later",
-    "readLaterPending": "Read Later queue support is being added"
+    "readLaterPending": "Read Later queue support is being added",
+    "autoHideContext": "Auto-hide this column; hover over the favorites rail to reveal it",
+    "keepContextVisible": "Keep this column visible"
   },
   "undoHistory": {
     "title": "Undo History",

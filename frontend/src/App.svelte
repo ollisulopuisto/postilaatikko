@@ -96,6 +96,11 @@
   let selectedFolderName = $state('Inbox')
   let selectedFolderType = $state<string | null>(null)
   let contextPaneMode = $state<'folders' | 'messages'>('messages')
+  let contextPaneAutoHide = $state(false)
+  let contextPaneRevealed = $state(true)
+  let contextPaneHideTimer: ReturnType<typeof setTimeout> | null = null
+  const CONTEXT_PANE_AUTO_HIDE_KEY = 'postilaatikko:context-pane-auto-hide'
+  const contextPaneVisible = $derived(!contextPaneAutoHide || contextPaneRevealed)
   let triageStatus = $state<'all' | 'unread' | 'readLater' | 'replyLater'>('all')
   type MailWorkspaceTab = { id: string; kind: 'reader'; scope: MailScope }
   const maxMailWorkspaceTabs = 4
@@ -213,6 +218,28 @@
     setFocusedPane('sidebar')
   }
 
+  function revealContextPane() {
+    if (contextPaneHideTimer) clearTimeout(contextPaneHideTimer)
+    contextPaneRevealed = true
+  }
+
+  function scheduleContextPaneHide() {
+    if (!contextPaneAutoHide) return
+    if (contextPaneHideTimer) clearTimeout(contextPaneHideTimer)
+    contextPaneHideTimer = setTimeout(() => {
+      contextPaneRevealed = false
+      contextPaneHideTimer = null
+    }, 350)
+  }
+
+  function toggleContextPaneAutoHide() {
+    contextPaneAutoHide = !contextPaneAutoHide
+    contextPaneRevealed = true
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(CONTEXT_PANE_AUTO_HIDE_KEY, String(contextPaneAutoHide))
+    }
+  }
+
   function selectTriageFilter(mode: '' | 'unread' | 'replyLater') {
     contextPaneMode = 'messages'
     triageStatus = mode === 'unread' ? 'unread' : mode === 'replyLater' ? 'replyLater' : 'all'
@@ -242,7 +269,7 @@
     const tab = mailWorkspaceTabs.find(item => item.id === id)
     if (!tab) return
     try {
-      const { accountId, folderId, folderName, folderType } = tab.scope
+      const { accountId, folderId, folderType } = tab.scope
       if (!tab.scope.threadId) return
       await OpenReaderWindow(tab.scope.threadAccountId || accountId, tab.scope.threadFolderId || folderId, tab.scope.threadId, folderType)
       closeWorkspaceTab(id)
@@ -636,9 +663,12 @@
 
   onDestroy(() => {
     if (pendingTick !== undefined) clearInterval(pendingTick)
+    if (contextPaneHideTimer) clearTimeout(contextPaneHideTimer)
   })
 
   onMount(async () => {
+    contextPaneAutoHide = localStorage.getItem(CONTEXT_PANE_AUTO_HIDE_KEY) === 'true'
+    contextPaneRevealed = !contextPaneAutoHide
     EventsOn('undo:history-open', () => {
       setActiveExtension('mail')
       showUndoHistory = true
@@ -2328,7 +2358,7 @@
 
   <!-- Main Content -->
   <div class="flex flex-1 min-h-0 overflow-hidden relative">
-    <ExtensionRail />
+    <ExtensionRail onRevealContext={revealContextPane} onHideContext={scheduleContextPaneHide} />
 
     {#if getActiveExtension() === 'scheduled'}
       <ScheduledPane />
@@ -2352,7 +2382,9 @@
     <aside
       class="spark-sidebar-host flex-col {getLayoutMode() === 'narrow' ? `responsive-sidebar-overlay w-72 border-r border-border bg-background ${getResponsiveView() === 'sidebar' ? 'responsive-sidebar-visible' : ''}` : 'flex-shrink-0 border-r border-border bg-muted/30'}"
       style="{getLayoutMode() === 'full' ? `width: ${listWidth}px` : ''}"
-      style:display={contextPaneMode === 'folders' ? 'flex' : 'none'}
+      style:display={contextPaneVisible && contextPaneMode === 'folders' ? 'flex' : 'none'}
+      onmouseenter={revealContextPane}
+      onmouseleave={scheduleContextPaneHide}
       role="presentation"
       onclick={() => handlePaneClick('sidebar')}
     >
@@ -2360,6 +2392,7 @@
         {#each triageStatusRow() as item (item.id)}
           <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors {triageStatus === item.id ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'} disabled={item.mode === null} aria-pressed={triageStatus === item.id} title={item.mode === null ? $_('triage.readLaterPending') : item.label} onclick={() => item.mode !== null && selectTriageFilter(item.mode)}>{item.label}</button>
         {/each}
+        <button type="button" class="ml-auto shrink-0 rounded p-1.5 text-muted-foreground hover:bg-muted" aria-pressed={contextPaneAutoHide} title={contextPaneAutoHide ? $_('triage.keepContextVisible') : $_('triage.autoHideContext')} onclick={toggleContextPaneAutoHide}><Icon icon={contextPaneAutoHide ? 'mdi:pin-outline' : 'mdi:pin-off-outline'} width="16" /></button>
       </div>
       <Sidebar
         navigationEnabled={true}
@@ -2401,7 +2434,9 @@
       bind:this={messageListContainerRef}
       class="spark-mail-list-pane min-h-0 flex flex-col overflow-hidden {isResponsive() ? 'flex-1 min-w-0 border-r border-border bg-background' : 'flex-shrink-0 border-r border-border bg-background'}"
       style="{getLayoutMode() === 'full' ? `width: ${listWidth}px` : ''}"
-      style:display={contextPaneMode === 'messages' ? 'flex' : 'none'}
+      style:display={contextPaneVisible && contextPaneMode === 'messages' ? 'flex' : 'none'}
+      onmouseenter={revealContextPane}
+      onmouseleave={scheduleContextPaneHide}
       role="presentation"
       data-pane="messageList"
       tabindex="-1"
@@ -2411,6 +2446,7 @@
         {#each triageStatusRow() as item (item.id)}
           <button type="button" class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors {triageStatus === item.id ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'} disabled={item.mode === null} aria-pressed={triageStatus === item.id} title={item.mode === null ? $_('triage.readLaterPending') : item.label} onclick={() => item.mode !== null && selectTriageFilter(item.mode)}>{item.label}</button>
         {/each}
+        <button type="button" class="ml-auto shrink-0 rounded p-1.5 text-muted-foreground hover:bg-muted" aria-pressed={contextPaneAutoHide} title={contextPaneAutoHide ? $_('triage.keepContextVisible') : $_('triage.autoHideContext')} onclick={toggleContextPaneAutoHide}><Icon icon={contextPaneAutoHide ? 'mdi:pin-outline' : 'mdi:pin-off-outline'} width="16" /></button>
       </div>
       <div class="flex-1 min-h-0">
         <MessageList

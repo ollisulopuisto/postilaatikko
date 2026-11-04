@@ -3,7 +3,7 @@
 ## [Unreleased]
 
 - Bring folder browsing and its message list into one context column, with All, Unread, Read Later, and Reply Later controls at the top.
-- Keep the favorites rail visible while browsing and place open email tabs above the wide reader; folder views no longer open as tabs.
+- Keep the favorites rail visible while browsing, place open email tabs above the wide reader, and optionally auto-hide the context column until the rail is hovered; folder views no longer open as tabs.
 - Read Later remains unavailable until its queue storage/query support is integrated.
 - Let conversation-mode email cards use the full available reader width.
 - Add an Archive + mark as read action alongside Archive in message context menus.

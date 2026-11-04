@@ -9,7 +9,9 @@
     "unread": "Lukemattomat",
     "readLater": "Lue myöhemmin",
     "replyLater": "Vastaa myöhemmin",
-    "readLaterPending": "Lue myöhemmin -jono on työn alla"
+    "readLaterPending": "Lue myöhemmin -jono on työn alla",
+    "autoHideContext": "Piilota tämä sarake automaattisesti; tuo se näkyviin osoittamalla suosikit-sivupalkkia",
+    "keepContextVisible": "Pidä tämä sarake näkyvissä"
   },
   "undoHistory": {
     "title": "Kumoushistoria",
