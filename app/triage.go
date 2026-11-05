@@ -35,9 +35,7 @@ func (a *App) setGmailTriageLabel(accountID, conversationID, queue string, enabl
 	defer a.triageLabelMu.Unlock()
 	threadID := conversationID
 	gmailPrefix := "gmail:" + accountID + ":"
-	if strings.HasPrefix(threadID, gmailPrefix) {
-		threadID = strings.TrimPrefix(threadID, gmailPrefix)
-	}
+	threadID = strings.TrimPrefix(threadID, gmailPrefix)
 	ctx := a.ctx
 	if ctx == nil {
 		ctx = context.Background()
@@ -146,7 +144,7 @@ func (a *App) syncGmailTriageQueue(accountID, queue string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if _, err = tx.ExecContext(ctx, `DELETE FROM `+table+` WHERE account_id=?`, accountID); err != nil {
 		return err
 	}
