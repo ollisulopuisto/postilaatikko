@@ -91,13 +91,11 @@ jobs:
           codesign --force --deep --options runtime --timestamp --sign "$APPLE_SIGNING_IDENTITY" build/bin/postilaatikko.app
           codesign --verify --deep --strict --verbose=2 build/bin/postilaatikko.app
 
-      - name: Create drag-and-drop DMG and ZIP
+      - name: Create drag-and-drop DMG
         run: |
           cd build/bin
           APP_BUNDLE="postilaatikko.app"
-          ZIP_NAME="Postilaatikko-darwin-${GOARCH}.zip"
           DMG_NAME="Postilaatikko-${{ github.ref_name }}-darwin-${GOARCH}.dmg"
-          zip -r "$ZIP_NAME" "$APP_BUNDLE"
           mkdir -p dmg-staging
           cp -R "$APP_BUNDLE" dmg-staging/Postilaatikko.app
           ln -s /Applications dmg-staging/Applications
@@ -109,7 +107,7 @@ jobs:
             "$DMG_NAME"
           hdiutil verify "$DMG_NAME"
           rm -rf dmg-staging
-          ls -lh "$DMG_NAME" "$ZIP_NAME"
+          ls -lh "$DMG_NAME"
 
       - name: Sign and verify DMG
         env:
@@ -118,6 +116,40 @@ jobs:
           DMG_PATH="build/bin/Postilaatikko-${{ github.ref_name }}-darwin-${GOARCH}.dmg"
           codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$DMG_PATH"
           codesign --verify --verbose=2 "$DMG_PATH"
+
+      # The ticket covers the app inside the DMG too, so the app is stapled
+      # after the DMG is accepted and only then zipped.
+      - name: Notarise and staple DMG and app, then create ZIP
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: LWSR8T5392
+        run: |
+          set -euo pipefail
+          if [ -z "$APPLE_ID" ] || [ -z "$APPLE_APP_PASSWORD" ]; then
+            echo "::error::APPLE_ID / APPLE_APP_PASSWORD secrets are missing; a release must be notarised."
+            exit 1
+          fi
+          cd build/bin
+          DMG_NAME="Postilaatikko-${{ github.ref_name }}-darwin-${GOARCH}.dmg"
+          ZIP_NAME="Postilaatikko-darwin-${GOARCH}.zip"
+          result=$(xcrun notarytool submit "$DMG_NAME" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" --wait --timeout 45m --output-format json) || true
+          echo "$result"
+          id=$(printf '%s' "$result" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+          status=$(printf '%s' "$result" | python3 -c 'import json,sys; print(json.load(sys.stdin)["status"])')
+          if [ "$status" != Accepted ]; then
+            xcrun notarytool log "$id" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD"
+            exit 1
+          fi
+          xcrun stapler staple "$DMG_NAME"
+          xcrun stapler validate "$DMG_NAME"
+          xcrun stapler staple postilaatikko.app
+          xcrun stapler validate postilaatikko.app
+          spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG_NAME"
+          spctl --assess --type execute --verbose=2 postilaatikko.app
+          ditto -c -k --keepParent postilaatikko.app "$ZIP_NAME"
+          ls -lh "$DMG_NAME" "$ZIP_NAME"
 
       - name: Remove signing keychain
         if: always()
