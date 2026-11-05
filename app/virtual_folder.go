@@ -25,7 +25,35 @@ func (a *App) GetVirtualFolders() ([]*virtualfolder.VirtualFolder, error) {
 
 // GetVirtualFolderUnreadCounts returns unread conversation counts for all virtual folders.
 func (a *App) GetVirtualFolderUnreadCounts() (map[string]int, error) {
-	return a.virtualFolderStore.UnreadCounts()
+	counts, err := a.virtualFolderStore.UnreadCounts()
+	if err != nil {
+		return nil, err
+	}
+
+	// The store's aggregate query handles state, date and folder criteria in a
+	// single pass. Saved text searches need the message FTS index, so recompute
+	// those few counts through the same search path used to open the view.
+	folders, err := a.virtualFolderStore.List()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list virtual folders for unread counts: %w", err)
+	}
+	for _, vf := range folders {
+		if vf.SearchQuery == "" {
+			continue
+		}
+		folderIDs, err := a.virtualFolderStore.QueryFolderIDs(vf)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve virtual folder %s for unread count: %w", vf.ID, err)
+		}
+		criteria := virtualFolderMessageCriteria(vf)
+		criteria.ReadStatus = virtualfolder.ReadStatusUnread
+		_, count, err := a.messageStore.SearchVirtualFolderConversations(folderIDs, vf.SearchQuery, 0, 0, criteria)
+		if err != nil {
+			return nil, fmt.Errorf("failed to count unread conversations in virtual folder %s: %w", vf.ID, err)
+		}
+		counts[vf.ID] = count
+	}
+	return counts, nil
 }
 
 // CreateVirtualFolder creates a new virtual folder
