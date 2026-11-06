@@ -157,3 +157,13 @@ test('key handlers no longer repeat the checked/focused hierarchy by hand', () =
   const repeats = appSource.match(/messageListRef\?\.hasCheckedMessages\(\)/g) ?? []
   assert.ok(repeats.length <= 2, `hasCheckedMessages() still appears ${repeats.length} times in App.svelte`)
 })
+
+test('message list pagination prefetching triggers ahead of bottom reach', async () => {
+  const messageListSource = await readFile(new URL('../src/lib/components/list/MessageList.svelte', import.meta.url), 'utf8')
+  // Verify handleListScroll prefetches next page using Math.max(600, container.clientHeight)
+  assert.match(
+    messageListSource,
+    /const\s+prefetchThreshold\s*=\s*Math\.max\(600,\s*container\.clientHeight\)/,
+    'MessageList.svelte should prefetch pagination at least 600px or full viewport ahead'
+  )
+})

@@ -2026,9 +2026,11 @@
   function handleListScroll(event: Event) {
     const container = event.currentTarget as HTMLDivElement
     scheduleVisibleBodyPrefetch()
-    // Start loading shortly before the user reaches the end so scrolling is
-    // continuous rather than stopping at a manual "Load more" control.
-    if (container.scrollHeight - container.scrollTop - container.clientHeight < 180) {
+    // Prefetch the next page of message headers well before the user reaches
+    // the end (at least 600px or one full viewport height) so scrolling remains
+    // continuous and headers have time to load without showing empty space.
+    const prefetchThreshold = Math.max(600, container.clientHeight)
+    if (container.scrollHeight - container.scrollTop - container.clientHeight < prefetchThreshold) {
       loadNextPage()
     }
   }
