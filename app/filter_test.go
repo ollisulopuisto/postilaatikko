@@ -363,6 +363,9 @@ func newFilterFixture(t *testing.T, rejectAppend bool) *filterFixture {
 		runtimeEventEmitter: func(string, ...interface{}) {},
 		filterStore:         mailfilter.NewStore(db),
 	}
+	app.filterRouter = mailfilter.NewAutomaticRouter(app.filterStore, folderStore, func(rule *mailfilter.Rule, destination *folder.Folder, msg *message.Message) {
+		go app.applyFilterRule(rule, destination, msg)
+	})
 
 	// Pre-populate server A with the test message (UID 10 in the inbox).
 	if err := messageStore.Create(&message.Message{
@@ -446,7 +449,7 @@ func (f *filterFixture) prependAppendReject(t *testing.T) {
 func TestFilterRoutesIncomingMessageAcrossAccounts(t *testing.T) {
 	f := newFilterFixture(t, false)
 
-	f.app.handleNewMessageForFilters(f.message.AccountID, f.message.FolderID, f.message)
+	f.app.handleNewMessageForFilters(f.message)
 
 	// The cross-account move APPENDs to the destination first, then routes the
 	// source through the Trash pipeline, so the local row ends up in account A's
@@ -474,7 +477,7 @@ func TestFilterKeepsSourceWhenAppendFails(t *testing.T) {
 	f := newFilterFixture(t, true)
 	f.prependAppendReject(t)
 
-	f.app.handleNewMessageForFilters(f.message.AccountID, f.message.FolderID, f.message)
+	f.app.handleNewMessageForFilters(f.message)
 
 	// Wait until the destination server has seen (and rejected) the append.
 	waitFor(t, 10*time.Second, func() bool {
@@ -513,7 +516,7 @@ func TestFilterHandlerIgnoresNonMatchingMessages(t *testing.T) {
 	f.serverA.sess.messages[11] = []byte("From: carol@example.com\r\nSubject: hello\r\n\r\nbody\r\n")
 	f.serverA.sess.mu.Unlock()
 
-	f.app.handleNewMessageForFilters("acct-a", "a-inbox", other)
+	f.app.handleNewMessageForFilters(other)
 	time.Sleep(300 * time.Millisecond)
 
 	if got := f.messageFolderID(t); got != "a-inbox" {

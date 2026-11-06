@@ -2,9 +2,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement the plan task-by-task.
 
-**Goal:** Provide an optional always-on Postilaatikko service that keeps mailbox metadata current and delivers scheduled messages while the desktop UI is closed.
+**Goal:** Run one always-on Postilaatikko service that keeps mailbox metadata current, applies local cross-account filters/moves, and delivers scheduled messages while the desktop UI is closed. The same service can run on localhost or on a user-operated Mac Studio/VPS.
 
-**Architecture:** Treat mailbox sync and scheduled delivery as workers owned by one long-lived service, reusing the existing account/sync and `internal/scheduledsend` code where their storage and lifecycle contracts fit. Start with a single-user deployment; do not assume a shared SaaS service. Keep mailbox bodies out of routine sync, make the service's account-credential and message-content trust boundary explicit, and retain periodic sync as recovery for missed provider notifications.
+**Architecture:** Make a shared Go service/core the single implementation of mailbox operations and background workflows. The desktop UI and any remote client call the same service API; localhost and user-hosted deployments differ by endpoint, transport security, and installation configuration, not duplicated business logic. Reuse existing account/sync, cross-account filter/move, and `internal/scheduledsend` code where their storage and lifecycle contracts fit. Start with one user's local service, then support that same service on a user-operated Mac Studio/VPS. Postilaatikko Cloud is explicitly deferred and may never ship. Keep mailbox bodies out of routine sync and retain periodic sync as recovery for missed provider notifications.
 
 **Tech Stack:** Go; existing account, credential, Gmail API, IMAP sync, and scheduled-send packages; SQLite; Cloud Pub/Sub only if the selected deployment uses Gmail `users.watch` push delivery.
 
@@ -18,24 +18,28 @@
 - The scheduled-send helper is trusted with sending credentials and decrypts queued MIME to send it. Extending that host to fetch mail makes it a trusted account-data processor too. Do not claim E2EE for data the host can decrypt or query.
 - Gmail push uses Cloud Pub/Sub and is delivered to a backend. Watches expire and need renewal; polling must remain as recovery. A desktop loopback listener cannot receive Google callbacks.
 
-## Deployment decision required before remote runtime work
+## Product and deployment decision
 
-1. **User-operated host:** one user's Mac Studio or VPS stores that user's account database, OAuth refresh tokens, and scheduled-send keys. Postilaatikko supplies the software; the operator controls host, backups, TLS and access. This best matches the existing helper's trust model.
-2. **Postilaatikko-operated service:** a shared, multi-user deployment stores or can use customer OAuth credentials and processes mail data. This requires explicit account isolation, token/key management, user authentication, abuse controls, privacy/retention terms, incident response and operating-cost decisions. It is a separate product trust mode.
+The first deployment is the user's own service, normally on localhost and optionally on a Mac Studio or VPS. The operator controls the host, database, credentials, backups, TLS and access. Postilaatikko Cloud is a later possibility, not a dependency or target for this implementation.
 
-Do not implement public account onboarding or remote mailbox reads until the operator model is selected. A local prototype can exercise worker lifecycle and provider sync against a test account without making a production endpoint public.
+The desktop must become a client of shared service operations instead of maintaining a second implementation of filtering, moving, sync, or scheduled delivery. Extract/reuse domain use cases incrementally from `app`; keep Wails bindings as a UI adapter and add a service API adapter over those same use cases. A local endpoint and a TLS-protected remote endpoint must call the same operation layer. Preserve the existing single-user trust model; do not add shared-cloud onboarding, multi-tenant identity, or SaaS operations in this scope.
+
+The service owns background sync, automatic local filters, and delayed sends while the UI is closed. Quitting the desktop with Command-Q must not stop or restart the service. Install/supervise it independently (launchd on macOS) and give it a small headless runtime with no Wails/WebKit UI. The desktop may connect to or start the service when opened, but closing its windows must not terminate the service; stopping the service is a separate explicit service-management action.
+
+In particular, new-message handling must evaluate the same persisted cross-account filter rules and use the existing safe move pipeline: confirm the destination copy before deleting the source. User-initiated move/filter edits must use the same use cases through the service API. Avoid having the desktop and service race as independent sync/mutation owners; define a clear service lifecycle and migration/DB ownership before switching desktop operations over.
 
 ## Milestones
 
-### 1. Service lifecycle and shared storage
+### 1. Shared operation layer and service lifecycle
 
-**Files:** `cmd/postilaatikko-helper/main.go`, new service package under `internal/alwayson/`, tests for lifecycle and cancellation.
+**Files:** `app/filter.go`, app move/sync use cases, `cmd/postilaatikko-helper/main.go`, new shared service package under `internal/alwayson/`, UI and service API adapters.
 
-1. Define a service configuration that names the account data directory, queue directory, sync policy, and enabled workers. Reject ambiguous or unsafe directory reuse.
-2. Open account, credential, folder, message, and attachment stores once; avoid two independent processes racing schema migration or holding incompatible DB lifetimes.
-3. Supervise the scheduled-send worker and sync worker under one context. One worker's failure must be visible and must not silently kill the other.
-4. On shutdown, stop new sync work, wait for bounded in-flight sync and delivery work, and preserve ambiguous-send recovery semantics.
-5. Add lifecycle tests for startup failures, cancellation, worker failure, and clean restart; run focused package tests and `go vet`.
+1. Identify the domain operations currently reachable only through `App` and factor service interfaces/use cases for sync, filter evaluation, safe moves, and scheduled delivery. Keep provider logic and safety invariants in one implementation.
+2. Make the Wails app and the local/remote API adapters call the shared use cases. Do not copy filter matching or move behavior into a daemon or frontend.
+3. Add an independent headless service entrypoint with configuration for account data, scheduled-send queue, sync policy, and enabled workers. Register it with the OS user-service manager so it starts independently of the UI.
+4. Make the service the single owner of background sync and schema migrations; define how UI reads/writes are serialized through the API before moving persistent ownership.
+5. Supervise scheduled-send and sync/filter workers under one context. Worker failures must be visible without silently killing unrelated work. Desktop shutdown must not cancel service workers.
+6. On service shutdown, stop new sync work, wait for bounded in-flight sync and delivery, and preserve ambiguous-send recovery semantics.
 
 ### 2. Header-first background mailbox sync
 
@@ -47,22 +51,23 @@ Do not implement public account onboarding or remote mailbox reads until the ope
 4. Coalesce notifications and requests per account/folder, enforce provider backoff and cancellation, and surface account-specific failures without blocking healthy accounts.
 5. Test with fake IMAP/Gmail providers for added/removed messages, flag changes, disconnects, duplicate notifications, backoff and missed-notification recovery.
 
-### 3. Desktop visibility and sent-message reconciliation
+### 3. Fast desktop client and sent-message reconciliation
 
 **Files:** existing client API/event contract, `internal/automation/` or a dedicated hosted-service API, app sync/send paths, generated Wails bindings only if needed.
 
-1. Define a per-device authenticated channel for change cursors and service health. Do not expose the current loopback automation API by relaxing its host/origin checks.
-2. Return only bounded account-qualified change metadata; readers still fetch message bodies explicitly through the selected trust path.
-3. After an in-app send is accepted, immediately add/refresh that message in the visible conversation and Sent view; reconcile later provider metadata idempotently so sync cannot duplicate it.
-4. When a device reconnects, replay from a durable per-account cursor or trigger an incremental provider sync; missed push notifications must not lose updates.
-5. Test duplicate/out-of-order events, reconnect, cursor expiry, concurrent sends and refresh, and account isolation.
+1. Define the service API and per-device authentication for health, mailbox changes, paginated folder/conversation headers, user operations, body-on-demand reads, and change cursors. Do not expose the current loopback automation API by relaxing its host/origin checks.
+2. Keep list/read APIs bounded and header-first. The desktop can render cached headers immediately, request the visible page and a small first-screen prefetch, then fetch message bodies explicitly. A client presentation cache may improve perceived speed, but the service remains authoritative for mailbox state.
+3. Publish account-qualified change events or cursors so the client can update/invalidate only affected views instead of reloading whole folders. Keep localhost and TLS remote transports over the same API and operation layer.
+4. After an in-app send is accepted, immediately add/refresh that message in the visible conversation and Sent view; reconcile later provider metadata idempotently so sync cannot duplicate it.
+5. When a device reconnects, replay from a durable per-account cursor or trigger an incremental provider sync; missed push notifications must not lose updates.
+6. Test duplicate/out-of-order events, reconnect, cursor expiry, concurrent sends and refresh, and account isolation.
 
-### 4. Deployment, operations and security review
+### 4. Local and user-hosted deployment, operations and security review
 
 **Files:** helper deployment docs/scripts, `docs/SEND_LATER.md`, `docs/API.md` or new hosted-service docs, `ROADMAP.md`, `TASKS.md`, privacy/terms documents if the operator is Postilaatikko.
 
-1. Provide a least-privilege service install and upgrade path for the chosen host OS; retain current launchd behavior where applicable.
-2. Require authenticated TLS for remote access, short/revocable per-device credentials, bounded requests/concurrency, and secrets excluded from logs.
+1. Provide a least-privilege local service install/upgrade path (including launchd) and a documented user-operated Mac Studio/VPS deployment using the same binary and API.
+2. Keep localhost access constrained and authenticated; require authenticated TLS for remote access, short/revocable per-device credentials, bounded requests/concurrency, and secrets excluded from logs.
 3. Document backup/restore, key rotation, token revocation, queue retention, database migration, health checks and manual recovery of ambiguous sends.
 4. Run Go race tests for stateful workers and provider fixtures, security/lint checks, then perform a separate source review before a live-account pilot.
 5. Do not claim reliable scheduled delivery or real-time sync until restart, network loss, token expiry, duplicated/missed notifications and provider-accepted-but-unacknowledged sends are verified on the target deployment.
@@ -70,9 +75,13 @@ Do not implement public account onboarding or remote mailbox reads until the ope
 ## Acceptance criteria
 
 - The host performs bounded metadata sync while the UI is closed, and the desktop can detect/reconcile updates after reconnect.
+- Quitting the desktop leaves the independently supervised service running; only an explicit service stop or OS logout/shutdown ends its workers.
+- The desktop can display cached or paginated headers without waiting for full message bodies, and receives targeted change information rather than reloading entire folders for each update.
+- Persisted cross-account filter rules continue to run while the UI is closed, using the shared filter and safe-move implementation; the confirmed destination copy precedes source deletion.
+- Desktop and service adapters invoke one shared set of mail operations; no duplicate filter/move business logic is introduced.
 - Routine sync fetches no message bodies or attachment content.
 - In-app sent messages appear immediately after provider acceptance; later sync does not create duplicates.
 - Scheduled delivery continues using durable queue states, exact-byte retries, and `outcome_unknown` handling. No ambiguous send is retried automatically.
-- Account and device access are isolated and revocable; remote requests require authenticated TLS.
+- The local service is the default deployment. A user-operated remote Mac Studio/VPS uses the same service and operation layer; remote requests require authenticated TLS and revocable device access.
 - A missed/dropped push notification is recovered by incremental polling.
-- The deployment operator and the fact that the host can access tokens/message content are disclosed clearly.
+- Postilaatikko Cloud remains out of scope. The deployment operator and the fact that the user-operated host can access tokens/message content are disclosed clearly.

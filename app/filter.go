@@ -98,40 +98,11 @@ func (a *App) validateFilterRule(rule *mailfilter.Rule) error {
 	return nil
 }
 
-// handleNewMessageForFilters applies local cross-account filter rules to a
-// newly synced message. Rules are evaluated in priority order and the first
-// match wins. Heavy routing work runs in a goroutine so the sync's new-mail
-// notification path stays lightweight.
-func (a *App) handleNewMessageForFilters(accountID, folderID string, msg *message.Message) {
-	log := logging.WithComponent("app.filters")
-
-	rules, err := a.filterStore.ListEnabled()
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to load enabled filter rules")
-		return
-	}
-	if len(rules) == 0 {
-		return
-	}
-
-	criteria := mailfilter.FromMessage(msg)
-	for _, rule := range rules {
-		dest, err := a.folderStore.Get(rule.DestFolderID)
-		if err != nil {
-			log.Warn().Err(err).Str("ruleID", rule.ID).Msg("Filter rule destination lookup failed")
-			continue
-		}
-		if dest == nil {
-			// Destination folder vanished (e.g. deleted on the server); skip
-			// the rule until it exists again rather than failing every match.
-			log.Debug().Str("ruleID", rule.ID).Str("destFolderID", rule.DestFolderID).Msg("Filter rule destination missing, skipping rule")
-			continue
-		}
-		if !mailfilter.Match(rule, criteria, dest.AccountID) {
-			continue
-		}
-		go a.applyFilterRule(rule, dest, msg)
-		return
+// handleNewMessageForFilters delegates rule selection to the reusable
+// backend router. The app supplies its shared move pipeline as the applier.
+func (a *App) handleNewMessageForFilters(msg *message.Message) {
+	if a.filterRouter != nil {
+		a.filterRouter.Route(msg)
 	}
 }
 

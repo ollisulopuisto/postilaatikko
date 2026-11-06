@@ -16,9 +16,9 @@ Keep IMAP support. The app now feels faster, so the earlier CPU/memory concern i
 
 ### Always-on mail service (2026-11-06)
 
-Start work on an optional always-on service that combines mailbox change detection with scheduled delivery. The current `postilaatikko-helper` is a trusted Send Later endpoint, not a mail-sync server; the local automation API is loopback-only. Reuse the existing sync and scheduled-send engines where their lifecycle and storage contracts fit, while keeping routine sync header/flag-only and body fetch explicit.
+Build one always-on service/core that owns mailbox change detection, persisted cross-account filtering and safe moves, and scheduled delivery while the desktop UI is closed. The desktop and remote clients should call the same service operations; localhost and user-operated Mac Studio/VPS deployments are configurations of one implementation, not forks. Reuse the current sync, filter/move, and scheduled-send logic where their lifecycle and storage contracts fit. Keep routine sync header/flag-only and body fetch explicit. Make the client feel immediate with bounded header-page queries, a presentation cache, targeted change events, and body fetch only when needed; service ownership should remove background work from the UI without adding full-folder reloads.
 
-Before enabling remote accounts, choose whether the first deployment is user-operated (for example, the user's own Mac Studio or VPS) or Postilaatikko-operated. Both models make the host trusted with account authorization; scheduled delivery also requires access to prepared message content. Do not describe a host-decryptable path as end-to-end encrypted. Specify device authentication, credential/key storage, revocation, retention, backup, delivery ambiguity and recovery before exposing the service remotely. Keep the current local-only desktop mode available.
+The first deployment is user-operated: normally localhost, with optional self-hosting on the user's Mac Studio or VPS. Postilaatikko Cloud is deferred and may never be built. The service host is trusted with account authorization and, for scheduled delivery, prepared message content; do not describe host-readable data as end-to-end encrypted. Specify device authentication, credential/key storage, revocation, retention, backup, delivery ambiguity and recovery before remote access. Avoid independent desktop/service sync owners or duplicated filter/move logic; define a single service lifecycle and database ownership before moving operations behind the API. The background service has an independent OS-managed lifecycle: quitting the desktop must not stop it, so it can keep sync, cross-account filters, and scheduled delivery running with a headless footprint.
 
 For Gmail, `users.watch` notifications require a Cloud Pub/Sub receiver and periodic watch renewal; maintain a bounded polling fallback. An in-app send should add the accepted message to its conversation immediately rather than waiting for the hosted sync cycle. See [the always-on service plan](docs/plans/2026-11-06-always-on-mail-service.md).
 
@@ -146,7 +146,6 @@ Use the [task board](TASKS.md) for current claims and integration status; the [D
 
 ## Open questions
 
-- **Hosted service deployment model.** The user requested a combined always-on sync and scheduled-send service. Decide whether its first deployment is user-operated or Postilaatikko-operated; the latter needs a separate trust, privacy, retention and operational model. Keep the initial Mac Studio helper's E2EE boundary distinct.
 - **Later layout options.** Whether to add saved-view tabs, hide empty views, per-view reader overrides or incoming-mail presentation schedules. Do not block the accepted core UI/API work on these decisions.
 
 ## Parked

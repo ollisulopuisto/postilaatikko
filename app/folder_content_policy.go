@@ -113,7 +113,7 @@ func (a *App) SetFolderContentPolicy(accountID, folderID, mode string) error {
 }
 
 func (a *App) handleNewSyncedMessage(accountID, folderID string, msg *message.Message) {
-	a.handleNewMessageForFilters(accountID, folderID, msg)
+	a.handleNewMessageForFilters(msg)
 	if msg == nil {
 		return
 	}
