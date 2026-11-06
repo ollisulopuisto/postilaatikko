@@ -30,6 +30,12 @@ In particular, new-message handling must evaluate the same persisted cross-accou
 
 ## Milestones
 
+### Current runnable slice
+
+- `cmd/postilaatikko-helper serve --sync` can supervise the durable Send Later worker and the existing bounded, header-first sync scheduler in a separate process on localhost. `install-agent --sync` opts the macOS LaunchAgent into that sync worker. `/healthz` is a no-store process check and returns no mailbox state.
+- `internal/mailfilter.AutomaticRouter` is now independent of Wails and the desktop wires it to the existing app move path. `internal/mailmove.CopyBeforeCleanup` centralizes the core cross-account safety ordering and the app uses it.
+- This is a transition slice, not yet a full ownership cutover: the helper's automatic filter execution and UI/API handoff are not connected, and the app still owns its own scheduler. Do not run helper `--sync` while the app is open; doing so would create two sync owners. The next implementation must remove that overlap and connect the server-side filter adapter before treating the daemon as the default service.
+
 ### 1. Shared operation layer and service lifecycle
 
 **Files:** `app/filter.go`, app move/sync use cases, `cmd/postilaatikko-helper/main.go`, new shared service package under `internal/alwayson/`, UI and service API adapters.

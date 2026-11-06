@@ -7,7 +7,7 @@ import (
 	"errors"
 )
 
-func installAgent(_ context.Context, _, _, _, _, _, _ string) error {
+func installAgent(_ context.Context, _, _, _, _, _, _ string, _ bool) error {
 	return errors.New("login-agent installation is available on macOS; run the helper under your system's service manager")
 }
 

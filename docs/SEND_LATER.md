@@ -43,7 +43,15 @@ For the same Studio's app, start with the default loopback connection:
 "$POSTILAATIKKO_HELPER" serve --identity studio
 ```
 
-The app's default address is `http://127.0.0.1:8028`. Content and acknowledgements are still end-to-end encrypted and authenticated. Off-loopback connections require HTTPS with a certificate trusted by the client:
+The app's default address is `http://127.0.0.1:8028`. Content and acknowledgements are still end-to-end encrypted and authenticated.
+
+```sh
+curl --fail http://127.0.0.1:8028/healthz
+```
+
+`/healthz` reports only whether the helper process is serving requests; it does not expose account, queue, or message data. The helper currently owns scheduled delivery only. Mailbox synchronization and automatic filters are still owned by the desktop while the shared service boundary is being extracted.
+
+Off-loopback connections require HTTPS with a certificate trusted by the client:
 
 ```sh
 "$POSTILAATIKKO_HELPER" serve --identity studio \
@@ -54,10 +62,18 @@ The app's default address is `http://127.0.0.1:8028`. Content and acknowledgemen
 
 The client would use the corresponding reachable HTTPS hostname. Redirects and untrusted TLS certificates are rejected; the pinned helper key is an additional E2EE identity check. Request size, concurrent request count and network timeouts are bounded. The helper caps its logical queue at 10,000 job records and 512 MiB of encrypted envelopes. Existing jobs can still be cancelled at capacity. Revision tombstones are retained to reject delayed replays; there is no automatic history pruning. SQLite WAL and free pages can use additional disk space. A public relay remains a separate deployment with its own quotas, retention policy and rotation requirements.
 
-Once local setup works, install the macOS login agent using the same flags:
+To also run the existing bounded, header-first mailbox sync scheduler while the desktop is closed, pass `--sync`:
 
 ```sh
-"$POSTILAATIKKO_HELPER" install-agent --identity studio
+"$POSTILAATIKKO_HELPER" serve --identity studio --sync
+```
+
+During this transition, use `--sync` only while the desktop app is closed; the app still has its own sync scheduler. Automatic cross-account filter execution and desktop API handoff are not migrated yet.
+
+Once local setup works, install the macOS login agent using the same flags. Add `--sync` only if the desktop will remain closed while the agent runs:
+
+```sh
+"$POSTILAATIKKO_HELPER" install-agent --identity studio --sync
 ```
 
 It starts at login and restarts after failure. Use `uninstall-agent` to stop and remove it before changing its configuration. A login agent requires that user to be logged in; the keychain must be available. It does not make a sleeping/offline Studio able to send. The mail UI can be closed while the helper runs. Restarting/upgrading during a send can leave an ambiguous outcome that needs inspection.

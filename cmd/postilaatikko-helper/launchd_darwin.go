@@ -25,7 +25,7 @@ func launchAgentPath() (string, error) {
 	return filepath.Join(home, "Library", "LaunchAgents", agentLabel+".plist"), nil
 }
 
-func installAgent(ctx context.Context, identity, data, queue, listen, cert, key string) error {
+func installAgent(ctx context.Context, identity, data, queue, listen, cert, key string, withSync bool) error {
 	if err := validateListener(listen, cert, key); err != nil {
 		return err
 	}
@@ -45,6 +45,9 @@ func installAgent(ctx context.Context, identity, data, queue, listen, cert, key 
 		return err
 	}
 	arguments := []string{binary, "serve", "--identity", identity, "--data", data, "--queue", queue, "--listen", listen}
+	if withSync {
+		arguments = append(arguments, "--sync")
+	}
 	if cert != "" {
 		arguments = append(arguments, "--tls-cert", cert, "--tls-key", key)
 	}
