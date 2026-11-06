@@ -258,6 +258,13 @@
     expandedInboxGroups = new Set([...expandedInboxGroups, groupID])
   }
 
+  // Compiled domain-suffix regexes, cached by suffix name. `categoryForConversation`
+  // tests the same ~66 sender-domain suffixes against every conversation on every
+  // MessageList render (default inbox mode is `categories`); compiling them once
+  // removes thousands of regex allocations per list paint instead of once per
+  // conversation per render.
+  const domainSuffixRegexCache = new Map<string, RegExp>()
+
   function categoryForConversation(conversation: message.Conversation): { id: string; label: string; icon: string } {
     // Newly synced messages carry a classification inferred from their real
     // RFC/IMAP headers. Keep the old sender heuristic only as a fallback for
@@ -274,9 +281,14 @@
     // doNotReply, do-not-reply and do_not_reply all mean the same thing.
     const mailbox = (senderEmail.split('@')[0] ?? '').replace(/[^a-z0-9]/g, '')
     const domain = senderEmail.split('@')[1] ?? ''
-    const domainHas = (names: string[]) => names.some(name =>
-      new RegExp(`(^|[.-])${name}([.-]|$)`).test(domain)
-    )
+    const domainHas = (names: string[]) => names.some((name) => {
+      let re = domainSuffixRegexCache.get(name)
+      if (!re) {
+        re = new RegExp(`(^|[.-])${name}([.-]|$)`)
+        domainSuffixRegexCache.set(name, re)
+      }
+      return re.test(domain)
+    })
     const automatedMailboxNames = [
       // Replies, system mail and mail transport.
       'noreply', 'donotreply', 'notreply', 'autoreply', 'automaticreply',
