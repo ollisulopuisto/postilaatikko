@@ -163,6 +163,19 @@ func (c *Client) Search(ctx context.Context, req v1.SearchRequest) (*views.Threa
 	return &resp.Data, nil
 }
 
+// ListConversations retrieves a bounded header-only page for a folder or all inboxes.
+func (c *Client) ListConversations(ctx context.Context, req v1.ConversationListRequest) (*v1.ConversationListPage, error) {
+	bytes, err := c.doRequest(ctx, http.MethodPost, "/v1/conversations", req, "")
+	if err != nil {
+		return nil, err
+	}
+	var resp v1.Response[v1.ConversationListPage]
+	if err := json.Unmarshal(bytes, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.Data, nil
+}
+
 // ReadThread retrieves thread messages and metadata.
 func (c *Client) ReadThread(ctx context.Context, req v1.ThreadReadRequest) (*views.ThreadView, error) {
 	bytes, err := c.doRequest(ctx, http.MethodPost, "/v1/threads/read", req, "")

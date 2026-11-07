@@ -92,13 +92,17 @@ func handleMessageHeaders(w http.ResponseWriter, r *http.Request, ops MessageHea
 }
 
 func writeHeaderResponse(w http.ResponseWriter, r *http.Request, status int, data MessageHeaderPage) {
+	writeAPIResponse(w, r, status, data)
+}
+
+func writeAPIResponse[T any](w http.ResponseWriter, r *http.Request, status int, data T) {
 	requestID := r.Header.Get("X-Request-Id")
 	if requestID == "" {
 		requestID = "req-unknown"
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(Response[MessageHeaderPage]{Data: data, RequestID: requestID})
+	_ = json.NewEncoder(w).Encode(Response[T]{Data: data, RequestID: requestID})
 }
 
 func writeHeaderError(w http.ResponseWriter, r *http.Request, status int, code ErrorCode, message string, retryable bool) {

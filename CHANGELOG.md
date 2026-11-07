@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Add an authenticated, bounded conversation-list API for real folders and All Inboxes, with stable sorting and existing list filters; responses contain summaries only.
 - Route explicit desktop message-body fetches through the authenticated localhost helper when connected, retaining local fetching only when the helper is unreachable.
 - Mount idempotent authenticated mail actions in the headless API, including provider-backed flags, archive, trash, and account-qualified safe moves.
 - Add optional Gmail Pub/Sub pull notifications and daily watch renewal to the localhost helper while retaining periodic sync recovery.
