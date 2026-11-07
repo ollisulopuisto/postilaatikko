@@ -2,6 +2,7 @@ package v1
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -55,14 +56,24 @@ type ActionOperations interface {
 type ActionsHandler struct {
 	ops             ActionOperations
 	mu              sync.Mutex
-	idempotencyKeys map[IdempotencyKey]*ActionResponse
+	idempotencyKeys map[IdempotencyKey]*actionIdempotencyRecord
+}
+
+type actionIdempotencyRecord struct {
+	requestHash [32]byte
+	done        chan struct{}
+	status      int
+	response    *ActionResponse
+	errorCode   ErrorCode
+	errorText   string
+	retryable   bool
 }
 
 // NewActionsHandler initializes an ActionsHandler.
 func NewActionsHandler(ops ActionOperations) *ActionsHandler {
 	return &ActionsHandler{
 		ops:             ops,
-		idempotencyKeys: make(map[IdempotencyKey]*ActionResponse),
+		idempotencyKeys: make(map[IdempotencyKey]*actionIdempotencyRecord),
 	}
 }
 
@@ -87,26 +98,50 @@ func (h *ActionsHandler) handleAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check existing idempotency record
-	h.mu.Lock()
-	if existing, ok := h.idempotencyKeys[idempotencyKey]; ok {
-		h.mu.Unlock()
-		replayedResp := *existing
-		replayedResp.Receipt.Replayed = true
-		h.writeResponse(w, r, http.StatusOK, replayedResp)
-		return
-	}
-	h.mu.Unlock()
-
 	var req ActionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.writeError(w, r, http.StatusBadRequest, CodeInvalidRequest, fmt.Sprintf("Malformed request: %v", err), false)
 		return
 	}
+	encodedRequest, err := json.Marshal(req)
+	if err != nil {
+		h.writeError(w, r, http.StatusBadRequest, CodeInvalidRequest, "Malformed action request", false)
+		return
+	}
+	requestHash := sha256.Sum256(encodedRequest)
+
+	h.mu.Lock()
+	if existing := h.idempotencyKeys[idempotencyKey]; existing != nil {
+		if existing.requestHash != requestHash {
+			h.mu.Unlock()
+			h.writeError(w, r, http.StatusConflict, CodeIdempotencyConflict, "Idempotency-Key was already used for a different action request", false)
+			return
+		}
+		done := existing.done
+		h.mu.Unlock()
+		select {
+		case <-done:
+			h.writeIdempotentResult(w, r, existing, true)
+		case <-r.Context().Done():
+			h.writeError(w, r, http.StatusConflict, CodeIdempotencyConflict, "Matching action is still in progress", true)
+		}
+		return
+	}
+	record := &actionIdempotencyRecord{requestHash: requestHash, done: make(chan struct{})}
+	h.idempotencyKeys[idempotencyKey] = record
+	h.mu.Unlock()
+	finished := false
+	defer func() {
+		if !finished {
+			h.finishError(record, http.StatusInternalServerError, CodeInternal, "Action stopped before its result was recorded", true)
+		}
+	}()
 
 	messageIDs, err := operations.Resolve(req.Target, h.ops)
 	if err != nil {
-		h.writeError(w, r, http.StatusBadRequest, CodeInvalidRequest, fmt.Sprintf("Target resolution failed: %v", err), false)
+		h.finishError(record, http.StatusBadRequest, CodeInvalidRequest, fmt.Sprintf("Target resolution failed: %v", err), false)
+		finished = true
+		h.writeIdempotentResult(w, r, record, false)
 		return
 	}
 
@@ -138,7 +173,9 @@ func (h *ActionsHandler) handleAction(w http.ResponseWriter, r *http.Request) {
 
 	case ActionMove:
 		if strings.TrimSpace(req.Destination) == "" {
-			h.writeError(w, r, http.StatusBadRequest, CodeInvalidRequest, "Destination folder ID required for move action", false)
+			h.finishError(record, http.StatusBadRequest, CodeInvalidRequest, "Destination folder ID required for move action", false)
+			finished = true
+			h.writeIdempotentResult(w, r, record, false)
 			return
 		}
 		id, err := h.ops.MoveMessages(messageIDs, req.Destination)
@@ -148,12 +185,16 @@ func (h *ActionsHandler) handleAction(w http.ResponseWriter, r *http.Request) {
 		opErr = err
 
 	default:
-		h.writeError(w, r, http.StatusBadRequest, CodeInvalidRequest, fmt.Sprintf("Unknown action %q", req.Action), false)
+		h.finishError(record, http.StatusBadRequest, CodeInvalidRequest, fmt.Sprintf("Unknown action %q", req.Action), false)
+		finished = true
+		h.writeIdempotentResult(w, r, record, false)
 		return
 	}
 
 	if opErr != nil {
-		h.writeError(w, r, http.StatusInternalServerError, CodeInternal, fmt.Sprintf("Action failed: %v", opErr), true)
+		h.finishError(record, http.StatusInternalServerError, CodeInternal, fmt.Sprintf("Action failed: %v", opErr), true)
+		finished = true
+		h.writeIdempotentResult(w, r, record, false)
 		return
 	}
 
@@ -167,10 +208,32 @@ func (h *ActionsHandler) handleAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.mu.Lock()
-	h.idempotencyKeys[idempotencyKey] = &resp
+	record.status = http.StatusOK
+	record.response = &resp
+	close(record.done)
 	h.mu.Unlock()
+	finished = true
+	h.writeIdempotentResult(w, r, record, false)
+}
 
-	h.writeResponse(w, r, http.StatusOK, resp)
+func (h *ActionsHandler) finishError(record *actionIdempotencyRecord, status int, code ErrorCode, message string, retryable bool) {
+	h.mu.Lock()
+	record.status = status
+	record.errorCode = code
+	record.errorText = message
+	record.retryable = retryable
+	close(record.done)
+	h.mu.Unlock()
+}
+
+func (h *ActionsHandler) writeIdempotentResult(w http.ResponseWriter, r *http.Request, record *actionIdempotencyRecord, replay bool) {
+	if record.response != nil {
+		response := *record.response
+		response.Receipt.Replayed = replay
+		h.writeResponse(w, r, record.status, response)
+		return
+	}
+	h.writeError(w, r, record.status, record.errorCode, record.errorText, record.retryable)
 }
 
 func (h *ActionsHandler) writeResponse(w http.ResponseWriter, r *http.Request, statusCode int, data any) {

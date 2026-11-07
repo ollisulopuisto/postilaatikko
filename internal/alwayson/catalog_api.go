@@ -64,5 +64,6 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 	v1.MountMessageHeaderRoutes(mux, operations, automation.RequireGrantCapability)
 	v1.MountSearchRoute(mux, readOperations, automation.RequireGrantCapability)
 	v1.MountThreadBodyRoutes(mux, readOperations, automation.RequireGrantCapability)
+	v1.NewActionsHandler(&mailboxActionOperations{runtime: r}).MountRoutes(mux, automation.RequireGrantCapability)
 	return mux, nil
 }
