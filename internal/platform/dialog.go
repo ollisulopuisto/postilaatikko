@@ -1,5 +1,10 @@
 package platform
 
+import (
+	"net/url"
+	"strings"
+)
+
 // DialogIcon controls the icon and severity styling of native OS dialogs
 // shown via ShowDialog / ShowDialogAsync.
 type DialogIcon int
@@ -55,5 +60,44 @@ func ShowDialogAsync(icon DialogIcon, title, text string) {
 // the dialog falls back to a single-button display with actionURL
 // included in the body as copyable plain text.
 func ShowDialogWithLink(icon DialogIcon, title, text, actionLabel, actionURL string) {
+	if !ValidateDialogURL(actionURL) {
+		// If the action URL fails security validation (e.g. contains flags, control characters,
+		// or dangerous schemes), degrade safely to a single-button dialog without URL opening.
+		ShowDialog(icon, title, text)
+		return
+	}
 	showDialogWithLink(icon, title, text, actionLabel, actionURL)
+}
+
+// ValidateDialogURL validates that a URL passed to native dialog link openers
+// uses an approved protocol (http, https, mailto) and does not contain control
+// characters or leading dashes that could trigger CLI option injection in
+// system handlers (e.g. xdg-open or open).
+func ValidateDialogURL(rawURL string) bool {
+	trimmed := strings.TrimSpace(rawURL)
+	if trimmed == "" || strings.ContainsAny(trimmed, "\r\n\x00") {
+		return false
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return false
+	}
+
+	scheme := strings.ToLower(parsed.Scheme)
+	switch scheme {
+	case "http", "https":
+		host := parsed.Hostname()
+		return host != "" && !strings.HasPrefix(host, "-")
+	case "mailto":
+		target := parsed.Opaque
+		if target == "" {
+			target = parsed.Path
+		}
+		if strings.HasPrefix(target, "-") {
+			return false
+		}
+		return target != "" || parsed.RawQuery != ""
+	default:
+		return false
+	}
 }
