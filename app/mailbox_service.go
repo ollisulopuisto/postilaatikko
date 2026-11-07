@@ -232,6 +232,14 @@ func (c *mailboxServiceConnector) search(ctx context.Context, sessionID string, 
 	return client.Search(searchCtx, req)
 }
 
+func (c *mailboxServiceConnector) readThread(ctx context.Context, ref views.ThreadRef, scope views.Scope) (*views.ThreadView, error) {
+	client, err := c.getClient()
+	if err != nil {
+		return nil, err
+	}
+	return client.ReadThread(ctx, v1.ThreadReadRequest{Ref: ref, Scope: scope})
+}
+
 func (c *mailboxServiceConnector) cancelSearch(sessionID string) {
 	if sessionID == "" {
 		return

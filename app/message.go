@@ -284,6 +284,33 @@ func (a *App) GetConversation(threadID, folderID string) (*message.Conversation,
 	if m, _ := a.messageStore.Get(threadID); m != nil && strings.HasPrefix(m.ThreadID, "gmail:") {
 		threadID = m.ThreadID
 	}
+	if a.mailboxService != nil {
+		status := a.GetMailboxServiceStatus()
+		if status.Connected {
+			selectedFolder, err := a.folderStore.Get(folderID)
+			if err != nil {
+				return nil, fmt.Errorf("resolve thread folder: %w", err)
+			}
+			if selectedFolder == nil {
+				return nil, fmt.Errorf("thread folder not found: %s", folderID)
+			}
+			ctx := a.ctx
+			if ctx == nil {
+				ctx = context.Background()
+			}
+			thread, err := a.mailboxService.readThread(ctx,
+				views.ThreadRef{AccountID: selectedFolder.AccountID, ThreadID: threadID},
+				views.Scope{Kind: views.ScopeFolder, AccountID: selectedFolder.AccountID, FolderID: selectedFolder.ID},
+			)
+			if err != nil {
+				return nil, fmt.Errorf("read thread through local mailbox service: %w", err)
+			}
+			return a.conversationFromServiceThread(thread, folderID)
+		}
+		if status.ErrorCode != "service_unavailable" {
+			return nil, fmt.Errorf("local mailbox service unavailable for thread read: %s", status.Message)
+		}
+	}
 	if strings.HasPrefix(threadID, "gmail:") {
 		f, err := a.folderStore.Get(folderID)
 		if err != nil || f == nil {
@@ -371,6 +398,106 @@ func (a *App) GetConversation(threadID, folderID string) (*message.Conversation,
 	}
 
 	return conv, nil
+}
+
+func (a *App) conversationFromServiceThread(view *views.ThreadView, folderID string) (*message.Conversation, error) {
+	if view == nil {
+		return nil, errors.New("local mailbox service returned an empty thread")
+	}
+	accountName, accountColor := "", ""
+	if acc, err := a.accountStore.Get(view.Ref.AccountID); err != nil {
+		return nil, fmt.Errorf("resolve thread account: %w", err)
+	} else if acc != nil {
+		accountName, accountColor = acc.Name, acc.Color
+	}
+	conversation := &message.Conversation{
+		ThreadID:     view.Ref.ThreadID,
+		Subject:      view.Subject,
+		LatestDate:   view.LatestDate,
+		MessageCount: view.MessageCount,
+		Participants: make([]message.Address, 0, len(view.Participants)),
+		MessageIDs:   make([]string, 0, len(view.Messages)),
+		AccountID:    view.Ref.AccountID,
+		AccountName:  accountName,
+		AccountColor: accountColor,
+		FolderID:     folderID,
+		Messages:     make([]*message.Message, 0, len(view.Messages)),
+	}
+	for _, participant := range view.Participants {
+		conversation.Participants = append(conversation.Participants, message.Address{Name: participant.Name, Email: participant.Email})
+	}
+	for _, item := range view.Messages {
+		msg := &message.Message{
+			ID:                 item.Ref.MessageID,
+			AccountID:          item.Ref.AccountID,
+			FolderID:           item.FolderID,
+			MessageID:          item.RFCMessageID,
+			ThreadID:           view.Ref.ThreadID,
+			Subject:            item.Subject,
+			Snippet:            item.Snippet,
+			FromName:           item.From.Name,
+			FromEmail:          item.From.Email,
+			ToList:             item.ToList,
+			CcList:             item.CcList,
+			BccList:            item.BccList,
+			ReplyTo:            item.ReplyTo,
+			Date:               item.Date,
+			IsRead:             item.IsRead,
+			IsStarred:          item.IsStarred,
+			IsAnswered:         item.IsAnswered,
+			IsForwarded:        item.IsForwarded,
+			IsDraft:            item.IsDraft,
+			IsDeleted:          item.IsDeleted,
+			Size:               item.Size,
+			InboxCategory:      item.InboxCategory,
+			HasAttachments:     item.HasAttachments,
+			SMIMEStatus:        item.SMIMEStatus,
+			SMIMESignerEmail:   item.SMIMESignerEmail,
+			SMIMESignerSubject: item.SMIMESignerSubject,
+			SMIMEEncrypted:     item.SMIMEEncrypted,
+			HasSMIME:           item.HasSMIME,
+			PGPStatus:          item.PGPStatus,
+			PGPSignerEmail:     item.PGPSignerEmail,
+			PGPSignerKeyID:     item.PGPSignerKeyID,
+			PGPEncrypted:       item.PGPEncrypted,
+			HasPGP:             item.HasPGP,
+			BodyFailed:         item.ContentState == views.ContentFetchFailed,
+		}
+		matched := item.Matched
+		msg.Matched = &matched
+		if item.ReceivedAt != nil {
+			msg.ReceivedAt = *item.ReceivedAt
+		}
+		localMessage, err := a.messageStore.Get(item.Ref.MessageID)
+		if err != nil {
+			return nil, fmt.Errorf("read cached thread body: %w", err)
+		}
+		if localMessage != nil && localMessage.AccountID == item.Ref.AccountID && localMessage.BodyFetched {
+			msg.BodyText = textrepair.FinnishUTF8(localMessage.BodyText)
+			msg.BodyHTML = localMessage.BodyHTML
+			msg.BodyFetched = true
+		}
+		if item.Snippet != "" {
+			conversation.Snippet = item.Snippet
+		}
+		if item.Matched {
+			conversation.MessageIDs = append(conversation.MessageIDs, item.Ref.MessageID)
+		}
+		if !item.IsRead {
+			conversation.UnreadCount++
+		}
+		conversation.IsStarred = conversation.IsStarred || item.IsStarred
+		conversation.HasAttachments = conversation.HasAttachments || item.HasAttachments
+		conversation.IsEncrypted = conversation.IsEncrypted || item.HasSMIME || item.HasPGP || item.SMIMEEncrypted || item.PGPEncrypted
+		if conversation.InboxCategory == "" {
+			conversation.InboxCategory = item.InboxCategory
+		}
+		conversation.Messages = append(conversation.Messages, msg)
+	}
+	if err := a.messageStore.EnrichReactions(conversation.Messages); err != nil {
+		return nil, fmt.Errorf("load thread reactions: %w", err)
+	}
+	return conversation, nil
 }
 
 // DecryptedAttachment holds metadata for an attachment extracted from an encrypted message.

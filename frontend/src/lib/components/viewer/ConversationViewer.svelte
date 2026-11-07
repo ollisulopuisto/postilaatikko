@@ -164,6 +164,8 @@
 
   async function resolveDisplayedMessageTarget(messageIds: string[]): Promise<string[]> {
     if (!messageIds.length) return []
+    messageIds = messageIds.filter((id) => conversation?.messages?.find((item) => item.id === id)?.matched !== false)
+    if (!messageIds.length) return []
     const owningAccountId = accountId || conversation?.messages?.[0]?.accountId
     if (!owningAccountId) throw new Error('Cannot validate a message action without its account')
     const displayedIds = new Set(conversation?.messages?.map((item) => item.id) ?? [])
@@ -2180,7 +2182,7 @@
 
               <!-- Wrap each message in its own context menu -->
               <MessageContextMenu
-                messageIds={[msg.id]}
+                messageIds={(msg as any).matched === false ? [] : [msg.id]}
                 accountId={accountId || ''}
                 currentFolderId={folderId || ''}
                 folderType={folderType || 'inbox'}

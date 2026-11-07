@@ -2714,6 +2714,7 @@ export namespace message {
 	    bodyText?: string;
 	    bodyHtml?: string;
 	    bodyFetched: boolean;
+	    matched?: boolean;
 	    readReceiptTo?: string;
 	    readReceiptHandled: boolean;
 	    smimeStatus?: string;
@@ -2765,6 +2766,7 @@ export namespace message {
 	        this.bodyText = source["bodyText"];
 	        this.bodyHtml = source["bodyHtml"];
 	        this.bodyFetched = source["bodyFetched"];
+	        this.matched = source["matched"];
 	        this.readReceiptTo = source["readReceiptTo"];
 	        this.readReceiptHandled = source["readReceiptHandled"];
 	        this.smimeStatus = source["smimeStatus"];
