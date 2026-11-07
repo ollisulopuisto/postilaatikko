@@ -67,25 +67,37 @@
 
   // Regex pattern for CSS url() with remote http(s) URLs.
   // Handles all quote styles: raw ' or ", decimal &#39;/&#34;, hex &#x27;/&#x22;, named &apos;/&quot;
-  // Used as a string so we can create fresh RegExp instances (avoids lastIndex issues with /g)
   const CSS_QUOTE = `(?:['"]|&#(?:39|x27|34|x22);|&(?:apos|quot);)?`
   const CSS_REMOTE_URL_PATTERN = `url\\(\\s*${CSS_QUOTE}\\s*https?://[^)]*?${CSS_QUOTE}\\s*\\)`
+
+  // Bolt optimization: Pre-compile regular expressions once instead of recompiling
+  // `new RegExp(CSS_REMOTE_URL_PATTERN)` on every email render or derived state calculation.
+  // Pre-compiled regexes eliminate repeated regex compilation overhead in the reader hot path.
+  const REMOTE_IMG_RE = /<img[^>]+src=["'](https?:\/\/[^"']+)["']/i
+  const CSS_REMOTE_URL_RE = new RegExp(CSS_REMOTE_URL_PATTERN, 'i')
+  const CSS_REMOTE_URL_GLOBAL_RE = new RegExp(CSS_REMOTE_URL_PATTERN, 'gi')
+  const BG_ATTR_RE = /\bbackground\s*=\s*["'](https?:\/\/[^"']+)["']/i
+  const CID_IMG_RE = /src=["']cid:([^"']+)["']/gi
+  const BLOCK_IMG_RE = /(<img[^>]+)src=["'](https?:\/\/[^"']+)["']([^>]*>)/gi
+  const BG_ATTR_GLOBAL_RE = /\bbackground\s*=\s*["'](https?:\/\/[^"']+)["']/gi
 
   function checkForRemoteImages(html: string): boolean {
     if (!html) return false
     // Check <img> tags with remote src
-    if (/<img[^>]+src=["'](https?:\/\/[^"']+)["']/i.test(html)) return true
+    if (REMOTE_IMG_RE.test(html)) return true
     // Check CSS url() references with remote URLs (background-image, background, etc.)
-    if (new RegExp(CSS_REMOTE_URL_PATTERN, 'i').test(html)) return true
+    if (CSS_REMOTE_URL_RE.test(html)) return true
     // Check HTML background attribute with remote URLs
-    if (/\bbackground\s*=\s*["'](https?:\/\/[^"']+)["']/i.test(html)) return true
+    if (BG_ATTR_RE.test(html)) return true
     return false
   }
 
   function processCidReferences(html: string): string {
     if (!html) return html
+    // Reset lastIndex on global regex before replace
+    CID_IMG_RE.lastIndex = 0
     return html.replace(
-      /src=["']cid:([^"']+)["']/gi,
+      CID_IMG_RE,
       (match, contentId) => `src="${loadingPlaceholder}" data-cid="${contentId}"`
     )
   }
@@ -96,8 +108,9 @@
     let processed = processCidReferences(html)
     if (blockImages) {
       // Block <img> tags with remote sources
+      BLOCK_IMG_RE.lastIndex = 0
       processed = processed.replace(
-        /(<img[^>]+)src=["'](https?:\/\/[^"']+)["']([^>]*>)/gi,
+        BLOCK_IMG_RE,
         (match, before, src, after) => {
           const placeholder = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='60' viewBox='0 0 100 60'%3E%3Crect fill='%23e5e7eb' width='100' height='60'/%3E%3Ctext x='50' y='35' text-anchor='middle' fill='%239ca3af' font-size='10' font-family='sans-serif'%3EImage blocked%3C/text%3E%3C/svg%3E`
           return `${before}src="${placeholder}" data-blocked-src="${encodeURIComponent(src)}"${after}`
@@ -105,10 +118,12 @@
       )
       // Block remote URLs in CSS url() references (covers background-image, background, etc.)
       // Handles all quote encodings: raw, decimal entities, hex entities, named entities
-      processed = processed.replace(new RegExp(CSS_REMOTE_URL_PATTERN, 'gi'), 'url()')
+      CSS_REMOTE_URL_GLOBAL_RE.lastIndex = 0
+      processed = processed.replace(CSS_REMOTE_URL_GLOBAL_RE, 'url()')
       // Block HTML background attribute with remote URLs
+      BG_ATTR_GLOBAL_RE.lastIndex = 0
       processed = processed.replace(
-        /\bbackground\s*=\s*["'](https?:\/\/[^"']+)["']/gi,
+        BG_ATTR_GLOBAL_RE,
         'background=""'
       )
     } else {
