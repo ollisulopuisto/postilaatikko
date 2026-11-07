@@ -12,6 +12,7 @@ import (
 	"github.com/hkdb/aerion/internal/certificate"
 	"github.com/hkdb/aerion/internal/folder"
 	"github.com/hkdb/aerion/internal/logging"
+	"github.com/hkdb/aerion/internal/syncowner"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -109,6 +110,9 @@ func (a *App) SyncFolder(accountID, folderID string) error {
 	return a.syncFolder(accountID, folderID, true)
 }
 func (a *App) syncFolder(accountID, folderID string, restart bool) error {
+	if err := a.ensureSyncOwnership(); err != nil {
+		return err
+	}
 	const debounceMs = 500
 	log := logging.WithComponent("app")
 
@@ -225,6 +229,9 @@ func (a *App) syncFolder(accountID, folderID string, restart bool) error {
 // folder, then re-syncs headers. Bodies are fetched again only as messages are
 // opened.
 func (a *App) ForceSyncFolder(accountID, folderID string) error {
+	if err := a.ensureSyncOwnership(); err != nil {
+		return err
+	}
 	log := logging.WithComponent("app")
 	log.Info().Str("accountID", accountID).Str("folderID", folderID).Msg("Starting force re-sync of folder")
 
@@ -244,6 +251,16 @@ func (a *App) ForceSyncFolder(accountID, folderID string) error {
 
 	// Step 3: Refresh headers. Opening a message will fetch its body again.
 	return a.SyncFolder(accountID, folderID)
+}
+
+func (a *App) ensureSyncOwnership() error {
+	if a.syncOwnerError == nil {
+		return nil
+	}
+	if errors.Is(a.syncOwnerError, syncowner.ErrOwned) {
+		return errors.New("mail sync is currently owned by the always-on helper; stop the helper before syncing from the desktop")
+	}
+	return fmt.Errorf("desktop mail sync is unavailable: %w", a.syncOwnerError)
 }
 
 // SyncAccountComplete performs a comprehensive sync of an account:

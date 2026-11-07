@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	goSync "sync"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/hkdb/aerion/internal/notification"
 	"github.com/hkdb/aerion/internal/platform"
 	"github.com/hkdb/aerion/internal/sync"
+	"github.com/hkdb/aerion/internal/syncowner"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -23,6 +25,13 @@ import (
 // and IMAP IDLE manager for real-time email notifications
 func (a *App) initBackgroundSync(ctx context.Context) {
 	log := logging.WithComponent("app")
+	ownerLock, err := syncowner.TryAcquire(filepath.Join(a.paths.Data, "mail-sync.owner.lock"))
+	if err != nil {
+		a.syncOwnerError = err
+		log.Warn().Err(err).Msg("Desktop background sync is unavailable because another process owns mailbox sync")
+		return
+	}
+	a.syncOwnerLock = ownerLock
 
 	// Initialize the sync scheduler for periodic polling
 	a.syncScheduler = sync.NewScheduler(a.syncEngine, a.accountStore, a.folderStore)

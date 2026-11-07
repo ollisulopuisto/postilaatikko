@@ -29,7 +29,20 @@ func (r *SyncRuntime) enqueueFilter(rule *mailfilter.Rule, destination *folder.F
 func (r *SyncRuntime) runFilterQueue(ctx context.Context) {
 	defer r.filterWG.Done()
 	log := logging.WithComponent("alwayson.filters")
-	for job := range r.filterQ {
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		var job filterJob
+		select {
+		case <-ctx.Done():
+			return
+		case next, open := <-r.filterQ:
+			if !open {
+				return
+			}
+			job = next
+		}
 		jobContext, cancel := context.WithTimeout(ctx, 45*time.Second)
 		applied, err := r.filterOp.Apply(jobContext, job.rule, job.destination, job.message)
 		cancel()

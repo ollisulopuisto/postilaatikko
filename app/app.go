@@ -45,6 +45,7 @@ import (
 	"github.com/hkdb/aerion/internal/settings"
 	"github.com/hkdb/aerion/internal/smime"
 	"github.com/hkdb/aerion/internal/sync"
+	"github.com/hkdb/aerion/internal/syncowner"
 	"github.com/hkdb/aerion/internal/triage"
 	"github.com/hkdb/aerion/internal/undo"
 	"github.com/hkdb/aerion/internal/virtualfolder"
@@ -249,7 +250,9 @@ type App struct {
 	triageLabelMu   goSync.Mutex
 
 	// Background sync (polling + IDLE)
-	syncScheduler *sync.Scheduler
+	syncScheduler  *sync.Scheduler
+	syncOwnerLock  *syncowner.Lock
+	syncOwnerError error
 
 	// activities keeps time-critical background work (in-flight syncs,
 	// outgoing sends, the Undo Send countdown) out of App Nap on macOS;
@@ -1136,6 +1139,12 @@ func (a *App) shutdown(ctx context.Context) {
 	if a.idleManager != nil {
 		a.idleManager.Stop()
 		log.Info().Msg("IDLE manager stopped")
+	}
+	if a.syncOwnerLock != nil {
+		if err := a.syncOwnerLock.Release(); err != nil {
+			log.Warn().Err(err).Msg("Failed to release mailbox sync ownership")
+		}
+		a.syncOwnerLock = nil
 	}
 
 	// Stop sleep/wake monitor

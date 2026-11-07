@@ -21,6 +21,7 @@ import (
 	"github.com/hkdb/aerion/internal/mailmove"
 	"github.com/hkdb/aerion/internal/message"
 	mailSync "github.com/hkdb/aerion/internal/sync"
+	"github.com/hkdb/aerion/internal/syncowner"
 )
 
 // IMAPConfigSource supplies account credentials without making the runtime
@@ -31,18 +32,23 @@ type IMAPConfigSource func(context.Context, string) (*imap.ClientConfig, error)
 // scheduler. The caller starts it under the independently supervised helper's
 // context and closes it before releasing the credential provider.
 type SyncRuntime struct {
-	db        *database.DB
-	pool      *imap.Pool
-	scheduler *mailSync.Scheduler
-	filterOp  mailmove.FilterOperation
-	filterer  *mailmove.IMAPFilterMover
-	filterQ   chan filterJob
-	ctxMu     sync.RWMutex
-	ctx       context.Context
-	cancel    context.CancelFunc
-	filterWG  sync.WaitGroup
-	startOnce sync.Once
-	closeOnce sync.Once
+	db             *database.DB
+	pool           *imap.Pool
+	scheduler      *mailSync.Scheduler
+	filterOp       mailmove.FilterOperation
+	filterer       *mailmove.IMAPFilterMover
+	filterQ        chan filterJob
+	syncLockPath   string
+	ctxMu          sync.RWMutex
+	ctx            context.Context
+	cancel         context.CancelFunc
+	filterCancel   context.CancelFunc
+	filterWG       sync.WaitGroup
+	lifecycleWG    sync.WaitGroup
+	started        bool
+	queueCloseOnce sync.Once
+	startOnce      sync.Once
+	closeOnce      sync.Once
 }
 
 type filterJob struct {
@@ -77,7 +83,7 @@ func OpenSyncRuntime(dataDirectory string, credentials IMAPConfigSource) (*SyncR
 	accounts := account.NewStore(db)
 	folders := folder.NewStore(db)
 	messages := message.NewStore(db)
-	runtime := &SyncRuntime{db: db, ctx: context.Background()}
+	runtime := &SyncRuntime{db: db, ctx: context.Background(), syncLockPath: filepath.Join(dataDirectory, "mail-sync.owner.lock")}
 	pool := imap.NewPool(imap.DefaultPoolConfig(), func(accountID string) (*imap.ClientConfig, error) {
 		runtime.ctxMu.RLock()
 		ctx := runtime.ctx
@@ -106,14 +112,14 @@ func (r *SyncRuntime) Start(ctx context.Context) {
 		if ctx == nil {
 			ctx = context.Background()
 		}
-		workerContext, cancel := context.WithCancel(context.WithoutCancel(ctx))
+		workerContext, cancel := context.WithCancel(ctx)
 		r.ctxMu.Lock()
 		r.ctx = workerContext
 		r.cancel = cancel
+		r.started = true
 		r.ctxMu.Unlock()
-		r.filterWG.Add(1)
-		go r.runFilterQueue(workerContext)
-		r.scheduler.Start(ctx)
+		r.lifecycleWG.Add(1)
+		go r.runSyncLifecycle(workerContext)
 	})
 }
 
@@ -124,21 +130,16 @@ func (r *SyncRuntime) Close() error {
 	}
 	var closeErr error
 	r.closeOnce.Do(func() {
-		r.scheduler.Stop()
-		close(r.filterQ)
-		log := logging.WithComponent("alwayson.filters")
-		filterDone := make(chan struct{})
-		go func() {
-			r.filterWG.Wait()
-			close(filterDone)
-		}()
-		select {
-		case <-filterDone:
-		case <-time.After(30 * time.Second):
-			log.Warn().Int("queued", len(r.filterQ)).Msg("Filter shutdown deadline reached; canceling unfinished filter moves")
-			r.cancelFilterWorker()
-			<-filterDone
+		r.ctxMu.RLock()
+		cancel, started := r.cancel, r.started
+		r.ctxMu.RUnlock()
+		if started && cancel != nil {
+			cancel()
+			r.lifecycleWG.Wait()
+		} else {
+			r.scheduler.Stop()
 		}
+		r.closeFilterQueue()
 		r.cancelFilterWorker()
 		r.pool.CloseAll()
 		closeErr = r.db.Close()
@@ -148,10 +149,59 @@ func (r *SyncRuntime) Close() error {
 
 func (r *SyncRuntime) cancelFilterWorker() {
 	r.ctxMu.Lock()
-	cancel := r.cancel
-	r.cancel = nil
+	cancel := r.filterCancel
+	r.filterCancel = nil
 	r.ctxMu.Unlock()
 	if cancel != nil {
 		cancel()
 	}
+}
+
+func (r *SyncRuntime) runSyncLifecycle(ctx context.Context) {
+	defer r.lifecycleWG.Done()
+	log := logging.WithComponent("alwayson.sync")
+	log.Info().Msg("Waiting for exclusive mailbox sync ownership")
+	owner, err := syncowner.Acquire(ctx, r.syncLockPath)
+	if err != nil {
+		if ctx.Err() == nil {
+			log.Error().Err(err).Msg("Could not acquire mailbox sync ownership")
+		}
+		return
+	}
+	defer func() {
+		if err := owner.Release(); err != nil {
+			log.Warn().Err(err).Msg("Failed to release mailbox sync ownership")
+		}
+	}()
+	if ctx.Err() != nil {
+		return
+	}
+	log.Info().Msg("Acquired mailbox sync ownership")
+	filterContext, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	r.ctxMu.Lock()
+	r.ctx, r.filterCancel = filterContext, cancel
+	r.ctxMu.Unlock()
+	r.filterWG.Add(1)
+	go r.runFilterQueue(filterContext)
+	r.scheduler.Start(ctx)
+	<-ctx.Done()
+	r.scheduler.Stop()
+	r.closeFilterQueue()
+	filterDone := make(chan struct{})
+	go func() {
+		r.filterWG.Wait()
+		close(filterDone)
+	}()
+	select {
+	case <-filterDone:
+	case <-time.After(30 * time.Second):
+		log.Warn().Msg("Filter shutdown deadline reached; canceling unfinished filter moves")
+		cancel()
+		<-filterDone
+	}
+	cancel()
+}
+
+func (r *SyncRuntime) closeFilterQueue() {
+	r.queueCloseOnce.Do(func() { close(r.filterQ) })
 }

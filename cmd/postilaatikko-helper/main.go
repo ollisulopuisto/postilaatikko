@@ -285,7 +285,11 @@ func defaultDataDirectory() (string, error) {
 	case "darwin":
 		return filepath.Join(home, "Library", "Application Support", "Aerion"), nil
 	case "windows":
-		return filepath.Join(os.Getenv("APPDATA"), "Aerion"), nil
+		appData := os.Getenv("APPDATA")
+		if appData == "" {
+			appData = filepath.Join(home, "AppData", "Roaming")
+		}
+		return filepath.Join(appData, "Aerion"), nil
 	default:
 		if data := os.Getenv("XDG_DATA_HOME"); data != "" {
 			return filepath.Join(data, "aerion"), nil
