@@ -31,24 +31,21 @@ type IMAPConfigSource func(context.Context, string) (*imap.ClientConfig, error)
 // scheduler. The caller starts it under the independently supervised helper's
 // context and closes it before releasing the credential provider.
 type SyncRuntime struct {
-	db        *database.DB
-	pool      *imap.Pool
-	scheduler *mailSync.Scheduler
-	filterOp  mailmove.FilterOperation
-	filterer  *mailmove.IMAPFilterMover
-	filterQ   chan filterJob
-	ctxMu     sync.RWMutex
-	ctx       context.Context
-	cancel    context.CancelFunc
-	filterWG  sync.WaitGroup
-	startOnce sync.Once
-	closeOnce sync.Once
-}
-
-type filterJob struct {
-	rule        *mailfilter.Rule
-	destination *folder.Folder
-	message     *message.Message
+	db         *database.DB
+	pool       *imap.Pool
+	scheduler  *mailSync.Scheduler
+	filterOp   mailmove.FilterOperation
+	filterer   *mailmove.IMAPFilterMover
+	filterJobs *mailfilter.JobStore
+	rules      *mailfilter.Store
+	folders    *folder.Store
+	filterWake chan struct{}
+	ctxMu      sync.RWMutex
+	ctx        context.Context
+	cancel     context.CancelFunc
+	filterWG   sync.WaitGroup
+	startOnce  sync.Once
+	closeOnce  sync.Once
 }
 
 // OpenSyncRuntime opens an existing Postilaatikko data directory. It refuses
@@ -87,12 +84,20 @@ func OpenSyncRuntime(dataDirectory string, credentials IMAPConfigSource) (*SyncR
 	engine := mailSync.NewEngine(pool, accounts, folders, messages, message.NewAttachmentStore(db))
 	scheduler := mailSync.NewScheduler(engine, accounts, folders)
 	runtime.pool, runtime.scheduler = pool, scheduler
-	runtime.filterQ = make(chan filterJob, 64)
+	runtime.filterJobs = mailfilter.NewJobStore(db)
+	runtime.rules, runtime.folders = mailfilter.NewStore(db), folders
+	runtime.filterWake = make(chan struct{}, 1)
+	filterLog := logging.WithComponent("alwayson.filters")
+	if interrupted, recoverErr := runtime.filterJobs.RecoverInterrupted(); recoverErr != nil {
+		return closeOnError(fmt.Errorf("recover automatic filter jobs: %w", recoverErr))
+	} else if interrupted > 0 {
+		filterLog.Warn().Int64("jobs", interrupted).Msg("Previous process stopped during automatic filter moves; outcomes need inspection")
+	}
 	runtime.filterer = &mailmove.IMAPFilterMover{Messages: messages, Folders: folders, Raw: engine, Pool: pool}
 	runtime.filterOp = mailmove.FilterOperation{Messages: messages, Move: func(ctx context.Context, _ string, source *message.Message, destination *folder.Folder) error {
 		return runtime.filterer.MoveFilterMessage(ctx, source, destination.ID)
 	}}
-	router := mailfilter.NewAutomaticRouter(mailfilter.NewStore(db), folders, runtime.enqueueFilter)
+	router := mailfilter.NewAutomaticRouter(runtime.rules, folders, runtime.enqueueFilter)
 	engine.SetNewMessageHandler(func(_ string, _ string, msg *message.Message) { router.Route(msg) })
 	return runtime, nil
 }
@@ -125,7 +130,7 @@ func (r *SyncRuntime) Close() error {
 	var closeErr error
 	r.closeOnce.Do(func() {
 		r.scheduler.Stop()
-		close(r.filterQ)
+		close(r.filterWake)
 		log := logging.WithComponent("alwayson.filters")
 		filterDone := make(chan struct{})
 		go func() {
@@ -135,7 +140,7 @@ func (r *SyncRuntime) Close() error {
 		select {
 		case <-filterDone:
 		case <-time.After(30 * time.Second):
-			log.Warn().Int("queued", len(r.filterQ)).Msg("Filter shutdown deadline reached; canceling unfinished filter moves")
+			log.Warn().Msg("Filter shutdown deadline reached; canceling unfinished filter moves")
 			r.cancelFilterWorker()
 			<-filterDone
 		}
