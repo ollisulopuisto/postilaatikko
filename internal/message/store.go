@@ -124,7 +124,7 @@ func (s *Store) ListByFolder(folderID string, offset, limit int) ([]*MessageHead
 		       date, snippet, is_read, is_starred, has_attachments
 		FROM messages
 		WHERE folder_id = ?
-		ORDER BY date DESC
+		ORDER BY date DESC, id DESC
 		LIMIT ? OFFSET ?
 	`
 
