@@ -88,6 +88,7 @@ func handleConversationList(w http.ResponseWriter, r *http.Request, ops Conversa
 	}
 
 	var items []*message.Conversation
+	var listErr error
 	if req.Scope.Kind == views.ScopeFolder {
 		f, err := ops.GetFolder(req.Scope.FolderID)
 		if err != nil {
@@ -98,11 +99,11 @@ func handleConversationList(w http.ResponseWriter, r *http.Request, ops Conversa
 			writeHeaderError(w, r, http.StatusNotFound, CodeNotFound, "Folder not found for account", false)
 			return
 		}
-		items, err = ops.ListConversationsByFolder(req.Scope.FolderID, offset, pageRequest.Limit+1, req.SortOrder, req.Filter)
+		items, listErr = ops.ListConversationsByFolder(req.Scope.FolderID, offset, pageRequest.Limit+1, req.SortOrder, req.Filter)
 	} else {
-		items, err = ops.ListConversationsUnifiedInbox(offset, pageRequest.Limit+1, req.SortOrder, req.Filter)
+		items, listErr = ops.ListConversationsUnifiedInbox(offset, pageRequest.Limit+1, req.SortOrder, req.Filter)
 	}
-	if err != nil {
+	if listErr != nil {
 		writeHeaderError(w, r, http.StatusInternalServerError, CodeInternal, "Failed to load conversations", true)
 		return
 	}
