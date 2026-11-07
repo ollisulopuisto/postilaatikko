@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"github.com/hkdb/aerion/internal/alwayson"
 )
 
 const agentLabel = "fi.postilaatikko.send-later"
@@ -25,7 +27,7 @@ func launchAgentPath() (string, error) {
 	return filepath.Join(home, "Library", "LaunchAgents", agentLabel+".plist"), nil
 }
 
-func installAgent(ctx context.Context, identity, data, queue, listen, cert, key string, withSync bool, apiConfig apiListenerConfig) error {
+func installAgent(ctx context.Context, identity, data, queue, listen, cert, key string, withSync bool, apiConfig apiListenerConfig, gmailPush alwayson.GmailPushConfig) error {
 	if err := validateListener(listen, cert, key); err != nil {
 		return err
 	}
@@ -50,6 +52,12 @@ func installAgent(ctx context.Context, identity, data, queue, listen, cert, key 
 	arguments := []string{binary, "serve", "--identity", identity, "--data", data, "--queue", queue, "--listen", listen, "--api-listen", apiConfig.address}
 	if withSync {
 		arguments = append(arguments, "--sync")
+	}
+	if gmailPush.ProjectID != "" {
+		arguments = append(arguments, "--gmail-pubsub-project", gmailPush.ProjectID, "--gmail-pubsub-topic", gmailPush.Topic, "--gmail-pubsub-subscription", gmailPush.Subscription)
+		if gmailPush.CredentialsFile != "" {
+			arguments = append(arguments, "--gmail-pubsub-credentials", gmailPush.CredentialsFile)
+		}
 	}
 	if cert != "" {
 		arguments = append(arguments, "--tls-cert", cert, "--tls-key", key)

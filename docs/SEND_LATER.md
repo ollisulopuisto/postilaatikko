@@ -68,7 +68,22 @@ To run the existing bounded, header-first mailbox sync scheduler and automatic f
 "$POSTILAATIKKO_HELPER" serve --identity studio --sync
 ```
 
-Sync uses periodic polling as its recovery path. Gmail Pub/Sub reception and watch renewal are not wired yet.
+Sync uses periodic polling as its recovery path. Optional Gmail Pub/Sub pull reception provides faster change hints without adding an inbound listener; the helper renews Gmail watches daily and acknowledges notifications only after the existing incremental sync succeeds.
+
+### Optional Gmail Pub/Sub notifications
+
+Before enabling Pub/Sub, configure a Google Cloud project that matches the project used by the Gmail OAuth client, enable the Pub/Sub API, create a topic and a **pull** subscription, and grant `gmail-api-push@system.gserviceaccount.com` the Pub/Sub Publisher role on the topic. Grant the identity used by the helper Pub/Sub Subscriber on the subscription. Gmail requires the topic to be in the same developer project that executes `users.watch`; use a project and OAuth client you can administer to create the topic and grant that permission. Watches expire and should be renewed daily. See Google's [Gmail push setup](https://developers.google.com/workspace/gmail/api/guides/push).
+
+For a local user account, set up Application Default Credentials with `gcloud auth application-default login`. For a service-account identity, pass a protected credentials JSON path with `--gmail-pubsub-credentials`; never put its contents in shell history or source control. The Gmail account must already be configured in Postilaatikko with a Gmail OAuth grant that allows watch and history reads.
+
+```sh
+postilaatikko-helper serve --sync \
+  --gmail-pubsub-project my-google-project \
+  --gmail-pubsub-topic projects/my-google-project/topics/postilaatikko-mail \
+  --gmail-pubsub-subscription projects/my-google-project/subscriptions/postilaatikko-mail
+```
+
+Pass the same flags to `install-agent` to persist the configuration. Add `--gmail-pubsub-credentials /absolute/path/service-account.json` when using a service-account key file. The subscription must already exist and refer to the configured topic. With none of the Pub/Sub flags, the helper uses periodic sync only; partial Pub/Sub configuration is rejected.
 
 During this transition, use `--sync` only while the desktop app is closed; the app still has its own sync scheduler. Automatic cross-account filter execution and desktop API handoff are not migrated yet.
 

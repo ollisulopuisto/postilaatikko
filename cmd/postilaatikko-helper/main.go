@@ -75,6 +75,10 @@ func run(args []string) error {
 	apiCert := flags.String("api-tls-cert", "", "authenticated mailbox API TLS certificate")
 	apiKey := flags.String("api-tls-key", "", "authenticated mailbox API TLS private-key file")
 	withSync := flags.Bool("sync", false, "also run bounded background mailbox header sync")
+	gmailPubSubProject := flags.String("gmail-pubsub-project", "", "Google Cloud project ID for the Gmail Pub/Sub subscription")
+	gmailPubSubTopic := flags.String("gmail-pubsub-topic", "", "fully qualified Gmail watch topic, e.g. projects/PROJECT/topics/gmail")
+	gmailPubSubSubscription := flags.String("gmail-pubsub-subscription", "", "fully qualified Pub/Sub pull subscription resource name")
+	gmailPubSubCredentials := flags.String("gmail-pubsub-credentials", "", "optional Google Cloud ADC service-account credentials JSON path")
 	account := flags.String("account", "", "helper-local sending account ID")
 	from := flags.String("from", "", "sender address configured on the helper account")
 	to := flags.String("to", "", "comma-separated envelope recipients, including Bcc")
@@ -94,6 +98,16 @@ func run(args []string) error {
 	}
 	if flags.NArg() != 0 {
 		return errors.New("unexpected positional arguments")
+	}
+	pushConfig := alwayson.GmailPushConfig{ProjectID: *gmailPubSubProject, Topic: *gmailPubSubTopic, Subscription: *gmailPubSubSubscription, CredentialsFile: *gmailPubSubCredentials}
+	pushConfigured := pushConfig.ProjectID != "" || pushConfig.Topic != "" || pushConfig.Subscription != "" || pushConfig.CredentialsFile != ""
+	if pushConfigured {
+		if !*withSync {
+			return errors.New("Gmail Pub/Sub requires --sync")
+		}
+		if err := pushConfig.Validate(); err != nil {
+			return err
+		}
 	}
 	if err := logging.Init(logging.Config{Level: "warn", Console: true}); err != nil {
 		return err
@@ -229,6 +243,12 @@ func run(args []string) error {
 			return err
 		}
 		apiConfig := apiListenerConfig{address: *apiListen, cert: *apiCert, key: *apiKey, allowedHost: apiAllowedHosts}
+		if pushConfigured {
+			if err := syncRuntime.ConfigureGmailPush(pushConfig); err != nil {
+				_ = syncRuntime.Close()
+				return err
+			}
+		}
 		return serve(ctx, store, transport, syncRuntime, *listen, *cert, *key, *withSync, apiConfig)
 	case "install-agent":
 		transport, err := scheduledsend.OpenSMTPTransport(*data)
@@ -237,7 +257,7 @@ func run(args []string) error {
 		}
 		transport.Close()
 		apiConfig := apiListenerConfig{address: *apiListen, cert: *apiCert, key: *apiKey, allowedHost: apiAllowedHosts}
-		return installAgent(ctx, *identityName, *data, *queue, *listen, *cert, *key, *withSync, apiConfig)
+		return installAgent(ctx, *identityName, *data, *queue, *listen, *cert, *key, *withSync, apiConfig, pushConfig)
 	default:
 		return fmt.Errorf("unknown helper command %q", command)
 	}

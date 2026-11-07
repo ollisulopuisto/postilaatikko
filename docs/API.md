@@ -104,9 +104,9 @@ go build ./cmd/postilaatikko-cli
 ./postilaatikko-cli --token=$TOKEN views
 
 # Search headers, read a thread, and explicitly fetch one body
-./postilaatikko-cli --token=$TOKEN search "report" --json
-./postilaatikko-cli --token=$TOKEN thread acc-1 thr-100 --json
-./postilaatikko-cli --token=$TOKEN body acc-1 msg-101 fetch --json
+./postilaatikko-cli --token="$TOKEN" --json search "report"
+./postilaatikko-cli --token="$TOKEN" --json thread acc-1 thr-100
+./postilaatikko-cli --token="$TOKEN" --json body acc-1 msg-101 fetch
 ```
 
 The helper also serves bounded message-header pages. The current CLI does not
@@ -118,8 +118,17 @@ curl --fail --silent --show-error \
   'http://127.0.0.1:8029/v1/messages/headers?accountId=acc-1&folderId=inbox&limit=50'
 ```
 
-The CLI's `action` command is still contract-only and returns not found until
-mail mutation handlers are mounted. Attachment routes are also future work.
+The CLI's `action` command sends mutations through the authenticated
+`/v1/actions` route. It generates an idempotency key for each invocation; API
+clients should provide their own stable key when they may retry a request.
+For example:
+
+```sh
+./postilaatikko-cli --token="$TOKEN" --json action archive acc-1 msg-101
+./postilaatikko-cli --token="$TOKEN" --json action move acc-1 msg-101 folder-archive
+```
+
+Attachment routes remain contract-only and are not mounted by the helper yet.
 
 ### Managing API Client Grants
 
@@ -141,7 +150,7 @@ postilaatikko-helper api-client list
 postilaatikko-helper api-client revoke --client client-<id>
 ```
 
-To start header-first background sync and automatic filters while the desktop is closed, run `serve --sync`. This uses the existing bounded periodic sync path. Gmail Pub/Sub push reception and watch renewal are not part of this listener.
+To start header-first background sync and automatic filters while the desktop is closed, run `serve --sync`. This uses the existing bounded periodic sync path. Optional Gmail Pub/Sub pull reception and daily watch renewal can be enabled with `--gmail-pubsub-project`, `--gmail-pubsub-topic`, and `--gmail-pubsub-subscription`; no inbound callback listener is exposed. Periodic sync remains the recovery path.
 
 Remote API access is optional. Bind the API separately, provide a certificate trusted by clients, and allow only the public DNS name used in the request Host header:
 
@@ -163,5 +172,6 @@ The `api-client` commands manage credentials. The create command prints a high-e
 
 The helper provides authenticated capabilities, account/folder/view catalogs,
 bounded header pages, provider-aware search, thread metadata, cached body reads,
-explicit body fetch, and idempotent mail actions. Attachment reads, Gmail Pub/Sub,
-and watch renewal are not yet available through the helper.
+and explicit body fetch. Gmail Pub/Sub pull notifications and daily watch
+renewal are optional helper workers. Mail actions are idempotent; attachment
+reads are not yet available through the helper.
