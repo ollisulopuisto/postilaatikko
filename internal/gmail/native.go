@@ -241,6 +241,34 @@ func (c *Client) ProfileHistoryID(ctx context.Context) (string, error) {
 	err := c.do(ctx, http.MethodGet, "/profile", nil, nil, &r)
 	return r.HistoryID, err
 }
+
+// WatchResponse describes a Gmail push watch registration.
+type WatchResponse struct {
+	HistoryID string
+	ExpiresAt time.Time
+}
+
+// Watch registers or renews a Gmail mailbox watch for a fully qualified
+// Cloud Pub/Sub topic name.
+func (c *Client) Watch(ctx context.Context, topic string) (*WatchResponse, error) {
+	topic = strings.TrimSpace(topic)
+	if topic == "" {
+		return nil, fmt.Errorf("gmail: Pub/Sub topic is required")
+	}
+	var wire struct {
+		HistoryID  string `json:"historyId"`
+		Expiration string `json:"expiration"`
+	}
+	if err := c.do(ctx, http.MethodPost, "/watch", nil, map[string]string{"topicName": topic}, &wire); err != nil {
+		return nil, err
+	}
+	expiresMillis, err := strconv.ParseInt(wire.Expiration, 10, 64)
+	if err != nil || wire.HistoryID == "" || expiresMillis <= 0 {
+		return nil, fmt.Errorf("gmail: watch response is incomplete")
+	}
+	return &WatchResponse{HistoryID: wire.HistoryID, ExpiresAt: time.UnixMilli(expiresMillis)}, nil
+}
+
 func (c *Client) History(ctx context.Context, start, page string) (*HistoryPage, error) {
 	q := url.Values{"startHistoryId": {start}, "maxResults": {"100"}}
 	if page != "" {

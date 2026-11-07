@@ -141,7 +141,7 @@ postilaatikko-helper api-client list
 postilaatikko-helper api-client revoke --client client-<id>
 ```
 
-To start header-first background sync and automatic filters while the desktop is closed, run `serve --sync`. This uses the existing bounded periodic sync path. Gmail Pub/Sub push reception and watch renewal are not part of this listener.
+To start header-first background sync and automatic filters while the desktop is closed, run `serve --sync`. This uses the existing bounded periodic sync path. Optional Gmail Pub/Sub pull reception and daily watch renewal can be enabled with `--gmail-pubsub-project`, `--gmail-pubsub-topic`, and `--gmail-pubsub-subscription`; no inbound callback listener is exposed. Periodic sync remains the recovery path.
 
 Remote API access is optional. Bind the API separately, provide a certificate trusted by clients, and allow only the public DNS name used in the request Host header:
 
@@ -163,5 +163,6 @@ The `api-client` commands manage credentials. The create command prints a high-e
 
 The helper provides authenticated capabilities, account/folder/view catalogs,
 bounded header pages, provider-aware search, thread metadata, cached body reads,
-explicit body fetch, and idempotent mail actions. Attachment reads, Gmail Pub/Sub,
-and watch renewal are not yet available through the helper.
+and explicit body fetch. Gmail Pub/Sub pull notifications and daily watch
+renewal are optional helper workers. Mail actions are idempotent; attachment
+reads are not yet available through the helper.

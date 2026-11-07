@@ -51,6 +51,7 @@ type SyncRuntime struct {
 	triage         *triage.Store
 	filterOp       mailmove.FilterOperation
 	filterer       *mailmove.IMAPFilterMover
+	gmailPush      *GmailPushConfig
 	filterJobs     *mailfilter.JobStore
 	rules          *mailfilter.Store
 	folders        *folder.Store
@@ -149,6 +150,26 @@ func (r *SyncRuntime) Start(ctx context.Context) {
 	})
 }
 
+// ConfigureGmailPush enables optional Gmail Pub/Sub receive and watch renewal.
+// Configuration must be provided before Start; periodic sync remains enabled
+// as the recovery path regardless of Pub/Sub availability.
+func (r *SyncRuntime) ConfigureGmailPush(config GmailPushConfig) error {
+	if r == nil {
+		return errors.New("always-on runtime is unavailable")
+	}
+	if err := config.Validate(); err != nil {
+		return err
+	}
+	r.ctxMu.Lock()
+	defer r.ctxMu.Unlock()
+	if r.started {
+		return errors.New("Gmail Pub/Sub must be configured before the runtime starts")
+	}
+	copy := config
+	r.gmailPush = &copy
+	return nil
+}
+
 // Close stops background work before closing its IMAP and database resources.
 func (r *SyncRuntime) Close() error {
 	if r == nil {
@@ -209,9 +230,23 @@ func (r *SyncRuntime) runSyncLifecycle(ctx context.Context) {
 	r.filterWG.Add(1)
 	go r.runFilterQueue(filterContext)
 	r.scheduler.Start(ctx)
+	var gmailPushDone chan struct{}
+	r.ctxMu.RLock()
+	gmailPush := r.gmailPush
+	r.ctxMu.RUnlock()
+	if gmailPush != nil {
+		gmailPushDone = make(chan struct{})
+		go func() {
+			defer close(gmailPushDone)
+			r.runGmailPush(ctx, *gmailPush)
+		}()
+	}
 	<-ctx.Done()
 	r.scheduler.Stop()
 	r.stopFilterWorker()
+	if gmailPushDone != nil {
+		<-gmailPushDone
+	}
 }
 
 func (r *SyncRuntime) stopFilterWorker() {
