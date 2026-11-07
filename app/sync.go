@@ -254,6 +254,8 @@ func (a *App) ForceSyncFolder(accountID, folderID string) error {
 }
 
 func (a *App) ensureSyncOwnership() error {
+	a.syncOwnerMu.Lock()
+	defer a.syncOwnerMu.Unlock()
 	if a.syncOwnerError == nil {
 		return nil
 	}

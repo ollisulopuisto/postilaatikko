@@ -250,9 +250,13 @@ type App struct {
 	triageLabelMu   goSync.Mutex
 
 	// Background sync (polling + IDLE)
-	syncScheduler  *sync.Scheduler
-	syncOwnerLock  *syncowner.Lock
-	syncOwnerError error
+	syncScheduler   *sync.Scheduler
+	syncOwnerMu     goSync.Mutex
+	syncOwnerLock   *syncowner.Lock
+	syncOwnerError  error
+	syncOwnerCancel context.CancelFunc
+	syncOwnerWait   goSync.WaitGroup
+	syncShutdown    bool
 
 	// activities keeps time-critical background work (in-flight syncs,
 	// outgoing sends, the Undo Send countdown) out of App Nap on macOS;
@@ -1107,6 +1111,15 @@ func (a *App) Shutdown(ctx context.Context) {
 func (a *App) shutdown(ctx context.Context) {
 	a.clearContactOAuth()
 	log := logging.WithComponent("app")
+	a.syncOwnerMu.Lock()
+	a.syncShutdown = true
+	cancelSyncOwnerWait := a.syncOwnerCancel
+	a.syncOwnerCancel = nil
+	a.syncOwnerMu.Unlock()
+	if cancelSyncOwnerWait != nil {
+		cancelSyncOwnerWait()
+	}
+	a.syncOwnerWait.Wait()
 
 	// Broadcast shutdown to all composer windows
 	if a.ipcServer != nil {
@@ -1140,11 +1153,14 @@ func (a *App) shutdown(ctx context.Context) {
 		a.idleManager.Stop()
 		log.Info().Msg("IDLE manager stopped")
 	}
-	if a.syncOwnerLock != nil {
-		if err := a.syncOwnerLock.Release(); err != nil {
+	a.syncOwnerMu.Lock()
+	ownerLock := a.syncOwnerLock
+	a.syncOwnerLock = nil
+	a.syncOwnerMu.Unlock()
+	if ownerLock != nil {
+		if err := ownerLock.Release(); err != nil {
 			log.Warn().Err(err).Msg("Failed to release mailbox sync ownership")
 		}
-		a.syncOwnerLock = nil
 	}
 
 	// Stop sleep/wake monitor
