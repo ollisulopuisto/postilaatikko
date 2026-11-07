@@ -1,9 +1,17 @@
 package app
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+
+	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/folder"
 	"github.com/hkdb/aerion/internal/gmail"
 	"github.com/hkdb/aerion/internal/mailservice"
+	"github.com/hkdb/aerion/internal/message"
+	"github.com/hkdb/aerion/internal/views"
 	"github.com/hkdb/aerion/internal/virtualfolder"
 )
 
@@ -41,10 +49,96 @@ func (a *App) currentMailService() *mailservice.Service {
 // SearchMail keeps the desktop API stable while sharing its provider-aware
 // search operation with the headless service.
 func (a *App) SearchMail(req MailSearchRequest) (*MailSearchPage, error) {
+	if page, handled, err := a.searchMailViaService(req); handled || err != nil {
+		return page, err
+	}
 	return a.currentMailService().Search(a.ctx, req)
 }
 
 // CancelMailSearch cancels a search by its UI session identifier.
 func (a *App) CancelMailSearch(sessionID string) {
+	if a.mailboxService != nil {
+		a.mailboxService.cancelSearch(sessionID)
+	}
 	a.currentMailService().Cancel(sessionID)
+}
+
+func (a *App) searchMailViaService(req MailSearchRequest) (*MailSearchPage, bool, error) {
+	if a.mailboxService == nil || req.VirtualFolderID != "" || len(req.FolderIDs) > 0 {
+		return nil, false, nil
+	}
+	status := a.GetMailboxServiceStatus()
+	if !status.Connected {
+		if status.ErrorCode == "service_unavailable" {
+			return nil, false, nil
+		}
+		return nil, true, fmt.Errorf("local mailbox service unavailable: %s", status.Message)
+	}
+	if len(req.AccountIDs) > 1 {
+		return nil, true, errors.New("the mailbox service search accepts at most one selected account")
+	}
+	if len(req.SessionID) > 128 {
+		return nil, true, errors.New("invalid search session")
+	}
+	var within views.Scope
+	if len(req.AccountIDs) == 1 {
+		within = views.Scope{Kind: views.ScopeAccount, AccountID: req.AccountIDs[0]}
+	} else {
+		within = views.Scope{Kind: views.ScopeAllAccounts}
+	}
+	query := strings.TrimSpace(req.Query)
+	if query == "" {
+		return &MailSearchPage{Conversations: []*message.Conversation{}, Issues: []MailSearchIssue{}}, true, nil
+	}
+	scope := views.Scope{Kind: views.ScopeSearch, Query: query, Within: &within}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	page, err := a.mailboxService.search(ctx, req.SessionID, v1.SearchRequest{
+		Scope:  scope,
+		Page:   v1.PageRequest{Cursor: req.Cursor, Limit: req.Limit},
+		Filter: req.Filter,
+	})
+	if err != nil {
+		return nil, true, err
+	}
+	result := &MailSearchPage{Conversations: make([]*message.Conversation, 0, len(page.Items)), Issues: make([]MailSearchIssue, 0, len(page.Errors))}
+	for _, item := range page.Items {
+		participants := make([]message.Address, 0, len(item.Participants))
+		for _, participant := range item.Participants {
+			participants = append(participants, message.Address{Name: participant.Name, Email: participant.Email})
+		}
+		messageIDs := make([]string, 0, len(item.Matched))
+		for _, ref := range item.Matched {
+			if ref.AccountID == item.Ref.AccountID {
+				messageIDs = append(messageIDs, ref.MessageID)
+			}
+		}
+		result.Conversations = append(result.Conversations, &message.Conversation{
+			ThreadID:       item.Ref.ThreadID,
+			AccountID:      item.Ref.AccountID,
+			AccountName:    item.AccountName,
+			FolderID:       item.FolderID,
+			Subject:        item.Subject,
+			Snippet:        item.Snippet,
+			MessageCount:   item.MessageCount,
+			UnreadCount:    item.UnreadCount,
+			HasAttachments: item.HasAttachments,
+			IsStarred:      item.IsStarred,
+			LatestDate:     item.LatestDate,
+			MessageIDs:     messageIDs,
+			Participants:   participants,
+		})
+	}
+	for _, issue := range page.Errors {
+		result.Issues = append(result.Issues, MailSearchIssue{
+			AccountID:   issue.AccountID,
+			AccountName: issue.AccountName,
+			Message:     issue.Message,
+			Reauthorize: issue.Reauthorize,
+		})
+	}
+	result.Cursor = page.NextCursor
+	return result, true, nil
 }

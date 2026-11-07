@@ -34,6 +34,10 @@ const (
 	// ScopeAllInboxes is the Inbox folders of every enabled account, resolved
 	// at query time.
 	ScopeAllInboxes ScopeKind = "all_inboxes"
+	// ScopeAllAccounts includes every folder of every enabled account.
+	ScopeAllAccounts ScopeKind = "all_accounts"
+	// ScopeAccount includes every folder of one enabled account.
+	ScopeAccount ScopeKind = "account"
 	// ScopeFolder is one real folder of one account.
 	ScopeFolder ScopeKind = "folder"
 	// ScopeVirtualFolder is a saved cross-account view.
@@ -71,6 +75,17 @@ func (s Scope) Validate() error {
 	case ScopeAllInboxes:
 		if s.AccountID != "" || s.FolderID != "" || s.VirtualFolderID != "" || s.Query != "" || s.Within != nil {
 			return errors.New("all_inboxes scope takes no other fields")
+		}
+	case ScopeAllAccounts:
+		if s.AccountID != "" || s.FolderID != "" || s.VirtualFolderID != "" || s.Query != "" || s.Within != nil {
+			return errors.New("all_accounts scope takes no other fields")
+		}
+	case ScopeAccount:
+		if s.AccountID == "" {
+			return errors.New("account scope needs accountId")
+		}
+		if s.FolderID != "" || s.VirtualFolderID != "" || s.Query != "" || s.Within != nil {
+			return errors.New("account scope takes only accountId")
 		}
 	case ScopeFolder:
 		if s.AccountID == "" || s.FolderID == "" {
@@ -115,6 +130,8 @@ func ScopeKey(s Scope) string {
 	switch s.Kind {
 	case ScopeFolder:
 		return "folder:" + url.PathEscape(s.AccountID) + "/" + url.PathEscape(s.FolderID)
+	case ScopeAccount:
+		return "account:" + url.PathEscape(s.AccountID)
 	case ScopeVirtualFolder:
 		return "virtual_folder:" + url.PathEscape(s.VirtualFolderID)
 	case ScopeSearch:
@@ -260,6 +277,8 @@ type ThreadView struct {
 // thread in the view; MessageCount also counts conversation context.
 type ThreadSummary struct {
 	Ref            ThreadRef    `json:"ref"`
+	AccountName    string       `json:"accountName,omitempty"`
+	FolderID       string       `json:"folderId,omitempty"`
 	Subject        string       `json:"subject"`
 	Snippet        string       `json:"snippet"`
 	LatestDate     time.Time    `json:"latestDate"`
@@ -274,9 +293,11 @@ type ThreadSummary struct {
 // PartialError says one account could not answer. The page is still returned
 // but is not complete.
 type PartialError struct {
-	AccountID string `json:"accountId"`
-	Code      string `json:"code"`
-	Message   string `json:"message"`
+	AccountID   string `json:"accountId"`
+	AccountName string `json:"accountName,omitempty"`
+	Code        string `json:"code"`
+	Message     string `json:"message"`
+	Reauthorize bool   `json:"reauthorize,omitempty"`
 }
 
 // ThreadPage is one page of a list. Complete is false when any account failed

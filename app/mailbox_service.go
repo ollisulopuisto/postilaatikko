@@ -13,6 +13,7 @@ import (
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/database"
 	"github.com/hkdb/aerion/internal/keyring"
+	"github.com/hkdb/aerion/internal/views"
 )
 
 const (
@@ -44,6 +45,13 @@ type mailboxServiceConnector struct {
 	keyring    *keyring.Keyring
 	credential *desktopMailboxCredential
 	client     *automationclient.Client
+	searchMu   sync.Mutex
+	searches   map[string]activeMailboxSearch
+}
+
+type activeMailboxSearch struct {
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 func newMailboxServiceConnector(db *database.DB) *mailboxServiceConnector {
@@ -191,6 +199,49 @@ func (c *mailboxServiceConnector) listConversations(ctx context.Context, req v1.
 		return nil, err
 	}
 	return client.ListConversations(ctx, req)
+}
+
+func (c *mailboxServiceConnector) search(ctx context.Context, sessionID string, req v1.SearchRequest) (*views.ThreadPage, error) {
+	client, err := c.getClient()
+	if err != nil {
+		return nil, err
+	}
+	searchCtx, cancel := context.WithCancel(ctx)
+	if sessionID != "" {
+		c.searchMu.Lock()
+		if c.searches == nil {
+			c.searches = map[string]activeMailboxSearch{}
+		}
+		if previous, ok := c.searches[sessionID]; ok {
+			previous.cancel()
+		}
+		c.searches[sessionID] = activeMailboxSearch{ctx: searchCtx, cancel: cancel}
+		c.searchMu.Unlock()
+	}
+	defer func() {
+		cancel()
+		if sessionID == "" {
+			return
+		}
+		c.searchMu.Lock()
+		defer c.searchMu.Unlock()
+		if current, ok := c.searches[sessionID]; ok && current.ctx == searchCtx {
+			delete(c.searches, sessionID)
+		}
+	}()
+	return client.Search(searchCtx, req)
+}
+
+func (c *mailboxServiceConnector) cancelSearch(sessionID string) {
+	if sessionID == "" {
+		return
+	}
+	c.searchMu.Lock()
+	defer c.searchMu.Unlock()
+	if active, ok := c.searches[sessionID]; ok {
+		active.cancel()
+		delete(c.searches, sessionID)
+	}
 }
 
 // GetMailboxServiceStatus checks the authenticated localhost service without

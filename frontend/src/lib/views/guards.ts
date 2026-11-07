@@ -100,7 +100,7 @@ export function isThreadPage(value: unknown): boolean {
   )
 }
 
-const SCOPE_KINDS = ['all_inboxes', 'folder', 'virtual_folder', 'search']
+const SCOPE_KINDS = ['all_inboxes', 'all_accounts', 'account', 'folder', 'virtual_folder', 'search']
 const SCOPE_FIELDS = ['accountId', 'folderId', 'virtualFolderId', 'query', 'within']
 
 function has(scope: Json, key: string): boolean {
@@ -125,6 +125,11 @@ export function scopeError(scope: unknown): string | null {
   switch (kind) {
     case 'all_inboxes':
       return only() ? null : 'all_inboxes scope takes no other fields'
+    case 'all_accounts':
+      return only() ? null : 'all_accounts scope takes no other fields'
+    case 'account':
+      if (!has(scope, 'accountId')) return 'account scope needs accountId'
+      return only('accountId') ? null : 'account scope takes only accountId'
     case 'folder':
       if (!has(scope, 'accountId') || !has(scope, 'folderId')) return 'folder scope needs accountId and folderId'
       return only('accountId', 'folderId') ? null : 'folder scope takes only accountId and folderId'

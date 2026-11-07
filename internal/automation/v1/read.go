@@ -34,6 +34,13 @@ type SearchOperations interface {
 	SearchMessages(ctx context.Context, scope views.Scope, query string, cursor string, limit int) (*views.ThreadPage, error)
 }
 
+// FilteredSearchOperations supports the desktop's bounded triage filters.
+// SearchOperations remains compatible with read-only adapters that do not
+// provide those filters.
+type FilteredSearchOperations interface {
+	SearchMessagesWithFilter(ctx context.Context, scope views.Scope, query, filter, cursor string, limit int) (*views.ThreadPage, error)
+}
+
 // MessageReadOperations defines thread and body reads. Body fetch remains an
 // explicit operation and is guarded by a separate capability.
 type MessageReadOperations interface {
@@ -305,7 +312,15 @@ func (h *ReadHandler) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err := h.search.SearchMessages(r.Context(), req.Scope, req.Scope.Query, normalizedPage.Cursor, normalizedPage.Limit)
+	var res *views.ThreadPage
+	if req.Filter == "" {
+		res, err = h.search.SearchMessages(r.Context(), req.Scope, req.Scope.Query, normalizedPage.Cursor, normalizedPage.Limit)
+	} else if filtered, ok := h.search.(FilteredSearchOperations); ok {
+		res, err = filtered.SearchMessagesWithFilter(r.Context(), req.Scope, req.Scope.Query, req.Filter, normalizedPage.Cursor, normalizedPage.Limit)
+	} else {
+		h.writeError(w, r, http.StatusBadRequest, CodeInvalidRequest, "Search filter is not supported", false)
+		return
+	}
 	if err != nil {
 		h.writeError(w, r, http.StatusInternalServerError, CodeInternal, fmt.Sprintf("Search failed: %v", err), true)
 		return
