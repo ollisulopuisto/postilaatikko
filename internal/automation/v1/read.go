@@ -23,6 +23,12 @@ type CatalogOperations interface {
 	GetVirtualFolders() ([]*virtualfolder.VirtualFolder, error)
 }
 
+// MessageHeaderOperations defines bounded, folder-scoped header reads.
+type MessageHeaderOperations interface {
+	GetFolder(folderID string) (*folder.Folder, error)
+	ListByFolder(folderID string, offset, limit int) ([]*message.MessageHeader, error)
+}
+
 // ReadOperations defines backend application capabilities required by all read endpoints.
 type ReadOperations interface {
 	CatalogOperations
