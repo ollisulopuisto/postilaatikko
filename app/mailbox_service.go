@@ -185,6 +185,14 @@ func (c *mailboxServiceConnector) fetchMessageBody(ctx context.Context, accountI
 	return err
 }
 
+func (c *mailboxServiceConnector) listConversations(ctx context.Context, req v1.ConversationListRequest) (*v1.ConversationListPage, error) {
+	client, err := c.getClient()
+	if err != nil {
+		return nil, err
+	}
+	return client.ListConversations(ctx, req)
+}
+
 // GetMailboxServiceStatus checks the authenticated localhost service without
 // allowing a missing service to block application startup.
 func (a *App) GetMailboxServiceStatus() MailboxServiceStatus {
