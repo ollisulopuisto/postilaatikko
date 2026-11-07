@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	goSync "sync"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/hkdb/aerion/internal/notification"
 	"github.com/hkdb/aerion/internal/platform"
 	"github.com/hkdb/aerion/internal/sync"
+	"github.com/hkdb/aerion/internal/syncowner"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -22,6 +24,76 @@ import (
 // initBackgroundSync initializes and starts the background sync scheduler
 // and IMAP IDLE manager for real-time email notifications
 func (a *App) initBackgroundSync(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	log := logging.WithComponent("app")
+	ownerLock, err := syncowner.TryAcquire(filepath.Join(a.paths.Data, "mail-sync.owner.lock"))
+	if err != nil {
+		a.syncOwnerMu.Lock()
+		if a.syncShutdown {
+			a.syncOwnerMu.Unlock()
+			return
+		}
+		a.syncOwnerError = err
+		if errors.Is(err, syncowner.ErrOwned) && ctx != nil {
+			waitContext, cancel := context.WithCancel(ctx)
+			a.syncOwnerCancel = cancel
+			a.syncOwnerWait.Add(1)
+			a.syncOwnerMu.Unlock()
+			log.Warn().Err(err).Msg("Desktop sync is waiting for the always-on helper to release mailbox ownership")
+			go a.waitForSyncOwnership(waitContext)
+			return
+		}
+		a.syncOwnerMu.Unlock()
+		log.Warn().Err(err).Msg("Desktop background sync is unavailable because another process owns mailbox sync")
+		return
+	}
+	a.syncOwnerMu.Lock()
+	if a.syncShutdown {
+		a.syncOwnerMu.Unlock()
+		if err := ownerLock.Release(); err != nil {
+			log.Warn().Err(err).Msg("Failed to release mailbox sync ownership during shutdown")
+		}
+		return
+	}
+	a.syncOwnerLock = ownerLock
+	a.syncOwnerMu.Unlock()
+	a.startBackgroundSync(ctx)
+}
+
+func (a *App) waitForSyncOwnership(ctx context.Context) {
+	defer a.syncOwnerWait.Done()
+	log := logging.WithComponent("app")
+	ownerLock, err := syncowner.Acquire(ctx, filepath.Join(a.paths.Data, "mail-sync.owner.lock"))
+	if err != nil {
+		if ctx.Err() == nil {
+			log.Error().Err(err).Msg("Desktop could not reacquire mailbox sync ownership")
+		}
+		return
+	}
+	a.syncOwnerMu.Lock()
+	if a.syncShutdown || ctx.Err() != nil {
+		a.syncOwnerMu.Unlock()
+		if err := ownerLock.Release(); err != nil {
+			log.Warn().Err(err).Msg("Failed to release mailbox sync ownership after shutdown")
+		}
+		return
+	}
+	a.syncOwnerLock = ownerLock
+	a.syncOwnerError = nil
+	a.syncOwnerCancel = nil
+	a.syncOwnerMu.Unlock()
+	log.Info().Msg("Desktop reacquired mailbox sync ownership")
+	a.startBackgroundSync(ctx)
+}
+
+func (a *App) startBackgroundSync(ctx context.Context) {
+	a.syncOwnerMu.Lock()
+	defer a.syncOwnerMu.Unlock()
+	if a.syncShutdown || a.syncOwnerLock == nil || a.syncScheduler != nil {
+		return
+	}
 	log := logging.WithComponent("app")
 
 	// Initialize the sync scheduler for periodic polling
@@ -97,6 +169,12 @@ func (a *App) initBackgroundSync(ctx context.Context) {
 	go a.processIdleEvents(ctx)
 
 	log.Info().Msg("IDLE manager started")
+}
+
+func (a *App) currentSyncScheduler() *sync.Scheduler {
+	a.syncOwnerMu.Lock()
+	defer a.syncOwnerMu.Unlock()
+	return a.syncScheduler
 }
 
 // processIdleEvents processes mail events from IDLE connections
@@ -247,7 +325,11 @@ func (a *App) handleIdleNewMail(event imap.MailEvent) {
 	a.syncMu.Unlock()
 
 	// Use the scheduler's blocking sync to get new mail info
-	newMailInfo, err := a.syncScheduler.SyncAccountInboxBlocking(event.AccountID)
+	scheduler := a.currentSyncScheduler()
+	if scheduler == nil {
+		return
+	}
+	newMailInfo, err := scheduler.SyncAccountInboxBlocking(event.AccountID)
 
 	if err != nil {
 		log.Error().Err(err).Str("accountID", event.AccountID).Msg("Failed to sync after IDLE notification")
@@ -440,7 +522,11 @@ func (a *App) handleIdleExpunge(accountID string) {
 	}
 
 	log.Debug().Str("accountID", accountID).Msg("Messages expunged via IDLE, reconciling inbox deletions (lightweight)")
-	_, syncErr := a.syncScheduler.SyncAccountInboxBlocking(accountID)
+	scheduler := a.currentSyncScheduler()
+	if scheduler == nil {
+		return
+	}
+	_, syncErr := scheduler.SyncAccountInboxBlocking(accountID)
 
 	// Always emit folder:synced: the sync emits progress that drives the sidebar
 	// indicator, so we emit the matching completion (clears the bar) and reload

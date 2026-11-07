@@ -658,6 +658,10 @@ func (a *App) handleExternalMailto(rawURL string) {
 func (a *App) syncSentFolder(accountID string) error {
 	defer recoverPanic("app.compose", "sync sent folder")
 	log := logging.WithComponent("app")
+	if err := a.ensureSyncOwnership(); err != nil {
+		log.Debug().Err(err).Msg("Skipping Sent folder sync because another process owns mailbox sync")
+		return nil
+	}
 
 	sentFolder, err := a.GetSpecialFolder(accountID, folder.TypeSent)
 	if err != nil || sentFolder == nil {

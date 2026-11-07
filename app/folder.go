@@ -39,6 +39,9 @@ func (a *App) GetFolderTree(accountID string) ([]*folder.FolderTree, error) {
 
 // SyncFolders synchronizes the folder list with the IMAP server
 func (a *App) SyncFolders(accountID string) error {
+	if err := a.ensureSyncOwnership(); err != nil {
+		return err
+	}
 	log := logging.WithComponent("app")
 	err := a.syncEngine.SyncFolders(a.ctx, accountID)
 	if err == nil {
@@ -63,6 +66,9 @@ func (a *App) GetAccountFoldersForMapping(accountID string) ([]*folder.Folder, e
 	// If no folders, trigger sync first
 	if len(folders) == 0 {
 		log.Info().Str("accountID", accountID).Msg("No folders found, triggering sync")
+		if err := a.ensureSyncOwnership(); err != nil {
+			return nil, err
+		}
 		if err := a.syncEngine.SyncFolders(a.ctx, accountID); err != nil {
 			return nil, fmt.Errorf("failed to sync folders: %w", err)
 		}

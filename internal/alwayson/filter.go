@@ -46,6 +46,8 @@ func (r *SyncRuntime) runFilterQueue(ctx context.Context) {
 			if !open {
 				return
 			}
+		case <-r.filterStop:
+			return
 		case <-ticker.C:
 		case <-ctx.Done():
 			return
