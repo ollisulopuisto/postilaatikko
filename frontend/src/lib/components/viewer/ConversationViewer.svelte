@@ -801,6 +801,7 @@
 
   async function fetchUnfetchedBodies(messages: messageModels.Message[]) {
     const generation = viewGeneration
+    let refreshedConversation = false
     for (const msg of messages) {
       if (generation !== viewGeneration) return
       if ((msg as any).bodyFetched === false && !msg.bodyHtml && !msg.bodyText) {
@@ -816,6 +817,7 @@
             if (idx >= 0 && updated) {
               conversation.messages[idx] = updated
               conversation = conversation // trigger reactivity
+              refreshedConversation = true
             }
           }
         } catch (err) {
@@ -828,6 +830,9 @@
           bodyFetchErrors = { ...bodyFetchErrors, [msg.id]: String(err) }
         }
       }
+    }
+    if (refreshedConversation && generation === viewGeneration && conversation && threadId && folderId) {
+      setThreadSnapshot(accountId, folderId, threadId, conversation)
     }
   }
 
