@@ -6,8 +6,10 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
+	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/email/textrepair"
 	"github.com/hkdb/aerion/internal/folder"
 	"github.com/hkdb/aerion/internal/gmail"
@@ -15,6 +17,7 @@ import (
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/pgp"
 	"github.com/hkdb/aerion/internal/smime"
+	"github.com/hkdb/aerion/internal/views"
 )
 
 // ============================================================================
@@ -63,11 +66,27 @@ func (a *App) GetMessageSource(messageID string) (string, error) {
 // This is called when a message's body hasn't been fetched yet (BodyFetched = false).
 // It fetches the body from IMAP, updates the database, and returns the updated message.
 func (a *App) FetchMessageBody(messageID string) (*message.Message, error) {
+	return a.fetchMessageBody(a.ctx, messageID)
+}
+
+func (a *App) fetchMessageBody(ctx context.Context, messageID string) (*message.Message, error) {
+	return a.fetchMessageBodyWithServiceStatus(ctx, "", messageID, nil)
+}
+
+func (a *App) fetchMessageBodyWithServiceStatus(ctx context.Context, accountID, messageID string, serviceStatus *MailboxServiceStatus) (*message.Message, error) {
 	log := logging.WithComponent("app")
 	log.Debug().Str("message_ref", logging.ShortHash(messageID)).Msg("Fetching message body on-demand")
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
 	if a.mailboxService != nil {
-		status := a.GetMailboxServiceStatus()
+		status := MailboxServiceStatus{}
+		if serviceStatus == nil {
+			status = a.mailboxService.status(ctx)
+		} else {
+			status = *serviceStatus
+		}
 		if status.Connected {
 			msg, err := a.messageStore.Get(messageID)
 			if err != nil {
@@ -75,10 +94,6 @@ func (a *App) FetchMessageBody(messageID string) (*message.Message, error) {
 			}
 			if msg == nil {
 				return nil, fmt.Errorf("message not found: %s", messageID)
-			}
-			ctx := a.ctx
-			if ctx == nil {
-				ctx = context.Background()
 			}
 			if err := a.mailboxService.fetchMessageBody(ctx, msg.AccountID, msg.ID); err != nil {
 				return nil, fmt.Errorf("failed to fetch message body through local service: %w", err)
@@ -100,7 +115,7 @@ func (a *App) FetchMessageBody(messageID string) (*message.Message, error) {
 		}
 	}
 
-	updatedMsg, err := a.currentMailService().FetchMessageBody(a.ctx, "", messageID)
+	updatedMsg, err := a.currentMailService().FetchMessageBody(ctx, accountID, messageID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch message body: %w", err)
 	}
@@ -124,6 +139,20 @@ func (a *App) GetConversations(accountID, folderID string, offset, limit int, so
 			return []*message.Conversation{}, nil
 		}
 		return a.messageStore.ListVirtualArchivedConversations([]string{allMail.ID}, offset, limit, sortOrder, filter)
+	}
+	if !strings.HasPrefix(folderID, "virtual:") {
+		conversations, handled, err := a.listServiceConversations(views.Scope{
+			Kind:      views.ScopeFolder,
+			AccountID: accountID,
+			FolderID:  folderID,
+		}, offset, limit, sortOrder, filter)
+		if err != nil {
+			return nil, err
+		}
+		if handled {
+			go a.enqueueFolderConversationPrefetch(accountID, folderID, conversations)
+			return conversations, nil
+		}
 	}
 	conversations, err := a.messageStore.ListConversationsByFolder(folderID, offset, limit, sortOrder, filter)
 	if err != nil {
@@ -152,12 +181,86 @@ func (a *App) GetConversationCount(accountID, folderID, filter string) (int, err
 
 // GetUnifiedInboxConversations returns conversations from all inbox folders across all accounts
 func (a *App) GetUnifiedInboxConversations(offset, limit int, sortOrder, filter string) ([]*message.Conversation, error) {
-	conversations, err := a.messageStore.ListConversationsUnifiedInbox(offset, limit, sortOrder, filter)
+	conversations, handled, err := a.listServiceConversations(views.Scope{Kind: views.ScopeAllInboxes}, offset, limit, sortOrder, filter)
+	if err != nil {
+		return nil, err
+	}
+	if handled {
+		go a.enqueueUnifiedInboxConversationPrefetch(conversations)
+		return conversations, nil
+	}
+	conversations, err = a.messageStore.ListConversationsUnifiedInbox(offset, limit, sortOrder, filter)
 	if err != nil {
 		return nil, err
 	}
 	go a.enqueueUnifiedInboxConversationPrefetch(conversations)
 	return conversations, nil
+}
+
+func (a *App) listServiceConversations(scope views.Scope, offset, limit int, sortOrder, filter string) ([]*message.Conversation, bool, error) {
+	if a.mailboxService == nil {
+		return nil, false, nil
+	}
+	status := a.GetMailboxServiceStatus()
+	if !status.Connected {
+		if status.ErrorCode == "service_unavailable" {
+			return nil, false, nil
+		}
+		return nil, true, fmt.Errorf("local mailbox service unavailable for conversation list: %s", status.Message)
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if limit == 0 {
+		return []*message.Conversation{}, true, nil
+	}
+	if limit < 0 || offset < 0 {
+		return nil, true, errors.New("conversation offset and limit must not be negative")
+	}
+	if offset > v1.MaximumMessageOffset || limit > v1.MaximumMessageOffset-offset {
+		return nil, true, fmt.Errorf("conversation window exceeds the service offset limit of %d", v1.MaximumMessageOffset)
+	}
+
+	items := make([]*message.Conversation, 0, min(limit, v1.MaximumPageSize))
+	remaining := limit
+	cursor := strconv.Itoa(offset)
+	seenCursors := map[string]struct{}{cursor: {}}
+	for remaining > 0 {
+		pageLimit := min(remaining, v1.MaximumPageSize)
+		page, err := a.mailboxService.listConversations(ctx, v1.ConversationListRequest{
+			Scope:     scope,
+			SortOrder: sortOrder,
+			Filter:    filter,
+			Page: v1.PageRequest{
+				Limit:  pageLimit,
+				Cursor: cursor,
+			},
+		})
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to list conversations through local mailbox service: %w", err)
+		}
+		if page == nil {
+			return nil, true, errors.New("local mailbox service returned an empty conversation response")
+		}
+		if len(page.Items) > pageLimit {
+			return nil, true, errors.New("local mailbox service returned more conversations than requested")
+		}
+		items = append(items, page.Items...)
+		remaining -= len(page.Items)
+		if remaining == 0 || page.Complete || len(page.Items) == 0 {
+			break
+		}
+		if page.NextCursor == "" {
+			return nil, true, errors.New("local mailbox service omitted the next conversation cursor")
+		}
+		if _, ok := seenCursors[page.NextCursor]; ok {
+			return nil, true, errors.New("local mailbox service repeated a conversation cursor")
+		}
+		seenCursors[page.NextCursor] = struct{}{}
+		cursor = page.NextCursor
+	}
+	return items, true, nil
 }
 
 // GetUnifiedInboxCount returns the total conversation count across all inbox folders

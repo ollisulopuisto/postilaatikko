@@ -277,6 +277,7 @@ func (a *App) enqueueFolderBodyPrefetchBatch(accountID, folderID string, message
 func (a *App) runFolderBodyPrefetch(key string, queue *folderBodyPrefetchQueue) {
 	defer queue.cancel()
 	log := logging.WithComponent("app.body-prefetch")
+	var serviceStatus *MailboxServiceStatus
 	for {
 		a.bodyPrefetchMu.Lock()
 		if len(queue.ids) == 0 {
@@ -307,8 +308,14 @@ func (a *App) runFolderBodyPrefetch(key string, queue *folderBodyPrefetchQueue) 
 					log.Warn().Err(sizeErr).Str("folder", queue.folderID).Msg("Could not check message size for automatic body prefetch")
 				} else if size > maxAutomaticBodyPrefetchSize {
 					log.Debug().Int("size", size).Str("folder", queue.folderID).Msg("Skipping large message during automatic body prefetch; body remains available on demand")
-				} else if _, fetchErr := a.syncEngine.FetchMessageBody(queue.ctx, queue.accountID, messageID); fetchErr != nil && queue.ctx.Err() == nil {
-					log.Warn().Err(fetchErr).Str("folder", queue.folderID).Msg("Automatic body prefetch failed; message remains fetchable on demand")
+				} else {
+					if serviceStatus == nil && a.mailboxService != nil {
+						status := a.mailboxService.status(queue.ctx)
+						serviceStatus = &status
+					}
+					if _, fetchErr := a.fetchMessageBodyWithServiceStatus(queue.ctx, queue.accountID, messageID, serviceStatus); fetchErr != nil && queue.ctx.Err() == nil {
+						log.Warn().Err(fetchErr).Str("folder", queue.folderID).Msg("Automatic body prefetch failed; message remains fetchable on demand")
+					}
 				}
 			}
 		}

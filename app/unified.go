@@ -6,6 +6,7 @@ import (
 
 	"github.com/hkdb/aerion/internal/folder"
 	"github.com/hkdb/aerion/internal/message"
+	"github.com/hkdb/aerion/internal/views"
 )
 
 // unifiedSpecialFolders resolves the real folders represented by a synthetic
@@ -70,6 +71,16 @@ func (a *App) unifiedSpecialFolderIDs(folderType string) ([]string, error) {
 
 func (a *App) GetUnifiedFolderConversations(folderType string, offset, limit int, sortOrder, filterValue string) ([]*message.Conversation, error) {
 	filterValue = replyLaterViewFilter(folderType, filterValue)
+	if folderType == string(folder.TypeInbox) {
+		conversations, handled, err := a.listServiceConversations(views.Scope{Kind: views.ScopeAllInboxes}, offset, limit, sortOrder, filterValue)
+		if err != nil {
+			return nil, err
+		}
+		if handled {
+			go a.enqueueUnifiedInboxConversationPrefetch(conversations)
+			return conversations, nil
+		}
+	}
 	if folderType == "replyLater" {
 		if offset == 0 {
 			a.syncGmailTriageQueues("reply-later")

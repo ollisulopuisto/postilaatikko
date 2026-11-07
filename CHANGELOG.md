@@ -2,7 +2,8 @@
 
 ## [Unreleased]
 
-- Add an authenticated, bounded conversation-list API for real folders and All Inboxes, with stable sorting and existing list filters; responses contain summaries only.
+- Route physical-folder and All Inboxes conversation pages through the authenticated local mailbox service when available, including triage filters and refresh windows larger than one page; preserve local fallback only when the helper is unreachable.
+- Add an authenticated, bounded conversation-list API for real folders and All Inboxes, with stable sorting, triage filters, and header-only summaries.
 - Route explicit desktop message-body fetches through the authenticated localhost helper when connected, retaining local fetching only when the helper is unreachable.
 - Reuse the existing reader tab when the same conversation is opened again, and share a bounded conversation snapshot across tab mounts so reopening recent threads is fast without retaining unbounded mail bodies.
 - Mount idempotent authenticated mail actions in the headless API, including provider-backed flags, archive, trash, and account-qualified safe moves.

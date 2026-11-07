@@ -8,7 +8,8 @@ import (
 	"github.com/hkdb/aerion/internal/message"
 )
 
-const maximumMessageOffset = 1_000_000
+// MaximumMessageOffset is the largest offset accepted by paginated read routes.
+const MaximumMessageOffset = 1_000_000
 
 // MessageHeaderPage is a bounded page of cached message headers.
 type MessageHeaderPage struct {
@@ -58,7 +59,7 @@ func handleMessageHeaders(w http.ResponseWriter, r *http.Request, ops MessageHea
 	offset := 0
 	if cursor := r.URL.Query().Get("cursor"); cursor != "" {
 		offset, err = strconv.Atoi(cursor)
-		if err != nil || offset < 0 || offset > maximumMessageOffset {
+		if err != nil || offset < 0 || offset > MaximumMessageOffset {
 			writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, "cursor is invalid or exceeds the maximum offset", false)
 			return
 		}
