@@ -212,22 +212,55 @@ func (a *App) listServiceConversations(scope views.Scope, offset, limit int, sor
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	page, err := a.mailboxService.listConversations(ctx, v1.ConversationListRequest{
-		Scope:     scope,
-		SortOrder: sortOrder,
-		Filter:    filter,
-		Page: v1.PageRequest{
-			Limit:  limit,
-			Cursor: strconv.Itoa(offset),
-		},
-	})
-	if err != nil {
-		return nil, true, fmt.Errorf("failed to list conversations through local mailbox service: %w", err)
+	if limit == 0 {
+		return []*message.Conversation{}, true, nil
 	}
-	if page == nil {
-		return nil, true, errors.New("local mailbox service returned an empty conversation response")
+	if limit < 0 || offset < 0 {
+		return nil, true, errors.New("conversation offset and limit must not be negative")
 	}
-	return page.Items, true, nil
+	if offset > v1.MaximumMessageOffset || limit > v1.MaximumMessageOffset-offset {
+		return nil, true, fmt.Errorf("conversation window exceeds the service offset limit of %d", v1.MaximumMessageOffset)
+	}
+
+	items := make([]*message.Conversation, 0, min(limit, v1.MaximumPageSize))
+	remaining := limit
+	cursor := strconv.Itoa(offset)
+	seenCursors := map[string]struct{}{cursor: {}}
+	for remaining > 0 {
+		pageLimit := min(remaining, v1.MaximumPageSize)
+		page, err := a.mailboxService.listConversations(ctx, v1.ConversationListRequest{
+			Scope:     scope,
+			SortOrder: sortOrder,
+			Filter:    filter,
+			Page: v1.PageRequest{
+				Limit:  pageLimit,
+				Cursor: cursor,
+			},
+		})
+		if err != nil {
+			return nil, true, fmt.Errorf("failed to list conversations through local mailbox service: %w", err)
+		}
+		if page == nil {
+			return nil, true, errors.New("local mailbox service returned an empty conversation response")
+		}
+		if len(page.Items) > pageLimit {
+			return nil, true, errors.New("local mailbox service returned more conversations than requested")
+		}
+		items = append(items, page.Items...)
+		remaining -= len(page.Items)
+		if remaining == 0 || page.Complete || len(page.Items) == 0 {
+			break
+		}
+		if page.NextCursor == "" {
+			return nil, true, errors.New("local mailbox service omitted the next conversation cursor")
+		}
+		if _, ok := seenCursors[page.NextCursor]; ok {
+			return nil, true, errors.New("local mailbox service repeated a conversation cursor")
+		}
+		seenCursors[page.NextCursor] = struct{}{}
+		cursor = page.NextCursor
+	}
+	return items, true, nil
 }
 
 // GetUnifiedInboxCount returns the total conversation count across all inbox folders

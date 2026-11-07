@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/hkdb/aerion/internal/folder"
 	"github.com/hkdb/aerion/internal/message"
@@ -67,9 +68,7 @@ func handleConversationList(w http.ResponseWriter, r *http.Request, ops Conversa
 		writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, "sortOrder must be newest or oldest", false)
 		return
 	}
-	switch req.Filter {
-	case "", "unread", "starred", "attachments":
-	default:
+	if !validConversationListFilter(req.Filter) {
 		writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, "Unsupported conversation filter", false)
 		return
 	}
@@ -81,7 +80,7 @@ func handleConversationList(w http.ResponseWriter, r *http.Request, ops Conversa
 	offset := 0
 	if pageRequest.Cursor != "" {
 		offset, err = strconv.Atoi(pageRequest.Cursor)
-		if err != nil || offset < 0 || offset > maximumMessageOffset {
+		if err != nil || offset < 0 || offset > MaximumMessageOffset {
 			writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, "cursor is invalid or exceeds the maximum offset", false)
 			return
 		}
@@ -129,4 +128,25 @@ func handleConversationList(w http.ResponseWriter, r *http.Request, ops Conversa
 		page.Items = []*message.Conversation{}
 	}
 	writeAPIResponse(w, r, http.StatusOK, page)
+}
+
+func validConversationListFilter(filter string) bool {
+	if filter == "" {
+		return true
+	}
+	allowed := map[string]bool{
+		"unread":      true,
+		"starred":     true,
+		"attachments": true,
+		"readLater":   true,
+		"replyLater":  true,
+	}
+	seen := make(map[string]bool)
+	for _, part := range strings.Split(filter, "+") {
+		if !allowed[part] || seen[part] {
+			return false
+		}
+		seen[part] = true
+	}
+	return true
 }

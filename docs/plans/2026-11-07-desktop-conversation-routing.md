@@ -7,7 +7,9 @@
 ## Behavior
 
 - Query service status before routing. Fall back to the current local query only when the helper is unreachable; return authorization, capability, and API errors to the caller without silently bypassing the service.
-- Preserve the Wails method signatures, sort order, filters, offset, and limit.
+- Route the frontend's actual All Inboxes adapter (`GetUnifiedFolderConversations("inbox", ...)`) through the all-inboxes API scope.
+- Preserve the Wails method signatures, sort order, filters, offset, and limit. Split requested windows above the API's 100-summary page cap into bounded requests, combining results only when all pages succeed.
+- Preserve the local store's supported `readLater`, `replyLater`, and combined triage filters at the authenticated API boundary.
 - Keep asynchronous visible-page body prefetch. Use the existing body-fetch path so connected desktops fetch through the service and cancelled prefetch contexts still cancel work.
 - Keep on-demand message-body reads unchanged.
 
