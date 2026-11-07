@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Compose the headless mailbox read API behind the authenticated automation server, requiring explicit token storage.
 - Add a bounded, account-qualified message-header API for headless mailbox reads; message bodies remain on demand.
 - Allow the authenticated automation API to bind to user-operated remote hosts only with TLS and an explicit Host allowlist; keep the default listener loopback-only.
 - When started with `--sync`, the headless helper now applies saved cross-account filter rules to newly synced messages, confirming the destination copy before moving the source to Trash.
