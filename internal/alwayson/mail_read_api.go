@@ -1,0 +1,280 @@
+package alwayson
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/hkdb/aerion/internal/automation/v1"
+	"github.com/hkdb/aerion/internal/email/replycontent"
+	"github.com/hkdb/aerion/internal/folder"
+	"github.com/hkdb/aerion/internal/mailservice"
+	"github.com/hkdb/aerion/internal/message"
+	"github.com/hkdb/aerion/internal/views"
+)
+
+type mailboxReadOperations struct{ runtime *SyncRuntime }
+
+func (o *mailboxReadOperations) SearchMessages(ctx context.Context, scope views.Scope, query, cursor string, limit int) (*views.ThreadPage, error) {
+	request, empty, err := o.searchRequest(scope, query, cursor, limit)
+	if err != nil {
+		return nil, err
+	}
+	if empty {
+		return &views.ThreadPage{Items: []views.ThreadSummary{}, Complete: true}, nil
+	}
+	page, err := o.runtime.mailService.Search(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	result := &views.ThreadPage{Items: make([]views.ThreadSummary, 0, len(page.Conversations)), NextCursor: page.Cursor, Complete: page.Cursor == "" && len(page.Issues) == 0}
+	for _, conversation := range page.Conversations {
+		if conversation == nil {
+			continue
+		}
+		participants := make([]views.Address, 0, len(conversation.Participants))
+		for _, participant := range conversation.Participants {
+			participants = append(participants, views.Address{Name: participant.Name, Email: participant.Email})
+		}
+		matched := make([]views.MessageRef, 0, len(conversation.MessageIDs))
+		for _, messageID := range conversation.MessageIDs {
+			matched = append(matched, views.MessageRef{AccountID: conversation.AccountID, MessageID: messageID})
+		}
+		result.Items = append(result.Items, views.ThreadSummary{
+			Ref:            views.ThreadRef{AccountID: conversation.AccountID, ThreadID: conversation.ThreadID},
+			Subject:        conversation.Subject,
+			Snippet:        conversation.Snippet,
+			LatestDate:     conversation.LatestDate,
+			Participants:   participants,
+			MessageCount:   conversation.MessageCount,
+			UnreadCount:    conversation.UnreadCount,
+			HasAttachments: conversation.HasAttachments,
+			IsStarred:      conversation.IsStarred,
+			Matched:        matched,
+		})
+	}
+	for _, issue := range page.Issues {
+		result.Errors = append(result.Errors, views.PartialError{AccountID: issue.AccountID, Code: "account_search_failed", Message: issue.Message})
+	}
+	return result, nil
+}
+
+func (o *mailboxReadOperations) searchRequest(scope views.Scope, query, cursor string, limit int) (mailservice.MailSearchRequest, bool, error) {
+	if err := scope.Validate(); err != nil {
+		return mailservice.MailSearchRequest{}, false, err
+	}
+	base := scope
+	if scope.Kind == views.ScopeSearch {
+		query = scope.Query
+		if scope.Within != nil {
+			base = *scope.Within
+		}
+	}
+	request := mailservice.MailSearchRequest{Query: query, Cursor: cursor, Limit: limit}
+	switch base.Kind {
+	case views.ScopeAllInboxes:
+		accounts, err := o.runtime.accounts.List()
+		if err != nil {
+			return mailservice.MailSearchRequest{}, false, err
+		}
+		for _, account := range accounts {
+			if !account.Enabled {
+				continue
+			}
+			folders, err := o.runtime.folders.List(account.ID)
+			if err != nil {
+				return mailservice.MailSearchRequest{}, false, err
+			}
+			for _, f := range folders {
+				if f.Type == folder.TypeInbox {
+					request.FolderIDs = append(request.FolderIDs, f.ID)
+				}
+			}
+		}
+		if len(request.FolderIDs) == 0 {
+			return request, true, nil
+		}
+	case views.ScopeFolder:
+		request.AccountIDs = []string{base.AccountID}
+		request.FolderIDs = []string{base.FolderID}
+	case views.ScopeVirtualFolder:
+		request.VirtualFolderID = base.VirtualFolderID
+	default:
+		return mailservice.MailSearchRequest{}, false, fmt.Errorf("unsupported search scope %q", base.Kind)
+	}
+	return request, false, nil
+}
+
+func (o *mailboxReadOperations) GetThread(ctx context.Context, ref views.ThreadRef, scope views.Scope) (*views.ThreadView, error) {
+	if ref.AccountID == "" || ref.ThreadID == "" {
+		return nil, errors.New("accountId and threadId are required")
+	}
+	ids, err := o.runtime.messages.GetMessageIDsInThread(ref.AccountID, ref.ThreadID)
+	if err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("thread %s not found", ref.ThreadID)
+	}
+	messages := make([]*message.Message, 0, len(ids))
+	for _, id := range ids {
+		msg, err := o.runtime.messages.Get(id)
+		if err != nil {
+			return nil, err
+		}
+		if msg == nil || msg.AccountID != ref.AccountID {
+			return nil, errors.New("thread message is outside the requested account")
+		}
+		messages = append(messages, msg)
+	}
+
+	matched, err := o.matchThreadScope(ctx, ref, scope, messages)
+	if err != nil {
+		return nil, err
+	}
+	result := &views.ThreadView{Ref: ref, Messages: make([]views.ThreadMessage, 0, len(messages)), Participants: []views.Address{}}
+	seenParticipants := map[string]bool{}
+	for _, msg := range messages {
+		if msg.Date.After(result.LatestDate) {
+			result.LatestDate = msg.Date
+		}
+		if result.Subject == "" {
+			result.Subject = msg.Subject
+		}
+		participantKey := strings.ToLower(msg.FromEmail)
+		if participantKey != "" && !seenParticipants[participantKey] {
+			seenParticipants[participantKey] = true
+			result.Participants = append(result.Participants, views.Address{Name: msg.FromName, Email: msg.FromEmail})
+		}
+		contentState := views.ContentNotFetched
+		if msg.BodyFetched {
+			contentState = views.ContentCached
+		} else if msg.BodyFailed {
+			contentState = views.ContentFetchFailed
+		}
+		isMatched := matched[msg.ID]
+		if isMatched {
+			result.MatchedCount++
+		}
+		result.Messages = append(result.Messages, views.ThreadMessage{
+			Ref:            views.MessageRef{AccountID: ref.AccountID, MessageID: msg.ID},
+			FolderID:       msg.FolderID,
+			RFCMessageID:   msg.MessageID,
+			From:           views.Address{Name: msg.FromName, Email: msg.FromEmail},
+			Date:           msg.Date,
+			Matched:        isMatched,
+			IsRead:         msg.IsRead,
+			IsStarred:      msg.IsStarred,
+			IsAnswered:     msg.IsAnswered,
+			HasAttachments: msg.HasAttachments,
+			ContentState:   contentState,
+		})
+	}
+	result.MessageCount = len(messages)
+	result.Completeness = views.CompletenessOf(result.Messages)
+	return result, nil
+}
+
+func (o *mailboxReadOperations) matchThreadScope(ctx context.Context, ref views.ThreadRef, scope views.Scope, messages []*message.Message) (map[string]bool, error) {
+	matched := make(map[string]bool, len(messages))
+	if scope.Kind == "" {
+		for _, msg := range messages {
+			matched[msg.ID] = true
+		}
+		return matched, nil
+	}
+	if err := scope.Validate(); err != nil {
+		return nil, err
+	}
+	if scope.Kind == views.ScopeSearch || scope.Kind == views.ScopeVirtualFolder {
+		request, empty, err := o.searchRequest(scope, "", "", 100)
+		if err != nil || empty {
+			return matched, err
+		}
+		request.AccountIDs = []string{ref.AccountID}
+		for pageCount := 0; pageCount < 20; pageCount++ {
+			page, err := o.runtime.mailService.Search(ctx, request)
+			if err != nil {
+				return nil, err
+			}
+			for _, conversation := range page.Conversations {
+				if conversation.AccountID == ref.AccountID && conversation.ThreadID == ref.ThreadID {
+					for _, messageID := range conversation.MessageIDs {
+						matched[messageID] = true
+					}
+					return matched, nil
+				}
+			}
+			if len(page.Issues) > 0 {
+				return nil, errors.New("thread scope could not be confirmed because mailbox search was partial")
+			}
+			if page.Cursor == "" {
+				return matched, nil
+			}
+			request.Cursor = page.Cursor
+		}
+		return nil, errors.New("thread scope could not be confirmed within the bounded search window")
+	}
+	for _, msg := range messages {
+		inScope, err := o.messageInScope(msg, scope)
+		if err != nil {
+			return nil, err
+		}
+		if inScope {
+			matched[msg.ID] = true
+		}
+	}
+	return matched, nil
+}
+
+func (o *mailboxReadOperations) messageInScope(msg *message.Message, scope views.Scope) (bool, error) {
+	switch scope.Kind {
+	case views.ScopeAllInboxes:
+		f, err := o.runtime.folders.Get(msg.FolderID)
+		return err == nil && f != nil && f.Type == folder.TypeInbox, err
+	case views.ScopeFolder:
+		return msg.AccountID == scope.AccountID && msg.FolderID == scope.FolderID, nil
+	case views.ScopeVirtualFolder:
+		vf, err := o.runtime.virtualFolders.Get(scope.VirtualFolderID)
+		if err != nil {
+			return false, err
+		}
+		if vf == nil {
+			return false, fmt.Errorf("virtual folder %s not found", scope.VirtualFolderID)
+		}
+		member := false
+		for _, folderID := range vf.FolderIDs {
+			if folderID == msg.FolderID {
+				member = true
+				break
+			}
+		}
+		if vf.FolderMode == "exclude" {
+			member = !member
+		}
+		if !member || vf.ReadStatus == "unread" && msg.IsRead || vf.ReadStatus == "read" && !msg.IsRead || vf.StarStatus == "starred" && !msg.IsStarred || vf.StarStatus == "unstarred" && msg.IsStarred || vf.ReplyStatus == "replied" && !msg.IsAnswered || vf.ReplyStatus == "unreplied" && msg.IsAnswered {
+			return false, nil
+		}
+		windowDays := map[string]int{"7d": 7, "30d": 30, "90d": 90, "1y": 365}[vf.DateWindow]
+		return windowDays == 0 || !msg.Date.Before(time.Now().AddDate(0, 0, -windowDays)), nil
+	default:
+		return false, fmt.Errorf("unsupported thread scope %q", scope.Kind)
+	}
+}
+
+func (o *mailboxReadOperations) GetMessage(accountID, messageID string) (*message.Message, error) {
+	return o.runtime.mailService.GetMessage(accountID, messageID)
+}
+
+func (o *mailboxReadOperations) GetReplyContent(accountID, messageID, channel string, fetch bool) (*replycontent.Reply, error) {
+	return o.runtime.mailService.GetReplyContent(context.Background(), accountID, messageID, channel, fetch)
+}
+
+func (o *mailboxReadOperations) FetchMessageBody(ctx context.Context, accountID, messageID string) (*message.Message, error) {
+	return o.runtime.mailService.FetchMessageBody(ctx, accountID, messageID)
+}
+
+var _ v1.SearchOperations = (*mailboxReadOperations)(nil)
+var _ v1.MessageReadOperations = (*mailboxReadOperations)(nil)

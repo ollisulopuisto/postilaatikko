@@ -36,6 +36,7 @@ import (
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/macoscontacts"
 	"github.com/hkdb/aerion/internal/mailfilter"
+	"github.com/hkdb/aerion/internal/mailservice"
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/notification"
 	"github.com/hkdb/aerion/internal/oauth2"
@@ -237,17 +238,17 @@ type App struct {
 	imageAllowlistStore *settings.ImageAllowlistStore
 
 	// IMAP
-	imapPool        *imap.Pool
-	syncEngine      *sync.Engine
-	refreshMu       goSync.Mutex
-	refreshLast     map[string]time.Time
-	refreshActive   map[string]bool
-	mailSearchMu    goSync.Mutex
-	mailSearchJobs  map[string]*mailSearchJob
-	viewCountMu     goSync.Mutex
-	viewCountJobs   map[string]*viewCountJob
-	viewCountShared map[string]*viewCountJob
-	triageLabelMu   goSync.Mutex
+	imapPool            *imap.Pool
+	syncEngine          *sync.Engine
+	refreshMu           goSync.Mutex
+	refreshLast         map[string]time.Time
+	refreshActive       map[string]bool
+	mailServiceMu goSync.Mutex
+	mailService   *mailservice.Service
+	viewCountMu         goSync.Mutex
+	viewCountJobs       map[string]*viewCountJob
+	viewCountShared     map[string]*viewCountJob
+	triageLabelMu       goSync.Mutex
 
 	// Background sync (polling + IDLE)
 	syncScheduler   *sync.Scheduler

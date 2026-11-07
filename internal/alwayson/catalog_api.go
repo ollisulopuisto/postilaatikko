@@ -49,17 +49,20 @@ func (r *SyncRuntime) CatalogAPIHandler() (http.Handler, error) {
 // bounded message-header routes. Mount it under the authenticated automation
 // server's /v1/ prefix; this handler has no listener or authentication layer.
 func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
-	if r == nil || r.db == nil {
+	if r == nil || r.db == nil || r.mailService == nil || r.syncEngine == nil {
 		return nil, errors.New("always-on runtime is not open")
 	}
 	operations := &catalogReadOperations{
-		accounts:       account.NewStore(r.db),
-		folders:        folder.NewStore(r.db),
-		virtualFolders: virtualfolder.NewStore(r.db),
-		messages:       message.NewStore(r.db),
+		accounts:       r.accounts,
+		folders:        r.folders,
+		virtualFolders: r.virtualFolders,
+		messages:       r.messages,
 	}
+	readOperations := &mailboxReadOperations{runtime: r}
 	mux := http.NewServeMux()
 	v1.MountCatalogRoutes(mux, operations, automation.RequireGrantCapability)
 	v1.MountMessageHeaderRoutes(mux, operations, automation.RequireGrantCapability)
+	v1.MountSearchRoute(mux, readOperations, automation.RequireGrantCapability)
+	v1.MountThreadBodyRoutes(mux, readOperations, automation.RequireGrantCapability)
 	return mux, nil
 }

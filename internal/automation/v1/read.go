@@ -29,27 +29,46 @@ type MessageHeaderOperations interface {
 	ListByFolder(folderID string, offset, limit int) ([]*message.MessageHeader, error)
 }
 
-// ReadOperations defines backend application capabilities required by all read endpoints.
-type ReadOperations interface {
-	CatalogOperations
+// SearchOperations defines the provider-aware bounded search operation.
+type SearchOperations interface {
 	SearchMessages(ctx context.Context, scope views.Scope, query string, cursor string, limit int) (*views.ThreadPage, error)
+}
+
+// MessageReadOperations defines thread and body reads. Body fetch remains an
+// explicit operation and is guarded by a separate capability.
+type MessageReadOperations interface {
 	GetThread(ctx context.Context, ref views.ThreadRef, scope views.Scope) (*views.ThreadView, error)
 	GetMessage(accountID, messageID string) (*message.Message, error)
 	GetReplyContent(accountID, messageID, channel string, fetch bool) (*replycontent.Reply, error)
 	FetchMessageBody(ctx context.Context, accountID, messageID string) (*message.Message, error)
+}
+
+// AttachmentReadOperations defines attachment metadata and byte reads.
+type AttachmentReadOperations interface {
 	GetAttachments(messageID string) ([]*message.Attachment, error)
 	ReadAttachmentBytes(accountID, messageID, attachmentID string) ([]byte, string, error)
 }
 
+// ReadOperations defines the complete read surface for callers that implement
+// catalog, search, message, and attachment reads together.
+type ReadOperations interface {
+	CatalogOperations
+	SearchOperations
+	MessageReadOperations
+	AttachmentReadOperations
+}
+
 // ReadHandler routes and handles read/search/thread/body/attachment requests.
 type ReadHandler struct {
-	ops     ReadOperations
-	catalog CatalogOperations
+	search      SearchOperations
+	messages    MessageReadOperations
+	attachments AttachmentReadOperations
+	catalog     CatalogOperations
 }
 
 // NewReadHandler creates a ReadHandler backed by the provided operations.
 func NewReadHandler(ops ReadOperations) *ReadHandler {
-	return &ReadHandler{ops: ops, catalog: ops}
+	return &ReadHandler{search: ops, messages: ops, attachments: ops, catalog: ops}
 }
 
 // MountCatalogRoutes mounts only the account, folder, and saved-view routes.
@@ -60,10 +79,26 @@ func MountCatalogRoutes(mux *http.ServeMux, ops CatalogOperations, requireCap fu
 	handler.mountCatalogRoutes(mux, requireCap)
 }
 
+// MountSearchRoute mounts only the authenticated search operation.
+func MountSearchRoute(mux *http.ServeMux, ops SearchOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+	(&ReadHandler{search: ops}).mountSearchRoute(mux, requireCap)
+}
+
+// MountThreadBodyRoutes mounts thread and body reads without requiring
+// attachment operations to be implemented by the same backend.
+func MountThreadBodyRoutes(mux *http.ServeMux, ops MessageReadOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+	(&ReadHandler{messages: ops}).mountThreadBodyRoutes(mux, requireCap)
+}
+
 // MountRoutes mounts read API endpoints onto a standard http.ServeMux.
 func (h *ReadHandler) MountRoutes(mux *http.ServeMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	h.mountCatalogRoutes(mux, requireCap)
+	h.mountSearchRoute(mux, requireCap)
+	h.mountThreadBodyRoutes(mux, requireCap)
+	h.mountAttachmentRoutes(mux, requireCap)
+}
 
+func (h *ReadHandler) mountSearchRoute(mux *http.ServeMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	mux.HandleFunc("/v1/search", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailRead) {
 			return
@@ -74,7 +109,9 @@ func (h *ReadHandler) MountRoutes(mux *http.ServeMux, requireCap func(http.Respo
 		}
 		h.handleSearch(w, r)
 	})
+}
 
+func (h *ReadHandler) mountThreadBodyRoutes(mux *http.ServeMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	mux.HandleFunc("/v1/threads/read", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailRead) {
 			return
@@ -96,7 +133,9 @@ func (h *ReadHandler) MountRoutes(mux *http.ServeMux, requireCap func(http.Respo
 		}
 		h.handleMessageBody(w, r, requireCap)
 	})
+}
 
+func (h *ReadHandler) mountAttachmentRoutes(mux *http.ServeMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	mux.HandleFunc("/v1/messages/attachments/list", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityAttachmentRead) {
 			return
@@ -266,7 +305,7 @@ func (h *ReadHandler) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err := h.ops.SearchMessages(r.Context(), req.Scope, req.Scope.Query, normalizedPage.Cursor, normalizedPage.Limit)
+	res, err := h.search.SearchMessages(r.Context(), req.Scope, req.Scope.Query, normalizedPage.Cursor, normalizedPage.Limit)
 	if err != nil {
 		h.writeError(w, r, http.StatusInternalServerError, CodeInternal, fmt.Sprintf("Search failed: %v", err), true)
 		return
@@ -287,7 +326,7 @@ func (h *ReadHandler) handleThreadRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	threadView, err := h.ops.GetThread(r.Context(), req.Ref, req.Scope)
+	threadView, err := h.messages.GetThread(r.Context(), req.Ref, req.Scope)
 	if err != nil {
 		h.writeError(w, r, http.StatusNotFound, CodeNotFound, fmt.Sprintf("Thread not found: %v", err), false)
 		return
@@ -316,14 +355,14 @@ func (h *ReadHandler) handleMessageBody(w http.ResponseWriter, r *http.Request, 
 		}
 	}
 
-	msg, err := h.ops.GetMessage(req.Ref.AccountID, req.Ref.MessageID)
+	msg, err := h.messages.GetMessage(req.Ref.AccountID, req.Ref.MessageID)
 	if err != nil || msg == nil {
 		h.writeError(w, r, http.StatusNotFound, CodeNotFound, "Message not found", false)
 		return
 	}
 
 	if shouldFetch && !msg.BodyFetched {
-		fetchedMsg, fetchErr := h.ops.FetchMessageBody(r.Context(), req.Ref.AccountID, req.Ref.MessageID)
+		fetchedMsg, fetchErr := h.messages.FetchMessageBody(r.Context(), req.Ref.AccountID, req.Ref.MessageID)
 		if fetchErr != nil {
 			h.writeError(w, r, http.StatusBadGateway, CodeProviderError, fmt.Sprintf("Provider fetch failed: %v", fetchErr), true)
 			return
@@ -346,7 +385,7 @@ func (h *ReadHandler) handleMessageBody(w http.ResponseWriter, r *http.Request, 
 	}
 
 	if contentState == views.ContentCached {
-		reply, err := h.ops.GetReplyContent(req.Ref.AccountID, req.Ref.MessageID, "automation", false)
+		reply, err := h.messages.GetReplyContent(req.Ref.AccountID, req.Ref.MessageID, "automation", false)
 		if err == nil && reply != nil {
 			resp.Extracted = &reply.Result
 		}
@@ -374,7 +413,7 @@ func (h *ReadHandler) handleAttachmentList(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	atts, err := h.ops.GetAttachments(req.Ref.MessageID)
+	atts, err := h.attachments.GetAttachments(req.Ref.MessageID)
 	if err != nil {
 		h.writeError(w, r, http.StatusInternalServerError, CodeInternal, "Failed to retrieve attachments", true)
 		return
@@ -419,7 +458,7 @@ func (h *ReadHandler) handleAttachmentRead(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	data, contentType, err := h.ops.ReadAttachmentBytes(req.Ref.AccountID, req.Ref.MessageID, req.AttachmentID)
+	data, contentType, err := h.attachments.ReadAttachmentBytes(req.Ref.AccountID, req.Ref.MessageID, req.AttachmentID)
 	if err != nil {
 		h.writeError(w, r, http.StatusNotFound, CodeNotFound, fmt.Sprintf("Attachment read failed: %v", err), false)
 		return

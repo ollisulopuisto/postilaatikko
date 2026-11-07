@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Wire provider-aware search, thread reads, and explicit body fetch through the authenticated helper API using the shared desktop search operation.
 - Start the authenticated mailbox API with the helper on localhost, persisting grants in the runtime-owned database and shutting its listener down with the service.
 - Compose the headless mailbox read API behind the authenticated automation server, requiring explicit token storage.
 - Add a bounded, account-qualified message-header API for headless mailbox reads; message bodies remain on demand.

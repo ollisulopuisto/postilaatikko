@@ -30,20 +30,25 @@ Returns the contract version and the caller's granted capabilities.
   - `accountId` and `folderId` are required and ownership is checked before reading.
   - `limit` defaults to 50; `nextCursor` is returned while more headers remain. Header pages never include bodies.
 
-### 3. Contract routes not mounted by the helper yet
+### 3. Search and message reads
 
-The v1 contract and CLI define additional operations, but the helper currently mounts only the capabilities, catalog, and header-page routes above. These routes return not found until their shared service operations are wired:
+The helper mounts provider-aware search and account-qualified thread/body reads:
 
-- `POST /v1/search` (Requires `mail.read`)
+- `POST /v1/search` (Requires `mail.read`; returns headers only)
   - Request body: `{ "scope": { "kind": "search", "query": "is:unread" }, "page": { "limit": 20 } }`
+  - Supports all-inbox, folder, saved-view, and search-within scopes. Pages are bounded to 100 items; account failures appear in `errors`, and `complete` stays false while a cursor or partial error remains.
 - `POST /v1/threads/read` (Requires `mail.read`)
   - Request body: `{ "ref": { "accountId": "acc-1", "threadId": "thr-1" } }`
 - `POST /v1/messages/body` (Requires `mail.read`; explicit fetch requires `mail.body.fetch`)
   - Request body: `{ "ref": { "accountId": "acc-1", "messageId": "msg-1" }, "mode": "fetch", "includeOriginal": true }`
+- Cached-only body reads never fetch provider content. Requesting `mode: "fetch"` is the only path that downloads an unfetched message body.
+
+### 4. Contract routes not mounted by the helper yet
+
 - `POST /v1/messages/attachments/list` (Requires `mail.attachment.read`)
 - `POST /v1/messages/attachments/read` (Requires `mail.attachment.read`)
 
-### 4. Mail Mutations (not mounted yet)
+### 5. Mail Mutations (not mounted yet)
 - `POST /v1/actions` (Requires `mail.write`, Header `Idempotency-Key: <unique-key>`)
   - Supported actions: `archive`, `mark_read`, `mark_unread`, `star`, `unstar`, `trash`, `move`.
   - Request body:
@@ -72,7 +77,7 @@ go build ./cmd/postilaatikko-cli
 - `POSTILAATIKKO_API_URL`: defaults to `http://127.0.0.1:8029`
 - `POSTILAATIKKO_API_TOKEN`: bearer token issued by Postilaatikko
 
-### Commands currently served by the helper
+### Commands
 ```bash
 # Verify capabilities
 ./postilaatikko-cli --token=$TOKEN capabilities
@@ -81,6 +86,11 @@ go build ./cmd/postilaatikko-cli
 ./postilaatikko-cli --token=$TOKEN accounts
 ./postilaatikko-cli --token=$TOKEN folders acc-1
 ./postilaatikko-cli --token=$TOKEN views
+
+# Search headers, read a thread, and explicitly fetch one body
+./postilaatikko-cli --token=$TOKEN search "report" --json
+./postilaatikko-cli --token=$TOKEN thread acc-1 thr-100 --json
+./postilaatikko-cli --token=$TOKEN body acc-1 msg-101 fetch --json
 ```
 
 The helper also serves bounded message-header pages. The current CLI does not
@@ -92,10 +102,8 @@ curl --fail --silent --show-error \
   'http://127.0.0.1:8029/v1/messages/headers?accountId=acc-1&folderId=inbox&limit=50'
 ```
 
-The CLI contract also defines `search`, `thread`, `body`, and `action`, but the
-helper returns not found for those operations until their shared service
-handlers are mounted. Attachment routes are also future work. See the route
-status above before building a client around them.
+The CLI's `action` command is still contract-only and returns not found until
+mail mutation handlers are mounted. Attachment routes are also future work.
 
 ### Managing API Client Grants
 
@@ -137,8 +145,7 @@ The `api-client` commands manage credentials. The create command prints a high-e
 
 ## Current service boundary
 
-This first helper listener milestone provides authenticated capabilities,
-account/folder/view catalogs, and bounded header-page reads. Search, thread/body
-reads, attachments, mail actions, Gmail Pub/Sub, and watch renewal are not yet
-available through the helper. Continue with the roadmap's shared-operation
-work before treating the helper as a complete mail API.
+The helper provides authenticated capabilities, account/folder/view catalogs,
+bounded header pages, provider-aware search, thread metadata, cached body reads,
+and explicit body fetch. Attachment reads, mail actions, Gmail Pub/Sub, and watch
+renewal are not yet available through the helper.

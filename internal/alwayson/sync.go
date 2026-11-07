@@ -14,14 +14,19 @@ import (
 
 	"github.com/hkdb/aerion/internal/account"
 	"github.com/hkdb/aerion/internal/database"
+	"github.com/hkdb/aerion/internal/email/replycontent"
 	"github.com/hkdb/aerion/internal/folder"
 	"github.com/hkdb/aerion/internal/imap"
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/mailfilter"
 	"github.com/hkdb/aerion/internal/mailmove"
+	"github.com/hkdb/aerion/internal/mailservice"
 	"github.com/hkdb/aerion/internal/message"
+	"github.com/hkdb/aerion/internal/replylater"
 	mailSync "github.com/hkdb/aerion/internal/sync"
 	"github.com/hkdb/aerion/internal/syncowner"
+	"github.com/hkdb/aerion/internal/triage"
+	"github.com/hkdb/aerion/internal/virtualfolder"
 )
 
 // IMAPConfigSource supplies account credentials without making the runtime
@@ -33,8 +38,17 @@ type IMAPConfigSource func(context.Context, string) (*imap.ClientConfig, error)
 // context and closes it before releasing the credential provider.
 type SyncRuntime struct {
 	db             *database.DB
+	accounts       *account.Store
+	messages       *message.Store
 	pool           *imap.Pool
 	scheduler      *mailSync.Scheduler
+	mailService    *mailservice.Service
+	syncEngine     *mailSync.Engine
+	replyContent   *replycontent.Service
+	attachments    *message.AttachmentStore
+	virtualFolders *virtualfolder.Store
+	replyLater     *replylater.Store
+	triage         *triage.Store
 	filterOp       mailmove.FilterOperation
 	filterer       *mailmove.IMAPFilterMover
 	filterJobs     *mailfilter.JobStore
@@ -81,16 +95,21 @@ func OpenSyncRuntime(dataDirectory string, credentials IMAPConfigSource) (*SyncR
 	accounts := account.NewStore(db)
 	folders := folder.NewStore(db)
 	messages := message.NewStore(db)
-	runtime := &SyncRuntime{db: db, ctx: context.Background(), syncLockPath: filepath.Join(dataDirectory, "mail-sync.owner.lock")}
+	attachments := message.NewAttachmentStore(db)
+	virtualFolders := virtualfolder.NewStore(db)
+	replyLater := replylater.NewStore(db)
+	triageStore := triage.NewStore(db)
+	runtime := &SyncRuntime{db: db, accounts: accounts, messages: messages, attachments: attachments, virtualFolders: virtualFolders, replyLater: replyLater, triage: triageStore, replyContent: replycontent.NewService(replycontent.ServiceOptions{}), ctx: context.Background(), syncLockPath: filepath.Join(dataDirectory, "mail-sync.owner.lock")}
 	pool := imap.NewPool(imap.DefaultPoolConfig(), func(accountID string) (*imap.ClientConfig, error) {
 		runtime.ctxMu.RLock()
 		ctx := runtime.ctx
 		runtime.ctxMu.RUnlock()
 		return credentials(ctx, accountID)
 	})
-	engine := mailSync.NewEngine(pool, accounts, folders, messages, message.NewAttachmentStore(db))
+	engine := mailSync.NewEngine(pool, accounts, folders, messages, attachments)
 	scheduler := mailSync.NewScheduler(engine, accounts, folders)
-	runtime.pool, runtime.scheduler = pool, scheduler
+	runtime.pool, runtime.scheduler, runtime.folders, runtime.syncEngine = pool, scheduler, folders, engine
+	runtime.mailService = mailservice.New(mailservice.Options{Accounts: accounts, Folders: folders, Messages: messages, ReplyLater: replyLater, Triage: triageStore, VirtualFolders: virtualFolders, Sync: engine, ReplyContent: runtime.replyContent})
 	runtime.filterJobs = mailfilter.NewJobStore(db)
 	runtime.rules, runtime.folders = mailfilter.NewStore(db), folders
 	runtime.filterWake = make(chan struct{}, 1)

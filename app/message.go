@@ -65,25 +65,7 @@ func (a *App) FetchMessageBody(messageID string) (*message.Message, error) {
 	log := logging.WithComponent("app")
 	log.Debug().Str("message_ref", logging.ShortHash(messageID)).Msg("Fetching message body on-demand")
 
-	// Get the message first to get the account ID
-	msg, err := a.messageStore.Get(messageID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get message: %w", err)
-	}
-	if msg == nil {
-		return nil, fmt.Errorf("message not found: %s", messageID)
-	}
-
-	// If body is already fetched, just return it
-	if msg.BodyFetched {
-		if err := a.messageStore.EnrichReactions([]*message.Message{msg}); err != nil {
-			return nil, err
-		}
-		return msg, nil
-	}
-
-	// Fetch the body from IMAP
-	updatedMsg, err := a.syncEngine.FetchMessageBody(a.ctx, msg.AccountID, messageID)
+	updatedMsg, err := a.currentMailService().FetchMessageBody(a.ctx, "", messageID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch message body: %w", err)
 	}
