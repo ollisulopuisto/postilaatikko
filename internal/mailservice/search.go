@@ -102,8 +102,14 @@ func (s *Service) Search(parent context.Context, req MailSearchRequest) (*MailSe
 	if parent == nil {
 		parent = context.Background()
 	}
-	if s.accountStore == nil || s.folderStore == nil || s.virtualFolderStore == nil || s.syncEngine == nil {
+	if err := parent.Err(); err != nil {
+		return nil, err
+	}
+	if s.accountStore == nil || s.folderStore == nil || s.syncEngine == nil {
 		return nil, errors.New("mail search service is not ready")
+	}
+	if req.VirtualFolderID != "" && s.virtualFolderStore == nil {
+		return nil, errors.New("virtual folder service is not ready")
 	}
 	switch req.Filter {
 	case "", "unread", "replyLater", "readLater":
