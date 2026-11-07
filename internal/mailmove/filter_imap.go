@@ -138,7 +138,7 @@ func (m *IMAPFilterMover) moveSourceToTrash(ctx context.Context, msg *message.Me
 		if _, err := client.CopyMessages([]goimap.UID{goimap.UID(msg.UID)}, trash.Path); err != nil {
 			return fmt.Errorf("copy filter source to Trash: %w", err)
 		}
-		if err := deleteCopiedSource(client, goimap.UID(msg.UID)); err != nil {
+		if err := DeleteCopiedSource(client, goimap.UID(msg.UID)); err != nil {
 			return fmt.Errorf("remove filter source after Trash copy: %w", err)
 		}
 		return nil
@@ -150,14 +150,17 @@ func (m *IMAPFilterMover) deleteSource(ctx context.Context, msg *message.Message
 		if _, err := client.SelectMailbox(ctx, source.Path); err != nil {
 			return fmt.Errorf("select trashed filter source: %w", err)
 		}
-		if err := deleteCopiedSource(client, goimap.UID(msg.UID)); err != nil {
+		if err := DeleteCopiedSource(client, goimap.UID(msg.UID)); err != nil {
 			return fmt.Errorf("delete trashed filter source: %w", err)
 		}
 		return nil
 	})
 }
 
-func deleteCopiedSource(client *imap.Client, uid goimap.UID) error {
+// DeleteCopiedSource removes only the confirmed copied source UID when the
+// server supports UID EXPUNGE. Without UIDPLUS, it marks that UID deleted and
+// leaves expunging to the provider, avoiding a broad EXPUNGE of unrelated mail.
+func DeleteCopiedSource(client *imap.Client, uid goimap.UID) error {
 	if client.Caps().Has(goimap.CapUIDPlus) {
 		return client.DeleteMessageByUID(uid)
 	}
