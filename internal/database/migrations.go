@@ -1763,4 +1763,18 @@ var migrations = []Migration{
 	CREATE INDEX IF NOT EXISTS idx_automatic_filter_jobs_pending
 	  ON automatic_filter_jobs(state, created_at);
 	`},
+	{Version: 67, SQL: `
+	-- API bearer tokens are high-entropy secrets. Persist only their SHA-256
+	-- digests so local mailbox database copies do not expose usable tokens.
+	CREATE TABLE IF NOT EXISTS automation_clients (
+	  client_id TEXT PRIMARY KEY,
+	  name TEXT NOT NULL,
+	  token_hash TEXT NOT NULL UNIQUE,
+	  capabilities_json TEXT NOT NULL,
+	  created_at TEXT NOT NULL,
+	  revoked INTEGER NOT NULL DEFAULT 0 CHECK(revoked IN (0, 1))
+	);
+	CREATE INDEX IF NOT EXISTS idx_automation_clients_created
+	  ON automation_clients(created_at, client_id);
+	`},
 }

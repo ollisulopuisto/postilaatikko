@@ -43,12 +43,18 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: postilaatikko-helper init|public-key|accounts|pair|revoke|serve|install-agent|uninstall-agent|schedule|submit|status|cancel|list|resolve [flags]")
+		return errors.New("usage: postilaatikko-helper init|public-key|accounts|pair|revoke|serve|install-agent|uninstall-agent|schedule|submit|status|cancel|list|resolve|api-client [flags]")
 	}
 	command := args[0]
 	dataDefault, err := defaultDataDirectory()
 	if err != nil {
 		return err
+	}
+	if command == "api-client" {
+		if err := logging.Init(logging.Config{Level: "warn", Console: true}); err != nil {
+			return err
+		}
+		return runAPIClientCommand(args[1:], dataDefault)
 	}
 	identityDefault := "studio"
 	switch command {

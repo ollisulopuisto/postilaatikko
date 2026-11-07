@@ -29,3 +29,8 @@
 **Vulnerability:** In `OpenFolder`, the directory target was resolved via `filepath.Dir(path)` without checking if path components or the directory itself began with a dash (`-`). If a subfolder name started with a dash, `filepath.Dir` could pass an option flag argument to `xdg-open` or `open`.
 **Learning:** Path validation must inspect every component of the path relative to the allowed root, not merely the outermost path prefix, because directory resolution functions like `filepath.Dir` can extract internal path segments into argument positions.
 **Prevention:** Ensure path validation rejects any segment starting with a dash, and validate resolved directory targets in folder opening helpers prior to invoking OS handlers.
+
+## 2026-11-07 - Native Dialog Link URL Validation and Option Injection Guard
+**Vulnerability:** Native modal link dialogs (`ShowDialogWithLink`) accepted arbitrary `actionURL` values and dispatched them to system openers (`open`, `xdg-open`, `ShellExecute`) without validating scheme or checking for CLI flags, leading dashes, or control characters.
+**Learning:** Pre-startup and native dialog link helpers must apply the same protocol restrictions and CLI flag defenses as the main application's URL opening facilities.
+**Prevention:** Centralize URL scheme validation and argument injection filters in dialog dispatchers, degrading safely to a linkless dialog when an unapproved or malformed action URL is passed.
