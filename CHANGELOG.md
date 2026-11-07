@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 - When started with `--sync`, the headless helper now applies saved cross-account filter rules to newly synced messages, confirming the destination copy before moving the source to Trash.
+- Automatic filter jobs now persist in the mailbox database. Unstarted jobs resume after restart; interrupted moves are retained as uncertain and are not retried automatically.
 
 ## Postilaatikko 2026.11.07.1
 
