@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Allow the authenticated automation API to bind to user-operated remote hosts only with TLS and an explicit Host allowlist; keep the default listener loopback-only.
 - When started with `--sync`, the headless helper now applies saved cross-account filter rules to newly synced messages, confirming the destination copy before moving the source to Trash.
 - Coordinate desktop and helper background sync with one process lock; the helper continues serving Send Later while it waits for desktop sync to release ownership.
 - Automatic filter jobs now persist in the mailbox database. Unstarted jobs resume after restart; interrupted moves are retained as uncertain and are not retried automatically.
