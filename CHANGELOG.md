@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Reuse the existing reader tab when the same conversation is opened again, and share a bounded conversation snapshot across tab mounts so reopening recent threads is fast without retaining unbounded mail bodies.
 - Mount idempotent authenticated mail actions in the headless API, including provider-backed flags, archive, trash, and account-qualified safe moves.
 - Add optional Gmail Pub/Sub pull notifications and daily watch renewal to the localhost helper while retaining periodic sync recovery.
 - Wire provider-aware search, thread reads, and explicit body fetch through the authenticated helper API using the shared desktop search operation.

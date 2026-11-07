@@ -39,6 +39,7 @@
   import { PendingReadOnLeave } from './pendingReadOnLeave'
   import { publishUndoOperationCompleted, publishUndoOperationCreated } from '../list/undoMutationEvents'
   import { runMessageMutation } from '../list/mutationInFlight'
+  import { getThreadSnapshot, setThreadSnapshot } from './threadSnapshotCache'
 
   interface Props {
     threadId?: string | null
@@ -543,33 +544,8 @@
 
   let viewGeneration = 0
 
-  // Small bounded in-memory snapshot cache (capped at 6 conversations) to make
-  // switching back and forth between recent threads instant without a blank flash.
-  // Sensitive/decrypted content and attachments are excluded.
-  const threadCache = new Map<string, messageModels.Conversation>()
-  const MAX_CACHED_THREADS = 6
-
-  function getCachedThread(accId: string | null, tid: string): messageModels.Conversation | null {
-    const key = `${accId || ''}:${tid}`
-    const hit = threadCache.get(key)
-    if (!hit) return null
-    // Move to MRU position
-    threadCache.delete(key)
-    threadCache.set(key, hit)
-    return hit
-  }
-
-  function setCachedThread(accId: string | null, tid: string, conv: messageModels.Conversation) {
-    if (!conv || !tid) return
-    const key = `${accId || ''}:${tid}`
-    threadCache.delete(key)
-    threadCache.set(key, conv)
-    while (threadCache.size > MAX_CACHED_THREADS) {
-      const oldest = threadCache.keys().next().value
-      if (oldest === undefined) break
-      threadCache.delete(oldest)
-    }
-  }
+  // Snapshots are shared across viewer mounts and bounded by count and size so
+  // tab switches stay fast without retaining every opened thread indefinitely.
 
   // Load conversation when threadId changes
   $effect(() => {
@@ -580,7 +556,7 @@
     viewGeneration++
 
     // Check if we have a recent snapshot for instant display
-    const cached = threadId ? getCachedThread(targetAccountId, threadId) : null
+    const cached = threadId && folderId ? getThreadSnapshot(targetAccountId, folderId, threadId) : null
     if (cached) {
       conversation = cached
       // Auto-expand unread messages and the last message from cache
@@ -713,7 +689,7 @@
       if (threadId !== tid || folderId !== fid || generation !== viewGeneration) return
 
       if (result) {
-        setCachedThread(accountId, tid, result)
+        setThreadSnapshot(accountId, fid, tid, result)
       }
 
       conversation = result

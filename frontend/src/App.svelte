@@ -2,6 +2,7 @@
   import Icon from '@iconify/svelte'
   import MailWindowApp from './MailWindowApp.svelte'
   import type { MailScope } from './lib/windows/mailWindow'
+  import { findReaderWorkspaceTab, type MailWorkspaceTab } from './lib/windows/mailWorkspaceTabs'
   import type { NavigationEntry } from './lib/sidebar/cards'
   // Load offline icon data before anything else
   import { LAYOUT_SYMBOL, PERMANENT_DELETE } from '$lib/keyboard/shortcuts'
@@ -105,7 +106,6 @@
   const CONTEXT_PANE_AUTO_HIDE_KEY = 'postilaatikko:context-pane-auto-hide'
   const contextPaneVisible = $derived(!contextPaneAutoHide || contextPaneRevealed)
   let triageStatus = $state<'all' | 'unread' | 'readLater' | 'replyLater'>('all')
-  type MailWorkspaceTab = { id: string; kind: 'reader'; scope: MailScope }
   const maxMailWorkspaceTabs = 8
   let mailWorkspaceTabs = $state<MailWorkspaceTab[]>([])
   let mailWindowTabInstances: Record<string, MailWindowApp | null> = {}
@@ -173,7 +173,13 @@
   }
 
   function openReaderScope(scope: MailScope) {
-    if (scope.threadId) addMailTab(scope)
+    if (!scope.threadId) return
+    const existing = findReaderWorkspaceTab(mailWorkspaceTabs, scope)
+    if (existing) {
+      switchMailWorkspace(existing.id)
+      return
+    }
+    addMailTab(scope)
   }
 
   function openListThreadInTab(accountId: string, folderId: string, threadId: string, folderType: string, subject: string) {
@@ -255,6 +261,7 @@
     const index = mailWorkspaceTabs.findIndex(tab => tab.id === id)
     if (index < 0) return
     mailWorkspaceTabs = mailWorkspaceTabs.filter(tab => tab.id !== id)
+    delete mailWindowTabInstances[id]
     if (activeMailWorkspace === id) {
       switchMailWorkspace(mailWorkspaceTabs[Math.min(index, mailWorkspaceTabs.length - 1)]?.id || 'primary')
     }
