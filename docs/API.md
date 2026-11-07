@@ -32,6 +32,7 @@ Returns the contract version and the caller's granted capabilities.
 - `POST /v1/conversations` (Requires `mail.read`)
   - Request body: `{ "scope": { "kind": "folder", "accountId": "acc-1", "folderId": "folder-1" }, "sortOrder": "newest", "filter": "unread", "page": { "limit": 50 } }`
   - Supports account-qualified folder and `all_inboxes` scopes, `newest`/`oldest` ordering, and `unread`, `starred`, `attachments`, `readLater`, or `replyLater` filters. Combine filters with `+`, for example `replyLater+unread`.
+  - `all_inboxes` resolves one Inbox-designated folder per enabled account through the same special-folder resolver used by the desktop.
   - Pages are bounded to 100 summaries; the numeric offset cursor is limited to 1,000,000. Results use stable date/account/thread ordering and omit full message objects and bodies.
 
 ### 3. Search and message reads
