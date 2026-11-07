@@ -15,11 +15,17 @@ import (
 	"github.com/hkdb/aerion/internal/virtualfolder"
 )
 
-// ReadOperations defines backend application capabilities required by read endpoints.
-type ReadOperations interface {
+// CatalogOperations defines store-backed metadata reads for accounts,
+// folders, and saved views.
+type CatalogOperations interface {
 	GetAccounts() ([]*account.Account, error)
 	GetFolders(accountID string) ([]*folder.Folder, error)
 	GetVirtualFolders() ([]*virtualfolder.VirtualFolder, error)
+}
+
+// ReadOperations defines backend application capabilities required by all read endpoints.
+type ReadOperations interface {
+	CatalogOperations
 	SearchMessages(ctx context.Context, scope views.Scope, query string, cursor string, limit int) (*views.ThreadPage, error)
 	GetThread(ctx context.Context, ref views.ThreadRef, scope views.Scope) (*views.ThreadView, error)
 	GetMessage(accountID, messageID string) (*message.Message, error)
@@ -31,48 +37,26 @@ type ReadOperations interface {
 
 // ReadHandler routes and handles read/search/thread/body/attachment requests.
 type ReadHandler struct {
-	ops ReadOperations
+	ops     ReadOperations
+	catalog CatalogOperations
 }
 
 // NewReadHandler creates a ReadHandler backed by the provided operations.
 func NewReadHandler(ops ReadOperations) *ReadHandler {
-	return &ReadHandler{ops: ops}
+	return &ReadHandler{ops: ops, catalog: ops}
+}
+
+// MountCatalogRoutes mounts only the account, folder, and saved-view routes.
+// The enclosing automation server must authenticate the request and apply its
+// loopback, Host, and Origin protections.
+func MountCatalogRoutes(mux *http.ServeMux, ops CatalogOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+	handler := &ReadHandler{catalog: ops}
+	handler.mountCatalogRoutes(mux, requireCap)
 }
 
 // MountRoutes mounts read API endpoints onto a standard http.ServeMux.
 func (h *ReadHandler) MountRoutes(mux *http.ServeMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
-	mux.HandleFunc("/v1/accounts", func(w http.ResponseWriter, r *http.Request) {
-		if !requireCap(w, r, CapabilityMailRead) {
-			return
-		}
-		if r.Method != http.MethodGet {
-			h.writeError(w, r, http.StatusMethodNotAllowed, CodeInvalidRequest, "Method not allowed", false)
-			return
-		}
-		h.handleAccounts(w, r)
-	})
-
-	mux.HandleFunc("/v1/folders", func(w http.ResponseWriter, r *http.Request) {
-		if !requireCap(w, r, CapabilityMailRead) {
-			return
-		}
-		if r.Method != http.MethodGet {
-			h.writeError(w, r, http.StatusMethodNotAllowed, CodeInvalidRequest, "Method not allowed", false)
-			return
-		}
-		h.handleFolders(w, r)
-	})
-
-	mux.HandleFunc("/v1/views", func(w http.ResponseWriter, r *http.Request) {
-		if !requireCap(w, r, CapabilityMailRead) {
-			return
-		}
-		if r.Method != http.MethodGet {
-			h.writeError(w, r, http.StatusMethodNotAllowed, CodeInvalidRequest, "Method not allowed", false)
-			return
-		}
-		h.handleViews(w, r)
-	})
+	h.mountCatalogRoutes(mux, requireCap)
 
 	mux.HandleFunc("/v1/search", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailRead) {
@@ -130,6 +114,41 @@ func (h *ReadHandler) MountRoutes(mux *http.ServeMux, requireCap func(http.Respo
 	})
 }
 
+func (h *ReadHandler) mountCatalogRoutes(mux *http.ServeMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+	mux.HandleFunc("/v1/accounts", func(w http.ResponseWriter, r *http.Request) {
+		if !requireCap(w, r, CapabilityMailRead) {
+			return
+		}
+		if r.Method != http.MethodGet {
+			h.writeError(w, r, http.StatusMethodNotAllowed, CodeInvalidRequest, "Method not allowed", false)
+			return
+		}
+		h.handleAccounts(w, r)
+	})
+
+	mux.HandleFunc("/v1/folders", func(w http.ResponseWriter, r *http.Request) {
+		if !requireCap(w, r, CapabilityMailRead) {
+			return
+		}
+		if r.Method != http.MethodGet {
+			h.writeError(w, r, http.StatusMethodNotAllowed, CodeInvalidRequest, "Method not allowed", false)
+			return
+		}
+		h.handleFolders(w, r)
+	})
+
+	mux.HandleFunc("/v1/views", func(w http.ResponseWriter, r *http.Request) {
+		if !requireCap(w, r, CapabilityMailRead) {
+			return
+		}
+		if r.Method != http.MethodGet {
+			h.writeError(w, r, http.StatusMethodNotAllowed, CodeInvalidRequest, "Method not allowed", false)
+			return
+		}
+		h.handleViews(w, r)
+	})
+}
+
 // AccountSummary contains safe account metadata for agent consumption.
 type AccountSummary struct {
 	ID    string `json:"id"`
@@ -138,7 +157,7 @@ type AccountSummary struct {
 }
 
 func (h *ReadHandler) handleAccounts(w http.ResponseWriter, r *http.Request) {
-	accounts, err := h.ops.GetAccounts()
+	accounts, err := h.catalog.GetAccounts()
 	if err != nil {
 		h.writeError(w, r, http.StatusInternalServerError, CodeInternal, "Failed to load accounts", true)
 		return
@@ -172,7 +191,7 @@ func (h *ReadHandler) handleFolders(w http.ResponseWriter, r *http.Request) {
 	if accountID != "" {
 		accountsToQuery = append(accountsToQuery, accountID)
 	} else {
-		all, err := h.ops.GetAccounts()
+		all, err := h.catalog.GetAccounts()
 		if err != nil {
 			h.writeError(w, r, http.StatusInternalServerError, CodeInternal, "Failed to query accounts", true)
 			return
@@ -184,7 +203,7 @@ func (h *ReadHandler) handleFolders(w http.ResponseWriter, r *http.Request) {
 
 	var allFolders []FolderSummary
 	for _, accID := range accountsToQuery {
-		folders, err := h.ops.GetFolders(accID)
+		folders, err := h.catalog.GetFolders(accID)
 		if err != nil {
 			continue
 		}
@@ -210,7 +229,7 @@ type ViewSummary struct {
 }
 
 func (h *ReadHandler) handleViews(w http.ResponseWriter, r *http.Request) {
-	vfs, err := h.ops.GetVirtualFolders()
+	vfs, err := h.catalog.GetVirtualFolders()
 	if err != nil {
 		h.writeError(w, r, http.StatusInternalServerError, CodeInternal, "Failed to load virtual views", true)
 		return
