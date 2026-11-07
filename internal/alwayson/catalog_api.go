@@ -8,6 +8,7 @@ import (
 	"github.com/hkdb/aerion/internal/automation"
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/folder"
+	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/virtualfolder"
 )
 
@@ -15,6 +16,7 @@ type catalogReadOperations struct {
 	accounts       *account.Store
 	folders        *folder.Store
 	virtualFolders *virtualfolder.Store
+	messages       *message.Store
 }
 
 func (o *catalogReadOperations) GetAccounts() ([]*account.Account, error) {
@@ -29,10 +31,24 @@ func (o *catalogReadOperations) GetVirtualFolders() ([]*virtualfolder.VirtualFol
 	return o.virtualFolders.List()
 }
 
-// CatalogAPIHandler creates the headless account/folder/saved-view API routes.
-// Mount its handler under the authenticated automation server's /v1/ prefix;
-// this handler deliberately does not provide its own listener or auth layer.
+func (o *catalogReadOperations) GetFolder(folderID string) (*folder.Folder, error) {
+	return o.folders.Get(folderID)
+}
+
+func (o *catalogReadOperations) ListByFolder(folderID string, offset, limit int) ([]*message.MessageHeader, error) {
+	return o.messages.ListByFolder(folderID, offset, limit)
+}
+
+// CatalogAPIHandler is kept as the compatible constructor for the mailbox read
+// API handler. Mount the result under the authenticated server's /v1/ prefix.
 func (r *SyncRuntime) CatalogAPIHandler() (http.Handler, error) {
+	return r.MailboxReadAPIHandler()
+}
+
+// MailboxReadAPIHandler creates the headless account, folder, saved-view, and
+// bounded message-header routes. Mount it under the authenticated automation
+// server's /v1/ prefix; this handler has no listener or authentication layer.
+func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 	if r == nil || r.db == nil {
 		return nil, errors.New("always-on runtime is not open")
 	}
@@ -40,8 +56,10 @@ func (r *SyncRuntime) CatalogAPIHandler() (http.Handler, error) {
 		accounts:       account.NewStore(r.db),
 		folders:        folder.NewStore(r.db),
 		virtualFolders: virtualfolder.NewStore(r.db),
+		messages:       message.NewStore(r.db),
 	}
 	mux := http.NewServeMux()
 	v1.MountCatalogRoutes(mux, operations, automation.RequireGrantCapability)
+	v1.MountMessageHeaderRoutes(mux, operations, automation.RequireGrantCapability)
 	return mux, nil
 }
