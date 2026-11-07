@@ -28,7 +28,7 @@ func main() {
 	}
 
 	if *endpoint == "" {
-		*endpoint = "http://127.0.0.1:8080"
+		*endpoint = "http://127.0.0.1:8029"
 	}
 	if *token == "" {
 		fmt.Fprintln(os.Stderr, "Error: authentication token is required (--token or POSTILAATIKKO_API_TOKEN)")
@@ -189,7 +189,7 @@ Commands:
   action <action> <accountId> <msgId> [dest] Perform mail mutation (archive, mark_read, star, move, trash)
 
 Flags:
-  --endpoint string   API URL (default: http://127.0.0.1:8080)
+  --endpoint string   API URL (default: http://127.0.0.1:8029)
   --token string      Bearer token
   --json              Output raw formatted JSON`)
 }

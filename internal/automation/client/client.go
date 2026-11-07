@@ -32,7 +32,7 @@ type Config struct {
 func New(cfg Config) *Client {
 	endpoint := strings.TrimRight(cfg.Endpoint, "/")
 	if endpoint == "" {
-		endpoint = "http://127.0.0.1:8080"
+		endpoint = "http://127.0.0.1:8029"
 	}
 	timeout := cfg.Timeout
 	if timeout == 0 {
