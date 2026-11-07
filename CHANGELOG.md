@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- When started with `--sync`, the headless helper now applies saved cross-account filter rules to newly synced messages, confirming the destination copy before moving the source to Trash.
+
 ## Postilaatikko 2026.11.07.1
 
 - Make conversation bubbles narrower and align them by sender, with subtle participant colors that remain distinguishable in group threads.

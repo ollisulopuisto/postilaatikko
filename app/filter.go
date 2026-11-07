@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -118,15 +119,15 @@ func (a *App) applyFilterRule(rule *mailfilter.Rule, dest *folder.Folder, msg *m
 	log := logging.WithComponent("app.filters")
 	operation := mailmove.FilterOperation{
 		Messages: a.messageStore,
-		Move: func(ruleID, messageID, destinationFolderID string) error {
-			_, _, _, err := a.runMoveMutation([]string{messageID}, "filter:"+ruleID, func() (bool, string, error) {
-				_, moveErr := a.moveToFolder([]string{messageID}, destinationFolderID, false, "")
+		Move: func(_ context.Context, ruleID string, source *message.Message, destination *folder.Folder) error {
+			_, _, _, err := a.runMoveMutation([]string{source.ID}, "filter:"+ruleID, func() (bool, string, error) {
+				_, moveErr := a.moveToFolder([]string{source.ID}, destination.ID, false, "")
 				return false, "", moveErr
 			})
 			return err
 		},
 	}
-	applied, err := operation.Apply(rule, dest, msg)
+	applied, err := operation.Apply(a.ctx, rule, dest, msg)
 	if err != nil {
 		log.Warn().Err(err).Str("ruleID", rule.ID).Str("destFolder", dest.Path).Msg("Filter rule move failed")
 		return
