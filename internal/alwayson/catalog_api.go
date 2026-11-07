@@ -39,6 +39,14 @@ func (o *catalogReadOperations) ListByFolder(folderID string, offset, limit int)
 	return o.messages.ListByFolder(folderID, offset, limit)
 }
 
+func (o *catalogReadOperations) ListConversationsByFolder(folderID string, offset, limit int, sortOrder, filter string) ([]*message.Conversation, error) {
+	return o.messages.ListConversationsByFolder(folderID, offset, limit, sortOrder, filter)
+}
+
+func (o *catalogReadOperations) ListConversationsUnifiedInbox(offset, limit int, sortOrder, filter string) ([]*message.Conversation, error) {
+	return o.messages.ListConversationsUnifiedInbox(offset, limit, sortOrder, filter)
+}
+
 // CatalogAPIHandler is kept as the compatible constructor for the mailbox read
 // API handler. Mount the result under the authenticated server's /v1/ prefix.
 func (r *SyncRuntime) CatalogAPIHandler() (http.Handler, error) {
@@ -62,6 +70,7 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 	mux := http.NewServeMux()
 	v1.MountCatalogRoutes(mux, operations, automation.RequireGrantCapability)
 	v1.MountMessageHeaderRoutes(mux, operations, automation.RequireGrantCapability)
+	v1.MountConversationListRoute(mux, operations, automation.RequireGrantCapability)
 	v1.MountSearchRoute(mux, readOperations, automation.RequireGrantCapability)
 	v1.MountThreadBodyRoutes(mux, readOperations, automation.RequireGrantCapability)
 	v1.NewActionsHandler(&mailboxActionOperations{runtime: r}).MountRoutes(mux, automation.RequireGrantCapability)

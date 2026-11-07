@@ -305,9 +305,9 @@ func (s *Store) listConversationsByFolderIDs(folderIDs []string, offset, limit i
 	defer cancel()
 
 	// Determine sort direction
-	orderClause := "ORDER BY latest_date DESC"
+	orderClause := "ORDER BY latest_date DESC, account_id ASC, conv_thread_id ASC"
 	if sortOrder == "oldest" {
-		orderClause = "ORDER BY latest_date ASC"
+		orderClause = "ORDER BY latest_date ASC, account_id ASC, conv_thread_id ASC"
 	}
 
 	placeholders := strings.TrimRight(strings.Repeat("?,", len(folderIDs)), ",")
@@ -1741,9 +1741,9 @@ func (s *Store) ListConversationsByFolder(folderID string, offset, limit int, so
 	defer cancel()
 
 	// Determine sort direction
-	orderClause := "ORDER BY latest_date DESC"
+	orderClause := "ORDER BY latest_date DESC, conv_thread_id ASC"
 	if sortOrder == "oldest" {
-		orderClause = "ORDER BY latest_date ASC"
+		orderClause = "ORDER BY latest_date ASC, conv_thread_id ASC"
 	}
 
 	// Pre-fetch folder type so we can pick the right participants
