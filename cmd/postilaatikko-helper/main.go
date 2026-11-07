@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hkdb/aerion/internal/alwayson"
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/scheduledsend"
 )
@@ -64,6 +65,7 @@ func run(args []string) error {
 	listen := flags.String("listen", "127.0.0.1:8028", "helper bind address; non-loopback requires TLS certificate and key")
 	cert := flags.String("tls-cert", "", "TLS server certificate")
 	key := flags.String("tls-key", "", "TLS server private-key file")
+	withSync := flags.Bool("sync", false, "also run bounded background mailbox header sync")
 	account := flags.String("account", "", "helper-local sending account ID")
 	from := flags.String("from", "", "sender address configured on the helper account")
 	to := flags.String("to", "", "comma-separated envelope recipients, including Bcc")
@@ -211,14 +213,21 @@ func run(args []string) error {
 			return err
 		}
 		defer transport.Close()
-		return serve(ctx, store, transport, *listen, *cert, *key)
+		var syncRuntime *alwayson.SyncRuntime
+		if *withSync {
+			syncRuntime, err = alwayson.OpenSyncRuntime(*data, transport.IMAPClientConfig)
+			if err != nil {
+				return err
+			}
+		}
+		return serve(ctx, store, transport, syncRuntime, *listen, *cert, *key)
 	case "install-agent":
 		transport, err := scheduledsend.OpenSMTPTransport(*data)
 		if err != nil {
 			return err
 		}
 		transport.Close()
-		return installAgent(ctx, *identityName, *data, *queue, *listen, *cert, *key)
+		return installAgent(ctx, *identityName, *data, *queue, *listen, *cert, *key, *withSync)
 	default:
 		return fmt.Errorf("unknown helper command %q", command)
 	}
@@ -305,7 +314,10 @@ func validateListener(address, cert, key string) error {
 	return nil
 }
 
-func serve(ctx context.Context, store *scheduledsend.Store, transport scheduledsend.Transport, address, cert, key string) error {
+func serve(ctx context.Context, store *scheduledsend.Store, transport scheduledsend.Transport, syncRuntime *alwayson.SyncRuntime, address, cert, key string) error {
+	if syncRuntime != nil {
+		defer syncRuntime.Close()
+	}
 	if err := validateListener(address, cert, key); err != nil {
 		return err
 	}
@@ -313,11 +325,14 @@ func serve(ctx context.Context, store *scheduledsend.Store, transport scheduleds
 	if err != nil {
 		return err
 	}
-	server := &http.Server{Handler: store.Handler(), ReadHeaderTimeout: 5 * time.Second,
+	server := &http.Server{Handler: helperHandler(store, syncRuntime != nil), ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 8192}
 	workerContext, cancel := context.WithCancel(ctx)
 	defer cancel()
 	worker := &scheduledsend.Worker{Store: store, Transport: transport}
+	if syncRuntime != nil {
+		syncRuntime.Start(workerContext)
+	}
 	workerError := make(chan error, 1)
 	serverError := make(chan error, 1)
 	go func() { workerError <- worker.Run(workerContext) }()
@@ -351,4 +366,27 @@ func serve(ctx context.Context, store *scheduledsend.Store, transport scheduleds
 		return nil
 	}
 	return result
+}
+
+// helperHandler exposes only a minimal process-health signal alongside the
+// authenticated encrypted command endpoint. It does not disclose account or
+// queue state.
+func helperHandler(store *scheduledsend.Store, syncEnabled bool) http.Handler {
+	serviceName := "send-later"
+	if syncEnabled {
+		serviceName = "mail-service"
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprintf(w, `{"status":"ok","service":%q}`, serviceName)
+	})
+	mux.Handle("/v1/commands", store.Handler())
+	return mux
 }

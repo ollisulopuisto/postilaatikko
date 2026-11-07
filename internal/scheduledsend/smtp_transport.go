@@ -79,6 +79,37 @@ func (t *SMTPTransport) Close() error { return t.db.Close() }
 // Accounts lists helper-local account IDs for the explicit pairing/setup flow.
 func (t *SMTPTransport) Accounts() ([]*account.Account, error) { return t.accounts.List() }
 
+// IMAPClientConfig returns the same locally configured credentials used by
+// scheduled delivery, for the headless metadata-sync worker. It never accepts
+// credentials over the service API.
+func (t *SMTPTransport) IMAPClientConfig(ctx context.Context, accountID string) (*imap.ClientConfig, error) {
+	acc, err := t.accounts.Get(accountID)
+	if err != nil {
+		return nil, err
+	}
+	if acc == nil || !acc.Enabled || acc.SharedMailboxParentID != "" {
+		return nil, errors.New("helper sync account unavailable or unsupported")
+	}
+	config := imap.DefaultConfig()
+	config.Host, config.Port, config.Username = acc.IMAPHost, acc.IMAPPort, acc.Username
+	config.Security, config.AuthMechanism = imap.SecurityType(acc.IMAPSecurity), string(acc.IMAPAuthMechanism)
+	config.TLSConfig = certificate.BuildTLSConfig(acc.IMAPHost, t.certs)
+	if acc.AuthType == account.AuthOAuth2 {
+		tokens, err := t.tokens(ctx, acc.ID)
+		if err != nil {
+			return nil, err
+		}
+		config.AuthType, config.AccessToken = imap.AuthTypeOAuth2, tokens.AccessToken
+	} else {
+		password, err := t.creds.GetPassword(acc.ID)
+		if err != nil {
+			return nil, err
+		}
+		config.AuthType, config.Password = imap.AuthTypePassword, password
+	}
+	return &config, nil
+}
+
 // Deliver submits immutable MIME through SMTP. Once SMTP accepts the message,
 // a Sent-copy failure is logged with a fixed code and never causes a resend.
 func (t *SMTPTransport) Deliver(ctx context.Context, delivery Delivery) error {

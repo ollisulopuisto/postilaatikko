@@ -15,6 +15,7 @@ import (
 	"github.com/hkdb/aerion/internal/folder"
 	"github.com/hkdb/aerion/internal/imap"
 	"github.com/hkdb/aerion/internal/logging"
+	"github.com/hkdb/aerion/internal/mailmove"
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/operations"
 	"github.com/hkdb/aerion/internal/undo"
@@ -424,16 +425,29 @@ func (a *App) moveToFolder(messageIDs []string, destFolderID string, recordUndo 
 	// Strict ordering: APPEND completes synchronously before Trash runs — if
 	// APPEND fails, source stays untouched.
 	if messages[0].AccountID != destFolder.AccountID {
-		if err := a.copyMessagesAcrossAccounts(messages, destFolder); err != nil {
-			return operationID, fmt.Errorf("cross-account move: append failed: %w", err)
-		}
-		_, operationID, trashErr := a.trashWithUndo(messageIDs, operationID)
+		destinationConfirmed := false
+		moveErr := mailmove.CopyBeforeCleanup(
+			func() error {
+				if err := a.copyMessagesAcrossAccounts(messages, destFolder); err != nil {
+					return err
+				}
+				destinationConfirmed = true
+				return nil
+			},
+			func() error {
+				_, nextOperationID, trashErr := a.trashWithUndo(messageIDs, operationID)
+				operationID = nextOperationID
+				return trashErr
+			},
+		)
 		// Sync destination so appended messages get correct UIDs locally.
-		go func() {
-			defer recoverPanic("app.actions", "cross-account move dest sync")
-			_ = a.SyncFolder(destFolder.AccountID, destFolder.ID)
-		}()
-		return operationID, trashErr
+		if destinationConfirmed {
+			go func() {
+				defer recoverPanic("app.actions", "cross-account move dest sync")
+				_ = a.SyncFolder(destFolder.AccountID, destFolder.ID)
+			}()
+		}
+		return operationID, moveErr
 	}
 
 	// Group by source folder
