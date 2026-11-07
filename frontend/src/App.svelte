@@ -261,10 +261,10 @@
     const index = mailWorkspaceTabs.findIndex(tab => tab.id === id)
     if (index < 0) return
     mailWorkspaceTabs = mailWorkspaceTabs.filter(tab => tab.id !== id)
-    delete mailWindowTabInstances[id]
     if (activeMailWorkspace === id) {
       switchMailWorkspace(mailWorkspaceTabs[Math.min(index, mailWorkspaceTabs.length - 1)]?.id || 'primary')
     }
+    delete mailWindowTabInstances[id]
   }
 
   async function detachWorkspaceTab(id: string) {
