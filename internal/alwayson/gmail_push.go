@@ -60,7 +60,7 @@ func (r *SyncRuntime) runGmailPush(ctx context.Context, config GmailPushConfig) 
 	log := logging.WithComponent("alwayson.gmail-push")
 	var options []option.ClientOption
 	if config.CredentialsFile != "" {
-		options = append(options, option.WithCredentialsFile(config.CredentialsFile))
+		options = append(options, option.WithAuthCredentialsFile(option.ServiceAccount, config.CredentialsFile))
 	}
 	var client *pubsub.Client
 	backoff := time.Second
