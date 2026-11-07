@@ -158,18 +158,61 @@ func (o *mailboxReadOperations) GetThread(ctx context.Context, ref views.ThreadR
 		if isMatched {
 			result.MatchedCount++
 		}
+		attachmentSummaries := []views.AttachmentSummary{}
+		if o.runtime.attachments != nil {
+			attachments, err := o.runtime.attachments.GetByMessage(msg.ID)
+			if err != nil {
+				return nil, fmt.Errorf("list thread attachment metadata: %w", err)
+			}
+			for _, attachment := range attachments {
+				if attachment == nil {
+					continue
+				}
+				attachmentSummaries = append(attachmentSummaries, views.AttachmentSummary{
+					ID:          attachment.ID,
+					Filename:    attachment.Filename,
+					ContentType: attachment.ContentType,
+					Size:        attachment.Size,
+					ContentID:   attachment.ContentID,
+					IsInline:    attachment.IsInline,
+				})
+			}
+		}
 		result.Messages = append(result.Messages, views.ThreadMessage{
-			Ref:            views.MessageRef{AccountID: ref.AccountID, MessageID: msg.ID},
-			FolderID:       msg.FolderID,
-			RFCMessageID:   msg.MessageID,
-			From:           views.Address{Name: msg.FromName, Email: msg.FromEmail},
-			Date:           msg.Date,
-			Matched:        isMatched,
-			IsRead:         msg.IsRead,
-			IsStarred:      msg.IsStarred,
-			IsAnswered:     msg.IsAnswered,
-			HasAttachments: msg.HasAttachments,
-			ContentState:   contentState,
+			Ref:                views.MessageRef{AccountID: ref.AccountID, MessageID: msg.ID},
+			FolderID:           msg.FolderID,
+			RFCMessageID:       msg.MessageID,
+			Subject:            msg.Subject,
+			Snippet:            msg.Snippet,
+			From:               views.Address{Name: msg.FromName, Email: msg.FromEmail},
+			ToList:             msg.ToList,
+			CcList:             msg.CcList,
+			BccList:            msg.BccList,
+			ReplyTo:            msg.ReplyTo,
+			Date:               msg.Date,
+			ReceivedAt:         msg.ReceivedAt,
+			Matched:            isMatched,
+			IsRead:             msg.IsRead,
+			IsStarred:          msg.IsStarred,
+			IsAnswered:         msg.IsAnswered,
+			IsForwarded:        msg.IsForwarded,
+			IsDraft:            msg.IsDraft,
+			IsDeleted:          msg.IsDeleted,
+			Size:               msg.Size,
+			InboxCategory:      msg.InboxCategory,
+			HasAttachments:     msg.HasAttachments,
+			Attachments:        attachmentSummaries,
+			SMIMEStatus:        msg.SMIMEStatus,
+			SMIMESignerEmail:   msg.SMIMESignerEmail,
+			SMIMESignerSubject: msg.SMIMESignerSubject,
+			SMIMEEncrypted:     msg.SMIMEEncrypted,
+			HasSMIME:           msg.HasSMIME,
+			PGPStatus:          msg.PGPStatus,
+			PGPSignerEmail:     msg.PGPSignerEmail,
+			PGPSignerKeyID:     msg.PGPSignerKeyID,
+			PGPEncrypted:       msg.PGPEncrypted,
+			HasPGP:             msg.HasPGP,
+			ContentState:       contentState,
 		})
 	}
 	result.MessageCount = len(messages)
