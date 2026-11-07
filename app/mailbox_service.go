@@ -74,7 +74,7 @@ func (c *mailboxServiceConnector) getClient() (*automationclient.Client, error) 
 		if grantErr != nil {
 			return nil, fmt.Errorf("validate desktop mailbox credential: %w", grantErr)
 		}
-		if grant.ClientID != credential.ClientID || !hasCapability(grant.Capabilities, v1.CapabilityMailRead) {
+		if grant.ClientID != credential.ClientID || !hasCapability(grant.Capabilities, v1.CapabilityMailRead) || !hasCapability(grant.Capabilities, v1.CapabilityMailBodyFetch) {
 			return nil, errDesktopMailboxAuthorizationRequired
 		}
 		c.credential = &credential
@@ -94,7 +94,7 @@ func (c *mailboxServiceConnector) getClient() (*automationclient.Client, error) 
 		}
 	}
 
-	grant, err := tokenStore.RegisterClient(desktopMailboxClientName, []v1.Capability{v1.CapabilityMailRead})
+	grant, err := tokenStore.RegisterClient(desktopMailboxClientName, []v1.Capability{v1.CapabilityMailRead, v1.CapabilityMailBodyFetch})
 	if err != nil {
 		return nil, fmt.Errorf("provision desktop mailbox credential: %w", err)
 	}
@@ -156,8 +156,8 @@ func (c *mailboxServiceConnector) status(ctx context.Context) MailboxServiceStat
 	if err != nil {
 		return MailboxServiceStatus{ErrorCode: "service_unavailable", Message: "The local mailbox service is not reachable."}
 	}
-	if capabilities == nil || capabilities.Version != v1.Version || !hasCapability(capabilities.Capabilities, v1.CapabilityMailRead) {
-		return MailboxServiceStatus{ErrorCode: "capability_mismatch", Message: "The local mailbox service does not provide the required read capability."}
+	if capabilities == nil || capabilities.Version != v1.Version || !hasCapability(capabilities.Capabilities, v1.CapabilityMailRead) || !hasCapability(capabilities.Capabilities, v1.CapabilityMailBodyFetch) {
+		return MailboxServiceStatus{ErrorCode: "capability_mismatch", Message: "The local mailbox service does not provide the required read and body-fetch capabilities."}
 	}
 	granted := make([]string, 0, len(capabilities.Capabilities))
 	for _, capability := range capabilities.Capabilities {
@@ -168,6 +168,21 @@ func (c *mailboxServiceConnector) status(ctx context.Context) MailboxServiceStat
 		APIVersion:   capabilities.Version,
 		Capabilities: granted,
 	}
+}
+
+func (c *mailboxServiceConnector) fetchMessageBody(ctx context.Context, accountID, messageID string) error {
+	client, err := c.getClient()
+	if err != nil {
+		return err
+	}
+	_, err = client.ReadBody(ctx, v1.BodyReadRequest{
+		Ref:  v1.MessageRef{AccountID: accountID, MessageID: messageID},
+		Mode: v1.FetchExplicit,
+		// The desktop reader needs the original display body, not only the
+		// derived reply excerpt returned by default.
+		IncludeOriginal: true,
+	})
+	return err
 }
 
 // GetMailboxServiceStatus checks the authenticated localhost service without
