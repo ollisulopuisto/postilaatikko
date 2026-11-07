@@ -3,6 +3,7 @@ package automation
 import (
 	"context"
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -29,16 +30,22 @@ const (
 	requestIDKey   contextKey = "automation.requestId"
 )
 
-// ServerConfig configures the local HTTP automation listener.
+// ServerConfig configures the authenticated automation listener.
 type ServerConfig struct {
-	Addr       string
-	TokenStore TokenStore
-	V1Handler  http.Handler
+	Addr string
+	// TLSCertFile and TLSKeyFile enable TLS; both must be set together.
+	TLSCertFile string
+	TLSKeyFile  string
+	// AllowedHosts contains exact Host names accepted by the listener.
+	AllowedHosts []string
+	TokenStore   TokenStore
+	V1Handler    http.Handler
 }
 
-// Server hosts the authenticated local loopback API.
+// Server hosts the authenticated automation API.
 type Server struct {
 	config     ServerConfig
+	tlsConfig  *tls.Config
 	httpServer *http.Server
 	listener   net.Listener
 	mu         sync.Mutex
@@ -53,6 +60,7 @@ func NewServer(config ServerConfig) *Server {
 	if config.TokenStore == nil {
 		config.TokenStore = NewMemoryTokenStore()
 	}
+	config.AllowedHosts = append([]string(nil), config.AllowedHosts...)
 
 	s := &Server{
 		config: config,
@@ -76,7 +84,7 @@ func NewServer(config ServerConfig) *Server {
 	return s
 }
 
-// Start binds to the configured loopback address and starts listening in a background goroutine.
+// Start binds to the configured address and starts listening in a background goroutine.
 func (s *Server) Start() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -84,24 +92,35 @@ func (s *Server) Start() error {
 	if s.running {
 		return errors.New("automation: server is already running")
 	}
+	tlsConfig, err := s.listenerTLSConfig()
+	if err != nil {
+		return err
+	}
 
 	ln, err := net.Listen("tcp", s.config.Addr)
 	if err != nil {
 		return fmt.Errorf("automation listen: %w", err)
 	}
 
-	// Verify loopback
-	tcpAddr, ok := ln.Addr().(*net.TCPAddr)
-	if !ok || (!tcpAddr.IP.IsLoopback() && !tcpAddr.IP.Equal(net.IPv4(127, 0, 0, 1))) {
+	if !isLoopbackListener(ln.Addr()) && tlsConfig == nil {
 		ln.Close()
-		return fmt.Errorf("automation listener refused non-loopback address: %s", ln.Addr())
+		return fmt.Errorf("automation: non-loopback listener requires TLS")
+	}
+	if !isLoopbackListener(ln.Addr()) && len(s.config.AllowedHosts) == 0 {
+		ln.Close()
+		return errors.New("automation: non-loopback listener requires an explicit Host allowlist")
 	}
 
 	s.listener = ln
+	s.tlsConfig = tlsConfig
 	s.running = true
 
 	go func() {
-		if err := s.httpServer.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		serveListener := ln
+		if tlsConfig != nil {
+			serveListener = tls.NewListener(ln, tlsConfig)
+		}
+		if err := s.httpServer.Serve(serveListener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log := logging.WithComponent("automation")
 			log.Error().Err(err).Msg("automation server error")
 		}
@@ -120,13 +139,95 @@ func (s *Server) Addr() string {
 	return s.listener.Addr().String()
 }
 
-// URL returns the base HTTP URL for accessing the server.
+// URL returns the base URL for accessing the server.
 func (s *Server) URL() string {
-	addr := s.Addr()
-	if addr == "" {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.listener == nil {
 		return ""
 	}
+	addr := s.listener.Addr().String()
+	if s.tlsConfig != nil {
+		return "https://" + addr
+	}
 	return "http://" + addr
+}
+
+func (s *Server) listenerTLSConfig() (*tls.Config, error) {
+	certFile := strings.TrimSpace(s.config.TLSCertFile)
+	keyFile := strings.TrimSpace(s.config.TLSKeyFile)
+	if certFile == "" && keyFile == "" {
+		if isRemoteBindAddress(s.config.Addr) {
+			return nil, errors.New("automation: non-loopback listener requires TLS certificate and key files")
+		}
+		return nil, nil
+	}
+	if certFile == "" || keyFile == "" {
+		return nil, errors.New("automation: both TLS certificate and key files are required")
+	}
+	if isRemoteBindAddress(s.config.Addr) && !hasAllowedHosts(s.config.AllowedHosts) {
+		return nil, errors.New("automation: non-loopback listener requires an explicit Host allowlist")
+	}
+	if len(s.config.AllowedHosts) > 0 && !hasAllowedHosts(s.config.AllowedHosts) {
+		return nil, errors.New("automation: Host allowlist must contain at least one valid host")
+	}
+	certificate, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("automation: load TLS certificate: %w", err)
+	}
+	return &tls.Config{Certificates: []tls.Certificate{certificate}, MinVersion: tls.VersionTLS12}, nil
+}
+
+func hasAllowedHosts(hosts []string) bool {
+	for _, host := range hosts {
+		host = normalizeHost(host)
+		if host != "" && !strings.ContainsAny(host, "* /\\") {
+			return true
+		}
+	}
+	return false
+}
+
+func isRemoteBindAddress(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return true
+	}
+	if strings.EqualFold(host, "localhost") {
+		return false
+	}
+	ip := net.ParseIP(strings.Trim(host, "[]"))
+	return ip == nil || !ip.IsLoopback()
+}
+
+func isLoopbackListener(addr net.Addr) bool {
+	tcpAddr, ok := addr.(*net.TCPAddr)
+	return ok && tcpAddr.IP.IsLoopback()
+}
+
+func (s *Server) allowedHost(host string) bool {
+	host = normalizeHost(host)
+	if host == "" {
+		return false
+	}
+	if len(s.config.AllowedHosts) == 0 {
+		return host == "127.0.0.1" || host == "localhost" || host == "::1"
+	}
+	for _, allowed := range s.config.AllowedHosts {
+		if host == normalizeHost(allowed) {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeHost(host string) string {
+	host = strings.TrimSpace(host)
+	if parsed, _, err := net.SplitHostPort(host); err == nil {
+		host = parsed
+	}
+	host = strings.Trim(host, "[]")
+	return strings.ToLower(strings.TrimSuffix(host, "."))
 }
 
 // Stop shuts down the server gracefully.
@@ -154,12 +255,7 @@ func (s *Server) wrapMiddleware(next http.Handler) http.Handler {
 		}
 
 		// 2. Host Validation: reject unexpected Host headers to prevent DNS rebinding attacks
-		host := r.Host
-		if colon := strings.LastIndex(host, ":"); colon != -1 {
-			host = host[:colon]
-		}
-		host = strings.Trim(host, "[]")
-		if host != "127.0.0.1" && host != "localhost" && host != "::1" {
+		if !s.allowedHost(r.Host) {
 			writeError(w, reqID, http.StatusBadRequest, v1.CodeInvalidRequest, "Invalid Host header", false)
 			return
 		}
