@@ -102,8 +102,9 @@ type Page[T any] struct {
 // SearchRequest asks for one bounded page of metadata matching a shared view
 // scope. Search scopes carry the query expression.
 type SearchRequest struct {
-	Scope Scope       `json:"scope"`
-	Page  PageRequest `json:"page,omitempty"`
+	Scope  Scope       `json:"scope"`
+	Page   PageRequest `json:"page,omitempty"`
+	Filter string      `json:"filter,omitempty"`
 }
 
 // ThreadReadRequest reads a thread and marks which messages match the scope.

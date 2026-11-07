@@ -11,7 +11,7 @@
 //   Reader   how an opened thread is rendered     (UI only)
 //   Layout   which panels are visible             (UI only)
 
-export type ScopeKind = 'all_inboxes' | 'folder' | 'virtual_folder' | 'search'
+export type ScopeKind = 'all_inboxes' | 'all_accounts' | 'account' | 'folder' | 'virtual_folder' | 'search'
 
 /**
  * The messages a view contains. Fields outside the kind must be absent.
@@ -122,6 +122,8 @@ export interface ThreadView {
 /** One row of a list. `matched` names the messages that put the thread in the view. */
 export interface ThreadSummary {
   ref: ThreadRef
+  accountName?: string
+  folderId?: string
   subject: string
   snippet: string
   latestDate: string
@@ -136,8 +138,10 @@ export interface ThreadSummary {
 /** One account could not answer; the page is returned but incomplete. */
 export interface PartialError {
   accountId: string
+  accountName?: string
   code: string
   message: string
+  reauthorize?: boolean
 }
 
 /** One page of a list. `nextCursor` is opaque and bound to the scope it was issued for. */

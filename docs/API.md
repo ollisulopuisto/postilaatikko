@@ -40,8 +40,8 @@ Returns the contract version and the caller's granted capabilities.
 The helper mounts provider-aware search and account-qualified thread/body reads:
 
 - `POST /v1/search` (Requires `mail.read`; returns headers only)
-  - Request body: `{ "scope": { "kind": "search", "query": "is:unread" }, "page": { "limit": 20 } }`
-  - Supports all-inbox, folder, saved-view, and search-within scopes. Pages are bounded to 100 items; account failures appear in `errors`, and `complete` stays false while a cursor or partial error remains.
+  - Request body: `{ "scope": { "kind": "search", "query": "is:unread", "within": { "kind": "all_accounts" } }, "page": { "limit": 20 }, "filter": "unread" }`
+  - Search scopes may target all enabled accounts, one account, all inboxes, one account-qualified folder, or a saved view. Pages are bounded to 100 items; account failures and reauthorization state appear in `errors`, and `complete` stays false while a cursor or partial error remains. Thread summaries include the account name and selected folder needed by desktop global search.
 - `POST /v1/threads/read` (Requires `mail.read`)
   - Request body: `{ "ref": { "accountId": "acc-1", "threadId": "thr-1" } }`
 - `POST /v1/messages/body` (Requires `mail.read`; explicit fetch requires `mail.body.fetch`)

@@ -18,7 +18,11 @@ import (
 type mailboxReadOperations struct{ runtime *SyncRuntime }
 
 func (o *mailboxReadOperations) SearchMessages(ctx context.Context, scope views.Scope, query, cursor string, limit int) (*views.ThreadPage, error) {
-	request, empty, err := o.searchRequest(scope, query, cursor, limit)
+	return o.SearchMessagesWithFilter(ctx, scope, query, "", cursor, limit)
+}
+
+func (o *mailboxReadOperations) SearchMessagesWithFilter(ctx context.Context, scope views.Scope, query, filter, cursor string, limit int) (*views.ThreadPage, error) {
+	request, empty, err := o.searchRequest(scope, query, filter, cursor, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -44,6 +48,8 @@ func (o *mailboxReadOperations) SearchMessages(ctx context.Context, scope views.
 		}
 		result.Items = append(result.Items, views.ThreadSummary{
 			Ref:            views.ThreadRef{AccountID: conversation.AccountID, ThreadID: conversation.ThreadID},
+			AccountName:    conversation.AccountName,
+			FolderID:       conversation.FolderID,
 			Subject:        conversation.Subject,
 			Snippet:        conversation.Snippet,
 			LatestDate:     conversation.LatestDate,
@@ -56,12 +62,16 @@ func (o *mailboxReadOperations) SearchMessages(ctx context.Context, scope views.
 		})
 	}
 	for _, issue := range page.Issues {
-		result.Errors = append(result.Errors, views.PartialError{AccountID: issue.AccountID, Code: "account_search_failed", Message: issue.Message})
+		code := "account_search_failed"
+		if issue.Reauthorize {
+			code = "reauthorize_required"
+		}
+		result.Errors = append(result.Errors, views.PartialError{AccountID: issue.AccountID, AccountName: issue.AccountName, Code: code, Message: issue.Message, Reauthorize: issue.Reauthorize})
 	}
 	return result, nil
 }
 
-func (o *mailboxReadOperations) searchRequest(scope views.Scope, query, cursor string, limit int) (mailservice.MailSearchRequest, bool, error) {
+func (o *mailboxReadOperations) searchRequest(scope views.Scope, query, filter, cursor string, limit int) (mailservice.MailSearchRequest, bool, error) {
 	if err := scope.Validate(); err != nil {
 		return mailservice.MailSearchRequest{}, false, err
 	}
@@ -72,7 +82,7 @@ func (o *mailboxReadOperations) searchRequest(scope views.Scope, query, cursor s
 			base = *scope.Within
 		}
 	}
-	request := mailservice.MailSearchRequest{Query: query, Cursor: cursor, Limit: limit}
+	request := mailservice.MailSearchRequest{Query: query, Filter: filter, Cursor: cursor, Limit: limit}
 	switch base.Kind {
 	case views.ScopeAllInboxes:
 		folderIDs, err := resolveSpecialFolderIDs(o.runtime.accounts, o.runtime.folders, folder.TypeInbox)
@@ -83,6 +93,9 @@ func (o *mailboxReadOperations) searchRequest(scope views.Scope, query, cursor s
 		if len(request.FolderIDs) == 0 {
 			return request, true, nil
 		}
+	case views.ScopeAllAccounts:
+	case views.ScopeAccount:
+		request.AccountIDs = []string{base.AccountID}
 	case views.ScopeFolder:
 		request.AccountIDs = []string{base.AccountID}
 		request.FolderIDs = []string{base.FolderID}
@@ -176,7 +189,7 @@ func (o *mailboxReadOperations) matchThreadScope(ctx context.Context, ref views.
 		return nil, err
 	}
 	if scope.Kind == views.ScopeSearch || scope.Kind == views.ScopeVirtualFolder {
-		request, empty, err := o.searchRequest(scope, "", "", 100)
+		request, empty, err := o.searchRequest(scope, "", "", "", 100)
 		if err != nil || empty {
 			return matched, err
 		}
