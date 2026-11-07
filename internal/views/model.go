@@ -182,6 +182,17 @@ type Address struct {
 	Email string `json:"email"`
 }
 
+// AttachmentSummary describes an attachment without exposing its bytes or
+// local storage path.
+type AttachmentSummary struct {
+	ID          string `json:"id"`
+	Filename    string `json:"filename"`
+	ContentType string `json:"contentType"`
+	Size        int    `json:"size"`
+	ContentID   string `json:"contentId,omitempty"`
+	IsInline    bool   `json:"isInline"`
+}
+
 // ContentState says whether a message's body is available locally.
 type ContentState string
 
@@ -200,17 +211,40 @@ type ThreadMessage struct {
 	Ref          MessageRef `json:"ref"`
 	FolderID     string     `json:"folderId"`
 	RFCMessageID string     `json:"rfcMessageId,omitempty"`
+	Subject      string     `json:"subject,omitempty"`
+	Snippet      string     `json:"snippet,omitempty"`
 	From         Address    `json:"from"`
+	ToList       string     `json:"toList,omitempty"`
+	CcList       string     `json:"ccList,omitempty"`
+	BccList      string     `json:"bccList,omitempty"`
+	ReplyTo      string     `json:"replyTo,omitempty"`
 	Date         time.Time  `json:"date"`
+	ReceivedAt   *time.Time `json:"receivedAt,omitempty"`
 	// Matched is true when the message is in the view's scope. Other messages
 	// are conversation context that makes the thread understandable. An
 	// action on the view must not reach them unless the target says so.
-	Matched        bool         `json:"matched"`
-	IsRead         bool         `json:"isRead"`
-	IsStarred      bool         `json:"isStarred"`
-	IsAnswered     bool         `json:"isAnswered"`
-	HasAttachments bool         `json:"hasAttachments"`
-	ContentState   ContentState `json:"contentState"`
+	Matched            bool                `json:"matched"`
+	IsRead             bool                `json:"isRead"`
+	IsStarred          bool                `json:"isStarred"`
+	IsAnswered         bool                `json:"isAnswered"`
+	IsForwarded        bool                `json:"isForwarded,omitempty"`
+	IsDraft            bool                `json:"isDraft,omitempty"`
+	IsDeleted          bool                `json:"isDeleted,omitempty"`
+	Size               int                 `json:"size,omitempty"`
+	InboxCategory      string              `json:"inboxCategory,omitempty"`
+	HasAttachments     bool                `json:"hasAttachments"`
+	Attachments        []AttachmentSummary `json:"attachments,omitempty"`
+	SMIMEStatus        string              `json:"smimeStatus,omitempty"`
+	SMIMESignerEmail   string              `json:"smimeSignerEmail,omitempty"`
+	SMIMESignerSubject string              `json:"smimeSignerSubject,omitempty"`
+	SMIMEEncrypted     bool                `json:"smimeEncrypted,omitempty"`
+	HasSMIME           bool                `json:"hasSMIME,omitempty"`
+	PGPStatus          string              `json:"pgpStatus,omitempty"`
+	PGPSignerEmail     string              `json:"pgpSignerEmail,omitempty"`
+	PGPSignerKeyID     string              `json:"pgpSignerKeyId,omitempty"`
+	PGPEncrypted       bool                `json:"pgpEncrypted,omitempty"`
+	HasPGP             bool                `json:"hasPGP,omitempty"`
+	ContentState       ContentState        `json:"contentState"`
 }
 
 // BodyCounts counts how many bodies are in each state.

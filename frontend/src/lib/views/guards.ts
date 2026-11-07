@@ -37,6 +37,13 @@ const CONTENT_STATES = ['cached', 'not_fetched', 'fetch_failed']
 const isAddress = (v: unknown): boolean => isShape(v, { name: isString, email: isString })
 const isMessageRef = (v: unknown): boolean => isShape(v, { accountId: isString, messageId: isString })
 const isThreadRef = (v: unknown): boolean => isShape(v, { accountId: isString, threadId: isString })
+const isAttachmentSummary = (v: unknown): boolean => isShape(v, {
+  id: isString,
+  filename: isString,
+  contentType: isString,
+  size: isCount,
+  isInline: isBool,
+}, { contentId: isString })
 
 const isThreadMessage = (v: unknown): boolean =>
   isShape(
@@ -53,7 +60,32 @@ const isThreadMessage = (v: unknown): boolean =>
       hasAttachments: isBool,
       contentState: (s) => isString(s) && CONTENT_STATES.includes(s),
     },
-    { rfcMessageId: isString },
+    {
+      rfcMessageId: isString,
+      subject: isString,
+      snippet: isString,
+      toList: isString,
+      ccList: isString,
+      bccList: isString,
+      replyTo: isString,
+      receivedAt: isTimestamp,
+      isForwarded: isBool,
+      isDraft: isBool,
+      isDeleted: isBool,
+      size: isCount,
+      inboxCategory: isString,
+      attachments: arrayOf(isAttachmentSummary),
+      smimeStatus: isString,
+      smimeSignerEmail: isString,
+      smimeSignerSubject: isString,
+      smimeEncrypted: isBool,
+      hasSMIME: isBool,
+      pgpStatus: isString,
+      pgpSignerEmail: isString,
+      pgpSignerKeyId: isString,
+      pgpEncrypted: isBool,
+      hasPGP: isBool,
+    },
   )
 
 const isBodyCounts = (v: unknown): boolean =>

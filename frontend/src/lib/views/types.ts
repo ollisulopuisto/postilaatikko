@@ -71,6 +71,16 @@ export interface Address {
   email: string
 }
 
+/** Attachment metadata only; bytes and local paths are read separately. */
+export interface AttachmentSummary {
+  id: string
+  filename: string
+  contentType: string
+  size: number
+  contentId?: string
+  isInline: boolean
+}
+
 /** Whether a body is available locally. */
 export type ContentState = 'cached' | 'not_fetched' | 'fetch_failed'
 
@@ -79,9 +89,16 @@ export interface ThreadMessage {
   folderId: string
   /** The RFC 5322 Message-ID header. Copies of one email can share it. */
   rfcMessageId?: string
+  subject?: string
+  snippet?: string
   from: Address
+  toList?: string
+  ccList?: string
+  bccList?: string
+  replyTo?: string
   /** RFC 3339 timestamp. */
   date: string
+  receivedAt?: string
   /**
    * True when the message is in the view's scope. Others are conversation
    * context. An action on the view must not reach them unless its target says so.
@@ -90,7 +107,23 @@ export interface ThreadMessage {
   isRead: boolean
   isStarred: boolean
   isAnswered: boolean
+  isForwarded?: boolean
+  isDraft?: boolean
+  isDeleted?: boolean
+  size?: number
+  inboxCategory?: string
   hasAttachments: boolean
+  attachments?: AttachmentSummary[]
+  smimeStatus?: string
+  smimeSignerEmail?: string
+  smimeSignerSubject?: string
+  smimeEncrypted?: boolean
+  hasSMIME?: boolean
+  pgpStatus?: string
+  pgpSignerEmail?: string
+  pgpSignerKeyId?: string
+  pgpEncrypted?: boolean
+  hasPGP?: boolean
   contentState: ContentState
 }
 

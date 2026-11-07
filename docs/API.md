@@ -44,6 +44,7 @@ The helper mounts provider-aware search and account-qualified thread/body reads:
   - Search scopes may target all enabled accounts, one account, all inboxes, one account-qualified folder, or a saved view. Pages are bounded to 100 items; account failures and reauthorization state appear in `errors`, and `complete` stays false while a cursor or partial error remains. Thread summaries include the account name and selected folder needed by desktop global search.
 - `POST /v1/threads/read` (Requires `mail.read`)
   - Request body: `{ "ref": { "accountId": "acc-1", "threadId": "thr-1" } }`
+  - Returns account-qualified, matched thread headers, envelope fields, flags, encryption metadata, attachment summaries, and body availability. It never includes message body text/HTML, attachment bytes, or local file paths.
 - `POST /v1/messages/body` (Requires `mail.read`; explicit fetch requires `mail.body.fetch`)
   - Request body: `{ "ref": { "accountId": "acc-1", "messageId": "msg-1" }, "mode": "fetch", "includeOriginal": true }`
 - Cached-only body reads never fetch provider content. Requesting `mode: "fetch"` is the only path that downloads an unfetched message body.
