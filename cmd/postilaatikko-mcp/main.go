@@ -16,7 +16,7 @@ func main() {
 	flag.Parse()
 
 	if *endpoint == "" {
-		*endpoint = "http://127.0.0.1:8080"
+		*endpoint = "http://127.0.0.1:8029"
 	}
 	if *token == "" {
 		fmt.Fprintln(os.Stderr, "Error: POSTILAATIKKO_API_TOKEN or --token flag is required")

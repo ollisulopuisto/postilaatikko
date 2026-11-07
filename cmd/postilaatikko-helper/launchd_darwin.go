@@ -25,8 +25,11 @@ func launchAgentPath() (string, error) {
 	return filepath.Join(home, "Library", "LaunchAgents", agentLabel+".plist"), nil
 }
 
-func installAgent(ctx context.Context, identity, data, queue, listen, cert, key string, withSync bool) error {
+func installAgent(ctx context.Context, identity, data, queue, listen, cert, key string, withSync bool, apiConfig apiListenerConfig) error {
 	if err := validateListener(listen, cert, key); err != nil {
+		return err
+	}
+	if err := apiConfig.validate(); err != nil {
 		return err
 	}
 	path, err := launchAgentPath()
@@ -44,12 +47,18 @@ func installAgent(ctx context.Context, identity, data, queue, listen, cert, key 
 	if err != nil {
 		return err
 	}
-	arguments := []string{binary, "serve", "--identity", identity, "--data", data, "--queue", queue, "--listen", listen}
+	arguments := []string{binary, "serve", "--identity", identity, "--data", data, "--queue", queue, "--listen", listen, "--api-listen", apiConfig.address}
 	if withSync {
 		arguments = append(arguments, "--sync")
 	}
 	if cert != "" {
 		arguments = append(arguments, "--tls-cert", cert, "--tls-key", key)
+	}
+	if apiConfig.cert != "" {
+		arguments = append(arguments, "--api-tls-cert", apiConfig.cert, "--api-tls-key", apiConfig.key)
+	}
+	for _, host := range apiConfig.allowedHost {
+		arguments = append(arguments, "--api-allowed-host", host)
 	}
 	var document bytes.Buffer
 	document.WriteString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\"><dict>\n")

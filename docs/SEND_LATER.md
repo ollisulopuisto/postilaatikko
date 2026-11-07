@@ -43,13 +43,13 @@ For the same Studio's app, start with the default loopback connection:
 "$POSTILAATIKKO_HELPER" serve --identity studio
 ```
 
-The app's default address is `http://127.0.0.1:8028`. Content and acknowledgements are still end-to-end encrypted and authenticated.
+The Send Later endpoint defaults to `http://127.0.0.1:8028`. The authenticated mailbox API runs separately at `http://127.0.0.1:8029`; create a scoped API credential with `postilaatikko-helper api-client create` before using it. See [the API guide](API.md) for client and remote TLS setup. Send Later content and acknowledgements remain end-to-end encrypted and authenticated.
 
 ```sh
 curl --fail http://127.0.0.1:8028/healthz
 ```
 
-`/healthz` reports only whether the helper process is serving requests; it does not expose account, queue, or message data. The helper currently owns scheduled delivery only. Mailbox synchronization and automatic filters are still owned by the desktop while the shared service boundary is being extracted.
+`/healthz` reports only whether the Send Later helper process is serving requests; it does not expose account, queue, or message data. The mailbox API requires a bearer token and checks its granted capabilities.
 
 Off-loopback connections require HTTPS with a certificate trusted by the client:
 
@@ -62,11 +62,13 @@ Off-loopback connections require HTTPS with a certificate trusted by the client:
 
 The client would use the corresponding reachable HTTPS hostname. Redirects and untrusted TLS certificates are rejected; the pinned helper key is an additional E2EE identity check. Request size, concurrent request count and network timeouts are bounded. The helper caps its logical queue at 10,000 job records and 512 MiB of encrypted envelopes. Existing jobs can still be cancelled at capacity. Revision tombstones are retained to reject delayed replays; there is no automatic history pruning. SQLite WAL and free pages can use additional disk space. A public relay remains a separate deployment with its own quotas, retention policy and rotation requirements.
 
-To also run the existing bounded, header-first mailbox sync scheduler while the desktop is closed, pass `--sync`:
+To run the existing bounded, header-first mailbox sync scheduler and automatic filters while the desktop is closed, pass `--sync`:
 
 ```sh
 "$POSTILAATIKKO_HELPER" serve --identity studio --sync
 ```
+
+Sync uses periodic polling as its recovery path. Gmail Pub/Sub reception and watch renewal are not wired yet.
 
 During this transition, use `--sync` only while the desktop app is closed; the app still has its own sync scheduler. Automatic cross-account filter execution and desktop API handoff are not migrated yet.
 

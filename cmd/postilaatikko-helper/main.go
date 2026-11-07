@@ -71,6 +71,9 @@ func run(args []string) error {
 	listen := flags.String("listen", "127.0.0.1:8028", "helper bind address; non-loopback requires TLS certificate and key")
 	cert := flags.String("tls-cert", "", "TLS server certificate")
 	key := flags.String("tls-key", "", "TLS server private-key file")
+	apiListen := flags.String("api-listen", "127.0.0.1:8029", "authenticated mailbox API bind address; non-loopback requires API TLS and Host allowlist")
+	apiCert := flags.String("api-tls-cert", "", "authenticated mailbox API TLS certificate")
+	apiKey := flags.String("api-tls-key", "", "authenticated mailbox API TLS private-key file")
 	withSync := flags.Bool("sync", false, "also run bounded background mailbox header sync")
 	account := flags.String("account", "", "helper-local sending account ID")
 	from := flags.String("from", "", "sender address configured on the helper account")
@@ -84,6 +87,8 @@ func run(args []string) error {
 	outcome := flags.String("outcome", "", "locally verified unknown outcome: sent or failed")
 	var allowed allowFlags
 	flags.Var(&allowed, "allow", "pairing permission account-id=sender@example.com; repeat for each account/sender")
+	var apiAllowedHosts allowFlags
+	flags.Var(&apiAllowedHosts, "api-allowed-host", "exact Host name accepted by the authenticated mailbox API; repeat for each name")
 	if err := flags.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -219,21 +224,20 @@ func run(args []string) error {
 			return err
 		}
 		defer transport.Close()
-		var syncRuntime *alwayson.SyncRuntime
-		if *withSync {
-			syncRuntime, err = alwayson.OpenSyncRuntime(*data, transport.IMAPClientConfig)
-			if err != nil {
-				return err
-			}
+		syncRuntime, err := alwayson.OpenSyncRuntime(*data, transport.IMAPClientConfig)
+		if err != nil {
+			return err
 		}
-		return serve(ctx, store, transport, syncRuntime, *listen, *cert, *key)
+		apiConfig := apiListenerConfig{address: *apiListen, cert: *apiCert, key: *apiKey, allowedHost: apiAllowedHosts}
+		return serve(ctx, store, transport, syncRuntime, *listen, *cert, *key, *withSync, apiConfig)
 	case "install-agent":
 		transport, err := scheduledsend.OpenSMTPTransport(*data)
 		if err != nil {
 			return err
 		}
 		transport.Close()
-		return installAgent(ctx, *identityName, *data, *queue, *listen, *cert, *key, *withSync)
+		apiConfig := apiListenerConfig{address: *apiListen, cert: *apiCert, key: *apiKey, allowedHost: apiAllowedHosts}
+		return installAgent(ctx, *identityName, *data, *queue, *listen, *cert, *key, *withSync, apiConfig)
 	default:
 		return fmt.Errorf("unknown helper command %q", command)
 	}
@@ -324,23 +328,34 @@ func validateListener(address, cert, key string) error {
 	return nil
 }
 
-func serve(ctx context.Context, store *scheduledsend.Store, transport scheduledsend.Transport, syncRuntime *alwayson.SyncRuntime, address, cert, key string) error {
-	if syncRuntime != nil {
-		defer syncRuntime.Close()
+func serve(ctx context.Context, store *scheduledsend.Store, transport scheduledsend.Transport, syncRuntime *alwayson.SyncRuntime, address, cert, key string, withSync bool, apiConfig apiListenerConfig) (result error) {
+	if syncRuntime == nil {
+		return errors.New("mailbox runtime is required to serve the authenticated API")
 	}
+	defer func() { result = errors.Join(result, syncRuntime.Close()) }()
 	if err := validateListener(address, cert, key); err != nil {
+		return err
+	}
+	if err := apiConfig.validate(); err != nil {
 		return err
 	}
 	listener, err := net.Listen("tcp", address)
 	if err != nil {
 		return err
 	}
-	server := &http.Server{Handler: helperHandler(store, syncRuntime != nil), ReadHeaderTimeout: 5 * time.Second,
+	apiServer, err := syncRuntime.NewPersistentMailboxAPIServer(apiConfig.serverConfig())
+	if err != nil {
+		return errors.Join(err, listener.Close())
+	}
+	if err := apiServer.Start(); err != nil {
+		return errors.Join(fmt.Errorf("start authenticated mailbox API: %w", err), listener.Close())
+	}
+	server := &http.Server{Handler: helperHandler(store, withSync), ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 8192}
 	workerContext, cancel := context.WithCancel(ctx)
 	defer cancel()
 	worker := &scheduledsend.Worker{Store: store, Transport: transport}
-	if syncRuntime != nil {
+	if withSync {
 		syncRuntime.Start(workerContext)
 	}
 	workerError := make(chan error, 1)
@@ -353,7 +368,6 @@ func serve(ctx context.Context, store *scheduledsend.Store, transport scheduleds
 		}
 		serverError <- server.Serve(listener)
 	}()
-	var result error
 	workerStopped := false
 	select {
 	case <-ctx.Done():
@@ -364,18 +378,18 @@ func serve(ctx context.Context, store *scheduledsend.Store, transport scheduleds
 	cancel()
 	shutdownContext, done := context.WithTimeout(context.Background(), 5*time.Second)
 	defer done()
-	_ = server.Shutdown(shutdownContext)
+	shutdownErr := errors.Join(server.Shutdown(shutdownContext), apiServer.Stop(shutdownContext))
 	if !workerStopped {
 		select {
 		case <-workerError:
 		case <-time.After(35 * time.Second):
-			return errors.New("helper shutdown interrupted delivery; inspect its durable outcome before retrying")
+			return errors.Join(shutdownErr, errors.New("helper shutdown interrupted delivery; inspect its durable outcome before retrying"))
 		}
 	}
 	if errors.Is(result, context.Canceled) || errors.Is(result, http.ErrServerClosed) {
-		return nil
+		result = nil
 	}
-	return result
+	return errors.Join(result, shutdownErr)
 }
 
 // helperHandler exposes only a minimal process-health signal alongside the
