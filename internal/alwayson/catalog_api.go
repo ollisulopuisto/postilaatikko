@@ -44,7 +44,11 @@ func (o *catalogReadOperations) ListConversationsByFolder(folderID string, offse
 }
 
 func (o *catalogReadOperations) ListConversationsUnifiedInbox(offset, limit int, sortOrder, filter string) ([]*message.Conversation, error) {
-	return o.messages.ListConversationsUnifiedInbox(offset, limit, sortOrder, filter)
+	folderIDs, err := resolveSpecialFolderIDs(o.accounts, o.folders, folder.TypeInbox)
+	if err != nil {
+		return nil, err
+	}
+	return o.messages.ListConversationsByFolderIDs(folderIDs, offset, limit, sortOrder, filter)
 }
 
 // CatalogAPIHandler is kept as the compatible constructor for the mailbox read

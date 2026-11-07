@@ -75,24 +75,11 @@ func (o *mailboxReadOperations) searchRequest(scope views.Scope, query, cursor s
 	request := mailservice.MailSearchRequest{Query: query, Cursor: cursor, Limit: limit}
 	switch base.Kind {
 	case views.ScopeAllInboxes:
-		accounts, err := o.runtime.accounts.List()
+		folderIDs, err := resolveSpecialFolderIDs(o.runtime.accounts, o.runtime.folders, folder.TypeInbox)
 		if err != nil {
 			return mailservice.MailSearchRequest{}, false, err
 		}
-		for _, account := range accounts {
-			if !account.Enabled {
-				continue
-			}
-			folders, err := o.runtime.folders.List(account.ID)
-			if err != nil {
-				return mailservice.MailSearchRequest{}, false, err
-			}
-			for _, f := range folders {
-				if f.Type == folder.TypeInbox {
-					request.FolderIDs = append(request.FolderIDs, f.ID)
-				}
-			}
-		}
+		request.FolderIDs = folderIDs
 		if len(request.FolderIDs) == 0 {
 			return request, true, nil
 		}
@@ -232,8 +219,11 @@ func (o *mailboxReadOperations) matchThreadScope(ctx context.Context, ref views.
 func (o *mailboxReadOperations) messageInScope(msg *message.Message, scope views.Scope) (bool, error) {
 	switch scope.Kind {
 	case views.ScopeAllInboxes:
-		f, err := o.runtime.folders.Get(msg.FolderID)
-		return err == nil && f != nil && f.Type == folder.TypeInbox, err
+		inbox, err := resolveSpecialFolder(o.runtime.accounts, o.runtime.folders, msg.AccountID, folder.TypeInbox)
+		if err != nil {
+			return false, err
+		}
+		return inbox != nil && inbox.ID == msg.FolderID, nil
 	case views.ScopeFolder:
 		return msg.AccountID == scope.AccountID && msg.FolderID == scope.FolderID, nil
 	case views.ScopeVirtualFolder:
