@@ -7,6 +7,7 @@ import (
 	"github.com/hkdb/aerion/internal/folder"
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/mailfilter"
+	"github.com/hkdb/aerion/internal/mailmove"
 	"github.com/hkdb/aerion/internal/message"
 )
 
@@ -115,25 +116,23 @@ func (a *App) handleNewMessageForFilters(msg *message.Message) {
 func (a *App) applyFilterRule(rule *mailfilter.Rule, dest *folder.Folder, msg *message.Message) {
 	defer recoverPanic("app.filters", "apply filter rule")
 	log := logging.WithComponent("app.filters")
-
-	// Re-check current state: the user may have moved or deleted the message
-	// between the sync and this goroutine running.
-	current, err := a.messageStore.GetByIDs([]string{msg.ID})
-	if err != nil || len(current) == 0 {
-		log.Debug().Str("messageRef", logging.ShortHash(msg.ID)).Msg("Filter target message no longer exists, skipping")
-		return
+	operation := mailmove.FilterOperation{
+		Messages: a.messageStore,
+		Move: func(ruleID, messageID, destinationFolderID string) error {
+			_, _, _, err := a.runMoveMutation([]string{messageID}, "filter:"+ruleID, func() (bool, string, error) {
+				_, moveErr := a.moveToFolder([]string{messageID}, destinationFolderID, false, "")
+				return false, "", moveErr
+			})
+			return err
+		},
 	}
-	if current[0].AccountID != msg.AccountID || current[0].FolderID != msg.FolderID {
-		log.Debug().Str("messageRef", logging.ShortHash(msg.ID)).Msg("Filter target message moved since match, skipping")
-		return
-	}
-
-	_, _, _, err = a.runMoveMutation([]string{msg.ID}, "filter:"+rule.ID, func() (bool, string, error) {
-		_, moveErr := a.moveToFolder([]string{msg.ID}, dest.ID, false, "")
-		return false, "", moveErr
-	})
+	applied, err := operation.Apply(rule, dest, msg)
 	if err != nil {
 		log.Warn().Err(err).Str("ruleID", rule.ID).Str("destFolder", dest.Path).Msg("Filter rule move failed")
+		return
+	}
+	if !applied {
+		log.Debug().Str("messageRef", logging.ShortHash(msg.ID)).Msg("Filter target changed since match, skipping")
 		return
 	}
 	log.Info().Str("ruleID", rule.ID).Str("destFolder", dest.Path).Msg("Filter rule routed message")
