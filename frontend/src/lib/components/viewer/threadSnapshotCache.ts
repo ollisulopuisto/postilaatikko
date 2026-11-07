@@ -19,15 +19,27 @@ function addStringBytes(total: { value: number }, value: string | null | undefin
   total.value += (value?.length ?? 0) * 2
 }
 
+function addStringsBytes(total: { value: number }, values: readonly string[] | null | undefined) {
+  for (const value of values ?? []) addStringBytes(total, value)
+}
+
 function estimateConversationBytes(conversation: messageModels.Conversation): number {
   const total = { value: 0 }
   addStringBytes(total, conversation.subject)
   addStringBytes(total, conversation.snippet)
+  addStringsBytes(total, conversation.messageIds)
   for (const participant of conversation.participants ?? []) {
     addStringBytes(total, participant.name)
     addStringBytes(total, participant.email)
   }
   for (const message of conversation.messages ?? []) {
+    addStringBytes(total, message.id)
+    addStringBytes(total, message.accountId)
+    addStringBytes(total, message.folderId)
+    addStringBytes(total, message.messageId)
+    addStringBytes(total, message.inReplyTo)
+    addStringBytes(total, message.references)
+    addStringBytes(total, message.threadId)
     addStringBytes(total, message.subject)
     addStringBytes(total, message.snippet)
     addStringBytes(total, message.bodyText)

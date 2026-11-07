@@ -53,6 +53,16 @@ test('thread snapshots are bounded by estimated content size', () => {
   assert.equal(getThreadSnapshot('account', 'folder', 'large-2')?.subject, 'large-2')
 })
 
+test('thread snapshot estimate includes reference headers and message ids', () => {
+  clearThreadSnapshots()
+  const referenceHeavy = conversation('reference-heavy', 1_200_000)
+  referenceHeavy.messages[0].references = 'r'.repeat(1_000_000)
+  referenceHeavy.messageIds = Array.from({ length: 100 }, (_, index) => `message-id-${index}-` + 'm'.repeat(100))
+  setThreadSnapshot('account', 'folder', 'reference-heavy', referenceHeavy)
+
+  assert.equal(getThreadSnapshot('account', 'folder', 'reference-heavy'), null)
+})
+
 test('oversized threads are not retained', () => {
   clearThreadSnapshots()
   setThreadSnapshot('account', 'folder', 'huge', conversation('huge', 3_000_000))
