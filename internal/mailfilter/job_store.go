@@ -53,7 +53,7 @@ func (s *JobStore) ClaimNext() (*FilterJob, error) {
 	if err != nil {
 		return nil, fmt.Errorf("begin automatic filter claim: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	job := &FilterJob{}
 	err = tx.QueryRow(`
 		SELECT id, rule_id, destination_folder_id, message_id, source_account_id, source_folder_id, source_uid
