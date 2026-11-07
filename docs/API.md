@@ -166,6 +166,8 @@ The same flags can be passed to `install-agent` to persist them in the macOS Lau
 
 The `api-client` commands manage credentials. The create command prints a high-entropy bearer token once; the database stores only its SHA-256 digest. Keep the displayed token private and use a password manager or the client's secure credential store. A grant authorizes only the listed capabilities. Starting `serve` exposes the mailbox API; remote access still requires the explicit TLS and Host settings above. This flow does not create a phone pairing code.
 
+The desktop provisions a dedicated local grant with `mail.read` and `mail.body.fetch`, and stores its bearer token in the OS keyring. It exposes authenticated connection status through Wails and routes explicit message-body fetches through the helper when connected. If the helper cannot be reached, the desktop uses its existing local body-fetch path. Authorization, credential, and capability errors do not trigger that fallback. Routine listing and sync remain header-only. Revoked credentials are not silently reissued; explicit reconnection UX is a follow-up. Other mailbox reads and actions still use the existing desktop path until their handoff tasks are integrated.
+
 ---
 
 ## Current service boundary

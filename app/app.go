@@ -217,7 +217,8 @@ type App struct {
 	paths *platform.Paths
 
 	// Database
-	db *database.DB
+	db             *database.DB
+	mailboxService *mailboxServiceConnector
 
 	// Stores
 	accountStore        *account.Store
@@ -238,17 +239,17 @@ type App struct {
 	imageAllowlistStore *settings.ImageAllowlistStore
 
 	// IMAP
-	imapPool            *imap.Pool
-	syncEngine          *sync.Engine
-	refreshMu           goSync.Mutex
-	refreshLast         map[string]time.Time
-	refreshActive       map[string]bool
-	mailServiceMu goSync.Mutex
-	mailService   *mailservice.Service
-	viewCountMu         goSync.Mutex
-	viewCountJobs       map[string]*viewCountJob
-	viewCountShared     map[string]*viewCountJob
-	triageLabelMu       goSync.Mutex
+	imapPool        *imap.Pool
+	syncEngine      *sync.Engine
+	refreshMu       goSync.Mutex
+	refreshLast     map[string]time.Time
+	refreshActive   map[string]bool
+	mailServiceMu   goSync.Mutex
+	mailService     *mailservice.Service
+	viewCountMu     goSync.Mutex
+	viewCountJobs   map[string]*viewCountJob
+	viewCountShared map[string]*viewCountJob
+	triageLabelMu   goSync.Mutex
 
 	// Background sync (polling + IDLE)
 	syncScheduler   *sync.Scheduler
@@ -619,6 +620,12 @@ func (a *App) Startup(ctx context.Context) {
 	// the time Startup runs, a.paths, a.db, and a.credStore are non-nil.
 	log := logging.WithComponent("app")
 	db := a.db
+	a.mailboxService = newMailboxServiceConnector(db)
+	if _, err := a.mailboxService.getClient(); err != nil {
+		if !errors.Is(err, errDesktopMailboxAuthorizationRequired) {
+			log.Warn().Err(err).Msg("Desktop mailbox service credential bootstrap is unavailable")
+		}
+	}
 
 	// A restart never auto-sends: expire any leftover undo-send queue rows;
 	// their drafts simply reappear in the Drafts folder.

@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -64,6 +65,40 @@ func (a *App) GetMessageSource(messageID string) (string, error) {
 func (a *App) FetchMessageBody(messageID string) (*message.Message, error) {
 	log := logging.WithComponent("app")
 	log.Debug().Str("message_ref", logging.ShortHash(messageID)).Msg("Fetching message body on-demand")
+
+	if a.mailboxService != nil {
+		status := a.GetMailboxServiceStatus()
+		if status.Connected {
+			msg, err := a.messageStore.Get(messageID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get message: %w", err)
+			}
+			if msg == nil {
+				return nil, fmt.Errorf("message not found: %s", messageID)
+			}
+			ctx := a.ctx
+			if ctx == nil {
+				ctx = context.Background()
+			}
+			if err := a.mailboxService.fetchMessageBody(ctx, msg.AccountID, msg.ID); err != nil {
+				return nil, fmt.Errorf("failed to fetch message body through local service: %w", err)
+			}
+			updatedMsg, err := a.messageStore.Get(messageID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read fetched message body: %w", err)
+			}
+			if updatedMsg == nil || !updatedMsg.BodyFetched {
+				return nil, errors.New("local service did not persist the fetched message body")
+			}
+			if err := a.messageStore.EnrichReactions([]*message.Message{updatedMsg}); err != nil {
+				return nil, err
+			}
+			return updatedMsg, nil
+		}
+		if status.ErrorCode != "service_unavailable" {
+			return nil, fmt.Errorf("local mailbox service unavailable for body fetch: %s", status.Message)
+		}
+	}
 
 	updatedMsg, err := a.currentMailService().FetchMessageBody(a.ctx, "", messageID)
 	if err != nil {
