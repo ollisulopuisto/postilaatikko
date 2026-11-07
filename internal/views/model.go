@@ -219,7 +219,7 @@ type ThreadMessage struct {
 	BccList      string     `json:"bccList,omitempty"`
 	ReplyTo      string     `json:"replyTo,omitempty"`
 	Date         time.Time  `json:"date"`
-	ReceivedAt   time.Time  `json:"receivedAt,omitempty"`
+	ReceivedAt   *time.Time `json:"receivedAt,omitempty"`
 	// Matched is true when the message is in the view's scope. Other messages
 	// are conversation context that makes the thread understandable. An
 	// action on the view must not reach them unless the target says so.

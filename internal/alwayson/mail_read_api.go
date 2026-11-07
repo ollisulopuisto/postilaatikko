@@ -158,6 +158,10 @@ func (o *mailboxReadOperations) GetThread(ctx context.Context, ref views.ThreadR
 		if isMatched {
 			result.MatchedCount++
 		}
+		var receivedAt *time.Time
+		if !msg.ReceivedAt.IsZero() {
+			receivedAt = &msg.ReceivedAt
+		}
 		attachmentSummaries := []views.AttachmentSummary{}
 		if o.runtime.attachments != nil {
 			attachments, err := o.runtime.attachments.GetByMessage(msg.ID)
@@ -190,7 +194,7 @@ func (o *mailboxReadOperations) GetThread(ctx context.Context, ref views.ThreadR
 			BccList:            msg.BccList,
 			ReplyTo:            msg.ReplyTo,
 			Date:               msg.Date,
-			ReceivedAt:         msg.ReceivedAt,
+			ReceivedAt:         receivedAt,
 			Matched:            isMatched,
 			IsRead:             msg.IsRead,
 			IsStarred:          msg.IsStarred,
