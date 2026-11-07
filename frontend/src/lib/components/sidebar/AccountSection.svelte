@@ -114,8 +114,13 @@
 
     <!-- Account Menu Button -->
     <button
-      class="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-muted transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+      type="button"
+      class="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-muted transition-colors opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       onclick={toggleMenu}
+      aria-label={$_('common.moreActions')}
+      title={$_('common.moreActions')}
+      aria-haspopup="menu"
+      aria-expanded={showMenu}
     >
       <Icon icon="mdi:dots-vertical" class="w-4 h-4 text-muted-foreground" />
     </button>

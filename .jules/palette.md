@@ -2,6 +2,10 @@
 
 Critical UX and Accessibility learnings only.
 
+## 2026-11-07 - Menu Disclosures and Focus Rings on Hover-Revealed Sidebar Actions
+**Learning:** Icon-only menu triggers concealed by default via `opacity-0 group-hover:opacity-100` (such as account context menu buttons in `AccountSection.svelte`) previously relied on legacy `focus:opacity-100` without `focus-visible` ring styles, accessible name labels, or popup semantics (`aria-haspopup="menu"`, `aria-expanded`). This left keyboard navigation without an outline and screen readers without announcement of the action or its expanded state.
+**Action:** Always provide `aria-haspopup="menu"` and `aria-expanded` on menu disclosure triggers, pair hover disclosure classes with `focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`, and supply localized `aria-label` and `title` attributes.
+
 ## 2026-11-06 - Focus-Visible States on Hover-Revealed Attachment Action Controls
 **Learning:** Secondary actions hidden by default with `opacity-0 group-hover:opacity-100` (such as attachment Open, Download, and Remove buttons) become invisible obstacles for keyboard navigation unless `focus-visible:opacity-100` is explicitly set along with focus ring classes. Additionally, icon-only buttons with `title` attributes must also provide explicit `aria-label` properties to guarantee consistent screen reader announcements.
 **Action:** Whenever using `opacity-0 group-hover:opacity-100` on interactive controls, always pair it with `focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring` and explicit `aria-label` attributes.
