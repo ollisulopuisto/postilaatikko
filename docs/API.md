@@ -84,6 +84,25 @@ go build ./cmd/postilaatikko-cli
 ./postilaatikko-cli --token=$TOKEN action archive acc-1 msg-101
 ```
 
+### Managing API Client Grants
+
+Use the local helper CLI to create, list, or revoke credentials in the configured account database:
+
+```bash
+# Create a credential and copy bearerToken into a client immediately.
+postilaatikko-helper api-client create --name "phone" --capability mail.read
+
+# Add only capabilities that client needs; repeat --capability as needed.
+postilaatikko-helper api-client create --name "automation" \
+  --capability mail.read --capability mail.body.fetch
+
+# List metadata (tokens are never returned) and revoke a client by ID.
+postilaatikko-helper api-client list
+postilaatikko-helper api-client revoke --client client-<id>
+```
+
+The create command prints a high-entropy bearer token once. The database stores only its SHA-256 digest; keep the displayed token private and use a password manager or the client's secure credential store. A grant authorizes only the listed capabilities. These commands manage credentials; they do not start the mailbox API, expose a remote listener, or create a phone pairing flow.
+
 ---
 
 ## LLM Workflow Example: Thread Summarization
