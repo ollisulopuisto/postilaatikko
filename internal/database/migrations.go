@@ -1745,4 +1745,22 @@ var migrations = []Migration{
 	  updated_at TEXT NOT NULL
 	);
 	`},
+	{Version: 66, SQL: `
+	CREATE TABLE IF NOT EXISTS automatic_filter_jobs (
+	  id TEXT PRIMARY KEY,
+	  rule_id TEXT NOT NULL,
+	  destination_folder_id TEXT NOT NULL,
+	  message_id TEXT NOT NULL,
+	  source_account_id TEXT NOT NULL,
+	  source_folder_id TEXT NOT NULL,
+	  source_uid INTEGER NOT NULL,
+	  state TEXT NOT NULL CHECK(state IN ('pending','processing','outcome_unknown')),
+	  last_error TEXT NOT NULL DEFAULT '',
+	  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+	  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+	  UNIQUE(rule_id, message_id, source_folder_id, destination_folder_id)
+	);
+	CREATE INDEX IF NOT EXISTS idx_automatic_filter_jobs_pending
+	  ON automatic_filter_jobs(state, created_at);
+	`},
 }
