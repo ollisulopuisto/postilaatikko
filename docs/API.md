@@ -166,6 +166,8 @@ The same flags can be passed to `install-agent` to persist them in the macOS Lau
 
 The `api-client` commands manage credentials. The create command prints a high-entropy bearer token once; the database stores only its SHA-256 digest. Keep the displayed token private and use a password manager or the client's secure credential store. A grant authorizes only the listed capabilities. Starting `serve` exposes the mailbox API; remote access still requires the explicit TLS and Host settings above. This flow does not create a phone pairing code.
 
+The desktop provisions a dedicated local `mail.read` grant and stores its bearer token in the OS keyring. It exposes authenticated connection status to the UI, but mailbox reads and actions continue through the existing desktop path until their handoff tasks are integrated. Revoked credentials are not silently reissued; explicit reconnection UX is a follow-up.
+
 ---
 
 ## Current service boundary

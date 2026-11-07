@@ -52,6 +52,39 @@ func (k *Keyring) DeletePassword(accountID string) error {
 	return nil
 }
 
+// SetSecret stores a non-account credential such as a local service token.
+func (k *Keyring) SetSecret(name, secret string) error {
+	err := gokeyring.Set(serviceName, name, secret)
+	if err != nil {
+		return keyringFailure("failed to store secret", err)
+	}
+	return nil
+}
+
+// GetSecret retrieves a non-account credential such as a local service token.
+func (k *Keyring) GetSecret(name string) (string, error) {
+	secret, err := gokeyring.Get(serviceName, name)
+	if err == gokeyring.ErrNotFound {
+		return "", ErrCredentialNotFound
+	}
+	if err != nil {
+		return "", keyringFailure("failed to retrieve secret", err)
+	}
+	return secret, nil
+}
+
+// DeleteSecret removes a non-account credential if it exists.
+func (k *Keyring) DeleteSecret(name string) error {
+	err := gokeyring.Delete(serviceName, name)
+	if err == gokeyring.ErrNotFound {
+		return nil
+	}
+	if err != nil {
+		return keyringFailure("failed to delete secret", err)
+	}
+	return nil
+}
+
 // SetOAuthTokens stores OAuth2 tokens for an account
 func (k *Keyring) SetOAuthTokens(accountID, accessToken, refreshToken string) error {
 	// Store access token

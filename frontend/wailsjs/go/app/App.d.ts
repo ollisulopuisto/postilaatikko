@@ -376,6 +376,8 @@ export function GetMacOSContactsStatus():Promise<string>;
 
 export function GetMailtoMode():Promise<string>;
 
+export function GetMailboxServiceStatus():Promise<{connected:boolean; apiVersion?:string; capabilities?:string[]; errorCode?:string; message?:string}>;
+
 export function GetMarkAsReadDelay():Promise<number>;
 
 export function GetMessage(arg1:string):Promise<message.Message>;

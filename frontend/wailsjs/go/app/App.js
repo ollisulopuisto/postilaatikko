@@ -702,6 +702,10 @@ export function GetMessage(arg1) {
   return window['go']['app']['App']['GetMessage'](arg1);
 }
 
+export function GetMailboxServiceStatus() {
+  return window['go']['app']['App']['GetMailboxServiceStatus']();
+}
+
 export function GetMessageCount(arg1, arg2) {
   return window['go']['app']['App']['GetMessageCount'](arg1, arg2);
 }
