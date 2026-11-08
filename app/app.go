@@ -680,9 +680,9 @@ func (a *App) Startup(ctx context.Context) {
 	a.contactStore = contact.NewStore(db.DB)
 	a.contactStore.SetMacOSContactsSource(macoscontacts.New())
 	a.draftStore = draft.NewStore(db)
-	a.settingsStore = settings.NewStore(db)
+	a.settingsStore = settings.NewStore(a.deviceDB)
 	a.appStateStore = appstate.NewStore(a.deviceDB.DB)
-	a.imageAllowlistStore = settings.NewImageAllowlistStore(db)
+	a.imageAllowlistStore = settings.NewImageAllowlistStore(a.deviceDB)
 
 	// Scale database connection pool based on number of accounts
 	a.updateDBConnectionPool()

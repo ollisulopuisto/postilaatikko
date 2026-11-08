@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Store desktop preferences and trusted remote-image entries in the device database, importing existing values without deleting their mailbox-database copies.
 - Keep desktop flag state and events aligned with provider-confirmed partial bulk changes, and allow longer helper-backed mutations to be retried safely after an ambiguous timeout.
 - Keep All Inboxes conversation lists and counts aligned by resolving the enabled accounts' selected Inbox folders for both helper-backed reads and local fallback.
 - Keep thread actions and automatic read-on-leave limited to messages in the active view, preserve scope during body fetch, and keep service thread reads metadata-only with account-safe stale-reference resolution.
