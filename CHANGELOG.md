@@ -55,6 +55,11 @@
 
 ## Postilaatikko 2026.11.07.1
 
+- Preserve provider-confirmed partial read/star changes on desktop errors and allow account removal before a custom OAuth fallback was ever saved.
+
+- Fix Move To and Copy To command dispatch so the folder picker follows the currently focused message list or conversation instead of failing.
+- Recognize supported unified system-folder scopes consistently with the mailbox service, while rejecting malformed non-string folder types.
+
 - Reuse compiled attachment keyword patterns when checking a draft for forgotten attachments.
 - Repair current-focus routing for Move To and Copy To and keep unified-folder scope checks aligned with the mailbox service.
 
