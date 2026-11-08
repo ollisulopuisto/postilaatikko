@@ -84,6 +84,12 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(run.call_args.args, ("list-keychains", "-d", "user", "-s",
                          "/original with spaces", "/concurrent", "/dummy/new"))
 
+    def test_paths_preserve_literal_quotes_and_backslashes(self):
+        value = '/dummy/work "2026" \\ keychain.keychain-db'
+        self.assertEqual(HELPER.keychain_paths('    "' + value + '"\n'), [value])
+        with self.assertRaises(RuntimeError):
+            HELPER.keychain_paths('security> "/dummy/path"\n')
+
     def test_line_protocol_rejects_command_separators(self):
         for value in ["a\nb", "a\rb", "a\0b"]:
             with self.assertRaises(ValueError):
