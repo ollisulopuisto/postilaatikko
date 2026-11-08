@@ -273,6 +273,9 @@ func (a AccountSummary) ToAccount() *account.Account {
 }
 
 func accountSummaryFrom(acc *account.Account) AccountSummary {
+	if acc == nil {
+		return AccountSummary{}
+	}
 	return AccountSummary{
 		ID: acc.ID, Email: acc.Email, Name: acc.Name, SharedMailboxParentID: acc.SharedMailboxParentID,
 		IMAPHost: acc.IMAPHost, IMAPPort: acc.IMAPPort, IMAPSecurity: acc.IMAPSecurity, IMAPAuthMechanism: acc.IMAPAuthMechanism,

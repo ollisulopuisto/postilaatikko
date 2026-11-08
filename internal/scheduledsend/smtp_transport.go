@@ -96,6 +96,66 @@ func (t *SMTPTransport) Close() error {
 	return errors.Join(t.db.Close(), t.schemaOwner.Release())
 }
 
+// DeleteAccountCredentials removes helper-local credentials before account data is deleted.
+func (t *SMTPTransport) DeleteAccountCredentials(accountID string) error {
+	if t == nil || t.creds == nil {
+		return errors.New("helper credential store is unavailable")
+	}
+	return t.creds.DeleteAllCredentials(accountID)
+}
+
+// ValidateSharedMailbox verifies Microsoft OAuth IMAP access using the primary account's token.
+func (t *SMTPTransport) ValidateSharedMailbox(ctx context.Context, primaryAccountID, sharedEmail string) error {
+	if t == nil || t.creds == nil || t.accounts == nil {
+		return errors.New("helper account credentials are unavailable")
+	}
+	primary, err := t.accounts.Get(primaryAccountID)
+	if err != nil {
+		return err
+	}
+	if primary == nil || primary.AuthType != account.AuthOAuth2 {
+		return errors.New("shared mailboxes require a Microsoft OAuth account")
+	}
+	provider, err := t.creds.GetOAuthProvider(primaryAccountID)
+	if err != nil || provider != "microsoft" {
+		return errors.New("shared mailboxes require Microsoft OAuth credentials")
+	}
+	tokens, err := t.tokens(ctx, primaryAccountID)
+	if err != nil {
+		return err
+	}
+	config := imap.DefaultConfig()
+	config.Host, config.Port, config.Username = primary.IMAPHost, primary.IMAPPort, sharedEmail
+	config.Security, config.AuthType, config.AccessToken = imap.SecurityType(primary.IMAPSecurity), imap.AuthTypeOAuth2, tokens.AccessToken
+	config.TLSConfig = certificate.BuildTLSConfig(primary.IMAPHost, t.certs)
+	client := imap.NewClient(config)
+	if err := client.Connect(); err != nil {
+		return fmt.Errorf("connect to shared mailbox IMAP: %w", err)
+	}
+	if err := client.Login(); err != nil {
+		client.Close()
+		return fmt.Errorf("shared mailbox authentication failed: %w", err)
+	}
+	client.Close()
+	return nil
+}
+
+// CopySharedMailboxCredentials stores the primary OAuth grant for a child account.
+func (t *SMTPTransport) CopySharedMailboxCredentials(primaryAccountID, childAccountID string) error {
+	if t == nil || t.creds == nil {
+		return errors.New("helper account credentials are unavailable")
+	}
+	provider, err := t.creds.GetOAuthProvider(primaryAccountID)
+	if err != nil || provider != "microsoft" {
+		return errors.New("shared mailbox credentials require Microsoft OAuth")
+	}
+	tokens, err := t.creds.GetOAuthTokens(primaryAccountID)
+	if err != nil {
+		return err
+	}
+	return t.creds.SetOAuthTokens(childAccountID, tokens)
+}
+
 // Accounts lists helper-local account IDs for the explicit pairing/setup flow.
 func (t *SMTPTransport) Accounts() ([]*account.Account, error) { return t.accounts.List() }
 

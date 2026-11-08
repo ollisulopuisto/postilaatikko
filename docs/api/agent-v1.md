@@ -191,9 +191,11 @@ contact the provider:
 ## Mutations, idempotency and conflicts
 
 Mutations require a client-generated `Idempotency-Key` header and an
-account-qualified explicit target. Repeating a key with the same operation
-returns the original result; reusing it with a different operation returns
-`idempotency_conflict`. Requests without a key are rejected for operations
+account-qualified explicit target. Repeating a completed operation with the
+same key returns its original result; reusing the key with a different
+operation returns `idempotency_conflict`. If an operation is interrupted before
+its receipt is saved, retrying returns `idempotency_conflict` while that
+operation remains unresolved, avoiding an unsafe duplicate. Requests without a key are rejected for operations
 that can change drafts, mailbox state, delivery, or queue membership.
 
 Where a resource has a revision, updates include the revision the client read.
@@ -209,7 +211,7 @@ The initial route families reserved by v1 are:
 | Route family | Capability | Task |
 | --- | --- | --- |
 | `GET /v1/accounts`, `GET /v1/accounts/{accountId}`, `GET /v1/folders`, `GET /v1/views` | `mail.read` | UX-021 / UX-038 |
-| `POST`, `PUT`, `PATCH`, `DELETE /v1/accounts` | `account.manage` | HOSTED-SERVER-035; not yet mounted |
+| `POST /v1/accounts`, `PUT /v1/accounts/{accountId}`, `DELETE /v1/accounts/{accountId}`, `PATCH /v1/accounts/{accountId}/enabled`, `PUT /v1/accounts/order`, `POST /v1/accounts/shared-mailboxes` | `account.manage` | HOSTED-SERVER-035 |
 | `POST /v1/search`, `POST /v1/threads/read`, `POST /v1/messages/body` | `mail.read`; explicit fetch also needs `mail.body.fetch` | UX-021 |
 | `POST /v1/messages/attachments/list`, `POST /v1/messages/attachments/read` | `mail.attachment.read` | UX-021 |
 | `/v1/drafts` | `draft.read`, `draft.write` | UX-037 |

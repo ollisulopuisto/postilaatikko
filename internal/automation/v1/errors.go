@@ -17,6 +17,8 @@ const (
 	CodeCapabilityDenied ErrorCode = "capability_denied"
 	// CodeNotFound indicates that the requested local resource does not exist.
 	CodeNotFound ErrorCode = "not_found"
+	// CodeConflict indicates that the requested resource state conflicts with existing data.
+	CodeConflict ErrorCode = "conflict"
 	// CodeAccountUnreachable indicates incomplete results for an unavailable account.
 	CodeAccountUnreachable ErrorCode = "account_unreachable"
 	// CodeProviderError indicates a provider operation failed.

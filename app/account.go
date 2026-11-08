@@ -5,7 +5,10 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/hkdb/aerion/internal/account"
+	automationclient "github.com/hkdb/aerion/internal/automation/client"
+	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/certificate"
 	"github.com/hkdb/aerion/internal/credentials"
 	"github.com/hkdb/aerion/internal/imap"
@@ -18,66 +21,92 @@ import (
 
 // GetAccounts returns all configured accounts
 func (a *App) GetAccounts() ([]*account.Account, error) {
-	if a.mailboxService != nil {
-		ctx := a.ctx
-		if ctx == nil {
-			ctx = context.Background()
+	ctx := a.accountContext()
+	client, useService, err := a.accountServiceClient(ctx, false)
+	if err != nil {
+		return nil, err
+	}
+	if useService {
+		accounts, err := client.GetAccounts(ctx)
+		if err != nil {
+			return nil, err
 		}
-		status := a.mailboxService.status(ctx)
-		if status.Connected {
-			client, err := a.mailboxService.getClient()
-			if err != nil {
-				return nil, err
-			}
-			accounts, err := client.GetAccounts(ctx)
-			if err != nil {
-				return nil, err
-			}
-			result := make([]*account.Account, 0, len(accounts))
-			for _, item := range accounts {
-				result = append(result, item.ToAccount())
-			}
-			return result, nil
+		result := make([]*account.Account, 0, len(accounts))
+		for _, item := range accounts {
+			result = append(result, item.ToAccount())
 		}
-		if status.ErrorCode != "service_unavailable" {
-			return nil, fmt.Errorf("mailbox service account access unavailable: %s", status.Message)
-		}
+		return result, nil
 	}
 	return a.accountStore.List()
 }
 
 // GetAccount returns a single account by ID
 func (a *App) GetAccount(id string) (*account.Account, error) {
-	if a.mailboxService != nil {
-		ctx := a.ctx
-		if ctx == nil {
-			ctx = context.Background()
+	ctx := a.accountContext()
+	client, useService, err := a.accountServiceClient(ctx, false)
+	if err != nil {
+		return nil, err
+	}
+	if useService {
+		item, err := client.GetAccount(ctx, id)
+		if err != nil {
+			return nil, err
 		}
-		status := a.mailboxService.status(ctx)
-		if status.Connected {
-			client, err := a.mailboxService.getClient()
-			if err != nil {
-				return nil, err
-			}
-			item, err := client.GetAccount(ctx, id)
-			if err != nil {
-				return nil, err
-			}
-			return item.ToAccount(), nil
-		}
-		if status.ErrorCode != "service_unavailable" {
-			return nil, fmt.Errorf("mailbox service account access unavailable: %s", status.Message)
-		}
+		return item.ToAccount(), nil
 	}
 	return a.accountStore.Get(id)
 }
+
+func (a *App) accountContext() context.Context {
+	if a.ctx != nil {
+		return a.ctx
+	}
+	return context.Background()
+}
+
+func (a *App) accountServiceClient(ctx context.Context, requireAccountManagement bool) (*automationclient.Client, bool, error) {
+	if a.mailboxService == nil {
+		return nil, false, nil
+	}
+	status := a.mailboxService.status(ctx)
+	if !status.Connected {
+		if status.ErrorCode == "service_unavailable" {
+			return nil, false, nil
+		}
+		return nil, true, fmt.Errorf("mailbox service account access unavailable: %s", status.Message)
+	}
+	if requireAccountManagement && !status.AccountManagementAuthorized {
+		return nil, true, errDesktopMailboxAccountManagementAuthorizationRequired
+	}
+	client, err := a.mailboxService.getClient()
+	if err != nil {
+		return nil, true, err
+	}
+	return client, true, nil
+}
+
+func accountMutationKey() string { return uuid.NewString() }
 
 // AddAccount creates a new email account
 func (a *App) AddAccount(config account.AccountConfig) (*account.Account, error) {
 	log := logging.WithComponent("app")
 
-	// Create account in database
-	acc, err := a.accountStore.Create(&config)
+	ctx := a.accountContext()
+	serviceClient, useService, err := a.accountServiceClient(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+	var acc *account.Account
+	if useService {
+		created, createErr := serviceClient.CreateAccount(ctx, v1.AccountMutationFromConfig(config), accountMutationKey())
+		if createErr != nil {
+			log.Error().Err(createErr).Str("email", logging.RedactEmail(config.Email)).Msg("Failed to create account through mailbox service")
+			return nil, createErr
+		}
+		acc = created.ToAccount()
+	} else {
+		acc, err = a.accountStore.Create(&config)
+	}
 	if err != nil {
 		log.Error().Err(err).Str("email", logging.RedactEmail(config.Email)).Msg("Failed to create account")
 		return nil, err
@@ -88,7 +117,7 @@ func (a *App) AddAccount(config account.AccountConfig) (*account.Account, error)
 		if err := a.credStore.SetPassword(acc.ID, config.Password); err != nil {
 			log.Error().Err(err).Str("account_id", acc.ID).Msg("Failed to store password")
 			// Delete the account since we can't store credentials
-			if delErr := a.accountStore.Delete(acc.ID); delErr != nil {
+			if delErr := a.rollbackAccountCreate(acc.ID, serviceClient, useService); delErr != nil {
 				log.Warn().Err(delErr).Str("account_id", acc.ID).Msg("Failed to roll back account after password storage failure")
 			}
 			return nil, fmt.Errorf("failed to store password: %w", err)
@@ -103,7 +132,7 @@ func (a *App) AddAccount(config account.AccountConfig) (*account.Account, error)
 	if config.SMTPUsername != "" && config.SMTPPassword != "" {
 		if err := a.credStore.SetSMTPPassword(acc.ID, config.SMTPPassword); err != nil {
 			log.Error().Err(err).Str("account_id", acc.ID).Msg("Failed to store SMTP password")
-			if delErr := a.accountStore.Delete(acc.ID); delErr != nil {
+			if delErr := a.rollbackAccountCreate(acc.ID, serviceClient, useService); delErr != nil {
 				log.Warn().Err(delErr).Str("account_id", acc.ID).Msg("Failed to roll back account after SMTP password storage failure")
 			}
 			return nil, fmt.Errorf("failed to store SMTP password: %w", err)
@@ -114,7 +143,7 @@ func (a *App) AddAccount(config account.AccountConfig) (*account.Account, error)
 	a.updateDBConnectionPool()
 
 	// Start IDLE for the new account
-	if a.idleManager != nil && acc.Enabled {
+	if !useService && a.idleManager != nil && acc.Enabled {
 		a.idleManager.StartAccount(acc.ID, acc.Name)
 	}
 
@@ -122,10 +151,31 @@ func (a *App) AddAccount(config account.AccountConfig) (*account.Account, error)
 	return acc, nil
 }
 
+func (a *App) rollbackAccountCreate(id string, client *automationclient.Client, useService bool) error {
+	if useService {
+		return client.DeleteAccount(a.accountContext(), id, accountMutationKey())
+	}
+	return a.accountStore.Delete(id)
+}
+
 // AddMicrosoftSharedMailbox creates a shared mailbox account linked to a primary Microsoft OAuth account.
 // The shared mailbox reuses the primary account's OAuth tokens but authenticates IMAP/SMTP
 // with the shared mailbox email as the XOAUTH2 username.
 func (a *App) AddMicrosoftSharedMailbox(primaryAccountID, sharedEmail, displayName string) (*account.Account, error) {
+	ctx := a.accountContext()
+	serviceClient, useService, err := a.accountServiceClient(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+	if useService {
+		created, err := serviceClient.AddSharedMailbox(ctx, v1.SharedMailboxMutation{
+			PrimaryAccountID: primaryAccountID, Email: sharedEmail, DisplayName: displayName,
+		}, accountMutationKey())
+		if err != nil {
+			return nil, err
+		}
+		return created.ToAccount(), nil
+	}
 	log := logging.WithComponent("app")
 
 	if sharedEmail == "" {
@@ -224,15 +274,39 @@ func (a *App) AddMicrosoftSharedMailbox(primaryAccountID, sharedEmail, displayNa
 
 // GetMicrosoftSharedMailboxes returns all shared mailbox accounts linked to a parent account.
 func (a *App) GetMicrosoftSharedMailboxes(parentAccountID string) ([]*account.Account, error) {
-	return a.accountStore.ListBySharedMailboxParent(parentAccountID)
+	accounts, err := a.GetAccounts()
+	if err != nil {
+		return nil, err
+	}
+	shared := make([]*account.Account, 0)
+	for _, acc := range accounts {
+		if acc.SharedMailboxParentID == parentAccountID {
+			shared = append(shared, acc)
+		}
+	}
+	return shared, nil
 }
 
 // UpdateAccount updates an existing account
 func (a *App) UpdateAccount(id string, config account.AccountConfig) (*account.Account, error) {
 	log := logging.WithComponent("app")
+	ctx := a.accountContext()
+	serviceClient, useService, err := a.accountServiceClient(ctx, true)
+	if err != nil {
+		return nil, err
+	}
 
 	// Get existing account to check for sync period changes
-	existingAcc, err := a.accountStore.Get(id)
+	var existingAcc *account.Account
+	if useService {
+		item, getErr := serviceClient.GetAccount(ctx, id)
+		if getErr != nil {
+			return nil, getErr
+		}
+		existingAcc = item.ToAccount()
+	} else {
+		existingAcc, err = a.accountStore.Get(id)
+	}
 	if err != nil {
 		log.Error().Err(err).Str("account_id", id).Msg("Failed to get existing account")
 		return nil, fmt.Errorf("failed to get existing account: %w", err)
@@ -316,7 +390,16 @@ func (a *App) UpdateAccount(id string, config account.AccountConfig) (*account.A
 		}
 	}
 
-	acc, err := a.accountStore.Update(id, &config)
+	var acc *account.Account
+	if useService {
+		updated, updateErr := serviceClient.UpdateAccount(ctx, id, v1.AccountMutationFromConfig(config), accountMutationKey())
+		err = updateErr
+		if updateErr == nil {
+			acc = updated.ToAccount()
+		}
+	} else {
+		acc, err = a.accountStore.Update(id, &config)
+	}
 	if err != nil {
 		log.Error().Err(err).Str("account_id", id).Msg("Failed to update account")
 		return nil, a.accountCredentialUpdateError(id, "account configuration", err, previousPassword, passwordAttempted, previousSMTPPassword, smtpPasswordAttempted)
@@ -374,15 +457,37 @@ func (a *App) accountCredentialUpdateError(accountID, operation string, updateEr
 // RemoveAccount deletes an account and all its data
 func (a *App) RemoveAccount(id string) error {
 	log := logging.WithComponent("app")
-	if a.replyContent != nil {
-		a.replyContent.PurgeAccount(id)
-	}
-	if acc, err := a.accountStore.Get(id); err != nil {
-		log.Warn().Err(err).Msg("Failed to inspect account before credential cleanup")
-	} else if acc != nil && a.pendingOAuthEmail == acc.Email {
+	accountInfo, inspectErr := a.GetAccount(id)
+	if inspectErr != nil {
+		log.Warn().Err(inspectErr).Msg("Failed to inspect account before credential cleanup")
+	} else if accountInfo != nil && a.pendingOAuthEmail == accountInfo.Email {
 		a.pendingOAuthTokens.Clear()
 		a.pendingOAuthTokens = nil
 		a.pendingOAuthEmail = ""
+	}
+	ctx := a.accountContext()
+	serviceClient, useService, err := a.accountServiceClient(ctx, true)
+	if err != nil {
+		return err
+	}
+	if useService {
+		if a.idleManager != nil {
+			a.idleManager.StopAccount(id)
+		}
+		if a.imapPool != nil {
+			a.imapPool.CloseAccount(id)
+		}
+		if err := serviceClient.DeleteAccount(ctx, id, accountMutationKey()); err != nil {
+			return err
+		}
+		if a.replyContent != nil {
+			a.replyContent.PurgeAccount(id)
+		}
+		a.updateDBConnectionPool()
+		return nil
+	}
+	if a.replyContent != nil {
+		a.replyContent.PurgeAccount(id)
 	}
 
 	// Cascade: delete any shared mailboxes linked to this account
@@ -422,7 +527,21 @@ func (a *App) RemoveAccount(id string) error {
 
 // SetAccountEnabled enables or disables an account
 func (a *App) SetAccountEnabled(id string, enabled bool) error {
-	err := a.accountStore.SetEnabled(id, enabled)
+	ctx := a.accountContext()
+	serviceClient, useService, err := a.accountServiceClient(ctx, true)
+	if err != nil {
+		return err
+	}
+	if useService {
+		if _, err := serviceClient.SetAccountEnabled(ctx, id, enabled, accountMutationKey()); err != nil {
+			return err
+		}
+		if !enabled && a.idleManager != nil {
+			a.idleManager.StopAccount(id)
+		}
+		return nil
+	}
+	err = a.accountStore.SetEnabled(id, enabled)
 	if err != nil {
 		return err
 	}
@@ -446,6 +565,14 @@ func (a *App) SetAccountEnabled(id string, enabled bool) error {
 
 // ReorderAccounts updates the order of accounts
 func (a *App) ReorderAccounts(ids []string) error {
+	ctx := a.accountContext()
+	serviceClient, useService, err := a.accountServiceClient(ctx, true)
+	if err != nil {
+		return err
+	}
+	if useService {
+		return serviceClient.ReorderAccounts(ctx, ids, accountMutationKey())
+	}
 	return a.accountStore.Reorder(ids)
 }
 

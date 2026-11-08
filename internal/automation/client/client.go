@@ -138,6 +138,58 @@ func (c *Client) GetAccount(ctx context.Context, accountID string) (*v1.AccountS
 	return &resp.Data, nil
 }
 
+// CreateAccount creates account configuration without accepting credentials.
+func (c *Client) CreateAccount(ctx context.Context, mutation v1.AccountMutation, idempotencyKey string) (*v1.AccountSummary, error) {
+	return c.accountMutation(ctx, http.MethodPost, "/v1/accounts", mutation, idempotencyKey)
+}
+
+// UpdateAccount changes account configuration without accepting credentials.
+func (c *Client) UpdateAccount(ctx context.Context, accountID string, mutation v1.AccountMutation, idempotencyKey string) (*v1.AccountSummary, error) {
+	return c.accountMutation(ctx, http.MethodPut, "/v1/accounts/"+url.PathEscape(accountID), mutation, idempotencyKey)
+}
+
+func (c *Client) accountMutation(ctx context.Context, method, path string, mutation any, idempotencyKey string) (*v1.AccountSummary, error) {
+	bytes, err := c.doRequest(ctx, method, path, mutation, idempotencyKey)
+	if err != nil {
+		return nil, err
+	}
+	var resp v1.Response[v1.AccountSummary]
+	if err := json.Unmarshal(bytes, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.Data, nil
+}
+
+// DeleteAccount removes an account and its helper-local credentials.
+func (c *Client) DeleteAccount(ctx context.Context, accountID, idempotencyKey string) error {
+	_, err := c.doRequest(ctx, http.MethodDelete, "/v1/accounts/"+url.PathEscape(accountID), nil, idempotencyKey)
+	return err
+}
+
+// SetAccountEnabled updates one account's sync-enabled state.
+func (c *Client) SetAccountEnabled(ctx context.Context, accountID string, enabled bool, idempotencyKey string) (*v1.AccountSummary, error) {
+	bytes, err := c.doRequest(ctx, http.MethodPatch, "/v1/accounts/"+url.PathEscape(accountID)+"/enabled", v1.AccountEnabledMutation{Enabled: enabled}, idempotencyKey)
+	if err != nil {
+		return nil, err
+	}
+	var resp v1.Response[v1.AccountSummary]
+	if err := json.Unmarshal(bytes, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.Data, nil
+}
+
+// ReorderAccounts applies a complete account order.
+func (c *Client) ReorderAccounts(ctx context.Context, ids []string, idempotencyKey string) error {
+	_, err := c.doRequest(ctx, http.MethodPut, "/v1/accounts/order", v1.AccountOrderMutation{IDs: ids}, idempotencyKey)
+	return err
+}
+
+// AddSharedMailbox creates a Microsoft shared mailbox under its primary account.
+func (c *Client) AddSharedMailbox(ctx context.Context, mutation v1.SharedMailboxMutation, idempotencyKey string) (*v1.AccountSummary, error) {
+	return c.accountMutation(ctx, http.MethodPost, "/v1/accounts/shared-mailboxes", mutation, idempotencyKey)
+}
+
 // GetFolders lists folders, optionally filtered by account.
 func (c *Client) GetFolders(ctx context.Context, accountID string) ([]v1.FolderSummary, error) {
 	path := "/v1/folders"

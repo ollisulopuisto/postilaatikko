@@ -41,8 +41,9 @@ const (
 )
 
 var (
-	errDesktopMailboxAuthorizationRequired      = errors.New("desktop mailbox service authorization required")
-	errDesktopMailboxWriteAuthorizationRequired = errors.New("desktop mailbox service needs explicit mail-write authorization")
+	errDesktopMailboxAuthorizationRequired                  = errors.New("desktop mailbox service authorization required")
+	errDesktopMailboxWriteAuthorizationRequired             = errors.New("desktop mailbox service needs explicit mail-write authorization")
+	errDesktopMailboxAccountManagementAuthorizationRequired = errors.New("desktop mailbox service needs explicit account-management authorization")
 )
 
 type desktopMailboxCredential struct {
