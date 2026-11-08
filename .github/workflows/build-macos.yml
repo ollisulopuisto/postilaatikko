@@ -194,6 +194,10 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --prefix frontend
 
+      - name: Check frontend before packaging
+        working-directory: frontend
+        run: npm run check && npm run lint
+
       - name: Import Developer ID certificate
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
@@ -309,7 +313,7 @@ jobs:
           Apple-silicon test build from merged main $BUILD_SHA.
           App version remains $BASE_VERSION. Test build ID: $TEST_TAG.
           No unmerged app code is included. Developer ID signed and notarized.
-          Main has known frontend typecheck/lint errors, including copy/move command dispatch.
+          Frontend typecheck and lint are required before packaging.
           New helper/remote-mail changes are still under Unreleased in the app changelog;
           automatic What's New is not updated in this unchanged-main test build.
           Native feature/UI acceptance has not been performed. This is not a stable release.
