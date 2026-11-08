@@ -1,4 +1,4 @@
-import { ChangeReadLater, GetReadLaterQueue } from '../../../wailsjs/go/app/App'
+import { ChangeReadLaterWithUndo, GetReadLaterQueue } from '../../../wailsjs/go/app/App'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
 
 export interface ReadLaterRef { accountId: string; conversationId: string }
@@ -32,6 +32,22 @@ async function load(force = false): Promise<void> {
   return loading
 }
 
+async function setWithUndo(accountId: string, conversationId: string, inQueue: boolean) {
+  const ref = { accountId, conversationId }, id = key(ref)
+  if (busy.has(id)) return null
+  busy = new Set([...busy, id])
+  try {
+    const result = await ChangeReadLaterWithUndo(accountId, conversationId, inQueue)
+    update(ref, inQueue)
+    return result
+  } finally { busy = new Set([...busy].filter(item => item !== id)) }
+}
+
+async function set(accountId: string, conversationId: string, inQueue: boolean) {
+  const result = await setWithUndo(accountId, conversationId, inQueue)
+  return result?.changed ?? false
+}
+
 export const readLaterQueue = {
   get refs() { return refs },
   get count() { return refs.length },
@@ -39,11 +55,6 @@ export const readLaterQueue = {
   load,
   has(accountId: string, conversationId: string) { return refs.some(ref => key(ref) === key({ accountId, conversationId })) },
   isBusy(accountId: string, conversationId: string) { return busy.has(key({ accountId, conversationId })) },
-  async set(accountId: string, conversationId: string, inQueue: boolean) {
-    const ref = { accountId, conversationId }, id = key(ref)
-    if (busy.has(id)) return false
-    busy = new Set([...busy, id])
-    try { const changed = await ChangeReadLater(accountId, conversationId, inQueue); update(ref, inQueue); return changed }
-    finally { busy = new Set([...busy].filter(item => item !== id)) }
-  },
+  set,
+  setWithUndo,
 }

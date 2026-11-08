@@ -80,7 +80,7 @@ func (a *App) undoLatest() (UndoLatestResult, error) {
 		if result == nil {
 			return UndoLatestResult{}, errors.New("mailbox service returned no undo receipt")
 		}
-		mapped := UndoLatestResult{OperationID: result.OperationID, Description: string(result.Action), State: result.State}
+		mapped := UndoLatestResult{OperationID: result.OperationID, Description: undoActionDescription(result.Action), State: result.State}
 		if result.State == "undone" {
 			a.emitRuntimeEvent("undo:completed")
 		}
@@ -169,7 +169,7 @@ func (a *App) UndoOperation(operationID string) (string, error) {
 		if result.State == "outcome_unknown" {
 			return string(result.Action), errors.New("undo outcome is unknown; retry with the same operation key")
 		}
-		return string(result.Action), nil
+		return undoActionDescription(result.Action), nil
 	}
 	log := logging.WithComponent("undo")
 	if operationID == "" {
@@ -267,7 +267,7 @@ func (a *App) GetUndoHistory(limit int) []UndoHistoryEntry {
 			out = append(out, UndoHistoryEntry{
 				OperationID:   row.OperationID,
 				Action:        string(row.Action),
-				Description:   string(row.Action),
+				Description:   undoActionDescription(row.Action),
 				CreatedAt:     parseUndoTime(row.CreatedAt),
 				ExpiresAt:     parseUndoTime(row.UndoExpiresAt),
 				MessageCount:  row.MessageCount,
@@ -295,6 +295,25 @@ func (a *App) GetUndoHistory(limit int) []UndoHistoryEntry {
 		})
 	}
 	return out
+}
+
+func undoActionDescription(action v1.ActionKind) string {
+	switch action {
+	case v1.ActionReplyLaterAdd:
+		return "Added to Reply Later"
+	case v1.ActionReplyLaterRemove:
+		return "Removed from Reply Later"
+	case v1.ActionReadLaterAdd:
+		return "Added to Read Later"
+	case v1.ActionReadLaterRemove:
+		return "Removed from Read Later"
+	case v1.ActionSnooze:
+		return "Snoozed conversation"
+	case v1.ActionUnsnooze:
+		return "Unsnoozed conversation"
+	default:
+		return string(action)
+	}
 }
 
 // RequestUndoHistoryFromMenu routes the native Edit menu item to the active UI.

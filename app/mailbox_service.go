@@ -968,11 +968,22 @@ func (c *mailboxServiceConnector) readLaterQueue(ctx context.Context) ([]triage.
 }
 
 func (c *mailboxServiceConnector) setReadLater(ctx context.Context, ref triage.Ref, inQueue bool) (bool, error) {
-	client, err := c.getClient()
+	response, err := c.setReadLaterWithReceipt(ctx, ref, inQueue)
 	if err != nil {
 		return false, err
 	}
-	return client.SetReadLater(ctx, ref, inQueue)
+	return response.Changed, nil
+}
+
+func (c *mailboxServiceConnector) setReadLaterWithReceipt(ctx context.Context, ref triage.Ref, inQueue bool) (*v1.TriageMutationResponse, error) {
+	client, err := c.getClient()
+	if err != nil {
+		return nil, err
+	}
+	request := v1.ReadLaterMutationRequest{Ref: ref, InQueue: inQueue}
+	return c.mutateTriageWithReceipt(ctx, "/v1/triage/read-later/mutations", request, func(key string) (*v1.TriageMutationResponse, error) {
+		return client.SetReadLaterWithKey(ctx, ref, inQueue, key)
+	})
 }
 
 func (c *mailboxServiceConnector) snoozedConversations(ctx context.Context) ([]triage.Ref, error) {
@@ -992,19 +1003,72 @@ func (c *mailboxServiceConnector) snoozedCount(ctx context.Context) (int, error)
 }
 
 func (c *mailboxServiceConnector) snooze(ctx context.Context, ref triage.Ref, wakeAt string) error {
+	_, err := c.snoozeWithReceipt(ctx, ref, wakeAt)
+	return err
+}
+
+func (c *mailboxServiceConnector) snoozeWithReceipt(ctx context.Context, ref triage.Ref, wakeAt string) (*v1.TriageMutationResponse, error) {
 	client, err := c.getClient()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return client.SnoozeConversation(ctx, ref, wakeAt)
+	request := v1.SnoozeMutationRequest{Operation: "snooze", Ref: ref, WakeAt: wakeAt}
+	return c.mutateTriageWithReceipt(ctx, "/v1/triage/snoozes/mutations", request, func(key string) (*v1.TriageMutationResponse, error) {
+		return client.SnoozeConversationWithKey(ctx, ref, wakeAt, key)
+	})
 }
 
 func (c *mailboxServiceConnector) unsnooze(ctx context.Context, ref triage.Ref) (bool, error) {
-	client, err := c.getClient()
+	response, err := c.unsnoozeWithReceipt(ctx, ref)
 	if err != nil {
 		return false, err
 	}
-	return client.UnsnoozeConversation(ctx, ref)
+	return response.Changed, nil
+}
+
+func (c *mailboxServiceConnector) unsnoozeWithReceipt(ctx context.Context, ref triage.Ref) (*v1.TriageMutationResponse, error) {
+	client, err := c.getClient()
+	if err != nil {
+		return nil, err
+	}
+	request := v1.SnoozeMutationRequest{Operation: "unsnooze", Ref: ref}
+	return c.mutateTriageWithReceipt(ctx, "/v1/triage/snoozes/mutations", request, func(key string) (*v1.TriageMutationResponse, error) {
+		return client.UnsnoozeConversationWithKey(ctx, ref, key)
+	})
+}
+
+func (c *mailboxServiceConnector) mutateTriageWithReceipt(ctx context.Context, endpoint string, request any, send func(string) (*v1.TriageMutationResponse, error)) (*v1.TriageMutationResponse, error) {
+	encoded, err := json.Marshal(struct {
+		Endpoint string `json:"endpoint"`
+		Request  any    `json:"request"`
+	}{endpoint, request})
+	if err != nil {
+		return nil, fmt.Errorf("encode triage mutation for idempotency: %w", err)
+	}
+	requestHash := sha256.Sum256(encoded)
+	c.mu.Lock()
+	if c.triageKeys == nil {
+		c.triageKeys = make(map[[32]byte]string)
+	}
+	idempotencyKey := c.triageKeys[requestHash]
+	if idempotencyKey == "" {
+		idempotencyKey = uuid.NewString()
+	}
+	c.mu.Unlock()
+
+	response, err := send(idempotencyKey)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err == nil && response != nil && (response.Receipt.State == v1.OperationUnknown || response.Receipt.State == v1.OperationSending) {
+		c.triageKeys[requestHash] = idempotencyKey
+		return response, fmt.Errorf("triage mutation outcome is ambiguous: %s", response.Receipt.State)
+	}
+	if err == nil || !isAmbiguousActionError(ctx, err) {
+		delete(c.triageKeys, requestHash)
+		return response, err
+	}
+	c.triageKeys[requestHash] = idempotencyKey
+	return response, err
 }
 
 func (c *mailboxServiceConnector) authorizeAccountManagement(ctx context.Context) error {

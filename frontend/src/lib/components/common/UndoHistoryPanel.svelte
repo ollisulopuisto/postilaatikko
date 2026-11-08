@@ -29,6 +29,18 @@
   let busyIds = $state<string[]>([])
   let refreshQueued = false
 
+  function descriptionFor(entry: HistoryEntry): string {
+    switch (entry.action) {
+      case 'reply_later_add': return $_('replyLater.added')
+      case 'reply_later_remove': return $_('replyLater.removed')
+      case 'read_later_add': return $_('readLater.added')
+      case 'read_later_remove': return $_('readLater.removed')
+      case 'snooze': return $_('snooze.done')
+      case 'unsnooze': return $_('snooze.restored')
+      default: return entry.description || entry.action
+    }
+  }
+
   async function refresh() {
     if (loading) {
       refreshQueued = true
@@ -111,7 +123,7 @@
           {#each entries as entry (entry.operationId)}
             <li class="flex items-center gap-3 py-3">
               <div class="min-w-0 flex-1">
-                <p class="truncate text-sm font-medium" title={entry.description}>{entry.description || entry.action}</p>
+                <p class="truncate text-sm font-medium" title={descriptionFor(entry)}>{descriptionFor(entry)}</p>
                 <p class="mt-1 text-xs text-muted-foreground">
                   {timeLabel(entry.createdAt)}
                   {#if entry.messageCount > 0}

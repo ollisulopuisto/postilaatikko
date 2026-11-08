@@ -181,15 +181,13 @@ func (a *App) syncGmailTriageQueues(queue string) {
 
 // GetReadLaterQueue exposes explicit triage membership from the mailbox service when available.
 func (a *App) GetReadLaterQueue() ([]triage.Ref, error) {
-	if a.mailboxService != nil {
-		ctx := a.helperCommandContext()
-		status := a.mailboxService.status(ctx)
-		if status.Connected {
-			return a.mailboxService.readLaterQueue(ctx)
+	ctx := a.helperCommandContext()
+	service, handled, err := a.undoService(ctx, false)
+	if handled {
+		if err != nil {
+			return nil, err
 		}
-		if status.ErrorCode != "service_unavailable" {
-			return nil, fmt.Errorf("load Read Later queue from mailbox service: %s", status.Message)
-		}
+		return service.readLaterQueue(ctx)
 	}
 	if a.triageStore == nil {
 		return nil, fmt.Errorf("Read Later queue is not ready")
@@ -214,48 +212,50 @@ func (a *App) IsReadLater(accountID, conversationID string) (bool, error) {
 	return false, nil
 }
 
+// TriageChangeResult identifies a helper-owned queue operation for targeted Undo.
+type TriageChangeResult struct {
+	Changed     bool   `json:"changed"`
+	OperationID string `json:"operationId"`
+}
+
 func (a *App) ChangeReadLater(accountID, conversationID string, inQueue bool) (bool, error) {
+	result, err := a.ChangeReadLaterWithUndo(accountID, conversationID, inQueue)
+	return result.Changed, err
+}
+
+// ChangeReadLaterWithUndo sets Read Later membership and returns its helper operation receipt.
+func (a *App) ChangeReadLaterWithUndo(accountID, conversationID string, inQueue bool) (TriageChangeResult, error) {
 	ref := triage.Ref{AccountID: accountID, ConversationID: conversationID}
-	changed, handled, err := a.changeReadLaterThroughService(ref, inQueue)
+	ctx := a.helperCommandContext()
+	service, handled, serviceErr := a.undoService(ctx, true)
 	if handled {
+		if serviceErr != nil {
+			return TriageChangeResult{}, serviceErr
+		}
+		response, err := service.setReadLaterWithReceipt(ctx, ref, inQueue)
 		if err != nil {
-			return false, err
+			return TriageChangeResult{}, fmt.Errorf("update Read Later through mailbox service: %w", err)
 		}
-	} else {
-		if err := a.setGmailTriageLabel(accountID, conversationID, "read-later", inQueue); err != nil {
-			return false, err
+		if response == nil {
+			return TriageChangeResult{}, fmt.Errorf("mailbox service returned no Read Later receipt")
 		}
-		if a.triageStore == nil {
-			return false, fmt.Errorf("Read Later queue is not ready")
+		if response.Changed {
+			a.emitRuntimeEvent("readLater:changed", map[string]interface{}{"accountId": accountID, "conversationId": conversationID, "inQueue": inQueue})
+			a.emitRuntimeEvent("undo:history-changed")
 		}
-		changed, err = a.triageStore.SetReadLater(ref, inQueue)
+		return TriageChangeResult{Changed: response.Changed, OperationID: response.Receipt.OperationID}, nil
 	}
+	if err := a.setGmailTriageLabel(accountID, conversationID, "read-later", inQueue); err != nil {
+		return TriageChangeResult{}, err
+	}
+	if a.triageStore == nil {
+		return TriageChangeResult{}, fmt.Errorf("Read Later queue is not ready")
+	}
+	changed, err := a.triageStore.SetReadLater(ref, inQueue)
 	if err == nil && changed {
 		a.emitRuntimeEvent("readLater:changed", map[string]interface{}{"accountId": accountID, "conversationId": conversationID, "inQueue": inQueue})
 	}
-	return changed, err
-}
-
-func (a *App) changeReadLaterThroughService(ref triage.Ref, inQueue bool) (bool, bool, error) {
-	if a.mailboxService == nil {
-		return false, false, nil
-	}
-	ctx := a.helperCommandContext()
-	status := a.mailboxService.status(ctx)
-	if !status.Connected {
-		if status.ErrorCode == "service_unavailable" {
-			return false, false, nil
-		}
-		return false, true, fmt.Errorf("mailbox service is not ready for Read Later: %s", status.Message)
-	}
-	if !status.WriteAuthorized {
-		return false, true, errDesktopMailboxWriteAuthorizationRequired
-	}
-	changed, err := a.mailboxService.setReadLater(ctx, ref, inQueue)
-	if err != nil {
-		return false, true, fmt.Errorf("update Read Later through local mailbox service: %w", err)
-	}
-	return changed, true, nil
+	return TriageChangeResult{Changed: changed}, err
 }
 
 func (a *App) AddReadLater(accountID, conversationID string) (bool, error) {
@@ -268,89 +268,90 @@ func (a *App) RemoveReadLater(accountID, conversationID string) (bool, error) {
 // SnoozeConversation stores a local wake deadline without changing provider
 // read state, labels, or folders.
 func (a *App) SnoozeConversation(accountID, conversationID, wakeAt string) error {
+	_, err := a.SnoozeConversationWithUndo(accountID, conversationID, wakeAt)
+	return err
+}
+
+// SnoozeConversationWithUndo sets a helper-owned deadline and returns its operation receipt.
+func (a *App) SnoozeConversationWithUndo(accountID, conversationID, wakeAt string) (TriageChangeResult, error) {
 	deadline, err := time.Parse(time.RFC3339Nano, wakeAt)
 	if err != nil {
-		return fmt.Errorf("invalid snooze deadline: %w", err)
+		return TriageChangeResult{}, fmt.Errorf("invalid snooze deadline: %w", err)
 	}
 	ref := triage.Ref{AccountID: accountID, ConversationID: conversationID}
-	handled := false
-	if a.mailboxService != nil {
-		ctx := a.helperCommandContext()
-		status := a.mailboxService.status(ctx)
-		if status.Connected {
-			if !status.WriteAuthorized {
-				return errDesktopMailboxWriteAuthorizationRequired
-			}
-			if err := a.mailboxService.snooze(ctx, ref, deadline.UTC().Format(time.RFC3339Nano)); err != nil {
-				return fmt.Errorf("snooze through local mailbox service: %w", err)
-			}
-			handled = true
-		} else if status.ErrorCode != "service_unavailable" {
-			return fmt.Errorf("mailbox service is not ready for Snooze: %s", status.Message)
+	ctx := a.helperCommandContext()
+	service, handled, serviceErr := a.undoService(ctx, true)
+	if handled {
+		if serviceErr != nil {
+			return TriageChangeResult{}, serviceErr
 		}
+		response, err := service.snoozeWithReceipt(ctx, ref, deadline.UTC().Format(time.RFC3339Nano))
+		if err != nil {
+			return TriageChangeResult{}, fmt.Errorf("snooze through mailbox service: %w", err)
+		}
+		if response == nil {
+			return TriageChangeResult{}, fmt.Errorf("mailbox service returned no Snooze receipt")
+		}
+		if response.Changed {
+			a.emitRuntimeEvent("snooze:changed", map[string]interface{}{"accountId": accountID, "conversationId": conversationID, "wakeAt": deadline.UTC().Format(time.RFC3339Nano)})
+			a.emitRuntimeEvent("undo:history-changed")
+		}
+		return TriageChangeResult{Changed: response.Changed, OperationID: response.Receipt.OperationID}, nil
 	}
-	if !handled {
-		if a.triageStore == nil {
-			return fmt.Errorf("Snooze store is not ready")
-		}
-		if err := a.triageStore.Snooze(ref, deadline); err != nil {
-			return err
-		}
+	if a.triageStore == nil {
+		return TriageChangeResult{}, fmt.Errorf("Snooze store is not ready")
+	}
+	if err := a.triageStore.Snooze(ref, deadline); err != nil {
+		return TriageChangeResult{}, err
 	}
 	a.emitRuntimeEvent("snooze:changed", map[string]interface{}{"accountId": accountID, "conversationId": conversationID, "wakeAt": deadline.UTC().Format(time.RFC3339Nano)})
-	return nil
+	return TriageChangeResult{Changed: true}, nil
 }
 func (a *App) UnsnoozeConversation(accountID, conversationID string) (bool, error) {
+	result, err := a.UnsnoozeConversationWithUndo(accountID, conversationID)
+	return result.Changed, err
+}
+
+// UnsnoozeConversationWithUndo removes a helper-owned deadline and returns its receipt.
+func (a *App) UnsnoozeConversationWithUndo(accountID, conversationID string) (TriageChangeResult, error) {
 	ref := triage.Ref{AccountID: accountID, ConversationID: conversationID}
-	changed, handled, err := a.unsnoozeThroughService(ref)
+	ctx := a.helperCommandContext()
+	service, handled, serviceErr := a.undoService(ctx, true)
 	if handled {
+		if serviceErr != nil {
+			return TriageChangeResult{}, serviceErr
+		}
+		response, err := service.unsnoozeWithReceipt(ctx, ref)
 		if err != nil {
-			return false, err
+			return TriageChangeResult{}, fmt.Errorf("unsnooze through mailbox service: %w", err)
 		}
-	} else {
-		if a.triageStore == nil {
-			return false, fmt.Errorf("Snooze store is not ready")
+		if response == nil {
+			return TriageChangeResult{}, fmt.Errorf("mailbox service returned no Unsnooze receipt")
 		}
-		changed, err = a.triageStore.Unsnooze(accountID, conversationID)
+		if response.Changed {
+			a.emitRuntimeEvent("snooze:changed", map[string]interface{}{"accountId": accountID, "conversationId": conversationID, "wakeAt": ""})
+			a.emitRuntimeEvent("undo:history-changed")
+		}
+		return TriageChangeResult{Changed: response.Changed, OperationID: response.Receipt.OperationID}, nil
 	}
+	if a.triageStore == nil {
+		return TriageChangeResult{}, fmt.Errorf("Snooze store is not ready")
+	}
+	changed, err := a.triageStore.Unsnooze(accountID, conversationID)
 	if err == nil && changed {
 		a.emitRuntimeEvent("snooze:changed", map[string]interface{}{"accountId": accountID, "conversationId": conversationID, "wakeAt": ""})
 	}
-	return changed, err
-}
-
-func (a *App) unsnoozeThroughService(ref triage.Ref) (bool, bool, error) {
-	if a.mailboxService == nil {
-		return false, false, nil
-	}
-	ctx := a.helperCommandContext()
-	status := a.mailboxService.status(ctx)
-	if !status.Connected {
-		if status.ErrorCode == "service_unavailable" {
-			return false, false, nil
-		}
-		return false, true, fmt.Errorf("mailbox service is not ready for Snooze: %s", status.Message)
-	}
-	if !status.WriteAuthorized {
-		return false, true, errDesktopMailboxWriteAuthorizationRequired
-	}
-	changed, err := a.mailboxService.unsnooze(ctx, ref)
-	if err != nil {
-		return false, true, fmt.Errorf("unsnooze through local mailbox service: %w", err)
-	}
-	return changed, true, nil
+	return TriageChangeResult{Changed: changed}, err
 }
 
 func (a *App) GetSnoozedConversations() ([]triage.Ref, error) {
-	if a.mailboxService != nil {
-		ctx := a.helperCommandContext()
-		status := a.mailboxService.status(ctx)
-		if status.Connected {
-			return a.mailboxService.snoozedConversations(ctx)
+	ctx := a.helperCommandContext()
+	service, handled, err := a.undoService(ctx, false)
+	if handled {
+		if err != nil {
+			return nil, err
 		}
-		if status.ErrorCode != "service_unavailable" {
-			return nil, fmt.Errorf("load Snoozed conversations from mailbox service: %s", status.Message)
-		}
+		return service.snoozedConversations(ctx)
 	}
 	if a.triageStore == nil {
 		return nil, fmt.Errorf("Snooze store is not ready")
@@ -359,15 +360,13 @@ func (a *App) GetSnoozedConversations() ([]triage.Ref, error) {
 }
 
 func (a *App) GetSnoozedCount() (int, error) {
-	if a.mailboxService != nil {
-		ctx := a.helperCommandContext()
-		status := a.mailboxService.status(ctx)
-		if status.Connected {
-			return a.mailboxService.snoozedCount(ctx)
+	ctx := a.helperCommandContext()
+	service, handled, err := a.undoService(ctx, false)
+	if handled {
+		if err != nil {
+			return 0, err
 		}
-		if status.ErrorCode != "service_unavailable" {
-			return 0, fmt.Errorf("count Snoozed conversations from mailbox service: %s", status.Message)
-		}
+		return service.snoozedCount(ctx)
 	}
 	if a.triageStore == nil {
 		return 0, fmt.Errorf("Snooze store is not ready")
@@ -399,6 +398,12 @@ func (a *App) runSnoozeWakeLoop() {
 				status = a.mailboxService.status(ctx)
 			}
 			if !status.Connected && status.ErrorCode == "service_unavailable" {
+				if a.mailboxService != nil && a.mailboxService.isRemote() {
+					continue
+				}
+				if a.triageStore == nil {
+					continue
+				}
 				count, err := a.triageStore.ExpireSnoozes(now)
 				if err == nil && count > 0 {
 					a.emitRuntimeEvent("snooze:expired", map[string]interface{}{"count": count})

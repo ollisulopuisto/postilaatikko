@@ -234,6 +234,10 @@ export function ChangeReadLater(arg1, arg2, arg3) {
   return window['go']['app']['App']['ChangeReadLater'](arg1, arg2, arg3);
 }
 
+export function ChangeReadLaterWithUndo(arg1, arg2, arg3) {
+  return window['go']['app']['App']['ChangeReadLaterWithUndo'](arg1, arg2, arg3);
+}
+
 export function ChangeReplyLaterWithUndo(arg1, arg2, arg3) {
   return window['go']['app']['App']['ChangeReplyLaterWithUndo'](arg1, arg2, arg3);
 }
@@ -1750,6 +1754,10 @@ export function SnoozeConversation(arg1, arg2, arg3) {
   return window['go']['app']['App']['SnoozeConversation'](arg1, arg2, arg3);
 }
 
+export function SnoozeConversationWithUndo(arg1, arg2, arg3) {
+  return window['go']['app']['App']['SnoozeConversationWithUndo'](arg1, arg2, arg3);
+}
+
 export function Star(arg1) {
   return window['go']['app']['App']['Star'](arg1);
 }
@@ -1856,6 +1864,10 @@ export function UndoOperation(arg1) {
 
 export function UnsnoozeConversation(arg1, arg2) {
   return window['go']['app']['App']['UnsnoozeConversation'](arg1, arg2);
+}
+
+export function UnsnoozeConversationWithUndo(arg1, arg2) {
+  return window['go']['app']['App']['UnsnoozeConversationWithUndo'](arg1, arg2);
 }
 
 export function Unstar(arg1) {

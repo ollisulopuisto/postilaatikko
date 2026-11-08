@@ -24,8 +24,8 @@
     CopyToFolder,
     ResolveMailActionTarget,
     UndoOperation,
-    SnoozeConversation,
-    UnsnoozeConversation,
+    SnoozeConversationWithUndo,
+    UnsnoozeConversationWithUndo,
   } from '../../../../wailsjs/go/app/App'
   // @ts-ignore - wailsjs path
   import { account, operations } from '../../../../wailsjs/go/models'
@@ -197,8 +197,13 @@
     if (!conversationId) return
     const inQueue = !readLaterQueue.has(accountId, conversationId)
     try {
-      const changed = await readLaterQueue.set(accountId, conversationId, inQueue)
-      if (changed) toasts.success($_(inQueue ? 'readLater.added' : 'readLater.removed'))
+      const result = await readLaterQueue.setWithUndo(accountId, conversationId, inQueue)
+      if (result?.changed) {
+        toasts.success($_(inQueue ? 'readLater.added' : 'readLater.removed'), result.operationId ? [{
+          label: $_('common.undo'),
+          onClick: () => { void UndoOperation(result.operationId).catch(() => toasts.error($_('toast.undoFailed'))) },
+        }] : undefined)
+      }
     } catch (err) { toasts.error(`${$_('readLater.failed')}: ${String(err)}`) }
   }
 
@@ -208,9 +213,14 @@
     if (!Number.isFinite(days) || days < 1 || days > 3650) return
     const wakeAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString()
     try {
-      await SnoozeConversation(accountId, conversationId, wakeAt)
+      const result = await SnoozeConversationWithUndo(accountId, conversationId, wakeAt)
       showSnoozeDialog = false
-      toasts.success($_('snooze.done'))
+      if (result.changed) {
+        toasts.success($_('snooze.done'), result.operationId ? [{
+          label: $_('common.undo'),
+          onClick: () => { void UndoOperation(result.operationId).catch(() => toasts.error($_('toast.undoFailed'))) },
+        }] : undefined)
+      }
       onActionComplete?.(true)
     } catch (err) { toasts.error(`${$_('snooze.failed')}: ${String(err)}`) }
   }
@@ -218,8 +228,13 @@
   async function handleUnsnooze() {
     if (!conversationId) return
     try {
-      await UnsnoozeConversation(accountId, conversationId)
-      toasts.success($_('snooze.restored'))
+      const result = await UnsnoozeConversationWithUndo(accountId, conversationId)
+      if (result.changed) {
+        toasts.success($_('snooze.restored'), result.operationId ? [{
+          label: $_('common.undo'),
+          onClick: () => { void UndoOperation(result.operationId).catch(() => toasts.error($_('toast.undoFailed'))) },
+        }] : undefined)
+      }
       onActionComplete?.(true)
     } catch (err) { toasts.error(`${$_('snooze.failed')}: ${String(err)}`) }
   }

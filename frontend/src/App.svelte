@@ -2329,8 +2329,12 @@
       if (kind === 'readLater') {
         await readLaterQueue.load()
         const inQueue = !readLaterQueue.has(accountId, conversationId)
-        const changed = await readLaterQueue.set(accountId, conversationId, inQueue)
-        if (changed) addToast({ type: 'success', message: $_(inQueue ? 'readLater.added' : 'readLater.removed') })
+        const result = await readLaterQueue.setWithUndo(accountId, conversationId, inQueue)
+        if (result?.changed) addToast({
+          type: 'success',
+          message: $_(inQueue ? 'readLater.added' : 'readLater.removed'),
+          actions: result.operationId ? [{ label: $_('common.undo'), onClick: () => { void UndoOperation(result.operationId).catch(() => addToast({ type: 'error', message: $_('toast.undoFailed') })) } }] : undefined,
+        })
         return
       }
 

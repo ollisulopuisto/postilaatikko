@@ -222,8 +222,11 @@
           if (kind === 'readLater') {
             await readLaterQueue.load()
             const inQueue = !readLaterQueue.has(thread.accountId, thread.threadId)
-            const changed = await readLaterQueue.set(thread.accountId, thread.threadId, inQueue)
-            if (changed) toasts.success($_(inQueue ? 'readLater.added' : 'readLater.removed'))
+            const result = await readLaterQueue.setWithUndo(thread.accountId, thread.threadId, inQueue)
+            if (result?.changed) toasts.success($_(inQueue ? 'readLater.added' : 'readLater.removed'), result.operationId ? [{
+              label: $_('common.undo'),
+              onClick: () => { void UndoOperation(result.operationId).catch(() => toasts.error($_('toast.undoFailed'))) },
+            }] : undefined)
             return
           }
           await replyLaterQueue.load()

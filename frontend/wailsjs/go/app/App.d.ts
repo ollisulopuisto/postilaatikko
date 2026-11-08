@@ -146,6 +146,8 @@ export function CancelVirtualFolderOnlineCount(arg1:string):Promise<void>;
 
 export function ChangeReadLater(arg1:string,arg2:string,arg3:boolean):Promise<boolean>;
 
+export function ChangeReadLaterWithUndo(arg1:string,arg2:string,arg3:boolean):Promise<app.TriageChangeResult>;
+
 export function ChangeReplyLaterWithUndo(arg1:string,arg2:string,arg3:boolean):Promise<app.ReplyLaterChangeResult>;
 
 export function CheckForUpdates():Promise<string>;
@@ -894,6 +896,8 @@ export function ShowWindow():Promise<void>;
 
 export function SnoozeConversation(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function SnoozeConversationWithUndo(arg1:string,arg2:string,arg3:string):Promise<app.TriageChangeResult>;
+
 export function Star(arg1:Array<string>):Promise<void>;
 
 export function StartContactsOnlyOAuthFlow(arg1:string):Promise<void>;
@@ -947,6 +951,8 @@ export function SyncMailboxActionEvents():Promise<void>;
 export function UndoOperation(arg1:string):Promise<string>;
 
 export function UnsnoozeConversation(arg1:string,arg2:string):Promise<boolean>;
+
+export function UnsnoozeConversationWithUndo(arg1:string,arg2:string):Promise<app.TriageChangeResult>;
 
 export function Unstar(arg1:Array<string>):Promise<void>;
 

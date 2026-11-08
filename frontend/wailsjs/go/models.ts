@@ -994,6 +994,20 @@ export namespace app {
 	        this.operationId = source["operationId"];
 	    }
 	}
+	export class TriageChangeResult {
+	    changed: boolean;
+	    operationId: string;
+
+	    static createFrom(source: any = {}) {
+	        return new TriageChangeResult(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.changed = source["changed"];
+	        this.operationId = source["operationId"];
+	    }
+	}
 	export class SMIMEViewResult {
 	    bodyHtml: string;
 	    bodyText: string;
