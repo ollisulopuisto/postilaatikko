@@ -59,10 +59,11 @@ func (r *SyncRuntime) GetDraft(id, accountID string) (*v1.DraftDocument, error) 
 	return r.draftDocument(item)
 }
 
-func (r *SyncRuntime) SaveDraft(id, accountID, revision string, composed smtp.ComposeMessage) (*v1.DraftDocument, error) {
+func (r *SyncRuntime) SaveDraft(id string, mutation v1.DraftMutation) (*v1.DraftDocument, error) {
 	if r == nil || r.drafts == nil || r.accounts == nil {
 		return nil, errors.New("draft service is unavailable")
 	}
+	accountID, revision, composed := mutation.AccountID, mutation.Revision, mutation.Message
 	acc, err := r.accounts.Get(accountID)
 	if err != nil {
 		return nil, err
@@ -70,8 +71,20 @@ func (r *SyncRuntime) SaveDraft(id, accountID, revision string, composed smtp.Co
 	if acc == nil || !acc.Enabled {
 		return nil, errors.New("account is unavailable")
 	}
-	if composed.EncryptMessage || composed.PGPEncryptMessage {
-		return nil, v1.InvalidRequest("Draft body encryption must be prepared by the desktop key workflow", nil)
+	if mutation.Encrypted && mutation.PGPEncrypted || mutation.Encrypted && len(mutation.EncryptedBody) == 0 || mutation.PGPEncrypted && len(mutation.PGPEncryptedBody) == 0 {
+		return nil, v1.InvalidRequest("Encrypted draft payload is incomplete or has conflicting encryption modes", nil)
+	}
+	if mutation.Encrypted != composed.EncryptMessage || mutation.PGPEncrypted != composed.PGPEncryptMessage {
+		return nil, v1.InvalidRequest("Draft encryption flags must match the opaque ciphertext payload", nil)
+	}
+	if (mutation.Encrypted || mutation.PGPEncrypted) && (composed.HTMLBody != "" || composed.TextBody != "" || len(composed.Attachments) > 0) {
+		return nil, v1.InvalidRequest("Encrypted draft content must be sent only as opaque ciphertext", nil)
+	}
+	if mutation.Encrypted && len(mutation.PGPEncryptedBody) > 0 || mutation.PGPEncrypted && len(mutation.EncryptedBody) > 0 {
+		return nil, v1.InvalidRequest("Draft contains ciphertext for a different encryption mode", nil)
+	}
+	if !mutation.Encrypted && len(mutation.EncryptedBody) > 0 || !mutation.PGPEncrypted && len(mutation.PGPEncryptedBody) > 0 {
+		return nil, v1.InvalidRequest("Draft contains ciphertext without its encryption mode", nil)
 	}
 	if err := r.validateDraftSender(acc, composed); err != nil {
 		return nil, err
@@ -109,10 +122,15 @@ func (r *SyncRuntime) SaveDraft(id, accountID, revision string, composed smtp.Co
 		current.ReferencesList = string(references)
 		current.IdentityID = composed.IdentityID
 		current.SignMessage, current.PGPSignMessage = composed.SignMessage, composed.PGPSignMessage
+		current.Encrypted, current.EncryptedBody = mutation.Encrypted, mutation.EncryptedBody
+		current.PGPEncrypted, current.PGPEncryptedBody = mutation.PGPEncrypted, mutation.PGPEncryptedBody
 		current.SyncStatus = draft.SyncStatusPending
-		current.AttachmentsData, err = json.Marshal(composed.Attachments)
-		if err != nil {
-			return nil, err
+		current.AttachmentsData = mutation.AttachmentsData
+		if len(current.AttachmentsData) == 0 && !mutation.Encrypted && !mutation.PGPEncrypted {
+			current.AttachmentsData, err = json.Marshal(composed.Attachments)
+			if err != nil {
+				return nil, err
+			}
 		}
 		if err := r.drafts.UpdateIfRevision(current, revision); err != nil {
 			return nil, err
@@ -139,16 +157,32 @@ func (r *SyncRuntime) SaveDraft(id, accountID, revision string, composed smtp.Co
 	if err != nil {
 		return nil, err
 	}
-	attachments, err := json.Marshal(composed.Attachments)
-	if err != nil {
-		return nil, err
+	attachments := mutation.AttachmentsData
+	if len(attachments) == 0 && !mutation.Encrypted && !mutation.PGPEncrypted {
+		attachments, err = json.Marshal(composed.Attachments)
+		if err != nil {
+			return nil, err
+		}
 	}
-	item := &draft.Draft{ID: uuid.NewString(), AccountID: accountID, ToList: toList, CcList: ccList, BccList: bccList,
+	requestID := strings.TrimSpace(mutation.ID)
+	if requestID == "" {
+		requestID = uuid.NewString()
+	}
+	item := &draft.Draft{ID: requestID, AccountID: accountID, ToList: toList, CcList: ccList, BccList: bccList,
 		Subject: composed.Subject, BodyHTML: composed.HTMLBody, BodyText: composed.TextBody, InReplyToID: composed.InReplyTo,
 		ReferencesList: string(references), IdentityID: composed.IdentityID, SignMessage: composed.SignMessage,
-		PGPSignMessage: composed.PGPSignMessage, AttachmentsData: attachments, SyncStatus: draft.SyncStatusPending}
-	if err := r.drafts.Create(item); err != nil {
-		return nil, err
+		Encrypted: mutation.Encrypted, EncryptedBody: mutation.EncryptedBody, PGPSignMessage: composed.PGPSignMessage,
+		PGPEncrypted: mutation.PGPEncrypted, PGPEncryptedBody: mutation.PGPEncryptedBody,
+		AttachmentsData: attachments, SyncStatus: draft.SyncStatusPending}
+	if createErr := r.drafts.Create(item); createErr != nil {
+		existing, getErr := r.drafts.Get(requestID)
+		if getErr != nil {
+			return nil, createErr
+		}
+		if existing == nil || existing.AccountID != accountID || draft.Fingerprint(existing) != draft.Fingerprint(item) {
+			return nil, createErr
+		}
+		return r.draftDocument(existing)
 	}
 	created, err := r.drafts.Get(item.ID)
 	if err != nil {
@@ -288,8 +322,69 @@ func (r *SyncRuntime) PrepareReply(req v1.ReplyPreparationRequest) (*smtp.Compos
 	if original.MessageID != "" {
 		refs = append(refs, angleMessageID(original.MessageID))
 	}
+	attachments := r.replyAttachments(original, req.Mode, quotedHTML)
 	return &smtp.ComposeMessage{From: from, To: to, Cc: cc, Subject: subject, HTMLBody: htmlBody, TextBody: body,
-		InReplyTo: angleMessageID(original.MessageID), References: refs, GmailThreadID: gmailThreadID(original), IdentityID: identityID(identity)}, nil
+		InReplyTo: angleMessageID(original.MessageID), References: refs, GmailThreadID: gmailThreadID(original),
+		IdentityID: identityID(identity), Attachments: attachments}, nil
+}
+
+func (r *SyncRuntime) replyAttachments(original *message.Message, mode, quotedHTML string) []smtp.Attachment {
+	if r.attachments == nil || original == nil {
+		return nil
+	}
+	var result []smtp.Attachment
+	inline, err := r.attachments.GetInlineByMessage(original.ID)
+	if err == nil {
+		for cid, dataURL := range inline {
+			if mode != "forward" && !strings.Contains(quotedHTML, "cid:"+cid) {
+				continue
+			}
+			contentType, encoded, ok := strings.Cut(strings.TrimPrefix(dataURL, "data:"), ";base64,")
+			if !ok || encoded == "" {
+				continue
+			}
+			result = append(result, smtp.Attachment{ContentBase64: encoded, ContentType: contentType, ContentID: cid, Inline: true, Filename: cid})
+		}
+	}
+	if mode != "forward" || r.syncEngine == nil {
+		return result
+	}
+	items, err := r.attachments.GetByMessage(original.ID)
+	if err != nil {
+		return result
+	}
+	regular := make([]*message.Attachment, 0, len(items))
+	for _, item := range items {
+		if item != nil && !item.IsInline {
+			regular = append(regular, item)
+		}
+	}
+	if len(regular) == 0 {
+		return result
+	}
+	raw, err := r.syncEngine.FetchRawMessage(r.runtimeContext(), original.AccountID, original.FolderID, original.UID)
+	if err != nil {
+		return result
+	}
+	downloader := email.NewAttachmentDownloader("")
+	for _, item := range regular {
+		content, err := downloader.ExtractAttachmentContent(raw, item.Filename)
+		if err != nil {
+			continue
+		}
+		result = append(result, smtp.Attachment{Content: content, ContentType: item.ContentType, Filename: item.Filename})
+	}
+	return result
+}
+
+func (r *SyncRuntime) runtimeContext() context.Context {
+	r.ctxMu.RLock()
+	ctx := r.ctx
+	r.ctxMu.RUnlock()
+	if ctx == nil {
+		return context.Background()
+	}
+	return ctx
 }
 
 func quoteReplyText(value string) string {
@@ -360,7 +455,7 @@ func (r *SyncRuntime) Send(ctx context.Context, req v1.SendRequest, key, hash st
 		}
 		return response, nil
 	}
-	delivery := scheduledsend.Delivery{AccountID: req.AccountID, From: req.From, To: req.To, RFC822: req.RFC822, DueAt: time.Now()}
+	delivery := scheduledsend.Delivery{AccountID: req.AccountID, From: req.From, To: req.To, RFC822: req.RFC822, GmailThreadID: req.GmailThreadID, DueAt: time.Now()}
 	deliveryErr := r.immediateSend(ctx, delivery)
 	state, code := v1.OperationSent, ""
 	if deliveryErr != nil {
@@ -402,7 +497,7 @@ func (r *SyncRuntime) existingSendReceipt(key, hash string) (*v1.SendResponse, b
 	if err != nil {
 		return nil, false, err
 	}
-	if existingHash != hash {
+	if hash != "" && existingHash != hash {
 		return nil, true, v1.ErrSendIdempotencyConflict
 	}
 	if state == "processing" {
@@ -418,6 +513,13 @@ func (r *SyncRuntime) existingSendReceipt(key, hash string) (*v1.SendResponse, b
 		state = string(v1.OperationSending)
 	}
 	return &v1.SendResponse{Receipt: v1.OperationReceipt{OperationID: existingID, State: v1.OperationState(state), Replayed: true}, Code: code}, true, nil
+}
+
+func (r *SyncRuntime) GetSendReceipt(key string) (*v1.SendResponse, bool, error) {
+	if r == nil || r.db == nil {
+		return nil, false, errors.New("send receipt storage is unavailable")
+	}
+	return r.existingSendReceipt(strings.TrimSpace(key), "")
 }
 
 func validateSendRequest(req v1.SendRequest) error {
@@ -502,6 +604,8 @@ func (r *SyncRuntime) draftDocument(item *draft.Draft) (*v1.DraftDocument, error
 		from = smtp.Address{Name: identity.Name, Address: identity.Email}
 	}
 	return &v1.DraftDocument{ID: item.ID, AccountID: item.AccountID, Revision: item.StorageVersion, UpdatedAt: item.UpdatedAt.Format(time.RFC3339Nano),
+		Encrypted: item.Encrypted, EncryptedBody: item.EncryptedBody, PGPEncrypted: item.PGPEncrypted,
+		PGPEncryptedBody: item.PGPEncryptedBody, AttachmentsData: item.AttachmentsData,
 		Message: smtp.ComposeMessage{From: from, IdentityID: item.IdentityID, To: to, Cc: cc, Bcc: bcc, Subject: item.Subject,
 			HTMLBody: item.BodyHTML, TextBody: item.BodyText, Attachments: attachments, InReplyTo: item.InReplyToID, References: references,
 			SignMessage: item.SignMessage, PGPSignMessage: item.PGPSignMessage}}, nil

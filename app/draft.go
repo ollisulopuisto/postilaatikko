@@ -6,14 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/hkdb/aerion/internal/gmail"
 	"strings"
 	"time"
 
 	goImap "github.com/emersion/go-imap/v2"
 	"github.com/hkdb/aerion/internal/account"
+	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/draft"
 	"github.com/hkdb/aerion/internal/folder"
+	"github.com/hkdb/aerion/internal/gmail"
 	"github.com/hkdb/aerion/internal/imap"
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/message"
@@ -38,8 +39,9 @@ type DraftResult struct {
 // DraftEditResult gives the composer both the editable message and the only
 // valid reference for subsequent saves/deletes: the local draft ID.
 type DraftEditResult struct {
-	DraftID string               `json:"draftId"`
-	Message *smtp.ComposeMessage `json:"message"`
+	DraftID  string               `json:"draftId"`
+	Revision string               `json:"revision,omitempty"`
+	Message  *smtp.ComposeMessage `json:"message"`
 }
 
 // encryptResult holds the result of encrypting a draft body for storage
@@ -1010,7 +1012,116 @@ func (a *App) GetDraftForEdit(ref string) (*DraftEditResult, error) {
 	if d == nil {
 		return nil, nil
 	}
-	return &DraftEditResult{DraftID: d.ID, Message: a.draftToComposeMessage(d)}, nil
+	return &DraftEditResult{DraftID: d.ID, Revision: d.StorageVersion, Message: a.draftToComposeMessage(d)}, nil
+}
+
+// GetComposerDraftForEdit reads an account-qualified draft from the helper
+// when compose capabilities are granted, then decrypts any opaque body locally.
+func (a *App) GetComposerDraftForEdit(accountID, ref string) (*DraftEditResult, error) {
+	ctx := a.accountContext()
+	client, err := a.composerServiceClient(ctx, v1.CapabilityDraftRead)
+	if err != nil {
+		return nil, err
+	}
+	items, err := client.ListDrafts(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range items {
+		if item.ID == ref {
+			stored := draftFromHelperDocument(&item)
+			return &DraftEditResult{DraftID: stored.ID, Revision: stored.StorageVersion, Message: a.draftToComposeMessage(stored)}, nil
+		}
+	}
+	return nil, nil
+}
+
+// GetComposerDraft reads one helper-owned draft and decrypts its body locally.
+func (a *App) GetComposerDraft(accountID, draftID string) (*smtp.ComposeMessage, error) {
+	result, err := a.GetComposerDraftForEdit(accountID, draftID)
+	if err != nil || result == nil {
+		return nil, err
+	}
+	return result.Message, nil
+}
+
+// SaveComposerDraft keeps draft storage in the helper while preparing
+// optional at-rest encryption with the device-local signing keys.
+func (a *App) SaveComposerDraft(accountID string, msg smtp.ComposeMessage, draftID, revision, requestID string) (*DraftResult, error) {
+	ctx := a.accountContext()
+	client, err := a.composerServiceClient(ctx, v1.CapabilityDraftRead, v1.CapabilityDraftWrite)
+	if err != nil {
+		return nil, err
+	}
+	if draftID != "" && revision == "" {
+		current, err := a.GetComposerDraftForEdit(accountID, draftID)
+		if err != nil {
+			return nil, err
+		}
+		if current == nil {
+			return nil, draft.ErrDraftNotFound
+		}
+		revision = current.Revision
+	}
+	enc, err := a.draftOps.encryptDraftBody(accountID, msg.From.Address, msg)
+	if err != nil {
+		return nil, err
+	}
+	message := msg
+	message.HTMLBody, message.TextBody = enc.bodyHTML, enc.bodyText
+	message.EncryptMessage, message.PGPEncryptMessage = enc.encrypted, enc.pgpEncrypted
+	if enc.encrypted || enc.pgpEncrypted {
+		message.Attachments = nil
+	}
+	mutation := v1.DraftMutation{ID: requestID, AccountID: accountID, Revision: revision, Message: message,
+		Encrypted: enc.encrypted, EncryptedBody: enc.encryptedBody, PGPEncrypted: enc.pgpEncrypted,
+		PGPEncryptedBody: enc.pgpEncryptedBody, AttachmentsData: enc.attachmentsData}
+	var saved *v1.DraftDocument
+	if draftID == "" {
+		saved, err = client.CreateDraft(ctx, mutation)
+	} else {
+		saved, err = client.UpdateDraft(ctx, draftID, mutation)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &DraftResult{Draft: draftFromHelperDocument(saved)}, nil
+}
+
+// DeleteComposerDraft removes a helper-owned draft using its read revision.
+func (a *App) DeleteComposerDraft(accountID, draftID, revision string) error {
+	ctx := a.accountContext()
+	client, err := a.composerServiceClient(ctx, v1.CapabilityDraftWrite)
+	if err != nil {
+		return err
+	}
+	if revision == "" {
+		current, err := a.GetComposerDraftForEdit(accountID, draftID)
+		if err != nil {
+			return err
+		}
+		if current == nil {
+			return draft.ErrDraftNotFound
+		}
+		revision = current.Revision
+	}
+	return client.DeleteDraft(ctx, accountID, draftID, revision)
+}
+
+func draftFromHelperDocument(document *v1.DraftDocument) *draft.Draft {
+	if document == nil {
+		return nil
+	}
+	message := document.Message
+	updatedAt, _ := time.Parse(time.RFC3339Nano, document.UpdatedAt)
+	return &draft.Draft{ID: document.ID, AccountID: document.AccountID, StorageVersion: document.Revision,
+		UpdatedAt: updatedAt, ToList: addressListToJSON(message.To), CcList: addressListToJSON(message.Cc),
+		BccList: addressListToJSON(message.Bcc), Subject: message.Subject, BodyHTML: message.HTMLBody,
+		BodyText: message.TextBody, InReplyToID: message.InReplyTo, ReferencesList: marshalReferences(message.References),
+		IdentityID: message.IdentityID, SignMessage: message.SignMessage, Encrypted: document.Encrypted,
+		EncryptedBody: document.EncryptedBody, PGPSignMessage: message.PGPSignMessage,
+		PGPEncrypted: document.PGPEncrypted, PGPEncryptedBody: document.PGPEncryptedBody,
+		AttachmentsData: document.AttachmentsData, SyncStatus: draft.SyncStatusPending}
 }
 
 // messageToComposeMessage converts a message (from Drafts folder) to a ComposeMessage

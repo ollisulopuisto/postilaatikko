@@ -214,46 +214,5 @@ func (a *App) handlePendingSendQueued(p ipc.PendingSendQueuedPayload) {
 // happen in the main process, so closing the composer window mid-countdown
 // is safe.
 func (c *ComposerApp) QueuePendingSend(accountID, draftID, payload string) (string, error) {
-	if accountID == "" || payload == "" {
-		return "", fmt.Errorf("pending send: account and payload are required")
-	}
-	id := uuid.NewString()
-	now := time.Now().UTC()
-	dispatchAt := now.Add(PendingSendDelay)
-
-	tx, err := c.db.Begin()
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = tx.Rollback() }()
-	if draftID != "" {
-		var n int
-		if err := tx.QueryRow(
-			`SELECT COUNT(*) FROM pending_sends WHERE draft_id = ? AND state = 'pending'`, draftID).Scan(&n); err != nil {
-			return "", err
-		}
-		if n > 0 {
-			return "", fmt.Errorf("pending send: this draft is already queued to send")
-		}
-	}
-	if _, err := tx.Exec(
-		`INSERT INTO pending_sends (id, account_id, draft_id, payload, dispatch_at, state, created_at)
-		 VALUES (?,?,?,?,?,'pending',?)`,
-		id, accountID, draftID, payload,
-		dispatchAt.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)); err != nil {
-		return "", err
-	}
-	if err := tx.Commit(); err != nil {
-		return "", err
-	}
-	if c.ipcClient != nil {
-		msg, err := ipc.NewMessage(ipc.TypePendingSendQueued, ipc.PendingSendQueuedPayload{
-			ID: id, AccountID: accountID, DraftID: draftID,
-			DispatchAt: dispatchAt.Format(time.RFC3339Nano),
-		})
-		if err == nil {
-			_ = c.ipcClient.Send(msg)
-		}
-	}
-	return id, nil
+	return callParentValue[string](c, "QueuePendingSend", accountID, draftID, payload)
 }

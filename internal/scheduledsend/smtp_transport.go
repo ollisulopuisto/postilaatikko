@@ -582,7 +582,7 @@ func (t *SMTPTransport) Deliver(ctx context.Context, delivery Delivery) error {
 			}
 			return tokens.AccessToken, nil
 		})
-		_, err := c.Send(ctx, delivery.RFC822, delivery.To...)
+		_, err := c.SendInThread(ctx, delivery.GmailThreadID, delivery.RFC822, delivery.To...)
 		if err == nil {
 			return nil
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/hkdb/aerion/internal/gmail"
 	"os"
@@ -13,6 +14,7 @@ import (
 
 	goImap "github.com/emersion/go-imap/v2"
 	"github.com/hkdb/aerion/internal/account"
+	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/certificate"
 	"github.com/hkdb/aerion/internal/contact"
 	"github.com/hkdb/aerion/internal/credentials"
@@ -622,6 +624,45 @@ func (a *App) SendMessage(accountID string, msg smtp.ComposeMessage) error {
 	return nil
 }
 
+// PrepareComposerSend creates the immutable MIME payload locally so retries
+// can submit the exact same bytes and idempotency key.
+func (a *App) PrepareComposerSend(accountID string, msg smtp.ComposeMessage, draftID, revision string) (*v1.SendRequest, error) {
+	raw, err := a.composeOps.prepareMessage(accountID, msg)
+	if err != nil {
+		return nil, err
+	}
+	to := msg.AllRecipients()
+	return &v1.SendRequest{AccountID: accountID, From: msg.From.Address, To: to, RFC822: raw,
+		GmailThreadID: msg.GmailThreadID, DraftID: draftID, Revision: revision}, nil
+}
+
+// SendPreparedComposerMessage delegates an already signed/encrypted message to
+// the helper and requires the caller to reuse its idempotency key on retries.
+func (a *App) SendPreparedComposerMessage(request v1.SendRequest, requestID string) (*v1.SendResponse, error) {
+	ctx := a.accountContext()
+	required := []v1.Capability{v1.CapabilityMailSend}
+	if request.DraftID != "" {
+		required = append(required, v1.CapabilityDraftWrite)
+	}
+	client, err := a.composerServiceClient(ctx, required...)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(requestID) == "" {
+		return nil, errors.New("a stable send request ID is required")
+	}
+	return client.SendPreparedMessage(ctx, request, requestID)
+}
+
+func (a *App) GetComposerSendReceipt(requestID string) (*v1.SendReceiptLookup, error) {
+	ctx := a.accountContext()
+	client, err := a.composerServiceClient(ctx, v1.CapabilityMailSend)
+	if err != nil {
+		return nil, err
+	}
+	return client.GetSendReceipt(ctx, requestID)
+}
+
 // handleExternalMailto handles a mailto URL received from a second instance.
 // Routes to inline or detached composer based on the mailto_mode setting.
 func (a *App) handleExternalMailto(rawURL string) {
@@ -907,6 +948,21 @@ func (a *App) PrepareReply(messageID, mode string) (*smtp.ComposeMessage, error)
 		GmailThreadID: gmailThreadIDFromMessage(msg),
 		Attachments:   attachments,
 	}, nil
+}
+
+// PrepareComposerReply builds reply or forward content from helper-owned mail
+// when the local service is connected, explicitly fetching the original body.
+func (a *App) PrepareComposerReply(accountID, messageID, mode string) (*smtp.ComposeMessage, error) {
+	ctx := a.accountContext()
+	client, err := a.composerServiceClient(ctx, v1.CapabilityMailRead, v1.CapabilityMailBodyFetch, v1.CapabilityDraftWrite)
+	if err != nil {
+		return nil, err
+	}
+	_, err = client.ReadBody(ctx, v1.BodyReadRequest{Ref: v1.MessageRef{AccountID: accountID, MessageID: messageID}, Mode: v1.FetchExplicit})
+	if err != nil {
+		return nil, fmt.Errorf("fetch original message body through mailbox service: %w", err)
+	}
+	return client.PrepareReply(ctx, v1.ReplyPreparationRequest{AccountID: accountID, MessageID: messageID, Mode: mode})
 }
 
 func gmailThreadIDFromMessage(msg *message.Message) string {

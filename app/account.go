@@ -85,6 +85,36 @@ func (a *App) accountServiceClient(ctx context.Context, requireAccountManagement
 	return client, true, nil
 }
 
+func (a *App) composerServiceClient(ctx context.Context, required ...v1.Capability) (*automationclient.Client, error) {
+	client, useService, err := a.accountServiceClient(ctx, false)
+	if err != nil {
+		return client, err
+	}
+	if !useService {
+		status := MailboxServiceStatus{Message: "The local mailbox service is not initialized."}
+		if a.mailboxService != nil {
+			status = a.mailboxService.status(ctx)
+		}
+		return nil, fmt.Errorf("detached compose requires the local mailbox service: %s", status.Message)
+	}
+	status := a.mailboxService.status(ctx)
+	for _, capability := range required {
+		if !hasStatusCapability(status.Capabilities, string(capability)) {
+			return nil, fmt.Errorf("local mailbox service requires explicit %s authorization for compose", capability)
+		}
+	}
+	return client, nil
+}
+
+func hasStatusCapability(capabilities []string, required string) bool {
+	for _, capability := range capabilities {
+		if capability == required {
+			return true
+		}
+	}
+	return false
+}
+
 func accountMutationKey() string { return uuid.NewString() }
 
 // AddAccount creates a new email account
@@ -601,16 +631,38 @@ type AccountIdentityGroup struct {
 // GetAllAccountIdentities returns all accounts with their identities in one call.
 // Used by the inline composer to populate the cross-account From dropdown.
 func (a *App) GetAllAccountIdentities() ([]AccountIdentityGroup, error) {
-	accounts, err := a.accountStore.List()
+	ctx := a.accountContext()
+	client, useService, err := a.accountServiceClient(ctx, false)
 	if err != nil {
 		return nil, err
+	}
+	var accounts []*account.Account
+	if useService {
+		items, err := client.GetAccounts(ctx)
+		if err != nil {
+			return nil, err
+		}
+		accounts = make([]*account.Account, 0, len(items))
+		for _, item := range items {
+			accounts = append(accounts, item.ToAccount())
+		}
+	} else {
+		accounts, err = a.accountStore.List()
+		if err != nil {
+			return nil, err
+		}
 	}
 	var groups []AccountIdentityGroup
 	for _, acc := range accounts {
 		if !acc.Enabled {
 			continue
 		}
-		identities, err := a.accountStore.GetIdentities(acc.ID)
+		var identities []*account.Identity
+		if useService {
+			identities, err = client.GetIdentities(ctx, acc.ID)
+		} else {
+			identities, err = a.accountStore.GetIdentities(acc.ID)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -624,6 +676,14 @@ func (a *App) GetAllAccountIdentities() ([]AccountIdentityGroup, error) {
 
 // GetIdentities returns all identities for an account
 func (a *App) GetIdentities(accountID string) ([]*account.Identity, error) {
+	ctx := a.accountContext()
+	client, useService, err := a.accountServiceClient(ctx, false)
+	if err != nil {
+		return nil, err
+	}
+	if useService {
+		return client.GetIdentities(ctx, accountID)
+	}
 	return a.accountStore.GetIdentities(accountID)
 }
 

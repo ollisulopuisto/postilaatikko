@@ -25,6 +25,12 @@ type CatalogOperations interface {
 	GetVirtualFolders() ([]*virtualfolder.VirtualFolder, error)
 }
 
+// IdentityCatalogOperations exposes account-owned sender identities needed by
+// compose clients without returning provider credentials.
+type IdentityCatalogOperations interface {
+	GetIdentities(accountID string) ([]*account.Identity, error)
+}
+
 // MessageHeaderOperations defines bounded, folder-scoped header reads.
 type MessageHeaderOperations interface {
 	GetFolder(folderID string) (*folder.Folder, error)
@@ -121,6 +127,25 @@ func (h *ReadHandler) mountSearchRoute(mux *http.ServeMux, requireCap func(http.
 }
 
 func (h *ReadHandler) mountThreadBodyRoutes(mux *http.ServeMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+	mux.HandleFunc("GET /v1/messages/{messageID}/header", func(w http.ResponseWriter, r *http.Request) {
+		if !requireCap(w, r, CapabilityMailRead) {
+			return
+		}
+		accountID := strings.TrimSpace(r.URL.Query().Get("accountId"))
+		messageID := strings.TrimSpace(r.PathValue("messageID"))
+		if accountID == "" || messageID == "" {
+			h.writeError(w, r, http.StatusBadRequest, CodeInvalidRequest, "accountId and messageId are required", false)
+			return
+		}
+		item, err := h.messages.GetMessage(accountID, messageID)
+		if err != nil || item == nil || item.AccountID != accountID {
+			h.writeError(w, r, http.StatusNotFound, CodeNotFound, "Message not found", false)
+			return
+		}
+		header := *item
+		header.BodyText, header.BodyHTML = "", ""
+		h.writeResponse(w, r, http.StatusOK, &header, nil)
+	})
 	mux.HandleFunc("/v1/threads/read", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailRead) {
 			return
@@ -169,6 +194,19 @@ func (h *ReadHandler) mountAttachmentRoutes(mux *http.ServeMux, requireCap func(
 }
 
 func (h *ReadHandler) mountCatalogRoutes(mux *http.ServeMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+	if identities, ok := h.catalog.(IdentityCatalogOperations); ok {
+		mux.HandleFunc("GET /v1/accounts/{accountID}/identities", func(w http.ResponseWriter, r *http.Request) {
+			if !requireCap(w, r, CapabilityMailRead) {
+				return
+			}
+			items, err := identities.GetIdentities(r.PathValue("accountID"))
+			if err != nil {
+				h.writeError(w, r, http.StatusInternalServerError, CodeInternal, "Failed to load account identities", true)
+				return
+			}
+			h.writeResponse(w, r, http.StatusOK, items, nil)
+		})
+	}
 	mux.HandleFunc("/v1/accounts", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailRead) {
 			return

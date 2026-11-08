@@ -228,13 +228,13 @@ The current route families in v1 are:
 
 | Route family | Capability | Task |
 | --- | --- | --- |
-| `GET /v1/accounts`, `GET /v1/accounts/{accountId}`, `GET /v1/folders`, `GET /v1/views` | `mail.read` | UX-021 / UX-038 |
+| `GET /v1/accounts`, `GET /v1/accounts/{accountId}`, `GET /v1/accounts/{accountId}/identities`, `GET /v1/folders`, `GET /v1/views` | `mail.read` | UX-021 / UX-038 / HOSTED-SERVER-038 |
 | `POST /v1/accounts`, `PUT /v1/accounts/{accountId}`, `DELETE /v1/accounts/{accountId}`, `PATCH /v1/accounts/{accountId}/enabled`, `PUT /v1/accounts/order`, `POST /v1/accounts/shared-mailboxes`, `POST /v1/accounts/{accountId}/oauth` | `account.manage` | HOSTED-SERVER-035 / -036 / -037 |
-| `POST /v1/search`, `POST /v1/threads/read`, `POST /v1/messages/body` | `mail.read`; explicit fetch also needs `mail.body.fetch` | UX-021 |
+| `POST /v1/search`, `POST /v1/threads/read`, `GET /v1/messages/{messageId}/header`, `POST /v1/messages/body` | `mail.read`; explicit fetch also needs `mail.body.fetch` | UX-021 / HOSTED-SERVER-038 |
 | `POST /v1/messages/attachments/list`, `POST /v1/messages/attachments/read` | `mail.attachment.read` | UX-021 |
 | `/v1/drafts` | `draft.read`, `draft.write` | UX-037 |
 | `/v1/actions` | `mail.write` | UX-022 |
-| `/v1/send` | `mail.send` | UX-037 |
+| `POST /v1/send`, `GET /v1/send/receipts/{idempotencyKey}` | `mail.send` | UX-037 / HOSTED-SERVER-038 |
 | `/v1/scheduled` | `schedule.read`, `schedule.write` | UX-039; depends on P-011 |
 | `/v1/reply-later` | `mail.read` for list; `mail.write` for membership changes | UX-026 adapter, exposed by UX-020/021 |
 
@@ -247,11 +247,15 @@ helper. Draft reads/writes are account-qualified and updates/deletes require
 the current storage revision. Reply preparation uses only cached message body
 content; clients explicitly fetch a body first when needed. Immediate send
 accepts a desktop-prepared RFC822 message and an SMTP envelope, and requires an
-`Idempotency-Key`. A repeated key with a different request returns
-`idempotency_conflict`; an interrupted send is retained as `outcome_unknown`
-and is never automatically retried. `sent` means the SMTP server accepted the
-message, not that the recipient received it. The helper cannot store encrypted
-draft bodies yet; private-key encryption and signing remain desktop operations.
+`Idempotency-Key`. Receipt lookup returns only the durable state for that key.
+Gmail replies may include the helper-owned Gmail thread ID so the provider send
+remains in the original conversation. A repeated key with a different request
+returns `idempotency_conflict`; an interrupted send is retained as `outcome_unknown`
+and is never automatically retried. `sent` means the provider accepted the
+message, not that the recipient received it. For encrypted drafts, the desktop
+encrypts the body locally and passes opaque ciphertext fields to the helper;
+private keys remain on the desktop. Draft reads return the ciphertext for local
+decryption.
 
 ## Error envelope
 

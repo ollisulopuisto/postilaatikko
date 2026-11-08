@@ -61,11 +61,12 @@ func validatePublicKey(key PublicKey) error {
 // Delivery is an immutable prepared message. AccountID names an explicitly
 // authorized account on the helper; credentials never belong in this payload.
 type Delivery struct {
-	AccountID string    `json:"accountId"`
-	From      string    `json:"from"`
-	To        []string  `json:"to"` // Includes envelope Bcc recipients.
-	RFC822    []byte    `json:"rfc822"`
-	DueAt     time.Time `json:"dueAt"`
+	AccountID     string    `json:"accountId"`
+	From          string    `json:"from"`
+	To            []string  `json:"to"` // Includes envelope Bcc recipients.
+	RFC822        []byte    `json:"rfc822"`
+	GmailThreadID string    `json:"gmailThreadId,omitempty"`
+	DueAt         time.Time `json:"dueAt"`
 }
 
 // Command carries a monotonic revision. A cancel tombstone prevents an older,

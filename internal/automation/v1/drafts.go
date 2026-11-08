@@ -17,18 +17,29 @@ var ErrDraftRevisionConflict = draft.ErrDraftRevisionConflict
 
 // DraftDocument is the compose-facing view of a helper-owned draft.
 type DraftDocument struct {
-	ID        string              `json:"id"`
-	AccountID string              `json:"accountId"`
-	Revision  string              `json:"revision"`
-	UpdatedAt string              `json:"updatedAt"`
-	Message   smtp.ComposeMessage `json:"message"`
+	ID               string              `json:"id"`
+	AccountID        string              `json:"accountId"`
+	Revision         string              `json:"revision"`
+	UpdatedAt        string              `json:"updatedAt"`
+	Message          smtp.ComposeMessage `json:"message"`
+	Encrypted        bool                `json:"encrypted,omitempty"`
+	EncryptedBody    []byte              `json:"encryptedBody,omitempty"`
+	PGPEncrypted     bool                `json:"pgpEncrypted,omitempty"`
+	PGPEncryptedBody []byte              `json:"pgpEncryptedBody,omitempty"`
+	AttachmentsData  []byte              `json:"attachmentsData,omitempty"`
 }
 
 // DraftMutation creates or replaces a draft. Revision is mandatory for updates.
 type DraftMutation struct {
-	AccountID string              `json:"accountId"`
-	Revision  string              `json:"revision,omitempty"`
-	Message   smtp.ComposeMessage `json:"message"`
+	ID               string              `json:"id,omitempty"`
+	AccountID        string              `json:"accountId"`
+	Revision         string              `json:"revision,omitempty"`
+	Message          smtp.ComposeMessage `json:"message"`
+	Encrypted        bool                `json:"encrypted,omitempty"`
+	EncryptedBody    []byte              `json:"encryptedBody,omitempty"`
+	PGPEncrypted     bool                `json:"pgpEncrypted,omitempty"`
+	PGPEncryptedBody []byte              `json:"pgpEncryptedBody,omitempty"`
+	AttachmentsData  []byte              `json:"attachmentsData,omitempty"`
 }
 
 type ReplyPreparationRequest struct {
@@ -38,17 +49,27 @@ type ReplyPreparationRequest struct {
 }
 
 type SendRequest struct {
-	AccountID string   `json:"accountId"`
-	From      string   `json:"from"`
-	To        []string `json:"to"`
-	RFC822    []byte   `json:"rfc822"`
-	DraftID   string   `json:"draftId,omitempty"`
-	Revision  string   `json:"revision,omitempty"`
+	AccountID     string   `json:"accountId"`
+	From          string   `json:"from"`
+	To            []string `json:"to"`
+	RFC822        []byte   `json:"rfc822"`
+	GmailThreadID string   `json:"gmailThreadId,omitempty"`
+	DraftID       string   `json:"draftId,omitempty"`
+	Revision      string   `json:"revision,omitempty"`
 }
 
 type SendResponse struct {
 	Receipt OperationReceipt `json:"receipt"`
 	Code    string           `json:"code,omitempty"`
+}
+
+type SendReceiptLookup struct {
+	Found    bool          `json:"found"`
+	Response *SendResponse `json:"response,omitempty"`
+}
+
+type SendReceiptOperations interface {
+	GetSendReceipt(string) (*SendResponse, bool, error)
 }
 
 var ErrSendIdempotencyConflict = errors.New("send idempotency key conflict")
@@ -57,7 +78,7 @@ var ErrSendIdempotencyConflict = errors.New("send idempotency key conflict")
 type DraftOperations interface {
 	ListDrafts(string) ([]DraftDocument, error)
 	GetDraft(string, string) (*DraftDocument, error)
-	SaveDraft(string, string, string, smtp.ComposeMessage) (*DraftDocument, error)
+	SaveDraft(string, DraftMutation) (*DraftDocument, error)
 	DeleteDraft(string, string, string) error
 	PrepareReply(ReplyPreparationRequest) (*smtp.ComposeMessage, error)
 	Send(context.Context, SendRequest, string, string) (*SendResponse, error)
@@ -113,11 +134,11 @@ func (h *DraftsHandler) MountRoutes(mux *http.ServeMux, requireCap func(http.Res
 		if !decodeDraftRequest(w, r, &req) {
 			return
 		}
-		if strings.TrimSpace(req.AccountID) == "" || req.Revision != "" {
+		if strings.TrimSpace(req.AccountID) == "" || req.Revision != "" || len(req.ID) > 128 {
 			writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, "accountId is required and a new draft cannot include a revision", false)
 			return
 		}
-		item, err := h.operations.SaveDraft("", req.AccountID, "", req.Message)
+		item, err := h.operations.SaveDraft("", req)
 		if err != nil {
 			writeDraftError(w, r, err)
 			return
@@ -132,11 +153,11 @@ func (h *DraftsHandler) MountRoutes(mux *http.ServeMux, requireCap func(http.Res
 		if !decodeDraftRequest(w, r, &req) {
 			return
 		}
-		if strings.TrimSpace(req.AccountID) == "" || strings.TrimSpace(req.Revision) == "" {
+		if strings.TrimSpace(req.AccountID) == "" || strings.TrimSpace(req.Revision) == "" || req.ID != "" && req.ID != r.PathValue("draftID") {
 			writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, "accountId and revision are required", false)
 			return
 		}
-		item, err := h.operations.SaveDraft(r.PathValue("draftID"), req.AccountID, req.Revision, req.Message)
+		item, err := h.operations.SaveDraft(r.PathValue("draftID"), req)
 		if err != nil {
 			writeDraftError(w, r, err)
 			return
@@ -219,6 +240,27 @@ func (h *DraftsHandler) MountRoutes(mux *http.ServeMux, requireCap func(http.Res
 			return
 		}
 		writeAPIResponse(w, r, http.StatusOK, response)
+	})
+	mux.HandleFunc("GET /v1/send/receipts/{idempotencyKey}", func(w http.ResponseWriter, r *http.Request) {
+		if !requireCap(w, r, CapabilityMailSend) {
+			return
+		}
+		operations, ok := h.operations.(SendReceiptOperations)
+		if !ok {
+			writeHeaderError(w, r, http.StatusNotImplemented, CodeInternal, "Send receipt lookup is unavailable", false)
+			return
+		}
+		key := strings.TrimSpace(r.PathValue("idempotencyKey"))
+		if key == "" || len(key) > 200 {
+			writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, "A valid idempotency key is required", false)
+			return
+		}
+		response, found, err := operations.GetSendReceipt(key)
+		if err != nil {
+			writeHeaderError(w, r, http.StatusInternalServerError, CodeInternal, "Could not read send receipt", true)
+			return
+		}
+		writeAPIResponse(w, r, http.StatusOK, SendReceiptLookup{Found: found, Response: response})
 	})
 }
 
