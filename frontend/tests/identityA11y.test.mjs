@@ -10,28 +10,33 @@ test('AccountIdentityTab identity action buttons and radio have accessible attri
   const filePath = path.resolve(__dirname, '../src/lib/components/settings/account/AccountIdentityTab.svelte')
   const content = fs.readFileSync(filePath, 'utf-8')
 
-  // Check radio button semantics and focus-visible styling
+  // Check native radio input with shared name for arrow key navigation
   assert.ok(
-    content.includes('role="radio"'),
-    'default identity selector button should have role="radio"'
+    content.includes('type="radio"'),
+    'default identity selector should be a native radio input'
   )
   assert.ok(
-    content.includes('aria-checked={identity.isDefault}'),
-    'default identity selector should reflect aria-checked'
+    content.includes('name="defaultIdentity"'),
+    'default identity selector should share the group name defaultIdentity'
   )
   assert.ok(
-    content.includes('aria-label={identity.isDefault ? $_(\'identity.defaultAddress\') : `${$_(\'identity.setAsDefaultAddress\')} (${identity.email})`}'),
+    content.includes('checked={identity.isDefault}'),
+    'default identity selector should reflect checked state'
+  )
+  assert.ok(
+    content.includes("aria-label={identity.isDefault ? $_('identity.defaultAddress') : `${$_('identity.setAsDefaultAddress')} (${identity.email})`}"),
     'default identity selector should have an accessible aria-label'
   )
   assert.ok(
-    content.includes('focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'),
+    content.includes('focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'),
     'default identity selector should have visible focus indicator ring'
   )
 
-  // Check action buttons container disclosure on keyboard focus-within
+  // Check action buttons container disclosure on keyboard focus-within for both lists
+  const focusWithinMatches = content.match(/group-focus-within:opacity-100 focus-within:opacity-100/g)
   assert.ok(
-    content.includes('group-focus-within:opacity-100 focus-within:opacity-100'),
-    'action buttons container should reveal when focused via keyboard'
+    focusWithinMatches && focusWithinMatches.length >= 2,
+    `both identity list and shared mailbox list action containers must reveal on keyboard focus-within (found ${focusWithinMatches?.length})`
   )
 
   // Check action buttons have aria-label

@@ -237,22 +237,16 @@
       {#each identities as identity (identity.id)}
         <div class="flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors group">
           <!-- Default radio button -->
-          <button
-            type="button"
-            role="radio"
-            aria-checked={identity.isDefault}
+          <input
+            type="radio"
+            name="defaultIdentity"
+            value={identity.id}
+            checked={identity.isDefault}
+            onchange={() => handleSetDefault(identity)}
+            class="flex-shrink-0 w-4 h-4 accent-primary cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             aria-label={identity.isDefault ? $_('identity.defaultAddress') : `${$_('identity.setAsDefaultAddress')} (${identity.email})`}
-            onclick={() => handleSetDefault(identity)}
-            class="flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
-              {identity.isDefault
-                ? 'border-primary bg-primary'
-                : 'border-muted-foreground hover:border-primary'}"
             title={identity.isDefault ? $_('identity.defaultAddress') : $_('identity.setAsDefaultAddress')}
-          >
-            {#if identity.isDefault}
-              <div class="w-2 h-2 rounded-full bg-white"></div>
-            {/if}
-          </button>
+          />
 
           <!-- Identity info -->
           <div class="flex-1 min-w-0">
