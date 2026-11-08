@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Reject mailto URLs with percent-encoded leading dashes (%2D) in URL openers to prevent CLI option injection in system mail handlers.
 - Browse and search unified Sent, Drafts, Trash, Spam, Starred, and Archive through a remote helper; the helper resolves account folders and merges Archive with All Mail while excluding Inbox copies.
 - Replay bounded helper action and Undo events by authenticated client cursor after disconnects; refresh an affected open view or request one reset when retained history has expired.
 - Route Cmd/Ctrl+V through the system clipboard fallback in composer windows and send composer Undo to its local draft history while editing; mailbox Undo remains scoped to durable helper operations.
