@@ -26,6 +26,21 @@ func (o *mailboxActionOperations) GetByIDs(ids []string) ([]*message.Message, er
 	return o.runtime.messages.GetByIDs(ids)
 }
 
+func (o *mailboxActionOperations) ActionAffectedRefs(ctx context.Context, ids []string) ([]v1.AffectedMessageRef, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	messages, err := o.loadActionMessages(ids)
+	if err != nil {
+		return nil, err
+	}
+	refs := make([]v1.AffectedMessageRef, 0, len(messages))
+	for _, msg := range messages {
+		refs = append(refs, v1.AffectedMessageRef{AccountID: msg.AccountID, MessageID: msg.ID, FolderID: msg.FolderID})
+	}
+	return refs, nil
+}
+
 func (o *mailboxActionOperations) GetMessageIDsInThread(accountID, threadID string) ([]string, error) {
 	return o.runtime.messages.GetMessageIDsInThread(accountID, threadID)
 }

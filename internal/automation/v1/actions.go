@@ -44,10 +44,23 @@ type ActionRequest struct {
 
 // ActionResponse describes the outcome and provides an operation receipt.
 type ActionResponse struct {
-	Receipt       OperationReceipt `json:"receipt"`
-	MessageIDs    []string         `json:"messageIds"`
-	UndoAvailable bool             `json:"undoAvailable,omitempty"`
-	UndoExpiresAt string           `json:"undoExpiresAt,omitempty"`
+	Receipt       OperationReceipt     `json:"receipt"`
+	MessageIDs    []string             `json:"messageIds"`
+	Affected      []AffectedMessageRef `json:"affected,omitempty"`
+	UndoAvailable bool                 `json:"undoAvailable,omitempty"`
+	UndoExpiresAt string               `json:"undoExpiresAt,omitempty"`
+}
+
+// AffectedMessageRef identifies a changed mailbox row without exposing content.
+type AffectedMessageRef struct {
+	AccountID string `json:"accountId"`
+	MessageID string `json:"messageId"`
+	FolderID  string `json:"folderId"`
+}
+
+// ActionAffectedRefReader reads bounded-safe references after an action.
+type ActionAffectedRefReader interface {
+	ActionAffectedRefs(context.Context, []string) ([]AffectedMessageRef, error)
 }
 
 // ActionOperations defines the mutations supported by the backend mail service.
@@ -344,6 +357,11 @@ func (h *ActionsHandler) handleDurableAction(w http.ResponseWriter, r *http.Requ
 		Receipt:       OperationReceipt{OperationID: operationID, State: state},
 		MessageIDs:    messageIDs,
 		UndoAvailable: state == OperationSent && len(undoSnapshot) > 0,
+	}
+	if state == OperationSent {
+		if reader, ok := h.ops.(ActionAffectedRefReader); ok {
+			response.Affected, _ = reader.ActionAffectedRefs(r.Context(), messageIDs)
+		}
 	}
 	if response.UndoAvailable {
 		response.UndoExpiresAt = time.Now().Add(24 * time.Hour).UTC().Format(time.RFC3339)

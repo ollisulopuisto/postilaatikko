@@ -37,12 +37,15 @@ type UndoLatestResult struct {
 
 // UndoHistoryEntry is the safe, compact summary exposed to the UI.
 type UndoHistoryEntry struct {
-	OperationID  string    `json:"operationId"`
-	Action       string    `json:"action"`
-	Description  string    `json:"description"`
-	CreatedAt    time.Time `json:"createdAt"`
-	ExpiresAt    time.Time `json:"expiresAt"`
-	MessageCount int       `json:"messageCount"`
+	OperationID   string    `json:"operationId"`
+	Action        string    `json:"action"`
+	Description   string    `json:"description"`
+	CreatedAt     time.Time `json:"createdAt"`
+	ExpiresAt     time.Time `json:"expiresAt"`
+	MessageCount  int       `json:"messageCount"`
+	State         string    `json:"state"`
+	UndoState     string    `json:"undoState"`
+	UndoAvailable bool      `json:"undoAvailable"`
 }
 
 type undoFolderDiagnostics interface {
@@ -79,6 +82,7 @@ func (a *App) undoLatest() (UndoLatestResult, error) {
 		if result.State == "undone" {
 			a.emitRuntimeEvent("undo:completed")
 		}
+		a.publishMailboxReconciliation(result.OperationID, result.State, result.Affected)
 		a.emitRuntimeEvent("undo:history-changed")
 		if result.State == "outcome_unknown" {
 			return mapped, errors.New("undo outcome is unknown; retry with the same operation key")
@@ -155,6 +159,7 @@ func (a *App) UndoOperation(operationID string) (string, error) {
 		if result == nil {
 			return "", errors.New("mailbox service returned no undo receipt")
 		}
+		a.publishMailboxReconciliation(result.OperationID, result.State, result.Affected)
 		if result.State == "undone" {
 			a.emitRuntimeEvent("undo:completed")
 		}
@@ -226,16 +231,19 @@ func (a *App) GetUndoHistory(limit int) []UndoHistoryEntry {
 		}
 		out := make([]UndoHistoryEntry, 0, len(rows))
 		for _, row := range rows {
-			if !row.UndoAvailable {
+			if !row.UndoAvailable && row.UndoState != "outcome_unknown" {
 				continue
 			}
 			out = append(out, UndoHistoryEntry{
-				OperationID:  row.OperationID,
-				Action:       string(row.Action),
-				Description:  string(row.Action),
-				CreatedAt:    parseUndoTime(row.CreatedAt),
-				ExpiresAt:    parseUndoTime(row.UndoExpiresAt),
-				MessageCount: row.MessageCount,
+				OperationID:   row.OperationID,
+				Action:        string(row.Action),
+				Description:   string(row.Action),
+				CreatedAt:     parseUndoTime(row.CreatedAt),
+				ExpiresAt:     parseUndoTime(row.UndoExpiresAt),
+				MessageCount:  row.MessageCount,
+				State:         row.State,
+				UndoState:     row.UndoState,
+				UndoAvailable: row.UndoAvailable,
 			})
 		}
 		return out
@@ -247,12 +255,13 @@ func (a *App) GetUndoHistory(limit int) []UndoHistoryEntry {
 	out := make([]UndoHistoryEntry, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, UndoHistoryEntry{
-			OperationID:  row.OperationID,
-			Action:       row.Action,
-			Description:  row.Description,
-			CreatedAt:    row.CreatedAt,
-			ExpiresAt:    row.ExpiresAt,
-			MessageCount: row.MessageCount,
+			OperationID:   row.OperationID,
+			Action:        row.Action,
+			Description:   row.Description,
+			CreatedAt:     row.CreatedAt,
+			ExpiresAt:     row.ExpiresAt,
+			MessageCount:  row.MessageCount,
+			UndoAvailable: true,
 		})
 	}
 	return out

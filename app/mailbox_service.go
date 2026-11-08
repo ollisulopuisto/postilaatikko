@@ -693,6 +693,9 @@ func (a *App) mutateResolvedAction(ctx context.Context, ids []string, action v1.
 		Destination: destination,
 		Target:      operations.Target{Kind: operations.TargetMatchedMessages, Messages: refs},
 	})
+	if response != nil {
+		a.publishMailboxReconciliation(response.Receipt.OperationID, string(response.Receipt.State), response.Affected)
+	}
 	if err == nil {
 		service.consumeActionRefs(ids)
 		return response, true, nil
@@ -701,6 +704,17 @@ func (a *App) mutateResolvedAction(ctx context.Context, ids []string, action v1.
 		service.consumeActionRefs(ids)
 	}
 	return response, true, err
+}
+
+func (a *App) publishMailboxReconciliation(operationID, state string, affected []v1.AffectedMessageRef) {
+	if state == "sent" || state == "undone" {
+		a.invalidateViewCounts()
+	}
+	a.emitRuntimeEvent("mail:reconciled", map[string]interface{}{
+		"operationId": operationID,
+		"state":       state,
+		"affected":    affected,
+	})
 }
 
 func (a *App) actionContext() context.Context {

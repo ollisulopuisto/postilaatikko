@@ -17,6 +17,9 @@
     createdAt: string
     expiresAt: string
     messageCount: number
+    state: string
+    undoState: string
+    undoAvailable: boolean
   }
 
   let { open = $bindable(false) } = $props<{ open?: boolean }>()
@@ -117,14 +120,18 @@
                   <span> · {remainingLabel(entry.expiresAt)}</span>
                 </p>
               </div>
-              <button type="button" class="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50" disabled={busyIds.includes(entry.operationId)} onclick={() => void undo(entry)}>
-                {#if busyIds.includes(entry.operationId)}
-                  <Icon icon="lucide:loader-circle" class="h-4 w-4 animate-spin" />
-                {:else}
-                  <Icon icon="lucide:undo-2" class="h-4 w-4" />
-                {/if}
-                {$_('undoHistory.undo')}
-              </button>
+              {#if entry.undoState === 'outcome_unknown'}
+                <span class="shrink-0 text-xs text-destructive" role="status">{$_('undoHistory.outcomeUnknown')}</span>
+              {:else}
+                <button type="button" class="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50" disabled={busyIds.includes(entry.operationId) || !entry.undoAvailable} onclick={() => void undo(entry)}>
+                  {#if busyIds.includes(entry.operationId)}
+                    <Icon icon="lucide:loader-circle" class="h-4 w-4 animate-spin" />
+                  {:else}
+                    <Icon icon="lucide:undo-2" class="h-4 w-4" />
+                  {/if}
+                  {$_('undoHistory.undo')}
+                </button>
+              {/if}
             </li>
           {/each}
         </ol>

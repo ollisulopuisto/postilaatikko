@@ -45,10 +45,16 @@ type ActionUndoRecord struct {
 
 // ActionUndoResult reports the durable result of an Undo request.
 type ActionUndoResult struct {
-	OperationID string     `json:"operationId"`
-	Action      ActionKind `json:"action"`
-	State       string     `json:"state"`
-	Replayed    bool       `json:"replayed,omitempty"`
+	OperationID string               `json:"operationId"`
+	Action      ActionKind           `json:"action"`
+	State       string               `json:"state"`
+	Affected    []AffectedMessageRef `json:"affected,omitempty"`
+	Replayed    bool                 `json:"replayed,omitempty"`
+}
+
+// ActionUndoAffectedRefReader reads current mailbox references after Undo.
+type ActionUndoAffectedRefReader interface {
+	ActionUndoAffectedRefs(context.Context, []byte) ([]AffectedMessageRef, error)
 }
 
 // ActionUndoStore owns durable action history and atomic undo claims.
@@ -147,7 +153,13 @@ func handleActionUndo(w http.ResponseWriter, r *http.Request, operationID string
 		return
 	}
 	if record.UndoState == "undone" || record.UndoState == "outcome_unknown" {
-		writeUndoResponse(w, r, http.StatusOK, ActionUndoResult{OperationID: record.OperationID, Action: record.Action, State: record.UndoState, Replayed: true})
+		result := ActionUndoResult{OperationID: record.OperationID, Action: record.Action, State: record.UndoState, Replayed: true}
+		if record.UndoState == "undone" {
+			if reader, ok := operations.(ActionUndoAffectedRefReader); ok {
+				result.Affected, _ = reader.ActionUndoAffectedRefs(r.Context(), record.Payload)
+			}
+		}
+		writeUndoResponse(w, r, http.StatusOK, result)
 		return
 	}
 	if err := operations.UndoAction(r.Context(), record.Action, record.Payload); err != nil {
@@ -162,7 +174,11 @@ func handleActionUndo(w http.ResponseWriter, r *http.Request, operationID string
 		writeHeaderError(w, r, http.StatusInternalServerError, CodeInternal, "Undo completed but its receipt could not be saved", true)
 		return
 	}
-	writeUndoResponse(w, r, http.StatusOK, ActionUndoResult{OperationID: record.OperationID, Action: record.Action, State: "undone"})
+	result := ActionUndoResult{OperationID: record.OperationID, Action: record.Action, State: "undone"}
+	if reader, ok := operations.(ActionUndoAffectedRefReader); ok {
+		result.Affected, _ = reader.ActionUndoAffectedRefs(r.Context(), record.Payload)
+	}
+	writeUndoResponse(w, r, http.StatusOK, result)
 }
 
 func completeActionUndo(store ActionUndoStore, operationID, state string) error {

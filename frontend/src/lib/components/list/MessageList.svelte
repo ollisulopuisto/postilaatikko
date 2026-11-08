@@ -610,6 +610,19 @@
       }
     })
 
+    EventsOn('mail:reconciled', (data: { state: string; affected?: { accountId: string; folderId: string }[] }) => {
+      if (data.state !== 'sent' && data.state !== 'undone') return
+      for (const ref of data.affected || []) {
+        const relevant = (isUnifiedView && isUnifiedSpecialFolder(ref.accountId, ref.folderId)) ||
+          (isVirtualFolderView && virtualFolderContains(ref.folderId)) ||
+          (!isUnifiedView && !isVirtualFolderView && accountId && folderId && ref.accountId === accountId && ref.folderId === folderId)
+        if (relevant) {
+          scheduleReload()
+          return
+        }
+      }
+    })
+
     // The backend refreshes cached virtual-folder indexes in the background;
     // reload an open view when its index changes.
     EventsOn('virtualfolder:cacheUpdated', (data: { virtualFolderId: string }) => {
@@ -748,6 +761,7 @@
   onDestroy(() => {
     void CancelMailSearch(virtualSearchSession)
     EventsOff('folder:synced')
+    EventsOff('mail:reconciled')
     EventsOff('messages:updated')
     stopReplyLaterListener?.()
     EventsOff('messages:readChanged')

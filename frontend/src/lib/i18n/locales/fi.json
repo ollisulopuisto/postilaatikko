@@ -14,6 +14,7 @@
     "keepContextVisible": "Pidä tämä sarake näkyvissä"
   },
   "undoHistory": {
+    "outcomeUnknown": "Tulos epäselvä · tarkista postilaatikko ennen uutta yritystä",
     "title": "Kumoushistoria",
     "description": "Viimeisimmät sähköpostitoiminnot, jotka voit vielä kumota. Cmd-Z Macissa (Ctrl-Z muilla alustoilla) kumoaa aina viimeisimmän toiminnon.",
     "loading": "Ladataan kumoushistoriaa…",

@@ -212,5 +212,28 @@ func (o *mailboxActionOperations) UndoAction(ctx context.Context, action v1.Acti
 	return nil
 }
 
+func (o *mailboxActionOperations) ActionUndoAffectedRefs(ctx context.Context, payload []byte) ([]v1.AffectedMessageRef, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	var snapshot mailboxActionUndoSnapshot
+	if err := json.Unmarshal(payload, &snapshot); err != nil {
+		return nil, fmt.Errorf("decode action undo snapshot: %w", err)
+	}
+	ids := make([]string, 0, len(snapshot.Entries))
+	for _, entry := range snapshot.Entries {
+		ids = append(ids, entry.MessageID)
+	}
+	messages, err := o.loadActionMessages(ids)
+	if err != nil {
+		return nil, err
+	}
+	refs := make([]v1.AffectedMessageRef, 0, len(messages))
+	for _, msg := range messages {
+		refs = append(refs, v1.AffectedMessageRef{AccountID: msg.AccountID, MessageID: msg.ID, FolderID: msg.FolderID})
+	}
+	return refs, nil
+}
+
 var _ v1.ActionUndoSnapshotter = (*mailboxActionOperations)(nil)
 var _ v1.ActionUndoOperations = (*mailboxActionOperations)(nil)
