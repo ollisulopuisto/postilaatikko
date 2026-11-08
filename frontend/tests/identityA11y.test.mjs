@@ -47,3 +47,10 @@ test('shared-mailbox actions independently disclose on keyboard focus and have n
   assertActionDisclosure(block, 'shared mailbox')
   assert.ok(block.includes("aria-label={$_('common.delete')}"))
 })
+
+// Wails Identity includes generated methods; object spread loses its prototype.
+test('default updates retain generated Identity instances', () => {
+  assert.ok(!source.includes('({ ...item, isDefault:'))
+  assert.ok(source.includes('for (const item of identities) item.isDefault = item.id === identity.id'))
+  assert.ok(source.includes('identities = [...identities]'))
+})
