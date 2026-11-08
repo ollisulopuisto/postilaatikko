@@ -87,6 +87,7 @@ Section
     SetOutPath $INSTDIR
 
     !insertmacro wails.files
+    File "..\..\bin\postilaatikko-helper.exe"
 
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"

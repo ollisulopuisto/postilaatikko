@@ -47,9 +47,11 @@ modules:
       # are versioned source configuration; no runtime credentials helper.
       # Tags: desktop (Wails runtime), webkit2_41 (GTK webkit API), production (embedded assets)
       - go build -mod=vendor -tags desktop,webkit2_41,production -ldflags "-w -s" -o eterno-mail
+      - CGO_ENABLED=0 go build -mod=vendor -trimpath -ldflags "-w -s" -o postilaatikko-helper ./cmd/postilaatikko-helper
 
       # Install binary
       - install -Dm755 eterno-mail /app/bin/eterno-mail
+      - install -Dm755 postilaatikko-helper /app/bin/postilaatikko-helper
 
       # Install desktop file with correct app ID
       - install -Dm644 build/linux/io.github.wesleiaqui.eternomail.desktop /app/share/applications/io.github.wesleiaqui.eternomail.desktop

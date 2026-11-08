@@ -60,8 +60,12 @@ modules:
         export PATH=$PATH:/run/build/aerion/go/bin
         /run/build/aerion/go/bin/wails build -tags webkit2_41,linux,production -o eterno-mail
 
+      # Build the sibling headless service helper from the same source revision.
+      - CGO_ENABLED=0 go build -mod=vendor -trimpath -ldflags "-w -s" -o postilaatikko-helper ./cmd/postilaatikko-helper
+
       # Install the binary
       - install -Dm755 build/bin/eterno-mail /app/bin/eterno-mail
+      - install -Dm755 postilaatikko-helper /app/bin/postilaatikko-helper
 
       # Install desktop file with correct app ID
       - install -Dm644 build/linux/io.github.wesleiaqui.eternomail.desktop /app/share/applications/io.github.wesleiaqui.eternomail.desktop

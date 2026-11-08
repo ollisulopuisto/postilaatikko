@@ -40,6 +40,13 @@ MODULE := github.com/hkdb/aerion
 # Wails build tags
 BUILD_TAGS := webkit2_41
 GO_WEBKIT_FLAGS := -tags=$(BUILD_TAGS)
+GOARCH ?= $(shell go env GOARCH)
+
+ifeq ($(OS),Windows_NT)
+HELPER_BINARY := build/bin/postilaatikko-helper.exe
+else
+HELPER_BINARY := build/bin/postilaatikko-helper
+endif
 
 # NOTE: AppImage build target has been removed due to webkit bundling incompatibility.
 # See archive/AppImage/README.md for details on what was tried and why it didn't work.
@@ -66,12 +73,20 @@ ifeq ($(UNAME_S),Darwin)
 	go build -trimpath -ldflags="-s -w" -o build/bin/postilaatikko.app/Contents/MacOS/postilaatikko-helper ./cmd/postilaatikko-helper
 	@echo "Ad-hoc signing postilaatikko.app (required for macOS notifications)..."
 	codesign --force --deep --sign - build/bin/postilaatikko.app
+else ifeq ($(UNAME_S),Linux)
+	@echo "Building the headless helper..."
+	go build -trimpath -ldflags="-s -w" -o build/bin/postilaatikko-helper ./cmd/postilaatikko-helper
+else ifeq ($(OS),Windows_NT)
+	@echo "Building the headless helper..."
+	go build -trimpath -ldflags="-s -w" -o build/bin/postilaatikko-helper.exe ./cmd/postilaatikko-helper
 endif
 
 # Build for Linux specifically
 build-linux:
 	@echo "Building Postilaatikko for Linux..."
 	wails build -tags $(BUILD_TAGS),linux,production
+	@echo "Building the headless helper..."
+	go build -trimpath -ldflags="-s -w" -o build/bin/postilaatikko-helper ./cmd/postilaatikko-helper
 
 # Build Flatpak (recommended for Linux distribution)
 flatpak:
@@ -86,6 +101,8 @@ flatpak-dev:
 # Run in development mode with hot reload
 dev:
 	@echo "Starting Postilaatikko in development mode..."
+	@mkdir -p build/bin
+	go build -o $(HELPER_BINARY) ./cmd/postilaatikko-helper
 	wails dev -tags $(BUILD_TAGS)
 
 # Run in development mode with Go's race detector enabled. Builds significantly
@@ -234,6 +251,8 @@ uninstall-darwin:
 
 # Build Windows installer (requires NSIS)
 build-windows-installer:
+	@echo "Building headless helper..."
+	go build -trimpath -ldflags="-s -w" -o build/bin/postilaatikko-helper.exe ./cmd/postilaatikko-helper
 	@echo "Building Windows installer..."
 	wails build -tags $(BUILD_TAGS) -nsis
 	@echo ""

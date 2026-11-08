@@ -25,6 +25,7 @@ modules:
     build-commands:
       # Install pre-built binary from host
       - install -Dm755 build/bin/eterno-mail /app/bin/eterno-mail
+      - install -Dm755 build/bin/postilaatikko-helper /app/bin/postilaatikko-helper
 
       # Install desktop file with correct app ID
       - install -Dm644 build/linux/io.github.wesleiaqui.eternomail.desktop /app/share/applications/io.github.wesleiaqui.eternomail.desktop

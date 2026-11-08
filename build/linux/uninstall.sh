@@ -121,6 +121,11 @@ if remove_file "$BIN_DIR/eterno-mail" "binary"; then
     REMOVED_COUNT=$((REMOVED_COUNT + 1))
 fi
 
+# Remove the bundled service helper
+if remove_file "$BIN_DIR/postilaatikko-helper" "service helper"; then
+    REMOVED_COUNT=$((REMOVED_COUNT + 1))
+fi
+
 # Remove new desktop file
 if remove_file "$APPS_DIR/io.github.wesleiaqui.eternomail.desktop" "desktop file"; then
     REMOVED_COUNT=$((REMOVED_COUNT + 1))

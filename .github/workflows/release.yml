@@ -90,6 +90,7 @@ jobs:
           # Create distribution tarball (complete package for manual installation)
           mkdir -p dist-package
           cp build/bin/eterno-mail-${{ github.ref_name }}-linux-* dist-package/eterno-mail
+          cp build/bin/postilaatikko-helper dist-package/postilaatikko-helper
           cp build/linux/install.sh dist-package/
           cp build/linux/uninstall.sh dist-package/
           cp build/linux/io.github.wesleiaqui.eternomail.desktop dist-package/io.github.wesleiaqui.eternomail.desktop

@@ -47,6 +47,12 @@ if [[ ! -f "eterno-mail" ]]; then
     exit 1
 fi
 
+if [[ ! -f "postilaatikko-helper" ]]; then
+    print_error "postilaatikko-helper binary not found in current directory"
+    echo "Please use a complete package that includes both the app and service helper"
+    exit 1
+fi
+
 # Check if desktop file exists
 if [[ ! -f "io.github.wesleiaqui.eternomail.desktop" ]]; then
     print_error "io.github.wesleiaqui.eternomail.desktop file not found in current directory"
@@ -134,6 +140,7 @@ done
 # Install binary
 print_info "Installing binary to $BIN_DIR..."
 run_cmd install -Dm755 eterno-mail "$BIN_DIR/eterno-mail"
+run_cmd install -Dm755 postilaatikko-helper "$BIN_DIR/postilaatikko-helper"
 
 # Install desktop file
 print_info "Installing desktop file to $APPS_DIR..."

@@ -54,6 +54,8 @@ jobs:
           TARGET_ARCH: ${{ matrix.arch }}
         run: |
           wails build -tags webkit2_41 -platform "darwin/${TARGET_ARCH}"
+          GOOS=darwin GOARCH="$TARGET_ARCH" go build -trimpath -ldflags="-s -w" \
+            -o build/bin/postilaatikko.app/Contents/MacOS/postilaatikko-helper ./cmd/postilaatikko-helper
           codesign --force --deep --sign - build/bin/postilaatikko.app
           codesign --verify --deep --strict build/bin/postilaatikko.app
       - name: Package DMG
