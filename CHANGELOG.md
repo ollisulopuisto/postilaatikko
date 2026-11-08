@@ -4,6 +4,8 @@
 
 ## Postilaatikko 2026.11.08.1
 
+- Preserve generated identity model instances when changing the default address, keeping keyboard focus without breaking packaged frontend type checks.
+
 - Keep macOS signing and notarization passwords out of process arguments, and make draft DMG checksum files directly verifiable beside the downloaded image.
 
 - Improve accessibility and keyboard navigation in Account Settings identity lists with account-specific native radio groups, focus retained after changing the default address, visible focus indicators, and focus disclosure for row action buttons. Failed default changes restore the selected address.
