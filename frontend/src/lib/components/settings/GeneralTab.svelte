@@ -9,6 +9,7 @@
   import { getSidebarWidth, setSidebarWidth } from '$lib/stores/uiState.svelte'
   import SidebarLayoutSettings from './SidebarLayoutSettings.svelte'
   import SidebarCardsSettings from './SidebarCardsSettings.svelte'
+  import MailboxServiceAccess from './MailboxServiceAccess.svelte'
 
   interface Props {
     messageListDensity: string
@@ -534,5 +535,8 @@
       </div>
     </div>
   </div>
+
+  <div class="border-t border-border"></div>
+  <MailboxServiceAccess />
 
 </div>

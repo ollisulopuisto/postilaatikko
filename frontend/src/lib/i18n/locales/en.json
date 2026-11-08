@@ -695,6 +695,14 @@
     "alwaysLoadImagesHelp": "Disables image blocking for all emails. Remote images will load automatically.",
     "alwaysLoadImagesWarningTitle": "Privacy & security risk",
     "alwaysLoadImagesWarningDescription": "Loading remote images automatically can expose your IP address, confirm when you read an email, and allow tracking by senders. Are you sure you want to disable image blocking?",
+    "mailboxService": "Local mailbox service",
+    "mailboxServiceHelp": "Allow the local helper to change mail flags and move messages for this desktop app. The mail.write permission also allows archive and trash actions. Enabling writes creates a new service credential and revokes the previous desktop credential.",
+    "mailboxServiceWritesEnabled": "Write access is enabled for this desktop.",
+    "mailboxServiceReadOnly": "The helper is connected with read-only access.",
+    "mailboxServiceEnableWrites": "Enable mailbox write access",
+    "mailboxServiceEnabling": "Enabling…",
+    "mailboxServiceEnableFailed": "Could not finish updating write access. Check the current access status and local service clients.",
+    "mailboxServiceUnavailable": "The local mailbox helper is unavailable.",
     "disable": "Disable"
   },
   "settingsAccounts": {

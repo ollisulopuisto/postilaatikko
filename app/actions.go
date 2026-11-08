@@ -12,6 +12,7 @@ import (
 	"time"
 
 	goImap "github.com/emersion/go-imap/v2"
+	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/folder"
 	"github.com/hkdb/aerion/internal/imap"
 	"github.com/hkdb/aerion/internal/logging"
@@ -144,10 +145,24 @@ func (a *App) setReadStatus(messageIDs []string, isRead bool) error {
 		byFolder[m.FolderID] = append(byFolder[m.FolderID], m)
 	}
 
-	// Update local DB first (local-first)
-	isReadPtr := &isRead
-	if err := a.messageStore.UpdateFlagsBatch(messageIDs, isReadPtr, nil); err != nil {
-		return fmt.Errorf("failed to update local flags: %w", err)
+	action := v1.ActionMarkUnread
+	if isRead {
+		action = v1.ActionMarkRead
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	serviceHandled, err := a.mutateFlagThroughMailboxService(ctx, messages, action)
+	if err != nil {
+		return err
+	}
+	if !serviceHandled {
+		// Update local DB first (local-first) when the helper is unavailable.
+		isReadPtr := &isRead
+		if err := a.messageStore.UpdateFlagsBatch(messageIDs, isReadPtr, nil); err != nil {
+			return fmt.Errorf("failed to update local flags: %w", err)
+		}
 	}
 
 	// Emit event for UI update with flag state
@@ -183,23 +198,25 @@ func (a *App) setReadStatus(messageIDs []string, isRead bool) error {
 	}()
 
 	// Sync to IMAP in background with retry
-	go func() {
-		defer recoverPanic("app.actions", "sync flags to IMAP")
-		for folderID, msgs := range byFolder {
-			var err error
-			for attempt := 1; attempt <= 3; attempt++ {
-				err = a.syncFlagsToIMAP(msgs, folderID, "read", isRead)
-				if err == nil {
-					break
+	if !serviceHandled {
+		go func() {
+			defer recoverPanic("app.actions", "sync flags to IMAP")
+			for folderID, msgs := range byFolder {
+				var err error
+				for attempt := 1; attempt <= 3; attempt++ {
+					err = a.syncFlagsToIMAP(msgs, folderID, "read", isRead)
+					if err == nil {
+						break
+					}
+					log.Warn().Err(err).Int("attempt", attempt).Str("folderID", folderID).Msg("Failed to sync read flags to IMAP, retrying...")
+					time.Sleep(time.Duration(attempt) * time.Second)
 				}
-				log.Warn().Err(err).Int("attempt", attempt).Str("folderID", folderID).Msg("Failed to sync read flags to IMAP, retrying...")
-				time.Sleep(time.Duration(attempt) * time.Second)
+				if err != nil {
+					log.Error().Err(err).Str("folderID", folderID).Msg("Failed to sync read flags to IMAP after 3 attempts")
+				}
 			}
-			if err != nil {
-				log.Error().Err(err).Str("folderID", folderID).Msg("Failed to sync read flags to IMAP after 3 attempts")
-			}
-		}
-	}()
+		}()
+	}
 
 	// Read-flag changes are intentionally NOT pushed onto the undo stack.
 	// The original design treated every mark-read/unread as undoable, but
@@ -243,10 +260,24 @@ func (a *App) setStarredStatus(messageIDs []string, isStarred bool) error {
 		byFolder[m.FolderID] = append(byFolder[m.FolderID], m)
 	}
 
-	// Update local DB first
-	isStarredPtr := &isStarred
-	if err := a.messageStore.UpdateFlagsBatch(messageIDs, nil, isStarredPtr); err != nil {
-		return fmt.Errorf("failed to update local flags: %w", err)
+	action := v1.ActionUnstar
+	if isStarred {
+		action = v1.ActionStar
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	serviceHandled, err := a.mutateFlagThroughMailboxService(ctx, messages, action)
+	if err != nil {
+		return err
+	}
+	if !serviceHandled {
+		// Update local DB first when the helper is unavailable.
+		isStarredPtr := &isStarred
+		if err := a.messageStore.UpdateFlagsBatch(messageIDs, nil, isStarredPtr); err != nil {
+			return fmt.Errorf("failed to update local flags: %w", err)
+		}
 	}
 
 	a.emitRuntimeEvent("messages:starredChanged", map[string]interface{}{
@@ -255,23 +286,25 @@ func (a *App) setStarredStatus(messageIDs []string, isStarred bool) error {
 	})
 
 	// Sync to IMAP in background with retry
-	go func() {
-		defer recoverPanic("app.actions", "sync star flags to IMAP")
-		for folderID, msgs := range byFolder {
-			var err error
-			for attempt := 1; attempt <= 3; attempt++ {
-				err = a.syncFlagsToIMAP(msgs, folderID, "starred", isStarred)
-				if err == nil {
-					break
+	if !serviceHandled {
+		go func() {
+			defer recoverPanic("app.actions", "sync star flags to IMAP")
+			for folderID, msgs := range byFolder {
+				var err error
+				for attempt := 1; attempt <= 3; attempt++ {
+					err = a.syncFlagsToIMAP(msgs, folderID, "starred", isStarred)
+					if err == nil {
+						break
+					}
+					log.Warn().Err(err).Int("attempt", attempt).Str("folderID", folderID).Msg("Failed to sync starred flags to IMAP, retrying...")
+					time.Sleep(time.Duration(attempt) * time.Second)
 				}
-				log.Warn().Err(err).Int("attempt", attempt).Str("folderID", folderID).Msg("Failed to sync starred flags to IMAP, retrying...")
-				time.Sleep(time.Duration(attempt) * time.Second)
+				if err != nil {
+					log.Error().Err(err).Str("folderID", folderID).Msg("Failed to sync starred flags to IMAP after 3 attempts")
+				}
 			}
-			if err != nil {
-				log.Error().Err(err).Str("folderID", folderID).Msg("Failed to sync starred flags to IMAP after 3 attempts")
-			}
-		}
-	}()
+		}()
+	}
 
 	// Star changes are intentionally NOT pushed onto the undo stack. Same
 	// rationale as setReadStatus: the cost of stack pollution outweighs

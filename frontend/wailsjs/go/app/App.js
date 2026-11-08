@@ -706,6 +706,10 @@ export function GetMailboxServiceStatus() {
   return window['go']['app']['App']['GetMailboxServiceStatus']();
 }
 
+export function EnableMailboxServiceWrites() {
+  return window['go']['app']['App']['EnableMailboxServiceWrites']();
+}
+
 export function GetMessageCount(arg1, arg2) {
   return window['go']['app']['App']['GetMessageCount'](arg1, arg2);
 }

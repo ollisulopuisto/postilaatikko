@@ -8,11 +8,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hkdb/aerion/internal/automation"
 	automationclient "github.com/hkdb/aerion/internal/automation/client"
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/database"
 	"github.com/hkdb/aerion/internal/keyring"
+	"github.com/hkdb/aerion/internal/message"
+	"github.com/hkdb/aerion/internal/operations"
 	"github.com/hkdb/aerion/internal/views"
 )
 
@@ -22,7 +25,10 @@ const (
 	mailboxServiceEndpoint   = "http://127.0.0.1:8029"
 )
 
-var errDesktopMailboxAuthorizationRequired = errors.New("desktop mailbox service authorization required")
+var (
+	errDesktopMailboxAuthorizationRequired      = errors.New("desktop mailbox service authorization required")
+	errDesktopMailboxWriteAuthorizationRequired = errors.New("desktop mailbox service needs explicit mail-write authorization")
+)
 
 type desktopMailboxCredential struct {
 	ClientID string `json:"clientId"`
@@ -32,11 +38,12 @@ type desktopMailboxCredential struct {
 // MailboxServiceStatus describes the local service connection without exposing
 // the bearer token or raw server responses.
 type MailboxServiceStatus struct {
-	Connected    bool     `json:"connected"`
-	APIVersion   string   `json:"apiVersion,omitempty"`
-	Capabilities []string `json:"capabilities,omitempty"`
-	ErrorCode    string   `json:"errorCode,omitempty"`
-	Message      string   `json:"message,omitempty"`
+	Connected       bool     `json:"connected"`
+	WriteAuthorized bool     `json:"writeAuthorized"`
+	APIVersion      string   `json:"apiVersion,omitempty"`
+	Capabilities    []string `json:"capabilities,omitempty"`
+	ErrorCode       string   `json:"errorCode,omitempty"`
+	Message         string   `json:"message,omitempty"`
 }
 
 type mailboxServiceConnector struct {
@@ -172,9 +179,10 @@ func (c *mailboxServiceConnector) status(ctx context.Context) MailboxServiceStat
 		granted = append(granted, string(capability))
 	}
 	return MailboxServiceStatus{
-		Connected:    true,
-		APIVersion:   capabilities.Version,
-		Capabilities: granted,
+		Connected:       true,
+		WriteAuthorized: hasCapability(capabilities.Capabilities, v1.CapabilityMailWrite),
+		APIVersion:      capabilities.Version,
+		Capabilities:    granted,
 	}
 }
 
@@ -240,6 +248,111 @@ func (c *mailboxServiceConnector) readThread(ctx context.Context, ref views.Thre
 	return client.ReadThread(ctx, v1.ThreadReadRequest{Ref: ref, Scope: scope})
 }
 
+func (c *mailboxServiceConnector) mutateAction(ctx context.Context, req v1.ActionRequest) (*v1.ActionResponse, error) {
+	client, err := c.getClient()
+	if err != nil {
+		return nil, err
+	}
+	return client.MutateAction(ctx, req, uuid.NewString())
+}
+
+func (c *mailboxServiceConnector) authorizeWrites(ctx context.Context) error {
+	client, err := c.getClient()
+	if err != nil {
+		return err
+	}
+	capabilities, err := client.GetCapabilities(ctx)
+	if err != nil {
+		return fmt.Errorf("check mailbox service capabilities: %w", err)
+	}
+	if capabilities == nil || capabilities.Version != v1.Version || !hasCapability(capabilities.Capabilities, v1.CapabilityMailRead) || !hasCapability(capabilities.Capabilities, v1.CapabilityMailBodyFetch) {
+		return errors.New("mailbox service read capabilities are unavailable")
+	}
+	if hasCapability(capabilities.Capabilities, v1.CapabilityMailWrite) {
+		return nil
+	}
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.credential == nil || c.db == nil || c.keyring == nil {
+		return errDesktopMailboxAuthorizationRequired
+	}
+	oldCredential := *c.credential
+	tokenStore := automation.NewSQLiteTokenStore(c.db)
+	oldGrant, err := tokenStore.GetGrant(oldCredential.Token)
+	if err != nil || oldGrant.ClientID != oldCredential.ClientID {
+		return errDesktopMailboxAuthorizationRequired
+	}
+	grant, err := tokenStore.RegisterClient(desktopMailboxClientName, []v1.Capability{
+		v1.CapabilityMailRead,
+		v1.CapabilityMailBodyFetch,
+		v1.CapabilityMailWrite,
+	})
+	if err != nil {
+		return fmt.Errorf("create write-enabled desktop grant: %w", err)
+	}
+	encoded, err := json.Marshal(desktopMailboxCredential{ClientID: grant.ClientID, Token: grant.Token})
+	if err != nil {
+		_ = tokenStore.RevokeClient(grant.ClientID)
+		return fmt.Errorf("encode write-enabled desktop grant: %w", err)
+	}
+	if err := c.keyring.SetSecret(desktopMailboxSecretName, string(encoded)); err != nil {
+		_ = tokenStore.RevokeClient(grant.ClientID)
+		return fmt.Errorf("save write-enabled desktop grant: %w", err)
+	}
+	if err := tokenStore.RevokeClient(oldCredential.ClientID); err != nil {
+		oldEncoded, marshalErr := json.Marshal(oldCredential)
+		if marshalErr == nil {
+			if restoreErr := c.keyring.SetSecret(desktopMailboxSecretName, string(oldEncoded)); restoreErr == nil {
+				_ = tokenStore.RevokeClient(grant.ClientID)
+				return fmt.Errorf("revoke previous desktop grant: %w", err)
+			}
+		}
+		// The replacement is already stored in the keyring. Keep the in-memory
+		// connector aligned with it if rollback cannot restore the old secret.
+		c.credential = &desktopMailboxCredential{ClientID: grant.ClientID, Token: grant.Token}
+		c.client = newMailboxAPIClient(grant.Token)
+		return fmt.Errorf("write access is enabled, but the previous read-only grant could not be revoked: %w", err)
+	}
+	c.credential = &desktopMailboxCredential{ClientID: grant.ClientID, Token: grant.Token}
+	c.client = newMailboxAPIClient(grant.Token)
+	return nil
+}
+
+func (a *App) mutateFlagThroughMailboxService(ctx context.Context, messages []*message.Message, action v1.ActionKind) (bool, error) {
+	if a.mailboxService == nil {
+		return false, nil
+	}
+	status := a.mailboxService.status(ctx)
+	if !status.Connected {
+		if status.ErrorCode == "service_unavailable" {
+			return false, nil
+		}
+		return false, fmt.Errorf("local mailbox service is unavailable for %s: %s", action, status.Message)
+	}
+	if !status.WriteAuthorized {
+		return false, errDesktopMailboxWriteAuthorizationRequired
+	}
+	refs := make([]operations.MessageRef, 0, len(messages))
+	for _, item := range messages {
+		if item == nil {
+			continue
+		}
+		refs = append(refs, operations.MessageRef{AccountID: item.AccountID, MessageID: item.ID})
+	}
+	if len(refs) == 0 {
+		return true, nil
+	}
+	_, err := a.mailboxService.mutateAction(ctx, v1.ActionRequest{
+		Action: action,
+		Target: operations.Target{Kind: operations.TargetMatchedMessages, Messages: refs},
+	})
+	if err != nil {
+		return true, fmt.Errorf("run %s through local mailbox service: %w", action, err)
+	}
+	return true, nil
+}
+
 func (c *mailboxServiceConnector) cancelSearch(sessionID string) {
 	if sessionID == "" {
 		return
@@ -263,4 +376,19 @@ func (a *App) GetMailboxServiceStatus() MailboxServiceStatus {
 		ctx = context.Background()
 	}
 	return a.mailboxService.status(ctx)
+}
+
+// EnableMailboxServiceWrites explicitly replaces the desktop's read-only service grant with one that can change mail flags.
+func (a *App) EnableMailboxServiceWrites() (MailboxServiceStatus, error) {
+	if a.mailboxService == nil {
+		return MailboxServiceStatus{ErrorCode: "service_unavailable", Message: "The local mailbox service is not reachable."}, errors.New("mailbox service is not initialized")
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := a.mailboxService.authorizeWrites(ctx); err != nil {
+		return a.mailboxService.status(ctx), err
+	}
+	return a.mailboxService.status(ctx), nil
 }

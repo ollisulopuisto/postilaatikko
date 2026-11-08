@@ -695,6 +695,14 @@
     "alwaysLoadImagesHelp": "Poistaa kuvien eston käytöstä kaikissa sähköposteissa. Etäkuvat ladataan automaattisesti.",
     "alwaysLoadImagesWarningTitle": "Yksityisyys- ja tietoturvariski",
     "alwaysLoadImagesWarningDescription": "Etäkuvien automaattinen lataaminen voi paljastaa IP-osoitteesi, vahvistaa sähköpostin lukemisen ja mahdollistaa lähettäjien suorittaman seurannan. Haluatko varmasti poistaa kuvien eston käytöstä?",
+    "mailboxService": "Paikallinen postipalvelu",
+    "mailboxServiceHelp": "Salli paikallisen apupalvelun muuttaa tämän työpöytäsovelluksen viestien luku- ja tähtilippuja sekä siirtää viestejä. mail.write-oikeus sallii myös arkistointi- ja roskakoritoiminnot. Käyttöönotto luo uuden palvelutunnisteen ja mitätöi aiemman työpöytätunnisteen.",
+    "mailboxServiceWritesEnabled": "Tällä työpöydällä on kirjoitusoikeus.",
+    "mailboxServiceReadOnly": "Apupalvelu on yhdistetty vain lukuoikeuksin.",
+    "mailboxServiceEnableWrites": "Ota postilaatikon kirjoitusoikeus käyttöön",
+    "mailboxServiceEnabling": "Otetaan käyttöön…",
+    "mailboxServiceEnableFailed": "Kirjoitusoikeuden päivitys jäi kesken. Tarkista käyttöoikeuden tila ja paikallisen palvelun asiakkaat.",
+    "mailboxServiceUnavailable": "Paikallinen postipalvelu ei ole käytettävissä.",
     "disable": "Poista käytöstä"
   },
   "settingsAccounts": {
