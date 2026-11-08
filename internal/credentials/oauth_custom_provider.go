@@ -145,9 +145,13 @@ func (s *Store) GetCustomOAuthProvider(accountID string) (CustomOAuthProvider, b
 // DeleteCustomOAuthProvider removes any stored custom provider config. Idempotent.
 func (s *Store) DeleteCustomOAuthProvider(accountID string) error {
 	if s.keyringEnabled {
-		s.deleteKeyringEntry(customOAuthProviderKeyringPrefix + accountID)
+		if err := s.deleteKeyringEntryStrict(customOAuthProviderKeyringPrefix + accountID); err != nil {
+			return fmt.Errorf("remove custom OAuth provider from keyring: %w", err)
+		}
 	}
-	s.clearCustomOAuthProviderDB(accountID)
+	if _, err := s.db.Exec(`DELETE FROM oauth_custom_providers WHERE account_id = ?`, accountID); err != nil {
+		return fmt.Errorf("delete custom OAuth provider fallback: %w", err)
+	}
 	return nil
 }
 

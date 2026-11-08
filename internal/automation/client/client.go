@@ -153,6 +153,12 @@ func (c *Client) UpdateAccount(ctx context.Context, accountID string, mutation v
 	return c.accountMutation(ctx, http.MethodPut, "/v1/accounts/"+url.PathEscape(accountID), mutation, idempotencyKey)
 }
 
+// SetAccountOAuthCredentials sends a one-time OAuth callback package to the helper.
+func (c *Client) SetAccountOAuthCredentials(ctx context.Context, accountID string, mutation v1.OAuthCredentialMutation, idempotencyKey string) error {
+	_, err := c.doRequest(ctx, http.MethodPost, "/v1/accounts/"+url.PathEscape(accountID)+"/oauth", mutation, idempotencyKey)
+	return err
+}
+
 func (c *Client) accountMutation(ctx context.Context, method, path string, mutation any, idempotencyKey string) (*v1.AccountSummary, error) {
 	bytes, err := c.doRequest(ctx, method, path, mutation, idempotencyKey)
 	if err != nil {

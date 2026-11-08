@@ -213,12 +213,23 @@ value is accepted only when its action is `replace`. Passwords are processed by
 the helper, excluded from responses and receipt records, and fingerprinted with
 a device-keyed HMAC for idempotency.
 
+`POST /v1/accounts/{accountId}/oauth` requires `account.manage` and an
+`Idempotency-Key`. Its one-time body carries `provider`, `accessToken`,
+`refreshToken`, `expiresAt`, granted `scopes`, optional `stableId`, and an
+optional `customProvider` definition (`authUrl`, `tokenUrl`, optional
+`userinfoEndpoint`, `scopes`, `clientId`, and `clientSecret`). It returns only
+an accepted acknowledgement. Tokens and custom client secrets are stored by
+the helper, omitted from receipts and logs, and excluded from account reads.
+Microsoft replacements are propagated to linked shared mailboxes before the
+helper acknowledges. A `credential_repair_required` error means compensation
+could not restore all previous values and requires operator repair.
+
 The current route families in v1 are:
 
 | Route family | Capability | Task |
 | --- | --- | --- |
 | `GET /v1/accounts`, `GET /v1/accounts/{accountId}`, `GET /v1/folders`, `GET /v1/views` | `mail.read` | UX-021 / UX-038 |
-| `POST /v1/accounts`, `PUT /v1/accounts/{accountId}`, `DELETE /v1/accounts/{accountId}`, `PATCH /v1/accounts/{accountId}/enabled`, `PUT /v1/accounts/order`, `POST /v1/accounts/shared-mailboxes` | `account.manage` | HOSTED-SERVER-035 / -036 |
+| `POST /v1/accounts`, `PUT /v1/accounts/{accountId}`, `DELETE /v1/accounts/{accountId}`, `PATCH /v1/accounts/{accountId}/enabled`, `PUT /v1/accounts/order`, `POST /v1/accounts/shared-mailboxes`, `POST /v1/accounts/{accountId}/oauth` | `account.manage` | HOSTED-SERVER-035 / -036 / -037 |
 | `POST /v1/search`, `POST /v1/threads/read`, `POST /v1/messages/body` | `mail.read`; explicit fetch also needs `mail.body.fetch` | UX-021 |
 | `POST /v1/messages/attachments/list`, `POST /v1/messages/attachments/read` | `mail.attachment.read` | UX-021 |
 | `/v1/drafts` | `draft.read`, `draft.write` | UX-037 |

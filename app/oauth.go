@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/hkdb/aerion/internal/account"
+	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/credentials"
 	"github.com/hkdb/aerion/internal/imap"
 	"github.com/hkdb/aerion/internal/logging"
@@ -133,6 +134,31 @@ func (a *App) persistOAuthStableID(accountID string, tokens *oauth2.TokenRespons
 	}
 }
 
+func oauthCredentialMutation(provider string, pending *oauth2.TokenResponse, scopes []string, custom *oauth2.ProviderConfig) v1.OAuthCredentialMutation {
+	if pending == nil {
+		return v1.OAuthCredentialMutation{}
+	}
+	mutation := v1.OAuthCredentialMutation{
+		Provider: provider, AccessToken: pending.AccessToken, RefreshToken: pending.RefreshToken,
+		ExpiresAt: time.Now().Add(time.Duration(pending.ExpiresIn) * time.Second),
+		Scopes:    oauth2.GrantedScopes(pending, scopes),
+		StableID:  oauth2.ExtractStableSubjectFromIDToken(pending.IDToken),
+	}
+	if custom != nil {
+		mutation.Custom = &v1.CustomOAuthProvider{
+			AuthURL: custom.AuthURL, TokenURL: custom.TokenURL, UserinfoEndpoint: custom.UserinfoEndpoint,
+			Scopes: append([]string(nil), custom.Scopes...), ClientID: custom.ClientID, ClientSecret: custom.ClientSecret,
+		}
+	}
+	return mutation
+}
+
+func clearOAuthMutation(mutation *v1.OAuthCredentialMutation) {
+	if mutation != nil {
+		mutation.ClearSecrets()
+	}
+}
+
 func (a *App) CompleteOAuthAccountSetup(provider, email, accountName, displayName, color string) (*account.Account, error) {
 	log := logging.WithComponent("app.oauth")
 
@@ -202,8 +228,16 @@ func (a *App) CompleteOAuthAccountSetup(provider, email, accountName, displayNam
 		return nil, fmt.Errorf("unsupported OAuth provider: %s", provider)
 	}
 
-	// Create the account
-	acc, err := a.accountStore.Create(&config)
+	serviceClient, useService, err := a.accountServiceClient(a.accountContext(), true)
+	if err != nil {
+		return nil, err
+	}
+	var acc *account.Account
+	if useService {
+		acc, err = a.AddAccount(config)
+	} else {
+		acc, err = a.accountStore.Create(&config)
+	}
 	if err != nil {
 		log.Error().Err(err).Str("email", logging.RedactEmail(email)).Str("provider", provider).Msg("Failed to create account")
 		return nil, fmt.Errorf("failed to create account: %w", err)
@@ -220,6 +254,7 @@ func (a *App) CompleteOAuthAccountSetup(provider, email, accountName, displayNam
 		ExpiresAt:    expiresAt,
 		Scopes:       oauth2.GrantedScopes(a.pendingOAuthTokens, providerConfig.Scopes),
 	}
+	defer func() { tokens.AccessToken, tokens.RefreshToken = "", "" }()
 
 	log.Debug().
 		Str("accountID", acc.ID).
@@ -230,10 +265,23 @@ func (a *App) CompleteOAuthAccountSetup(provider, email, accountName, displayNam
 		Strs("scopes", tokens.Scopes).
 		Msg("Saving OAuth tokens")
 
-	if err := a.credStore.SetOAuthTokens(acc.ID, tokens); err != nil {
+	mutation := oauthCredentialMutation(provider, a.pendingOAuthTokens, tokens.Scopes, nil)
+	defer clearOAuthMutation(&mutation)
+	if useService {
+		err = serviceClient.SetAccountOAuthCredentials(a.accountContext(), acc.ID, mutation, accountMutationKey())
+	} else {
+		err = a.credStore.SetOAuthTokens(acc.ID, tokens)
+	}
+	if err != nil {
 		// Rollback: delete the account if we can't save tokens
 		log.Error().Err(err).Str("accountID", acc.ID).Msg("Failed to save OAuth tokens, rolling back account creation")
-		if delErr := a.accountStore.Delete(acc.ID); delErr != nil {
+		var delErr error
+		if useService {
+			delErr = serviceClient.DeleteAccount(a.accountContext(), acc.ID, accountMutationKey())
+		} else {
+			delErr = a.accountStore.Delete(acc.ID)
+		}
+		if delErr != nil {
 			log.Warn().Err(delErr).Str("accountID", acc.ID).Msg("Failed to roll back account after token save failure")
 		}
 		return nil, fmt.Errorf("failed to save OAuth tokens: %w", err)
@@ -242,7 +290,9 @@ func (a *App) CompleteOAuthAccountSetup(provider, email, accountName, displayNam
 	log.Debug().Str("accountID", acc.ID).Msg("OAuth tokens saved successfully")
 
 	// Capture the stable account identity (oid+tid) for incremental-consent validation.
-	a.persistOAuthStableID(acc.ID, a.pendingOAuthTokens)
+	if !useService {
+		a.persistOAuthStableID(acc.ID, a.pendingOAuthTokens)
+	}
 
 	// Clear pending tokens
 	a.pendingOAuthTokens.Clear()
@@ -392,7 +442,16 @@ func (a *App) CompleteCustomOAuthAccountSetup(config account.AccountConfig) (*ac
 
 	config.AuthType = account.AuthOAuth2
 
-	acc, err := a.accountStore.Create(&config)
+	serviceClient, useService, err := a.accountServiceClient(a.accountContext(), true)
+	if err != nil {
+		return nil, err
+	}
+	var acc *account.Account
+	if useService {
+		acc, err = a.AddAccount(config)
+	} else {
+		acc, err = a.accountStore.Create(&config)
+	}
 	if err != nil {
 		log.Error().Err(err).Str("email", logging.RedactEmail(config.Email)).Msg("Failed to create account")
 		return nil, fmt.Errorf("failed to create account: %w", err)
@@ -406,9 +465,23 @@ func (a *App) CompleteCustomOAuthAccountSetup(config account.AccountConfig) (*ac
 		ExpiresAt:    expiresAt,
 		Scopes:       provider.Scopes,
 	}
-	if err := a.credStore.SetOAuthTokens(acc.ID, tokens); err != nil {
+	defer func() { tokens.AccessToken, tokens.RefreshToken = "", "" }()
+	mutation := oauthCredentialMutation(customOAuthProviderName, a.pendingOAuthTokens, provider.Scopes, provider)
+	defer clearOAuthMutation(&mutation)
+	if useService {
+		err = serviceClient.SetAccountOAuthCredentials(a.accountContext(), acc.ID, mutation, accountMutationKey())
+	} else {
+		err = a.credStore.SetOAuthTokens(acc.ID, tokens)
+	}
+	if err != nil {
 		log.Error().Err(err).Str("accountID", acc.ID).Msg("Failed to save OAuth tokens, rolling back account creation")
-		if delErr := a.accountStore.Delete(acc.ID); delErr != nil {
+		var delErr error
+		if useService {
+			delErr = serviceClient.DeleteAccount(a.accountContext(), acc.ID, accountMutationKey())
+		} else {
+			delErr = a.accountStore.Delete(acc.ID)
+		}
+		if delErr != nil {
 			log.Warn().Err(delErr).Str("accountID", acc.ID).Msg("Failed to roll back account after token save failure")
 		}
 		return nil, fmt.Errorf("failed to save OAuth tokens: %w", err)
@@ -424,21 +497,36 @@ func (a *App) CompleteCustomOAuthAccountSetup(config account.AccountConfig) (*ac
 		ClientID:         provider.ClientID,
 		ClientSecret:     provider.ClientSecret,
 	}
-	if err := a.credStore.SetCustomOAuthProvider(acc.ID, customCfg); err != nil {
+	defer func() { customCfg.ClientSecret = "" }()
+	if !useService {
+		err = a.credStore.SetCustomOAuthProvider(acc.ID, customCfg)
+	}
+	if err != nil {
 		log.Error().Err(err).Str("accountID", acc.ID).Msg("Failed to save custom OAuth provider, rolling back account creation")
-		_ = a.credStore.DeleteAllCredentials(acc.ID)
-		if delErr := a.accountStore.Delete(acc.ID); delErr != nil {
+		if !useService {
+			_ = a.credStore.DeleteAllCredentials(acc.ID)
+		}
+		var delErr error
+		if useService {
+			delErr = serviceClient.DeleteAccount(a.accountContext(), acc.ID, accountMutationKey())
+		} else {
+			delErr = a.accountStore.Delete(acc.ID)
+		}
+		if delErr != nil {
 			log.Warn().Err(delErr).Str("accountID", acc.ID).Msg("Failed to roll back account after provider save failure")
 		}
 		return nil, fmt.Errorf("failed to save custom OAuth provider: %w", err)
 	}
 
 	// Capture the stable account identity (oid+tid) for incremental-consent validation.
-	a.persistOAuthStableID(acc.ID, a.pendingOAuthTokens)
+	if !useService {
+		a.persistOAuthStableID(acc.ID, a.pendingOAuthTokens)
+	}
 
 	a.pendingOAuthTokens.Clear()
 	a.pendingOAuthTokens = nil
 	a.pendingOAuthEmail = ""
+	provider.ClientSecret = ""
 	a.pendingCustomProvider = nil
 
 	a.updateDBConnectionPool()
@@ -470,6 +558,7 @@ func (a *App) SavePendingOAuthTokens(accountID string) error {
 	// static config; custom ("bring your own app") providers store them per account,
 	// since GetProvider("custom") fails by design.
 	var scopes []string
+	var customConfig *credentials.CustomOAuthProvider
 	switch provider {
 	case customOAuthProviderName:
 		cfg, ok, cerr := a.credStore.GetCustomOAuthProvider(accountID)
@@ -477,6 +566,7 @@ func (a *App) SavePendingOAuthTokens(accountID string) error {
 			return fmt.Errorf("could not load custom OAuth provider for account")
 		}
 		scopes = cfg.Scopes
+		customConfig = &cfg
 	default:
 		providerConfig, perr := oauth2.GetProvider(provider)
 		if perr != nil {
@@ -495,20 +585,42 @@ func (a *App) SavePendingOAuthTokens(accountID string) error {
 		ExpiresAt:    expiresAt,
 		Scopes:       oauth2.GrantedScopes(a.pendingOAuthTokens, scopes),
 	}
-
-	if err := a.credStore.SetOAuthTokens(accountID, tokens); err != nil {
+	defer func() { tokens.AccessToken, tokens.RefreshToken = "", "" }()
+	serviceClient, useService, err := a.accountServiceClient(a.accountContext(), true)
+	if err != nil {
+		return err
+	}
+	mutation := oauthCredentialMutation(provider, a.pendingOAuthTokens, scopes, nil)
+	defer clearOAuthMutation(&mutation)
+	if customConfig != nil {
+		defer func() { customConfig.ClientSecret = "" }()
+		mutation.Custom = &v1.CustomOAuthProvider{
+			AuthURL: customConfig.AuthURL, TokenURL: customConfig.TokenURL, UserinfoEndpoint: customConfig.UserinfoEndpoint,
+			Scopes: append([]string(nil), customConfig.Scopes...), ClientID: customConfig.ClientID, ClientSecret: customConfig.ClientSecret,
+		}
+	}
+	if useService {
+		err = serviceClient.SetAccountOAuthCredentials(a.accountContext(), accountID, mutation, accountMutationKey())
+	} else {
+		err = a.credStore.SetOAuthTokens(accountID, tokens)
+	}
+	if err != nil {
 		return fmt.Errorf("failed to store OAuth tokens: %w", err)
 	}
 
 	// Re-capture the stable account identity (oid+tid) so accounts added before
 	// this existed self-heal on re-authorize (#337/#328).
-	a.persistOAuthStableID(accountID, a.pendingOAuthTokens)
+	if !useService {
+		a.persistOAuthStableID(accountID, a.pendingOAuthTokens)
+	}
 
 	// Propagate new tokens to any shared mailboxes linked to this account
-	sharedMailboxes, _ := a.accountStore.ListBySharedMailboxParent(accountID)
-	for _, sm := range sharedMailboxes {
-		if smErr := a.credStore.SetOAuthTokens(sm.ID, tokens); smErr != nil {
-			log.Warn().Err(smErr).Str("sharedID", sm.ID).Msg("Failed to propagate tokens to shared mailbox")
+	if !useService {
+		sharedMailboxes, _ := a.accountStore.ListBySharedMailboxParent(accountID)
+		for _, sm := range sharedMailboxes {
+			if smErr := a.credStore.SetOAuthTokens(sm.ID, tokens); smErr != nil {
+				log.Warn().Err(smErr).Str("sharedID", sm.ID).Msg("Failed to propagate tokens to shared mailbox")
+			}
 		}
 	}
 
