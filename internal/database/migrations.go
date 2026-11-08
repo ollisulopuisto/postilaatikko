@@ -1777,4 +1777,17 @@ var migrations = []Migration{
 	CREATE INDEX IF NOT EXISTS idx_automation_clients_created
 	  ON automation_clients(created_at, client_id);
 	`},
+	{Version: 68, SQL: `
+	-- Account mutations store no request bodies or credentials. The raw key is a
+	-- caller-generated operation identifier; the fingerprint and public result
+	-- make retries replayable without retaining incoming configuration.
+	CREATE TABLE IF NOT EXISTS account_api_idempotency (
+	  idempotency_key TEXT PRIMARY KEY,
+	  request_hash TEXT NOT NULL,
+	  response_status INTEGER NOT NULL DEFAULT 0,
+	  response_json BLOB,
+	  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+	  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+	);
+	`},
 }

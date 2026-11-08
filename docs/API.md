@@ -22,6 +22,16 @@ it the API reads the existing local mailbox database and bodies remain on demand
 `GET /v1/capabilities`
 Returns the contract version and the caller's granted capabilities.
 
+`GET /v1/accounts` and `GET /v1/accounts/{accountId}` return non-secret account
+configuration for settings and account-aware clients. Passwords, OAuth tokens,
+and custom OAuth client secrets are never included.
+
+Account create/update/delete, enable/disable, ordering, and Microsoft shared
+mailbox setup require `account.manage`. These requests use the routes listed in
+`docs/api/agent-v1.md` and require an `Idempotency-Key`. Account mutations store
+only a request fingerprint and the public response for replay; credentials must
+be configured through the separate credential handoff flow.
+
 ### 2. Accounts & Folders
 - `GET /v1/accounts` (Requires `mail.read`)
 - `GET /v1/folders?accountId={id}` (Requires `mail.read`)

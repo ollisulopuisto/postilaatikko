@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/hkdb/aerion/internal/account"
@@ -178,6 +179,21 @@ func (h *ReadHandler) mountCatalogRoutes(mux *http.ServeMux, requireCap func(htt
 		}
 		h.handleAccounts(w, r)
 	})
+	mux.HandleFunc("/v1/accounts/", func(w http.ResponseWriter, r *http.Request) {
+		if !requireCap(w, r, CapabilityMailRead) {
+			return
+		}
+		if r.Method != http.MethodGet {
+			h.writeError(w, r, http.StatusMethodNotAllowed, CodeInvalidRequest, "Method not allowed", false)
+			return
+		}
+		accountID := strings.TrimPrefix(r.URL.Path, "/v1/accounts/")
+		if accountID == "" || strings.Contains(accountID, "/") {
+			h.writeError(w, r, http.StatusBadRequest, CodeInvalidRequest, "Account ID is required", false)
+			return
+		}
+		h.handleAccount(w, r, accountID)
+	})
 
 	mux.HandleFunc("/v1/folders", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailRead) {
@@ -202,11 +218,76 @@ func (h *ReadHandler) mountCatalogRoutes(mux *http.ServeMux, requireCap func(htt
 	})
 }
 
-// AccountSummary contains safe account metadata for agent consumption.
+// AccountSummary contains non-secret account configuration for settings and agents.
 type AccountSummary struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
-	Name  string `json:"name"`
+	ID                       string                `json:"id"`
+	Email                    string                `json:"email"`
+	Name                     string                `json:"name"`
+	SharedMailboxParentID    string                `json:"sharedMailboxParentId,omitempty"`
+	IMAPHost                 string                `json:"imapHost"`
+	IMAPPort                 int                   `json:"imapPort"`
+	IMAPSecurity             account.SecurityType  `json:"imapSecurity"`
+	IMAPAuthMechanism        account.AuthMechanism `json:"imapAuthMechanism"`
+	SMTPHost                 string                `json:"smtpHost"`
+	SMTPPort                 int                   `json:"smtpPort"`
+	SMTPSecurity             account.SecurityType  `json:"smtpSecurity"`
+	SMTPAuthMechanism        account.AuthMechanism `json:"smtpAuthMechanism"`
+	NoOutgoingServer         bool                  `json:"noOutgoingServer"`
+	SMTPUsername             string                `json:"smtpUsername"`
+	ReplyForwardIdentityID   string                `json:"replyForwardIdentityId"`
+	AuthType                 account.AuthType      `json:"authType"`
+	Username                 string                `json:"username"`
+	Enabled                  bool                  `json:"enabled"`
+	OrderIndex               int                   `json:"orderIndex"`
+	Color                    string                `json:"color"`
+	SyncPeriodDays           int                   `json:"syncPeriodDays"`
+	SyncInterval             int                   `json:"syncInterval"`
+	SyncAllFolders           bool                  `json:"syncAllFolders"`
+	SyncFoldersEnabled       bool                  `json:"syncFoldersEnabled"`
+	ReadReceiptRequestPolicy string                `json:"readReceiptRequestPolicy"`
+	SentFolderPath           string                `json:"sentFolderPath,omitempty"`
+	DraftsFolderPath         string                `json:"draftsFolderPath,omitempty"`
+	TrashFolderPath          string                `json:"trashFolderPath,omitempty"`
+	SpamFolderPath           string                `json:"spamFolderPath,omitempty"`
+	ArchiveFolderPath        string                `json:"archiveFolderPath,omitempty"`
+	AllMailFolderPath        string                `json:"allMailFolderPath,omitempty"`
+	StarredFolderPath        string                `json:"starredFolderPath,omitempty"`
+	CreatedAt                time.Time             `json:"createdAt"`
+	UpdatedAt                time.Time             `json:"updatedAt"`
+}
+
+// ToAccount maps the public non-secret account representation to the desktop's existing model.
+func (a AccountSummary) ToAccount() *account.Account {
+	return &account.Account{
+		ID: a.ID, Email: a.Email, Name: a.Name, SharedMailboxParentID: a.SharedMailboxParentID,
+		IMAPHost: a.IMAPHost, IMAPPort: a.IMAPPort, IMAPSecurity: a.IMAPSecurity, IMAPAuthMechanism: a.IMAPAuthMechanism,
+		SMTPHost: a.SMTPHost, SMTPPort: a.SMTPPort, SMTPSecurity: a.SMTPSecurity, SMTPAuthMechanism: a.SMTPAuthMechanism,
+		NoOutgoingServer: a.NoOutgoingServer, SMTPUsername: a.SMTPUsername, ReplyForwardIdentityID: a.ReplyForwardIdentityID,
+		AuthType: a.AuthType, Username: a.Username, Enabled: a.Enabled, OrderIndex: a.OrderIndex, Color: a.Color,
+		SyncPeriodDays: a.SyncPeriodDays, SyncInterval: a.SyncInterval, SyncAllFolders: a.SyncAllFolders,
+		SyncFoldersEnabled: a.SyncFoldersEnabled, ReadReceiptRequestPolicy: a.ReadReceiptRequestPolicy,
+		SentFolderPath: a.SentFolderPath, DraftsFolderPath: a.DraftsFolderPath, TrashFolderPath: a.TrashFolderPath,
+		SpamFolderPath: a.SpamFolderPath, ArchiveFolderPath: a.ArchiveFolderPath, AllMailFolderPath: a.AllMailFolderPath,
+		StarredFolderPath: a.StarredFolderPath, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
+	}
+}
+
+func accountSummaryFrom(acc *account.Account) AccountSummary {
+	if acc == nil {
+		return AccountSummary{}
+	}
+	return AccountSummary{
+		ID: acc.ID, Email: acc.Email, Name: acc.Name, SharedMailboxParentID: acc.SharedMailboxParentID,
+		IMAPHost: acc.IMAPHost, IMAPPort: acc.IMAPPort, IMAPSecurity: acc.IMAPSecurity, IMAPAuthMechanism: acc.IMAPAuthMechanism,
+		SMTPHost: acc.SMTPHost, SMTPPort: acc.SMTPPort, SMTPSecurity: acc.SMTPSecurity, SMTPAuthMechanism: acc.SMTPAuthMechanism,
+		NoOutgoingServer: acc.NoOutgoingServer, SMTPUsername: acc.SMTPUsername, ReplyForwardIdentityID: acc.ReplyForwardIdentityID,
+		AuthType: acc.AuthType, Username: acc.Username, Enabled: acc.Enabled, OrderIndex: acc.OrderIndex, Color: acc.Color,
+		SyncPeriodDays: acc.SyncPeriodDays, SyncInterval: acc.SyncInterval, SyncAllFolders: acc.SyncAllFolders,
+		SyncFoldersEnabled: acc.SyncFoldersEnabled, ReadReceiptRequestPolicy: acc.ReadReceiptRequestPolicy,
+		SentFolderPath: acc.SentFolderPath, DraftsFolderPath: acc.DraftsFolderPath, TrashFolderPath: acc.TrashFolderPath,
+		SpamFolderPath: acc.SpamFolderPath, ArchiveFolderPath: acc.ArchiveFolderPath, AllMailFolderPath: acc.AllMailFolderPath,
+		StarredFolderPath: acc.StarredFolderPath, CreatedAt: acc.CreatedAt, UpdatedAt: acc.UpdatedAt,
+	}
 }
 
 func (h *ReadHandler) handleAccounts(w http.ResponseWriter, r *http.Request) {
@@ -218,14 +299,25 @@ func (h *ReadHandler) handleAccounts(w http.ResponseWriter, r *http.Request) {
 
 	summaries := make([]AccountSummary, 0, len(accounts))
 	for _, acc := range accounts {
-		summaries = append(summaries, AccountSummary{
-			ID:    acc.ID,
-			Email: acc.Email,
-			Name:  acc.Name,
-		})
+		summaries = append(summaries, accountSummaryFrom(acc))
 	}
 
 	h.writeResponse(w, r, http.StatusOK, summaries, nil)
+}
+
+func (h *ReadHandler) handleAccount(w http.ResponseWriter, r *http.Request, accountID string) {
+	accounts, err := h.catalog.GetAccounts()
+	if err != nil {
+		h.writeError(w, r, http.StatusInternalServerError, CodeInternal, "Failed to load account", true)
+		return
+	}
+	for _, acc := range accounts {
+		if acc.ID == accountID {
+			h.writeResponse(w, r, http.StatusOK, accountSummaryFrom(acc), nil)
+			return
+		}
+	}
+	h.writeError(w, r, http.StatusNotFound, CodeNotFound, "Account not found", false)
 }
 
 // FolderSummary contains safe folder metadata.

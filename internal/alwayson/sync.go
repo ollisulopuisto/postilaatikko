@@ -7,12 +7,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/mail"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/hkdb/aerion/internal/account"
+	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/database"
 	"github.com/hkdb/aerion/internal/email/replycontent"
 	"github.com/hkdb/aerion/internal/folder"
@@ -40,42 +43,46 @@ type GmailTriageLabeler func(context.Context, string, string, string, bool) erro
 // scheduler. The caller starts it under the independently supervised helper's
 // context and closes it before releasing the credential provider.
 type SyncRuntime struct {
-	db                *database.DB
-	accounts          *account.Store
-	messages          *message.Store
-	pool              *imap.Pool
-	scheduler         *mailSync.Scheduler
-	mailService       *mailservice.Service
-	syncEngine        *mailSync.Engine
-	replyContent      *replycontent.Service
-	attachments       *message.AttachmentStore
-	virtualFolders    *virtualfolder.Store
-	replyLater        *replylater.Store
-	gmailTriage       GmailTriageLabeler
-	triage            *triage.Store
-	schemaOwner       *syncowner.Lock
-	filterOp          mailmove.FilterOperation
-	filterer          *mailmove.IMAPFilterMover
-	gmailPush         *GmailPushConfig
-	filterJobs        *mailfilter.JobStore
-	rules             *mailfilter.Store
-	folders           *folder.Store
-	filterWake        chan struct{}
-	filterStop        chan struct{}
-	syncLockPath      string
-	ctxMu             sync.RWMutex
-	ctx               context.Context
-	cancel            context.CancelFunc
-	filterCancel      context.CancelFunc
-	filterWG          sync.WaitGroup
-	lifecycleWG       sync.WaitGroup
-	maintenanceWG     sync.WaitGroup
-	maintenanceCancel context.CancelFunc
-	started           bool
-	maintenanceOnce   sync.Once
-	filterStopOnce    sync.Once
-	startOnce         sync.Once
-	closeOnce         sync.Once
+	db                          *database.DB
+	accounts                    *account.Store
+	messages                    *message.Store
+	pool                        *imap.Pool
+	scheduler                   *mailSync.Scheduler
+	mailService                 *mailservice.Service
+	syncEngine                  *mailSync.Engine
+	replyContent                *replycontent.Service
+	attachments                 *message.AttachmentStore
+	virtualFolders              *virtualfolder.Store
+	replyLater                  *replylater.Store
+	gmailTriage                 GmailTriageLabeler
+	triage                      *triage.Store
+	schemaOwner                 *syncowner.Lock
+	filterOp                    mailmove.FilterOperation
+	filterer                    *mailmove.IMAPFilterMover
+	gmailPush                   *GmailPushConfig
+	filterJobs                  *mailfilter.JobStore
+	rules                       *mailfilter.Store
+	folders                     *folder.Store
+	filterWake                  chan struct{}
+	filterStop                  chan struct{}
+	syncLockPath                string
+	ctxMu                       sync.RWMutex
+	ctx                         context.Context
+	cancel                      context.CancelFunc
+	filterCancel                context.CancelFunc
+	filterWG                    sync.WaitGroup
+	lifecycleWG                 sync.WaitGroup
+	maintenanceWG               sync.WaitGroup
+	maintenanceCancel           context.CancelFunc
+	started                     bool
+	maintenanceOnce             sync.Once
+	filterStopOnce              sync.Once
+	startOnce                   sync.Once
+	closeOnce                   sync.Once
+	accountMutationMu           sync.Mutex
+	credentialCleanup           func(string) error
+	sharedMailboxValidate       func(context.Context, string, string) error
+	sharedMailboxCredentialCopy func(string, string) error
 }
 
 // OpenSyncRuntime opens an existing Postilaatikko data directory. It refuses
@@ -188,6 +195,292 @@ func (r *SyncRuntime) SetGmailTriageLabeler(labeler GmailTriageLabeler) error {
 	}
 	r.gmailTriage = labeler
 	return nil
+}
+
+// SetAccountCredentialLifecycle wires helper-local credential cleanup and shared-mailbox setup before runtime start.
+func (r *SyncRuntime) SetAccountCredentialLifecycle(cleanup func(string) error, validateShared func(context.Context, string, string) error, copyShared func(string, string) error) error {
+	if r == nil || cleanup == nil || validateShared == nil || copyShared == nil {
+		return errors.New("account credential lifecycle dependencies are required")
+	}
+	r.ctxMu.Lock()
+	defer r.ctxMu.Unlock()
+	if r.started {
+		return errors.New("cannot configure account credential lifecycle after runtime start")
+	}
+	r.credentialCleanup = cleanup
+	r.sharedMailboxValidate = validateShared
+	r.sharedMailboxCredentialCopy = copyShared
+	return nil
+}
+
+// CreateAccount adds non-secret account configuration to the helper-owned catalog.
+func (r *SyncRuntime) CreateAccount(mutation v1.AccountMutation) (*account.Account, error) {
+	if r == nil || r.accounts == nil {
+		return nil, errors.New("always-on runtime is not open")
+	}
+	r.accountMutationMu.Lock()
+	defer r.accountMutationMu.Unlock()
+	config := mutation.ToAccountConfig()
+	if err := config.Validate(); err != nil {
+		return nil, v1.InvalidRequest("Account configuration is invalid", err)
+	}
+	created, err := r.accounts.Create(&config)
+	if err != nil {
+		return nil, err
+	}
+	r.refreshAccountAfterChange(created, true)
+	return created, nil
+}
+
+// UpdateAccount changes non-secret account configuration in the helper.
+func (r *SyncRuntime) UpdateAccount(id string, mutation v1.AccountMutation) (*account.Account, error) {
+	if r == nil || r.accounts == nil || r.folders == nil {
+		return nil, errors.New("always-on runtime is not open")
+	}
+	r.accountMutationMu.Lock()
+	defer r.accountMutationMu.Unlock()
+	config := mutation.ToAccountConfig()
+	if err := config.Validate(); err != nil {
+		return nil, v1.InvalidRequest("Account configuration is invalid", err)
+	}
+	for label, path := range map[string]string{
+		"sent": config.SentFolderPath, "drafts": config.DraftsFolderPath, "trash": config.TrashFolderPath,
+		"spam": config.SpamFolderPath, "archive": config.ArchiveFolderPath, "all mail": config.AllMailFolderPath,
+		"starred": config.StarredFolderPath,
+	} {
+		if path == "" {
+			continue
+		}
+		folder, err := r.folders.GetByPath(id, path)
+		if err != nil {
+			return nil, v1.InvalidRequest(fmt.Sprintf("Could not validate %s folder mapping", label), err)
+		}
+		if folder == nil {
+			return nil, v1.InvalidRequest(fmt.Sprintf("%s folder mapping does not belong to this account", label), nil)
+		}
+	}
+	updated, err := r.accounts.Update(id, &config)
+	if err != nil {
+		return nil, err
+	}
+	r.refreshAccountAfterChange(updated, true)
+	return updated, nil
+}
+
+// SetAccountEnabled enables or disables an account and updates helper connections and scheduling.
+func (r *SyncRuntime) SetAccountEnabled(id string, enabled bool) (*account.Account, error) {
+	if r == nil || r.accounts == nil {
+		return nil, errors.New("always-on runtime is not open")
+	}
+	r.accountMutationMu.Lock()
+	defer r.accountMutationMu.Unlock()
+	if err := r.accounts.SetEnabled(id, enabled); err != nil {
+		return nil, err
+	}
+	updated, err := r.accounts.Get(id)
+	if err != nil {
+		return nil, err
+	}
+	if r.pool != nil {
+		r.pool.CloseAccount(id)
+	}
+	if r.scheduler != nil {
+		if !enabled {
+			r.scheduler.CancelSync(id)
+		} else {
+			r.scheduler.TriggerSync(id)
+		}
+	}
+	return updated, nil
+}
+
+// ReorderAccounts updates the full account order after validating an exact account permutation.
+func (r *SyncRuntime) ReorderAccounts(ids []string) error {
+	if r == nil || r.accounts == nil {
+		return errors.New("always-on runtime is not open")
+	}
+	r.accountMutationMu.Lock()
+	defer r.accountMutationMu.Unlock()
+	accounts, err := r.accounts.List()
+	if err != nil {
+		return err
+	}
+	if len(ids) != len(accounts) {
+		return v1.InvalidRequest("Account order must include each account exactly once", nil)
+	}
+	known := make(map[string]struct{}, len(accounts))
+	for _, acc := range accounts {
+		known[acc.ID] = struct{}{}
+	}
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		if _, ok := known[id]; !ok {
+			return v1.InvalidRequest("Account order contains an unknown account", nil)
+		}
+		if _, ok := seen[id]; ok {
+			return v1.InvalidRequest("Account order contains a duplicate account", nil)
+		}
+		seen[id] = struct{}{}
+	}
+	return r.accounts.Reorder(ids)
+}
+
+// DeleteAccount removes helper-owned credentials and cascaded account data.
+func (r *SyncRuntime) DeleteAccount(id string) error {
+	if r == nil || r.accounts == nil {
+		return errors.New("always-on runtime is not open")
+	}
+	r.accountMutationMu.Lock()
+	defer r.accountMutationMu.Unlock()
+	return r.deleteAccountTree(id)
+}
+
+func (r *SyncRuntime) deleteAccountTree(id string) error {
+	acc, err := r.accounts.Get(id)
+	if err != nil {
+		return err
+	}
+	children, err := r.accounts.ListBySharedMailboxParent(id)
+	if err != nil {
+		return err
+	}
+	for _, child := range children {
+		if err := r.deleteAccountTree(child.ID); err != nil {
+			return fmt.Errorf("remove linked shared mailbox: %w", err)
+		}
+	}
+	if acc.Enabled {
+		if err := r.accounts.SetEnabled(id, false); err != nil {
+			return fmt.Errorf("disable account before removal: %w", err)
+		}
+	}
+	if r.scheduler != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		err := r.scheduler.CancelSyncAndWait(ctx, id)
+		cancel()
+		if err != nil {
+			return fmt.Errorf("stop account sync before removal; account data was preserved: %w", err)
+		}
+	}
+	if r.pool != nil {
+		r.pool.CloseAccount(id)
+	}
+	if r.credentialCleanup == nil {
+		return errors.New("helper credential cleanup is unavailable; account data was preserved")
+	}
+	if err := r.credentialCleanup(id); err != nil {
+		return fmt.Errorf("remove account credentials; account data was preserved: %w", err)
+	}
+	if r.replyContent != nil {
+		r.replyContent.PurgeAccount(id)
+	}
+	if err := r.accounts.Delete(id); err != nil {
+		return fmt.Errorf("remove account data after credential cleanup: %w", err)
+	}
+	return nil
+}
+
+// AddSharedMailbox validates access through the primary account and creates a linked child account.
+func (r *SyncRuntime) AddSharedMailbox(ctx context.Context, mutation v1.SharedMailboxMutation) (*account.Account, error) {
+	if r == nil || r.accounts == nil {
+		return nil, errors.New("always-on runtime is not open")
+	}
+	r.accountMutationMu.Lock()
+	defer r.accountMutationMu.Unlock()
+	email := strings.TrimSpace(mutation.Email)
+	parsed, err := mail.ParseAddress(email)
+	if err != nil || parsed.Address != email || !strings.Contains(email, "@") {
+		return nil, v1.InvalidRequest("Shared mailbox email is invalid", err)
+	}
+	parent, err := r.accounts.Get(mutation.PrimaryAccountID)
+	if err != nil {
+		return nil, err
+	}
+	if parent.AuthType != account.AuthOAuth2 || r.sharedMailboxValidate == nil || r.sharedMailboxCredentialCopy == nil {
+		return nil, errors.New("shared mailboxes require a configured OAuth credential lifecycle")
+	}
+	if err := r.sharedMailboxValidate(ctx, parent.ID, email); err != nil {
+		return nil, fmt.Errorf("validate shared mailbox access: %w", err)
+	}
+	children, err := r.accounts.ListBySharedMailboxParent(parent.ID)
+	if err != nil {
+		return nil, err
+	}
+	for _, child := range children {
+		if strings.EqualFold(child.Email, email) {
+			return nil, account.ErrAccountExists
+		}
+	}
+	displayName := strings.TrimSpace(mutation.DisplayName)
+	if displayName == "" {
+		displayName = email
+	}
+	config := account.AccountConfig{
+		Name: displayName, DisplayName: displayName, Email: email, SharedMailboxParentID: parent.ID,
+		IMAPHost: parent.IMAPHost, IMAPPort: parent.IMAPPort, IMAPSecurity: parent.IMAPSecurity,
+		SMTPHost: parent.SMTPHost, SMTPPort: parent.SMTPPort, SMTPSecurity: parent.SMTPSecurity,
+		AuthType: account.AuthOAuth2, Username: email, Color: parent.Color,
+		SyncPeriodDays: parent.SyncPeriodDays, SyncInterval: parent.SyncInterval,
+	}
+	child, err := r.accounts.Create(&config)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.sharedMailboxCredentialCopy(parent.ID, child.ID); err != nil {
+		var rollbackErr error
+		if r.credentialCleanup != nil {
+			rollbackErr = r.credentialCleanup(child.ID)
+		} else {
+			rollbackErr = errors.New("helper credential cleanup is unavailable")
+		}
+		if rollbackErr != nil {
+			return nil, fmt.Errorf("copy shared mailbox credentials failed and cleanup failed; account %s was retained: %w", child.ID, errors.Join(err, rollbackErr))
+		}
+		if deleteErr := r.accounts.Delete(child.ID); deleteErr != nil {
+			return nil, fmt.Errorf("copy shared mailbox credentials failed and account cleanup failed; account %s was retained: %w", child.ID, errors.Join(err, deleteErr))
+		}
+		return nil, fmt.Errorf("copy shared mailbox credentials: %w", err)
+	}
+	stableID, err := r.accounts.GetOAuthStableID(parent.ID)
+	if err != nil {
+		return nil, r.rollbackSharedMailbox(child.ID, fmt.Errorf("read primary Microsoft identity: %w", err))
+	}
+	if stableID != "" {
+		if err := r.accounts.SetOAuthStableID(child.ID, stableID); err != nil {
+			return nil, r.rollbackSharedMailbox(child.ID, fmt.Errorf("persist shared mailbox identity: %w", err))
+		}
+	}
+	r.refreshAccountAfterChange(child, true)
+	return child, nil
+}
+
+func (r *SyncRuntime) rollbackSharedMailbox(accountID string, cause error) error {
+	if r.credentialCleanup == nil {
+		return fmt.Errorf("%w; account %s was retained because helper credential cleanup is unavailable", cause, accountID)
+	}
+	if err := r.credentialCleanup(accountID); err != nil {
+		return fmt.Errorf("%w; account %s was retained because credential cleanup failed: %v", cause, accountID, err)
+	}
+	if err := r.accounts.Delete(accountID); err != nil {
+		return fmt.Errorf("%w; account %s was retained because account cleanup failed: %v", cause, accountID, err)
+	}
+	return cause
+}
+
+func (r *SyncRuntime) refreshAccountAfterChange(acc *account.Account, trigger bool) {
+	if acc == nil {
+		return
+	}
+	if r.pool != nil {
+		r.pool.CloseAccount(acc.ID)
+	}
+	if r.scheduler == nil {
+		return
+	}
+	r.scheduler.CancelSync(acc.ID)
+	if trigger && acc.Enabled {
+		r.scheduler.TriggerSync(acc.ID)
+	}
 }
 
 // GetReplyLaterQueue returns the persisted helper-owned Reply Later entries.

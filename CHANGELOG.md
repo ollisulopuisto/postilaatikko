@@ -29,7 +29,9 @@
 - Expire due Snoozes in the helper independently of mailbox sync so deadlines are honored while the desktop is closed.
 - Expose bounded, read-only inspection of automatic filter moves with uncertain provider outcomes; inspection never retries or changes mail.
 - Route folder catalog reads, provider discovery, and subscription changes through the authenticated helper when available.
+- Serve the desktop's account configuration reads from the authenticated helper while keeping credentials out of account responses.
 - Add separately granted `account.manage` access for the desktop, preserving existing service capabilities when replacing its local grant.
+- Route account creation, configuration, deletion, enable/order, and Microsoft shared-mailbox setup through the helper with durable idempotency receipts and recoverable credential cleanup.
 
 ## Postilaatikko 2026.11.07.1
 

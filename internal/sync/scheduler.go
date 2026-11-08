@@ -55,6 +55,7 @@ type Scheduler struct {
 
 	// Track syncing accounts to prevent concurrent syncs
 	syncing   map[string]bool
+	syncDone  map[string]chan struct{}
 	syncingMu sync.Mutex
 
 	// Per-account cancellation for running syncs
@@ -74,6 +75,7 @@ func NewScheduler(engine *Engine, accountStore *account.Store, folderStore *fold
 		log:           logging.WithComponent("sync-scheduler"),
 		checkInterval: 1 * time.Minute, // Check every minute if any account is due
 		syncing:       make(map[string]bool),
+		syncDone:      make(map[string]chan struct{}),
 		syncCancels:   make(map[string]context.CancelFunc),
 	}
 }
@@ -273,6 +275,8 @@ func (s *Scheduler) syncAccountInbox(parent context.Context, acc *account.Accoun
 		return
 	}
 	s.syncing[acc.ID] = true
+	done := make(chan struct{})
+	s.syncDone[acc.ID] = done
 	s.syncingMu.Unlock()
 
 	// Create a cancellable context with timeout for this sync operation
@@ -291,6 +295,8 @@ func (s *Scheduler) syncAccountInbox(parent context.Context, acc *account.Accoun
 
 		s.syncingMu.Lock()
 		delete(s.syncing, acc.ID)
+		delete(s.syncDone, acc.ID)
+		close(done)
 		s.syncingMu.Unlock()
 	}()
 
@@ -489,6 +495,29 @@ func (s *Scheduler) CancelSync(accountID string) {
 	s.syncCancelMu.Unlock()
 }
 
+// CancelSyncAndWait cancels an account sync and waits until its database work has stopped.
+func (s *Scheduler) CancelSyncAndWait(ctx context.Context, accountID string) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	s.CancelSync(accountID)
+	for {
+		s.syncingMu.Lock()
+		done, syncing := s.syncDone[accountID], s.syncing[accountID]
+		s.syncingMu.Unlock()
+		if !syncing || done == nil {
+			return nil
+		}
+		s.CancelSync(accountID)
+		select {
+		case <-done:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
 // TriggerSyncAll manually triggers a sync for all enabled accounts (non-blocking)
 func (s *Scheduler) TriggerSyncAll() {
 	accounts, err := s.accountStore.List()
@@ -530,6 +559,8 @@ func (s *Scheduler) SyncAccountInboxBlocking(accountID string) (*NewMailInfo, er
 		return nil, nil
 	}
 	s.syncing[acc.ID] = true
+	done := make(chan struct{})
+	s.syncDone[acc.ID] = done
 	s.syncingMu.Unlock()
 
 	// Create a cancellable context with timeout for this sync operation
@@ -548,6 +579,8 @@ func (s *Scheduler) SyncAccountInboxBlocking(accountID string) (*NewMailInfo, er
 
 		s.syncingMu.Lock()
 		delete(s.syncing, acc.ID)
+		delete(s.syncDone, acc.ID)
+		close(done)
 		s.syncingMu.Unlock()
 	}()
 
