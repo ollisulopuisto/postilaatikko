@@ -14,6 +14,7 @@ import (
 
 	goimap "github.com/emersion/go-imap/v2"
 	"github.com/hkdb/aerion/internal/account"
+	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/certificate"
 	"github.com/hkdb/aerion/internal/credentials"
 	"github.com/hkdb/aerion/internal/database"
@@ -102,6 +103,98 @@ func (t *SMTPTransport) DeleteAccountCredentials(accountID string) error {
 		return errors.New("helper credential store is unavailable")
 	}
 	return t.creds.DeleteAllCredentials(accountID)
+}
+
+// AccountMutationFingerprint returns a device-keyed request digest that does
+// not enable offline guesses of password values stored in mutation receipts.
+func (t *SMTPTransport) AccountMutationFingerprint(value []byte) []byte {
+	if t == nil || t.creds == nil {
+		return nil
+	}
+	return t.creds.Fingerprint(value)
+}
+
+// ApplyAccountPasswordMutation updates helper-local IMAP/SMTP passwords and
+// commits the account row only after the secret writes succeed. Any failed
+// apply or account update restores the original credential snapshots.
+func (t *SMTPTransport) ApplyAccountPasswordMutation(accountID string, mutation v1.PasswordCredentialMutation, commitAccount func() error) error {
+	defer mutation.ClearSecrets()
+	if err := mutation.Normalize(); err != nil {
+		return err
+	}
+	if t == nil || t.creds == nil {
+		return errors.New("helper credential store is unavailable")
+	}
+	if !mutation.HasChanges() {
+		if commitAccount != nil {
+			return commitAccount()
+		}
+		return nil
+	}
+
+	var imapSnapshot, smtpSnapshot credentials.CredentialSnapshot
+	var captureIMAP, captureSMTP bool
+	var err error
+	if mutation.IMAPAction != v1.PasswordKeep {
+		imapSnapshot, err = t.creds.CapturePassword(accountID)
+		if err != nil {
+			return fmt.Errorf("capture IMAP password state: %w", err)
+		}
+		captureIMAP = true
+	}
+	if mutation.SMTPAction != v1.PasswordKeep {
+		smtpSnapshot, err = t.creds.CaptureSMTPPassword(accountID)
+		if err != nil {
+			return fmt.Errorf("capture SMTP password state: %w", err)
+		}
+		captureSMTP = true
+	}
+
+	attemptedIMAP, attemptedSMTP := false, false
+	apply := func(action v1.PasswordAction, password string, smtpPassword bool) error {
+		if action == v1.PasswordKeep {
+			return nil
+		}
+		if smtpPassword {
+			attemptedSMTP = true
+			if action == v1.PasswordReplace {
+				return t.creds.SetSMTPPassword(accountID, password)
+			}
+			return t.creds.DeleteSMTPPassword(accountID)
+		}
+		attemptedIMAP = true
+		if action == v1.PasswordReplace {
+			return t.creds.SetPassword(accountID, password)
+		}
+		return t.creds.DeletePassword(accountID)
+	}
+
+	operationErr := apply(mutation.IMAPAction, mutation.IMAPPassword, false)
+	if operationErr == nil {
+		operationErr = apply(mutation.SMTPAction, mutation.SMTPPassword, true)
+	}
+	if operationErr == nil && commitAccount != nil {
+		operationErr = commitAccount()
+	}
+	if operationErr == nil {
+		return nil
+	}
+
+	var restoreErrs []error
+	if attemptedSMTP && captureSMTP {
+		if err := t.creds.RestoreSMTPPassword(accountID, smtpSnapshot); err != nil {
+			restoreErrs = append(restoreErrs, err)
+		}
+	}
+	if attemptedIMAP && captureIMAP {
+		if err := t.creds.RestorePassword(accountID, imapSnapshot); err != nil {
+			restoreErrs = append(restoreErrs, err)
+		}
+	}
+	if restoreErr := errors.Join(restoreErrs...); restoreErr != nil {
+		return errors.Join(v1.ErrCredentialRepairRequired, operationErr, restoreErr)
+	}
+	return operationErr
 }
 
 // ValidateSharedMailbox verifies Microsoft OAuth IMAP access using the primary account's token.

@@ -4,6 +4,7 @@ package crypto
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -50,6 +51,16 @@ const (
 // Encryptor provides AES-256-GCM encryption/decryption
 type Encryptor struct {
 	key []byte
+}
+
+// Fingerprint returns a keyed digest for secret-bearing idempotency records.
+// Unlike a plain hash, the digest cannot be used for offline password guesses
+// without the device key.
+func (e *Encryptor) Fingerprint(value []byte) []byte {
+	mac := hmac.New(sha256.New, e.key)
+	_, _ = mac.Write([]byte("postilaatikko/account-mutation-fingerprint/v1\x00"))
+	_, _ = mac.Write(value)
+	return mac.Sum(nil)
 }
 
 // NewEncryptor creates a new Encryptor using a device-specific key
