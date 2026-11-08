@@ -36,6 +36,23 @@ class WorkflowTests(unittest.TestCase):
             self.assertNotIn("actions/cache", step.get("uses", ""))
             self.assertNotIn("upload-artifact", step.get("uses", ""))
 
+    def test_missing_certificate_cannot_skip_import_and_reach_notary_setup(self):
+        jobs = yaml.safe_load((ROOT / ".github/workflows/build-macos.yml").read_text())["jobs"]
+        for job in jobs.values():
+            steps = job["steps"]
+            index = next(i for i, step in enumerate(steps)
+                         if step.get("name") == "Import Developer ID certificate")
+            step = steps[index]
+            self.assertNotIn("if", step)
+            self.assertNotIn("continue-on-error", step)
+            self.assertIn('test -n "$BUILD_CERTIFICATE_BASE64"', step["run"])
+            self.assertIn('test -n "$P12_PASSWORD"', step["run"])
+            self.assertIn('test -n "$KEYCHAIN_PASSWORD"', step["run"])
+            for later in steps[index + 1:]:
+                if "store-notary-credentials" in later.get("run", ""):
+                    self.assertNotIn("if", later)
+                    self.assertNotIn("continue-on-error", later)
+
     def test_security_import_transports_dummy_passwords_only_over_stdin(self):
         env = {"KEYCHAIN_PATH": "/dummy/keychain", "CERTIFICATE_PATH": "/dummy/cert.p12",
                "KEYCHAIN_PASSWORD": 'dummy "quote" \\ $value', "P12_PASSWORD": "dummy-p12"}
