@@ -115,3 +115,13 @@ test('Trash quick-delete waits for confirmation without hiding its row', async (
   assert.doesNotMatch(list, /messageAnimations.clear\(\)/)
   assert.match(list, /doHandleActionComplete\(autoSelectNext\).finally\(release\)/)
 })
+
+
+test('completed reload holds discard all processed ID bookkeeping', async () => {
+  const { messageAnimations } = await loadAnimationsStore()
+  messageAnimations.startRemoval(['a', 'b'], 'archive')
+  const release = messageAnimations.holdActive()
+  release()
+  assert.equal(messageAnimations.holds.size, 0)
+  assert.equal(messageAnimations.generations.size, 0)
+})
