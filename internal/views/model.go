@@ -40,6 +40,8 @@ const (
 	ScopeAccount ScopeKind = "account"
 	// ScopeFolder is one real folder of one account.
 	ScopeFolder ScopeKind = "folder"
+	// ScopeUnifiedFolder is one system folder resolved across enabled accounts.
+	ScopeUnifiedFolder ScopeKind = "unified_folder"
 	// ScopeVirtualFolder is a saved cross-account view.
 	ScopeVirtualFolder ScopeKind = "virtual_folder"
 	// ScopeSearch is a query, optionally limited to another scope.
@@ -63,6 +65,7 @@ type Scope struct {
 	Kind            ScopeKind `json:"kind"`
 	AccountID       string    `json:"accountId,omitempty"`
 	FolderID        string    `json:"folderId,omitempty"`
+	FolderType      string    `json:"folderType,omitempty"`
 	VirtualFolderID string    `json:"virtualFolderId,omitempty"`
 	Query           string    `json:"query,omitempty"`
 	// Within limits a search. Nil means all inboxes. It must not be a search.
@@ -73,39 +76,46 @@ type Scope struct {
 func (s Scope) Validate() error {
 	switch s.Kind {
 	case ScopeAllInboxes:
-		if s.AccountID != "" || s.FolderID != "" || s.VirtualFolderID != "" || s.Query != "" || s.Within != nil {
+		if s.AccountID != "" || s.FolderID != "" || s.FolderType != "" || s.VirtualFolderID != "" || s.Query != "" || s.Within != nil {
 			return errors.New("all_inboxes scope takes no other fields")
 		}
 	case ScopeAllAccounts:
-		if s.AccountID != "" || s.FolderID != "" || s.VirtualFolderID != "" || s.Query != "" || s.Within != nil {
+		if s.AccountID != "" || s.FolderID != "" || s.FolderType != "" || s.VirtualFolderID != "" || s.Query != "" || s.Within != nil {
 			return errors.New("all_accounts scope takes no other fields")
 		}
 	case ScopeAccount:
 		if s.AccountID == "" {
 			return errors.New("account scope needs accountId")
 		}
-		if s.FolderID != "" || s.VirtualFolderID != "" || s.Query != "" || s.Within != nil {
+		if s.FolderID != "" || s.FolderType != "" || s.VirtualFolderID != "" || s.Query != "" || s.Within != nil {
 			return errors.New("account scope takes only accountId")
 		}
 	case ScopeFolder:
 		if s.AccountID == "" || s.FolderID == "" {
 			return errors.New("folder scope needs accountId and folderId")
 		}
-		if s.VirtualFolderID != "" || s.Query != "" || s.Within != nil {
+		if s.FolderType != "" || s.VirtualFolderID != "" || s.Query != "" || s.Within != nil {
 			return errors.New("folder scope takes only accountId and folderId")
+		}
+	case ScopeUnifiedFolder:
+		if s.FolderType != "drafts" && s.FolderType != "sent" && s.FolderType != "trash" && s.FolderType != "starred" && s.FolderType != "archive" && s.FolderType != "spam" {
+			return errors.New("unified folder scope needs a supported folderType")
+		}
+		if s.AccountID != "" || s.FolderID != "" || s.VirtualFolderID != "" || s.Query != "" || s.Within != nil {
+			return errors.New("unified folder scope takes only folderType")
 		}
 	case ScopeVirtualFolder:
 		if s.VirtualFolderID == "" {
 			return errors.New("virtual_folder scope needs virtualFolderId")
 		}
-		if s.AccountID != "" || s.FolderID != "" || s.Query != "" || s.Within != nil {
+		if s.AccountID != "" || s.FolderID != "" || s.FolderType != "" || s.Query != "" || s.Within != nil {
 			return errors.New("virtual_folder scope takes only virtualFolderId")
 		}
 	case ScopeSearch:
 		if strings.TrimSpace(s.Query) == "" {
 			return errors.New("search scope needs a query")
 		}
-		if s.AccountID != "" || s.FolderID != "" || s.VirtualFolderID != "" {
+		if s.AccountID != "" || s.FolderID != "" || s.FolderType != "" || s.VirtualFolderID != "" {
 			return errors.New("search scope takes only query and within")
 		}
 		if s.Within == nil {
@@ -130,6 +140,8 @@ func ScopeKey(s Scope) string {
 	switch s.Kind {
 	case ScopeFolder:
 		return "folder:" + url.PathEscape(s.AccountID) + "/" + url.PathEscape(s.FolderID)
+	case ScopeUnifiedFolder:
+		return "unified_folder:" + url.PathEscape(s.FolderType)
 	case ScopeAccount:
 		return "account:" + url.PathEscape(s.AccountID)
 	case ScopeVirtualFolder:

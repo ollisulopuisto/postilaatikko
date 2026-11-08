@@ -3220,11 +3220,29 @@ func (s *Store) SearchConversations(folderID, query string, offset, limit int, f
 
 // SearchConversationsUnifiedInbox searches across all inbox folders for all accounts
 func (s *Store) SearchConversationsByFolderIDs(folderIDs []string, query string, offset, limit int, filter string) ([]*ConversationSearchResult, int, error) {
+	return s.searchConversationsByFolderIDs(folderIDs, query, offset, limit, filter, false)
+}
+
+// SearchVirtualArchivedConversations searches All Mail rows while excluding
+// matching copies still present in the same account's Inbox.
+func (s *Store) SearchVirtualArchivedConversations(folderIDs []string, query string, offset, limit int, filter string) ([]*ConversationSearchResult, int, error) {
+	return s.searchConversationsByFolderIDs(folderIDs, query, offset, limit, filter, true)
+}
+
+func (s *Store) searchConversationsByFolderIDs(folderIDs []string, query string, offset, limit int, filter string, excludeInboxCopies bool) ([]*ConversationSearchResult, int, error) {
 	if len(folderIDs) == 0 || query == "" {
 		return []*ConversationSearchResult{}, 0, nil
 	}
 	ftsQuery := prepareFTSQuery(query)
 	placeholders := strings.TrimRight(strings.Repeat("?,", len(folderIDs)), ",")
+	archiveClause := ""
+	if excludeInboxCopies {
+		archiveClause = ` AND m.message_id IS NOT NULL AND NOT EXISTS (
+			SELECT 1 FROM messages inbox_m JOIN folders inbox_f ON inbox_f.id = inbox_m.folder_id
+			WHERE inbox_m.account_id = m.account_id AND inbox_f.folder_type = 'inbox'
+			AND inbox_m.message_id = m.message_id
+		)`
+	}
 
 	// Count total results across all inbox folders
 	countQuery := fmt.Sprintf(`
@@ -3234,7 +3252,7 @@ func (s *Store) SearchConversationsByFolderIDs(folderIDs []string, query string,
 		INNER JOIN folders f ON m.folder_id = f.id
 		INNER JOIN accounts a ON f.account_id = a.id AND a.enabled = 1
 		WHERE m.folder_id IN (%s) AND messages_fts MATCH ?
-	`+filterWhereClause(filter, "m."), placeholders)
+	`+archiveClause+filterWhereClause(filter, "m."), placeholders)
 	var totalCount int
 	args := make([]any, 0, len(folderIDs)+1)
 	for _, id := range folderIDs {
@@ -3276,6 +3294,7 @@ func (s *Store) SearchConversationsByFolderIDs(folderIDs []string, query string,
 		INNER JOIN folders f ON m.folder_id = f.id
 		INNER JOIN accounts a ON f.account_id = a.id AND a.enabled = 1
 		WHERE m.folder_id IN (%s) AND messages_fts MATCH ?
+		`+archiveClause+`
 		GROUP BY COALESCE(m.thread_id, m.id), a.id`+
 		filterHavingClause(filter, "m.")+`
 		ORDER BY latest_date DESC

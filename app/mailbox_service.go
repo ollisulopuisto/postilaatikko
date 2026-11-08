@@ -467,6 +467,14 @@ func (c *mailboxServiceConnector) countConversations(ctx context.Context, req v1
 	return client.CountConversations(ctx, req)
 }
 
+func (c *mailboxServiceConnector) searchUnifiedFolder(ctx context.Context, req v1.ConversationSearchRequest) (*v1.ConversationSearchPage, error) {
+	client, err := c.getClient()
+	if err != nil {
+		return nil, err
+	}
+	return client.SearchUnifiedFolder(ctx, req)
+}
+
 func (c *mailboxServiceConnector) folders(ctx context.Context, accountID string) ([]*folder.Folder, error) {
 	client, err := c.getClient()
 	if err != nil {

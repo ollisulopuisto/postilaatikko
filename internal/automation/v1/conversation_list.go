@@ -31,6 +31,7 @@ type ConversationListOperations interface {
 	GetFolder(folderID string) (*folder.Folder, error)
 	ListConversationsByFolder(folderID string, offset, limit int, sortOrder, filter string) ([]*message.Conversation, error)
 	ListConversationsUnifiedInbox(offset, limit int, sortOrder, filter string) ([]*message.Conversation, error)
+	ListConversationsUnifiedFolder(folderType string, offset, limit int, sortOrder, filter string) ([]*message.Conversation, error)
 }
 
 // MountConversationListRoute mounts the authenticated conversation-list route.
@@ -57,8 +58,8 @@ func handleConversationList(w http.ResponseWriter, r *http.Request, ops Conversa
 		writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, "Invalid conversation scope", false)
 		return
 	}
-	if req.Scope.Kind != views.ScopeFolder && req.Scope.Kind != views.ScopeAllInboxes {
-		writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, "Conversation lists support folder and all_inboxes scopes", false)
+	if req.Scope.Kind != views.ScopeFolder && req.Scope.Kind != views.ScopeAllInboxes && req.Scope.Kind != views.ScopeUnifiedFolder {
+		writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, "Conversation lists support folder, unified_folder, and all_inboxes scopes", false)
 		return
 	}
 	if req.SortOrder == "" {
@@ -99,8 +100,10 @@ func handleConversationList(w http.ResponseWriter, r *http.Request, ops Conversa
 			return
 		}
 		items, listErr = ops.ListConversationsByFolder(req.Scope.FolderID, offset, pageRequest.Limit+1, req.SortOrder, req.Filter)
-	} else {
+	} else if req.Scope.Kind == views.ScopeAllInboxes {
 		items, listErr = ops.ListConversationsUnifiedInbox(offset, pageRequest.Limit+1, req.SortOrder, req.Filter)
+	} else {
+		items, listErr = ops.ListConversationsUnifiedFolder(req.Scope.FolderType, offset, pageRequest.Limit+1, req.SortOrder, req.Filter)
 	}
 	if listErr != nil {
 		writeHeaderError(w, r, http.StatusInternalServerError, CodeInternal, "Failed to load conversations", true)

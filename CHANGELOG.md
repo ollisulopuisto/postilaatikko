@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Browse and search unified Sent, Drafts, Trash, Spam, Starred, and Archive through a remote helper; the helper resolves account folders and merges Archive with All Mail while excluding Inbox copies.
 - Replay bounded helper action and Undo events by authenticated client cursor after disconnects; refresh an affected open view or request one reset when retained history has expired.
 - Route Cmd/Ctrl+V through the system clipboard fallback in composer windows and send composer Undo to its local draft history while editing; mailbox Undo remains scoped to durable helper operations.
 - Reconcile helper-owned actions and Undo through bounded account/message/folder references, refresh only affected open views, and retain uncertain outcomes in Undo History with explicit status.

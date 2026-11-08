@@ -17,6 +17,7 @@ type ConversationCountRequest struct {
 type ConversationCountOperations interface {
 	CountConversationsByFolder(accountID, folderID, filter string) (int, error)
 	CountConversationsUnifiedInbox(filter string) (int, error)
+	CountConversationsUnifiedFolder(folderType, filter string) (int, error)
 	CountConversationsVirtualFolder(virtualFolderID string) (int, error)
 }
 
@@ -31,7 +32,7 @@ func MountConversationCountRoute(mux *http.ServeMux, ops ConversationCountOperat
 			writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, "Malformed request body", false)
 			return
 		}
-		if err := req.Scope.Validate(); err != nil || (req.Scope.Kind != views.ScopeFolder && req.Scope.Kind != views.ScopeAllInboxes && req.Scope.Kind != views.ScopeVirtualFolder) {
+		if err := req.Scope.Validate(); err != nil || (req.Scope.Kind != views.ScopeFolder && req.Scope.Kind != views.ScopeAllInboxes && req.Scope.Kind != views.ScopeUnifiedFolder && req.Scope.Kind != views.ScopeVirtualFolder) {
 			writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, "Invalid conversation count scope", false)
 			return
 		}
@@ -49,6 +50,8 @@ func MountConversationCountRoute(mux *http.ServeMux, ops ConversationCountOperat
 			count, err = ops.CountConversationsByFolder(req.Scope.AccountID, req.Scope.FolderID, req.Filter)
 		} else if req.Scope.Kind == views.ScopeAllInboxes {
 			count, err = ops.CountConversationsUnifiedInbox(req.Filter)
+		} else if req.Scope.Kind == views.ScopeUnifiedFolder {
+			count, err = ops.CountConversationsUnifiedFolder(req.Scope.FolderType, req.Filter)
 		} else {
 			count, err = ops.CountConversationsVirtualFolder(req.Scope.VirtualFolderID)
 		}

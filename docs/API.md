@@ -73,12 +73,16 @@ acknowledgement.
   - `limit` defaults to 50; `nextCursor` is returned while more headers remain. Header pages never include bodies.
 - `POST /v1/conversations` (Requires `mail.read`)
   - Request body: `{ "scope": { "kind": "folder", "accountId": "acc-1", "folderId": "folder-1" }, "sortOrder": "newest", "filter": "unread", "page": { "limit": 50 } }`
-  - Supports account-qualified folder and `all_inboxes` scopes, `newest`/`oldest` ordering, and `unread`, `starred`, `attachments`, `readLater`, or `replyLater` filters. Combine filters with `+`, for example `replyLater+unread`.
+  - Supports account-qualified folder, `all_inboxes`, and `unified_folder` scopes (`drafts`, `sent`, `trash`, `starred`, `archive`, `spam`), `newest`/`oldest` ordering, and `unread`, `starred`, `attachments`, `readLater`, or `replyLater` filters. Combine filters with `+`, for example `replyLater+unread`.
   - `all_inboxes` resolves one Inbox-designated folder per enabled account through the same special-folder resolver used by the desktop.
+  - `unified_folder` resolves each system folder from enabled accounts on the helper. Archive combines physical Archive folders with All Mail rows and excludes matching Inbox copies.
   - Pages are bounded to 100 summaries; the numeric offset cursor is limited to 1,000,000. Results use stable date/account/thread ordering and omit full message objects and bodies.
 - `POST /v1/conversations/count` (Requires `mail.read`)
   - Request body: `{ "scope": { "kind": "folder", "accountId": "acc-1", "folderId": "folder-1" }, "filter": "unread" }`
-  - Counts an account-qualified folder, `all_inboxes`, or a saved `virtual_folder`. Folder scopes verify account ownership. Saved-view counts apply the stored criteria and saved query; they do not accept an additional filter.
+  - Counts an account-qualified folder, `all_inboxes`, a supported `unified_folder`, or a saved `virtual_folder`. Folder scopes verify account ownership. Saved-view counts apply the stored criteria and saved query; they do not accept an additional filter.
+- `POST /v1/conversations/search` (Requires `mail.read`)
+  - Request body: `{ "scope": { "kind": "unified_folder", "folderType": "archive" }, "query": "invoice", "offset": 0, "limit": 50 }`
+  - Searches helper-indexed headers with bounded offset/limit and returns an exact count. Archive search excludes Inbox copies, matching unified Archive list membership.
 
 ### 3. Search and message reads
 

@@ -2,6 +2,8 @@
   "valid": [
     { "kind": "all_inboxes" },
     { "kind": "folder", "accountId": "acc-a", "folderId": "fld-a-inbox" },
+    { "kind": "unified_folder", "folderType": "sent" },
+    { "kind": "unified_folder", "folderType": "archive" },
     { "kind": "virtual_folder", "virtualFolderId": "vf-1" },
     { "kind": "search", "query": "from:alice" },
     { "kind": "search", "query": "from:alice", "within": { "kind": "all_inboxes" } },
@@ -17,6 +19,8 @@
     { "kind": "search", "query": "x", "within": { "kind": "folder" } },
     { "kind": "everything" },
     { "kind": "all_inboxes", "accountId": "acc-a" },
-    { "kind": "folder", "accountId": "a", "folderId": "f", "query": "x" }
+    { "kind": "folder", "accountId": "a", "folderId": "f", "query": "x" },
+    { "kind": "unified_folder", "folderType": "all" },
+    { "kind": "unified_folder", "folderType": "trash", "accountId": "a" }
   ]
 }

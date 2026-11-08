@@ -656,6 +656,19 @@ func (c *Client) CountConversations(ctx context.Context, req v1.ConversationCoun
 	return resp.Data, nil
 }
 
+// SearchUnifiedFolder searches one bounded page of helper-indexed unified-folder headers.
+func (c *Client) SearchUnifiedFolder(ctx context.Context, req v1.ConversationSearchRequest) (*v1.ConversationSearchPage, error) {
+	bytes, err := c.doRequest(ctx, http.MethodPost, "/v1/conversations/search", req, "")
+	if err != nil {
+		return nil, err
+	}
+	var resp v1.Response[v1.ConversationSearchPage]
+	if err := json.Unmarshal(bytes, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.Data, nil
+}
+
 // ReadThread retrieves thread messages and metadata.
 func (c *Client) ReadThread(ctx context.Context, req v1.ThreadReadRequest) (*views.ThreadView, error) {
 	bytes, err := c.doRequest(ctx, http.MethodPost, "/v1/threads/read", req, "")

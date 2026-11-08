@@ -294,6 +294,24 @@ func (o *mailboxReadOperations) messageInScope(msg *message.Message, scope views
 		return inbox != nil && inbox.ID == msg.FolderID, nil
 	case views.ScopeFolder:
 		return msg.AccountID == scope.AccountID && msg.FolderID == scope.FolderID, nil
+	case views.ScopeUnifiedFolder:
+		typeValue, err := parseUnifiedFolderType(scope.FolderType)
+		if err != nil {
+			return false, err
+		}
+		if typeValue != folder.TypeArchive {
+			resolved, err := resolveSpecialFolder(o.runtime.accounts, o.runtime.folders, msg.AccountID, typeValue)
+			if err != nil {
+				return false, err
+			}
+			return resolved != nil && resolved.ID == msg.FolderID, nil
+		}
+		physical, err := resolveSpecialFolder(o.runtime.accounts, o.runtime.folders, msg.AccountID, folder.TypeArchive)
+		if err != nil || physical != nil {
+			return physical != nil && physical.ID == msg.FolderID, err
+		}
+		allMail, err := resolveSpecialFolder(o.runtime.accounts, o.runtime.folders, msg.AccountID, folder.TypeAll)
+		return allMail != nil && allMail.ID == msg.FolderID, err
 	case views.ScopeVirtualFolder:
 		vf, err := o.runtime.virtualFolders.Get(scope.VirtualFolderID)
 		if err != nil {

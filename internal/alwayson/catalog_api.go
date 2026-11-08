@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/hkdb/aerion/internal/account"
@@ -73,6 +74,163 @@ func (o *catalogReadOperations) ListConversationsUnifiedInbox(offset, limit int,
 		return nil, err
 	}
 	return o.messages.ListConversationsByFolderIDs(folderIDs, offset, limit, sortOrder, filter)
+}
+
+func (o *catalogReadOperations) ListConversationsUnifiedFolder(folderType string, offset, limit int, sortOrder, filter string) ([]*message.Conversation, error) {
+	typeValue, err := parseUnifiedFolderType(folderType)
+	if err != nil {
+		return nil, err
+	}
+	if typeValue != folder.TypeArchive {
+		folderIDs, err := resolveSpecialFolderIDs(o.accounts, o.folders, typeValue)
+		if err != nil {
+			return nil, err
+		}
+		return o.messages.ListConversationsByFolderIDs(folderIDs, offset, limit, sortOrder, filter)
+	}
+	physicalIDs, allMailIDs, err := o.unifiedArchiveFolderIDs()
+	if err != nil {
+		return nil, err
+	}
+	window := offset + limit
+	physical, err := o.messages.ListConversationsByFolderIDs(physicalIDs, 0, window, sortOrder, filter)
+	if err != nil {
+		return nil, err
+	}
+	virtual, err := o.messages.ListVirtualArchivedConversations(allMailIDs, 0, window, sortOrder, filter)
+	if err != nil {
+		return nil, err
+	}
+	combined := append(physical, virtual...)
+	sort.SliceStable(combined, func(i, j int) bool {
+		if combined[i].LatestDate.Equal(combined[j].LatestDate) {
+			if combined[i].AccountID == combined[j].AccountID {
+				return combined[i].ThreadID < combined[j].ThreadID
+			}
+			return combined[i].AccountID < combined[j].AccountID
+		}
+		if sortOrder == "oldest" {
+			return combined[i].LatestDate.Before(combined[j].LatestDate)
+		}
+		return combined[i].LatestDate.After(combined[j].LatestDate)
+	})
+	if offset >= len(combined) {
+		return []*message.Conversation{}, nil
+	}
+	end := offset + limit
+	if end > len(combined) {
+		end = len(combined)
+	}
+	return combined[offset:end], nil
+}
+
+func (o *catalogReadOperations) CountConversationsUnifiedFolder(folderType, filter string) (int, error) {
+	typeValue, err := parseUnifiedFolderType(folderType)
+	if err != nil {
+		return 0, err
+	}
+	if typeValue != folder.TypeArchive {
+		folderIDs, err := resolveSpecialFolderIDs(o.accounts, o.folders, typeValue)
+		if err != nil {
+			return 0, err
+		}
+		return o.messages.CountConversationsByFolderIDs(folderIDs, filter)
+	}
+	physicalIDs, allMailIDs, err := o.unifiedArchiveFolderIDs()
+	if err != nil {
+		return 0, err
+	}
+	physical, err := o.messages.CountConversationsByFolderIDs(physicalIDs, filter)
+	if err != nil {
+		return 0, err
+	}
+	virtual, err := o.messages.CountVirtualArchivedConversations(allMailIDs, filter)
+	return physical + virtual, err
+}
+
+func (o *catalogReadOperations) SearchConversationsUnifiedFolder(folderType, query string, offset, limit int, filter string) ([]*message.ConversationSearchResult, int, error) {
+	typeValue, err := parseUnifiedFolderType(folderType)
+	if err != nil {
+		return nil, 0, err
+	}
+	if typeValue != folder.TypeArchive {
+		folderIDs, err := resolveSpecialFolderIDs(o.accounts, o.folders, typeValue)
+		if err != nil {
+			return nil, 0, err
+		}
+		return o.messages.SearchConversationsByFolderIDs(folderIDs, query, offset, limit, filter)
+	}
+	physicalIDs, allMailIDs, err := o.unifiedArchiveFolderIDs()
+	if err != nil {
+		return nil, 0, err
+	}
+	window := offset + limit
+	physical, physicalCount, err := o.messages.SearchConversationsByFolderIDs(physicalIDs, query, 0, window, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	virtual, virtualCount, err := o.messages.SearchVirtualArchivedConversations(allMailIDs, query, 0, window, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	combined := append(physical, virtual...)
+	sort.SliceStable(combined, func(i, j int) bool {
+		if combined[i].LatestDate.Equal(combined[j].LatestDate) {
+			if combined[i].AccountID == combined[j].AccountID {
+				return combined[i].ThreadID < combined[j].ThreadID
+			}
+			return combined[i].AccountID < combined[j].AccountID
+		}
+		return combined[i].LatestDate.After(combined[j].LatestDate)
+	})
+	if offset >= len(combined) {
+		return []*message.ConversationSearchResult{}, physicalCount + virtualCount, nil
+	}
+	end := offset + limit
+	if end > len(combined) {
+		end = len(combined)
+	}
+	return combined[offset:end], physicalCount + virtualCount, nil
+}
+
+func (o *catalogReadOperations) unifiedArchiveFolderIDs() ([]string, []string, error) {
+	accounts, err := o.accounts.List()
+	if err != nil {
+		return nil, nil, err
+	}
+	physicalIDs := make([]string, 0, len(accounts))
+	allMailIDs := make([]string, 0, len(accounts))
+	for _, account := range accounts {
+		if account == nil || !account.Enabled {
+			continue
+		}
+		physical, err := resolveSpecialFolder(o.accounts, o.folders, account.ID, folder.TypeArchive)
+		if err != nil {
+			return nil, nil, err
+		}
+		if physical != nil {
+			physicalIDs = append(physicalIDs, physical.ID)
+			continue
+		}
+		allMail, err := resolveSpecialFolder(o.accounts, o.folders, account.ID, folder.TypeAll)
+		if err != nil {
+			return nil, nil, err
+		}
+		if allMail != nil {
+			allMailIDs = append(allMailIDs, allMail.ID)
+		}
+	}
+	return physicalIDs, allMailIDs, nil
+}
+
+func parseUnifiedFolderType(value string) (folder.Type, error) {
+	typeValue := folder.Type(value)
+	switch typeValue {
+	case folder.TypeDrafts, folder.TypeSent, folder.TypeTrash, folder.TypeStarred, folder.TypeArchive, folder.TypeSpam:
+		return typeValue, nil
+	default:
+		return "", fmt.Errorf("unsupported unified folder type: %s", value)
+	}
 }
 
 func (o *catalogReadOperations) CountConversationsUnifiedInbox(filter string) (int, error) {
@@ -447,6 +605,7 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 	v1.MountMessageHeaderRoutes(mux, operations, automation.RequireGrantCapability)
 	v1.MountConversationListRoute(mux, operations, automation.RequireGrantCapability)
 	v1.MountConversationCountRoute(mux, operations, automation.RequireGrantCapability)
+	v1.MountConversationSearchRoute(mux, operations, automation.RequireGrantCapability)
 	v1.MountSearchRoute(mux, readOperations, automation.RequireGrantCapability)
 	v1.MountThreadBodyRoutes(mux, readOperations, automation.RequireGrantCapability)
 	v1.MountActionTargetRoute(mux, mailboxActions, automation.RequireGrantCapability)

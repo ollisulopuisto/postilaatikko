@@ -1,9 +1,11 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 
+	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/folder"
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/views"
@@ -71,9 +73,6 @@ func (a *App) unifiedSpecialFolderIDs(folderType string) ([]string, error) {
 
 func (a *App) GetUnifiedFolderConversations(folderType string, offset, limit int, sortOrder, filterValue string) ([]*message.Conversation, error) {
 	filterValue = replyLaterViewFilter(folderType, filterValue)
-	if a.remoteServiceMode && folderType != string(folder.TypeInbox) {
-		return nil, fmt.Errorf("unified %s conversations are not available from the remote mailbox service", folderType)
-	}
 	if folderType == string(folder.TypeInbox) {
 		conversations, handled, err := a.listServiceConversations(views.Scope{Kind: views.ScopeAllInboxes}, offset, limit, sortOrder, filterValue)
 		if err != nil {
@@ -83,6 +82,19 @@ func (a *App) GetUnifiedFolderConversations(folderType string, offset, limit int
 			go a.enqueueUnifiedInboxConversationPrefetch(conversations)
 			return conversations, nil
 		}
+	}
+	if a.remoteServiceMode {
+		if !isRemoteUnifiedFolderType(folderType) {
+			return nil, fmt.Errorf("unified %s conversations are not available from the remote mailbox service", folderType)
+		}
+		conversations, handled, err := a.listServiceConversations(views.Scope{Kind: views.ScopeUnifiedFolder, FolderType: folderType}, offset, limit, sortOrder, filterValue)
+		if err != nil {
+			return nil, err
+		}
+		if !handled {
+			return nil, errors.New("remote mailbox service is not connected")
+		}
+		return conversations, nil
 	}
 	if folderType == "replyLater" {
 		if offset == 0 {
@@ -171,7 +183,17 @@ func (a *App) GetUnifiedFolderCount(folderType, filterValue string) (int, error)
 		}
 	}
 	if a.remoteServiceMode {
-		return 0, fmt.Errorf("unified %s count is not available from the remote mailbox service", folderType)
+		if !isRemoteUnifiedFolderType(folderType) {
+			return 0, fmt.Errorf("unified %s count is not available from the remote mailbox service", folderType)
+		}
+		count, handled, err := a.serviceConversationCount(views.Scope{Kind: views.ScopeUnifiedFolder, FolderType: folderType}, filterValue)
+		if err != nil {
+			return 0, err
+		}
+		if !handled {
+			return 0, errors.New("remote mailbox service is not connected")
+		}
+		return count, nil
 	}
 	if folderType == "replyLater" {
 		return a.messageStore.CountReplyLaterConversations(filterValue)
@@ -197,6 +219,13 @@ func (a *App) GetUnifiedFolderCount(folderType, filterValue string) (int, error)
 
 func (a *App) SearchUnifiedFolder(folderType, query string, offset, limit int, filterValue string) ([]*message.ConversationSearchResult, error) {
 	filterValue = replyLaterViewFilter(folderType, filterValue)
+	if a.remoteServiceMode {
+		page, err := a.searchRemoteUnifiedFolder(folderType, query, offset, limit, filterValue)
+		if err != nil {
+			return nil, err
+		}
+		return page.Results, nil
+	}
 	ids, err := a.unifiedSpecialFolderIDs(folderType)
 	if err != nil {
 		return nil, err
@@ -207,6 +236,13 @@ func (a *App) SearchUnifiedFolder(folderType, query string, offset, limit int, f
 
 func (a *App) GetSearchCountUnifiedFolder(folderType, query, filterValue string) (int, error) {
 	filterValue = replyLaterViewFilter(folderType, filterValue)
+	if a.remoteServiceMode {
+		page, err := a.searchRemoteUnifiedFolder(folderType, query, 0, 1, filterValue)
+		if err != nil {
+			return 0, err
+		}
+		return page.TotalCount, nil
+	}
 	ids, err := a.unifiedSpecialFolderIDs(folderType)
 	if err != nil {
 		return 0, err
@@ -215,9 +251,39 @@ func (a *App) GetSearchCountUnifiedFolder(folderType, query, filterValue string)
 	return count, err
 }
 
+func isRemoteUnifiedFolderType(folderType string) bool {
+	switch folder.Type(folderType) {
+	case folder.TypeDrafts, folder.TypeSent, folder.TypeTrash, folder.TypeStarred, folder.TypeArchive, folder.TypeSpam:
+		return true
+	default:
+		return false
+	}
+}
+
+func (a *App) searchRemoteUnifiedFolder(folderType, query string, offset, limit int, filterValue string) (*v1.ConversationSearchPage, error) {
+	if !isRemoteUnifiedFolderType(folderType) {
+		return nil, fmt.Errorf("unified %s search is not available from the remote mailbox service", folderType)
+	}
+	if a.mailboxService == nil {
+		return nil, errors.New("remote mailbox service is not connected")
+	}
+	ctx := a.actionContext()
+	status := a.mailboxService.status(ctx)
+	if !status.Connected {
+		return nil, fmt.Errorf("remote mailbox service search unavailable: %s", status.Message)
+	}
+	return a.mailboxService.searchUnifiedFolder(ctx, v1.ConversationSearchRequest{
+		Scope: views.Scope{Kind: views.ScopeUnifiedFolder, FolderType: folderType},
+		Query: query, Offset: offset, Limit: limit, Filter: filterValue,
+	})
+}
+
 // SyncUnifiedFolder syncs each represented real folder. It never passes a
 // synthetic navigation ID to the sync engine.
 func (a *App) SyncUnifiedFolder(folderType string) error {
+	if a.remoteServiceMode {
+		return errors.New("mailbox sync is owned by the configured remote helper")
+	}
 	if folderType == "replyLater" || folderType == "readLater" || folderType == "snoozed" {
 		if folderType == "snoozed" {
 			return nil

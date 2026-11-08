@@ -11,7 +11,7 @@
 //   Reader   how an opened thread is rendered     (UI only)
 //   Layout   which panels are visible             (UI only)
 
-export type ScopeKind = 'all_inboxes' | 'all_accounts' | 'account' | 'folder' | 'virtual_folder' | 'search'
+export type ScopeKind = 'all_inboxes' | 'all_accounts' | 'account' | 'folder' | 'unified_folder' | 'virtual_folder' | 'search'
 
 /**
  * The messages a view contains. Fields outside the kind must be absent.
@@ -21,6 +21,7 @@ export interface Scope {
   kind: ScopeKind
   accountId?: string
   folderId?: string
+  folderType?: 'drafts' | 'sent' | 'trash' | 'starred' | 'archive' | 'spam'
   virtualFolderId?: string
   query?: string
   within?: Scope
