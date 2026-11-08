@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Keep macOS signing and notarization passwords out of process arguments, and make draft DMG checksum files directly verifiable beside the downloaded image.
+
 - Improve accessibility and keyboard navigation in Account Settings identity lists with account-specific native radio groups, focus retained after changing the default address, visible focus indicators, and focus disclosure for row action buttons. Failed default changes restore the selected address.
 - Reject mailto URLs with percent-encoded leading dashes (%2D) in URL openers to prevent CLI option injection in system mail handlers.
 - Browse and search unified Sent, Drafts, Trash, Spam, Starred, and Archive through a remote helper; the helper resolves account folders and merges Archive with All Mail while excluding Inbox copies.
