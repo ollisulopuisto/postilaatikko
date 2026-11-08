@@ -22,6 +22,8 @@
 - Automatic filter jobs now persist in the mailbox database. Unstarted jobs resume after restart; interrupted moves are retained as uncertain and are not retried automatically.
 - Persist local mailbox API client grants as token digests and add helper commands to create, inspect, and revoke credentials.
 - Add capability-checked headless handlers for account, folder, and saved-view API reads, backed by the existing local stores.
+- Let the helper use Gmail API access tokens from its local OAuth credential store for provider-aware mailbox operations; OAuth secrets remain local to the helper.
+- Route saved-view and automatic filter-rule administration through authenticated helper API operations when the helper is connected.
 
 ## Postilaatikko 2026.11.07.1
 

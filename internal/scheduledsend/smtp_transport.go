@@ -127,6 +127,40 @@ func (t *SMTPTransport) IMAPClientConfig(ctx context.Context, accountID string) 
 	return &config, nil
 }
 
+// GmailTokenSource supplies access tokens to the headless sync engine from
+// helper-local OAuth storage. Tokens never cross the mailbox API boundary.
+func (t *SMTPTransport) GmailTokenSource(ctx context.Context, accountID string, forceRefresh bool) (string, error) {
+	acc, err := t.accounts.Get(accountID)
+	if err != nil {
+		return "", err
+	}
+	if acc == nil || acc.AuthType != account.AuthOAuth2 || !strings.EqualFold(strings.TrimSpace(acc.IMAPHost), "imap.gmail.com") {
+		return "", gmail.ErrNotCapable
+	}
+	tokens, err := t.creds.GetOAuthTokens(accountID)
+	if errors.Is(err, credentials.ErrCredentialNotFound) || (err == nil && (tokens == nil || (tokens.Provider != "google" && tokens.Provider != "custom"))) {
+		return "", gmail.ErrNotCapable
+	}
+	if err != nil {
+		return "", fmt.Errorf("load helper Gmail OAuth credentials: %w", err)
+	}
+	if !gmail.ScopesCoverSearch(tokens.Scopes) {
+		return "", gmail.ErrReauthRequired
+	}
+	if forceRefresh {
+		tokens, err = t.tokensWithForce(ctx, accountID, true)
+	} else {
+		tokens, err = t.tokens(ctx, accountID)
+	}
+	if err != nil {
+		return "", err
+	}
+	if tokens == nil || strings.TrimSpace(tokens.AccessToken) == "" {
+		return "", gmail.ErrReauthRequired
+	}
+	return tokens.AccessToken, nil
+}
+
 // Deliver submits immutable MIME through SMTP. Once SMTP accepts the message,
 // a Sent-copy failure is logged with a fixed code and never causes a resend.
 func (t *SMTPTransport) Deliver(ctx context.Context, delivery Delivery) error {

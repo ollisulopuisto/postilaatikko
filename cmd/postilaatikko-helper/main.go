@@ -285,6 +285,10 @@ func run(args []string) error {
 		if err != nil {
 			return err
 		}
+		if err := syncRuntime.SetGmailTokenSource(transport.GmailTokenSource); err != nil {
+			_ = syncRuntime.Close()
+			return err
+		}
 		apiConfig := apiListenerConfig{address: *apiListen, cert: *apiCert, key: *apiKey, allowedHost: apiAllowedHosts}
 		if pushConfigured {
 			if err := syncRuntime.ConfigureGmailPush(pushConfig); err != nil {

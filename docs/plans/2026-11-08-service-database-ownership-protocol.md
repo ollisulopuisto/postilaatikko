@@ -1,12 +1,12 @@
 # Service Database Ownership Protocol
 
-**Status:** Ownership protocol based on main `6f6197d`, extended by HOSTED-SERVER-025 through HOSTED-SERVER-027. The helper bootstrap handshake and migration-owner transfer are implemented; HOSTED-SERVER-026 routes saved-view definitions and mutations, and HOSTED-SERVER-027 routes automatic filter-rule definitions, through the authenticated helper API. The desktop still opens other service-owned stores, so full database separation remains incomplete.
+**Status:** Ownership protocol based on main `6f6197d`, extended by HOSTED-SERVER-025 through HOSTED-SERVER-028. The helper bootstrap handshake and migration-owner transfer are implemented; HOSTED-SERVER-026 routes saved-view definitions and mutations, HOSTED-SERVER-027 routes automatic filter-rule definitions, and HOSTED-SERVER-028 wires helper-local OAuth credentials into the Gmail API client. The desktop still opens other service-owned stores, so full database separation remains incomplete.
 
 ## Current store map
 
 | Store group | Desktop | Headless service | API status | Target owner |
 | --- | --- | --- | --- | --- |
-| Accounts, provider configuration and credential access | `accountStore`, `credStore`; account CRUD and credential writes in `app/account.go` | `accountStore` and credential-backed sync | Catalog reads only; no account setup/update API | Service; desktop setup becomes API client and uses the OS keychain only for device-local secrets where appropriate. |
+| Accounts, provider configuration and credential access | `accountStore`, `credStore`; account CRUD and credential writes in `app/account.go` | `accountStore`, local OAuth credentials, credential-backed sync | Catalog reads only; no account setup/update API | Service; desktop setup becomes API client and uses the OS keychain only for device-local secrets where appropriate. |
 | Folders and provider folder discovery | `folderStore`; direct list, tree, sync and mapping operations | `folderStore`; sync and API reads | Folder catalog read only | Service for provider state; UI may keep a presentation cache. |
 | Messages, attachments and sync state | `messageStore`, `attachmentStore`, direct provider fetch fallbacks | Same stores; sync, filter moves, API reads/actions | Headers, conversations, search, thread/body, attachment list/read, flags and supported moves | Service for authoritative provider state; desktop cache must be rebuildable and separate. |
 | Saved views and virtual folders | `virtualFolderStore`, cache/read methods | `virtualFolderStore` and cache maintenance | Full definition list and CRUD/order/cache-refresh API; virtual-folder search and derived unread/cache reads still use the shared DB | Service for persisted query definitions and indexes; desktop presentation state stays local. |

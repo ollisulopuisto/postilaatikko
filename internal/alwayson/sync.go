@@ -154,6 +154,21 @@ func OpenSyncRuntime(dataDirectory string, credentials IMAPConfigSource) (*SyncR
 	return runtime, nil
 }
 
+// SetGmailTokenSource configures helper-local OAuth access for Gmail API
+// operations. Call it before Start; credentials remain in the helper process.
+func (r *SyncRuntime) SetGmailTokenSource(source mailSync.GmailTokenSource) error {
+	if r == nil || r.syncEngine == nil {
+		return errors.New("always-on runtime is not open")
+	}
+	r.ctxMu.Lock()
+	defer r.ctxMu.Unlock()
+	if r.started {
+		return errors.New("cannot configure Gmail credentials after runtime start")
+	}
+	r.syncEngine.SetGmailTokenSource(source)
+	return nil
+}
+
 // Start begins the existing bounded, header-first periodic sync scheduler.
 func (r *SyncRuntime) Start(ctx context.Context) {
 	if r == nil {
