@@ -178,7 +178,7 @@
       await SetDefaultIdentity(accountId, identity.id)
       // Keep keyed rows mounted: removing them to show a loading spinner loses
       // the radio's focus, breaking the next arrow key in the native group.
-      identities = identities.map(item => ({ ...item, isDefault: item.id === identity.id }))
+      identities = identities.map(item => Object.assign(Object.create(Object.getPrototypeOf(item)), item, { isDefault: item.id === identity.id }))
       addToast({
         type: 'success',
         message: $_('identity.isNowDefault', { values: { email: identity.email } }),

@@ -2192,22 +2192,36 @@
                 onActionComplete={handleContextMenuActionComplete}
                 onReply={openReply}
               >
-                <div
-                  class="spark-message-card border rounded-lg overflow-hidden transition-all {readerMode === 'conversation' ? 'conversation-bubble ' + (bubble?.side === 'right' ? 'bubble-right' : 'bubble-left') : ''} {focusedMessageId === msg.id ? 'border-primary ring-2 ring-primary/20' : 'border-border'}"
-                  style={readerMode === 'conversation' ? `--bubble-accent: ${bubble?.accent || 'hsl(var(--primary))'}` : undefined}
-                  data-message-id={msg.id}
-                  tabindex="-1"
-                  role="button"
-                  aria-expanded={readerMode === 'conversation' || isExpanded}
-                  onfocus={() => focusedMessageId = msg.id}
-                  onblur={() => { if (focusedMessageId === msg.id) focusedMessageId = null }}
-                  onkeydown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      toggleCard(msg.id)
-                    }
-                  }}
-                >
+                <div class={readerMode === 'conversation' ? `conversation-bubble-row flex items-end gap-2.5 ${bubble?.side === 'right' ? 'justify-end flex-row-reverse' : 'justify-start'}` : ''}>
+                  {#if readerMode === 'conversation' && getShowViewerCircles()}
+                    {@const avatarPhoto = contactPhotos.get(msg.fromEmail)}
+                    <div class="conversation-bubble-avatar shrink-0 mb-1">
+                      <Avatar
+                        email={msg.fromEmail}
+                        name={msg.fromName}
+                        size={40}
+                        photoData={avatarPhoto?.data}
+                        photoMediaType={avatarPhoto?.mediaType}
+                        faviconUrl={getFaviconUrl(msg.fromEmail)}
+                      />
+                    </div>
+                  {/if}
+                  <div
+                    class="spark-message-card border rounded-lg overflow-hidden transition-all {readerMode === 'conversation' ? 'conversation-bubble ' + (bubble?.side === 'right' ? 'bubble-right' : 'bubble-left') : ''} {focusedMessageId === msg.id ? 'border-primary ring-2 ring-primary/20' : 'border-border'}"
+                    style={readerMode === 'conversation' ? `--bubble-accent: ${bubble?.accent || 'hsl(var(--primary))'}` : undefined}
+                    data-message-id={msg.id}
+                    tabindex="-1"
+                    role="button"
+                    aria-expanded={readerMode === 'conversation' || isExpanded}
+                    onfocus={() => focusedMessageId = msg.id}
+                    onblur={() => { if (focusedMessageId === msg.id) focusedMessageId = null }}
+                    onkeydown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        toggleCard(msg.id)
+                      }
+                    }}
+                  >
                 {#if readerMode === 'conversation'}
                   <div class="bubble-heading flex items-center gap-2 px-4 pt-2 pb-1 text-xs text-muted-foreground">
                     <button type="button" class="flex min-w-0 flex-1 items-center justify-between gap-3 text-left" aria-expanded={expandedHeaders.has(msg.id)} title={$_('viewer.messageDetails')} onkeydown={(event) => event.stopPropagation()} onclick={() => toggleHeader(msg.id)}>
@@ -2618,6 +2632,7 @@
                     </div>
                   </div>
                 {/if}
+                  </div>
                 </div>
               </MessageContextMenu>
             {/each}
@@ -2667,12 +2682,15 @@
 
 
 <style>
+  .conversation-bubble-row {
+    width: 100%;
+  }
   .conversation-bubble {
     --bubble-accent: hsl(var(--muted-foreground));
     --bubble-fill: color-mix(in srgb, var(--bubble-accent) 12%, hsl(var(--background)));
     position: relative;
     overflow: visible;
-    width: min(82%, 76rem);
+    max-width: min(82%, 76rem);
     border-radius: 1rem;
     background: var(--bubble-fill) !important;
     border-color: color-mix(in srgb, var(--bubble-accent) 30%, hsl(var(--border)));
@@ -2680,9 +2698,7 @@
   .conversation-bubble.bubble-right {
     --bubble-accent: hsl(var(--primary));
     --bubble-fill: color-mix(in srgb, var(--bubble-accent) 13%, hsl(var(--background)));
-    margin-left: auto;
   }
-  .conversation-bubble.bubble-left { margin-right: auto; }
   .conversation-bubble::after {
     content: '';
     position: absolute;
@@ -2703,7 +2719,7 @@
     border-top: 1px solid hsl(var(--border));
     border-right: 1px solid hsl(var(--border));
   }
-  @media (max-width: 800px) { .conversation-bubble { width: 94%; } }
+  @media (max-width: 800px) { .conversation-bubble { max-width: 90%; } }
   .viewer-toolbar-action :global(svg) {
     transition: color 150ms ease, transform 150ms ease;
   }

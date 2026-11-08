@@ -38,3 +38,15 @@ test('display-address and bare-address forms of the same identity share a side',
   assert.equal(result.get('a').side,'right')
   assert.equal(result.get('b').side,'left')
 })
+
+test('message bubble records provide sender side required for avatar alignment next to tail', () => {
+  const result = bubbleLayout([
+    message('incoming-1', 'alice@example.com'),
+    message('outgoing-1', 'me@example.com'),
+  ], email => email === 'me@example.com')
+
+  // Incoming message bubbles sit on the left; avatar aligns beside left-pointing tail
+  assert.equal(result.get('incoming-1').side, 'left')
+  // Outgoing message bubbles sit on the right; avatar aligns beside right-pointing tail
+  assert.equal(result.get('outgoing-1').side, 'right')
+})
