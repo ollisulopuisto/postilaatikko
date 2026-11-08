@@ -760,14 +760,33 @@ func (r *SyncRuntime) Start(ctx context.Context) {
 		r.cancel = cancel
 		r.started = true
 		r.ctxMu.Unlock()
-		r.lifecycleWG.Add(2)
+		r.lifecycleWG.Add(3)
 		go r.runSyncLifecycle(workerContext)
 		interval := r.virtualFolderCacheInterval
 		if interval <= 0 {
 			interval = virtualFolderCacheRefreshInterval
 		}
 		go r.runVirtualFolderCacheMaintenance(workerContext, interval)
+		go r.runActionUndoMaintenance(workerContext)
 	})
+}
+
+func (r *SyncRuntime) runActionUndoMaintenance(ctx context.Context) {
+	defer r.lifecycleWG.Done()
+	log := logging.WithComponent("alwayson.action-undo")
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	ledger := newActionReceiptLedger(r.db)
+	for {
+		if err := ledger.ExpireUndoSnapshots(ctx); err != nil {
+			log.Warn().Err(err).Msg("Failed to expire mail action undo snapshots")
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
 }
 
 func (r *SyncRuntime) runVirtualFolderCacheMaintenance(ctx context.Context, interval time.Duration) {

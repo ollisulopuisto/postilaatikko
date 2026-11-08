@@ -1818,4 +1818,24 @@ var migrations = []Migration{
 		CREATE INDEX IF NOT EXISTS idx_mail_action_operations_updated
 			ON mail_action_operations(updated_at);
 	`},
+	{Version: 71, SQL: `
+		ALTER TABLE mail_action_operations ADD COLUMN action_kind TEXT NOT NULL DEFAULT '';
+		ALTER TABLE mail_action_operations ADD COLUMN undo_state TEXT NOT NULL DEFAULT 'unavailable'
+			CHECK(undo_state IN ('available','undoing','undone','outcome_unknown','expired','unavailable'));
+		ALTER TABLE mail_action_operations ADD COLUMN undo_payload BLOB;
+		ALTER TABLE mail_action_operations ADD COLUMN undo_expires_at TEXT;
+		ALTER TABLE mail_action_operations ADD COLUMN undo_message_count INTEGER NOT NULL DEFAULT 0;
+		CREATE INDEX IF NOT EXISTS idx_mail_action_undo_available
+			ON mail_action_operations(undo_state, created_at DESC);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_mail_action_operations_operation_id
+			ON mail_action_operations(operation_id);
+		CREATE TABLE IF NOT EXISTS mail_action_undo_requests (
+			idempotency_key_hash TEXT PRIMARY KEY,
+			request_hash TEXT NOT NULL,
+			operation_id TEXT NOT NULL REFERENCES mail_action_operations(operation_id),
+			state TEXT NOT NULL CHECK(state IN ('reserved','undone','outcome_unknown')),
+			created_at TEXT NOT NULL DEFAULT (datetime('now')),
+			updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+		);
+	`},
 }

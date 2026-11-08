@@ -42,8 +42,10 @@ type ActionRequest struct {
 
 // ActionResponse describes the outcome and provides an operation receipt.
 type ActionResponse struct {
-	Receipt    OperationReceipt `json:"receipt"`
-	MessageIDs []string         `json:"messageIds"`
+	Receipt       OperationReceipt `json:"receipt"`
+	MessageIDs    []string         `json:"messageIds"`
+	UndoAvailable bool             `json:"undoAvailable,omitempty"`
+	UndoExpiresAt string           `json:"undoExpiresAt,omitempty"`
 }
 
 // ActionOperations defines the mutations supported by the backend mail service.
@@ -80,8 +82,14 @@ type ActionReceiptRecord struct {
 // its terminal or uncertain receipt for safe retries.
 type ActionReceiptStore interface {
 	Lookup(context.Context, string) (ActionReceiptRecord, bool, error)
-	Reserve(context.Context, string, string, string) (ActionReceiptRecord, bool, error)
-	Complete(context.Context, string, string, OperationState, int, []byte) error
+	Reserve(context.Context, string, string, string, ActionKind, int) (ActionReceiptRecord, bool, error)
+	Complete(context.Context, string, string, ActionKind, OperationState, int, []byte, []byte) error
+}
+
+// ActionUndoSnapshotter captures the helper-owned prior state needed to reverse
+// a mutation. The serialized result must contain identifiers/flags only.
+type ActionUndoSnapshotter interface {
+	CaptureActionUndo(context.Context, ActionKind, []string) ([]byte, error)
 }
 
 type actionIdempotencyRecord struct {
@@ -281,7 +289,7 @@ func (h *ActionsHandler) handleDurableAction(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	operationID := generateOpID()
-	stored, owner, err := h.receipts.Reserve(r.Context(), keyHash, requestHash, operationID)
+	stored, owner, err := h.receipts.Reserve(r.Context(), keyHash, requestHash, operationID, req.Action, len(messageIDs))
 	if err != nil {
 		if errors.Is(err, ErrActionReceiptConflict) {
 			h.writeError(w, r, http.StatusConflict, CodeIdempotencyConflict, "Idempotency-Key was already used for a different action request", false)
@@ -295,6 +303,23 @@ func (h *ActionsHandler) handleDurableAction(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	var undoSnapshot []byte
+	if snapshotter, ok := h.ops.(ActionUndoSnapshotter); ok {
+		undoSnapshot, err = snapshotter.CaptureActionUndo(r.Context(), req.Action, messageIDs)
+		if err != nil {
+			state := OperationUnknown
+			response := ActionResponse{Receipt: OperationReceipt{OperationID: operationID, State: state}, MessageIDs: messageIDs}
+			payload, _ := json.Marshal(response)
+			completeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if completeErr := h.receipts.Complete(completeCtx, keyHash, requestHash, req.Action, state, http.StatusOK, payload, nil); completeErr != nil {
+				h.writeError(w, r, http.StatusInternalServerError, CodeInternal, "Could not record action receipt", true)
+				return
+			}
+			h.writeResponse(w, r, http.StatusOK, response)
+			return
+		}
+	}
 	opErr := h.performAction(req, messageIDs, &operationID)
 	state := OperationSent
 	if opErr != nil {
@@ -303,8 +328,12 @@ func (h *ActionsHandler) handleDurableAction(w http.ResponseWriter, r *http.Requ
 		state = OperationUnknown
 	}
 	response := ActionResponse{
-		Receipt:    OperationReceipt{OperationID: operationID, State: state},
-		MessageIDs: messageIDs,
+		Receipt:       OperationReceipt{OperationID: operationID, State: state},
+		MessageIDs:    messageIDs,
+		UndoAvailable: state == OperationSent && len(undoSnapshot) > 0,
+	}
+	if response.UndoAvailable {
+		response.UndoExpiresAt = time.Now().Add(24 * time.Hour).UTC().Format(time.RFC3339)
 	}
 	payload, err := json.Marshal(response)
 	if err != nil {
@@ -313,7 +342,7 @@ func (h *ActionsHandler) handleDurableAction(w http.ResponseWriter, r *http.Requ
 	}
 	completeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := h.receipts.Complete(completeCtx, keyHash, requestHash, state, http.StatusOK, payload); err != nil {
+	if err := h.receipts.Complete(completeCtx, keyHash, requestHash, req.Action, state, http.StatusOK, payload, undoSnapshot); err != nil {
 		h.writeError(w, r, http.StatusInternalServerError, CodeInternal, "Action completed but its receipt could not be saved", true)
 		return
 	}

@@ -431,6 +431,7 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 		messages:       r.messages,
 	}
 	readOperations := &mailboxReadOperations{runtime: r}
+	mailboxActions := &mailboxActionOperations{runtime: r}
 	mux := http.NewServeMux()
 	v1.MountCatalogRoutes(mux, operations, automation.RequireGrantCapability)
 	v1.MountVirtualFolderCacheRoute(mux, r, automation.RequireGrantCapability)
@@ -448,8 +449,12 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 	v1.MountConversationCountRoute(mux, operations, automation.RequireGrantCapability)
 	v1.MountSearchRoute(mux, readOperations, automation.RequireGrantCapability)
 	v1.MountThreadBodyRoutes(mux, readOperations, automation.RequireGrantCapability)
-	v1.NewActionsHandlerWithReceiptStore(&mailboxActionOperations{runtime: r}, actionReceipts,
+	v1.NewActionsHandlerWithReceiptStore(mailboxActions, actionReceipts,
 		func(key string) string { return actionReceipts.digestKey(key, r.accountMutationFingerprint) },
 	).MountRoutes(mux, automation.RequireGrantCapability)
+	v1.MountActionUndoRoutes(mux, actionReceipts, mailboxActions,
+		func(key string) string { return actionReceipts.digestKey(key, r.accountMutationFingerprint) },
+		automation.RequireGrantCapability,
+	)
 	return mux, nil
 }
