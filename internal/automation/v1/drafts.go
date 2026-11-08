@@ -31,6 +31,7 @@ type DraftDocument struct {
 
 // DraftMutation creates or replaces a draft. Revision is mandatory for updates.
 type DraftMutation struct {
+	ID               string              `json:"id,omitempty"`
 	AccountID        string              `json:"accountId"`
 	Revision         string              `json:"revision,omitempty"`
 	Message          smtp.ComposeMessage `json:"message"`
@@ -123,7 +124,7 @@ func (h *DraftsHandler) MountRoutes(mux *http.ServeMux, requireCap func(http.Res
 		if !decodeDraftRequest(w, r, &req) {
 			return
 		}
-		if strings.TrimSpace(req.AccountID) == "" || req.Revision != "" {
+		if strings.TrimSpace(req.AccountID) == "" || req.Revision != "" || len(req.ID) > 128 {
 			writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, "accountId is required and a new draft cannot include a revision", false)
 			return
 		}
@@ -142,7 +143,7 @@ func (h *DraftsHandler) MountRoutes(mux *http.ServeMux, requireCap func(http.Res
 		if !decodeDraftRequest(w, r, &req) {
 			return
 		}
-		if strings.TrimSpace(req.AccountID) == "" || strings.TrimSpace(req.Revision) == "" {
+		if strings.TrimSpace(req.AccountID) == "" || strings.TrimSpace(req.Revision) == "" || req.ID != "" && req.ID != r.PathValue("draftID") {
 			writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, "accountId and revision are required", false)
 			return
 		}

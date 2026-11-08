@@ -164,14 +164,25 @@ func (r *SyncRuntime) SaveDraft(id string, mutation v1.DraftMutation) (*v1.Draft
 			return nil, err
 		}
 	}
-	item := &draft.Draft{ID: uuid.NewString(), AccountID: accountID, ToList: toList, CcList: ccList, BccList: bccList,
+	requestID := strings.TrimSpace(mutation.ID)
+	if requestID == "" {
+		requestID = uuid.NewString()
+	}
+	item := &draft.Draft{ID: requestID, AccountID: accountID, ToList: toList, CcList: ccList, BccList: bccList,
 		Subject: composed.Subject, BodyHTML: composed.HTMLBody, BodyText: composed.TextBody, InReplyToID: composed.InReplyTo,
 		ReferencesList: string(references), IdentityID: composed.IdentityID, SignMessage: composed.SignMessage,
 		Encrypted: mutation.Encrypted, EncryptedBody: mutation.EncryptedBody, PGPSignMessage: composed.PGPSignMessage,
 		PGPEncrypted: mutation.PGPEncrypted, PGPEncryptedBody: mutation.PGPEncryptedBody,
 		AttachmentsData: attachments, SyncStatus: draft.SyncStatusPending}
-	if err := r.drafts.Create(item); err != nil {
-		return nil, err
+	if createErr := r.drafts.Create(item); createErr != nil {
+		existing, getErr := r.drafts.Get(requestID)
+		if getErr != nil {
+			return nil, createErr
+		}
+		if existing == nil || existing.AccountID != accountID || draft.Fingerprint(existing) != draft.Fingerprint(item) {
+			return nil, createErr
+		}
+		return r.draftDocument(existing)
 	}
 	created, err := r.drafts.Get(item.ID)
 	if err != nil {

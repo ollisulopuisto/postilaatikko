@@ -85,6 +85,29 @@ func (a *App) accountServiceClient(ctx context.Context, requireAccountManagement
 	return client, true, nil
 }
 
+func (a *App) composerServiceClient(ctx context.Context, required ...v1.Capability) (*automationclient.Client, bool, error) {
+	client, useService, err := a.accountServiceClient(ctx, false)
+	if err != nil || !useService {
+		return client, useService, err
+	}
+	status := a.mailboxService.status(ctx)
+	for _, capability := range required {
+		if !hasStatusCapability(status.Capabilities, string(capability)) {
+			return nil, true, fmt.Errorf("local mailbox service requires explicit %s authorization for compose", capability)
+		}
+	}
+	return client, true, nil
+}
+
+func hasStatusCapability(capabilities []string, required string) bool {
+	for _, capability := range capabilities {
+		if capability == required {
+			return true
+		}
+	}
+	return false
+}
+
 func accountMutationKey() string { return uuid.NewString() }
 
 // AddAccount creates a new email account

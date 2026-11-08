@@ -10,6 +10,7 @@ import (
 	goSync "sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hkdb/aerion/internal/account"
 	"github.com/hkdb/aerion/internal/contact"
 	"github.com/hkdb/aerion/internal/draft"
@@ -67,6 +68,7 @@ type ComposerApp struct {
 	originalMessage *message.Message     // For reply/forward
 	currentDraft    *draft.Draft         // Current draft being edited
 	composeMessage  *smtp.ComposeMessage // Prepared compose message
+	pendingDraftID  string               // Stable helper idempotency key across ambiguous create retries
 }
 
 // NewComposerApp creates a new ComposerApp with the given configuration.
@@ -269,13 +271,13 @@ func (c *ComposerApp) loadInitialData() error {
 
 	// If resuming a draft, load it
 	if c.config.DraftID != "" {
-		loaded, err := callParentValue[*DraftEditResult](c, "GetDraftForEdit", c.config.DraftID)
+		loaded, err := callParentValue[*DraftEditResult](c, "GetComposerDraftForEdit", c.config.AccountID, c.config.DraftID)
 		if err != nil {
 			log.Error().Err(err).Str("draftID", c.config.DraftID).Msg("Failed to get draft from store")
 			return fmt.Errorf("failed to load draft: %w", err)
 		}
 		if loaded != nil {
-			c.currentDraft = &draft.Draft{ID: loaded.DraftID, AccountID: c.config.AccountID}
+			c.currentDraft = &draft.Draft{ID: loaded.DraftID, AccountID: c.config.AccountID, StorageVersion: loaded.Revision}
 			c.config.DraftID = loaded.DraftID
 			log.Info().
 				Str("draftID", c.config.DraftID).
@@ -435,7 +437,7 @@ func (c *ComposerApp) GetDraft() (*smtp.ComposeMessage, error) {
 	if c.currentDraft == nil {
 		return nil, nil
 	}
-	return callParentValue[*smtp.ComposeMessage](c, "GetDraft", c.currentDraft.ID)
+	return callParentValue[*smtp.ComposeMessage](c, "GetComposerDraft", c.config.AccountID, c.currentDraft.ID)
 }
 
 // PrepareReply builds a ComposeMessage for the current mode.
@@ -512,6 +514,7 @@ func (c *ComposerApp) SendMessage(accountID string, msg smtp.ComposeMessage) err
 	_, err := c.callParent("SendMessage", accountID, msg)
 	if err == nil {
 		c.currentDraft = nil
+		c.pendingDraftID = ""
 	}
 	return err
 }
@@ -522,7 +525,18 @@ func (c *ComposerApp) SaveDraft(accountID string, msg smtp.ComposeMessage, exist
 	if existingDraftID == "" && c.currentDraft != nil {
 		existingDraftID = c.currentDraft.ID
 	}
-	result, err := callParentValue[*DraftResult](c, "SaveDraft", accountID, msg, existingDraftID)
+	revision := ""
+	if c.currentDraft != nil && c.currentDraft.ID == existingDraftID {
+		revision = c.currentDraft.StorageVersion
+	}
+	if existingDraftID == "" && c.pendingDraftID == "" {
+		c.pendingDraftID = uuid.NewString()
+	}
+	requestID := ""
+	if existingDraftID == "" {
+		requestID = c.pendingDraftID
+	}
+	result, err := callParentValue[*DraftResult](c, "SaveComposerDraft", accountID, msg, existingDraftID, revision, requestID)
 	if err != nil {
 		return nil, err
 	}
@@ -531,6 +545,7 @@ func (c *ComposerApp) SaveDraft(accountID string, msg smtp.ComposeMessage, exist
 	}
 	c.currentDraft = result.Draft
 	c.config.DraftID = result.Draft.ID
+	c.pendingDraftID = ""
 	return result.Draft, nil
 }
 
@@ -547,7 +562,11 @@ func (c *ComposerApp) DeleteDraft(draftID string) error {
 	if draftID == "" {
 		return nil
 	}
-	if _, err := c.callParent("DeleteDraft", draftID); err != nil {
+	revision := ""
+	if c.currentDraft != nil && c.currentDraft.ID == draftID {
+		revision = c.currentDraft.StorageVersion
+	}
+	if _, err := c.callParent("DeleteComposerDraft", c.config.AccountID, draftID, revision); err != nil {
 		return err
 	}
 	if c.currentDraft != nil && c.currentDraft.ID == draftID {

@@ -730,6 +730,10 @@ export function EnableMailboxServiceAccountManagement() {
   return window['go']['app']['App']['EnableMailboxServiceAccountManagement']();
 }
 
+export function EnableMailboxServiceDraftAccess() {
+  return window['go']['app']['App']['EnableMailboxServiceDraftAccess']();
+}
+
 export function GetMessageCount(arg1, arg2) {
   return window['go']['app']['App']['GetMessageCount'](arg1, arg2);
 }
