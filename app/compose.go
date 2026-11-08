@@ -58,6 +58,11 @@ type composeOps struct {
 	draftOps       *draftOps // for draft cleanup on send
 }
 
+type remotePreparedSend struct {
+	fingerprint string
+	request     v1.SendRequest
+}
+
 // getValidOAuthToken returns a valid OAuth token, refreshing if needed.
 // ctx is the caller's Wails context (for EventsEmit on reauth).
 func (ops *composeOps) getValidOAuthToken(ctx context.Context, accountID string) (*credentials.OAuthTokens, error) {
@@ -611,6 +616,9 @@ func pickAttachmentFiles(ctx context.Context) ([]ComposerAttachment, error) {
 // SendMessage sends an email via SMTP.
 // The message is composed in the frontend and sent to the backend.
 func (a *App) SendMessage(accountID string, msg smtp.ComposeMessage) error {
+	if a.remoteServiceMode {
+		return errors.New("remote compose requires a stable send request ID")
+	}
 	_, err := a.composeOps.sendMessage(a.ctx, accountID, msg, nil)
 	if err != nil {
 		return err
@@ -624,10 +632,78 @@ func (a *App) SendMessage(accountID string, msg smtp.ComposeMessage) error {
 	return nil
 }
 
+// SendMessageWithRequestID sends through the mailbox helper in remote mode.
+// The caller must retain and reuse requestID after any ambiguous transport error.
+func (a *App) SendMessageWithRequestID(accountID string, msg smtp.ComposeMessage, requestID string) error {
+	if !a.remoteServiceMode {
+		return a.SendMessage(accountID, msg)
+	}
+	if strings.TrimSpace(requestID) == "" {
+		return errors.New("a stable send request ID is required")
+	}
+	fingerprintBytes, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+	fingerprint := string(fingerprintBytes)
+	a.remoteSendMu.Lock()
+	if a.remoteSendRequests == nil {
+		a.remoteSendRequests = make(map[string]remotePreparedSend)
+	}
+	prepared, exists := a.remoteSendRequests[requestID]
+	if exists && prepared.fingerprint != fingerprint {
+		a.remoteSendMu.Unlock()
+		return errors.New("the previous send outcome is unresolved; retry the unchanged message first")
+	}
+	if !exists {
+		request, prepareErr := a.PrepareComposerSend(accountID, msg, "", "")
+		if prepareErr != nil {
+			a.remoteSendMu.Unlock()
+			return prepareErr
+		}
+		prepared = remotePreparedSend{fingerprint: fingerprint, request: *request}
+		a.remoteSendRequests[requestID] = prepared
+	}
+	a.remoteSendMu.Unlock()
+	result, err := a.SendPreparedComposerMessage(prepared.request, requestID)
+	if err != nil {
+		return err
+	}
+	if result == nil {
+		return errors.New("mailbox service returned no send receipt")
+	}
+	switch result.Receipt.State {
+	case v1.OperationSent:
+		a.remoteSendMu.Lock()
+		delete(a.remoteSendRequests, requestID)
+		a.remoteSendMu.Unlock()
+		if result.Code != "" {
+			return fmt.Errorf("message was sent, but helper reported %s", result.Code)
+		}
+		return nil
+	case v1.OperationUnknown, v1.OperationSending:
+		return errors.New("message delivery outcome is unknown; retry with the same request ID")
+	default:
+		if result.Code != "" {
+			return fmt.Errorf("message was not accepted: %s", result.Code)
+		}
+		return fmt.Errorf("message send ended in state %q", result.Receipt.State)
+	}
+}
+
 // PrepareComposerSend creates the immutable MIME payload locally so retries
 // can submit the exact same bytes and idempotency key.
 func (a *App) PrepareComposerSend(accountID string, msg smtp.ComposeMessage, draftID, revision string) (*v1.SendRequest, error) {
-	raw, err := a.composeOps.prepareMessage(accountID, msg)
+	var raw []byte
+	var err error
+	if a.remoteServiceMode {
+		if msg.SignMessage || msg.EncryptMessage || msg.PGPSignMessage || msg.PGPEncryptMessage {
+			return nil, errors.New("remote message signing and encryption must be configured on the mailbox helper")
+		}
+		raw, err = msg.ToRFC822At(time.Now())
+	} else {
+		raw, err = a.composeOps.prepareMessage(accountID, msg)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -954,6 +1030,13 @@ func (a *App) PrepareReply(messageID, mode string) (*smtp.ComposeMessage, error)
 // when the local service is connected, explicitly fetching the original body.
 func (a *App) PrepareComposerReply(accountID, messageID, mode string) (*smtp.ComposeMessage, error) {
 	ctx := a.accountContext()
+	_, useService, err := a.accountServiceClient(ctx, false)
+	if err != nil {
+		return nil, err
+	}
+	if !useService {
+		return a.PrepareReply(messageID, mode)
+	}
 	client, err := a.composerServiceClient(ctx, v1.CapabilityMailRead, v1.CapabilityMailBodyFetch, v1.CapabilityDraftWrite)
 	if err != nil {
 		return nil, err

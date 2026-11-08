@@ -10,6 +10,7 @@ import (
 	automationclient "github.com/hkdb/aerion/internal/automation/client"
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/message"
+	"github.com/hkdb/aerion/internal/smtp"
 	"github.com/hkdb/aerion/internal/views"
 	"github.com/hkdb/aerion/internal/virtualfolder"
 )
@@ -92,5 +93,36 @@ func TestRemoteWorkspaceCoreReadsWithoutMailboxStores(t *testing.T) {
 	body, err := app.FetchMessageBodyForAccount("account-a", "message-a")
 	if err != nil || !body.BodyFetched || body.BodyText != "Remote body" {
 		t.Fatalf("FetchMessageBodyForAccount = %#v, %v", body, err)
+	}
+}
+
+func TestRemotePrepareComposerSendDoesNotNeedLocalComposeStores(t *testing.T) {
+	app := &App{remoteServiceMode: true}
+	request, err := app.PrepareComposerSend("account-a", smtp.ComposeMessage{
+		From:     smtp.Address{Address: "sender@example.test"},
+		To:       []smtp.Address{{Address: "recipient@example.test"}},
+		Subject:  "Remote compose",
+		TextBody: "Hello",
+	}, "", "")
+	if err != nil {
+		t.Fatalf("PrepareComposerSend: %v", err)
+	}
+	if request.AccountID != "account-a" || request.From != "sender@example.test" || len(request.RFC822) == 0 {
+		t.Fatalf("unexpected prepared request: %#v", request)
+	}
+	if app.db != nil || app.credStore != nil || app.composeOps.accountStore != nil {
+		t.Fatal("remote compose initialized local mailbox or credential stores")
+	}
+}
+
+func TestRemotePrepareComposerSendRejectsDeviceLocalCrypto(t *testing.T) {
+	app := &App{remoteServiceMode: true}
+	_, err := app.PrepareComposerSend("account-a", smtp.ComposeMessage{
+		From:        smtp.Address{Address: "sender@example.test"},
+		To:          []smtp.Address{{Address: "recipient@example.test"}},
+		SignMessage: true,
+	}, "", "")
+	if err == nil {
+		t.Fatal("expected local-only crypto request to fail explicitly")
 	}
 }

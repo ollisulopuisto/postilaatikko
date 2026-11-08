@@ -70,7 +70,7 @@
   import { publishUndoOperationCompleted, publishUndoOperationCreated } from '$lib/components/list/undoMutationEvents'
   import { runMessageMutation } from '$lib/components/list/mutationInFlight'
   // @ts-ignore - wailsjs path
-  import { PrepareReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, ClearDraftHistory, SendMessageWithDraftGuard, CancelPendingSend, CompletePendingSend, ListPendingSends, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ResolveMailActionTarget, UndoOperation, UndoLatestWithResult, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, RequestQuitApp, CancelQuitAppRequest, OpenComposerWindow, OpenMailWindow, OpenReaderWindow, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
+  import { PrepareComposerReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, ClearDraftHistory, SendMessageWithDraftGuard, CancelPendingSend, CompletePendingSend, ListPendingSends, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ResolveMailActionTarget, UndoOperation, UndoLatestWithResult, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, RequestQuitApp, CancelQuitAppRequest, OpenComposerWindow, OpenMailWindow, OpenReaderWindow, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
   // @ts-ignore - wailsjs path
   import { smtp, folder, certificate, operations } from '../wailsjs/go/models'
   // @ts-ignore - wailsjs runtime
@@ -1314,7 +1314,7 @@
 
     try {
       // Call backend to prepare the reply message (backend gets account from message)
-      const composeMessage = await PrepareReply(messageId, mode)
+      const composeMessage = await PrepareComposerReply(accountId, messageId, mode)
       composerAccountId = accountId
       composerDraftId = null
       composerInitialMessage = composeMessage

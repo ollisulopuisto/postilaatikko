@@ -10,6 +10,7 @@ import (
 	"time"
 
 	goImap "github.com/emersion/go-imap/v2"
+	"github.com/google/uuid"
 	"github.com/hkdb/aerion/internal/account"
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/draft"
@@ -798,6 +799,17 @@ func (a *App) cancelDraftSync(draftID string) {
 // SaveDraft saves or updates a draft email to the local database and syncs to IMAP.
 // If existingDraftID is provided and exists, updates that draft; otherwise creates a new one.
 func (a *App) SaveDraft(accountID string, msg smtp.ComposeMessage, existingDraftID string) (*DraftResult, error) {
+	if a.remoteServiceMode {
+		current, err := a.GetComposerDraftForEdit(accountID, existingDraftID)
+		if err != nil {
+			return nil, err
+		}
+		revision := ""
+		if current != nil {
+			revision = current.Revision
+		}
+		return a.SaveComposerDraft(accountID, msg, existingDraftID, revision, uuid.NewString())
+	}
 	log := logging.WithComponent("app")
 
 	log.Debug().
@@ -939,6 +951,24 @@ func (a *App) draftToComposeMessage(d *draft.Draft) *smtp.ComposeMessage {
 
 // DeleteDraft deletes a draft from local DB and IMAP
 func (a *App) DeleteDraft(draftID string) error {
+	if a.remoteServiceMode {
+		accounts, err := a.GetAccounts()
+		if err != nil {
+			return err
+		}
+		for _, acc := range accounts {
+			items, err := a.ListDrafts(acc.ID)
+			if err != nil {
+				return err
+			}
+			for _, item := range items {
+				if item.ID == draftID {
+					return a.DeleteComposerDraft(acc.ID, item.ID, item.StorageVersion)
+				}
+			}
+		}
+		return nil
+	}
 	log := logging.WithComponent("app")
 
 	d, remoteMessage, err := a.draftOps.resolveDraftReference(draftID)
@@ -999,6 +1029,22 @@ func (a *App) GetDraft(id string) (*smtp.ComposeMessage, error) {
 
 // GetDraftForEdit resolves/adopts a draft and returns its canonical local ID.
 func (a *App) GetDraftForEdit(ref string) (*DraftEditResult, error) {
+	if a.remoteServiceMode {
+		accounts, err := a.GetAccounts()
+		if err != nil {
+			return nil, err
+		}
+		for _, acc := range accounts {
+			result, err := a.GetComposerDraftForEdit(acc.ID, ref)
+			if err != nil {
+				return nil, err
+			}
+			if result != nil {
+				return result, nil
+			}
+		}
+		return nil, nil
+	}
 	d, remoteMessage, err := a.draftOps.resolveDraftReference(ref)
 	if err != nil {
 		return nil, err
@@ -1030,7 +1076,38 @@ func (a *App) GetComposerDraftForEdit(accountID, ref string) (*DraftEditResult, 
 	for _, item := range items {
 		if item.ID == ref {
 			stored := draftFromHelperDocument(&item)
-			return &DraftEditResult{DraftID: stored.ID, Revision: stored.StorageVersion, Message: a.draftToComposeMessage(stored)}, nil
+			if !a.remoteServiceMode {
+				return &DraftEditResult{DraftID: stored.ID, Revision: stored.StorageVersion, Message: a.draftToComposeMessage(stored)}, nil
+			}
+			if item.Encrypted || item.PGPEncrypted {
+				return nil, errors.New("this encrypted draft requires local cryptographic keys and is unavailable in remote mode")
+			}
+			identities, err := client.GetIdentities(ctx, accountID)
+			if err != nil {
+				return nil, err
+			}
+			from := smtp.Address{}
+			for _, identity := range identities {
+				if identity.ID == item.Message.IdentityID {
+					from = smtp.Address{Name: identity.Name, Address: identity.Email}
+					break
+				}
+			}
+			if from.Address == "" {
+				account, err := a.GetAccount(accountID)
+				if err != nil {
+					return nil, err
+				}
+				from = smtp.Address{Name: account.Name, Address: account.Email}
+			}
+			message := item.Message
+			message.From = from
+			if len(item.AttachmentsData) > 0 {
+				if err := json.Unmarshal(item.AttachmentsData, &message.Attachments); err != nil {
+					return nil, fmt.Errorf("decode helper draft attachments: %w", err)
+				}
+			}
+			return &DraftEditResult{DraftID: stored.ID, Revision: stored.StorageVersion, Message: &message}, nil
 		}
 	}
 	return nil, nil
@@ -1063,9 +1140,29 @@ func (a *App) SaveComposerDraft(accountID string, msg smtp.ComposeMessage, draft
 		}
 		revision = current.Revision
 	}
-	enc, err := a.draftOps.encryptDraftBody(accountID, msg.From.Address, msg)
-	if err != nil {
-		return nil, err
+	var enc *encryptResult
+	if a.remoteServiceMode {
+		if msg.EncryptMessage || msg.PGPEncryptMessage {
+			return nil, errors.New("remote draft encryption must be configured on the mailbox helper")
+		}
+		attachments := msg.Attachments
+		if len(attachments) > 0 {
+			attachments, err = resolveAttachmentContent(attachments)
+			if err != nil {
+				return nil, err
+			}
+		}
+		attachmentsData, marshalErr := json.Marshal(attachments)
+		if marshalErr != nil {
+			return nil, marshalErr
+		}
+		enc = &encryptResult{bodyHTML: msg.HTMLBody, bodyText: msg.TextBody, attachmentsData: attachmentsData}
+		msg.Attachments = nil
+	} else {
+		enc, err = a.draftOps.encryptDraftBody(accountID, msg.From.Address, msg)
+		if err != nil {
+			return nil, err
+		}
 	}
 	message := msg
 	message.HTMLBody, message.TextBody = enc.bodyHTML, enc.bodyText
@@ -1139,6 +1236,22 @@ func (a *App) messageToComposeMessage(msg *message.Message) *smtp.ComposeMessage
 
 // ListDrafts returns all drafts for an account
 func (a *App) ListDrafts(accountID string) ([]*draft.Draft, error) {
+	if a.remoteServiceMode {
+		ctx := a.accountContext()
+		client, err := a.composerServiceClient(ctx, v1.CapabilityDraftRead)
+		if err != nil {
+			return nil, err
+		}
+		documents, err := client.ListDrafts(ctx, accountID)
+		if err != nil {
+			return nil, err
+		}
+		result := make([]*draft.Draft, 0, len(documents))
+		for i := range documents {
+			result = append(result, draftFromHelperDocument(&documents[i]))
+		}
+		return result, nil
+	}
 	return a.draftStore.ListByAccount(accountID)
 }
 

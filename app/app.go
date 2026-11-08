@@ -224,6 +224,8 @@ type App struct {
 	mailboxService        *mailboxServiceConnector
 	remoteServiceMode     bool
 	remoteServiceEndpoint string
+	remoteSendMu          goSync.Mutex
+	remoteSendRequests    map[string]remotePreparedSend
 
 	// Stores
 	accountStore        *account.Store
@@ -1064,6 +1066,10 @@ func (a *App) startRemoteWorkspace(ctx context.Context) {
 func (a *App) IsReady() bool {
 	return a.ready
 }
+
+// IsRemoteServiceMode reports whether this desktop is connected to an
+// explicitly configured remote mailbox helper.
+func (a *App) IsRemoteServiceMode() bool { return a.remoteServiceMode }
 
 // BeforeClose is called when the window is about to close (e.g., OS close signal)
 func (a *App) BeforeClose(ctx context.Context) bool {

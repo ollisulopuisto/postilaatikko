@@ -137,10 +137,34 @@ export const COMPOSER_API_KEY = 'composer-api'
  * Uses App bindings.
  */
 export function createMainWindowApi(): ComposerApi {
+  const pendingRemoteSends = new Map<string, { id: string; fingerprint: string }>()
   // Dynamic import to avoid bundling issues
   // These will be resolved at runtime based on which entry point is used
   return {
     sendMessage: async (accountId: string, message: smtp.ComposeMessage, draftId?: string) => {
+      const { IsRemoteServiceMode, SendMessageWithRequestID } = await import('../../wailsjs/go/app/App.js')
+      if (await IsRemoteServiceMode()) {
+        const key = `${accountId}:${draftId || 'new'}`
+        const storageKey = `remote-send:${key}`
+        const fingerprint = JSON.stringify(message)
+        let attempt = pendingRemoteSends.get(key)
+        if (!attempt) {
+          const retainedId = localStorage.getItem(storageKey)
+          if (retainedId) attempt = { id: retainedId, fingerprint }
+        }
+        if (attempt && attempt.fingerprint !== fingerprint) {
+          throw new Error('The previous send outcome is unresolved; retry the unchanged message first')
+        }
+        if (!attempt) {
+          attempt = { id: crypto.randomUUID(), fingerprint }
+        }
+        pendingRemoteSends.set(key, attempt)
+        localStorage.setItem(storageKey, attempt.id)
+        await SendMessageWithRequestID(accountId, message, attempt.id)
+        pendingRemoteSends.delete(key)
+        localStorage.removeItem(storageKey)
+        return
+      }
       if (draftId) return sendLaterBackend().SendMessageWithDraftGuard(accountId, message, draftId)
       const { SendMessage } = await import('../../wailsjs/go/app/App.js')
       return SendMessage(accountId, message)

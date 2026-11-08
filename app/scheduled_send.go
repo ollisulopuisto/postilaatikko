@@ -257,6 +257,9 @@ func (a *App) UpdateScheduledMessage(id, action string) (ScheduleResult, error) 
 
 // SendMessageWithDraftGuard prevents Send Now from an already scheduled draft.
 func (a *App) SendMessageWithDraftGuard(accountID string, message smtp.ComposeMessage, draftID string) error {
+	if a.remoteServiceMode {
+		return errors.New("remote Undo Send dispatch is not available until pending-send ownership moves to the mailbox helper")
+	}
 	if err := guardScheduledDraft(a.ctx, a.paths.Data, accountID, draftID); err != nil {
 		return err
 	}

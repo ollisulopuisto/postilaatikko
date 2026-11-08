@@ -2,7 +2,7 @@
   import { onMount } from 'svelte'
   import Composer from '$lib/components/composer/Composer.svelte'
   // @ts-ignore - Wails-generated imports
-  import { PrepareReply } from '../../../../wailsjs/go/app/App'
+  import { PrepareComposerReply } from '../../../../wailsjs/go/app/App'
   // @ts-ignore - Wails-generated types
   import { smtp } from '../../../../wailsjs/go/models'
   import Icon from '@iconify/svelte'
@@ -24,7 +24,7 @@
 
   onMount(() => {
     let current = true
-    void PrepareReply(messageId, mode).then((message: smtp.ComposeMessage | null) => {
+    void PrepareComposerReply(accountId, messageId, mode).then((message: smtp.ComposeMessage | null) => {
       if (current) initialMessage = message
     }).catch(error => {
       console.error('Failed to prepare inline reply:', error)

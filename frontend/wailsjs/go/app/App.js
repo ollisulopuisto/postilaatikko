@@ -1110,6 +1110,14 @@ export function IsReady() {
   return window['go']['app']['App']['IsReady']();
 }
 
+export function IsRemoteServiceMode() {
+  return window['go']['app']['App']['IsRemoteServiceMode']();
+}
+
+export function SendMessageWithRequestID(arg1, arg2, arg3) {
+  return window['go']['app']['App']['SendMessageWithRequestID'](arg1, arg2, arg3);
+}
+
 export function IsReplyLater(arg1, arg2) {
   return window['go']['app']['App']['IsReplyLater'](arg1, arg2);
 }
@@ -1316,6 +1324,10 @@ export function Preflight() {
 
 export function PrepareReply(arg1, arg2) {
   return window['go']['app']['App']['PrepareReply'](arg1, arg2);
+}
+
+export function PrepareComposerReply(arg1, arg2, arg3) {
+  return window['go']['app']['App']['PrepareComposerReply'](arg1, arg2, arg3);
 }
 
 export function ProcessPGPMessage(arg1) {
