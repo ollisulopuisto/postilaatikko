@@ -26,6 +26,7 @@ Returns the contract version and the caller's granted capabilities.
 - `GET /v1/accounts` (Requires `mail.read`)
 - `GET /v1/folders?accountId={id}` (Requires `mail.read`)
 - `GET /v1/views` (Requires `mail.read`)
+  - Returns complete saved-view definitions, including folder membership and search/triage criteria.
 - `GET /v1/messages/headers?accountId={id}&folderId={id}&limit={1..100}&cursor={offset}` (Requires `mail.read`)
   - `accountId` and `folderId` are required and ownership is checked before reading.
   - `limit` defaults to 50; `nextCursor` is returned while more headers remain. Header pages never include bodies.
@@ -55,6 +56,10 @@ The helper mounts provider-aware search and account-qualified thread/body reads:
 - `POST /v1/messages/attachments/read` (Requires `mail.attachment.read`)
 
 ### 5. Mail Mutations
+- `POST /v1/views/mutations` (Requires `mail.write`)
+  - Request body uses `operation` with `virtualFolder` for `create`/`update`, `id` for `delete`/`refresh`, or `ids` for `reorder`.
+  - Create/update rebuild the service-owned virtual-view cache before returning. `refresh` explicitly rebuilds one view's cached index.
+  - Desktop calls use these service routes when connected and write-authorized; a local-store fallback is used only when the helper is unreachable. Authorization and API failures are returned to the caller.
 - `POST /v1/actions` (Requires `mail.write`, Header `Idempotency-Key: <unique-key>`)
   - Supported actions: `archive`, `mark_read`, `mark_unread`, `star`, `unstar`, `trash`, `move`.
   - Targets use explicit account-qualified message references, matched-message sets, or account-qualified threads. A move also requires `destination` to name an existing folder.

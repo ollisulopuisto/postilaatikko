@@ -27,6 +27,7 @@ import (
 	"github.com/hkdb/aerion/internal/operations"
 	"github.com/hkdb/aerion/internal/servicebootstrap"
 	"github.com/hkdb/aerion/internal/views"
+	"github.com/hkdb/aerion/internal/virtualfolder"
 )
 
 const (
@@ -278,6 +279,22 @@ func (c *mailboxServiceConnector) mutateAction(ctx context.Context, req v1.Actio
 		return nil, err
 	}
 	return client.MutateAction(ctx, req, uuid.NewString())
+}
+
+func (c *mailboxServiceConnector) virtualFolders(ctx context.Context) ([]*virtualfolder.VirtualFolder, error) {
+	client, err := c.getClient()
+	if err != nil {
+		return nil, err
+	}
+	return client.VirtualFolders(ctx)
+}
+
+func (c *mailboxServiceConnector) mutateVirtualFolder(ctx context.Context, req v1.VirtualFolderMutationRequest) error {
+	client, err := c.getClient()
+	if err != nil {
+		return err
+	}
+	return client.MutateVirtualFolder(ctx, req)
 }
 
 func (c *mailboxServiceConnector) authorizeWrites(ctx context.Context) error {

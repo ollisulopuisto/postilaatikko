@@ -12,6 +12,7 @@ import (
 
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/views"
+	"github.com/hkdb/aerion/internal/virtualfolder"
 )
 
 // Client interacts with Postilaatikko's local automation API.
@@ -148,6 +149,30 @@ func (c *Client) GetViews(ctx context.Context) ([]v1.ViewSummary, error) {
 		return nil, err
 	}
 	return resp.Data, nil
+}
+
+// MutateVirtualFolder performs one helper-owned saved-view operation.
+func (c *Client) MutateVirtualFolder(ctx context.Context, req v1.VirtualFolderMutationRequest) error {
+	_, err := c.doRequest(ctx, http.MethodPost, "/v1/views/mutations", req, "")
+	return err
+}
+
+// VirtualFolders lists the complete saved-view definitions held by the service.
+func (c *Client) VirtualFolders(ctx context.Context) ([]*virtualfolder.VirtualFolder, error) {
+	views, err := c.GetViews(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*virtualfolder.VirtualFolder, 0, len(views))
+	for _, view := range views {
+		result = append(result, &virtualfolder.VirtualFolder{
+			ID: view.ID, Name: view.Name, OrderIndex: view.OrderIndex, FolderIDs: view.FolderIDs,
+			FolderMode: view.FolderMode, ReadStatus: view.ReadStatus, ReplyStatus: view.ReplyStatus,
+			StarStatus: view.StarStatus, DateWindow: view.DateWindow, SearchQuery: view.SearchQuery,
+			CreatedAt: view.CreatedAt, UpdatedAt: view.UpdatedAt,
+		})
+	}
+	return result, nil
 }
 
 // Search queries messages across a given view scope.

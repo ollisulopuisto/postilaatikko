@@ -4,7 +4,7 @@
 
 **Goal:** Make the helper the owner of persisted virtual-folder operations while preserving desktop behavior and local fallback only when the helper is unavailable.
 
-**Architecture:** Add authenticated `mail.write` API endpoints backed by the helper runtime's existing virtual-folder store and cache refresher. Extend the desktop API client and connector so Wails virtual-folder mutations use those endpoints when connected; authorization, validation, and server errors must reach the caller. Keep list and search behavior on their existing paths for this slice.
+**Architecture:** Extend authenticated saved-view reads and add `mail.write` mutation endpoints backed by the helper runtime's existing virtual-folder store and cache refresher. Extend the desktop API client and connector so Wails virtual-folder reads and mutations use those endpoints when connected; authorization, validation, and server errors must reach the caller. Keep search behavior on its existing path for this slice.
 
 **Tech Stack:** Go, `net/http`, SQLite stores, Wails bindings.
 

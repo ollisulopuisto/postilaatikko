@@ -8,7 +8,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hkdb/aerion/internal/account"
+	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/virtualfolder"
@@ -20,6 +22,16 @@ import (
 
 // GetVirtualFolders returns all virtual folders
 func (a *App) GetVirtualFolders() ([]*virtualfolder.VirtualFolder, error) {
+	if a.mailboxService != nil {
+		ctx := a.helperCommandContext()
+		status := a.mailboxService.status(ctx)
+		if status.Connected {
+			return a.mailboxService.virtualFolders(ctx)
+		}
+		if status.ErrorCode != "service_unavailable" {
+			return nil, fmt.Errorf("load virtual folders from mailbox service: %s", status.Message)
+		}
+	}
 	return a.virtualFolderStore.List()
 }
 
@@ -32,6 +44,9 @@ func (a *App) GetVirtualFolderUnreadCounts() (map[string]int, error) {
 func (a *App) CreateVirtualFolder(vf *virtualfolder.VirtualFolder) error {
 	if vf == nil {
 		return fmt.Errorf("virtual folder cannot be nil")
+	}
+	if handled, err := a.mutateVirtualFolderThroughService(v1.VirtualFolderMutationRequest{Operation: "create", VirtualFolder: vf}); handled {
+		return err
 	}
 	if err := a.virtualFolderStore.Create(vf); err != nil {
 		return err
@@ -52,6 +67,9 @@ func (a *App) UpdateVirtualFolder(vf *virtualfolder.VirtualFolder) error {
 	if vf.ID == "" {
 		return fmt.Errorf("virtual folder ID cannot be empty")
 	}
+	if handled, err := a.mutateVirtualFolderThroughService(v1.VirtualFolderMutationRequest{Operation: "update", VirtualFolder: vf}); handled {
+		return err
+	}
 	if err := a.virtualFolderStore.Update(vf); err != nil {
 		return err
 	}
@@ -65,6 +83,9 @@ func (a *App) UpdateVirtualFolder(vf *virtualfolder.VirtualFolder) error {
 
 // ReorderVirtualFolders saves the sidebar order of virtual folders.
 func (a *App) ReorderVirtualFolders(ids []string) error {
+	if handled, err := a.mutateVirtualFolderThroughService(v1.VirtualFolderMutationRequest{Operation: "reorder", IDs: ids}); handled {
+		return err
+	}
 	return a.virtualFolderStore.Reorder(ids)
 }
 
@@ -73,7 +94,40 @@ func (a *App) DeleteVirtualFolder(id string) error {
 	if id == "" {
 		return fmt.Errorf("virtual folder ID cannot be empty")
 	}
+	if handled, err := a.mutateVirtualFolderThroughService(v1.VirtualFolderMutationRequest{Operation: "delete", ID: id}); handled {
+		return err
+	}
 	return a.virtualFolderStore.Delete(id)
+}
+
+func (a *App) mutateVirtualFolderThroughService(req v1.VirtualFolderMutationRequest) (bool, error) {
+	if a.mailboxService == nil {
+		return false, nil
+	}
+	ctx := a.helperCommandContext()
+	status := a.mailboxService.status(ctx)
+	if !status.Connected {
+		if status.ErrorCode == "service_unavailable" {
+			return false, nil
+		}
+		return true, fmt.Errorf("mailbox service is not ready for virtual-folder %s: %s", req.Operation, status.Message)
+	}
+	if !status.WriteAuthorized {
+		return true, errDesktopMailboxWriteAuthorizationRequired
+	}
+	if req.Operation == "create" && req.VirtualFolder != nil && req.VirtualFolder.ID == "" {
+		req.VirtualFolder.ID = uuid.NewString()
+	}
+	if err := a.mailboxService.mutateVirtualFolder(ctx, req); err != nil {
+		return true, fmt.Errorf("run virtual-folder %s through local mailbox service: %w", req.Operation, err)
+	}
+	if (req.Operation == "create" || req.Operation == "update" || req.Operation == "refresh") && req.VirtualFolder != nil {
+		// Refresh requests carry only an ID; create and update carry the model.
+		a.emitRuntimeEvent("virtualfolder:cacheUpdated", map[string]interface{}{"virtualFolderId": req.VirtualFolder.ID})
+	} else if req.Operation == "refresh" {
+		a.emitRuntimeEvent("virtualfolder:cacheUpdated", map[string]interface{}{"virtualFolderId": req.ID})
+	}
+	return true, nil
 }
 
 // GetVirtualFolderConversations returns conversations matching a virtual folder's criteria
@@ -247,7 +301,7 @@ func (a *App) GetVirtualFolderCachedView(virtualFolderID string) (*VirtualFolder
 		return nil, err
 	}
 	if !hasCache {
-		if err := a.refreshVirtualFolderCache(vf); err != nil {
+		if err := a.RefreshVirtualFolderCache(virtualFolderID); err != nil {
 			return nil, err
 		}
 		if refs, refreshedAt, _, err = a.virtualFolderStore.LoadCache(virtualFolderID); err != nil {
@@ -275,6 +329,9 @@ func (a *App) GetVirtualFolderCachedView(virtualFolderID string) (*VirtualFolder
 // manual refresh.
 func (a *App) RefreshVirtualFolderCache(virtualFolderID string) error {
 	a.invalidateViewCounts()
+	if handled, err := a.mutateVirtualFolderThroughService(v1.VirtualFolderMutationRequest{Operation: "refresh", ID: virtualFolderID}); handled {
+		return err
+	}
 	vf, err := a.virtualFolderStore.Get(virtualFolderID)
 	if err != nil {
 		return fmt.Errorf("failed to get virtual folder: %w", err)
@@ -414,7 +471,7 @@ func (a *App) startVirtualFolderCacheRefresher(ctx context.Context) {
 				continue
 			}
 			for _, vf := range folders {
-				if err := a.refreshVirtualFolderCache(vf); err != nil {
+				if err := a.RefreshVirtualFolderCache(vf.ID); err != nil {
 					log.Warn().Err(err).Str("virtualFolderID", vf.ID).Msg("Failed to refresh virtual-folder cache")
 				}
 			}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/hkdb/aerion/internal/account"
 	"github.com/hkdb/aerion/internal/email/replycontent"
@@ -275,9 +276,18 @@ func (h *ReadHandler) handleFolders(w http.ResponseWriter, r *http.Request) {
 
 // ViewSummary contains saved virtual view metadata.
 type ViewSummary struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	SearchQuery string `json:"searchQuery,omitempty"`
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	OrderIndex  int       `json:"orderIndex"`
+	FolderIDs   []string  `json:"folderIds"`
+	FolderMode  string    `json:"folderMode"`
+	ReadStatus  string    `json:"readStatus"`
+	ReplyStatus string    `json:"replyStatus"`
+	StarStatus  string    `json:"starStatus"`
+	DateWindow  string    `json:"dateWindow"`
+	SearchQuery string    `json:"searchQuery,omitempty"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
 func (h *ReadHandler) handleViews(w http.ResponseWriter, r *http.Request) {
@@ -292,7 +302,16 @@ func (h *ReadHandler) handleViews(w http.ResponseWriter, r *http.Request) {
 		views = append(views, ViewSummary{
 			ID:          vf.ID,
 			Name:        vf.Name,
+			OrderIndex:  vf.OrderIndex,
+			FolderIDs:   vf.FolderIDs,
+			FolderMode:  vf.FolderMode,
+			ReadStatus:  vf.ReadStatus,
+			ReplyStatus: vf.ReplyStatus,
+			StarStatus:  vf.StarStatus,
+			DateWindow:  vf.DateWindow,
 			SearchQuery: vf.SearchQuery,
+			CreatedAt:   vf.CreatedAt,
+			UpdatedAt:   vf.UpdatedAt,
 		})
 	}
 

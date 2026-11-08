@@ -2,6 +2,7 @@ package alwayson
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/hkdb/aerion/internal/account"
@@ -51,6 +52,72 @@ func (o *catalogReadOperations) ListConversationsUnifiedInbox(offset, limit int,
 	return o.messages.ListConversationsByFolderIDs(folderIDs, offset, limit, sortOrder, filter)
 }
 
+func (r *SyncRuntime) CreateVirtualFolder(vf *virtualfolder.VirtualFolder) error {
+	if r == nil || r.virtualFolders == nil || r.messages == nil {
+		return errors.New("always-on runtime is not open")
+	}
+	if err := r.virtualFolders.Create(vf); err != nil {
+		return err
+	}
+	return r.refreshVirtualFolderCache(vf.ID)
+}
+
+func (r *SyncRuntime) UpdateVirtualFolder(vf *virtualfolder.VirtualFolder) error {
+	if r == nil || r.virtualFolders == nil || r.messages == nil {
+		return errors.New("always-on runtime is not open")
+	}
+	if err := r.virtualFolders.Update(vf); err != nil {
+		return err
+	}
+	return r.refreshVirtualFolderCache(vf.ID)
+}
+
+func (r *SyncRuntime) DeleteVirtualFolder(id string) error {
+	if r == nil || r.virtualFolders == nil {
+		return errors.New("always-on runtime is not open")
+	}
+	return r.virtualFolders.Delete(id)
+}
+
+func (r *SyncRuntime) ReorderVirtualFolders(ids []string) error {
+	if r == nil || r.virtualFolders == nil {
+		return errors.New("always-on runtime is not open")
+	}
+	return r.virtualFolders.Reorder(ids)
+}
+
+func (r *SyncRuntime) RefreshVirtualFolderCache(id string) error {
+	if r == nil || r.virtualFolders == nil || r.messages == nil {
+		return errors.New("always-on runtime is not open")
+	}
+	return r.refreshVirtualFolderCache(id)
+}
+
+func (r *SyncRuntime) refreshVirtualFolderCache(id string) error {
+	vf, err := r.virtualFolders.Get(id)
+	if err != nil {
+		return fmt.Errorf("load virtual folder for cache refresh: %w", err)
+	}
+	if vf == nil {
+		return fmt.Errorf("virtual folder not found: %s", id)
+	}
+	folderIDs, err := r.virtualFolders.QueryFolderIDs(vf)
+	if err != nil {
+		return fmt.Errorf("resolve virtual folder members: %w", err)
+	}
+	refs, err := r.messages.ListVirtualFolderConversationIDs(folderIDs, vf.SearchQuery, 200, message.VirtualFolderCriteria{
+		ReadStatus: vf.ReadStatus, ReplyStatus: vf.ReplyStatus, StarStatus: vf.StarStatus, DateWindow: vf.DateWindow,
+	})
+	if err != nil {
+		return fmt.Errorf("query virtual folder cache members: %w", err)
+	}
+	entries := make([]virtualfolder.CachedConversation, 0, len(refs))
+	for _, ref := range refs {
+		entries = append(entries, virtualfolder.CachedConversation{AccountID: ref.AccountID, ConversationID: ref.ConversationID})
+	}
+	return r.virtualFolders.SaveCache(id, entries)
+}
+
 // CatalogAPIHandler is kept as the compatible constructor for the mailbox read
 // API handler. Mount the result under the authenticated server's /v1/ prefix.
 func (r *SyncRuntime) CatalogAPIHandler() (http.Handler, error) {
@@ -73,6 +140,7 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 	readOperations := &mailboxReadOperations{runtime: r}
 	mux := http.NewServeMux()
 	v1.MountCatalogRoutes(mux, operations, automation.RequireGrantCapability)
+	v1.MountVirtualFolderMutationRoutes(mux, r, automation.RequireGrantCapability)
 	v1.MountMessageHeaderRoutes(mux, operations, automation.RequireGrantCapability)
 	v1.MountConversationListRoute(mux, operations, automation.RequireGrantCapability)
 	v1.MountSearchRoute(mux, readOperations, automation.RequireGrantCapability)
