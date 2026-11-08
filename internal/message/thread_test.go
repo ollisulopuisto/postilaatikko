@@ -152,6 +152,45 @@ func TestFindThreadID(t *testing.T) {
 	}
 }
 
+func TestResolveThreadIDAcceptsStaleMessageReferencesWithinAccount(t *testing.T) {
+	store, db := setupThreadTestDB(t)
+	defer db.Close()
+
+	msg := &Message{ID: "msg-stale", AccountID: "acc-1", FolderID: "fld-1", UID: 201, ThreadID: "thread-old"}
+	if err := store.Create(msg); err != nil {
+		t.Fatalf("store.Create: %v", err)
+	}
+	if err := store.UpdateThreadID(msg.ID, "thread-current"); err != nil {
+		t.Fatalf("store.UpdateThreadID: %v", err)
+	}
+
+	got, err := store.ResolveThreadID("acc-1", msg.ID)
+	if err != nil {
+		t.Fatalf("ResolveThreadID: %v", err)
+	}
+	if got != "thread-current" {
+		t.Fatalf("ResolveThreadID() = %q, want %q", got, "thread-current")
+	}
+}
+
+func TestResolveThreadIDDoesNotCrossAccounts(t *testing.T) {
+	store, db := setupThreadTestDB(t)
+	defer db.Close()
+
+	msg := &Message{ID: "msg-account-bound", AccountID: "acc-1", FolderID: "fld-1", UID: 202, ThreadID: "thread-bound"}
+	if err := store.Create(msg); err != nil {
+		t.Fatalf("store.Create: %v", err)
+	}
+
+	got, err := store.ResolveThreadID("another-account", msg.ID)
+	if err != nil {
+		t.Fatalf("ResolveThreadID: %v", err)
+	}
+	if got != "" {
+		t.Fatalf("ResolveThreadID() = %q, want empty for another account", got)
+	}
+}
+
 func BenchmarkFindThreadID(b *testing.B) {
 	store, db := setupThreadTestDB(b)
 	defer db.Close()

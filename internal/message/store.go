@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"regexp"
@@ -104,16 +105,29 @@ func snoozedViewHavingClause(filter string) string {
 	if strings.Contains(filter, "+") {
 		parts := strings.Split(filter, "+")
 		clauses := make([]string, 0, len(parts))
-		for _, part := range parts { if clause := snoozedViewHavingClause(part); clause != "" { clauses = append(clauses, strings.TrimPrefix(clause," HAVING ")) } }
-		if len(clauses)==0 { return "" }; return " HAVING "+strings.Join(clauses," AND ")
+		for _, part := range parts {
+			if clause := snoozedViewHavingClause(part); clause != "" {
+				clauses = append(clauses, strings.TrimPrefix(clause, " HAVING "))
+			}
+		}
+		if len(clauses) == 0 {
+			return ""
+		}
+		return " HAVING " + strings.Join(clauses, " AND ")
 	}
 	switch filter {
-	case "unread": return " HAVING SUM(CASE WHEN m.is_read=0 THEN 1 ELSE 0 END)>0"
-	case "starred": return " HAVING MAX(CASE WHEN m.is_starred=1 THEN 1 ELSE 0 END)=1"
-	case "attachments": return " HAVING MAX(CASE WHEN m.has_attachments=1 THEN 1 ELSE 0 END)=1"
-	case "replyLater": return " HAVING MAX(CASE WHEN EXISTS(SELECT 1 FROM reply_later_queue rl WHERE rl.account_id=m.account_id AND rl.conversation_id=COALESCE(m.thread_id,m.id)) THEN 1 ELSE 0 END)=1"
-	case "readLater": return " HAVING MAX(CASE WHEN EXISTS(SELECT 1 FROM read_later_queue rl WHERE rl.account_id=m.account_id AND rl.conversation_id=COALESCE(m.thread_id,m.id)) THEN 1 ELSE 0 END)=1"
-	default: return ""
+	case "unread":
+		return " HAVING SUM(CASE WHEN m.is_read=0 THEN 1 ELSE 0 END)>0"
+	case "starred":
+		return " HAVING MAX(CASE WHEN m.is_starred=1 THEN 1 ELSE 0 END)=1"
+	case "attachments":
+		return " HAVING MAX(CASE WHEN m.has_attachments=1 THEN 1 ELSE 0 END)=1"
+	case "replyLater":
+		return " HAVING MAX(CASE WHEN EXISTS(SELECT 1 FROM reply_later_queue rl WHERE rl.account_id=m.account_id AND rl.conversation_id=COALESCE(m.thread_id,m.id)) THEN 1 ELSE 0 END)=1"
+	case "readLater":
+		return " HAVING MAX(CASE WHEN EXISTS(SELECT 1 FROM read_later_queue rl WHERE rl.account_id=m.account_id AND rl.conversation_id=COALESCE(m.thread_id,m.id)) THEN 1 ELSE 0 END)=1"
+	default:
+		return ""
 	}
 }
 
@@ -287,7 +301,7 @@ func (s *Store) CountSnoozedConversations(filter string) (int, error) {
 	var count int
 	err := s.db.QueryRow(`SELECT COUNT(*) FROM (SELECT sz.account_id,sz.conversation_id FROM snoozed_conversations sz
 	 JOIN messages m ON m.account_id=sz.account_id AND COALESCE(m.thread_id,m.id)=sz.conversation_id
-	 WHERE julianday(sz.wake_at)>julianday('now') GROUP BY sz.account_id,sz.conversation_id`+snoozedViewHavingClause(filter)+`)`).Scan(&count)
+	 WHERE julianday(sz.wake_at)>julianday('now') GROUP BY sz.account_id,sz.conversation_id` + snoozedViewHavingClause(filter) + `)`).Scan(&count)
 	return count, err
 }
 
@@ -3032,6 +3046,29 @@ func (s *Store) GetMessageIDsInThread(accountID, threadID string) ([]string, err
 		return nil, fmt.Errorf("iterate thread message IDs: %w", err)
 	}
 	return ids, nil
+}
+
+// ResolveThreadID returns the current account-qualified thread ID for either a
+// thread reference or a message ID retained by an older reader snapshot.
+func (s *Store) ResolveThreadID(accountID, reference string) (string, error) {
+	if strings.TrimSpace(accountID) == "" || strings.TrimSpace(reference) == "" {
+		return "", fmt.Errorf("accountId and thread reference are required")
+	}
+	var threadID string
+	err := s.db.QueryRow(`
+		SELECT COALESCE(thread_id, id)
+		FROM messages
+		WHERE account_id = ? AND (COALESCE(thread_id, id) = ? OR id = ?)
+		ORDER BY CASE WHEN COALESCE(thread_id, id) = ? THEN 0 ELSE 1 END, date ASC, id ASC
+		LIMIT 1
+	`, accountID, reference, reference, reference).Scan(&threadID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("resolve thread reference: %w", err)
+	}
+	return threadID, nil
 }
 
 // SearchConversations searches for conversations in a folder using FTS5

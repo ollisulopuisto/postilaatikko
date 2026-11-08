@@ -111,6 +111,14 @@ func (o *mailboxReadOperations) GetThread(ctx context.Context, ref views.ThreadR
 	if ref.AccountID == "" || ref.ThreadID == "" {
 		return nil, errors.New("accountId and threadId are required")
 	}
+	threadID, err := o.runtime.messages.ResolveThreadID(ref.AccountID, ref.ThreadID)
+	if err != nil {
+		return nil, err
+	}
+	if threadID == "" {
+		return nil, fmt.Errorf("thread %s not found", ref.ThreadID)
+	}
+	ref.ThreadID = threadID
 	ids, err := o.runtime.messages.GetMessageIDsInThread(ref.AccountID, ref.ThreadID)
 	if err != nil {
 		return nil, err

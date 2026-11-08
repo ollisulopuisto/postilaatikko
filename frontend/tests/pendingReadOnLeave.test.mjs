@@ -57,3 +57,13 @@ test('an unrendered or discarded snapshot can be cleared without a read operatio
   pending.clear()
   assert.deepEqual(pending.take(), [])
 })
+
+test('unmatched unread context messages are not marked read when leaving the thread', () => {
+  const pending = new PendingReadOnLeave()
+  pending.capture([
+    { id: 'matched-unread', isRead: false, matched: true },
+    { id: 'context-unread', isRead: false, matched: false },
+    { id: 'local-unread', isRead: false },
+  ])
+  assert.deepEqual(pending.take(), ['matched-unread', 'local-unread'])
+})

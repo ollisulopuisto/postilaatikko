@@ -1,6 +1,6 @@
 # Service Database Ownership Protocol
 
-**Status:** Ownership protocol based on main `6f6197d`, extended through HOSTED-SERVER-038. The helper bootstrap handshake and migration-owner transfer are implemented; HOSTED-SERVER-026 through -032 route saved views, filter rules, triage queues, job inspection, and provider folders; HOSTED-SERVER-033 through -038 add account management, secret handoff, and detached-composer service routing. HOSTED-SERVER-039 moves persisted app UI state into a separate device database using a copy-only import. Account CRUD and credential editing remain API-backed, but the main desktop still opens the service database and constructs service-owned stores; full database separation remains incomplete.
+**Status:** Ownership protocol based on main `6f6197d`, extended through HOSTED-SERVER-040. The helper bootstrap handshake and migration-owner transfer are implemented; HOSTED-SERVER-026 through -038 route persisted mailbox workflows, account/credential changes, and detached-composer service operations. HOSTED-SERVER-039 moves persisted app UI state into a separate device database using a copy-only import. HOSTED-SERVER-040 preserves matched thread scope across body fetch/read-on-leave, canonicalizes stale message references, and tests that thread responses omit bodies and local attachment paths. The main desktop still opens the service database and constructs service-owned stores; full database separation remains incomplete.
 
 ## Current store map
 
@@ -16,7 +16,7 @@
 | Device and security data | `appStateStore` uses `device.db`; settings, content policy, contacts/CardDAV, certificates, S/MIME and PGP stores still use `aerion.db` | Not constructed by `SyncRuntime` | No API routes needed for local-only presentation; auth grants are service DB data | Keep device layout/preferences and OS-specific contact/key UX local. Decide per-store whether provider trust/configuration belongs with service credentials. |
 | API grants and helper lifecycle | Desktop keyring credential and connector; local lifecycle controls | SQLite token store and listener | Authenticated localhost API with revocation | Grants and server state stay service-owned; desktop keeps only its client token in the OS keyring. |
 
-The desktop store construction is in `app/app.go:637-689`; the helper's is in `internal/alwayson/sync.go:96-115`. `appStateStore` now uses `device.db`; the remaining desktop stores still use the service database. The detached composer no longer opens `aerion.db`; `ComposerApp` requests these operations from its parent desktop process over authenticated IPC. The table is a current dependency map, not a claim that every Wails call site was enumerated.
+The desktop store construction is in `app/app.go:637-689`; the helper's is in `internal/alwayson/sync.go:96-115`. `appStateStore` now uses `device.db`; the remaining desktop stores still use the service database. The detached composer no longer opens `aerion.db`; `ComposerApp` requests these operations from its parent desktop process over authenticated IPC. Thread metadata responses retain matched-scope bits while omitting body content, attachment bytes, and local attachment paths. The table is a current dependency map, not a claim that every Wails call site was enumerated.
 
 ## Decision: separate service and desktop databases
 

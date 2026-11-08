@@ -6,8 +6,8 @@
 export class PendingReadOnLeave {
   private messageIds = new Set<string>()
 
-  capture(messages: ReadonlyArray<{ id: string; isRead: boolean }>) {
-    this.messageIds = new Set(messages.filter(message => !message.isRead).map(message => message.id))
+  capture(messages: ReadonlyArray<{ id: string; isRead: boolean; matched?: boolean }>) {
+    this.messageIds = new Set(messages.filter(message => !message.isRead && message.matched !== false).map(message => message.id))
   }
 
   cancel(messageIds: Iterable<string>) {

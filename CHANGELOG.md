@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Keep thread actions and automatic read-on-leave limited to messages in the active view, preserve scope during body fetch, and keep service thread reads metadata-only with account-safe stale-reference resolution.
 - Persist desktop window and navigation state in a device-owned database, importing existing state without deleting the service-database copy.
 - Add helper-owned draft read/write, cached-body reply preparation, and explicit immediate send with revision checks and durable idempotency receipts.
 - Hand OAuth callback tokens and per-account custom provider credentials to the authenticated helper, with compensating rollback and Microsoft shared-mailbox propagation.

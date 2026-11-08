@@ -37,6 +37,7 @@
   import { getIsDarkActive } from '$lib/stores/theme.svelte'
   import { contactPhotos } from '$lib/stores/contactPhotos.svelte'
   import { PendingReadOnLeave } from './pendingReadOnLeave'
+  import { preserveThreadMessageScope } from './threadScope'
   import { publishUndoOperationCompleted, publishUndoOperationCreated } from '../list/undoMutationEvents'
   import { runMessageMutation } from '../list/mutationInFlight'
   import { getThreadSnapshot, setThreadSnapshot } from './threadSnapshotCache'
@@ -817,7 +818,7 @@
           if (conversation?.messages) {
             const idx = conversation.messages.findIndex(m => m.id === msg.id)
             if (idx >= 0 && updated) {
-              conversation.messages[idx] = updated
+              conversation.messages[idx] = preserveThreadMessageScope(msg, updated)
               conversation = conversation // trigger reactivity
               refreshedConversation = true
             }
