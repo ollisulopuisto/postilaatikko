@@ -146,7 +146,8 @@ func TestMigrationV29_OAuthCompositeKey(t *testing.T) {
 // who applied migration 31 (id format was "local-X@Y") and is now upgrading
 // to the schema that uses UUIDs.
 func TestMigrationV32_LocalRecordIDsRewrittenToUUIDs(t *testing.T) {
-	db := openTestDB(t)
+	db := openUnmigratedTestDB(t)
+	applyMigrationsThrough(t, db, 31)
 
 	// Seed legacy v31-shape data: a local record with the "local-<email>"
 	// synthetic id. Delete the migration 32 marker so it re-applies and
@@ -163,73 +164,6 @@ func TestMigrationV32_LocalRecordIDsRewrittenToUUIDs(t *testing.T) {
 	`); err != nil {
 		t.Fatalf("seed contact_emails: %v", err)
 	}
-	// Clear v32 AND any later markers so Migrate() sees v32 as pending.
-	// Migrate compares against MAX(version), so leaving a later marker
-	// (e.g., v33) would cause v32 to be skipped on the re-run.
-	if _, err := db.Exec(`DELETE FROM migrations WHERE version >= 32`); err != nil {
-		t.Fatalf("clear migration 32+ markers: %v", err)
-	}
-	// Drop v34's photo columns so its re-application's ADD COLUMNs don't
-	// collide. SQLite supports DROP COLUMN since 3.35; modernc.org/sqlite
-	// is well past that.
-	for _, col := range []string{"photo_data", "photo_media_type", "photo_url"} {
-		if _, err := db.Exec(`ALTER TABLE contact_records DROP COLUMN ` + col); err != nil {
-			t.Fatalf("drop %s for re-migrate: %v", col, err)
-		}
-	}
-	// Drop v36's encrypted fallback columns on oauth_tokens for the same
-	// reason — re-running v36 ADDs them again.
-	for _, col := range []string{"encrypted_access_token", "encrypted_refresh_token"} {
-		if _, err := db.Exec(`ALTER TABLE oauth_tokens DROP COLUMN ` + col); err != nil {
-			t.Fatalf("drop oauth_tokens.%s for re-migrate: %v", col, err)
-		}
-	}
-	// Drop v37's SMTP-receive-only / SMTP-creds columns + v38's
-	// reply_forward_identity_id + v41's smtp_auth_mechanism on accounts so
-	// the re-application's ADD COLUMNs don't collide.
-	for _, col := range []string{"no_outgoing_server", "smtp_username", "encrypted_smtp_password", "reply_forward_identity_id", "oauth_stable_id", "imap_auth_mechanism", "smtp_auth_mechanism"} {
-		if _, err := db.Exec(`ALTER TABLE accounts DROP COLUMN ` + col); err != nil {
-			t.Fatalf("drop accounts.%s for re-migrate: %v", col, err)
-		}
-	}
-	// Same for v39's body_failed on messages.
-	if _, err := db.Exec(`ALTER TABLE messages DROP COLUMN body_failed`); err != nil {
-		t.Fatalf("drop messages.body_failed for re-migrate: %v", err)
-	}
-	// Same for v43's inbox_category on messages.
-	if _, err := db.Exec(`DROP INDEX idx_messages_inbox_category`); err != nil {
-		t.Fatalf("drop messages inbox category index for re-migrate: %v", err)
-	}
-	if _, err := db.Exec(`ALTER TABLE messages DROP COLUMN inbox_category`); err != nil {
-		t.Fatalf("drop messages.inbox_category for re-migrate: %v", err)
-	}
-	// V44 created this table and V45 added failure_type; remove both before
-	// replaying migrations 44-46.
-	if _, err := db.Exec(`DROP TABLE sender_logo_cache`); err != nil {
-		t.Fatalf("drop sender_logo_cache for re-migrate: %v", err)
-	}
-	// Same for v47's folder flags sync modseq.
-	if _, err := db.Exec(`ALTER TABLE folders DROP COLUMN flags_sync_modseq`); err != nil {
-		t.Fatalf("drop folders.flags_sync_modseq for re-migrate: %v", err)
-	}
-	for _, col := range []string{"password_storage", "smtp_password_storage"} {
-		if _, err := db.Exec(`ALTER TABLE accounts DROP COLUMN ` + col); err != nil {
-			t.Fatalf("drop accounts.%s for re-migrate: %v", col, err)
-		}
-	}
-	if _, err := db.Exec(`ALTER TABLE contact_sources DROP COLUMN password_storage`); err != nil {
-		t.Fatalf("drop contact_sources.password_storage for re-migrate: %v", err)
-	}
-	for _, col := range []string{"folder_mode", "read_status", "reply_status", "star_status", "date_window", "search_query"} {
-		if _, err := db.Exec(`ALTER TABLE virtual_folders DROP COLUMN ` + col); err != nil {
-			t.Fatalf("drop virtual_folders.%s for re-migrate: %v", col, err)
-		}
-	}
-	// Same for v63's signature_rules on identities.
-	if _, err := db.Exec(`ALTER TABLE identities DROP COLUMN signature_rules`); err != nil {
-		t.Fatalf("drop identities.signature_rules for re-migrate: %v", err)
-	}
-
 	// Re-run migrations — migration 32 should rewrite the seeded local- id.
 	if err := db.Migrate(); err != nil {
 		t.Fatalf("re-migrate: %v", err)
@@ -338,82 +272,8 @@ func TestMigrationV33_AddsAddressbookFK(t *testing.T) {
 // then re-running migration 33 — which must pre-clean orphans before the
 // table rebuild's INSERT.
 func TestMigrationV33_CleansExistingOrphans(t *testing.T) {
-	db := openTestDB(t)
-
-	// Roll back the v33 schema: drop the FK by rebuilding the table without
-	// it. This mimics what an install at v32 would have looked like.
-	if _, err := db.Exec(`
-		PRAGMA foreign_keys = OFF;
-		DROP TABLE carddav_record_state;
-		CREATE TABLE carddav_record_state (
-			record_id       TEXT PRIMARY KEY REFERENCES contact_records(id) ON DELETE CASCADE,
-			addressbook_id  TEXT NOT NULL,
-			href            TEXT NOT NULL UNIQUE,
-			etag            TEXT,
-			synced_at       DATETIME
-		);
-		CREATE INDEX idx_carddav_record_state_addressbook
-			ON carddav_record_state(addressbook_id);
-		DELETE FROM migrations WHERE version >= 33;
-		PRAGMA foreign_keys = ON;
-	`); err != nil {
-		t.Fatalf("rewind to v32 schema: %v", err)
-	}
-	// Drop v34's photo columns so re-application's ADD COLUMNs don't collide.
-	for _, col := range []string{"photo_data", "photo_media_type", "photo_url"} {
-		if _, err := db.Exec(`ALTER TABLE contact_records DROP COLUMN ` + col); err != nil {
-			t.Fatalf("drop %s for re-migrate: %v", col, err)
-		}
-	}
-	// Same for v36's encrypted oauth_tokens fallback columns.
-	for _, col := range []string{"encrypted_access_token", "encrypted_refresh_token"} {
-		if _, err := db.Exec(`ALTER TABLE oauth_tokens DROP COLUMN ` + col); err != nil {
-			t.Fatalf("drop oauth_tokens.%s for re-migrate: %v", col, err)
-		}
-	}
-	// Same for v37 + v38 + v40 + v41 + v42's accounts columns.
-	for _, col := range []string{"no_outgoing_server", "smtp_username", "encrypted_smtp_password", "reply_forward_identity_id", "oauth_stable_id", "imap_auth_mechanism", "smtp_auth_mechanism"} {
-		if _, err := db.Exec(`ALTER TABLE accounts DROP COLUMN ` + col); err != nil {
-			t.Fatalf("drop accounts.%s for re-migrate: %v", col, err)
-		}
-	}
-	// And v39's body_failed on messages.
-	if _, err := db.Exec(`ALTER TABLE messages DROP COLUMN body_failed`); err != nil {
-		t.Fatalf("drop messages.body_failed for re-migrate: %v", err)
-	}
-	// And v43's inbox_category on messages.
-	if _, err := db.Exec(`DROP INDEX idx_messages_inbox_category`); err != nil {
-		t.Fatalf("drop messages inbox category index for re-migrate: %v", err)
-	}
-	if _, err := db.Exec(`ALTER TABLE messages DROP COLUMN inbox_category`); err != nil {
-		t.Fatalf("drop messages.inbox_category for re-migrate: %v", err)
-	}
-	// V44 created this table and V45 added failure_type; remove both before
-	// replaying migrations 44-46.
-	if _, err := db.Exec(`DROP TABLE sender_logo_cache`); err != nil {
-		t.Fatalf("drop sender_logo_cache for re-migrate: %v", err)
-	}
-	// Same for v47's folder flags sync modseq.
-	if _, err := db.Exec(`ALTER TABLE folders DROP COLUMN flags_sync_modseq`); err != nil {
-		t.Fatalf("drop folders.flags_sync_modseq for re-migrate: %v", err)
-	}
-	for _, col := range []string{"password_storage", "smtp_password_storage"} {
-		if _, err := db.Exec(`ALTER TABLE accounts DROP COLUMN ` + col); err != nil {
-			t.Fatalf("drop accounts.%s for re-migrate: %v", col, err)
-		}
-	}
-	if _, err := db.Exec(`ALTER TABLE contact_sources DROP COLUMN password_storage`); err != nil {
-		t.Fatalf("drop contact_sources.password_storage for re-migrate: %v", err)
-	}
-	for _, col := range []string{"folder_mode", "read_status", "reply_status", "star_status", "date_window", "search_query"} {
-		if _, err := db.Exec(`ALTER TABLE virtual_folders DROP COLUMN ` + col); err != nil {
-			t.Fatalf("drop virtual_folders.%s for re-migrate: %v", col, err)
-		}
-	}
-	// Same for v63's signature_rules on identities.
-	if _, err := db.Exec(`ALTER TABLE identities DROP COLUMN signature_rules`); err != nil {
-		t.Fatalf("drop identities.signature_rules for re-migrate: %v", err)
-	}
+	db := openUnmigratedTestDB(t)
+	applyMigrationsThrough(t, db, 32)
 
 	// Seed: orphan state row whose addressbook doesn't exist. Pre-migration,
 	// this insert succeeds because the FK isn't there.

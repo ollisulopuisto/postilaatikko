@@ -149,6 +149,10 @@ func (s *Store) DeleteCustomOAuthProvider(accountID string) error {
 			return fmt.Errorf("remove custom OAuth provider from keyring: %w", err)
 		}
 	}
+	// The encrypted fallback table is lazy and may never have been needed.
+	if err := s.ensureCustomProvidersTable(); err != nil {
+		return fmt.Errorf("ensure custom OAuth provider fallback before deletion: %w", err)
+	}
 	if _, err := s.db.Exec(`DELETE FROM oauth_custom_providers WHERE account_id = ?`, accountID); err != nil {
 		return fmt.Errorf("delete custom OAuth provider fallback: %w", err)
 	}
