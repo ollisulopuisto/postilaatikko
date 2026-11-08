@@ -23,25 +23,44 @@ class MessageAnimationsStore {
     return this.animating.size > 0
   }
 
-  // Default safety TTL so animations self-retire even in workspaces/tabs without a MessageList
-  private static readonly AUTO_EXPIRE_MS = 600
+  private holds = new Map<number, number>()
+  private generations = new Map<string, number>()
+  private nextGeneration = 0
 
-  startRemoval(messageIds: Iterable<string>, kind: MessageAnimationKind, ttlMs: number = MessageAnimationsStore.AUTO_EXPIRE_MS) {
-    const ids = [...new Set(messageIds)].filter(Boolean)
-    if (ids.length === 0) return
+  // Each callback owns only the captured generation, never a newer operation.
+  holdActive() {
+    const captured = new Map(this.generations)
+    for (const generation of captured.values()) this.holds.set(generation, (this.holds.get(generation) || 0) + 1)
+    return () => {
+      for (const [id, generation] of captured) {
+        const remaining = Math.max(0, (this.holds.get(generation) || 1) - 1)
+        if (remaining) this.holds.set(generation, remaining)
+        if (!remaining) this.holds.delete(generation)
+        if (!remaining && this.generations.get(id) === generation) this.finishRemoval([id])
+      }
+    }
+  }
 
+  settleRemoval(messageIds: Iterable<string>) {
+    const captured = [...messageIds].map(id => [id, this.generations.get(id)] as const)
+    setTimeout(() => {
+      for (const [id, generation] of captured) {
+        if ((generation === undefined || !this.holds.get(generation)) && this.generations.get(id) === generation) {
+          this.finishRemoval([id])
+        }
+      }
+    }, MESSAGE_EXIT_ANIM_DURATION_MS)
+  }
+
+  startRemoval(messageIds: Iterable<string>, kind: MessageAnimationKind) {
     const next = new Map(this.animating)
-    for (const id of ids) {
-      next.set(id, kind)
+    for (const id of messageIds) {
+      if (id) {
+        next.set(id, kind)
+        this.generations.set(id, ++this.nextGeneration)
+      }
     }
     this.animating = next
-
-    // Ensure the operation has a bounded lifecycle independent of any list component
-    if (ttlMs > 0 && typeof setTimeout !== 'undefined') {
-      setTimeout(() => {
-        this.finishRemoval(ids)
-      }, ttlMs)
-    }
   }
 
   finishRemoval(messageIds: Iterable<string>) {
@@ -49,6 +68,7 @@ class MessageAnimationsStore {
     let changed = false
     for (const id of messageIds) {
       if (next.delete(id)) {
+        this.generations.delete(id)
         changed = true
       }
     }
@@ -60,6 +80,8 @@ class MessageAnimationsStore {
   clear() {
     if (this.animating.size > 0) {
       this.animating = new Map()
+      this.generations.clear()
+      this.holds.clear()
     }
   }
 }

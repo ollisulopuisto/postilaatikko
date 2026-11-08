@@ -27,6 +27,7 @@
   // State
   let identities = $state<account.Identity[]>([])
   let loading = $state(true)
+  let selectedDefaultId = $state('')
   let showEditor = $state(false)
   let editingIdentity = $state<account.Identity | null>(null)
   let deletingId = $state<string | null>(null)
@@ -101,6 +102,7 @@
     loading = true
     try {
       identities = await GetIdentities(accountId)
+      selectedDefaultId = identities.find(identity => identity.isDefault)?.id ?? ''
     } catch (err) {
       console.error('Failed to load identities:', err)
       addToast({
@@ -174,12 +176,16 @@
 
     try {
       await SetDefaultIdentity(accountId, identity.id)
+      // Keep keyed rows mounted: removing them to show a loading spinner loses
+      // the radio's focus, breaking the next arrow key in the native group.
+      for (const item of identities) item.isDefault = item.id === identity.id
+      identities = [...identities]
       addToast({
         type: 'success',
         message: $_('identity.isNowDefault', { values: { email: identity.email } }),
       })
-      await loadIdentities()
     } catch (err) {
+      selectedDefaultId = identities.find(item => item.isDefault)?.id ?? ''
       console.error('Failed to set default identity:', err)
       addToast({
         type: 'error',
@@ -236,20 +242,17 @@
     <div class="space-y-2">
       {#each identities as identity (identity.id)}
         <div class="flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors group">
-          <!-- Default radio button -->
-          <button
-            type="button"
-            onclick={() => handleSetDefault(identity)}
-            class="flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors
-              {identity.isDefault
-                ? 'border-primary bg-primary'
-                : 'border-muted-foreground hover:border-primary'}"
+          <!-- Native grouping supplies one tab stop and arrow-key selection. -->
+          <input
+            type="radio"
+            name={`default-identity-${accountId}`}
+            value={identity.id}
+            bind:group={selectedDefaultId}
+            aria-label={`${identity.email}: ${identity.isDefault ? $_('identity.defaultAddress') : $_('identity.setAsDefaultAddress')}`}
+            onchange={() => handleSetDefault(identity)}
+            class="flex-shrink-0 w-4 h-4 accent-primary cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             title={identity.isDefault ? $_('identity.defaultAddress') : $_('identity.setAsDefaultAddress')}
-          >
-            {#if identity.isDefault}
-              <div class="w-2 h-2 rounded-full bg-white"></div>
-            {/if}
-          </button>
+          />
 
           <!-- Identity info -->
           <div class="flex-1 min-w-0">
@@ -269,12 +272,13 @@
           </div>
 
           <!-- Actions -->
-          <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity">
             <Button
               variant="ghost"
               size="sm"
               onclick={() => handleEditIdentity(identity)}
               class="h-8 w-8 p-0"
+              aria-label={$_('common.edit')}
               title={$_('common.edit')}
             >
               <Icon icon="mdi:pencil" class="w-4 h-4" />
@@ -285,6 +289,7 @@
               onclick={() => handleDeleteIdentity(identity)}
               disabled={identity.isDefault || deletingId === identity.id}
               class="h-8 w-8 p-0 text-destructive hover:text-destructive"
+              aria-label={identity.isDefault ? $_('identity.cannotDeleteDefaultTitle') : $_('common.delete')}
               title={identity.isDefault ? $_('identity.cannotDeleteDefaultTitle') : $_('common.delete')}
             >
               {#if deletingId === identity.id}
@@ -342,12 +347,13 @@
                 <div class="text-xs text-muted-foreground truncate">{mailbox.name}</div>
               {/if}
             </div>
-            <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity">
               <Button
                 variant="ghost"
                 size="sm"
                 onclick={() => { editingSharedMailbox = mailbox; showSharedMailboxEditor = true }}
                 class="h-8 w-8 p-0"
+                aria-label={$_('common.edit')}
                 title={$_('common.edit')}
               >
                 <Icon icon="mdi:pencil" class="w-4 h-4" />
@@ -357,6 +363,7 @@
                 size="sm"
                 onclick={() => handleDeleteSharedMailbox(mailbox)}
                 class="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                aria-label={$_('common.delete')}
                 title={$_('common.delete')}
               >
                 <Icon icon="mdi:delete" class="w-4 h-4" />

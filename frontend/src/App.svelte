@@ -2292,6 +2292,8 @@
       messageAnimations.finishRemoval(messageIds)
       console.error('Archive failed:', err)
       addToast({ type: 'error', message: $_('toast.failedToArchive') })
+    } finally {
+      messageAnimations.settleRemoval(messageIds)
     }
   }
 
@@ -2319,6 +2321,8 @@
       messageAnimations.finishRemoval(messageIds)
       console.error('Archive and mark read failed:', err)
       addToast({ type: 'error', message: $_(archived ? 'toast.failedToUpdateReadStatus' : 'toast.failedToArchive') })
+    } finally {
+      messageAnimations.settleRemoval(messageIds)
     }
   }
 
@@ -2377,6 +2381,8 @@
       const isSpamFolder = selectedFolderType === 'spam'
       console.error('Spam toggle failed:', err)
       addToast({ type: 'error', message: $_(isSpamFolder ? 'toast.failedToMarkAsNotSpam' : 'toast.failedToMarkAsSpam') })
+    } finally {
+      messageAnimations.settleRemoval(messageIds)
     }
   }
 

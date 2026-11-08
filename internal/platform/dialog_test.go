@@ -30,6 +30,8 @@ func TestValidateDialogURL(t *testing.T) {
 		{"-oProxyCommand=calc", false},
 		{"mailto:--help", false},
 		{"mailto:-flag@example.com", false},
+		{"mailto:%2D%2Dhelp", false},
+		{"mailto:%2d-flag@example.com", false},
 		{"https://example.com\r\ninjected", false},
 		{"https://example.com\x00injected", false},
 	}
