@@ -60,12 +60,35 @@ class WorkflowTests(unittest.TestCase):
             HELPER.subprocess, "run", return_value=subprocess.CompletedProcess([], 0),
         ) as run:
             HELPER.import_certificate()
-        self.assertEqual(len(run.call_args_list), 6)
+        self.assertEqual(len(run.call_args_list), 8)
         for call in run.call_args_list:
             self.assertEqual(call.args[0], ["/usr/bin/security", "-i"])
             self.assertNotIn("dummy-p12", str(call.args))
             self.assertNotIn("KEYCHAIN_PASSWORD", call.kwargs["env"])
             self.assertNotIn("P12_PASSWORD", call.kwargs["env"])
+
+    def test_zero_exit_with_command_error_fails_closed(self):
+        with patch.object(HELPER.subprocess, "run", return_value=(
+            subprocess.CompletedProcess([], 0, "", "unlock-keychain: returned -25293\n")
+        )), self.assertRaises(RuntimeError):
+            HELPER.security("unlock-keychain", "-p", "dummy", "/dummy/keychain")
+
+    def test_import_preserves_existing_and_concurrent_keychains(self):
+        env = {"KEYCHAIN_PATH": "/dummy/new", "CERTIFICATE_PATH": "/dummy/cert",
+               "KEYCHAIN_PASSWORD": "dummy", "P12_PASSWORD": "dummy"}
+        with patch.dict(os.environ, env), patch.object(HELPER, "security", side_effect=[
+            '"/original with spaces"\n', "", "", "", "", "",
+            '"/concurrent"\n', "",
+        ]) as run:
+            HELPER.import_certificate()
+        self.assertEqual(run.call_args.args, ("list-keychains", "-d", "user", "-s",
+                         "/original with spaces", "/concurrent", "/dummy/new"))
+
+    def test_paths_preserve_literal_quotes_and_backslashes(self):
+        value = '/dummy/work "2026" \\ keychain.keychain-db'
+        self.assertEqual(HELPER.keychain_paths('    "' + value + '"\n'), [value])
+        with self.assertRaises(RuntimeError):
+            HELPER.keychain_paths('security> "/dummy/path"\n')
 
     def test_line_protocol_rejects_command_separators(self):
         for value in ["a\nb", "a\rb", "a\0b"]:
