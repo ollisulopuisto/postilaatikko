@@ -50,3 +50,11 @@ test('message bubble records provide sender side required for avatar alignment n
   // Outgoing message bubbles sit on the right; avatar aligns beside right-pointing tail
   assert.equal(result.get('outgoing-1').side, 'right')
 })
+
+
+test('reversed outgoing avatar row starts at the right edge', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const source = await readFile(new URL('../src/lib/components/viewer/ConversationViewer.svelte', import.meta.url), 'utf8')
+  assert.match(source, /bubble\?\.side === 'right' \? 'justify-start flex-row-reverse'/)
+  assert.doesNotMatch(source, /justify-end flex-row-reverse/)
+})

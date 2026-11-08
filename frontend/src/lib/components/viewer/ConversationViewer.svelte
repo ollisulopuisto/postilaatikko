@@ -2192,7 +2192,7 @@
                 onActionComplete={handleContextMenuActionComplete}
                 onReply={openReply}
               >
-                <div class={readerMode === 'conversation' ? `conversation-bubble-row flex items-end gap-2.5 ${bubble?.side === 'right' ? 'justify-end flex-row-reverse' : 'justify-start'}` : ''}>
+                <div class={readerMode === 'conversation' ? `conversation-bubble-row flex items-end gap-2.5 ${bubble?.side === 'right' ? 'justify-start flex-row-reverse' : 'justify-start'}` : ''}>
                   {#if readerMode === 'conversation' && getShowViewerCircles()}
                     {@const avatarPhoto = contactPhotos.get(msg.fromEmail)}
                     <div class="conversation-bubble-avatar shrink-0 mb-1">
