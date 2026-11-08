@@ -367,3 +367,9 @@ Suggested model/effort is a dispatch recommendation, not an existing claim or mo
 | ID | Status | Owner / branch / worktree | Scope |
 | --- | --- | --- | --- |
 | COUNT-REUSE | Review (local only) | Instinct / agent/approved-post-followup / post-work | Shared exact Gmail online-count scans/results, isolated subscribers, criteria/account keys, mutation invalidation and explicit refresh bypass. Separate from P-047; no merge/release/native claim. |
+
+## Frontend check repair (2026-11-08)
+
+- FRONTEND-CHECKS-001: Review. Owner Instinct; branch `agent/fix-main-frontend-checks`; worktree `/downloads/postilaatikko-check-fix`. Fix current main's 21 type errors and 3 lint errors without weakening checks; regression-test copy/move dispatch; no merge.
+
+Validation: callback regression red (2 ReferenceErrors) before, green2/2 after. `npm run check`: before21errors/1warning, after0errors/1existing nonreactive viewerRef warning +8shortcut checks pass. `npm run lint`: before3errors, after0. Full frontend tests799/799 pass (three baseline failures repaired: stale native Paste/registry wiring assertions, unified-folder guard Go parity). `npm run build` passes before/after. Wails declarations synchronized to existing Go/JS methods and UndoHistoryEntry fields; no new backend methods. No native Mac/UI acceptance performed.

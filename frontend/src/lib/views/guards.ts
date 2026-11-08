@@ -132,8 +132,8 @@ export function isThreadPage(value: unknown): boolean {
   )
 }
 
-const SCOPE_KINDS = ['all_inboxes', 'all_accounts', 'account', 'folder', 'virtual_folder', 'search']
-const SCOPE_FIELDS = ['accountId', 'folderId', 'virtualFolderId', 'query', 'within']
+const SCOPE_KINDS = ['all_inboxes', 'all_accounts', 'account', 'folder', 'unified_folder', 'virtual_folder', 'search']
+const SCOPE_FIELDS = ['accountId', 'folderId', 'folderType', 'virtualFolderId', 'query', 'within']
 
 function has(scope: Json, key: string): boolean {
   const value = scope[key]
@@ -165,6 +165,9 @@ export function scopeError(scope: unknown): string | null {
     case 'folder':
       if (!has(scope, 'accountId') || !has(scope, 'folderId')) return 'folder scope needs accountId and folderId'
       return only('accountId', 'folderId') ? null : 'folder scope takes only accountId and folderId'
+    case 'unified_folder':
+      if (!['drafts', 'sent', 'trash', 'starred', 'archive', 'spam'].includes(String(scope.folderType))) return 'unified folder scope needs a supported folderType'
+      return only('folderType') ? null : 'unified folder scope takes only folderType'
     case 'virtual_folder':
       if (!has(scope, 'virtualFolderId')) return 'virtual_folder scope needs virtualFolderId'
       return only('virtualFolderId') ? null : 'virtual_folder scope takes only virtualFolderId'

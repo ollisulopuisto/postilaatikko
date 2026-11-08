@@ -982,7 +982,7 @@
             ? [`${owningAccountId}:${conversation.threadId}`, { accountId: owningAccountId, conversationId: conversation.threadId }] as const
             : null
         })
-        .filter((ref): ref is readonly [string, { accountId: string; conversationId: string }] => ref !== null)
+        .filter((ref) => ref !== null)
     ).values()]
   )
 
