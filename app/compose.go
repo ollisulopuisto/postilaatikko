@@ -641,7 +641,10 @@ func (a *App) SendMessageWithRequestID(accountID string, msg smtp.ComposeMessage
 	if strings.TrimSpace(requestID) == "" {
 		return errors.New("a stable send request ID is required")
 	}
-	fingerprintBytes, err := json.Marshal(msg)
+	fingerprintBytes, err := json.Marshal(struct {
+		AccountID string              `json:"accountId"`
+		Message   smtp.ComposeMessage `json:"message"`
+	}{AccountID: accountID, Message: msg})
 	if err != nil {
 		return err
 	}
