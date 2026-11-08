@@ -6,7 +6,9 @@ import ts from 'typescript'
 
 // Run the actual registered callbacks, not a copy of their dispatch logic.
 const source = readFileSync(new URL('../src/App.svelte', import.meta.url), 'utf8')
-const script = source.match(/<script[^>]*>([\s\S]*?)<\/script>/)[1]
+const scriptMatch = source.match(/<script\b[^>]*>([\s\S]*?)<\/script\s*>/i)
+assert.ok(scriptMatch, 'Expected App.svelte to contain a <script> block')
+const script = scriptMatch[1]
 const ast = ts.createSourceFile('App.ts', script, ts.ScriptTarget.Latest, true)
 const callbacks = new Map()
 function visit(node) {
