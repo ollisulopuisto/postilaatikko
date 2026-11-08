@@ -26,7 +26,7 @@
     let current = true
     void PrepareComposerReply(accountId, messageId, mode).then((message: smtp.ComposeMessage | null) => {
       if (current) initialMessage = message
-    }).catch(error => {
+    }).catch((error: unknown) => {
       console.error('Failed to prepare inline reply:', error)
       if (!current) return
       failed = true

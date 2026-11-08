@@ -139,7 +139,7 @@ func (h *TriageMutationsHandler) handle(w http.ResponseWriter, r *http.Request, 
 		writeTriageMutationError(w, r, http.StatusBadRequest, CodeInvalidRequest, "Account and conversation IDs are required", false)
 		return
 	}
-	if request.WakeAt.IsZero() == false {
+	if !request.WakeAt.IsZero() {
 		request.WakeAt = request.WakeAt.UTC().Round(0)
 	}
 	key := strings.TrimSpace(r.Header.Get("Idempotency-Key"))

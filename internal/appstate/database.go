@@ -108,7 +108,7 @@ func ImportLegacyDeviceDatabase(deviceDB, legacyDB *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("begin device state initialization: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // A committed transaction has nothing left to roll back.
 
 	if err := importAppStateOnce(tx, legacyDB); err != nil {
 		return err

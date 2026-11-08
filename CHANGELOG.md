@@ -55,6 +55,9 @@
 
 ## Postilaatikko 2026.11.07.1
 
+- Reuse compiled attachment keyword patterns when checking a draft for forgotten attachments.
+- Repair current-focus routing for Move To and Copy To and keep unified-folder scope checks aligned with the mailbox service.
+
 - Make conversation bubbles narrower and align them by sender, with subtle participant colors that remain distinguishable in group threads.
 
 ## Postilaatikko 2026.11.06.3

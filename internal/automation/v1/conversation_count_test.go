@@ -69,3 +69,37 @@ func TestMountConversationCountRouteRejectsInvalidScope(t *testing.T) {
 		t.Fatalf("status=%d called=%v, want bad request without operation", response.Code, called)
 	}
 }
+
+func TestMountConversationCountRouteReturnsUnifiedFolderCount(t *testing.T) {
+	for _, folderType := range []string{"drafts", "sent", "trash", "starred", "archive", "spam"} {
+		t.Run(folderType, func(t *testing.T) {
+			called := false
+			mux := http.NewServeMux()
+			MountConversationCountRoute(mux, conversationCountOperationsFunc(func(req ConversationCountRequest) (int, error) {
+				called = true
+				if req.Scope.Kind != views.ScopeUnifiedFolder || req.Scope.FolderType != folderType || req.Filter != "unread" {
+					t.Fatalf("count request = %+v", req)
+				}
+				return 7, nil
+			}), func(_ http.ResponseWriter, _ *http.Request, capability Capability) bool {
+				if capability != CapabilityMailRead {
+					t.Fatalf("capability = %q", capability)
+				}
+				return true
+			})
+			request := httptest.NewRequest(http.MethodPost, "/v1/conversations/count", strings.NewReader(`{"scope":{"kind":"unified_folder","folderType":"`+folderType+`"},"filter":"unread"}`))
+			response := httptest.NewRecorder()
+			mux.ServeHTTP(response, request)
+			if response.Code != http.StatusOK || !called {
+				t.Fatalf("status=%d called=%v", response.Code, called)
+			}
+			var result Response[int]
+			if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+				t.Fatal(err)
+			}
+			if result.Data != 7 {
+				t.Fatalf("count=%d, want 7", result.Data)
+			}
+		})
+	}
+}

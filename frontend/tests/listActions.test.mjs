@@ -148,7 +148,7 @@ test('regression: command panel mail actions never pass a thread id as a message
 
 test('command panel list handlers go through the shared action layer', () => {
   for (const id of ['mail.archive', 'mail.spam', 'mail.trash', 'mail.star', 'mail.markRead', 'mail.markUnread']) {
-    assert.match(appSource, new RegExp(`registerCommandHandler\\('${id.replace('.', '\\.')}',\\s*\\(\\)\\s*=>\\s*runListAction\\('${id.replace('.', '\\.')}'`), id)
+    assert.match(appSource, new RegExp(`registerCommand\\('${id.replace('.', '\\.')}',\\s*\\(\\)\\s*=>\\s*runListAction\\('${id.replace('.', '\\.')}'`), id)
   }
 })
 

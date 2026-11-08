@@ -367,3 +367,9 @@ Suggested model/effort is a dispatch recommendation, not an existing claim or mo
 | ID | Status | Owner / branch / worktree | Scope |
 | --- | --- | --- | --- |
 | COUNT-REUSE | Review (local only) | Instinct / agent/approved-post-followup / post-work | Shared exact Gmail online-count scans/results, isolated subscribers, criteria/account keys, mutation invalidation and explicit refresh bypass. Separate from P-047; no merge/release/native claim. |
+
+## PR180 check repair (2026-11-08)
+
+Owner Instinct, worktree `/downloads/postilaatikko-pr180`, repair branch `repair/pr180-tests` pushes to existing attachment-regex PR180. Preserve its optimization and strict unified scope guard. Reuse frontend fixes/test coverage from PR181, repair shared backend lint errors, and retain regression guards. No main push or merge.
+
+Verification:825/825frontend tests pass; frontend check0errors/1pre-existing viewerRef warning; lint passes; production build passes. `go test ./internal/automation/v1 ./internal/appstate ./internal/views` and golangci-lint2.12.2 on those packages pass (0issues). Full native-linked Go test/lint requires CI because local glib/GTK headers are unavailable. Review pending; no merge.
