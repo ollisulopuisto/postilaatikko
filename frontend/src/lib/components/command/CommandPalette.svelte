@@ -13,7 +13,7 @@
   import { formatShortcut, isMacPlatform } from '$lib/keyboard/format'
   import { getActiveExtension } from '$lib/stores/uiState.svelte'
   import { getIsDarkActive } from '$lib/stores/theme.svelte'
-  import { CORE_COMMANDS, getShortcut } from '$lib/keyboard/registry'
+  import { CORE_COMMANDS, getShortcut, type CommandDefinition, type CoreCommandId } from '$lib/keyboard/registry'
 
   const mac = isMacPlatform()
 
@@ -47,7 +47,8 @@
   const allCommands = $derived.by(() => {
     const isDark = getIsDarkActive()
     const activeExt = getActiveExtension()
-    return CORE_COMMANDS
+    const commands: readonly (CommandDefinition & { id: CoreCommandId })[] = CORE_COMMANDS
+    return commands
       .filter(definition => definition.palette !== false && !!definition.category)
       .map((definition): PaletteItem => {
         const shortcut = definition.shortcutId ? getShortcut(definition.shortcutId) : undefined

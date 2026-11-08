@@ -116,3 +116,13 @@ test('scopeError accepts and rejects the same scopes as the Go Validate', async 
   scopes.valid.forEach((scope, i) => assert.equal(scopeError(scope), null, `valid[${i}]`))
   scopes.invalid.forEach((scope, i) => assert.notEqual(scopeError(scope), null, `invalid[${i}]`))
 })
+
+test('unified folder scopes require a string type and supported system folder', () => {
+  for (const folderType of ['drafts', 'sent', 'trash', 'starred', 'archive', 'spam']) {
+    assert.equal(scopeError({ kind: 'unified_folder', folderType }), null)
+  }
+  for (const folderType of [['sent'], ['archive'], [], {}, null, 1, true, 'all', '']) {
+    assert.notEqual(scopeError({ kind: 'unified_folder', folderType }), null)
+  }
+  assert.notEqual(scopeError({ kind: 'unified_folder', folderType: 'sent', accountId: 'acc-a' }), null)
+})
