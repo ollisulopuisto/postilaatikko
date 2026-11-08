@@ -526,6 +526,11 @@ func (a *App) RemoveAccount(id string) error {
 		if err := serviceClient.DeleteAccount(ctx, id, accountMutationKey()); err != nil {
 			return err
 		}
+		if a.contentPolicyStore != nil {
+			if err := a.contentPolicyStore.DeleteAccount(id); err != nil {
+				return fmt.Errorf("account was removed from the mailbox service but local folder policies could not be cleared: %w", err)
+			}
+		}
 		if a.replyContent != nil {
 			a.replyContent.PurgeAccount(id)
 		}
@@ -562,6 +567,11 @@ func (a *App) RemoveAccount(id string) error {
 	if err := a.accountStore.Delete(id); err != nil {
 		log.Error().Err(err).Str("account_id", id).Msg("Failed to delete account")
 		return err
+	}
+	if a.contentPolicyStore != nil {
+		if err := a.contentPolicyStore.DeleteAccount(id); err != nil {
+			return fmt.Errorf("account was removed but local folder policies could not be cleared: %w", err)
+		}
 	}
 
 	// Scale database connection pool after removing account

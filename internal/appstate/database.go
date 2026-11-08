@@ -9,6 +9,7 @@ import (
 const (
 	deviceStateImportVersion    = 1
 	deviceSettingsImportVersion = 2
+	deviceContentPolicyVersion  = 3
 )
 
 // InitializeDeviceDatabase creates the device-owned app-state schema and
@@ -45,6 +46,19 @@ func InitializeDeviceDatabase(deviceDB, legacyDB *sql.DB) error {
 		return fmt.Errorf("create device image allowlist index: %w", err)
 	}
 	if _, err := deviceDB.Exec(`
+		CREATE TABLE IF NOT EXISTS folder_content_policies (
+			folder_id TEXT PRIMARY KEY,
+			account_id TEXT NOT NULL,
+			body_prefetch INTEGER NOT NULL CHECK(body_prefetch IN (0, 1)),
+			updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+		)
+	`); err != nil {
+		return fmt.Errorf("create device folder content policy table: %w", err)
+	}
+	if _, err := deviceDB.Exec(`CREATE INDEX IF NOT EXISTS idx_device_folder_content_policies_account ON folder_content_policies(account_id)`); err != nil {
+		return fmt.Errorf("create device folder content policy index: %w", err)
+	}
+	if _, err := deviceDB.Exec(`
 		CREATE TABLE IF NOT EXISTS device_database_migrations (
 			version INTEGER PRIMARY KEY,
 			applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -63,6 +77,9 @@ func InitializeDeviceDatabase(deviceDB, legacyDB *sql.DB) error {
 		return err
 	}
 	if err := importDeviceSettingsOnce(tx, legacyDB); err != nil {
+		return err
+	}
+	if err := importDeviceContentPoliciesOnce(tx, legacyDB); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {
@@ -174,6 +191,52 @@ func importDeviceSettingsOnce(tx *sql.Tx, legacyDB *sql.DB) error {
 		}
 	}
 	return recordDeviceMigration(tx, deviceSettingsImportVersion)
+}
+
+func importDeviceContentPoliciesOnce(tx *sql.Tx, legacyDB *sql.DB) error {
+	applied, err := deviceMigrationApplied(tx, deviceContentPolicyVersion)
+	if err != nil {
+		return fmt.Errorf("check folder content policy import marker: %w", err)
+	}
+	if applied {
+		return nil
+	}
+	if legacyDB != nil {
+		rows, err := queryIfTableExists(legacyDB, "folder_content_policies", "SELECT folder_id, account_id, body_prefetch, updated_at FROM folder_content_policies ORDER BY folder_id")
+		if err != nil {
+			return fmt.Errorf("read legacy folder content policies: %w", err)
+		}
+		if rows != nil {
+			for rows.Next() {
+				var folderID, accountID string
+				var bodyPrefetch bool
+				var updatedAt sql.NullString
+				if err := rows.Scan(&folderID, &accountID, &bodyPrefetch, &updatedAt); err != nil {
+					rows.Close()
+					return fmt.Errorf("scan legacy folder content policy: %w", err)
+				}
+				var updatedAtValue any
+				if updatedAt.Valid {
+					updatedAtValue = updatedAt.String
+				}
+				if _, err := tx.Exec(`
+					INSERT INTO folder_content_policies(folder_id, account_id, body_prefetch, updated_at)
+					VALUES (?, ?, ?, ?) ON CONFLICT(folder_id) DO NOTHING
+				`, folderID, accountID, bodyPrefetch, updatedAtValue); err != nil {
+					rows.Close()
+					return fmt.Errorf("import folder content policy for %s: %w", folderID, err)
+				}
+			}
+			if err := rows.Err(); err != nil {
+				rows.Close()
+				return fmt.Errorf("read legacy folder content policies: %w", err)
+			}
+			if err := rows.Close(); err != nil {
+				return fmt.Errorf("close legacy folder content policies: %w", err)
+			}
+		}
+	}
+	return recordDeviceMigration(tx, deviceContentPolicyVersion)
 }
 
 func deviceMigrationApplied(tx *sql.Tx, version int) (bool, error) {

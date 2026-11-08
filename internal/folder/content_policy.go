@@ -73,3 +73,14 @@ func (s *ContentPolicyStore) Reset(accountID, folderID string) error {
 	}
 	return nil
 }
+
+// DeleteAccount removes device-local overrides for a removed mailbox account.
+func (s *ContentPolicyStore) DeleteAccount(accountID string) error {
+	if accountID == "" {
+		return fmt.Errorf("account ID is required")
+	}
+	if _, err := s.db.Exec(`DELETE FROM folder_content_policies WHERE account_id = ?`, accountID); err != nil {
+		return fmt.Errorf("delete folder content policies for account: %w", err)
+	}
+	return nil
+}

@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Store explicit folder body-prefetch choices in the device database and remove them when the mailbox account is removed.
 - Store desktop preferences and trusted remote-image entries in the device database, importing existing values without deleting their mailbox-database copies.
 - Keep desktop flag state and events aligned with provider-confirmed partial bulk changes, and allow longer helper-backed mutations to be retried safely after an ambiguous timeout.
 - Keep All Inboxes conversation lists and counts aligned by resolving the enabled accounts' selected Inbox folders for both helper-backed reads and local fallback.

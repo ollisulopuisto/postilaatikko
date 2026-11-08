@@ -662,7 +662,7 @@ func (a *App) Startup(ctx context.Context) {
 	// Initialize stores
 	a.accountStore = account.NewStore(db)
 	a.folderStore = folder.NewStore(db)
-	a.contentPolicyStore = folder.NewContentPolicyStore(db)
+	a.contentPolicyStore = folder.NewContentPolicyStore(a.deviceDB)
 	a.messageStore = message.NewStore(db)
 	a.replyLaterStore = replylater.NewStore(db)
 	a.triageStore = triage.NewStore(db)
