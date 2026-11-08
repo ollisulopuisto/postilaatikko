@@ -105,6 +105,48 @@ func TestInitializeDeviceDatabaseUpgradesSettingsAfterAppStateImport(t *testing.
 	assertStoredValue(t, device.DB, `SELECT value FROM settings WHERE key='language'`, "fi")
 }
 
+func TestDeviceOnlyInitializationLeavesLegacyImportsPending(t *testing.T) {
+	device, err := database.Open(filepath.Join(t.TempDir(), "device.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer device.Close()
+
+	if err := InitializeDeviceDatabase(device.DB, nil); err != nil {
+		t.Fatal(err)
+	}
+	var markerCount int
+	if err := device.QueryRow(`SELECT count(*) FROM device_database_migrations`).Scan(&markerCount); err != nil {
+		t.Fatal(err)
+	}
+	if markerCount != 0 {
+		t.Fatalf("device-only initialization recorded %d legacy import markers", markerCount)
+	}
+
+	legacy, err := database.Open(filepath.Join(t.TempDir(), "legacy.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer legacy.Close()
+	if _, err := legacy.Exec(`CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := legacy.Exec(`INSERT INTO settings(key, value) VALUES ('language', 'fi')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := ImportLegacyDeviceDatabase(device.DB, legacy.DB); err != nil {
+		t.Fatal(err)
+	}
+	assertStoredValue(t, device.DB, `SELECT value FROM settings WHERE key='language'`, "fi")
+	assertStoredValue(t, legacy.DB, `SELECT value FROM settings WHERE key='language'`, "fi")
+	if err := device.QueryRow(`SELECT count(*) FROM device_database_migrations`).Scan(&markerCount); err != nil {
+		t.Fatal(err)
+	}
+	if markerCount != 4 {
+		t.Fatalf("legacy import recorded %d markers, want 4", markerCount)
+	}
+}
+
 func TestInitializeDeviceDatabaseCopiesTrustedCertificatesOnce(t *testing.T) {
 	legacy, err := database.Open(filepath.Join(t.TempDir(), "legacy.db"))
 	if err != nil {

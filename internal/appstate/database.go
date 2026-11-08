@@ -13,10 +13,20 @@ const (
 	deviceCertificateTrustVersion = 4
 )
 
-// InitializeDeviceDatabase creates the device-owned app-state schema and
-// imports legacy rows from the mailbox database once. Legacy rows are retained
-// so an interrupted or rolled-back upgrade cannot lose the original state.
+// InitializeDeviceDatabase creates the device-owned schema and imports legacy
+// rows from the mailbox database once. Legacy rows are retained so an
+// interrupted or rolled-back upgrade cannot lose the original state.
 func InitializeDeviceDatabase(deviceDB, legacyDB *sql.DB) error {
+	if err := InitializeDeviceDatabaseSchema(deviceDB); err != nil {
+		return err
+	}
+	return ImportLegacyDeviceDatabase(deviceDB, legacyDB)
+}
+
+// InitializeDeviceDatabaseSchema creates only device-owned tables. It is safe
+// to call before the mailbox database is available; it does not mark any
+// legacy imports complete.
+func InitializeDeviceDatabaseSchema(deviceDB *sql.DB) error {
 	if deviceDB == nil {
 		return fmt.Errorf("device database is required")
 	}
@@ -82,7 +92,18 @@ func InitializeDeviceDatabase(deviceDB, legacyDB *sql.DB) error {
 	`); err != nil {
 		return fmt.Errorf("create device database migration table: %w", err)
 	}
+	return nil
+}
 
+// ImportLegacyDeviceDatabase copies device-owned rows from the legacy mailbox
+// database once. A nil legacy DB intentionally leaves import markers pending.
+func ImportLegacyDeviceDatabase(deviceDB, legacyDB *sql.DB) error {
+	if deviceDB == nil {
+		return fmt.Errorf("device database is required")
+	}
+	if legacyDB == nil {
+		return nil
+	}
 	tx, err := deviceDB.Begin()
 	if err != nil {
 		return fmt.Errorf("begin device state initialization: %w", err)

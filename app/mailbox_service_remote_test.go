@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/database"
 )
 
 func TestValidateMailboxServiceEndpoint(t *testing.T) {
@@ -43,7 +42,6 @@ func TestRemoteMailboxCredentialDoesNotUseLocalGrantDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 	connector := &mailboxServiceConnector{
-		db:       &database.DB{},
 		keyring:  &testMailboxSecretStore{secret: string(encoded)},
 		endpoint: "https://mail.example.test:8029",
 		capabilitiesFunc: func(context.Context) (*v1.Capabilities, error) {

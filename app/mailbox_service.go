@@ -124,7 +124,7 @@ func (c *mailboxServiceConnector) getClient() (*automationclient.Client, error) 
 	if c.client != nil {
 		return c.client, nil
 	}
-	if c.db == nil || c.keyring == nil {
+	if c.keyring == nil {
 		return nil, errors.New("mailbox service connection is not initialized")
 	}
 
@@ -138,7 +138,13 @@ func (c *mailboxServiceConnector) getClient() (*automationclient.Client, error) 
 	}
 	endpoint = validatedEndpoint
 	remote := endpoint != mailboxServiceEndpoint
-	tokenStore := automation.NewSQLiteTokenStore(c.db)
+	var tokenStore *automation.SQLiteTokenStore
+	if !remote {
+		if c.db == nil {
+			return nil, errors.New("local mailbox service connection requires a database")
+		}
+		tokenStore = automation.NewSQLiteTokenStore(c.db)
+	}
 	secretName := desktopMailboxSecretName
 	if remote {
 		secretName = desktopRemoteMailboxSecretName
