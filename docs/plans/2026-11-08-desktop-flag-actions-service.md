@@ -20,6 +20,8 @@
 
 Expose a user-initiated action that creates a desktop grant with `mail.read`, `mail.body.fetch`, and `mail.write`, saves the new credential in the OS keyring, then revokes the old desktop grant. Preserve the old token and grant if creating or saving the new credential fails. Keep status output token-free and report missing write authorization distinctly from helper unavailability.
 
+The consent text must disclose the full existing `mail.write` API capability: it also authorizes archive, trash, and move actions even though this task routes only flag changes.
+
 ### Task 2: Route read and star flag changes
 
 **Files:**
