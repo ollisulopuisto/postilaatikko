@@ -88,24 +88,28 @@ func (a *App) RemoveReplyLater(accountID, conversationID string) (bool, error) {
 // ChangeReplyLaterWithUndo sets explicit membership and returns the normal
 // operation-scoped undo token. Duplicate calls do not create duplicate history.
 func (a *App) ChangeReplyLaterWithUndo(accountID, conversationID string, inQueue bool) (ReplyLaterChangeResult, error) {
-	if a.replyLaterStore == nil {
-		return ReplyLaterChangeResult{}, fmt.Errorf("Reply Later queue is not ready")
-	}
 	ref := replylater.Ref{AccountID: accountID, ConversationID: conversationID}
-	changed, handled, err := a.changeReplyLaterThroughService(ref, inQueue)
+	changed, operationID, handled, err := a.changeReplyLaterThroughService(ref, inQueue)
 	if handled {
 		if err != nil {
 			return ReplyLaterChangeResult{}, err
 		}
+		if changed {
+			a.emitReplyLaterChanged(ref, inQueue)
+			a.emitRuntimeEvent("undo:history-changed")
+		}
+		return ReplyLaterChangeResult{Changed: changed, OperationID: operationID}, nil
+	}
+	if a.replyLaterStore == nil {
+		return ReplyLaterChangeResult{}, fmt.Errorf("Reply Later queue is not ready")
+	}
+	if err := a.changeReplyLaterProvider(accountID, conversationID, inQueue); err != nil {
+		return ReplyLaterChangeResult{}, err
+	}
+	if inQueue {
+		changed, err = a.replyLaterStore.Add(ref)
 	} else {
-		if err := a.changeReplyLaterProvider(accountID, conversationID, inQueue); err != nil {
-			return ReplyLaterChangeResult{}, err
-		}
-		if inQueue {
-			changed, err = a.replyLaterStore.Add(ref)
-		} else {
-			changed, err = a.replyLaterStore.Remove(ref)
-		}
+		changed, err = a.replyLaterStore.Remove(ref)
 	}
 	if err != nil || !changed {
 		return ReplyLaterChangeResult{Changed: changed}, err
@@ -114,7 +118,7 @@ func (a *App) ChangeReplyLaterWithUndo(accountID, conversationID string, inQueue
 	if !inQueue {
 		description, action = "Removed from Reply Later", "reply-later-remove"
 	}
-	operationID := a.undoStack.PushOperation("", undo.NewReplyLaterChangeCommand(a, ref, !inQueue, description), undo.OperationMetadata{Action: action})
+	operationID = a.undoStack.PushOperation("", undo.NewReplyLaterChangeCommand(a, ref, !inQueue, description), undo.OperationMetadata{Action: action})
 	a.emitReplyLaterChanged(ref, inQueue)
 	a.emitRuntimeEvent("undo:history-changed")
 	return ReplyLaterChangeResult{Changed: true, OperationID: operationID}, nil
@@ -123,10 +127,7 @@ func (a *App) ChangeReplyLaterWithUndo(accountID, conversationID string, inQueue
 // SetReplyLaterMembership is the undo-context operation for restoring a
 // previous explicit membership state.
 func (a *App) SetReplyLaterMembership(ref replylater.Ref, inQueue bool) error {
-	if a.replyLaterStore == nil {
-		return fmt.Errorf("Reply Later queue is not ready")
-	}
-	changed, handled, err := a.changeReplyLaterThroughService(ref, inQueue)
+	changed, _, handled, err := a.changeReplyLaterThroughService(ref, inQueue)
 	if handled {
 		if err != nil {
 			return err
@@ -135,6 +136,9 @@ func (a *App) SetReplyLaterMembership(ref replylater.Ref, inQueue bool) error {
 			a.emitReplyLaterChanged(ref, inQueue)
 		}
 		return nil
+	}
+	if a.replyLaterStore == nil {
+		return fmt.Errorf("Reply Later queue is not ready")
 	}
 	if err := a.changeReplyLaterProvider(ref.AccountID, ref.ConversationID, inQueue); err != nil {
 		return err
@@ -153,26 +157,26 @@ func (a *App) SetReplyLaterMembership(ref replylater.Ref, inQueue bool) error {
 	return nil
 }
 
-func (a *App) changeReplyLaterThroughService(ref replylater.Ref, inQueue bool) (bool, bool, error) {
+func (a *App) changeReplyLaterThroughService(ref replylater.Ref, inQueue bool) (bool, string, bool, error) {
 	if a.mailboxService == nil {
-		return false, false, nil
+		return false, "", false, nil
 	}
 	ctx := a.helperCommandContext()
 	status := a.mailboxService.status(ctx)
 	if !status.Connected {
 		if status.ErrorCode == "service_unavailable" {
-			return false, false, nil
+			return false, "", false, nil
 		}
-		return false, true, fmt.Errorf("mailbox service is not ready for Reply Later: %s", status.Message)
+		return false, "", true, fmt.Errorf("mailbox service is not ready for Reply Later: %s", status.Message)
 	}
 	if !status.WriteAuthorized {
-		return false, true, errDesktopMailboxWriteAuthorizationRequired
+		return false, "", true, errDesktopMailboxWriteAuthorizationRequired
 	}
-	changed, err := a.mailboxService.setReplyLaterMembership(ctx, ref, inQueue)
+	response, err := a.mailboxService.setReplyLaterMembershipWithReceipt(ctx, ref, inQueue)
 	if err != nil {
-		return false, true, fmt.Errorf("update Reply Later through local mailbox service: %w", err)
+		return false, "", true, fmt.Errorf("update Reply Later through local mailbox service: %w", err)
 	}
-	return changed, true, nil
+	return response.Changed, response.Receipt.OperationID, true, nil
 }
 
 func (a *App) emitReplyLaterChanged(ref replylater.Ref, inQueue bool) {

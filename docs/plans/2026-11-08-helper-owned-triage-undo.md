@@ -41,8 +41,8 @@
 
 ## Dependency-ordered implementation slices
 
-1. **HOSTED-SERVER-065 — durable helper triage mutations:** add validated request/response types, receipt reservation/replay, queue snapshots and helper mutation adapters for the three queue stores. Include provider-label side effects in the operation boundary. Preserve existing list/count endpoints.
-2. **HOSTED-SERVER-066 — triage Undo execution and event feed:** implement compare-before-restore inverses through existing `/v1/undo/*`; add typed affected queue refs to action/Undo receipts and durable cursor events; keep unknown outcomes non-retryable.
+1. **HOSTED-SERVER-065 — durable receipts and guarded Undo:** add validated request/response types, receipt reservation/replay, queue snapshots, provider-aware mutation adapters, and compare-before-restore inverses through existing `/v1/undo/*`. Preserve list/count endpoints and keep uncertain outcomes non-retryable.
+2. **HOSTED-SERVER-066 — event reconciliation:** add typed affected queue refs to mutation/Undo receipts and durable cursor events, allowing targeted replay after reconnect.
 3. **HOSTED-SERVER-067 — desktop adapter and Undo UX:** return helper operation IDs to Wails; route Reply Later/Read Later/Snooze/Unsnooze actions and operation-scoped Undo through the helper in local and remote modes; remove local-store prerequisites in remote mode; emit immediate and replayed queue reconciliation events and map triage action labels in history/toasts.
 4. **HOSTED-SERVER-068 — cutover audit:** verify every frontend queue mutation call path and ensure no successful helper mutation is duplicated into local state or local Undo. Gate unsupported queue mutation flows explicitly if any path cannot yet use the helper contract.
 

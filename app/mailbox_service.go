@@ -101,6 +101,7 @@ type mailboxServiceConnector struct {
 	actionEventSyncMu  sync.Mutex
 	searches           map[string]activeMailboxSearch
 	actionKeys         map[[32]byte]string
+	triageKeys         map[[32]byte]string
 	undoKeys           map[[32]byte]string
 	resolvedActionRefs map[string]operations.MessageRef
 	statusFunc         func(context.Context) MailboxServiceStatus
@@ -914,11 +915,47 @@ func (c *mailboxServiceConnector) replyLaterQueue(ctx context.Context) ([]replyl
 }
 
 func (c *mailboxServiceConnector) setReplyLaterMembership(ctx context.Context, ref replylater.Ref, inQueue bool) (bool, error) {
-	client, err := c.getClient()
+	response, err := c.setReplyLaterMembershipWithReceipt(ctx, ref, inQueue)
 	if err != nil {
 		return false, err
 	}
-	return client.SetReplyLaterMembership(ctx, ref, inQueue)
+	return response.Changed, nil
+}
+
+func (c *mailboxServiceConnector) setReplyLaterMembershipWithReceipt(ctx context.Context, ref replylater.Ref, inQueue bool) (*v1.ReplyLaterMutationResponse, error) {
+	client, err := c.getClient()
+	if err != nil {
+		return nil, err
+	}
+	request := v1.ReplyLaterMutationRequest{Ref: ref, InQueue: inQueue}
+	encoded, err := json.Marshal(request)
+	if err != nil {
+		return nil, fmt.Errorf("encode Reply Later mutation for idempotency: %w", err)
+	}
+	requestHash := sha256.Sum256(encoded)
+	c.mu.Lock()
+	if c.triageKeys == nil {
+		c.triageKeys = make(map[[32]byte]string)
+	}
+	idempotencyKey := c.triageKeys[requestHash]
+	if idempotencyKey == "" {
+		idempotencyKey = uuid.NewString()
+	}
+	c.mu.Unlock()
+
+	response, err := client.SetReplyLaterMembershipWithKey(ctx, ref, inQueue, idempotencyKey)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err == nil && response != nil && (response.Receipt.State == v1.OperationUnknown || response.Receipt.State == v1.OperationSending) {
+		c.triageKeys[requestHash] = idempotencyKey
+		return response, fmt.Errorf("Reply Later outcome is ambiguous: %s", response.Receipt.State)
+	}
+	if err == nil || !isAmbiguousActionError(ctx, err) {
+		delete(c.triageKeys, requestHash)
+		return response, err
+	}
+	c.triageKeys[requestHash] = idempotencyKey
+	return response, err
 }
 
 func (c *mailboxServiceConnector) readLaterQueue(ctx context.Context) ([]triage.Ref, error) {

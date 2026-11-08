@@ -3,6 +3,8 @@ package triage
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -98,6 +100,26 @@ func (s *Store) Unsnooze(accountID, conversationID string) (bool, error) {
 	}
 	n, err := r.RowsAffected()
 	return n > 0, err
+}
+
+// GetSnooze returns one account-qualified Snooze without scanning the full queue.
+func (s *Store) GetSnooze(accountID, conversationID string) (time.Time, bool, error) {
+	if err := validate(accountID, conversationID); err != nil {
+		return time.Time{}, false, err
+	}
+	var wakeAt string
+	err := s.db.QueryRowContext(context.Background(), `SELECT wake_at FROM snoozed_conversations WHERE account_id=? AND conversation_id=?`, accountID, conversationID).Scan(&wakeAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return time.Time{}, false, nil
+	}
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	deadline, err := time.Parse(time.RFC3339Nano, wakeAt)
+	if err != nil {
+		return time.Time{}, false, fmt.Errorf("parse Snooze deadline: %w", err)
+	}
+	return deadline, true, nil
 }
 
 func (s *Store) ExpireSnoozes(now time.Time) (int64, error) {

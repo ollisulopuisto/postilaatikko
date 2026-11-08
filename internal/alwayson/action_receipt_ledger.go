@@ -188,6 +188,9 @@ func (l *actionReceiptLedger) Complete(ctx context.Context, keyHash, requestHash
 	if err := json.Unmarshal(response, &responseData); err != nil {
 		return fmt.Errorf("decode action response for event: %w", err)
 	}
+	if action == "" {
+		return tx.Commit()
+	}
 	if err := insertActionEvent(ctx, tx, responseData.Receipt.OperationID, string(state), responseData.Affected); err != nil {
 		return err
 	}

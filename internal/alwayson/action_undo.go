@@ -141,6 +141,10 @@ func (o *mailboxActionOperations) UndoAction(ctx context.Context, action v1.Acti
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	switch action {
+	case v1.ActionReplyLaterAdd, v1.ActionReplyLaterRemove, v1.ActionReadLaterAdd, v1.ActionReadLaterRemove, v1.ActionSnooze, v1.ActionUnsnooze:
+		return o.undoTriageAction(ctx, action, payload)
+	}
 	var snapshot mailboxActionUndoSnapshot
 	if err := json.Unmarshal(payload, &snapshot); err != nil {
 		return fmt.Errorf("decode action undo snapshot: %w", err)
@@ -219,6 +223,10 @@ func (o *mailboxActionOperations) ActionUndoAffectedRefs(ctx context.Context, pa
 	var snapshot mailboxActionUndoSnapshot
 	if err := json.Unmarshal(payload, &snapshot); err != nil {
 		return nil, fmt.Errorf("decode action undo snapshot: %w", err)
+	}
+	switch snapshot.Action {
+	case v1.ActionReplyLaterAdd, v1.ActionReplyLaterRemove, v1.ActionReadLaterAdd, v1.ActionReadLaterRemove, v1.ActionSnooze, v1.ActionUnsnooze:
+		return []v1.AffectedMessageRef{}, nil
 	}
 	ids := make([]string, 0, len(snapshot.Entries))
 	for _, entry := range snapshot.Entries {

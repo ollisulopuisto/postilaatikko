@@ -1,7 +1,6 @@
 package v1
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 
@@ -16,13 +15,15 @@ type ReplyLaterMutationRequest struct {
 
 // ReplyLaterMutationResponse reports whether queue membership changed.
 type ReplyLaterMutationResponse struct {
-	Changed bool `json:"changed"`
+	Changed       bool             `json:"changed"`
+	Receipt       OperationReceipt `json:"receipt"`
+	UndoAvailable bool             `json:"undoAvailable,omitempty"`
+	UndoExpiresAt string           `json:"undoExpiresAt,omitempty"`
 }
 
 // ReplyLaterHTTPOperations owns Reply Later queue reads and changes.
 type ReplyLaterHTTPOperations interface {
 	GetReplyLaterQueue() ([]replylater.Ref, error)
-	SetReplyLaterMembership(context.Context, string, string, bool) (bool, error)
 }
 
 // MountReplyLaterRoutes mounts authenticated Reply Later queue operations.
@@ -41,26 +42,6 @@ func MountReplyLaterRoutes(mux *http.ServeMux, ops ReplyLaterHTTPOperations, req
 			return
 		}
 		writeReplyLaterResponse(w, r, queue)
-	})
-	mux.HandleFunc("/v1/reply-later/mutations", func(w http.ResponseWriter, r *http.Request) {
-		if !requireCap(w, r, CapabilityMailWrite) {
-			return
-		}
-		if r.Method != http.MethodPost {
-			writeReplyLaterError(w, r, http.StatusMethodNotAllowed, CodeInvalidRequest, "Method not allowed")
-			return
-		}
-		var req ReplyLaterMutationRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeReplyLaterError(w, r, http.StatusBadRequest, CodeInvalidRequest, "Malformed Reply Later request")
-			return
-		}
-		changed, err := ops.SetReplyLaterMembership(r.Context(), req.Ref.AccountID, req.Ref.ConversationID, req.InQueue)
-		if err != nil {
-			writeReplyLaterError(w, r, http.StatusBadRequest, CodeInvalidRequest, err.Error())
-			return
-		}
-		writeReplyLaterResponse(w, r, ReplyLaterMutationResponse{Changed: changed})
 	})
 }
 

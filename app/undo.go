@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/imap"
 	"github.com/hkdb/aerion/internal/ipc"
 	"github.com/hkdb/aerion/internal/logging"
@@ -84,6 +85,7 @@ func (a *App) undoLatest() (UndoLatestResult, error) {
 			a.emitRuntimeEvent("undo:completed")
 		}
 		a.publishMailboxReconciliation(result.OperationID, result.State, result.Affected)
+		a.publishTriageUndoReconciliation(result.AffectedTriage)
 		a.emitRuntimeEvent("undo:history-changed")
 		if result.State == "outcome_unknown" {
 			return mapped, errors.New("undo outcome is unknown; retry with the same operation key")
@@ -161,6 +163,7 @@ func (a *App) UndoOperation(operationID string) (string, error) {
 			return "", errors.New("mailbox service returned no undo receipt")
 		}
 		a.publishMailboxReconciliation(result.OperationID, result.State, result.Affected)
+		a.publishTriageUndoReconciliation(result.AffectedTriage)
 		if result.State == "undone" {
 			a.emitRuntimeEvent("undo:completed")
 		}
@@ -207,6 +210,23 @@ func (a *App) UndoOperation(operationID string) (string, error) {
 	a.emitRuntimeEvent("undo:completed", description)
 	log.Info().Str("operationId", operationID).Str("action", description).Msg("UNDO DONE")
 	return description, nil
+}
+
+func (a *App) publishTriageUndoReconciliation(refs []v1.AffectedTriageRef) {
+	for _, ref := range refs {
+		payload := map[string]interface{}{"accountId": ref.AccountID, "conversationId": ref.ConversationID}
+		switch ref.Queue {
+		case "replyLater":
+			payload["inQueue"] = ref.InQueue
+			a.emitRuntimeEvent("replyLater:changed", payload)
+		case "readLater":
+			payload["inQueue"] = ref.InQueue
+			a.emitRuntimeEvent("readLater:changed", payload)
+		case "snoozed":
+			payload["wakeAt"] = ref.WakeAt
+			a.emitRuntimeEvent("snooze:changed", payload)
+		}
+	}
 }
 
 // GetUndoHistory returns at most 100 active mailbox operations, newest first.

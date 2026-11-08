@@ -24,15 +24,21 @@ var ErrActionReceiptConflict = errors.New("action idempotency key conflict")
 type ActionKind string
 
 const (
-	ActionArchive     ActionKind = "archive"
-	ActionMarkRead    ActionKind = "mark_read"
-	ActionMarkUnread  ActionKind = "mark_unread"
-	ActionStar        ActionKind = "star"
-	ActionUnstar      ActionKind = "unstar"
-	ActionTrash       ActionKind = "trash"
-	ActionMove        ActionKind = "move"
-	ActionMoveToInbox ActionKind = "move_to_inbox"
-	ActionMoveToSpam  ActionKind = "move_to_spam"
+	ActionArchive          ActionKind = "archive"
+	ActionMarkRead         ActionKind = "mark_read"
+	ActionMarkUnread       ActionKind = "mark_unread"
+	ActionStar             ActionKind = "star"
+	ActionUnstar           ActionKind = "unstar"
+	ActionTrash            ActionKind = "trash"
+	ActionMove             ActionKind = "move"
+	ActionMoveToInbox      ActionKind = "move_to_inbox"
+	ActionMoveToSpam       ActionKind = "move_to_spam"
+	ActionReplyLaterAdd    ActionKind = "reply_later_add"
+	ActionReplyLaterRemove ActionKind = "reply_later_remove"
+	ActionReadLaterAdd     ActionKind = "read_later_add"
+	ActionReadLaterRemove  ActionKind = "read_later_remove"
+	ActionSnooze           ActionKind = "snooze"
+	ActionUnsnooze         ActionKind = "unsnooze"
 )
 
 // ActionRequest specifies a mutation on an explicit target.

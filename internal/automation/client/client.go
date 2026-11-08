@@ -3,6 +3,8 @@ package client
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -535,15 +537,28 @@ func (c *Client) GetReplyLaterQueue(ctx context.Context) ([]replylater.Ref, erro
 
 // SetReplyLaterMembership updates one account-qualified conversation's queue state.
 func (c *Client) SetReplyLaterMembership(ctx context.Context, ref replylater.Ref, inQueue bool) (bool, error) {
-	bytes, err := c.doRequest(ctx, http.MethodPost, "/v1/reply-later/mutations", v1.ReplyLaterMutationRequest{Ref: ref, InQueue: inQueue}, "")
+	key, err := newTriageMutationKey()
 	if err != nil {
 		return false, err
 	}
-	var resp v1.Response[v1.ReplyLaterMutationResponse]
-	if err := json.Unmarshal(bytes, &resp); err != nil {
+	response, err := c.SetReplyLaterMembershipWithKey(ctx, ref, inQueue, key)
+	if err != nil {
 		return false, err
 	}
-	return resp.Data.Changed, nil
+	return response.Changed, nil
+}
+
+// SetReplyLaterMembershipWithKey updates membership using a caller-stable receipt key.
+func (c *Client) SetReplyLaterMembershipWithKey(ctx context.Context, ref replylater.Ref, inQueue bool, idempotencyKey string) (*v1.ReplyLaterMutationResponse, error) {
+	bytes, err := c.doRequest(ctx, http.MethodPost, "/v1/reply-later/mutations", v1.ReplyLaterMutationRequest{Ref: ref, InQueue: inQueue}, idempotencyKey)
+	if err != nil {
+		return nil, err
+	}
+	var resp v1.Response[v1.ReplyLaterMutationResponse]
+	if err := json.Unmarshal(bytes, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.Data, nil
 }
 
 // GetReadLaterQueue lists helper-owned Read Later membership.
@@ -561,15 +576,28 @@ func (c *Client) GetReadLaterQueue(ctx context.Context) ([]triage.Ref, error) {
 
 // SetReadLater changes one account-qualified Read Later membership.
 func (c *Client) SetReadLater(ctx context.Context, ref triage.Ref, inQueue bool) (bool, error) {
-	bytes, err := c.doRequest(ctx, http.MethodPost, "/v1/triage/read-later/mutations", v1.ReadLaterMutationRequest{Ref: ref, InQueue: inQueue}, "")
+	key, err := newTriageMutationKey()
 	if err != nil {
 		return false, err
 	}
-	var resp v1.Response[v1.TriageMutationResponse]
-	if err := json.Unmarshal(bytes, &resp); err != nil {
+	response, err := c.SetReadLaterWithKey(ctx, ref, inQueue, key)
+	if err != nil {
 		return false, err
 	}
-	return resp.Data.Changed, nil
+	return response.Changed, nil
+}
+
+// SetReadLaterWithKey changes membership using a caller-stable receipt key.
+func (c *Client) SetReadLaterWithKey(ctx context.Context, ref triage.Ref, inQueue bool, idempotencyKey string) (*v1.TriageMutationResponse, error) {
+	bytes, err := c.doRequest(ctx, http.MethodPost, "/v1/triage/read-later/mutations", v1.ReadLaterMutationRequest{Ref: ref, InQueue: inQueue}, idempotencyKey)
+	if err != nil {
+		return nil, err
+	}
+	var resp v1.Response[v1.TriageMutationResponse]
+	if err := json.Unmarshal(bytes, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.Data, nil
 }
 
 // GetSnoozedConversations lists active helper-owned Snoozes.
@@ -600,21 +628,59 @@ func (c *Client) GetSnoozedCount(ctx context.Context) (int, error) {
 
 // SnoozeConversation adds or updates a helper-owned Snooze deadline.
 func (c *Client) SnoozeConversation(ctx context.Context, ref triage.Ref, wakeAt string) error {
-	_, err := c.doRequest(ctx, http.MethodPost, "/v1/triage/snoozes/mutations", v1.SnoozeMutationRequest{Operation: "snooze", Ref: ref, WakeAt: wakeAt}, "")
+	key, err := newTriageMutationKey()
+	if err != nil {
+		return err
+	}
+	_, err = c.SnoozeConversationWithKey(ctx, ref, wakeAt, key)
 	return err
+}
+
+// SnoozeConversationWithKey updates a helper-owned deadline with a durable receipt key.
+func (c *Client) SnoozeConversationWithKey(ctx context.Context, ref triage.Ref, wakeAt, idempotencyKey string) (*v1.TriageMutationResponse, error) {
+	bytes, err := c.doRequest(ctx, http.MethodPost, "/v1/triage/snoozes/mutations", v1.SnoozeMutationRequest{Operation: "snooze", Ref: ref, WakeAt: wakeAt}, idempotencyKey)
+	if err != nil {
+		return nil, err
+	}
+	var resp v1.Response[v1.TriageMutationResponse]
+	if err := json.Unmarshal(bytes, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.Data, nil
 }
 
 // UnsnoozeConversation removes one helper-owned Snooze.
 func (c *Client) UnsnoozeConversation(ctx context.Context, ref triage.Ref) (bool, error) {
-	bytes, err := c.doRequest(ctx, http.MethodPost, "/v1/triage/snoozes/mutations", v1.SnoozeMutationRequest{Operation: "unsnooze", Ref: ref}, "")
+	key, err := newTriageMutationKey()
 	if err != nil {
 		return false, err
 	}
-	var resp v1.Response[v1.TriageMutationResponse]
-	if err := json.Unmarshal(bytes, &resp); err != nil {
+	response, err := c.UnsnoozeConversationWithKey(ctx, ref, key)
+	if err != nil {
 		return false, err
 	}
-	return resp.Data.Changed, nil
+	return response.Changed, nil
+}
+
+// UnsnoozeConversationWithKey removes a Snooze using a caller-stable receipt key.
+func (c *Client) UnsnoozeConversationWithKey(ctx context.Context, ref triage.Ref, idempotencyKey string) (*v1.TriageMutationResponse, error) {
+	bytes, err := c.doRequest(ctx, http.MethodPost, "/v1/triage/snoozes/mutations", v1.SnoozeMutationRequest{Operation: "unsnooze", Ref: ref}, idempotencyKey)
+	if err != nil {
+		return nil, err
+	}
+	var resp v1.Response[v1.TriageMutationResponse]
+	if err := json.Unmarshal(bytes, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.Data, nil
+}
+
+func newTriageMutationKey() (string, error) {
+	key := make([]byte, 16)
+	if _, err := rand.Read(key); err != nil {
+		return "", fmt.Errorf("generate triage idempotency key: %w", err)
+	}
+	return hex.EncodeToString(key), nil
 }
 
 // Search queries messages across a given view scope.

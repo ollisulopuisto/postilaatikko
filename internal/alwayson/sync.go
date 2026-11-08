@@ -77,6 +77,7 @@ type SyncRuntime struct {
 	lifecycleWG                 sync.WaitGroup
 	maintenanceWG               sync.WaitGroup
 	maintenanceCancel           context.CancelFunc
+	triageMutationMu            sync.Mutex
 	actionReceiptRecoveryOnce   sync.Once
 	actionReceiptRecoveryErr    error
 	started                     bool
@@ -734,8 +735,11 @@ func (r *SyncRuntime) runTriageMaintenance(ctx context.Context) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 	for {
-		if _, err := r.triage.ExpireSnoozes(time.Now()); err != nil {
-			log.Warn().Err(err).Msg("Failed to expire due Snoozes")
+		r.triageMutationMu.Lock()
+		_, expireErr := r.triage.ExpireSnoozes(time.Now())
+		r.triageMutationMu.Unlock()
+		if expireErr != nil {
+			log.Warn().Err(expireErr).Msg("Failed to expire due Snoozes")
 		}
 		select {
 		case <-ctx.Done():

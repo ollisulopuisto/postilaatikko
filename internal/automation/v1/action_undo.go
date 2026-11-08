@@ -45,16 +45,31 @@ type ActionUndoRecord struct {
 
 // ActionUndoResult reports the durable result of an Undo request.
 type ActionUndoResult struct {
-	OperationID string               `json:"operationId"`
-	Action      ActionKind           `json:"action"`
-	State       string               `json:"state"`
-	Affected    []AffectedMessageRef `json:"affected,omitempty"`
-	Replayed    bool                 `json:"replayed,omitempty"`
+	OperationID    string               `json:"operationId"`
+	Action         ActionKind           `json:"action"`
+	State          string               `json:"state"`
+	Affected       []AffectedMessageRef `json:"affected,omitempty"`
+	AffectedTriage []AffectedTriageRef  `json:"affectedTriage,omitempty"`
+	Replayed       bool                 `json:"replayed,omitempty"`
+}
+
+// AffectedTriageRef describes one queue entry after a confirmed Undo.
+type AffectedTriageRef struct {
+	Queue          string `json:"queue"`
+	AccountID      string `json:"accountId"`
+	ConversationID string `json:"conversationId"`
+	InQueue        bool   `json:"inQueue"`
+	WakeAt         string `json:"wakeAt,omitempty"`
 }
 
 // ActionUndoAffectedRefReader reads current mailbox references after Undo.
 type ActionUndoAffectedRefReader interface {
 	ActionUndoAffectedRefs(context.Context, []byte) ([]AffectedMessageRef, error)
+}
+
+// ActionUndoTriageRefReader returns queue state restored by a confirmed Undo.
+type ActionUndoTriageRefReader interface {
+	ActionUndoTriageRefs(context.Context, []byte) ([]AffectedTriageRef, error)
 }
 
 // ActionUndoStore owns durable action history and atomic undo claims.
@@ -158,6 +173,9 @@ func handleActionUndo(w http.ResponseWriter, r *http.Request, operationID string
 			if reader, ok := operations.(ActionUndoAffectedRefReader); ok {
 				result.Affected, _ = reader.ActionUndoAffectedRefs(r.Context(), record.Payload)
 			}
+			if reader, ok := operations.(ActionUndoTriageRefReader); ok {
+				result.AffectedTriage, _ = reader.ActionUndoTriageRefs(r.Context(), record.Payload)
+			}
 		}
 		writeUndoResponse(w, r, http.StatusOK, result)
 		return
@@ -177,6 +195,9 @@ func handleActionUndo(w http.ResponseWriter, r *http.Request, operationID string
 	result := ActionUndoResult{OperationID: record.OperationID, Action: record.Action, State: "undone"}
 	if reader, ok := operations.(ActionUndoAffectedRefReader); ok {
 		result.Affected, _ = reader.ActionUndoAffectedRefs(r.Context(), record.Payload)
+	}
+	if reader, ok := operations.(ActionUndoTriageRefReader); ok {
+		result.AffectedTriage, _ = reader.ActionUndoTriageRefs(r.Context(), record.Payload)
 	}
 	writeUndoResponse(w, r, http.StatusOK, result)
 }
