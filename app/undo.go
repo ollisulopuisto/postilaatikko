@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -31,6 +32,7 @@ func (a *App) emitRuntimeEvent(eventName string, data ...interface{}) {
 type UndoLatestResult struct {
 	OperationID string `json:"operationId"`
 	Description string `json:"description"`
+	State       string `json:"state,omitempty"`
 }
 
 // UndoHistoryEntry is the safe, compact summary exposed to the UI.
@@ -57,6 +59,32 @@ func undoFolderFields(cmd undoPkg.Command) (string, string) {
 // undoLatest reverses the newest complete user action and retains the claim on
 // failure so an execution error does not silently consume the operation.
 func (a *App) undoLatest() (UndoLatestResult, error) {
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	service, handled, serviceErr := a.undoService(ctx, true)
+	if handled {
+		if serviceErr != nil {
+			return UndoLatestResult{}, serviceErr
+		}
+		result, err := service.undoLatest(ctx)
+		if err != nil {
+			return UndoLatestResult{}, fmt.Errorf("undo latest through mailbox service: %w", err)
+		}
+		if result == nil {
+			return UndoLatestResult{}, errors.New("mailbox service returned no undo receipt")
+		}
+		mapped := UndoLatestResult{OperationID: result.OperationID, Description: string(result.Action), State: result.State}
+		if result.State == "undone" {
+			a.emitRuntimeEvent("undo:completed")
+		}
+		a.emitRuntimeEvent("undo:history-changed")
+		if result.State == "outcome_unknown" {
+			return mapped, errors.New("undo outcome is unknown; retry with the same operation key")
+		}
+		return mapped, nil
+	}
 	claim := a.undoStack.PopLatestOperation()
 	if claim == nil {
 		return UndoLatestResult{}, fmt.Errorf("nothing to undo")
@@ -111,6 +139,31 @@ func (a *App) UndoLatestWithResult() (UndoLatestResult, error) {
 // UndoOperation reverses only commands created by the matching user action.
 // Claiming the operation is atomic, so a second click cannot run it twice.
 func (a *App) UndoOperation(operationID string) (string, error) {
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	service, handled, serviceErr := a.undoService(ctx, true)
+	if handled {
+		if serviceErr != nil {
+			return "", serviceErr
+		}
+		result, err := service.undoOperation(ctx, operationID)
+		if err != nil {
+			return "", fmt.Errorf("undo operation through mailbox service: %w", err)
+		}
+		if result == nil {
+			return "", errors.New("mailbox service returned no undo receipt")
+		}
+		if result.State == "undone" {
+			a.emitRuntimeEvent("undo:completed")
+		}
+		a.emitRuntimeEvent("undo:history-changed")
+		if result.State == "outcome_unknown" {
+			return string(result.Action), errors.New("undo outcome is unknown; retry with the same operation key")
+		}
+		return string(result.Action), nil
+	}
 	log := logging.WithComponent("undo")
 	if operationID == "" {
 		log.Warn().Msg("UNDO MISS")
@@ -152,6 +205,41 @@ func (a *App) UndoOperation(operationID string) (string, error) {
 
 // GetUndoHistory returns at most 100 active mailbox operations, newest first.
 func (a *App) GetUndoHistory(limit int) []UndoHistoryEntry {
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	service, handled, serviceErr := a.undoService(ctx, false)
+	if handled {
+		log := logging.WithComponent("undo")
+		if serviceErr != nil {
+			log.Warn().Err(serviceErr).Msg("Could not read helper Undo history")
+			return []UndoHistoryEntry{}
+		}
+		if limit > 100 {
+			limit = 100
+		}
+		rows, err := service.undoHistory(ctx, limit)
+		if err != nil {
+			log.Warn().Err(err).Msg("Could not read helper Undo history")
+			return []UndoHistoryEntry{}
+		}
+		out := make([]UndoHistoryEntry, 0, len(rows))
+		for _, row := range rows {
+			if !row.UndoAvailable {
+				continue
+			}
+			out = append(out, UndoHistoryEntry{
+				OperationID:  row.OperationID,
+				Action:       string(row.Action),
+				Description:  string(row.Action),
+				CreatedAt:    parseUndoTime(row.CreatedAt),
+				ExpiresAt:    parseUndoTime(row.UndoExpiresAt),
+				MessageCount: row.MessageCount,
+			})
+		}
+		return out
+	}
 	if a.undoStack == nil {
 		return []UndoHistoryEntry{}
 	}
@@ -202,16 +290,75 @@ func (a *App) RunEditMenuCommand(command string) {
 
 // CanUndo returns true if there's an action that can be undone
 func (a *App) CanUndo() bool {
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	service, handled, err := a.undoService(ctx, true)
+	if handled {
+		if err != nil {
+			return false
+		}
+		rows, err := service.undoHistory(ctx, 100)
+		if err != nil {
+			return false
+		}
+		for _, row := range rows {
+			if row.UndoAvailable {
+				return true
+			}
+		}
+		return false
+	}
+	if a.undoStack == nil {
+		return false
+	}
 	return a.undoStack.CanUndo()
 }
 
 // GetUndoDescription returns the description of what would be undone
 func (a *App) GetUndoDescription() string {
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	service, handled, err := a.undoService(ctx, false)
+	if handled {
+		if err != nil {
+			return ""
+		}
+		rows, err := service.undoHistory(ctx, 100)
+		if err != nil {
+			return ""
+		}
+		for _, row := range rows {
+			if row.UndoAvailable {
+				return string(row.Action)
+			}
+		}
+		return ""
+	}
+	if a.undoStack == nil {
+		return ""
+	}
 	cmd := a.undoStack.Peek()
 	if cmd == nil {
 		return ""
 	}
 	return cmd.Description()
+}
+
+func parseUndoTime(value string) time.Time {
+	if value == "" {
+		return time.Time{}
+	}
+	for _, layout := range []string{time.RFC3339Nano, "2006-01-02 15:04:05"} {
+		parsed, err := time.Parse(layout, value)
+		if err == nil {
+			return parsed
+		}
+	}
+	return time.Time{}
 }
 
 // ============================================================================

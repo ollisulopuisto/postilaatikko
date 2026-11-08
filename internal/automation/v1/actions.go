@@ -24,13 +24,15 @@ var ErrActionReceiptConflict = errors.New("action idempotency key conflict")
 type ActionKind string
 
 const (
-	ActionArchive    ActionKind = "archive"
-	ActionMarkRead   ActionKind = "mark_read"
-	ActionMarkUnread ActionKind = "mark_unread"
-	ActionStar       ActionKind = "star"
-	ActionUnstar     ActionKind = "unstar"
-	ActionTrash      ActionKind = "trash"
-	ActionMove       ActionKind = "move"
+	ActionArchive     ActionKind = "archive"
+	ActionMarkRead    ActionKind = "mark_read"
+	ActionMarkUnread  ActionKind = "mark_unread"
+	ActionStar        ActionKind = "star"
+	ActionUnstar      ActionKind = "unstar"
+	ActionTrash       ActionKind = "trash"
+	ActionMove        ActionKind = "move"
+	ActionMoveToInbox ActionKind = "move_to_inbox"
+	ActionMoveToSpam  ActionKind = "move_to_spam"
 )
 
 // ActionRequest specifies a mutation on an explicit target.
@@ -58,6 +60,17 @@ type ActionOperations interface {
 	UnstarMessages(messageIDs []string) error
 	TrashMessages(messageIDs []string) error
 	MoveMessages(messageIDs []string, destinationFolderID string) (string, error)
+}
+
+// ActionInboxOperations supports account-specific Inbox resolution for a
+// cross-account move-to-Inbox action.
+type ActionInboxOperations interface {
+	MoveMessagesToInbox(messageIDs []string) error
+}
+
+// ActionSpamOperations supports account-specific Spam-folder resolution.
+type ActionSpamOperations interface {
+	MoveMessagesToSpam(messageIDs []string) error
 }
 
 // ActionsHandler executes mail mutations with idempotency checking and target validation.
@@ -278,7 +291,7 @@ func (h *ActionsHandler) handleDurableAction(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	switch req.Action {
-	case ActionArchive, ActionMarkRead, ActionMarkUnread, ActionStar, ActionUnstar, ActionTrash, ActionMove:
+	case ActionArchive, ActionMarkRead, ActionMarkUnread, ActionStar, ActionUnstar, ActionTrash, ActionMove, ActionMoveToInbox, ActionMoveToSpam:
 	default:
 		h.writeError(w, r, http.StatusBadRequest, CodeInvalidRequest, fmt.Sprintf("Unknown action %q", req.Action), false)
 		return
@@ -396,6 +409,18 @@ func (h *ActionsHandler) performAction(req ActionRequest, messageIDs []string, o
 			*operationID = id
 		}
 		return err
+	case ActionMoveToInbox:
+		inboxOperations, ok := h.ops.(ActionInboxOperations)
+		if !ok {
+			return errors.New("move-to-Inbox action is unsupported")
+		}
+		return inboxOperations.MoveMessagesToInbox(messageIDs)
+	case ActionMoveToSpam:
+		spamOperations, ok := h.ops.(ActionSpamOperations)
+		if !ok {
+			return errors.New("move-to-Spam action is unsupported")
+		}
+		return spamOperations.MoveMessagesToSpam(messageIDs)
 	default:
 		return fmt.Errorf("unsupported action %q", req.Action)
 	}

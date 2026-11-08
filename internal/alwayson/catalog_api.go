@@ -449,6 +449,7 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 	v1.MountConversationCountRoute(mux, operations, automation.RequireGrantCapability)
 	v1.MountSearchRoute(mux, readOperations, automation.RequireGrantCapability)
 	v1.MountThreadBodyRoutes(mux, readOperations, automation.RequireGrantCapability)
+	v1.MountActionTargetRoute(mux, mailboxActions, automation.RequireGrantCapability)
 	v1.NewActionsHandlerWithReceiptStore(mailboxActions, actionReceipts,
 		func(key string) string { return actionReceipts.digestKey(key, r.accountMutationFingerprint) },
 	).MountRoutes(mux, automation.RequireGrantCapability)

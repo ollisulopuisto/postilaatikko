@@ -131,6 +131,56 @@ func (o *mailboxActionOperations) MoveMessages(ids []string, destinationFolderID
 	return "", nil
 }
 
+func (o *mailboxActionOperations) MoveMessagesToInbox(ids []string) error {
+	messages, err := o.loadActionMessages(ids)
+	if err != nil {
+		return err
+	}
+	byAccount := groupMessagesByAccount(messages)
+	destinations := make(map[string]*folder.Folder, len(byAccount))
+	for _, accountID := range sortedMessageGroupKeys(byAccount) {
+		destination, err := o.runtime.folders.GetByType(accountID, folder.TypeInbox)
+		if err != nil {
+			return err
+		}
+		if destination == nil {
+			return fmt.Errorf("account %s has no Inbox folder", accountID)
+		}
+		destinations[accountID] = destination
+	}
+	for _, accountID := range sortedMessageGroupKeys(byAccount) {
+		if err := o.moveToFolder(messagesForAccount(byAccount, accountID), destinations[accountID]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (o *mailboxActionOperations) MoveMessagesToSpam(ids []string) error {
+	messages, err := o.loadActionMessages(ids)
+	if err != nil {
+		return err
+	}
+	byAccount := groupMessagesByAccount(messages)
+	destinations := make(map[string]*folder.Folder, len(byAccount))
+	for _, accountID := range sortedMessageGroupKeys(byAccount) {
+		destination, err := o.runtime.folders.GetByType(accountID, folder.TypeSpam)
+		if err != nil {
+			return err
+		}
+		if destination == nil {
+			return fmt.Errorf("account %s has no Spam folder", accountID)
+		}
+		destinations[accountID] = destination
+	}
+	for _, accountID := range sortedMessageGroupKeys(byAccount) {
+		if err := o.moveToFolder(messagesForAccount(byAccount, accountID), destinations[accountID]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (o *mailboxActionOperations) loadActionMessages(ids []string) ([]*message.Message, error) {
 	if len(ids) == 0 {
 		return nil, errors.New("at least one message is required")

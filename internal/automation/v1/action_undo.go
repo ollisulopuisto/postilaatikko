@@ -43,6 +43,14 @@ type ActionUndoRecord struct {
 	Payload      []byte
 }
 
+// ActionUndoResult reports the durable result of an Undo request.
+type ActionUndoResult struct {
+	OperationID string     `json:"operationId"`
+	Action      ActionKind `json:"action"`
+	State       string     `json:"state"`
+	Replayed    bool       `json:"replayed,omitempty"`
+}
+
 // ActionUndoStore owns durable action history and atomic undo claims.
 type ActionUndoStore interface {
 	ListUndoHistory(context.Context, int) ([]ActionUndoSummary, error)
@@ -139,7 +147,7 @@ func handleActionUndo(w http.ResponseWriter, r *http.Request, operationID string
 		return
 	}
 	if record.UndoState == "undone" || record.UndoState == "outcome_unknown" {
-		writeUndoResponse(w, r, http.StatusOK, map[string]any{"operationId": record.OperationID, "state": record.UndoState, "replayed": true})
+		writeUndoResponse(w, r, http.StatusOK, ActionUndoResult{OperationID: record.OperationID, Action: record.Action, State: record.UndoState, Replayed: true})
 		return
 	}
 	if err := operations.UndoAction(r.Context(), record.Action, record.Payload); err != nil {
@@ -147,14 +155,14 @@ func handleActionUndo(w http.ResponseWriter, r *http.Request, operationID string
 			writeHeaderError(w, r, http.StatusInternalServerError, CodeInternal, "Undo outcome is uncertain and its receipt could not be saved", true)
 			return
 		}
-		writeUndoResponse(w, r, http.StatusOK, map[string]any{"operationId": record.OperationID, "state": "outcome_unknown"})
+		writeUndoResponse(w, r, http.StatusOK, ActionUndoResult{OperationID: record.OperationID, Action: record.Action, State: "outcome_unknown"})
 		return
 	}
 	if err := completeActionUndo(store, record.OperationID, "undone"); err != nil {
 		writeHeaderError(w, r, http.StatusInternalServerError, CodeInternal, "Undo completed but its receipt could not be saved", true)
 		return
 	}
-	writeUndoResponse(w, r, http.StatusOK, map[string]any{"operationId": record.OperationID, "state": "undone"})
+	writeUndoResponse(w, r, http.StatusOK, ActionUndoResult{OperationID: record.OperationID, Action: record.Action, State: "undone"})
 }
 
 func completeActionUndo(store ActionUndoStore, operationID, state string) error {

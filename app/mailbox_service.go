@@ -92,21 +92,26 @@ type helperAgentStatus struct {
 }
 
 type mailboxServiceConnector struct {
-	mu               sync.Mutex
-	db               *database.DB
-	keyring          mailboxSecretStore
-	credential       *desktopMailboxCredential
-	client           *automationclient.Client
-	searchMu         sync.Mutex
-	searches         map[string]activeMailboxSearch
-	actionKeys       map[[32]byte]string
-	statusFunc       func(context.Context) MailboxServiceStatus
-	capabilitiesFunc func(context.Context) (*v1.Capabilities, error)
-	searchFunc       func(context.Context, string, v1.SearchRequest) (*views.ThreadPage, error)
-	cachedViewFunc   func(context.Context, string) (*v1.CachedVirtualFolderView, error)
-	unreadCountsFunc func(context.Context) (map[string]int, error)
-	mutateActionFunc func(context.Context, v1.ActionRequest, string) (*v1.ActionResponse, error)
-	endpoint         string
+	mu                 sync.Mutex
+	db                 *database.DB
+	keyring            mailboxSecretStore
+	credential         *desktopMailboxCredential
+	client             *automationclient.Client
+	searchMu           sync.Mutex
+	searches           map[string]activeMailboxSearch
+	actionKeys         map[[32]byte]string
+	undoKeys           map[[32]byte]string
+	resolvedActionRefs map[string]operations.MessageRef
+	statusFunc         func(context.Context) MailboxServiceStatus
+	capabilitiesFunc   func(context.Context) (*v1.Capabilities, error)
+	searchFunc         func(context.Context, string, v1.SearchRequest) (*views.ThreadPage, error)
+	cachedViewFunc     func(context.Context, string) (*v1.CachedVirtualFolderView, error)
+	unreadCountsFunc   func(context.Context) (map[string]int, error)
+	mutateActionFunc   func(context.Context, v1.ActionRequest, string) (*v1.ActionResponse, error)
+	undoHistoryFunc    func(context.Context, int) ([]v1.ActionUndoSummary, error)
+	undoLatestFunc     func(context.Context, string) (*v1.ActionUndoResult, error)
+	undoOperationFunc  func(context.Context, string, string) (*v1.ActionUndoResult, error)
+	endpoint           string
 }
 
 type activeMailboxSearch struct {
@@ -351,6 +356,49 @@ func (c *mailboxServiceConnector) status(ctx context.Context) MailboxServiceStat
 	}
 }
 
+func (a *App) undoService(ctx context.Context, write bool) (*mailboxServiceConnector, bool, error) {
+	if a.mailboxService == nil {
+		return nil, false, nil
+	}
+	service := a.mailboxService
+	status := service.status(ctx)
+	if status.Connected {
+		if write && !status.WriteAuthorized {
+			return service, true, errDesktopMailboxWriteAuthorizationRequired
+		}
+		return service, true, nil
+	}
+	if service.isRemote() {
+		message := status.Message
+		if message == "" {
+			message = "the configured remote mailbox service is unavailable"
+		}
+		return service, true, fmt.Errorf("remote mailbox service unavailable: %s", message)
+	}
+	if status.ErrorCode == "service_unavailable" {
+		return service, false, nil
+	}
+	message := status.Message
+	if message == "" {
+		message = "local mailbox service authorization is unavailable"
+	}
+	return service, true, fmt.Errorf("mailbox service unavailable: %s", message)
+}
+
+func (a *App) rejectUnsupportedServiceMutation(ctx context.Context, message string) (bool, error) {
+	if a.mailboxService == nil {
+		return false, nil
+	}
+	_, handled, err := a.undoService(ctx, true)
+	if !handled {
+		return false, nil
+	}
+	if err != nil {
+		return true, err
+	}
+	return true, errors.New(message)
+}
+
 func (c *mailboxServiceConnector) getCapabilities(ctx context.Context, client *automationclient.Client) (*v1.Capabilities, error) {
 	if c.capabilitiesFunc != nil {
 		return c.capabilitiesFunc(ctx)
@@ -542,12 +590,180 @@ func (c *mailboxServiceConnector) mutateAction(ctx context.Context, req v1.Actio
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if err == nil && response != nil && (response.Receipt.State == v1.OperationUnknown || response.Receipt.State == v1.OperationSending) {
+		c.actionKeys[requestHash] = idempotencyKey
+		return response, fmt.Errorf("action outcome is ambiguous: %s", response.Receipt.State)
+	}
 	if err == nil || !isAmbiguousActionError(ctx, err) {
 		delete(c.actionKeys, requestHash)
 		return response, err
 	}
 	c.actionKeys[requestHash] = idempotencyKey
 	return response, err
+}
+
+func (c *mailboxServiceConnector) undoHistory(ctx context.Context, limit int) ([]v1.ActionUndoSummary, error) {
+	client, err := c.getClient()
+	if err != nil {
+		return nil, err
+	}
+	if c.undoHistoryFunc != nil {
+		return c.undoHistoryFunc(ctx, limit)
+	}
+	return client.GetUndoHistory(ctx, limit)
+}
+
+func (c *mailboxServiceConnector) resolveActionTarget(ctx context.Context, target operations.Target) ([]string, error) {
+	client, err := c.getClient()
+	if err != nil {
+		return nil, err
+	}
+	refs, err := client.ResolveActionTarget(ctx, target)
+	if err != nil {
+		return nil, err
+	}
+	c.mu.Lock()
+	if c.resolvedActionRefs == nil {
+		c.resolvedActionRefs = make(map[string]operations.MessageRef)
+	}
+	ids := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		c.resolvedActionRefs[ref.MessageID] = ref
+		ids = append(ids, ref.MessageID)
+	}
+	c.mu.Unlock()
+	return ids, nil
+}
+
+func (c *mailboxServiceConnector) actionRefs(ids []string) ([]operations.MessageRef, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	refs := make([]operations.MessageRef, 0, len(ids))
+	for _, id := range ids {
+		ref, ok := c.resolvedActionRefs[id]
+		if !ok {
+			return nil, fmt.Errorf("message %q has no helper-validated account reference", id)
+		}
+		refs = append(refs, ref)
+	}
+	return refs, nil
+}
+
+func (c *mailboxServiceConnector) consumeActionRefs(ids []string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, id := range ids {
+		delete(c.resolvedActionRefs, id)
+	}
+}
+
+func (a *App) mutateResolvedAction(ctx context.Context, ids []string, action v1.ActionKind, destination string) (*v1.ActionResponse, bool, error) {
+	if a.mailboxService == nil {
+		return nil, false, nil
+	}
+	service, handled, err := a.undoService(ctx, true)
+	if !handled {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, true, err
+	}
+	refs, err := service.actionRefs(ids)
+	if err != nil {
+		if service.isRemote() {
+			return nil, true, err
+		}
+		messages, lookupErr := a.messageStore.GetByIDs(ids)
+		if lookupErr != nil {
+			return nil, true, lookupErr
+		}
+		if len(messages) != len(ids) {
+			return nil, true, errors.New("one or more action messages are unavailable")
+		}
+		refs = make([]operations.MessageRef, 0, len(messages))
+		for _, item := range messages {
+			if item == nil || item.ID == "" || item.AccountID == "" {
+				return nil, true, errors.New("action requires account-qualified message identities")
+			}
+			refs = append(refs, operations.MessageRef{AccountID: item.AccountID, MessageID: item.ID})
+		}
+	}
+	response, err := service.mutateAction(ctx, v1.ActionRequest{
+		Action:      action,
+		Destination: destination,
+		Target:      operations.Target{Kind: operations.TargetMatchedMessages, Messages: refs},
+	})
+	if err == nil {
+		service.consumeActionRefs(ids)
+		return response, true, nil
+	}
+	if !isAmbiguousActionError(ctx, err) {
+		service.consumeActionRefs(ids)
+	}
+	return response, true, err
+}
+
+func (a *App) actionContext() context.Context {
+	if a.ctx != nil {
+		return a.ctx
+	}
+	return context.Background()
+}
+
+func (a *App) publishRemoteMove(messageIDs []string, destinationFolderID string) {
+	a.emitRuntimeEvent("messages:moved", map[string]interface{}{
+		"messageIds":   messageIDs,
+		"destFolderId": destinationFolderID,
+	})
+	a.emitRuntimeEvent("undo:history-changed")
+}
+
+func (c *mailboxServiceConnector) undoLatest(ctx context.Context) (*v1.ActionUndoResult, error) {
+	return c.undoRequest(ctx, "latest", func(client *automationclient.Client, key string) (*v1.ActionUndoResult, error) {
+		if c.undoLatestFunc != nil {
+			return c.undoLatestFunc(ctx, key)
+		}
+		return client.UndoLatest(ctx, key)
+	})
+}
+
+func (c *mailboxServiceConnector) undoOperation(ctx context.Context, operationID string) (*v1.ActionUndoResult, error) {
+	return c.undoRequest(ctx, "operation:"+operationID, func(client *automationclient.Client, key string) (*v1.ActionUndoResult, error) {
+		if c.undoOperationFunc != nil {
+			return c.undoOperationFunc(ctx, operationID, key)
+		}
+		return client.UndoOperation(ctx, operationID, key)
+	})
+}
+
+func (c *mailboxServiceConnector) undoRequest(ctx context.Context, identity string, call func(*automationclient.Client, string) (*v1.ActionUndoResult, error)) (*v1.ActionUndoResult, error) {
+	client, err := c.getClient()
+	if err != nil {
+		return nil, err
+	}
+	requestHash := sha256.Sum256([]byte(identity))
+	c.mu.Lock()
+	if c.undoKeys == nil {
+		c.undoKeys = make(map[[32]byte]string)
+	}
+	idempotencyKey := c.undoKeys[requestHash]
+	if idempotencyKey == "" {
+		idempotencyKey = uuid.NewString()
+	}
+	c.mu.Unlock()
+	result, err := call(client, idempotencyKey)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err == nil && result != nil && result.State != "outcome_unknown" {
+		delete(c.undoKeys, requestHash)
+		return result, nil
+	}
+	if err != nil && !isAmbiguousActionError(ctx, err) {
+		delete(c.undoKeys, requestHash)
+		return nil, err
+	}
+	c.undoKeys[requestHash] = idempotencyKey
+	return result, err
 }
 
 func isAmbiguousActionError(ctx context.Context, err error) bool {
@@ -558,6 +774,12 @@ func isAmbiguousActionError(ctx context.Context, err error) bool {
 		return true
 	}
 	if strings.Contains(err.Error(), "Matching action is still in progress") {
+		return true
+	}
+	if strings.Contains(err.Error(), "action outcome is ambiguous:") {
+		return true
+	}
+	if strings.Contains(err.Error(), "Action undo is already in progress") || strings.Contains(err.Error(), "Undo outcome is uncertain") {
 		return true
 	}
 	var timeout interface{ Timeout() bool }

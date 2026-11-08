@@ -105,6 +105,24 @@ func (o *mailboxActionOperations) actionExpectedLocation(req v1.ActionRequest, m
 			return "", "", errors.New("Trash folder is unavailable for undo snapshot")
 		}
 		return destination.AccountID, destination.ID, nil
+	case v1.ActionMoveToInbox:
+		destination, err := o.runtime.folders.GetByType(msg.AccountID, folder.TypeInbox)
+		if err != nil {
+			return "", "", err
+		}
+		if destination == nil {
+			return "", "", errors.New("Inbox folder is unavailable for undo snapshot")
+		}
+		return destination.AccountID, destination.ID, nil
+	case v1.ActionMoveToSpam:
+		destination, err := o.runtime.folders.GetByType(msg.AccountID, folder.TypeSpam)
+		if err != nil {
+			return "", "", err
+		}
+		if destination == nil {
+			return "", "", errors.New("Spam folder is unavailable for undo snapshot")
+		}
+		return destination.AccountID, destination.ID, nil
 	case v1.ActionMove:
 		destination, err := o.runtime.folders.Get(req.Destination)
 		if err != nil {
@@ -157,7 +175,7 @@ func (o *mailboxActionOperations) UndoAction(ctx context.Context, action v1.Acti
 	}
 
 	switch action {
-	case v1.ActionArchive, v1.ActionTrash, v1.ActionMove:
+	case v1.ActionArchive, v1.ActionTrash, v1.ActionMove, v1.ActionMoveToInbox, v1.ActionMoveToSpam:
 		byFolder := make(map[string][]*message.Message)
 		folderAccounts := make(map[string]string)
 		for _, msg := range current {

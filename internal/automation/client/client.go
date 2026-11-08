@@ -15,6 +15,7 @@ import (
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/mailfilter"
 	"github.com/hkdb/aerion/internal/message"
+	"github.com/hkdb/aerion/internal/operations"
 	"github.com/hkdb/aerion/internal/replylater"
 	"github.com/hkdb/aerion/internal/smtp"
 	"github.com/hkdb/aerion/internal/triage"
@@ -702,6 +703,61 @@ func (c *Client) MutateAction(ctx context.Context, req v1.ActionRequest, idempot
 		return nil, err
 	}
 	var resp v1.Response[v1.ActionResponse]
+	if err := json.Unmarshal(bytes, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.Data, nil
+}
+
+// ResolveActionTarget validates a UI selection against helper-owned mailbox rows.
+func (c *Client) ResolveActionTarget(ctx context.Context, target operations.Target) ([]operations.MessageRef, error) {
+	bytes, err := c.doRequest(ctx, http.MethodPost, "/v1/actions/resolve", map[string]any{"target": target}, "")
+	if err != nil {
+		return nil, err
+	}
+	var resp v1.Response[v1.ResolvedActionTarget]
+	if err := json.Unmarshal(bytes, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data.Messages, nil
+}
+
+// GetUndoHistory reads a bounded, privacy-minimal helper-owned operation list.
+func (c *Client) GetUndoHistory(ctx context.Context, limit int) ([]v1.ActionUndoSummary, error) {
+	path := "/v1/undo/history"
+	if limit > 0 {
+		path += "?limit=" + url.QueryEscape(fmt.Sprint(limit))
+	}
+	bytes, err := c.doRequest(ctx, http.MethodGet, path, nil, "")
+	if err != nil {
+		return nil, err
+	}
+	var resp v1.Response[[]v1.ActionUndoSummary]
+	if err := json.Unmarshal(bytes, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// UndoLatest asks the helper to atomically claim and reverse its newest action.
+func (c *Client) UndoLatest(ctx context.Context, idempotencyKey string) (*v1.ActionUndoResult, error) {
+	return c.undo(ctx, "/v1/undo/latest", idempotencyKey)
+}
+
+// UndoOperation reverses one helper-owned operation idempotently.
+func (c *Client) UndoOperation(ctx context.Context, operationID, idempotencyKey string) (*v1.ActionUndoResult, error) {
+	if strings.TrimSpace(operationID) == "" {
+		return nil, fmt.Errorf("operation ID is required")
+	}
+	return c.undo(ctx, "/v1/undo/operations/"+url.PathEscape(operationID), idempotencyKey)
+}
+
+func (c *Client) undo(ctx context.Context, path, idempotencyKey string) (*v1.ActionUndoResult, error) {
+	bytes, err := c.doRequest(ctx, http.MethodPost, path, struct{}{}, idempotencyKey)
+	if err != nil {
+		return nil, err
+	}
+	var resp v1.Response[v1.ActionUndoResult]
 	if err := json.Unmarshal(bytes, &resp); err != nil {
 		return nil, err
 	}

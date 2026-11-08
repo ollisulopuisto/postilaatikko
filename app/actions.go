@@ -61,11 +61,24 @@ func (a *App) withIMAPRetry(accountID string, op func(conn *imap.Client) error) 
 // Message Actions API - Exposed to frontend via Wails bindings
 // ============================================================================
 
-// ResolveMailActionTarget validates a UI's explicit, account-qualified target
-// and returns the local message IDs expected by the existing undoable mutation
-// APIs. This is a resolution step only; callers still use the established
-// mutation methods so sync, events and undo retain their existing semantics.
+// ResolveMailActionTarget validates a UI's explicit account-qualified target.
+// Remote targets are resolved by the helper and their account-qualified refs
+// are retained for the immediately following action call.
 func (a *App) ResolveMailActionTarget(target operations.Target) ([]string, error) {
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if a.mailboxService != nil {
+		service, handled, err := a.undoService(ctx, false)
+		if !handled {
+			return operations.Resolve(target, a.messageStore)
+		}
+		if err != nil {
+			return nil, err
+		}
+		return service.resolveActionTarget(ctx, target)
+	}
 	return operations.Resolve(target, a.messageStore)
 }
 
@@ -129,6 +142,23 @@ func (a *App) setReadStatus(messageIDs []string, isRead bool) error {
 	if len(messageIDs) == 0 {
 		return nil
 	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	remoteAction := v1.ActionMarkUnread
+	if isRead {
+		remoteAction = v1.ActionMarkRead
+	}
+	if response, handled, err := a.mutateResolvedAction(ctx, messageIDs, remoteAction, ""); handled {
+		if err != nil {
+			return err
+		}
+		a.emitRuntimeEvent("messages:readChanged", map[string]interface{}{"messageIds": messageIDs, "isRead": isRead})
+		a.emitRuntimeEvent("undo:history-changed")
+		_ = response
+		return nil
+	}
 
 	// Get messages to find their UIDs and folders
 	messages, err := a.messageStore.GetByIDs(messageIDs)
@@ -148,10 +178,6 @@ func (a *App) setReadStatus(messageIDs []string, isRead bool) error {
 	action := v1.ActionMarkUnread
 	if isRead {
 		action = v1.ActionMarkRead
-	}
-	ctx := a.ctx
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	serviceHandled, mutationErr := a.mutateFlagThroughMailboxService(ctx, messages, action)
 	changedIDs := messageIDs
@@ -266,6 +292,22 @@ func (a *App) setStarredStatus(messageIDs []string, isStarred bool) error {
 	if len(messageIDs) == 0 {
 		return nil
 	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	remoteAction := v1.ActionUnstar
+	if isStarred {
+		remoteAction = v1.ActionStar
+	}
+	if _, handled, err := a.mutateResolvedAction(ctx, messageIDs, remoteAction, ""); handled {
+		if err != nil {
+			return err
+		}
+		a.emitRuntimeEvent("messages:starredChanged", map[string]interface{}{"messageIds": messageIDs, "isStarred": isStarred})
+		a.emitRuntimeEvent("undo:history-changed")
+		return nil
+	}
 
 	messages, err := a.messageStore.GetByIDs(messageIDs)
 	if err != nil {
@@ -283,10 +325,6 @@ func (a *App) setStarredStatus(messageIDs []string, isStarred bool) error {
 	action := v1.ActionUnstar
 	if isStarred {
 		action = v1.ActionStar
-	}
-	ctx := a.ctx
-	if ctx == nil {
-		ctx = context.Background()
 	}
 	serviceHandled, mutationErr := a.mutateFlagThroughMailboxService(ctx, messages, action)
 	changedIDs := messageIDs
@@ -452,6 +490,15 @@ func (a *App) syncFlagsToIMAP(messages []*message.Message, folderID, flagType st
 
 // MoveToFolder moves messages to a specified folder
 func (a *App) MoveToFolder(messageIDs []string, destFolderID string) error {
+	if a.mailboxService != nil {
+		response, handled, err := a.mutateResolvedAction(a.actionContext(), messageIDs, v1.ActionMove, destFolderID)
+		if handled {
+			if err == nil && response != nil {
+				a.publishRemoteMove(messageIDs, destFolderID)
+			}
+			return err
+		}
+	}
 	_, _, _, err := a.runMoveMutation(messageIDs, "move-to-folder", func() (bool, string, error) {
 		operationID, moveErr := a.moveToFolder(messageIDs, destFolderID, true, "")
 		return false, operationID, moveErr
@@ -461,6 +508,19 @@ func (a *App) MoveToFolder(messageIDs []string, destFolderID string) error {
 
 // MoveToFolderWithUndo moves messages and atomically returns its undo operation.
 func (a *App) MoveToFolderWithUndo(messageIDs []string, destFolderID string) (UndoableActionResult, error) {
+	if a.mailboxService != nil {
+		response, handled, err := a.mutateResolvedAction(a.actionContext(), messageIDs, v1.ActionMove, destFolderID)
+		if handled {
+			if err != nil {
+				return UndoableActionResult{}, err
+			}
+			if response == nil || response.Receipt.OperationID == "" {
+				return UndoableActionResult{}, errors.New("mailbox service returned no action receipt")
+			}
+			a.publishRemoteMove(messageIDs, destFolderID)
+			return UndoableActionResult{OperationID: response.Receipt.OperationID}, nil
+		}
+	}
 	_, operationID, coalesced, err := a.runMoveMutation(messageIDs, "move-to-folder", func() (bool, string, error) {
 		op, moveErr := a.moveToFolder(messageIDs, destFolderID, true, "")
 		return false, op, moveErr
@@ -522,9 +582,6 @@ func (a *App) moveToFolderWithService(messageIDs []string, destFolderID string, 
 				return operationID, errors.New("mailbox service move did not return an operation receipt")
 			}
 			operationID = response.Receipt.OperationID
-			if recordUndo {
-				a.recordMailboxServiceMoveUndo(messages, destFolder, operationID)
-			}
 			a.publishMailboxServiceMove(messages, destFolder.ID)
 			return operationID, nil
 		}
@@ -792,40 +849,6 @@ func (a *App) moveToFolderWithService(messageIDs []string, destFolderID string, 
 	}()
 
 	return operationID, nil
-}
-
-func (a *App) recordMailboxServiceMoveUndo(messages []*message.Message, destination *folder.Folder, operationID string) {
-	if a.undoStack == nil || destination == nil {
-		return
-	}
-	bySource := make(map[string][]*message.Message)
-	for _, item := range messages {
-		if item == nil || item.FolderID == "" || item.AccountID != destination.AccountID {
-			continue
-		}
-		bySource[item.FolderID] = append(bySource[item.FolderID], item)
-	}
-	sourceFolderIDs := make([]string, 0, len(bySource))
-	for sourceFolderID := range bySource {
-		sourceFolderIDs = append(sourceFolderIDs, sourceFolderID)
-	}
-	slices.Sort(sourceFolderIDs)
-	for _, sourceFolderID := range sourceFolderIDs {
-		group := bySource[sourceFolderID]
-		identities := make([]undo.MoveMessageIdentity, 0, len(group))
-		ids := make([]string, 0, len(group))
-		for _, item := range group {
-			identities = append(identities, undo.MoveMessageIdentity{LocalID: item.ID, MessageID: item.MessageID})
-			ids = append(ids, item.ID)
-		}
-		cmd := undo.NewMoveCommand(a, group[0].AccountID, identities, sourceFolderID, destination.ID, "Move to "+destination.Name)
-		operationID = a.undoStack.PushOperation(operationID, cmd, undo.OperationMetadata{
-			Action:     "move:" + string(destination.Type),
-			MessageIDs: ids,
-		})
-		cmd.SetOperationID(operationID)
-	}
-	a.emitRuntimeEvent("undo:history-changed")
 }
 
 func (a *App) publishMailboxServiceMove(messages []*message.Message, destinationFolderID string) {
@@ -1250,6 +1273,9 @@ func (a *App) moveMessagesToIMAP(messages []*message.Message, sourceFolderID str
 // CopyToFolder copies messages to a specified folder (keeps original)
 // Unlike MoveToFolder, this only copies - original messages remain in place
 func (a *App) CopyToFolder(messageIDs []string, destFolderID string) error {
+	if handled, err := a.rejectUnsupportedServiceMutation(a.actionContext(), "copy action is not available through the mailbox helper yet"); handled {
+		return err
+	}
 	log := logging.WithComponent("app")
 
 	if len(messageIDs) == 0 {
@@ -1479,6 +1505,15 @@ func (a *App) copyMessagesAcrossAccounts(messages []*message.Message, destFolder
 
 // Archive moves messages to Archive, or All Mail for Gmail.
 func (a *App) Archive(messageIDs []string) error {
+	if a.mailboxService != nil {
+		response, handled, err := a.mutateResolvedAction(a.actionContext(), messageIDs, v1.ActionArchive, "")
+		if handled {
+			if err == nil && response != nil {
+				a.publishRemoteMove(messageIDs, "")
+			}
+			return err
+		}
+	}
 	_, _, _, err := a.runMoveMutation(messageIDs, "archive", func() (bool, string, error) {
 		operationID, archiveErr := a.archiveWithUndo(messageIDs, "")
 		return false, operationID, archiveErr
@@ -1488,6 +1523,19 @@ func (a *App) Archive(messageIDs []string) error {
 
 // ArchiveWithUndo archives messages and atomically returns its undo operation.
 func (a *App) ArchiveWithUndo(messageIDs []string) (UndoableActionResult, error) {
+	if a.mailboxService != nil {
+		response, handled, err := a.mutateResolvedAction(a.actionContext(), messageIDs, v1.ActionArchive, "")
+		if handled {
+			if err != nil {
+				return UndoableActionResult{}, err
+			}
+			if response == nil || response.Receipt.OperationID == "" {
+				return UndoableActionResult{}, errors.New("mailbox service returned no action receipt")
+			}
+			a.publishRemoteMove(messageIDs, "")
+			return UndoableActionResult{OperationID: response.Receipt.OperationID}, nil
+		}
+	}
 	_, operationID, coalesced, err := a.runMoveMutation(messageIDs, "archive", func() (bool, string, error) {
 		op, archiveErr := a.archiveWithUndo(messageIDs, "")
 		return false, op, archiveErr
@@ -1502,6 +1550,18 @@ func (a *App) archiveWithUndo(messageIDs []string, operationID string) (string, 
 func (a *App) archiveWithUndoUsingService(messageIDs []string, operationID string, useService bool) (string, error) {
 	if len(messageIDs) == 0 {
 		return operationID, nil
+	}
+	if a.mailboxService != nil && a.mailboxService.isRemote() {
+		response, _, err := a.mutateResolvedAction(a.actionContext(), messageIDs, v1.ActionArchive, "")
+		if err != nil {
+			return operationID, err
+		}
+		if response == nil {
+			return operationID, errors.New("remote mailbox service returned no action receipt")
+		}
+		a.emitRuntimeEvent("messages:moved", map[string]interface{}{"messageIds": messageIDs})
+		a.emitRuntimeEvent("undo:history-changed")
+		return response.Receipt.OperationID, nil
 	}
 
 	// Cross-account selections (Unified Inbox) route to a partition
@@ -1519,6 +1579,15 @@ func (a *App) archiveWithUndoUsingService(messageIDs []string, operationID strin
 // this as moving the message to its All Mail label, rather than requiring an
 // Archive folder to be configured.
 func (a *App) RemoveFromInbox(messageIDs []string) error {
+	if a.mailboxService != nil {
+		response, handled, err := a.mutateResolvedAction(a.actionContext(), messageIDs, v1.ActionArchive, "")
+		if handled {
+			if err == nil && response != nil {
+				a.publishRemoteMove(messageIDs, "")
+			}
+			return err
+		}
+	}
 	_, _, _, err := a.runMoveMutation(messageIDs, "remove-from-inbox", func() (bool, string, error) {
 		operationID, removeErr := a.removeFromInboxWithUndo(messageIDs, "")
 		return false, operationID, removeErr
@@ -1528,6 +1597,19 @@ func (a *App) RemoveFromInbox(messageIDs []string) error {
 
 // RemoveFromInboxWithUndo removes Inbox and atomically returns its undo operation.
 func (a *App) RemoveFromInboxWithUndo(messageIDs []string) (UndoableActionResult, error) {
+	if a.mailboxService != nil {
+		response, handled, err := a.mutateResolvedAction(a.actionContext(), messageIDs, v1.ActionArchive, "")
+		if handled {
+			if err != nil {
+				return UndoableActionResult{}, err
+			}
+			if response == nil || response.Receipt.OperationID == "" {
+				return UndoableActionResult{}, errors.New("mailbox service returned no action receipt")
+			}
+			a.publishRemoteMove(messageIDs, "")
+			return UndoableActionResult{OperationID: response.Receipt.OperationID}, nil
+		}
+	}
 	_, operationID, coalesced, err := a.runMoveMutation(messageIDs, "remove-from-inbox", func() (bool, string, error) {
 		op, removeErr := a.removeFromInboxWithUndo(messageIDs, "")
 		return false, op, removeErr
@@ -1542,6 +1624,18 @@ func (a *App) removeFromInboxWithUndo(messageIDs []string, operationID string) (
 func (a *App) removeFromInboxWithService(messageIDs []string, operationID string, useService bool) (string, error) {
 	if len(messageIDs) == 0 {
 		return operationID, nil
+	}
+	if a.mailboxService != nil && a.mailboxService.isRemote() {
+		response, _, err := a.mutateResolvedAction(a.actionContext(), messageIDs, v1.ActionArchive, "")
+		if err != nil {
+			return operationID, err
+		}
+		if response == nil {
+			return operationID, errors.New("remote mailbox service returned no action receipt")
+		}
+		a.emitRuntimeEvent("messages:moved", map[string]interface{}{"messageIds": messageIDs})
+		a.emitRuntimeEvent("undo:history-changed")
+		return response.Receipt.OperationID, nil
 	}
 
 	messages, err := a.messageStore.GetByIDs(messageIDs[:1])
@@ -1570,6 +1664,15 @@ func (a *App) removeFromInboxWithService(messageIDs []string, operationID string
 // Returns true if at least one message was moved to trash (show undo toast).
 // Returns false if all messages were just label-removed on Gmail (no undo).
 func (a *App) Trash(messageIDs []string) (bool, error) {
+	if a.mailboxService != nil {
+		response, handled, err := a.mutateResolvedAction(a.actionContext(), messageIDs, v1.ActionTrash, "")
+		if handled {
+			if err == nil && response != nil {
+				a.publishRemoteMove(messageIDs, "")
+			}
+			return err == nil && response != nil, err
+		}
+	}
 	moved, _, _, err := a.runMoveMutation(messageIDs, "trash", func() (bool, string, error) {
 		return a.trashWithUndo(messageIDs, "")
 	})
@@ -1578,6 +1681,19 @@ func (a *App) Trash(messageIDs []string) (bool, error) {
 
 // TrashWithUndo moves messages to Trash and atomically returns its undo operation.
 func (a *App) TrashWithUndo(messageIDs []string) (TrashUndoResult, error) {
+	if a.mailboxService != nil {
+		response, handled, err := a.mutateResolvedAction(a.actionContext(), messageIDs, v1.ActionTrash, "")
+		if handled {
+			if err != nil {
+				return TrashUndoResult{}, err
+			}
+			if response == nil || response.Receipt.OperationID == "" {
+				return TrashUndoResult{}, errors.New("mailbox service returned no action receipt")
+			}
+			a.publishRemoteMove(messageIDs, "")
+			return TrashUndoResult{MovedToTrash: true, OperationID: response.Receipt.OperationID}, nil
+		}
+	}
 	moved, operationID, coalesced, err := a.runMoveMutation(messageIDs, "trash", func() (bool, string, error) {
 		return a.trashWithUndo(messageIDs, "")
 	})
@@ -1591,6 +1707,18 @@ func (a *App) trashWithUndo(messageIDs []string, operationID string) (bool, stri
 func (a *App) trashWithUndoUsingService(messageIDs []string, operationID string, useService bool) (bool, string, error) {
 	if len(messageIDs) == 0 {
 		return false, operationID, nil
+	}
+	if a.mailboxService != nil && a.mailboxService.isRemote() {
+		response, _, err := a.mutateResolvedAction(a.actionContext(), messageIDs, v1.ActionTrash, "")
+		if err != nil {
+			return false, operationID, err
+		}
+		if response == nil {
+			return false, operationID, errors.New("remote mailbox service returned no action receipt")
+		}
+		a.emitRuntimeEvent("messages:moved", map[string]interface{}{"messageIds": messageIDs})
+		a.emitRuntimeEvent("undo:history-changed")
+		return true, response.Receipt.OperationID, nil
 	}
 
 	// Cross-account selections (Unified Inbox) route to a partition
@@ -1795,6 +1923,15 @@ func (a *App) removeFromIMAPFolder(messages []*message.Message, folderID string)
 // Returns true if at least one message was moved to spam (show undo toast).
 // Returns false if all messages were just label-removed on Gmail (no undo).
 func (a *App) MarkAsSpam(messageIDs []string) (bool, error) {
+	if a.mailboxService != nil {
+		response, handled, err := a.mutateResolvedAction(a.actionContext(), messageIDs, v1.ActionMoveToSpam, "")
+		if handled {
+			if err == nil && response != nil {
+				a.publishRemoteMove(messageIDs, "")
+			}
+			return err == nil && response != nil, err
+		}
+	}
 	moved, _, _, err := a.runMoveMutation(messageIDs, "mark-as-spam", func() (bool, string, error) {
 		return a.markAsSpamWithUndo(messageIDs, "")
 	})
@@ -1803,6 +1940,19 @@ func (a *App) MarkAsSpam(messageIDs []string) (bool, error) {
 
 // MarkAsSpamWithUndo marks messages as spam and atomically returns its undo operation.
 func (a *App) MarkAsSpamWithUndo(messageIDs []string) (SpamUndoResult, error) {
+	if a.mailboxService != nil {
+		response, handled, err := a.mutateResolvedAction(a.actionContext(), messageIDs, v1.ActionMoveToSpam, "")
+		if handled {
+			if err != nil {
+				return SpamUndoResult{}, err
+			}
+			if response == nil || response.Receipt.OperationID == "" {
+				return SpamUndoResult{}, errors.New("mailbox service returned no action receipt")
+			}
+			a.publishRemoteMove(messageIDs, "")
+			return SpamUndoResult{MovedToSpam: true, OperationID: response.Receipt.OperationID}, nil
+		}
+	}
 	moved, operationID, coalesced, err := a.runMoveMutation(messageIDs, "mark-as-spam", func() (bool, string, error) {
 		return a.markAsSpamWithUndo(messageIDs, "")
 	})
@@ -1848,6 +1998,15 @@ func (a *App) markAsSpamWithUndo(messageIDs []string, operationID string) (bool,
 
 // MarkAsNotSpam moves messages from Spam to Inbox
 func (a *App) MarkAsNotSpam(messageIDs []string) error {
+	if a.mailboxService != nil {
+		response, handled, err := a.mutateResolvedAction(a.actionContext(), messageIDs, v1.ActionMoveToInbox, "")
+		if handled {
+			if err == nil && response != nil {
+				a.publishRemoteMove(messageIDs, "")
+			}
+			return err
+		}
+	}
 	_, _, _, err := a.runMoveMutation(messageIDs, "mark-as-not-spam", func() (bool, string, error) {
 		operationID, notSpamErr := a.markAsNotSpamWithUndo(messageIDs, "")
 		return false, operationID, notSpamErr
@@ -1857,6 +2016,19 @@ func (a *App) MarkAsNotSpam(messageIDs []string) error {
 
 // MarkAsNotSpamWithUndo moves messages to Inbox and atomically returns its undo operation.
 func (a *App) MarkAsNotSpamWithUndo(messageIDs []string) (UndoableActionResult, error) {
+	if a.mailboxService != nil {
+		response, handled, err := a.mutateResolvedAction(a.actionContext(), messageIDs, v1.ActionMoveToInbox, "")
+		if handled {
+			if err != nil {
+				return UndoableActionResult{}, err
+			}
+			if response == nil || response.Receipt.OperationID == "" {
+				return UndoableActionResult{}, errors.New("mailbox service returned no action receipt")
+			}
+			a.publishRemoteMove(messageIDs, "")
+			return UndoableActionResult{OperationID: response.Receipt.OperationID}, nil
+		}
+	}
 	_, operationID, coalesced, err := a.runMoveMutation(messageIDs, "mark-as-not-spam", func() (bool, string, error) {
 		op, notSpamErr := a.markAsNotSpamWithUndo(messageIDs, "")
 		return false, op, notSpamErr
@@ -1870,6 +2042,15 @@ func (a *App) markAsNotSpamWithUndo(messageIDs []string, operationID string) (st
 
 // MoveToInbox restores messages to the Inbox of their respective accounts.
 func (a *App) MoveToInbox(messageIDs []string) error {
+	if a.mailboxService != nil {
+		response, handled, err := a.mutateResolvedAction(a.actionContext(), messageIDs, v1.ActionMoveToInbox, "")
+		if handled {
+			if err == nil && response != nil {
+				a.publishRemoteMove(messageIDs, "")
+			}
+			return err
+		}
+	}
 	_, _, _, err := a.runMoveMutation(messageIDs, "move-to-inbox", func() (bool, string, error) {
 		operationID, inboxErr := a.moveToInboxWithUndo(messageIDs, "")
 		return false, operationID, inboxErr
@@ -1879,6 +2060,19 @@ func (a *App) MoveToInbox(messageIDs []string) error {
 
 // MoveToInboxWithUndo moves messages to Inbox and atomically returns its undo operation.
 func (a *App) MoveToInboxWithUndo(messageIDs []string) (UndoableActionResult, error) {
+	if a.mailboxService != nil {
+		response, handled, err := a.mutateResolvedAction(a.actionContext(), messageIDs, v1.ActionMoveToInbox, "")
+		if handled {
+			if err != nil {
+				return UndoableActionResult{}, err
+			}
+			if response == nil || response.Receipt.OperationID == "" {
+				return UndoableActionResult{}, errors.New("mailbox service returned no action receipt")
+			}
+			a.publishRemoteMove(messageIDs, "")
+			return UndoableActionResult{OperationID: response.Receipt.OperationID}, nil
+		}
+	}
 	_, operationID, coalesced, err := a.runMoveMutation(messageIDs, "move-to-inbox", func() (bool, string, error) {
 		op, inboxErr := a.moveToInboxWithUndo(messageIDs, "")
 		return false, op, inboxErr
@@ -1916,6 +2110,9 @@ func (a *App) moveToInboxWithUndo(messageIDs []string, operationID string) (stri
 
 // EmptyTrash permanently deletes all messages in a trash folder
 func (a *App) EmptyTrash(accountID, folderID string) error {
+	if handled, err := a.rejectUnsupportedServiceMutation(a.actionContext(), "emptying Trash is not available through the mailbox helper yet"); handled {
+		return err
+	}
 	if a.syncEngine != nil {
 		c, apiErr := a.syncEngine.GmailClient(a.ctx, accountID)
 		if apiErr == nil {
@@ -1963,6 +2160,9 @@ func (a *App) EmptyTrash(accountID, folderID string) error {
 
 // DeletePermanently permanently deletes messages
 func (a *App) DeletePermanently(messageIDs []string) error {
+	if handled, err := a.rejectUnsupportedServiceMutation(a.actionContext(), "permanent deletion is not available through the mailbox helper yet"); handled {
+		return err
+	}
 	log := logging.WithComponent("app")
 
 	if len(messageIDs) == 0 {
