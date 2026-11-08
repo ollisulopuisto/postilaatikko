@@ -656,6 +656,31 @@ func (a *App) SendMessageWithRequestID(accountID string, msg smtp.ComposeMessage
 		return errors.New("the previous send outcome is unresolved; retry the unchanged message first")
 	}
 	if !exists {
+		lookup, lookupErr := a.GetComposerSendReceipt(requestID)
+		if lookupErr != nil {
+			a.remoteSendMu.Unlock()
+			return lookupErr
+		}
+		if lookup != nil && lookup.Found {
+			if lookup.Response == nil {
+				a.remoteSendMu.Unlock()
+				return errors.New("mailbox service returned an empty send receipt")
+			}
+			switch lookup.Response.Receipt.State {
+			case v1.OperationSent:
+				a.remoteSendMu.Unlock()
+				if lookup.Response.Code != "" {
+					return fmt.Errorf("message was already sent, but helper reported %s", lookup.Response.Code)
+				}
+				return nil
+			case v1.OperationUnknown, v1.OperationSending:
+				a.remoteSendMu.Unlock()
+				return errors.New("message delivery outcome is unknown; do not send this message again")
+			default:
+				a.remoteSendMu.Unlock()
+				return fmt.Errorf("prior send receipt is %q; automatic resend is blocked", lookup.Response.Receipt.State)
+			}
+		}
 		request, prepareErr := a.PrepareComposerSend(accountID, msg, "", "")
 		if prepareErr != nil {
 			a.remoteSendMu.Unlock()
