@@ -15,6 +15,9 @@ type ActionEvent struct {
 	State          string               `json:"state"`
 	Affected       []AffectedMessageRef `json:"affected,omitempty"`
 	AffectedTriage []AffectedTriageRef  `json:"affectedTriage,omitempty"`
+	Partial        bool                 `json:"partial,omitempty"`
+	Groups         []ActionGroupOutcome `json:"groups,omitempty"`
+	UndoAvailable  bool                 `json:"undoAvailable,omitempty"`
 	CreatedAt      string               `json:"createdAt"`
 }
 
