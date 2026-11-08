@@ -23,10 +23,40 @@ class MessageAnimationsStore {
     return this.animating.size > 0
   }
 
+  private holds = new Map<string, number>()
+  private generations = new Map<string, number>()
+  private nextGeneration = 0
+
+  // Each callback owns only the captured generation, never a newer operation.
+  holdActive() {
+    const captured = new Map(this.generations)
+    for (const [id] of captured) this.holds.set(id, (this.holds.get(id) || 0) + 1)
+    return () => {
+      for (const [id, generation] of captured) {
+        this.holds.set(id, Math.max(0, (this.holds.get(id) || 1) - 1))
+        if (!this.holds.get(id) && this.generations.get(id) === generation) this.finishRemoval([id])
+      }
+    }
+  }
+
+  settleRemoval(messageIds: Iterable<string>) {
+    const captured = [...messageIds].map(id => [id, this.generations.get(id)] as const)
+    setTimeout(() => {
+      for (const [id, generation] of captured) {
+        if (!this.holds.get(id) && this.generations.get(id) === generation) {
+          this.finishRemoval([id])
+        }
+      }
+    }, MESSAGE_EXIT_ANIM_DURATION_MS)
+  }
+
   startRemoval(messageIds: Iterable<string>, kind: MessageAnimationKind) {
     const next = new Map(this.animating)
     for (const id of messageIds) {
-      if (id) next.set(id, kind)
+      if (id) {
+        next.set(id, kind)
+        this.generations.set(id, ++this.nextGeneration)
+      }
     }
     this.animating = next
   }
@@ -36,6 +66,7 @@ class MessageAnimationsStore {
     let changed = false
     for (const id of messageIds) {
       if (next.delete(id)) {
+        this.generations.delete(id)
         changed = true
       }
     }
@@ -47,6 +78,8 @@ class MessageAnimationsStore {
   clear() {
     if (this.animating.size > 0) {
       this.animating = new Map()
+      this.generations.clear()
+      this.holds.clear()
     }
   }
 }

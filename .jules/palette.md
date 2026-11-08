@@ -2,6 +2,10 @@
 
 Critical UX and Accessibility learnings only.
 
+## 2026-11-08 - Focus-Within Disclosure and Radio Semantics on Account Identity Lists
+**Learning:** In account settings identity lists (`AccountIdentityTab.svelte`), row action button wrappers styled with `opacity-0 group-hover:opacity-100` hid Edit and Delete buttons entirely during keyboard tabbing because the parent row had no focus-within disclosure (`group-focus-within:opacity-100 focus-within:opacity-100`). Furthermore, custom radio buttons selecting the default identity lacked `role="radio"`, `aria-checked`, dynamic accessible labels, and keyboard focus rings.
+**Action:** Pair hover-revealed action containers with `group-focus-within:opacity-100 focus-within:opacity-100`, supply `aria-label` to all icon buttons, and ensure custom radio toggles include `role="radio"`, `aria-checked`, dynamic labels, and `focus-visible:ring-2` styling.
+
 ## 2026-11-07 - Menu Disclosures and Focus Rings on Hover-Revealed Sidebar Actions
 **Learning:** Icon-only menu triggers concealed by default via `opacity-0 group-hover:opacity-100` (such as account context menu buttons in `AccountSection.svelte`) previously relied on legacy `focus:opacity-100` without `focus-visible` ring styles, accessible name labels, or popup semantics (`aria-haspopup="menu"`, `aria-expanded`). This left keyboard navigation without an outline and screen readers without announcement of the action or its expanded state.
 **Action:** Always provide `aria-haspopup="menu"` and `aria-expanded` on menu disclosure triggers, pair hover disclosure classes with `focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`, and supply localized `aria-label` and `title` attributes.

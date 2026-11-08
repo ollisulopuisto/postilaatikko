@@ -1916,16 +1916,17 @@
     if (messageAnimations.isAnyAnimating()) {
       // Allow the exit animation to visibly conclude before the backend reload
       // removes the elements from the DOM.
+      const release = messageAnimations.holdActive()
       setTimeout(() => {
-        messageAnimations.clear()
-        doHandleActionComplete(autoSelectNext)
+        // Keep removed rows hidden until the replacement data has arrived.
+        void doHandleActionComplete(autoSelectNext).finally(release)
       }, MESSAGE_EXIT_ANIM_DURATION_MS)
       return
     }
     doHandleActionComplete(autoSelectNext)
   }
 
-  function doHandleActionComplete(autoSelectNext: boolean = false) {
+  async function doHandleActionComplete(autoSelectNext: boolean = false) {
     // Capture before clearing the viewer: pendingReadOnLeave may immediately
     // change the origin to read while this action reloads the list.
     const selection = autoSelectNext
@@ -1955,7 +1956,7 @@
     const totalLoaded = Math.max(conversations.length, PAGE_SIZE)
     offset = 0
 
-    loadConversations(totalLoaded).then(() => {
+    await loadConversations(totalLoaded).then(() => {
       // Restore scroll position
       if (listContainerRef) {
         requestAnimationFrame(() => {
@@ -2401,6 +2402,7 @@
           handleActionComplete(true)
         } finally {
           moveMutationInFlight = false
+          messageAnimations.settleRemoval(messageIds)
         }
       })
     } catch (err) {
@@ -2525,6 +2527,7 @@
         clearChecked()
       } finally {
         moveMutationInFlight = false
+        messageAnimations.settleRemoval(messageIds)
       }
     }).catch((err) => {
       messageAnimations.finishRemoval(messageIds)

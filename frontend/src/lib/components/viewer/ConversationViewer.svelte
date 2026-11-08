@@ -228,6 +228,7 @@
             onActionComplete?.(true)
           } finally {
             moveMutationInFlight = false
+            messageAnimations.settleRemoval(messageIds)
           }
         })
       } else {
@@ -1260,6 +1261,7 @@
           onActionComplete?.(true)
         } finally {
           moveMutationInFlight = false
+          messageAnimations.settleRemoval(messageIds)
         }
       })
     } catch (err) {
@@ -1285,6 +1287,7 @@
           onActionComplete?.(true)
         } finally {
           moveMutationInFlight = false
+          messageAnimations.settleRemoval(messageIds)
         }
       })
     } catch (err) {
@@ -1320,6 +1323,7 @@
           onActionComplete?.(true)
         } finally {
           moveMutationInFlight = false
+          messageAnimations.settleRemoval(messageIds)
         }
       })
     } catch (err) {
@@ -1346,6 +1350,7 @@
           onActionComplete?.(true)
         } finally {
           moveMutationInFlight = false
+          messageAnimations.settleRemoval(messageIds)
         }
       })
     } catch (err) {
@@ -1379,6 +1384,7 @@
             onActionComplete?.(true)
           } finally {
             moveMutationInFlight = false
+            messageAnimations.settleRemoval(messageIds)
           }
         })
       } catch (err) {
@@ -1404,6 +1410,7 @@
           onActionComplete?.(true)
         } finally {
           moveMutationInFlight = false
+          messageAnimations.settleRemoval(messageIds)
         }
       })
     } catch (err) {
@@ -1430,6 +1437,7 @@
             // Will auto-reload via messages:deleted event
           } finally {
             moveMutationInFlight = false
+            messageAnimations.settleRemoval([messageID])
           }
         })
       } catch (err) {
@@ -1452,6 +1460,7 @@
             // Will auto-reload via messages:deleted event
           } finally {
             moveMutationInFlight = false
+            messageAnimations.settleRemoval([messageID])
           }
         })
       } catch (err) {
@@ -1489,6 +1498,7 @@
           onActionComplete?.(true)
         } finally {
           moveMutationInFlight = false
+          messageAnimations.settleRemoval(messageIds)
         }
       })
     } catch (err) {

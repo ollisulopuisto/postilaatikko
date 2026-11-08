@@ -76,3 +76,42 @@ test('messageAnimations store handles batch message IDs correctly', async () => 
   messageAnimations.finishRemoval(['id-1', 'id-3'])
   assert.equal(messageAnimations.isAnyAnimating(), false)
 })
+
+
+test('reader-only operation settles without a mounted list and leaves other operations alone', async () => {
+  const { messageAnimations } = await loadAnimationsStore()
+  messageAnimations.startRemoval(['reader'], 'move')
+  messageAnimations.startRemoval(['other'], 'archive')
+  messageAnimations.settleRemoval(['reader'])
+  await new Promise(resolve => setTimeout(resolve, 250))
+  assert.equal(messageAnimations.isAnimating('reader'), undefined)
+  assert.equal(messageAnimations.isAnimating('other'), 'archive')
+})
+
+test('slow replacement data holds removed rows hidden until reload finishes', async () => {
+  const { messageAnimations } = await loadAnimationsStore()
+  messageAnimations.startRemoval(['old-row'], 'trash')
+  const release = messageAnimations.holdActive()
+  messageAnimations.settleRemoval(['old-row'])
+  await new Promise(resolve => setTimeout(resolve, 280))
+  assert.equal(messageAnimations.isAnimating('old-row'), 'trash')
+  release()
+  assert.equal(messageAnimations.isAnimating('old-row'), undefined)
+})
+
+test('settlement from an older operation cannot clear a newer animation for the same message', async () => {
+  const { messageAnimations } = await loadAnimationsStore()
+  messageAnimations.startRemoval(['shared'], 'move')
+  messageAnimations.settleRemoval(['shared'])
+  messageAnimations.startRemoval(['shared'], 'spam')
+  await new Promise(resolve => setTimeout(resolve, 250))
+  assert.equal(messageAnimations.isAnimating('shared'), 'spam')
+})
+
+test('Trash quick-delete waits for confirmation without hiding its row', async () => {
+  const row = await readFile(new URL('../src/lib/components/list/ConversationRow.svelte', import.meta.url), 'utf8')
+  assert.match(row, /if \(folderType !== 'trash'\) messageAnimations.startRemoval/)
+  const list = await readFile(new URL('../src/lib/components/list/MessageList.svelte', import.meta.url), 'utf8')
+  assert.doesNotMatch(list, /messageAnimations.clear\(\)/)
+  assert.match(list, /doHandleActionComplete\(autoSelectNext\).finally\(release\)/)
+})
