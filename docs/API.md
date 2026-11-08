@@ -59,6 +59,10 @@ acknowledgement.
   - Request body: `{ "accountId": "acc-1", "subscribed": true }` applies the provider's existing bulk subscription behavior.
 - `GET /v1/views` (Requires `mail.read`)
   - Returns complete saved-view definitions, including folder membership and search/triage criteria.
+- `GET /v1/views/unread-counts` (Requires `mail.read`)
+  - Returns the helper's saved-view unread count map using the saved-view criteria.
+- `GET /v1/views/{viewId}/cache` (Requires `mail.read`)
+  - Returns the helper-cached, bounded saved-view conversation page and its refresh timestamp.
 - `GET /v1/filters` (Requires `mail.read`)
   - Returns automatic cross-account filter rules in priority order.
 - `GET /v1/filter-jobs?limit={1..100}&cursor={offset}` (Requires `mail.read`)
@@ -72,6 +76,9 @@ acknowledgement.
   - Supports account-qualified folder and `all_inboxes` scopes, `newest`/`oldest` ordering, and `unread`, `starred`, `attachments`, `readLater`, or `replyLater` filters. Combine filters with `+`, for example `replyLater+unread`.
   - `all_inboxes` resolves one Inbox-designated folder per enabled account through the same special-folder resolver used by the desktop.
   - Pages are bounded to 100 summaries; the numeric offset cursor is limited to 1,000,000. Results use stable date/account/thread ordering and omit full message objects and bodies.
+- `POST /v1/conversations/count` (Requires `mail.read`)
+  - Request body: `{ "scope": { "kind": "folder", "accountId": "acc-1", "folderId": "folder-1" }, "filter": "unread" }`
+  - Counts an account-qualified folder, `all_inboxes`, or a saved `virtual_folder`. Folder scopes verify account ownership. Saved-view counts apply the stored criteria and saved query; they do not accept an additional filter.
 
 ### 3. Search and message reads
 

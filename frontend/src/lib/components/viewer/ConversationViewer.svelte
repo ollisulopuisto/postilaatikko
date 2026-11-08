@@ -2,7 +2,7 @@
   import { onMount, onDestroy, tick } from 'svelte'
   import Icon from '@iconify/svelte'
   // @ts-ignore - wailsjs bindings
-  import { GetReaderIdentityEmails, GetConversation, GetReadReceiptResponsePolicy, SendReadReceipt, IgnoreReadReceipt, GetMessageSource, ProcessSMIMEMessage, ProcessPGPMessage, FetchMessageBody } from '../../../../wailsjs/go/app/App'
+  import { GetReaderIdentityEmails, GetConversation, GetReadReceiptResponsePolicy, SendReadReceipt, IgnoreReadReceipt, GetMessageSource, ProcessSMIMEMessage, ProcessPGPMessage, FetchMessageBodyForAccount } from '../../../../wailsjs/go/app/App'
   // @ts-ignore - wailsjs bindings
   import { MoveToInboxWithUndo, GetAccounts, MoveToFolderWithUndo, CopyToFolder, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, RemoveFromInboxWithUndo, TrashWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, DeletePermanently, ResolveMailActionTarget, UndoOperation } from '../../../../wailsjs/go/app/App'
   // @ts-ignore - wailsjs path
@@ -810,7 +810,7 @@
       if ((msg as any).bodyFetched === false && !msg.bodyHtml && !msg.bodyText) {
         bodyFetchErrors = { ...bodyFetchErrors, [msg.id]: '' }
         try {
-          const updated = await FetchMessageBody(msg.id)
+          const updated = await FetchMessageBodyForAccount(msg.accountId, msg.id)
           if (generation !== viewGeneration) {
             continue
           }

@@ -52,6 +52,9 @@ func (a *App) SearchMail(req MailSearchRequest) (*MailSearchPage, error) {
 	if page, handled, err := a.searchMailViaService(req); handled || err != nil {
 		return page, err
 	}
+	if a.remoteServiceMode {
+		return nil, errors.New("requested search scope is not available from the remote mailbox service")
+	}
 	return a.currentMailService().Search(a.ctx, req)
 }
 
@@ -59,12 +62,21 @@ func (a *App) SearchMail(req MailSearchRequest) (*MailSearchPage, error) {
 func (a *App) CancelMailSearch(sessionID string) {
 	if a.mailboxService != nil {
 		a.mailboxService.cancelSearch(sessionID)
+		if a.remoteServiceMode {
+			return
+		}
 	}
 	a.currentMailService().Cancel(sessionID)
 }
 
 func (a *App) searchMailViaService(req MailSearchRequest) (*MailSearchPage, bool, error) {
-	if a.mailboxService == nil || len(req.FolderIDs) > 0 {
+	if a.mailboxService == nil {
+		return nil, false, nil
+	}
+	if len(req.FolderIDs) > 0 {
+		if a.remoteServiceMode {
+			return nil, true, errors.New("folder-ID search scopes are not available from the remote mailbox service")
+		}
 		return nil, false, nil
 	}
 	status := a.GetMailboxServiceStatus()

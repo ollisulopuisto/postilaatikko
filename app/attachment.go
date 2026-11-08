@@ -25,11 +25,17 @@ import (
 
 // GetAttachments returns all attachments for a message
 func (a *App) GetAttachments(messageID string) ([]*message.Attachment, error) {
+	if a.attachmentStore == nil {
+		return nil, errors.New("attachment reads are not available from the remote mailbox service")
+	}
 	return a.attachmentStore.GetByMessage(messageID)
 }
 
 // GetAttachment returns a single attachment by ID
 func (a *App) GetAttachment(attachmentID string) (*message.Attachment, error) {
+	if a.attachmentStore == nil {
+		return nil, errors.New("attachment reads are not available from the remote mailbox service")
+	}
 	return a.attachmentStore.Get(attachmentID)
 }
 
@@ -37,6 +43,9 @@ func (a *App) GetAttachment(attachmentID string) (*message.Attachment, error) {
 // This is used to resolve cid: references in HTML email bodies
 // Content is read from the database (stored during sync) for fast offline access
 func (a *App) GetInlineAttachments(messageID string) (map[string]string, error) {
+	if a.attachmentStore == nil {
+		return nil, errors.New("inline attachment reads are not available from the remote mailbox service")
+	}
 	log := logging.WithComponent("app")
 
 	log.Info().Str("message_ref", logging.ShortHash(messageID)).Msg("GetInlineAttachments called")
@@ -58,6 +67,9 @@ func (a *App) GetInlineAttachments(messageID string) (map[string]string, error) 
 // If savePath is empty, saves to the default attachments directory
 // Returns the path where the file was saved
 func (a *App) DownloadAttachment(attachmentID, savePath string) (string, error) {
+	if a.attachmentStore == nil {
+		return "", errors.New("attachment downloads are not available from the remote mailbox service")
+	}
 	log := logging.WithComponent("app")
 
 	log.Debug().Str("attachment_id", attachmentID).Bool("custom_path", savePath != "").Msg("DownloadAttachment called")

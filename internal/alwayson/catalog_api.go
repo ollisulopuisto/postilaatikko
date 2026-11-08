@@ -56,12 +56,51 @@ func (o *catalogReadOperations) ListConversationsByFolder(folderID string, offse
 	return o.messages.ListConversationsByFolder(folderID, offset, limit, sortOrder, filter)
 }
 
+func (o *catalogReadOperations) CountConversationsByFolder(accountID, folderID, filter string) (int, error) {
+	f, err := o.folders.Get(folderID)
+	if err != nil {
+		return 0, err
+	}
+	if f == nil || f.AccountID != accountID {
+		return 0, errors.New("folder not found for account")
+	}
+	return o.messages.CountConversationsByFolder(folderID, filter)
+}
+
 func (o *catalogReadOperations) ListConversationsUnifiedInbox(offset, limit int, sortOrder, filter string) ([]*message.Conversation, error) {
 	folderIDs, err := resolveSpecialFolderIDs(o.accounts, o.folders, folder.TypeInbox)
 	if err != nil {
 		return nil, err
 	}
 	return o.messages.ListConversationsByFolderIDs(folderIDs, offset, limit, sortOrder, filter)
+}
+
+func (o *catalogReadOperations) CountConversationsUnifiedInbox(filter string) (int, error) {
+	folderIDs, err := resolveSpecialFolderIDs(o.accounts, o.folders, folder.TypeInbox)
+	if err != nil {
+		return 0, err
+	}
+	return o.messages.CountConversationsByFolderIDs(folderIDs, filter)
+}
+
+func (o *catalogReadOperations) CountConversationsVirtualFolder(virtualFolderID string) (int, error) {
+	vf, err := o.virtualFolders.Get(virtualFolderID)
+	if err != nil {
+		return 0, err
+	}
+	if vf == nil {
+		return 0, errors.New("virtual folder not found")
+	}
+	folderIDs, err := o.virtualFolders.QueryFolderIDs(vf)
+	if err != nil {
+		return 0, err
+	}
+	criteria := message.VirtualFolderCriteria{ReadStatus: vf.ReadStatus, ReplyStatus: vf.ReplyStatus, StarStatus: vf.StarStatus, DateWindow: vf.DateWindow}
+	if vf.SearchQuery != "" {
+		_, count, err := o.messages.SearchVirtualFolderConversations(folderIDs, vf.SearchQuery, 0, 0, criteria)
+		return count, err
+	}
+	return o.messages.CountVirtualFolderConversations(folderIDs, criteria)
 }
 
 func (r *SyncRuntime) CreateVirtualFolder(vf *virtualfolder.VirtualFolder) error {
@@ -399,6 +438,7 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 	v1.MountTriageRoutes(mux, r, automation.RequireGrantCapability)
 	v1.MountMessageHeaderRoutes(mux, operations, automation.RequireGrantCapability)
 	v1.MountConversationListRoute(mux, operations, automation.RequireGrantCapability)
+	v1.MountConversationCountRoute(mux, operations, automation.RequireGrantCapability)
 	v1.MountSearchRoute(mux, readOperations, automation.RequireGrantCapability)
 	v1.MountThreadBodyRoutes(mux, readOperations, automation.RequireGrantCapability)
 	v1.NewActionsHandler(&mailboxActionOperations{runtime: r}).MountRoutes(mux, automation.RequireGrantCapability)

@@ -71,6 +71,9 @@ func (a *App) unifiedSpecialFolderIDs(folderType string) ([]string, error) {
 
 func (a *App) GetUnifiedFolderConversations(folderType string, offset, limit int, sortOrder, filterValue string) ([]*message.Conversation, error) {
 	filterValue = replyLaterViewFilter(folderType, filterValue)
+	if a.remoteServiceMode && folderType != string(folder.TypeInbox) {
+		return nil, fmt.Errorf("unified %s conversations are not available from the remote mailbox service", folderType)
+	}
 	if folderType == string(folder.TypeInbox) {
 		conversations, handled, err := a.listServiceConversations(views.Scope{Kind: views.ScopeAllInboxes}, offset, limit, sortOrder, filterValue)
 		if err != nil {
@@ -161,6 +164,15 @@ func (a *App) listUnifiedArchived(offset, limit int, sortOrder, filterValue stri
 
 func (a *App) GetUnifiedFolderCount(folderType, filterValue string) (int, error) {
 	filterValue = replyLaterViewFilter(folderType, filterValue)
+	if folderType == string(folder.TypeInbox) {
+		count, handled, err := a.serviceConversationCount(views.Scope{Kind: views.ScopeAllInboxes}, filterValue)
+		if handled || err != nil {
+			return count, err
+		}
+	}
+	if a.remoteServiceMode {
+		return 0, fmt.Errorf("unified %s count is not available from the remote mailbox service", folderType)
+	}
 	if folderType == "replyLater" {
 		return a.messageStore.CountReplyLaterConversations(filterValue)
 	}

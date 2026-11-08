@@ -218,10 +218,12 @@ type App struct {
 	paths *platform.Paths
 
 	// Database
-	db             *database.DB
-	deviceDB       *database.DB
-	schemaOwner    *syncowner.Lock
-	mailboxService *mailboxServiceConnector
+	db                    *database.DB
+	deviceDB              *database.DB
+	schemaOwner           *syncowner.Lock
+	mailboxService        *mailboxServiceConnector
+	remoteServiceMode     bool
+	remoteServiceEndpoint string
 
 	// Stores
 	accountStore        *account.Store
@@ -525,6 +527,52 @@ func (a *App) preflight() (startupErr error) {
 		Str("data", paths.Data).
 		Str("cache", paths.Cache).
 		Msg("Initialized paths")
+	deviceDB, err := database.Open(paths.DeviceDatabasePath())
+	if err != nil {
+		return fmt.Errorf("open device database: %w", err)
+	}
+	a.deviceDB = deviceDB
+	defer func() {
+		if startupErr != nil {
+			if a.db != nil {
+				if err := a.db.Close(); err != nil {
+					log.Warn().Err(err).Msg("Close mailbox database after failed startup")
+				}
+				a.db = nil
+			}
+			if a.schemaOwner != nil {
+				_ = a.schemaOwner.Release()
+				a.schemaOwner = nil
+			}
+			if a.deviceDB != nil {
+				if err := a.deviceDB.Close(); err != nil {
+					log.Warn().Err(err).Msg("Close device database after failed startup")
+				}
+				a.deviceDB = nil
+			}
+		}
+	}()
+	if err := appstate.InitializeDeviceDatabaseSchema(deviceDB.DB); err != nil {
+		return fmt.Errorf("initialize device database: %w", err)
+	}
+	a.settingsStore = settings.NewStore(deviceDB)
+	configuredEndpoint, err := a.settingsStore.Get(settings.KeyMailboxServiceEndpoint)
+	if err != nil {
+		return fmt.Errorf("load mailbox service endpoint: %w", err)
+	}
+	if strings.TrimSpace(configuredEndpoint) != "" {
+		endpoint, err := validateMailboxServiceEndpoint(configuredEndpoint)
+		if err != nil {
+			return fmt.Errorf("invalid configured mailbox service endpoint: %w", err)
+		}
+		if endpoint != mailboxServiceEndpoint {
+			a.remoteServiceMode = true
+			a.remoteServiceEndpoint = endpoint
+			log.Info().Str("endpoint", endpoint).Msg("Configured for remote mailbox service")
+			return nil
+		}
+	}
+
 	if err := a.bootstrapMailboxDatabase(); err != nil {
 		return err
 	}
@@ -536,37 +584,14 @@ func (a *App) preflight() (startupErr error) {
 
 	db, err := database.Open(paths.DatabasePath())
 	if err != nil {
-		_ = schemaOwner.Release()
-		a.schemaOwner = nil
 		return fmt.Errorf("open database: %w", err)
 	}
 	a.db = db
-	defer func() {
-		if startupErr != nil {
-			if a.deviceDB != nil {
-				if err := a.deviceDB.Close(); err != nil {
-					log.Warn().Err(err).Msg("Close device database after failed startup")
-				}
-				a.deviceDB = nil
-			}
-			if err := db.Close(); err != nil {
-				log.Warn().Err(err).Msg("Close database after failed startup")
-			}
-			a.db = nil
-			_ = schemaOwner.Release()
-			a.schemaOwner = nil
-		}
-	}()
 	log.Info().Str("path", paths.DatabasePath()).Msg("Opened database")
 
 	log.Info().Msg("Opened helper-bootstrapped mailbox database")
-	deviceDB, err := database.Open(paths.DeviceDatabasePath())
-	if err != nil {
-		return fmt.Errorf("open device database: %w", err)
-	}
-	a.deviceDB = deviceDB
-	if err := appstate.InitializeDeviceDatabase(deviceDB.DB, db.DB); err != nil {
-		return fmt.Errorf("initialize device database: %w", err)
+	if err := appstate.ImportLegacyDeviceDatabase(deviceDB.DB, db.DB); err != nil {
+		return fmt.Errorf("import legacy device data: %w", err)
 	}
 
 	credStore, err := credentials.NewStore(db.DB, paths.Data)
@@ -643,8 +668,13 @@ func (a *App) Startup(ctx context.Context) {
 
 	// Logging, paths, db open, migrations, and credential store are all
 	// initialized in Preflight (called from main.go before wails.Run). By
-	// the time Startup runs, a.paths, a.db, and a.credStore are non-nil.
+	// the time Startup runs, local mode has a.paths, a.db, and a.credStore;
+	// remote mode has only device-owned state.
 	log := logging.WithComponent("app")
+	if a.remoteServiceMode {
+		a.startRemoteWorkspace(ctx)
+		return
+	}
 	db := a.db
 	a.settingsStore = settings.NewStore(a.deviceDB)
 	a.mailboxService = newMailboxServiceConnector(db)
@@ -997,6 +1027,29 @@ func (a *App) Startup(ctx context.Context) {
 	log.Info().
 		Dur("duration", time.Since(startedAt)).
 		Msg("Aerion started successfully")
+}
+
+// startRemoteWorkspace initializes only device-owned state. Mailbox stores,
+// provider clients, local sync workers, and the local undo journal belong to
+// the helper in remote mode.
+func (a *App) startRemoteWorkspace(ctx context.Context) {
+	log := logging.WithComponent("app")
+	a.settingsStore = settings.NewStore(a.deviceDB)
+	a.appStateStore = appstate.NewStore(a.deviceDB.DB)
+	a.imageAllowlistStore = settings.NewImageAllowlistStore(a.deviceDB)
+	a.contentPolicyStore = folder.NewContentPolicyStore(a.deviceDB)
+	a.certStore = certificate.NewStore(a.deviceDB.DB)
+	if a.mailboxService == nil {
+		a.mailboxService = newMailboxServiceConnector(nil)
+	}
+	a.mailboxService.endpoint = a.remoteServiceEndpoint
+	if _, err := a.mailboxService.getClient(); err != nil && !errors.Is(err, errDesktopMailboxAuthorizationRequired) {
+		log.Warn().Err(err).Msg("Remote mailbox service client could not be initialized")
+	}
+	a.replyContent = replycontent.NewService(replycontent.ServiceOptions{})
+	a.ready = true
+	a.emitRuntimeEvent("app:ready")
+	a.initThemeMonitor(ctx)
 }
 
 // IsReady reports whether Startup has fully completed. The frontend calls

@@ -12,6 +12,7 @@ import (
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/message"
+	"github.com/hkdb/aerion/internal/views"
 	"github.com/hkdb/aerion/internal/virtualfolder"
 )
 
@@ -144,7 +145,7 @@ func (a *App) mutateVirtualFolderThroughService(req v1.VirtualFolderMutationRequ
 
 // GetVirtualFolderConversations returns conversations matching a virtual folder's criteria
 func (a *App) GetVirtualFolderConversations(virtualFolderID string, offset, limit int, sortOrder string) ([]*message.Conversation, error) {
-	if a.syncEngine != nil {
+	if a.syncEngine != nil || a.remoteServiceMode {
 		result := []*message.Conversation{}
 		cursor := ""
 		if limit <= 0 {
@@ -211,6 +212,13 @@ func (a *App) GetVirtualFolderConversations(virtualFolderID string, offset, limi
 
 // GetVirtualFolderCount returns the count of conversations matching a virtual folder's criteria.
 func (a *App) GetVirtualFolderCount(virtualFolderID string) (int, error) {
+	count, handled, err := a.serviceConversationCount(views.Scope{Kind: views.ScopeVirtualFolder, VirtualFolderID: virtualFolderID}, "")
+	if handled || err != nil {
+		return count, err
+	}
+	if a.virtualFolderStore == nil || a.messageStore == nil {
+		return 0, fmt.Errorf("virtual-folder counts require a connected mailbox service")
+	}
 	vf, err := a.virtualFolderStore.Get(virtualFolderID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get virtual folder: %w", err)

@@ -373,12 +373,49 @@ func (c *mailboxServiceConnector) fetchMessageBody(ctx context.Context, accountI
 	return err
 }
 
+func (c *mailboxServiceConnector) readMessageBody(ctx context.Context, accountID, messageID string) (*message.Message, error) {
+	client, err := c.getClient()
+	if err != nil {
+		return nil, err
+	}
+	msg, err := client.GetMessage(ctx, accountID, messageID)
+	if err != nil {
+		return nil, err
+	}
+	body, err := client.ReadBody(ctx, v1.BodyReadRequest{
+		Ref:             v1.MessageRef{AccountID: accountID, MessageID: messageID},
+		Mode:            v1.FetchExplicit,
+		IncludeOriginal: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if msg == nil || body == nil || body.Original == nil {
+		return nil, errors.New("mailbox service returned no original message body")
+	}
+	msg.BodyText = body.Original.Text
+	msg.BodyHTML = body.Original.HTML
+	msg.BodyFetched = body.ContentState == views.ContentCached
+	if !msg.BodyFetched {
+		return nil, fmt.Errorf("mailbox service body state is %s", body.ContentState)
+	}
+	return msg, nil
+}
+
 func (c *mailboxServiceConnector) listConversations(ctx context.Context, req v1.ConversationListRequest) (*v1.ConversationListPage, error) {
 	client, err := c.getClient()
 	if err != nil {
 		return nil, err
 	}
 	return client.ListConversations(ctx, req)
+}
+
+func (c *mailboxServiceConnector) countConversations(ctx context.Context, req v1.ConversationCountRequest) (int, error) {
+	client, err := c.getClient()
+	if err != nil {
+		return 0, err
+	}
+	return client.CountConversations(ctx, req)
 }
 
 func (c *mailboxServiceConnector) folders(ctx context.Context, accountID string) ([]*folder.Folder, error) {

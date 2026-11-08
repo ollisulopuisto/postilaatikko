@@ -257,6 +257,7 @@ export function EmptyUnifiedTrash():Promise<void>;
 export function ExpirePendingSends():Promise<void>;
 
 export function FetchMessageBody(arg1:string):Promise<message.Message>;
+export function FetchMessageBodyForAccount(arg1:string,arg2:string):Promise<message.Message>;
 
 export function PrefetchMessageBodies(arg1:string,arg2:string,arg3:Array<string>):Promise<void>;
 

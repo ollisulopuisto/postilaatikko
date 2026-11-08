@@ -593,6 +593,19 @@ func (c *Client) ListConversations(ctx context.Context, req v1.ConversationListR
 	return &resp.Data, nil
 }
 
+// CountConversations returns an exact service-owned count for a supported scope.
+func (c *Client) CountConversations(ctx context.Context, req v1.ConversationCountRequest) (int, error) {
+	bytes, err := c.doRequest(ctx, http.MethodPost, "/v1/conversations/count", req, "")
+	if err != nil {
+		return 0, err
+	}
+	var resp v1.Response[int]
+	if err := json.Unmarshal(bytes, &resp); err != nil {
+		return 0, err
+	}
+	return resp.Data, nil
+}
+
 // ReadThread retrieves thread messages and metadata.
 func (c *Client) ReadThread(ctx context.Context, req v1.ThreadReadRequest) (*views.ThreadView, error) {
 	bytes, err := c.doRequest(ctx, http.MethodPost, "/v1/threads/read", req, "")

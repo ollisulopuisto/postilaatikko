@@ -26,21 +26,33 @@ import (
 
 // GetMessages returns messages for a folder with pagination
 func (a *App) GetMessages(accountID, folderID string, offset, limit int) ([]*message.MessageHeader, error) {
+	if a.messageStore == nil {
+		return nil, errors.New("message headers are not available from the remote mailbox service")
+	}
 	return a.messageStore.ListByFolder(folderID, offset, limit)
 }
 
 // GetMessageCount returns the total message count for a folder
 func (a *App) GetMessageCount(accountID, folderID string) (int, error) {
+	if a.messageStore == nil {
+		return 0, errors.New("message counts are not available from the remote mailbox service")
+	}
 	return a.messageStore.CountByFolder(folderID)
 }
 
 // GetMessage returns a full message by ID
 func (a *App) GetMessage(id string) (*message.Message, error) {
+	if a.messageStore == nil {
+		return nil, errors.New("message lookup requires an account-qualified remote read")
+	}
 	return a.messageStore.Get(id)
 }
 
 // GetMessageSource fetches the raw RFC822 source of a message from the IMAP server
 func (a *App) GetMessageSource(messageID string) (string, error) {
+	if a.messageStore == nil || a.syncEngine == nil {
+		return "", errors.New("raw message source is not available from the remote mailbox service")
+	}
 	log := logging.WithComponent("app")
 	log.Debug().Str("message_ref", logging.ShortHash(messageID)).Msg("Fetching message source")
 
@@ -69,6 +81,12 @@ func (a *App) FetchMessageBody(messageID string) (*message.Message, error) {
 	return a.fetchMessageBody(a.ctx, messageID)
 }
 
+// FetchMessageBodyForAccount fetches an explicitly requested message body for
+// a remote-only desktop, where no local message row is available for lookup.
+func (a *App) FetchMessageBodyForAccount(accountID, messageID string) (*message.Message, error) {
+	return a.fetchMessageBodyWithServiceStatus(a.ctx, accountID, messageID, nil)
+}
+
 func (a *App) fetchMessageBody(ctx context.Context, messageID string) (*message.Message, error) {
 	return a.fetchMessageBodyWithServiceStatus(ctx, "", messageID, nil)
 }
@@ -88,6 +106,17 @@ func (a *App) fetchMessageBodyWithServiceStatus(ctx context.Context, accountID, 
 			status = *serviceStatus
 		}
 		if status.Connected {
+			if a.messageStore == nil {
+				if accountID == "" {
+					return nil, errors.New("account ID is required for remote body fetch")
+				}
+				msg, err := a.mailboxService.readMessageBody(ctx, accountID, messageID)
+				if err != nil {
+					return nil, fmt.Errorf("fetch message body through mailbox service: %w", err)
+				}
+				msg.BodyText = textrepair.FinnishUTF8(msg.BodyText)
+				return msg, nil
+			}
 			msg, err := a.messageStore.Get(messageID)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get message: %w", err)
@@ -131,6 +160,9 @@ func (a *App) fetchMessageBodyWithServiceStatus(ctx context.Context, accountID, 
 // filter can be "" (all), "unread", "starred", or "attachments"
 func (a *App) GetConversations(accountID, folderID string, offset, limit int, sortOrder, filter string) ([]*message.Conversation, error) {
 	if folderID == "virtual:archive" {
+		if a.remoteServiceMode {
+			return nil, errors.New("per-account archive conversations are not available from the remote mailbox service")
+		}
 		allMail, err := a.GetSpecialFolder(accountID, folder.TypeAll)
 		if err != nil {
 			return nil, err
@@ -167,6 +199,9 @@ func (a *App) GetConversations(accountID, folderID string, offset, limit int, so
 // GetConversationCount returns the total conversation count for a folder
 func (a *App) GetConversationCount(accountID, folderID, filter string) (int, error) {
 	if folderID == "virtual:archive" {
+		if a.remoteServiceMode {
+			return 0, errors.New("per-account archive counts are not available from the remote mailbox service")
+		}
 		allMail, err := a.GetSpecialFolder(accountID, folder.TypeAll)
 		if err != nil {
 			return 0, err
@@ -176,7 +211,33 @@ func (a *App) GetConversationCount(accountID, folderID, filter string) (int, err
 		}
 		return a.messageStore.CountVirtualArchivedConversations([]string{allMail.ID}, filter)
 	}
+	count, handled, err := a.serviceConversationCount(views.Scope{Kind: views.ScopeFolder, AccountID: accountID, FolderID: folderID}, filter)
+	if handled || err != nil {
+		return count, err
+	}
+	if a.messageStore == nil {
+		return 0, errors.New("conversation counts require a connected mailbox service")
+	}
 	return a.messageStore.CountConversationsByFolder(folderID, filter)
+}
+
+func (a *App) serviceConversationCount(scope views.Scope, filter string) (int, bool, error) {
+	if a.mailboxService == nil {
+		return 0, false, nil
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	status := a.mailboxService.status(ctx)
+	if !status.Connected {
+		if status.ErrorCode == "service_unavailable" {
+			return 0, false, nil
+		}
+		return 0, true, fmt.Errorf("mailbox service conversation count unavailable: %s", status.Message)
+	}
+	count, err := a.mailboxService.countConversations(ctx, v1.ConversationCountRequest{Scope: scope, Filter: filter})
+	return count, true, err
 }
 
 // GetUnifiedInboxConversations returns conversations from all inbox folders across all accounts
@@ -293,13 +354,15 @@ func (a *App) GetConversation(threadID, folderID string) (*message.Conversation,
 		Str("folderID", folderID).
 		Msg("GetConversation called")
 
-	if m, _ := a.messageStore.Get(threadID); m != nil && strings.HasPrefix(m.ThreadID, "gmail:") {
-		threadID = m.ThreadID
+	if a.messageStore != nil {
+		if m, _ := a.messageStore.Get(threadID); m != nil && strings.HasPrefix(m.ThreadID, "gmail:") {
+			threadID = m.ThreadID
+		}
 	}
 	if a.mailboxService != nil {
 		status := a.GetMailboxServiceStatus()
 		if status.Connected {
-			selectedFolder, err := a.folderStore.Get(folderID)
+			selectedFolder, err := a.resolveThreadFolder(folderID)
 			if err != nil {
 				return nil, fmt.Errorf("resolve thread folder: %w", err)
 			}
@@ -315,7 +378,7 @@ func (a *App) GetConversation(threadID, folderID string) (*message.Conversation,
 				views.Scope{Kind: views.ScopeFolder, AccountID: selectedFolder.AccountID, FolderID: selectedFolder.ID},
 			)
 			if err != nil {
-				return nil, fmt.Errorf("read thread through local mailbox service: %w", err)
+				return nil, fmt.Errorf("read thread through mailbox service: %w", err)
 			}
 			return a.conversationFromServiceThread(thread, folderID)
 		}
@@ -412,15 +475,46 @@ func (a *App) GetConversation(threadID, folderID string) (*message.Conversation,
 	return conv, nil
 }
 
+func (a *App) resolveThreadFolder(folderID string) (*folder.Folder, error) {
+	if a.folderStore != nil {
+		return a.folderStore.Get(folderID)
+	}
+	if a.mailboxService == nil {
+		return nil, errors.New("folder catalog is unavailable")
+	}
+	accounts, err := a.GetAccounts()
+	if err != nil {
+		return nil, err
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	for _, account := range accounts {
+		folders, err := a.mailboxService.folders(ctx, account.ID)
+		if err != nil {
+			return nil, fmt.Errorf("load folder catalog for account %s: %w", account.ID, err)
+		}
+		for _, item := range folders {
+			if item.ID == folderID {
+				return item, nil
+			}
+		}
+	}
+	return nil, nil
+}
+
 func (a *App) conversationFromServiceThread(view *views.ThreadView, folderID string) (*message.Conversation, error) {
 	if view == nil {
 		return nil, errors.New("local mailbox service returned an empty thread")
 	}
 	accountName, accountColor := "", ""
-	if acc, err := a.accountStore.Get(view.Ref.AccountID); err != nil {
-		return nil, fmt.Errorf("resolve thread account: %w", err)
-	} else if acc != nil {
-		accountName, accountColor = acc.Name, acc.Color
+	if a.accountStore != nil {
+		if acc, err := a.accountStore.Get(view.Ref.AccountID); err != nil {
+			return nil, fmt.Errorf("resolve thread account: %w", err)
+		} else if acc != nil {
+			accountName, accountColor = acc.Name, acc.Color
+		}
 	}
 	conversation := &message.Conversation{
 		ThreadID:     view.Ref.ThreadID,
@@ -480,14 +574,16 @@ func (a *App) conversationFromServiceThread(view *views.ThreadView, folderID str
 		if item.ReceivedAt != nil {
 			msg.ReceivedAt = *item.ReceivedAt
 		}
-		localMessage, err := a.messageStore.Get(item.Ref.MessageID)
-		if err != nil {
-			return nil, fmt.Errorf("read cached thread body: %w", err)
-		}
-		if localMessage != nil && localMessage.AccountID == item.Ref.AccountID && localMessage.BodyFetched {
-			msg.BodyText = textrepair.FinnishUTF8(localMessage.BodyText)
-			msg.BodyHTML = localMessage.BodyHTML
-			msg.BodyFetched = true
+		if a.messageStore != nil {
+			localMessage, err := a.messageStore.Get(item.Ref.MessageID)
+			if err != nil {
+				return nil, fmt.Errorf("read cached thread body: %w", err)
+			}
+			if localMessage != nil && localMessage.AccountID == item.Ref.AccountID && localMessage.BodyFetched {
+				msg.BodyText = textrepair.FinnishUTF8(localMessage.BodyText)
+				msg.BodyHTML = localMessage.BodyHTML
+				msg.BodyFetched = true
+			}
 		}
 		if item.Snippet != "" {
 			conversation.Snippet = item.Snippet
@@ -506,8 +602,10 @@ func (a *App) conversationFromServiceThread(view *views.ThreadView, folderID str
 		}
 		conversation.Messages = append(conversation.Messages, msg)
 	}
-	if err := a.messageStore.EnrichReactions(conversation.Messages); err != nil {
-		return nil, fmt.Errorf("load thread reactions: %w", err)
+	if a.messageStore != nil {
+		if err := a.messageStore.EnrichReactions(conversation.Messages); err != nil {
+			return nil, fmt.Errorf("load thread reactions: %w", err)
+		}
 	}
 	return conversation, nil
 }
