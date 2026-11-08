@@ -375,3 +375,5 @@ Suggested model/effort is a dispatch recommendation, not an existing claim or mo
 Validation: callback regression red (2 ReferenceErrors) before, green2/2 after. `npm run check`: before21errors/1warning, after0errors/1existing nonreactive viewerRef warning +8shortcut checks pass. `npm run lint`: before3errors, after0. Full frontend tests799/799 pass (three baseline failures repaired: stale native Paste/registry wiring assertions, unified-folder guard Go parity). `npm run build` passes before/after. Wails declarations synchronized to existing Go/JS methods and UndoHistoryEntry fields; no new backend methods. No native Mac/UI acceptance performed.
 
 Review follow-up: require a real string unified folderType (array coercion reproduced and rejected with new regression), and document command routing/unified-folder behavior under the current version heading.
+
+CI follow-up: refreshed existing conversation-count test double for the unified-folder interface and added table-driven route coverage for all six supported system folders, unread filter and mail.read capability. Preserved the owner's intervening fd4f926 test extraction fix.
