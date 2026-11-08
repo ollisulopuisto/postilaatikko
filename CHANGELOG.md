@@ -4,6 +4,8 @@
 
 ## Postilaatikko 2026.11.08.1
 
+- Exercise the notarization password prompt and exact quoted-keychain path round-trip in release credential checks.
+
 - Preserve existing macOS keychain search paths while importing the signing identity, and stop signing on security-tool diagnostics even if the process exits successfully.
 
 - Preserve generated identity model instances when changing the default address, keeping keyboard focus without breaking packaged frontend type checks.
