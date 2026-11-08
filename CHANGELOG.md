@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+- Show sender avatars beside conversation bubble tails when viewer circles are enabled.
+
+## Postilaatikko 2026.11.08.1
+
+- Exercise the notarization password prompt and exact quoted-keychain path round-trip in release credential checks.
+
+- Preserve existing macOS keychain search paths while importing the signing identity, and stop signing on security-tool diagnostics even if the process exits successfully.
+
+- Preserve generated identity model instances when changing the default address, keeping keyboard focus without breaking packaged frontend type checks.
+
+- Keep macOS signing and notarization passwords out of process arguments, and make draft DMG checksum files directly verifiable beside the downloaded image.
+
 - Improve accessibility and keyboard navigation in Account Settings identity lists with account-specific native radio groups, focus retained after changing the default address, visible focus indicators, and focus disclosure for row action buttons. Failed default changes restore the selected address.
 - Reject mailto URLs with percent-encoded leading dashes (%2D) in URL openers to prevent CLI option injection in system mail handlers.
 - Browse and search unified Sent, Drafts, Trash, Spam, Starred, and Archive through a remote helper; the helper resolves account folders and merges Archive with All Mail while excluding Inbox copies.
