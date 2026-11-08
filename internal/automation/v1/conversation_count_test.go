@@ -20,6 +20,10 @@ func (f conversationCountOperationsFunc) CountConversationsUnifiedInbox(filter s
 	return f(ConversationCountRequest{Scope: views.Scope{Kind: views.ScopeAllInboxes}, Filter: filter})
 }
 
+func (f conversationCountOperationsFunc) CountConversationsUnifiedFolder(folderType, filter string) (int, error) {
+	return f(ConversationCountRequest{Scope: views.Scope{Kind: views.ScopeUnifiedFolder, FolderType: folderType}, Filter: filter})
+}
+
 func (f conversationCountOperationsFunc) CountConversationsVirtualFolder(virtualFolderID string) (int, error) {
 	return f(ConversationCountRequest{Scope: views.Scope{Kind: views.ScopeVirtualFolder, VirtualFolderID: virtualFolderID}})
 }

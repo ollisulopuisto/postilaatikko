@@ -63,7 +63,7 @@
   import { dispatchExtensionShortcut } from '$lib/stores/extensionShortcuts.svelte'
   import { shortcutsOverlay, openShortcutsOverlay } from '$lib/stores/shortcutsOverlay.svelte'
   import { executeCommand, openCommandPalette, registerCommand } from '$lib/stores/commandPalette.svelte'
-  import { LIST_ACTIONS, getListAction, runListAction as runActionOnTarget } from '$lib/actions/listActions'
+  import { getListAction, runListAction as runActionOnTarget } from '$lib/actions/listActions'
   import { resolveListTarget } from '$lib/actions/target'
   import type { ActionTarget, ListTarget, MessageActionExecutor, RunOptions } from '$lib/actions/types'
   import { initLayout, getLayoutMode, getResponsiveView, showViewer, hideViewer, showSidebar, hideSidebar, isResponsive } from '$lib/stores/layout.svelte'
@@ -1056,11 +1056,11 @@
     registerCommand('mail.readLater', () => toggleLaterQueue('readLater'), () => selectedThreadId !== null)
     registerCommand('mail.replyLater', () => toggleLaterQueue('replyLater'), () => selectedThreadId !== null)
     registerCommand('mail.moveTo', () => {
-      if (focusedPane === 'viewer' && selectedThreadId) viewerRef?.toggleFolderPicker('move')
+      if (getFocusedPane() === 'viewer' && selectedThreadId) viewerRef?.toggleFolderPicker('move')
       else messageListRef?.toggleMoveToDialog()
     })
     registerCommand('mail.copyTo', () => {
-      if (focusedPane === 'viewer' && selectedThreadId) viewerRef?.toggleFolderPicker('copy')
+      if (getFocusedPane() === 'viewer' && selectedThreadId) viewerRef?.toggleFolderPicker('copy')
       else messageListRef?.toggleCopyToDialog()
     })
     registerCommand('mail.deletePermanently', () => runListAction('mail.trash', { permanent: true }), () => listActionAvailable('mail.trash'))
