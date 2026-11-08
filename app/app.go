@@ -1049,6 +1049,10 @@ func (a *App) startRemoteWorkspace(ctx context.Context) {
 		log.Warn().Err(err).Msg("Remote mailbox service client could not be initialized")
 	}
 	a.replyContent = replycontent.NewService(replycontent.ServiceOptions{})
+	a.CalendarBridge = extcalendarbe.NewCalendarBridge(extcalendarbe.CalendarBridgeDeps{
+		SettingsStore:     a.settingsStore,
+		UnavailableReason: "Calendar is unavailable in remote mailbox mode",
+	})
 	a.ready = true
 	a.emitRuntimeEvent("app:ready")
 	a.initThemeMonitor(ctx)

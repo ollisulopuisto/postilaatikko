@@ -53,6 +53,9 @@ type CalendarBridgeDeps struct {
 	// gate (lightweight invariant — disabled calls short-circuit before
 	// any work).
 	SettingsStore SettingsStore
+	// UnavailableReason disables store-backed operations without constructing
+	// a local Calendar database, as in remote-only desktop startup.
+	UnavailableReason string
 
 	// Paths gives the bridge access to the OS-appropriate data directory
 	// for opening the extension's per-extension SQLite.
@@ -114,6 +117,10 @@ func (b *CalendarBridge) gateEnabled() bool {
 // from coreapi.Core, pre-scoped to this extension's ID.
 func (b *CalendarBridge) ensureInit() error {
 	b.initOnce.Do(func() {
+		if b.deps.UnavailableReason != "" {
+			b.initErr = errors.New(b.deps.UnavailableReason)
+			return
+		}
 		if b.deps.DB == nil || b.deps.Paths == nil {
 			b.initErr = errors.New("calendar.CalendarBridge: missing DB or Paths in deps")
 			return
@@ -652,6 +659,9 @@ func (b *CalendarBridge) Calendar_OpenURL(url string) error {
 	if !b.gateEnabled() {
 		return errors.New("calendar: extension disabled")
 	}
+	if b.deps.UnavailableReason != "" {
+		return errors.New(b.deps.UnavailableReason)
+	}
 	if b.deps.Core == nil {
 		return errors.New("calendar: core not available")
 	}
@@ -814,6 +824,9 @@ func (b *CalendarBridge) Calendar_AddMicrosoftSource(accountID, name, accountEma
 func (b *CalendarBridge) Calendar_GrantCalendarAccess(provider, accountID, expectedEmail string) error {
 	if !b.gateEnabled() {
 		return errors.New("calendar: extension disabled")
+	}
+	if b.deps.UnavailableReason != "" {
+		return errors.New(b.deps.UnavailableReason)
 	}
 	if accountID == "" {
 		return errors.New("calendar: accountID is required")
