@@ -9,6 +9,7 @@ import (
 	"github.com/hkdb/aerion/internal/automation"
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/folder"
+	"github.com/hkdb/aerion/internal/mailfilter"
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/virtualfolder"
 )
@@ -118,6 +119,55 @@ func (r *SyncRuntime) refreshVirtualFolderCache(id string) error {
 	return r.virtualFolders.SaveCache(id, entries)
 }
 
+func (r *SyncRuntime) GetFilterRules() ([]*mailfilter.Rule, error) {
+	if r == nil || r.rules == nil {
+		return nil, errors.New("always-on runtime is not open")
+	}
+	return r.rules.List()
+}
+
+func (r *SyncRuntime) CreateFilterRule(rule *mailfilter.Rule) error {
+	if r == nil || r.rules == nil || r.accounts == nil || r.folders == nil {
+		return errors.New("always-on runtime is not open")
+	}
+	if err := mailfilter.ValidateRule(rule, r.accounts, r.folders); err != nil {
+		return err
+	}
+	if rule.OrderIndex == 0 {
+		if existing, err := r.rules.List(); err == nil {
+			rule.OrderIndex = len(existing)
+		}
+	}
+	return r.rules.Create(rule)
+}
+
+func (r *SyncRuntime) UpdateFilterRule(rule *mailfilter.Rule) error {
+	if r == nil || r.rules == nil || r.accounts == nil || r.folders == nil {
+		return errors.New("always-on runtime is not open")
+	}
+	if rule == nil || rule.ID == "" {
+		return errors.New("filter rule ID cannot be empty")
+	}
+	if err := mailfilter.ValidateRule(rule, r.accounts, r.folders); err != nil {
+		return err
+	}
+	return r.rules.Update(rule)
+}
+
+func (r *SyncRuntime) DeleteFilterRule(id string) error {
+	if r == nil || r.rules == nil {
+		return errors.New("always-on runtime is not open")
+	}
+	return r.rules.Delete(id)
+}
+
+func (r *SyncRuntime) ReorderFilterRules(ids []string) error {
+	if r == nil || r.rules == nil {
+		return errors.New("always-on runtime is not open")
+	}
+	return r.rules.Reorder(ids)
+}
+
 // CatalogAPIHandler is kept as the compatible constructor for the mailbox read
 // API handler. Mount the result under the authenticated server's /v1/ prefix.
 func (r *SyncRuntime) CatalogAPIHandler() (http.Handler, error) {
@@ -141,6 +191,7 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 	mux := http.NewServeMux()
 	v1.MountCatalogRoutes(mux, operations, automation.RequireGrantCapability)
 	v1.MountVirtualFolderMutationRoutes(mux, r, automation.RequireGrantCapability)
+	v1.MountFilterRuleRoutes(mux, r, automation.RequireGrantCapability)
 	v1.MountMessageHeaderRoutes(mux, operations, automation.RequireGrantCapability)
 	v1.MountConversationListRoute(mux, operations, automation.RequireGrantCapability)
 	v1.MountSearchRoute(mux, readOperations, automation.RequireGrantCapability)

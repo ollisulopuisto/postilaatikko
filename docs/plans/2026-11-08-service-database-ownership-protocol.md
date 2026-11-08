@@ -1,6 +1,6 @@
 # Service Database Ownership Protocol
 
-**Status:** Ownership protocol based on main `6f6197d`, extended by HOSTED-SERVER-025 and HOSTED-SERVER-026. The helper bootstrap handshake and migration-owner transfer are implemented; HOSTED-SERVER-026 routes saved-view definitions and mutations through the authenticated helper API. The desktop still opens other service-owned stores, so full database separation remains incomplete.
+**Status:** Ownership protocol based on main `6f6197d`, extended by HOSTED-SERVER-025 through HOSTED-SERVER-027. The helper bootstrap handshake and migration-owner transfer are implemented; HOSTED-SERVER-026 routes saved-view definitions and mutations, and HOSTED-SERVER-027 routes automatic filter-rule definitions, through the authenticated helper API. The desktop still opens other service-owned stores, so full database separation remains incomplete.
 
 ## Current store map
 
@@ -39,7 +39,7 @@ The service API needs account setup/update and credential handoff, provider fold
 
 The remaining implementation sequence is:
 
-1. Move persisted mailbox workflow operations (views, filters, triage, drafts) to authenticated service APIs and route the desktop through them. HOSTED-SERVER-026 covers saved-view definitions, mutations, ordering, and cache refresh; filter rules/jobs, triage/Reply Later, and drafts/send remain.
+1. Move persisted mailbox workflow operations (views, filters, triage, drafts) to authenticated service APIs and route the desktop through them. HOSTED-SERVER-026 covers saved-view definitions, mutations, ordering, and cache refresh; HOSTED-SERVER-027 covers filter-rule CRUD/order. Durable filter-job inspection/recovery, triage/Reply Later, and drafts/send remain.
 2. Move account/folder setup and provider credential access behind the service boundary, including detached compose.
 3. Move device-only stores to a desktop database and remove service-store construction from desktop processes.
 4. Verify upgrade, rollback refusal, concurrent launch, stopped service, first run, old-helper upgrade, manual-service recovery, and interruption recovery on every supported platform. Resolve custom-port manual-service detection and exercise the LaunchAgent upgrade lifecycle on a real macOS account.

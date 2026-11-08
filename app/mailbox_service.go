@@ -23,6 +23,7 @@ import (
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/database"
 	"github.com/hkdb/aerion/internal/keyring"
+	"github.com/hkdb/aerion/internal/mailfilter"
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/operations"
 	"github.com/hkdb/aerion/internal/servicebootstrap"
@@ -295,6 +296,22 @@ func (c *mailboxServiceConnector) mutateVirtualFolder(ctx context.Context, req v
 		return err
 	}
 	return client.MutateVirtualFolder(ctx, req)
+}
+
+func (c *mailboxServiceConnector) filterRules(ctx context.Context) ([]*mailfilter.Rule, error) {
+	client, err := c.getClient()
+	if err != nil {
+		return nil, err
+	}
+	return client.GetFilterRules(ctx)
+}
+
+func (c *mailboxServiceConnector) mutateFilterRule(ctx context.Context, req v1.FilterRuleMutationRequest) error {
+	client, err := c.getClient()
+	if err != nil {
+		return err
+	}
+	return client.MutateFilterRule(ctx, req)
 }
 
 func (c *mailboxServiceConnector) authorizeWrites(ctx context.Context) error {

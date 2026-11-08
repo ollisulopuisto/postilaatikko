@@ -11,6 +11,7 @@ import (
 	"time"
 
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
+	"github.com/hkdb/aerion/internal/mailfilter"
 	"github.com/hkdb/aerion/internal/views"
 	"github.com/hkdb/aerion/internal/virtualfolder"
 )
@@ -173,6 +174,25 @@ func (c *Client) VirtualFolders(ctx context.Context) ([]*virtualfolder.VirtualFo
 		})
 	}
 	return result, nil
+}
+
+// GetFilterRules lists service-owned automatic filter rules.
+func (c *Client) GetFilterRules(ctx context.Context) ([]*mailfilter.Rule, error) {
+	bytes, err := c.doRequest(ctx, http.MethodGet, "/v1/filters", nil, "")
+	if err != nil {
+		return nil, err
+	}
+	var resp v1.Response[[]*mailfilter.Rule]
+	if err := json.Unmarshal(bytes, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// MutateFilterRule performs one helper-owned filter-rule operation.
+func (c *Client) MutateFilterRule(ctx context.Context, req v1.FilterRuleMutationRequest) error {
+	_, err := c.doRequest(ctx, http.MethodPost, "/v1/filters/mutations", req, "")
+	return err
 }
 
 // Search queries messages across a given view scope.

@@ -27,6 +27,8 @@ Returns the contract version and the caller's granted capabilities.
 - `GET /v1/folders?accountId={id}` (Requires `mail.read`)
 - `GET /v1/views` (Requires `mail.read`)
   - Returns complete saved-view definitions, including folder membership and search/triage criteria.
+- `GET /v1/filters` (Requires `mail.read`)
+  - Returns automatic cross-account filter rules in priority order.
 - `GET /v1/messages/headers?accountId={id}&folderId={id}&limit={1..100}&cursor={offset}` (Requires `mail.read`)
   - `accountId` and `folderId` are required and ownership is checked before reading.
   - `limit` defaults to 50; `nextCursor` is returned while more headers remain. Header pages never include bodies.
@@ -56,6 +58,9 @@ The helper mounts provider-aware search and account-qualified thread/body reads:
 - `POST /v1/messages/attachments/read` (Requires `mail.attachment.read`)
 
 ### 5. Mail Mutations
+- `POST /v1/filters/mutations` (Requires `mail.write`)
+  - Request body uses `operation` with `rule` for `create`/`update`, `id` for `delete`, or `ids` for `reorder`.
+  - Rule validation is performed by the helper against its account/folder catalog, including the cross-account destination constraint.
 - `POST /v1/views/mutations` (Requires `mail.write`)
   - Request body uses `operation` with `virtualFolder` for `create`/`update`, `id` for `delete`/`refresh`, or `ids` for `reorder`.
   - Create/update rebuild the service-owned virtual-view cache before returning. `refresh` explicitly rebuilds one view's cached index.

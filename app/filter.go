@@ -3,8 +3,8 @@ package app
 import (
 	"context"
 	"fmt"
-	"strings"
 
+	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/folder"
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/mailfilter"
@@ -18,6 +18,16 @@ import (
 
 // GetFilterRules returns all local cross-account filter rules in priority order.
 func (a *App) GetFilterRules() ([]*mailfilter.Rule, error) {
+	if a.mailboxService != nil {
+		ctx := a.helperCommandContext()
+		status := a.mailboxService.status(ctx)
+		if status.Connected {
+			return a.mailboxService.filterRules(ctx)
+		}
+		if status.ErrorCode != "service_unavailable" {
+			return nil, fmt.Errorf("load filter rules from mailbox service: %s", status.Message)
+		}
+	}
 	return a.filterStore.List()
 }
 
@@ -25,6 +35,9 @@ func (a *App) GetFilterRules() ([]*mailfilter.Rule, error) {
 func (a *App) CreateFilterRule(rule *mailfilter.Rule) error {
 	if rule == nil {
 		return fmt.Errorf("filter rule cannot be nil")
+	}
+	if handled, err := a.mutateFilterRuleThroughService(v1.FilterRuleMutationRequest{Operation: "create", Rule: rule}); handled {
+		return err
 	}
 	if err := a.validateFilterRule(rule); err != nil {
 		return err
@@ -46,6 +59,9 @@ func (a *App) UpdateFilterRule(rule *mailfilter.Rule) error {
 	if rule.ID == "" {
 		return fmt.Errorf("filter rule ID cannot be empty")
 	}
+	if handled, err := a.mutateFilterRuleThroughService(v1.FilterRuleMutationRequest{Operation: "update", Rule: rule}); handled {
+		return err
+	}
 	if err := a.validateFilterRule(rule); err != nil {
 		return err
 	}
@@ -57,12 +73,39 @@ func (a *App) DeleteFilterRule(id string) error {
 	if id == "" {
 		return fmt.Errorf("filter rule ID cannot be empty")
 	}
+	if handled, err := a.mutateFilterRuleThroughService(v1.FilterRuleMutationRequest{Operation: "delete", ID: id}); handled {
+		return err
+	}
 	return a.filterStore.Delete(id)
 }
 
 // ReorderFilterRules saves the priority order of filter rules.
 func (a *App) ReorderFilterRules(ids []string) error {
+	if handled, err := a.mutateFilterRuleThroughService(v1.FilterRuleMutationRequest{Operation: "reorder", IDs: ids}); handled {
+		return err
+	}
 	return a.filterStore.Reorder(ids)
+}
+
+func (a *App) mutateFilterRuleThroughService(req v1.FilterRuleMutationRequest) (bool, error) {
+	if a.mailboxService == nil {
+		return false, nil
+	}
+	ctx := a.helperCommandContext()
+	status := a.mailboxService.status(ctx)
+	if !status.Connected {
+		if status.ErrorCode == "service_unavailable" {
+			return false, nil
+		}
+		return true, fmt.Errorf("mailbox service is not ready for filter rule %s: %s", req.Operation, status.Message)
+	}
+	if !status.WriteAuthorized {
+		return true, errDesktopMailboxWriteAuthorizationRequired
+	}
+	if err := a.mailboxService.mutateFilterRule(ctx, req); err != nil {
+		return true, fmt.Errorf("run filter rule %s through local mailbox service: %w", req.Operation, err)
+	}
+	return true, nil
 }
 
 // validateFilterRule enforces the cross-account invariant: the destination
@@ -71,33 +114,7 @@ func (a *App) ReorderFilterRules(ids []string) error {
 // exclude anything; matching messages on the destination account are simply
 // never routed (see mailfilter.Match).
 func (a *App) validateFilterRule(rule *mailfilter.Rule) error {
-	if strings.TrimSpace(rule.Name) == "" {
-		return fmt.Errorf("filter rule name cannot be empty")
-	}
-	if rule.DestFolderID == "" {
-		return fmt.Errorf("filter rule destination folder is required")
-	}
-	dest, err := a.folderStore.Get(rule.DestFolderID)
-	if err != nil {
-		return fmt.Errorf("failed to load destination folder: %w", err)
-	}
-	if dest == nil {
-		return fmt.Errorf("destination folder not found: %s", rule.DestFolderID)
-	}
-	if rule.AccountID == "" {
-		return nil
-	}
-	acct, err := a.accountStore.Get(rule.AccountID)
-	if err != nil {
-		return fmt.Errorf("failed to load source account: %w", err)
-	}
-	if acct == nil {
-		return fmt.Errorf("source account not found: %s", rule.AccountID)
-	}
-	if dest.AccountID == rule.AccountID {
-		return fmt.Errorf("destination folder must be on a different account than the rule's source account")
-	}
-	return nil
+	return mailfilter.ValidateRule(rule, a.accountStore, a.folderStore)
 }
 
 // handleNewMessageForFilters delegates rule selection to the reusable
