@@ -22,6 +22,23 @@ type FilterJob struct {
 	SourceUID           uint32
 }
 
+// FilterJobInspection contains the metadata needed to reconcile an uncertain
+// move without exposing message content or allowing the job to be retried.
+type FilterJobInspection struct {
+	ID                   string `json:"id"`
+	RuleID               string `json:"ruleId"`
+	MessageID            string `json:"messageId"`
+	SourceAccountID      string `json:"sourceAccountId"`
+	SourceFolderID       string `json:"sourceFolderId"`
+	SourceUID            uint32 `json:"sourceUid"`
+	DestinationAccountID string `json:"destinationAccountId,omitempty"`
+	DestinationFolderID  string `json:"destinationFolderId"`
+	State                string `json:"state"`
+	LastError            string `json:"lastError,omitempty"`
+	CreatedAt            string `json:"createdAt"`
+	UpdatedAt            string `json:"updatedAt"`
+}
+
 // JobStore persists automatic filter work in the mailbox database.
 type JobStore struct{ db *database.DB }
 
@@ -109,4 +126,45 @@ func (s *JobStore) RecoverInterrupted() (int64, error) {
 		return 0, fmt.Errorf("count interrupted automatic filter jobs: %w", err)
 	}
 	return count, nil
+}
+
+// ListOutcomeUnknown returns a stable bounded page of jobs whose move result
+// must be inspected. Reading these rows never changes their state.
+func (s *JobStore) ListOutcomeUnknown(offset, limit int) ([]FilterJobInspection, error) {
+	if s == nil || s.db == nil {
+		return nil, errors.New("automatic filter job store is not open")
+	}
+	if offset < 0 || limit < 1 || limit > 101 {
+		return nil, errors.New("automatic filter job page is invalid")
+	}
+	rows, err := s.db.Query(`
+		SELECT j.id, j.rule_id, j.message_id, j.source_account_id, j.source_folder_id,
+		       j.source_uid, COALESCE(f.account_id, ''), j.destination_folder_id,
+		       j.state, j.last_error, j.created_at, j.updated_at
+		FROM automatic_filter_jobs AS j
+		LEFT JOIN folders AS f ON f.id = j.destination_folder_id
+		WHERE j.state = 'outcome_unknown'
+		ORDER BY j.updated_at, j.id
+		LIMIT ? OFFSET ?`, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("list uncertain automatic filter jobs: %w", err)
+	}
+	defer rows.Close()
+
+	jobs := make([]FilterJobInspection, 0, limit)
+	for rows.Next() {
+		var job FilterJobInspection
+		if err := rows.Scan(
+			&job.ID, &job.RuleID, &job.MessageID, &job.SourceAccountID, &job.SourceFolderID,
+			&job.SourceUID, &job.DestinationAccountID, &job.DestinationFolderID,
+			&job.State, &job.LastError, &job.CreatedAt, &job.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("read uncertain automatic filter job: %w", err)
+		}
+		jobs = append(jobs, job)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate uncertain automatic filter jobs: %w", err)
+	}
+	return jobs, nil
 }

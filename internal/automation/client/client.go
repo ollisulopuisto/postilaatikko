@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -195,6 +196,30 @@ func (c *Client) GetFilterRules(ctx context.Context) ([]*mailfilter.Rule, error)
 func (c *Client) MutateFilterRule(ctx context.Context, req v1.FilterRuleMutationRequest) error {
 	_, err := c.doRequest(ctx, http.MethodPost, "/v1/filters/mutations", req, "")
 	return err
+}
+
+// GetUncertainFilterJobs lists one bounded page of automatic moves for inspection.
+func (c *Client) GetUncertainFilterJobs(ctx context.Context, limit int, cursor string) (v1.FilterJobPage, error) {
+	query := url.Values{}
+	if limit > 0 {
+		query.Set("limit", fmt.Sprint(limit))
+	}
+	if cursor != "" {
+		query.Set("cursor", cursor)
+	}
+	path := "/v1/filter-jobs"
+	if encoded := query.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	bytes, err := c.doRequest(ctx, http.MethodGet, path, nil, "")
+	if err != nil {
+		return v1.FilterJobPage{}, err
+	}
+	var resp v1.Response[v1.FilterJobPage]
+	if err := json.Unmarshal(bytes, &resp); err != nil {
+		return v1.FilterJobPage{}, err
+	}
+	return resp.Data, nil
 }
 
 // GetReplyLaterQueue lists helper-owned Reply Later entries.

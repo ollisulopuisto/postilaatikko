@@ -27,6 +27,7 @@
 - Route Reply Later queue reads and membership changes through the helper, preserving Gmail labels and desktop Undo history.
 - Route Read Later and Snooze reads and mutations through the helper, preserving Gmail labels and local fallback only while the helper is unavailable.
 - Expire due Snoozes in the helper independently of mailbox sync so deadlines are honored while the desktop is closed.
+- Expose bounded, read-only inspection of automatic filter moves with uncertain provider outcomes; inspection never retries or changes mail.
 
 ## Postilaatikko 2026.11.07.1
 

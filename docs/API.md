@@ -29,6 +29,9 @@ Returns the contract version and the caller's granted capabilities.
   - Returns complete saved-view definitions, including folder membership and search/triage criteria.
 - `GET /v1/filters` (Requires `mail.read`)
   - Returns automatic cross-account filter rules in priority order.
+- `GET /v1/filter-jobs?limit={1..100}&cursor={offset}` (Requires `mail.read`)
+  - Lists bounded pages of automatic filter jobs in `outcome_unknown`; results are ordered by update time and job ID.
+  - Returns job/rule/message IDs, account-qualified source and destination folder IDs, source UID, timestamps, and the recorded error. It never returns message content or changes job state. These jobs are not retried automatically.
 - `GET /v1/messages/headers?accountId={id}&folderId={id}&limit={1..100}&cursor={offset}` (Requires `mail.read`)
   - `accountId` and `folderId` are required and ownership is checked before reading.
   - `limit` defaults to 50; `nextCursor` is returned while more headers remain. Header pages never include bodies.

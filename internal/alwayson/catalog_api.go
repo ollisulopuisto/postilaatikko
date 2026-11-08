@@ -168,6 +168,14 @@ func (r *SyncRuntime) ReorderFilterRules(ids []string) error {
 	return r.rules.Reorder(ids)
 }
 
+// ListUncertainFilterJobs returns durable automatic moves for inspection only.
+func (r *SyncRuntime) ListUncertainFilterJobs(offset, limit int) ([]mailfilter.FilterJobInspection, error) {
+	if r == nil || r.filterJobs == nil {
+		return nil, errors.New("always-on runtime is not open")
+	}
+	return r.filterJobs.ListOutcomeUnknown(offset, limit)
+}
+
 // CatalogAPIHandler is kept as the compatible constructor for the mailbox read
 // API handler. Mount the result under the authenticated server's /v1/ prefix.
 func (r *SyncRuntime) CatalogAPIHandler() (http.Handler, error) {
@@ -192,6 +200,7 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 	v1.MountCatalogRoutes(mux, operations, automation.RequireGrantCapability)
 	v1.MountVirtualFolderMutationRoutes(mux, r, automation.RequireGrantCapability)
 	v1.MountFilterRuleRoutes(mux, r, automation.RequireGrantCapability)
+	v1.MountFilterJobRoutes(mux, r, automation.RequireGrantCapability)
 	v1.MountReplyLaterRoutes(mux, r, automation.RequireGrantCapability)
 	v1.MountTriageRoutes(mux, r, automation.RequireGrantCapability)
 	v1.MountMessageHeaderRoutes(mux, operations, automation.RequireGrantCapability)
