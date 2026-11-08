@@ -97,6 +97,8 @@ Install the macOS login agent to keep the service independent of the desktop. It
 
 It starts at login and restarts after failure. Use `uninstall-agent` to stop and remove it before changing its configuration. A login agent requires that user to be logged in; the keychain must be available. It does not make a sleeping/offline Studio able to send. The mail UI can be closed while the helper runs. Restarting/upgrading during a send can leave an ambiguous outcome that needs inspection.
 
+On macOS, General Settings also shows whether the bundled background service is installed and running. Use **Install and start background service**, **Start background service**, or **Stop background service** there. Stop keeps the LaunchAgent configuration installed; closing the desktop does not stop the service. Use the helper's `uninstall-agent` command when you want to remove its configuration.
+
 Custom app-data and queue locations are supported through explicit `--data` and `--queue` flags; use the same values for setup, serve, pairing and administration. The queue directory must be private (owner-only). Do not point it at a shared/home directory and do not upload its database to a relay.
 
 ## Schedule and manage messages

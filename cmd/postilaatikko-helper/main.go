@@ -28,6 +28,12 @@ import (
 
 type allowFlags []string
 
+type helperAgentStatus struct {
+	Supported bool `json:"supported"`
+	Installed bool `json:"installed"`
+	Running   bool `json:"running"`
+}
+
 func (a *allowFlags) String() string { return strings.Join(*a, ",") }
 func (a *allowFlags) Set(value string) error {
 	*a = append(*a, value)
@@ -43,7 +49,7 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: postilaatikko-helper init|public-key|accounts|pair|revoke|serve|install-agent|uninstall-agent|schedule|submit|status|cancel|list|resolve|api-client [flags]")
+		return errors.New("usage: postilaatikko-helper init|public-key|accounts|pair|revoke|serve|install-agent|agent-status|start-agent|stop-agent|uninstall-agent|schedule|submit|status|cancel|list|resolve|api-client [flags]")
 	}
 	command := args[0]
 	dataDefault, err := defaultDataDirectory()
@@ -122,6 +128,19 @@ func run(args []string) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if command == "agent-status" {
+		status, err := getAgentStatus(ctx)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(status)
+	}
+	if command == "start-agent" {
+		return startAgent(ctx)
+	}
+	if command == "stop-agent" {
+		return stopAgent(ctx)
+	}
 	if command == "uninstall-agent" {
 		return uninstallAgent(ctx)
 	}

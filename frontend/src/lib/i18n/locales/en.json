@@ -703,6 +703,15 @@
     "mailboxServiceEnabling": "Enabling…",
     "mailboxServiceEnableFailed": "Could not finish updating write access. Check the current access status and local service clients.",
     "mailboxServiceUnavailable": "The local mailbox helper is unavailable.",
+    "mailboxServiceAgentRunning": "The background mail service is running independently of the desktop.",
+    "mailboxServiceAgentStopped": "The service is installed but stopped. Its configuration is kept.",
+    "mailboxServiceAgentNotInstalled": "The background mail service is not installed.",
+    "mailboxServiceAgentInstall": "Install and start background service",
+    "mailboxServiceAgentStart": "Start background service",
+    "mailboxServiceAgentStop": "Stop background service",
+    "mailboxServiceManaging": "Updating service…",
+    "mailboxServiceLifecycleFailed": "Could not update the background service. Check the installed app and login-agent status.",
+    "mailboxServiceHelperMissing": "The bundled service helper is unavailable. Reinstall Postilaatikko to restore it.",
     "disable": "Disable"
   },
   "settingsAccounts": {

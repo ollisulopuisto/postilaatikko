@@ -706,6 +706,22 @@ export function GetMailboxServiceStatus() {
   return window['go']['app']['App']['GetMailboxServiceStatus']();
 }
 
+export function GetMailboxServiceLifecycleStatus() {
+  return window['go']['app']['App']['GetMailboxServiceLifecycleStatus']();
+}
+
+export function InstallMailboxService() {
+  return window['go']['app']['App']['InstallMailboxService']();
+}
+
+export function StartMailboxService() {
+  return window['go']['app']['App']['StartMailboxService']();
+}
+
+export function StopMailboxService() {
+  return window['go']['app']['App']['StopMailboxService']();
+}
+
 export function EnableMailboxServiceWrites() {
   return window['go']['app']['App']['EnableMailboxServiceWrites']();
 }

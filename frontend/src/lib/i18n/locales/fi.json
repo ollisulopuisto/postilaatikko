@@ -703,6 +703,15 @@
     "mailboxServiceEnabling": "Otetaan käyttöön…",
     "mailboxServiceEnableFailed": "Kirjoitusoikeuden päivitys jäi kesken. Tarkista käyttöoikeuden tila ja paikallisen palvelun asiakkaat.",
     "mailboxServiceUnavailable": "Paikallinen postipalvelu ei ole käytettävissä.",
+    "mailboxServiceAgentRunning": "Taustalla toimiva postipalvelu on käynnissä työpöytäsovelluksesta riippumatta.",
+    "mailboxServiceAgentStopped": "Palvelu on asennettu mutta pysäytetty. Sen asetukset säilyvät.",
+    "mailboxServiceAgentNotInstalled": "Taustalla toimivaa postipalvelua ei ole asennettu.",
+    "mailboxServiceAgentInstall": "Asenna ja käynnistä taustapalvelu",
+    "mailboxServiceAgentStart": "Käynnistä taustapalvelu",
+    "mailboxServiceAgentStop": "Pysäytä taustapalvelu",
+    "mailboxServiceManaging": "Päivitetään palvelua…",
+    "mailboxServiceLifecycleFailed": "Taustapalvelun päivitys epäonnistui. Tarkista asennettu sovellus ja kirjautumisagentin tila.",
+    "mailboxServiceHelperMissing": "Sovelluksen mukana tuleva palvelun apuohjelma puuttuu. Palauta se asentamalla Postilaatikko uudelleen.",
     "disable": "Poista käytöstä"
   },
   "settingsAccounts": {

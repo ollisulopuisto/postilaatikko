@@ -5,6 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -44,6 +49,20 @@ type MailboxServiceStatus struct {
 	Capabilities    []string `json:"capabilities,omitempty"`
 	ErrorCode       string   `json:"errorCode,omitempty"`
 	Message         string   `json:"message,omitempty"`
+}
+
+// MailboxServiceLifecycleStatus describes the local OS service controls.
+type MailboxServiceLifecycleStatus struct {
+	Supported       bool `json:"supported"`
+	HelperAvailable bool `json:"helperAvailable"`
+	Installed       bool `json:"installed"`
+	Running         bool `json:"running"`
+}
+
+type helperAgentStatus struct {
+	Supported bool `json:"supported"`
+	Installed bool `json:"installed"`
+	Running   bool `json:"running"`
 }
 
 type mailboxServiceConnector struct {
@@ -382,6 +401,106 @@ func (a *App) GetMailboxServiceStatus() MailboxServiceStatus {
 		ctx = context.Background()
 	}
 	return a.mailboxService.status(ctx)
+}
+
+// GetMailboxServiceLifecycleStatus reports whether the bundled helper's
+// per-user service can be managed and whether its LaunchAgent is installed.
+func (a *App) GetMailboxServiceLifecycleStatus() (MailboxServiceLifecycleStatus, error) {
+	if runtime.GOOS != "darwin" {
+		return MailboxServiceLifecycleStatus{}, nil
+	}
+	status := MailboxServiceLifecycleStatus{Supported: true}
+	if _, err := a.mailboxHelperPath(); err != nil {
+		return status, err
+	}
+	status.HelperAvailable = true
+	output, err := a.runMailboxHelperCommand("agent-status")
+	if err != nil {
+		return status, err
+	}
+	var agentStatus helperAgentStatus
+	if err := json.Unmarshal(output, &agentStatus); err != nil {
+		return status, fmt.Errorf("decode helper service status: %w", err)
+	}
+	status.Supported = agentStatus.Supported
+	status.Installed = agentStatus.Installed
+	status.Running = agentStatus.Running
+	return status, nil
+}
+
+// InstallMailboxService installs and starts the bundled local helper agent.
+func (a *App) InstallMailboxService() (MailboxServiceLifecycleStatus, error) {
+	if runtime.GOOS != "darwin" {
+		return MailboxServiceLifecycleStatus{}, errors.New("local helper service installation is supported on macOS only")
+	}
+	if a.paths == nil || a.paths.Data == "" {
+		return MailboxServiceLifecycleStatus{}, errors.New("application data directory is unavailable")
+	}
+	queuePath := filepath.Join(a.paths.Data, "send-later-helper")
+	if _, err := a.runMailboxHelperCommand("install-agent", "--identity", "studio", "--data", a.paths.Data, "--queue", queuePath); err != nil {
+		return MailboxServiceLifecycleStatus{}, err
+	}
+	return a.GetMailboxServiceLifecycleStatus()
+}
+
+// StartMailboxService starts an installed helper agent without changing its configuration.
+func (a *App) StartMailboxService() (MailboxServiceLifecycleStatus, error) {
+	if _, err := a.runMailboxHelperCommand("start-agent"); err != nil {
+		return MailboxServiceLifecycleStatus{}, err
+	}
+	return a.GetMailboxServiceLifecycleStatus()
+}
+
+// StopMailboxService stops the helper agent while retaining its LaunchAgent configuration.
+func (a *App) StopMailboxService() (MailboxServiceLifecycleStatus, error) {
+	if _, err := a.runMailboxHelperCommand("stop-agent"); err != nil {
+		return MailboxServiceLifecycleStatus{}, err
+	}
+	return a.GetMailboxServiceLifecycleStatus()
+}
+
+func (a *App) mailboxHelperPath() (string, error) {
+	if runtime.GOOS != "darwin" {
+		return "", errors.New("local helper service management is supported on macOS only")
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("locate Postilaatikko app executable: %w", err)
+	}
+	executable, err = filepath.EvalSymlinks(executable)
+	if err != nil {
+		return "", fmt.Errorf("resolve Postilaatikko app executable: %w", err)
+	}
+	helperPath := filepath.Join(filepath.Dir(executable), "postilaatikko-helper")
+	info, err := os.Stat(helperPath)
+	if err != nil {
+		return "", fmt.Errorf("locate bundled mailbox helper: %w", err)
+	}
+	if !info.Mode().IsRegular() || info.Mode()&0111 == 0 {
+		return "", errors.New("bundled mailbox helper is not an executable file")
+	}
+	return helperPath, nil
+}
+
+func (a *App) runMailboxHelperCommand(args ...string) ([]byte, error) {
+	helperPath, err := a.mailboxHelperPath()
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(a.helperCommandContext(), 30*time.Second)
+	defer cancel()
+	output, err := exec.CommandContext(ctx, helperPath, args...).CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("mailbox helper %s failed: %s: %w", args[0], strings.TrimSpace(string(output)), err)
+	}
+	return output, nil
+}
+
+func (a *App) helperCommandContext() context.Context {
+	if a.ctx != nil {
+		return a.ctx
+	}
+	return context.Background()
 }
 
 // EnableMailboxServiceWrites explicitly replaces the desktop's read-only service grant with one that can change mail flags.

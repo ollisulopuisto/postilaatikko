@@ -106,19 +106,76 @@ func installAgent(ctx context.Context, identity, data, queue, listen, cert, key 
 	return nil
 }
 
-func uninstallAgent(ctx context.Context) error {
+func getAgentStatus(ctx context.Context) (helperAgentStatus, error) {
+	status := helperAgentStatus{Supported: true}
+	path, err := launchAgentPath()
+	if err != nil {
+		return status, err
+	}
+	_, err = os.Stat(path)
+	if err == nil {
+		status.Installed = true
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return status, err
+	}
+	service := "gui/" + strconv.Itoa(os.Getuid()) + "/" + agentLabel
+	commandContext, done := context.WithTimeout(ctx, 5*time.Second)
+	defer done()
+	if err := exec.CommandContext(commandContext, "launchctl", "print", service).Run(); err == nil {
+		status.Running = true
+	}
+	return status, nil
+}
+
+func startAgent(ctx context.Context) error {
+	status, err := getAgentStatus(ctx)
+	if err != nil {
+		return fmt.Errorf("inspect helper login agent: %w", err)
+	}
+	if !status.Installed {
+		return errors.New("helper login agent is not installed")
+	}
+	if status.Running {
+		return nil
+	}
 	path, err := launchAgentPath()
 	if err != nil {
 		return err
 	}
 	commandContext, done := context.WithTimeout(ctx, 10*time.Second)
 	defer done()
+	output, err := exec.CommandContext(commandContext, "launchctl", "bootstrap", "gui/"+strconv.Itoa(os.Getuid()), path).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("start helper login agent: %s: %w", string(output), err)
+	}
+	return nil
+}
+
+func stopAgent(ctx context.Context) error {
+	status, err := getAgentStatus(ctx)
+	if err != nil {
+		return fmt.Errorf("inspect helper login agent: %w", err)
+	}
+	if !status.Running {
+		return nil
+	}
 	service := "gui/" + strconv.Itoa(os.Getuid()) + "/" + agentLabel
-	if err := exec.CommandContext(commandContext, "launchctl", "print", service).Run(); err == nil {
-		output, err := exec.CommandContext(commandContext, "launchctl", "bootout", service).CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("stop helper agent before removing its configuration: %s: %w", string(output), err)
-		}
+	commandContext, done := context.WithTimeout(ctx, 10*time.Second)
+	defer done()
+	output, err := exec.CommandContext(commandContext, "launchctl", "bootout", service).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("stop helper login agent: %s: %w", string(output), err)
+	}
+	return nil
+}
+
+func uninstallAgent(ctx context.Context) error {
+	path, err := launchAgentPath()
+	if err != nil {
+		return err
+	}
+	if err := stopAgent(ctx); err != nil {
+		return fmt.Errorf("stop helper agent before removing its configuration: %w", err)
 	}
 	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
