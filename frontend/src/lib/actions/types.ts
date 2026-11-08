@@ -1,6 +1,7 @@
 // Shared types for the action layer (docs/plans/2026-10-25-contextual-toolbars-design.md §5.1).
 // Type-only: nothing here may import runtime code, so the pure modules next to
 // it stay loadable from node tests.
+import type { CoreCommandId } from '../keyboard/registry'
 
 /** Where a list action's targets came from. */
 export type ListTargetKind = 'checked' | 'focused' | 'none'
@@ -84,7 +85,7 @@ export interface RunOptions {
  */
 export interface ActionDef {
   /** Shortcut-registry id, e.g. 'mail.archive'. */
-  id: string
+  id: CoreCommandId
   isAvailable(ctx: ListActionContext): boolean
   run(ctx: ListActionContext, executor: MessageActionExecutor, options?: RunOptions): unknown
 }

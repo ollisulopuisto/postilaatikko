@@ -11,8 +11,9 @@
     isCommandAvailable,
   } from '$lib/stores/commandPalette.svelte'
   import { formatShortcut, isMacPlatform } from '$lib/keyboard/format'
-  import { getActiveExtension, setActiveExtension } from '$lib/stores/uiState.svelte'
+  import { getActiveExtension } from '$lib/stores/uiState.svelte'
   import { getIsDarkActive } from '$lib/stores/theme.svelte'
+  import { CORE_COMMANDS, getShortcut } from '$lib/keyboard/registry'
 
   const mac = isMacPlatform()
 
@@ -41,215 +42,34 @@
     }
   })
 
-  // Static and registry-backed command list
+  // Palette rows are generated from the core command catalog. Shortcut-backed
+  // commands take their label and icon from the keyboard registry.
   const allCommands = $derived.by(() => {
-    // Read reactivity dependencies
     const isDark = getIsDarkActive()
     const activeExt = getActiveExtension()
-
-    const list: PaletteItem[] = [
-      // Primary Mail commands
-      {
-        id: 'app.compose',
-        title: $_('shortcuts.action.compose'),
-        category: $_('commandPalette.categories.mail'),
-        icon: 'mdi:pencil-plus-outline',
-        shortcut: formatShortcut('app.compose', mac),
-        action: () => executeCommand('app.compose'),
-      },
-      {
-        id: 'app.search',
-        title: $_('shortcuts.action.search'),
-        category: $_('commandPalette.categories.mail'),
-        icon: 'mdi:magnify',
-        shortcut: formatShortcut('app.search', mac),
-        action: () => executeCommand('app.search'),
-      },
-      {
-        id: 'app.syncAll',
-        title: $_('shortcuts.action.syncAll'),
-        category: $_('commandPalette.categories.mail'),
-        icon: 'mdi:refresh',
-        shortcut: formatShortcut('app.syncAll', mac),
-        action: () => executeCommand('app.syncAll'),
-      },
-      {
-        id: 'app.syncFolder',
-        title: $_('shortcuts.action.syncFolder'),
-        category: $_('commandPalette.categories.mail'),
-        icon: 'mdi:folder-sync-outline',
-        shortcut: formatShortcut('app.syncFolder', mac),
-        action: () => executeCommand('app.syncFolder'),
-      },
-      // View switches
-      {
-        id: 'view.mail',
-        title: activeExt === 'mail' ? `${$_('commandPalette.categories.mail')} (${$_('common.active') || 'active'})` : $_('commandPalette.categories.mail'),
-        category: $_('commandPalette.categories.view'),
-        icon: 'mdi:email-outline',
-        action: () => {
-          setActiveExtension('mail')
-          closeCommandPalette()
-        },
-      },
-      {
-        id: 'view.calendar',
-        title: activeExt === 'calendar' ? `${$_('commandPalette.categories.calendar')} (${$_('common.active') || 'active'})` : $_('commandPalette.categories.calendar'),
-        category: $_('commandPalette.categories.view'),
-        icon: 'mdi:calendar-outline',
-        action: () => {
-          setActiveExtension('calendar')
-          closeCommandPalette()
-        },
-      },
-      {
-        id: 'view.contacts',
-        title: activeExt === 'contacts' ? `${$_('commandPalette.categories.contacts')} (${$_('common.active') || 'active'})` : $_('commandPalette.categories.contacts'),
-        category: $_('commandPalette.categories.view'),
-        icon: 'mdi:account-box-outline',
-        action: () => {
-          setActiveExtension('contacts')
-          closeCommandPalette()
-        },
-      },
-      // Settings & Shortcuts
-      {
-        id: 'app.preferences',
-        title: $_('shortcuts.action.preferences'),
-        category: $_('commandPalette.categories.settings'),
-        icon: 'mdi:cog-outline',
-        shortcut: formatShortcut('app.preferences', mac),
-        action: () => executeCommand('app.preferences'),
-      },
-      {
-        id: 'app.shortcuts',
-        title: $_('shortcuts.action.showShortcuts'),
-        category: $_('commandPalette.categories.general'),
-        icon: 'mdi:keyboard-outline',
-        shortcut: formatShortcut('app.shortcuts', mac),
-        action: () => executeCommand('app.shortcuts'),
-      },
-      {
-        id: 'theme.toggle',
-        title: isDark ? 'Switch to light theme' : 'Switch to dark theme',
-        category: $_('commandPalette.categories.view'),
-        icon: isDark ? 'mdi:weather-sunny' : 'mdi:weather-night',
-        action: () => executeCommand('theme.toggle'),
-      },
-      // Message Actions
-      {
-        id: 'mail.reply',
-        title: $_('shortcuts.action.reply'),
-        category: $_('commandPalette.categories.mail'),
-        icon: 'mdi:reply',
-        shortcut: formatShortcut('mail.reply', mac),
-        action: () => executeCommand('mail.reply'),
-      },
-      {
-        id: 'mail.replyAll',
-        title: $_('shortcuts.action.replyAll'),
-        category: $_('commandPalette.categories.mail'),
-        icon: 'mdi:reply-all',
-        shortcut: formatShortcut('mail.replyAll', mac),
-        action: () => executeCommand('mail.replyAll'),
-      },
-      {
-        id: 'mail.forward',
-        title: $_('shortcuts.action.forward'),
-        category: $_('commandPalette.categories.mail'),
-        icon: 'mdi:forward',
-        shortcut: formatShortcut('mail.forward', mac),
-        action: () => executeCommand('mail.forward'),
-      },
-      {
-        id: 'mail.archive',
-        title: $_('shortcuts.action.archive'),
-        category: $_('commandPalette.categories.mail'),
-        icon: 'mdi:archive-outline',
-        shortcut: formatShortcut('mail.archive', mac),
-        action: () => executeCommand('mail.archive'),
-      },
-      {
-        id: 'mail.spam',
-        title: $_('shortcuts.action.spam'),
-        category: $_('commandPalette.categories.mail'),
-        icon: 'mdi:alert-octagon-outline',
-        shortcut: formatShortcut('mail.spam', mac),
-        action: () => executeCommand('mail.spam'),
-      },
-      {
-        id: 'mail.trash',
-        title: $_('shortcuts.action.trash'),
-        category: $_('commandPalette.categories.mail'),
-        icon: 'mdi:delete-outline',
-        shortcut: formatShortcut('mail.trash', mac),
-        action: () => executeCommand('mail.trash'),
-      },
-      {
-        id: 'mail.markRead',
-        title: $_('shortcuts.action.markRead'),
-        category: $_('commandPalette.categories.mail'),
-        icon: 'mdi:email-open-outline',
-        shortcut: formatShortcut('mail.markRead', mac),
-        action: () => executeCommand('mail.markRead'),
-      },
-      {
-        id: 'mail.markUnread',
-        title: $_('shortcuts.action.markUnread'),
-        category: $_('commandPalette.categories.mail'),
-        icon: 'mdi:email-outline',
-        shortcut: formatShortcut('mail.markUnread', mac),
-        action: () => executeCommand('mail.markUnread'),
-      },
-      {
-        id: 'mail.star',
-        title: $_('shortcuts.action.star'),
-        category: $_('commandPalette.categories.mail'),
-        icon: 'mdi:star-outline',
-        shortcut: formatShortcut('mail.star', mac),
-        action: () => executeCommand('mail.star'),
-      },
-      {
-        id: 'app.undo',
-        title: $_('shortcuts.action.undo'),
-        category: $_('commandPalette.categories.general'),
-        icon: 'mdi:undo',
-        shortcut: formatShortcut('app.undo', mac),
-        action: () => executeCommand('app.undo'),
-      },
-      // Focus navigation
-      {
-        id: 'focus.messageList',
-        title: $_('shortcuts.action.paneNext'),
-        category: $_('commandPalette.categories.navigation'),
-        icon: 'mdi:view-list-outline',
-        action: () => executeCommand('focus.messageList'),
-      },
-      {
-        id: 'focus.viewer',
-        title: $_('shortcuts.action.threadFocus'),
-        category: $_('commandPalette.categories.navigation'),
-        icon: 'mdi:eye-outline',
-        action: () => executeCommand('focus.viewer'),
-      },
-      {
-        id: 'focus.sidebar',
-        title: $_('shortcuts.action.folderNext'),
-        category: $_('commandPalette.categories.navigation'),
-        icon: 'mdi:dock-left',
-        action: () => executeCommand('focus.sidebar'),
-      },
-      {
-        id: 'app.quit',
-        title: $_('shortcuts.action.quit'),
-        category: $_('commandPalette.categories.general'),
-        icon: 'mdi:power',
-        shortcut: formatShortcut('app.quit', mac),
-        action: () => executeCommand('app.quit'),
-      },
-    ]
-
-    return list
+    return CORE_COMMANDS
+      .filter(definition => definition.palette !== false && !!definition.category)
+      .map((definition): PaletteItem => {
+        const shortcut = definition.shortcutId ? getShortcut(definition.shortcutId) : undefined
+        let title = shortcut ? $_(shortcut.label) : definition.titleKey ? $_(definition.titleKey) : definition.id
+        if (definition.dynamicTitle === 'activeView') {
+          title = activeExt === definition.id.slice('view.'.length)
+            ? `${title} (${$_('common.active') || 'active'})`
+            : title
+        }
+        if (definition.dynamicTitle === 'theme') title = isDark ? 'Switch to light theme' : 'Switch to dark theme'
+        const icon = definition.dynamicIcon === 'theme'
+          ? (isDark ? 'mdi:weather-sunny' : 'mdi:weather-night')
+          : shortcut?.icon || definition.icon || 'mdi:flash-outline'
+        return {
+          id: definition.id,
+          title,
+          category: $_(definition.category!),
+          icon,
+          shortcut: definition.shortcutId ? formatShortcut(definition.shortcutId, mac) : undefined,
+          action: () => executeCommand(definition.id),
+        }
+      })
   })
 
   // Filter commands by query. Availability is re-checked whenever the panel

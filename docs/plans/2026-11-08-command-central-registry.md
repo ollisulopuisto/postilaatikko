@@ -4,20 +4,19 @@
 
 **Goal:** Make one typed command catalog the source for core command identity, shortcut presentation, command-palette entries, and handler registration.
 
-**Architecture:** Keep contextual execution in `App.svelte` and list-target resolution in the list action layer, since both depend on live component state. Put stable IDs, labels, icons, palette categories, shortcut references, availability rules, and dispatch registration contracts in one typed catalog. Generate the command palette from that catalog and make keyboard/action surfaces dispatch through the same IDs; extension-defined shortcuts remain extension-owned and are composed at runtime.
+**Architecture:** Keep contextual execution in `App.svelte` and list-target resolution in the list action layer, since both depend on live component state. Put stable IDs, labels, icons, palette categories, shortcut references, availability rules, and dispatch registration contracts in the existing typed keyboard registry. Generate the command palette from that registry and make keyboard/action surfaces dispatch through the same IDs; extension-defined shortcuts remain extension-owned and are composed at runtime.
 
 **Tech Stack:** TypeScript, Svelte 5, existing `$lib/keyboard/registry`, action target/executor modules, command-palette store.
 
 ---
 
-### Task 1: Define the command catalog
+### Task 1: Add command definitions to the shared registry
 
 **Files:**
-- Create: `frontend/src/lib/commands/catalog.ts`
 - Modify: `frontend/src/lib/keyboard/registry.ts`
 - Modify: `frontend/src/lib/actions/listActions.ts`
 
-1. Define typed core command descriptors with stable ID, label key, icon, category, optional shortcut ID, optional palette visibility, and optional availability class.
+1. Define typed core command descriptors beside shortcut definitions, with stable ID, label key, icon, category, optional shortcut ID, and optional palette visibility.
 2. Register callable core app, view, theme, reply, and mail-action commands once, preserving existing IDs and key combinations.
 3. Keep provider/UI behavior in injected handlers; command metadata must not import `App.svelte` or component state.
 4. Link list action execution definitions to catalog IDs, removing copied labels/icons/shortcut identity where the catalog already supplies them.
@@ -29,7 +28,7 @@
 - Modify: `frontend/src/lib/stores/commandPalette.svelte.ts`
 - Modify: `frontend/src/App.svelte`
 
-1. Replace unrelated handler and availability maps with a typed registration API keyed by catalog command IDs.
+1. Replace separate handler and availability storage with typed registrations keyed by IDs from the shared keyboard registry.
 2. Reject or report unknown core IDs at registration time while permitting explicitly namespaced extension commands.
 3. Register each core command with one handler and optional availability callback; return unregister functions for lifecycle cleanup.
 4. Keep target resolution and error/toast handling in the app executor, and keep commands without a visible shortcut dispatchable by their stable ID.

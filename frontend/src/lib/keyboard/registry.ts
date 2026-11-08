@@ -94,6 +94,26 @@ export interface ExtensionShortcutRegistry {
   predicates: Record<string, ShortcutPredicate>
 }
 
+export type CommandCategory =
+  | 'commandPalette.categories.mail'
+  | 'commandPalette.categories.view'
+  | 'commandPalette.categories.settings'
+  | 'commandPalette.categories.general'
+  | 'commandPalette.categories.navigation'
+
+export interface CommandDefinition {
+  id: string
+  category?: CommandCategory
+  palette?: boolean
+  /** Shortcut registry supplies the localized title, icon, and displayed key. */
+  shortcutId?: string
+  /** Commands without a shortcut carry their own presentation. */
+  titleKey?: string
+  icon?: string
+  dynamicTitle?: 'activeView' | 'theme'
+  dynamicIcon?: 'theme'
+}
+
 const MAIL: ShortcutPane[] = ['mail']
 
 export const CORE_GROUPS: ShortcutGroupDef[] = [
@@ -106,6 +126,51 @@ export const CORE_GROUPS: ShortcutGroupDef[] = [
   { id: 'composer', label: 'shortcuts.group.composer' },
   { id: 'lists', label: 'shortcuts.group.lists' },
 ]
+
+// Core commands use the same stable IDs as shortcuts and action definitions.
+// The palette derives labels/icons/keys from ShortcutDef when shortcutId is set.
+export const CORE_COMMANDS = [
+  { id: 'app.compose', category: 'commandPalette.categories.mail', shortcutId: 'app.compose' },
+  { id: 'app.search', category: 'commandPalette.categories.mail', shortcutId: 'app.search' },
+  { id: 'app.syncAll', category: 'commandPalette.categories.mail', shortcutId: 'app.syncAll' },
+  { id: 'app.syncFolder', category: 'commandPalette.categories.mail', shortcutId: 'app.syncFolder' },
+  { id: 'view.mail', category: 'commandPalette.categories.view', titleKey: 'commandPalette.categories.mail', icon: 'mdi:email-outline', dynamicTitle: 'activeView' },
+  { id: 'view.calendar', category: 'commandPalette.categories.view', titleKey: 'commandPalette.categories.calendar', icon: 'mdi:calendar-outline', dynamicTitle: 'activeView' },
+  { id: 'view.contacts', category: 'commandPalette.categories.view', titleKey: 'commandPalette.categories.contacts', icon: 'mdi:account-box-outline', dynamicTitle: 'activeView' },
+  { id: 'app.preferences', category: 'commandPalette.categories.settings', shortcutId: 'app.preferences' },
+  { id: 'app.shortcuts', category: 'commandPalette.categories.general', shortcutId: 'app.shortcuts' },
+  { id: 'theme.toggle', category: 'commandPalette.categories.view', icon: 'mdi:weather-night', dynamicTitle: 'theme', dynamicIcon: 'theme' },
+  { id: 'mail.reply', category: 'commandPalette.categories.mail', shortcutId: 'mail.reply' },
+  { id: 'mail.replyAll', category: 'commandPalette.categories.mail', shortcutId: 'mail.replyAll' },
+  { id: 'mail.forward', category: 'commandPalette.categories.mail', shortcutId: 'mail.forward' },
+  { id: 'mail.archive', category: 'commandPalette.categories.mail', shortcutId: 'mail.archive' },
+  { id: 'mail.archiveAndMarkRead', category: 'commandPalette.categories.mail', shortcutId: 'mail.archiveAndMarkRead' },
+  { id: 'mail.spam', category: 'commandPalette.categories.mail', shortcutId: 'mail.spam' },
+  { id: 'mail.trash', category: 'commandPalette.categories.mail', shortcutId: 'mail.trash' },
+  { id: 'mail.markRead', category: 'commandPalette.categories.mail', shortcutId: 'mail.markRead' },
+  { id: 'mail.markUnread', category: 'commandPalette.categories.mail', shortcutId: 'mail.markUnread' },
+  { id: 'mail.star', category: 'commandPalette.categories.mail', shortcutId: 'mail.star' },
+  { id: 'app.undo', category: 'commandPalette.categories.general', shortcutId: 'app.undo' },
+  { id: 'focus.messageList', category: 'commandPalette.categories.navigation', titleKey: 'shortcuts.action.paneNext', icon: 'mdi:view-list-outline' },
+  { id: 'focus.viewer', category: 'commandPalette.categories.navigation', titleKey: 'shortcuts.action.threadFocus', icon: 'mdi:eye-outline' },
+  { id: 'focus.sidebar', category: 'commandPalette.categories.navigation', titleKey: 'shortcuts.action.folderNext', icon: 'mdi:dock-left' },
+  { id: 'app.quit', category: 'commandPalette.categories.general', shortcutId: 'app.quit' },
+  { id: 'mail.toggleRead', palette: false, shortcutId: 'mail.toggleRead' },
+  { id: 'mail.readLater', palette: false, shortcutId: 'mail.readLater' },
+  { id: 'mail.replyLater', palette: false, shortcutId: 'mail.replyLater' },
+  { id: 'mail.moveTo', palette: false, shortcutId: 'mail.moveTo' },
+  { id: 'mail.copyTo', palette: false, shortcutId: 'mail.copyTo' },
+  { id: 'mail.deletePermanently', palette: false, shortcutId: 'mail.deletePermanently' },
+] as const satisfies readonly CommandDefinition[]
+
+export type CoreCommandId = typeof CORE_COMMANDS[number]['id']
+export type CommandId = CoreCommandId | `extension.${string}`
+const commandById = new Map<string, CommandDefinition>(CORE_COMMANDS.map(command => [command.id, command] as const))
+
+/** Look up a core command by its stable action id. */
+export function getCommand(id: string): CommandDefinition | undefined {
+  return commandById.get(id)
+}
 
 const app = (...keys: string[]): ShortcutInlineBinding => ({ file: 'App.svelte', keys })
 const composer = (...keys: string[]): ShortcutInlineBinding => ({ file: 'Composer.svelte', keys })
@@ -227,7 +292,7 @@ export const SHORTCUTS: ShortcutDef[] = [
   }))),
 ]
 
-const byId = new Map(SHORTCUTS.map(def => [def.id, def]))
+const byId = new Map<string, ShortcutDef>(SHORTCUTS.map(def => [def.id, def] as const))
 
 /** Look up a shortcut by id; undefined for unknown ids. */
 export function getShortcut(id: string): ShortcutDef | undefined {

@@ -24,7 +24,7 @@ export const LIST_ACTIONS: ActionDef[] = [
   { id: 'mail.trash', isAvailable: hasTarget, run: (ctx, x, options) => apply('mail.trash', ctx, x, () => x.trash(ctx.target.messageIds, options?.permanent === true), options) },
 ]
 
-const BY_ID = new Map(LIST_ACTIONS.map((def) => [def.id, def]))
+const BY_ID = new Map<string, ActionDef>(LIST_ACTIONS.map((def) => [def.id, def]))
 
 export function getListAction(id: string): ActionDef | undefined {
   return BY_ID.get(id)

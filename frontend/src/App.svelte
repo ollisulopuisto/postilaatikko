@@ -62,7 +62,7 @@
   import { isDialogGuardActive } from '$lib/stores/dialogGuard'
   import { dispatchExtensionShortcut } from '$lib/stores/extensionShortcuts.svelte'
   import { shortcutsOverlay, openShortcutsOverlay } from '$lib/stores/shortcutsOverlay.svelte'
-  import { openCommandPalette, registerCommandAvailability, registerCommandHandler } from '$lib/stores/commandPalette.svelte'
+  import { executeCommand, openCommandPalette, registerCommand } from '$lib/stores/commandPalette.svelte'
   import { LIST_ACTIONS, getListAction, runListAction as runActionOnTarget } from '$lib/actions/listActions'
   import { resolveListTarget } from '$lib/actions/target'
   import type { ActionTarget, ListTarget, MessageActionExecutor, RunOptions } from '$lib/actions/types'
@@ -1007,62 +1007,63 @@
     initLayout()
 
     // Register actions for the command palette
-    registerCommandHandler('app.compose', () => handleCompose())
-    registerCommandHandler('app.search', () => {
+    registerCommand('app.compose', () => handleCompose())
+    registerCommand('app.search', () => {
       if (getActiveExtension() === 'mail') { showGlobalSearch = true; return }
-      if (getActiveExtension() === 'mail') {
-        messageListRef?.toggleSearchFocus()
-        setFocusedPane('messageList')
-      } else {
-        getPaneNav('messageList')?.focusSearch?.()
-        setFocusedPane('messageList')
-      }
+      getPaneNav('messageList')?.focusSearch?.()
+      setFocusedPane('messageList')
     })
-    registerCommandHandler('app.syncAll', () => {
+    registerCommand('app.syncAll', () => {
       sidebarRef?.toggleSync()
     })
-    registerCommandHandler('app.syncFolder', () => {
+    registerCommand('app.syncFolder', () => {
       messageListRef?.toggleFolderSync()
     })
-    registerCommandHandler('app.preferences', () => sidebarRef?.openSettings())
-    registerCommandHandler('app.shortcuts', () => openShortcutsOverlay())
-    registerCommandHandler('app.undo', () => handleGlobalUndo())
-    registerCommandHandler('app.quit', () => handleQuit())
-    registerCommandHandler('theme.toggle', () => {
+    registerCommand('app.preferences', () => sidebarRef?.openSettings())
+    registerCommand('app.shortcuts', () => openShortcutsOverlay())
+    registerCommand('app.undo', () => handleGlobalUndo())
+    registerCommand('app.quit', () => handleQuit())
+    registerCommand('theme.toggle', () => {
       const next = getIsDarkActive() ? 'light' : 'dark'
       applyTheme(next)
     })
-    registerCommandHandler('focus.sidebar', () => setFocusedPane('sidebar'))
-    registerCommandHandler('focus.messageList', () => setFocusedPane('messageList'))
-    registerCommandHandler('focus.viewer', () => setFocusedPane('viewer'))
-    registerCommandHandler('mail.reply', () => {
+    registerCommand('view.mail', () => setActiveExtension('mail'))
+    registerCommand('view.calendar', () => setActiveExtension('calendar'))
+    registerCommand('view.contacts', () => setActiveExtension('contacts'))
+    registerCommand('focus.sidebar', () => setFocusedPane('sidebar'))
+    registerCommand('focus.messageList', () => setFocusedPane('messageList'))
+    registerCommand('focus.viewer', () => setFocusedPane('viewer'))
+    registerCommand('mail.reply', () => {
       const msgId = getLastMessageId()
       if (msgId) handleReply('reply', msgId, viewerRef?.isImagesLoaded(msgId) || false)
-    })
-    registerCommandHandler('mail.replyAll', () => {
+    }, () => selectedThreadId !== null)
+    registerCommand('mail.replyAll', () => {
       const msgId = getLastMessageId()
       if (msgId) handleReply('reply-all', msgId, viewerRef?.isImagesLoaded(msgId) || false)
-    })
-    registerCommandHandler('mail.forward', () => {
+    }, () => selectedThreadId !== null)
+    registerCommand('mail.forward', () => {
       const msgId = getLastMessageId()
       if (msgId) handleReply('forward', msgId, viewerRef?.isImagesLoaded(msgId) || false)
+    }, () => selectedThreadId !== null)
+    registerCommand('mail.archive', () => runListAction('mail.archive'), () => listActionAvailable('mail.archive'))
+    registerCommand('mail.archiveAndMarkRead', () => runListAction('mail.archiveAndMarkRead'), () => listActionAvailable('mail.archiveAndMarkRead'))
+    registerCommand('mail.spam', () => runListAction('mail.spam'), () => listActionAvailable('mail.spam'))
+    registerCommand('mail.trash', () => runListAction('mail.trash'), () => listActionAvailable('mail.trash'))
+    registerCommand('mail.star', () => runListAction('mail.star'), () => listActionAvailable('mail.star'))
+    registerCommand('mail.markRead', () => runListAction('mail.markRead'), () => listActionAvailable('mail.markRead'))
+    registerCommand('mail.markUnread', () => runListAction('mail.markUnread'), () => listActionAvailable('mail.markUnread'))
+    registerCommand('mail.toggleRead', () => runListAction('mail.toggleRead'), () => listActionAvailable('mail.toggleRead'))
+    registerCommand('mail.readLater', () => toggleLaterQueue('readLater'), () => selectedThreadId !== null)
+    registerCommand('mail.replyLater', () => toggleLaterQueue('replyLater'), () => selectedThreadId !== null)
+    registerCommand('mail.moveTo', () => {
+      if (focusedPane === 'viewer' && selectedThreadId) viewerRef?.toggleFolderPicker('move')
+      else messageListRef?.toggleMoveToDialog()
     })
-    // List actions use the same target as the keys (checked messages, else the
-    // focused row) and are hidden from the panel when there is none.
-    for (const listAction of LIST_ACTIONS) {
-      registerCommandAvailability(listAction.id, () => listActionAvailable(listAction.id))
-    }
-    registerCommandHandler('mail.archive', () => runListAction('mail.archive'))
-    registerCommandHandler('mail.archiveAndMarkRead', () => runListAction('mail.archiveAndMarkRead'))
-    registerCommandHandler('mail.spam', () => runListAction('mail.spam'))
-    registerCommandHandler('mail.trash', () => runListAction('mail.trash'))
-    registerCommandHandler('mail.star', () => runListAction('mail.star'))
-    registerCommandHandler('mail.markRead', () => runListAction('mail.markRead'))
-    registerCommandHandler('mail.markUnread', () => runListAction('mail.markUnread'))
-    for (const id of ['mail.reply', 'mail.replyAll', 'mail.forward']) {
-      registerCommandAvailability(id, () => selectedThreadId !== null)
-    }
-
+    registerCommand('mail.copyTo', () => {
+      if (focusedPane === 'viewer' && selectedThreadId) viewerRef?.toggleFolderPicker('copy')
+      else messageListRef?.toggleCopyToDialog()
+    })
+    registerCommand('mail.deletePermanently', () => runListAction('mail.trash', { permanent: true }), () => listActionAvailable('mail.trash'))
     // Check for pending mailto: URL from command line
     try {
       const mailtoData = await GetPendingMailto()
@@ -1624,7 +1625,7 @@
           // shortcut registry handles Ctrl+N before we reach the global
           // switch, opening its own "new X" dialog.
           e.preventDefault()
-          handleCompose()
+          void executeCommand('app.compose')
           return
         case 'r': {
           if (!hasConversation) return
@@ -1668,7 +1669,7 @@
           if (e.shiftKey) {
             // Ctrl-Shift-A: Toggle sync all accounts (start sync or cancel if already running)
             e.preventDefault()
-            sidebarRef?.toggleSync()
+            void executeCommand('app.syncAll')
             return
           }
           // Ctrl-A: Select all text in viewer, or select all messages in list
@@ -1681,7 +1682,7 @@
           return
         case 'z':
           e.preventDefault()
-          handleGlobalUndo()
+          void executeCommand('app.undo')
           return
         case 'l':
           e.preventDefault()
@@ -1695,15 +1696,15 @@
           return
         case 'u':
           e.preventDefault()
-          runListAction(e.shiftKey ? 'mail.markUnread' : 'mail.markRead')
+          void executeCommand(e.shiftKey ? 'mail.markUnread' : 'mail.markRead')
           return
         case 'k':
           e.preventDefault()
-          runListAction('mail.archive')
+          void executeCommand('mail.archive')
           return
         case 'j':
           e.preventDefault()
-          runListAction('mail.spam')
+          void executeCommand('mail.spam')
           return
       }
       return
@@ -2009,7 +2010,7 @@
     switch (e.key) {
       case 'c':
         e.preventDefault()
-        handleCompose()
+        void executeCommand('app.compose')
         return
       case 'e':
         e.preventDefault()
@@ -2017,15 +2018,15 @@
           viewerRef?.archiveAndMarkRead()
           return
         }
-        runListAction('mail.archiveAndMarkRead')
+        void executeCommand('mail.archiveAndMarkRead')
         return
       case 'l':
         e.preventDefault()
-        void toggleLaterQueue('readLater')
+        void executeCommand('mail.readLater')
         return
       case 'L':
         e.preventDefault()
-        void toggleLaterQueue('replyLater')
+        void executeCommand('mail.replyLater')
         return
       case 'v':
         if (!isMailActive()) return
@@ -2075,11 +2076,7 @@
       }
       case '/':
         e.preventDefault()
-        if (isMailActive()) { showGlobalSearch = true; return }
-        if (isMailActive()) {
-          messageListRef?.toggleSearchFocus()
-          setFocusedPane('messageList')
-        }
+        void executeCommand('app.search')
         return
       case '!':
         e.preventDefault()
@@ -2087,15 +2084,15 @@
           viewerRef?.spam()
           return
         }
-        runListAction('mail.spam')
+        void executeCommand('mail.spam')
         return
       case 'z':
         e.preventDefault()
-        handleGlobalUndo()
+        void executeCommand('app.undo')
         return
       case 'm':
         if (!KEY.LIST_TOGGLE_READ(e)) return
-        runListAction('mail.toggleRead')
+        void executeCommand('mail.toggleRead')
         return
       case 'I':
         e.preventDefault()
@@ -2103,7 +2100,7 @@
           viewerRef?.markRead()
           return
         }
-        runListAction('mail.markRead')
+        void executeCommand('mail.markRead')
         return
       case 'U':
         e.preventDefault()
@@ -2111,7 +2108,7 @@
           viewerRef?.markUnread()
           return
         }
-        runListAction('mail.markUnread')
+        void executeCommand('mail.markUnread')
         return
       case 'u':
         if (selectedThreadId) {
@@ -2128,7 +2125,7 @@
           viewerRef?.toggleStar()
           return
         }
-        runListAction('mail.star')
+        void executeCommand('mail.star')
         return
       case 'F': {
         // Shift+F: toggle focus mode
@@ -2149,7 +2146,7 @@
           viewerRef.trash()
           return
         }
-        runListAction('mail.trash', { permanent: PERMANENT_DELETE(e) })
+        void executeCommand(PERMANENT_DELETE(e) ? 'mail.deletePermanently' : 'mail.trash')
         return
       }
     }
