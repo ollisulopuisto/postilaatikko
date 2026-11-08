@@ -45,13 +45,15 @@ cannot elevate its grant by naming a capability in JSON.
 | `draft.read` | List or read drafts. |
 | `draft.write` | Create, update, or discard drafts. |
 | `mail.write` | Change message flags, move, archive, trash, or spam messages. |
+| `account.manage` | Add, change, enable, disable, order, and remove mailbox accounts and manage their credentials. This is separate from mailbox mutations. |
 | `mail.send` | Submit a draft for immediate delivery. |
 | `schedule.read` | Read Send Later queue status and delivery results. |
 | `schedule.write` | Schedule, cancel, or reschedule a delivery. |
 
 Read and write permissions are separate. `mail.read` never implies
 `mail.body.fetch` or `mail.attachment.read`; `draft.write` never implies
-`mail.send`. Send Later remains a distinct capability from immediate sending.
+`mail.send`; `mail.write` never implies `account.manage`. Send Later remains a
+distinct capability from immediate sending.
 Queue membership for Reply Later is an explicit personal triage operation and
 does not imply provider replied/unreplied state.
 
@@ -207,6 +209,7 @@ The initial route families reserved by v1 are:
 | Route family | Capability | Task |
 | --- | --- | --- |
 | `GET /v1/accounts`, `GET /v1/folders`, `GET /v1/views` | `mail.read` | UX-021 / UX-038 |
+| `POST`, `PUT`, `PATCH`, `DELETE /v1/accounts` | `account.manage` | HOSTED-SERVER-035; not yet mounted |
 | `POST /v1/search`, `POST /v1/threads/read`, `POST /v1/messages/body` | `mail.read`; explicit fetch also needs `mail.body.fetch` | UX-021 |
 | `POST /v1/messages/attachments/list`, `POST /v1/messages/attachments/read` | `mail.attachment.read` | UX-021 |
 | `/v1/drafts` | `draft.read`, `draft.write` | UX-037 |

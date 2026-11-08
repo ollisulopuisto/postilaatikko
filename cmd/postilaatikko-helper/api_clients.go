@@ -39,7 +39,7 @@ func runAPIClientCommand(args []string, defaultData string) (result error) {
 	name := flags.String("name", "", "display name for a new API client")
 	clientID := flags.String("client", "", "client ID to revoke")
 	var capabilities capabilityFlags
-	flags.Var(&capabilities, "capability", "API capability to grant (repeatable)")
+	flags.Var(&capabilities, "capability", "API capability to grant (repeatable; includes account.manage)")
 	if err := flags.Parse(args[1:]); err != nil {
 		return err
 	}

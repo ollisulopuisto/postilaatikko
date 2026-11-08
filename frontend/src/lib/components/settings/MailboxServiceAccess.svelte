@@ -4,6 +4,7 @@
   import { _ } from '$lib/i18n'
   // @ts-ignore - Wails binding path
   import {
+    EnableMailboxServiceAccountManagement,
     EnableMailboxServiceWrites,
     GetMailboxServiceLifecycleStatus,
     GetMailboxServiceStatus,
@@ -15,6 +16,7 @@
   interface ServiceStatus {
     connected: boolean
     writeAuthorized: boolean
+    accountManagementAuthorized: boolean
     errorCode?: string
   }
 
@@ -29,8 +31,9 @@
 
   let status = $state<ServiceStatus | null>(null)
   let lifecycle = $state<LifecycleStatus | null>(null)
-  let saving = $state(false)
-  let error = $state(false)
+  let saving = $state<'mail.write' | 'account.manage' | null>(null)
+  let writeError = $state(false)
+  let accountManagementError = $state(false)
   let lifecycleAction = $state<LifecycleAction | null>(null)
   let lifecycleError = $state(false)
 
@@ -38,7 +41,7 @@
     try {
       status = await GetMailboxServiceStatus()
     } catch {
-      status = { connected: false, writeAuthorized: false, errorCode: 'status_failed' }
+      status = { connected: false, writeAuthorized: false, accountManagementAuthorized: false, errorCode: 'status_failed' }
     }
     try {
       lifecycle = await GetMailboxServiceLifecycleStatus()
@@ -48,17 +51,21 @@
     }
   }
 
-  async function enableWrites() {
-    if (saving) return
-    saving = true
-    error = false
+  async function enableAccess(capability: 'mail.write' | 'account.manage') {
+    if (saving !== null) return
+    saving = capability
+    writeError = false
+    accountManagementError = false
     try {
-      status = await EnableMailboxServiceWrites()
+      status = capability === 'mail.write'
+        ? await EnableMailboxServiceWrites()
+        : await EnableMailboxServiceAccountManagement()
     } catch {
-      error = true
+      if (capability === 'mail.write') writeError = true
+      else accountManagementError = true
       await refreshStatus()
     } finally {
-      saving = false
+      saving = null
     }
   }
 
@@ -124,20 +131,41 @@
     <p class="text-sm text-destructive" role="alert">{$_('settingsGeneral.mailboxServiceLifecycleFailed')}</p>
   {/if}
 
-  {#if status?.writeAuthorized}
-    <p class="text-sm text-muted-foreground">{$_('settingsGeneral.mailboxServiceWritesEnabled')}</p>
-    {#if error}
-      <p class="text-sm text-destructive" role="alert">{$_('settingsGeneral.mailboxServiceEnableFailed')}</p>
-    {/if}
-  {:else if status?.connected}
-    <p class="text-sm text-muted-foreground">{$_('settingsGeneral.mailboxServiceReadOnly')}</p>
-    {#if error}
-      <p class="text-sm text-destructive" role="alert">{$_('settingsGeneral.mailboxServiceEnableFailed')}</p>
-    {/if}
-    <Button onclick={enableWrites} disabled={saving}>
-      {saving ? $_('settingsGeneral.mailboxServiceEnabling') : $_('settingsGeneral.mailboxServiceEnableWrites')}
-    </Button>
-  {:else}
+  {#if !status?.connected}
     <p class="text-sm text-muted-foreground">{$_('settingsGeneral.mailboxServiceUnavailable')}</p>
+  {:else}
+    <div class="space-y-2 border-t border-border pt-3">
+      <div class="space-y-1">
+        <h4 class="text-sm font-medium">{$_('settingsGeneral.mailboxServiceWriteAccess')}</h4>
+        <p class="text-xs text-muted-foreground">{$_('settingsGeneral.mailboxServiceWriteAccessHelp')}</p>
+      </div>
+      {#if status.writeAuthorized}
+        <p class="text-sm text-muted-foreground">{$_('settingsGeneral.mailboxServiceWritesEnabled')}</p>
+      {:else}
+        <Button onclick={() => enableAccess('mail.write')} disabled={saving !== null}>
+          {saving === 'mail.write' ? $_('settingsGeneral.mailboxServiceEnabling') : $_('settingsGeneral.mailboxServiceEnableWrites')}
+        </Button>
+      {/if}
+      {#if writeError}
+        <p class="text-sm text-destructive" role="alert">{$_('settingsGeneral.mailboxServiceEnableFailed')}</p>
+      {/if}
+    </div>
+
+    <div class="space-y-2 border-t border-border pt-3">
+      <div class="space-y-1">
+        <h4 class="text-sm font-medium">{$_('settingsGeneral.mailboxServiceAccountManagement')}</h4>
+        <p class="text-xs text-muted-foreground">{$_('settingsGeneral.mailboxServiceAccountManagementHelp')}</p>
+      </div>
+      {#if status.accountManagementAuthorized}
+        <p class="text-sm text-muted-foreground">{$_('settingsGeneral.mailboxServiceAccountManagementEnabled')}</p>
+      {:else}
+        <Button onclick={() => enableAccess('account.manage')} disabled={saving !== null}>
+          {saving === 'account.manage' ? $_('settingsGeneral.mailboxServiceEnabling') : $_('settingsGeneral.mailboxServiceEnableAccountManagement')}
+        </Button>
+      {/if}
+      {#if accountManagementError}
+        <p class="text-sm text-destructive" role="alert">{$_('settingsGeneral.mailboxServiceAccountManagementFailed')}</p>
+      {/if}
+    </div>
   {/if}
 </section>

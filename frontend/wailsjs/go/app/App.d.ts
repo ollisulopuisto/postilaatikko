@@ -376,7 +376,7 @@ export function GetMacOSContactsStatus():Promise<string>;
 
 export function GetMailtoMode():Promise<string>;
 
-export function GetMailboxServiceStatus():Promise<{connected:boolean; writeAuthorized:boolean; apiVersion?:string; capabilities?:string[]; errorCode?:string; message?:string}>;
+export function GetMailboxServiceStatus():Promise<{connected:boolean; writeAuthorized:boolean; accountManagementAuthorized:boolean; apiVersion?:string; capabilities?:string[]; errorCode?:string; message?:string}>;
 
 export function GetMailboxServiceLifecycleStatus():Promise<{supported:boolean; helperAvailable:boolean; installed:boolean; running:boolean}>;
 
@@ -386,7 +386,9 @@ export function StartMailboxService():Promise<{supported:boolean; helperAvailabl
 
 export function StopMailboxService():Promise<{supported:boolean; helperAvailable:boolean; installed:boolean; running:boolean}>;
 
-export function EnableMailboxServiceWrites():Promise<{connected:boolean; writeAuthorized:boolean; apiVersion?:string; capabilities?:string[]; errorCode?:string; message?:string}>;
+export function EnableMailboxServiceWrites():Promise<{connected:boolean; writeAuthorized:boolean; accountManagementAuthorized:boolean; apiVersion?:string; capabilities?:string[]; errorCode?:string; message?:string}>;
+
+export function EnableMailboxServiceAccountManagement():Promise<{connected:boolean; writeAuthorized:boolean; accountManagementAuthorized:boolean; apiVersion?:string; capabilities?:string[]; errorCode?:string; message?:string}>;
 
 export function GetMarkAsReadDelay():Promise<number>;
 

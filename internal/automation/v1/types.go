@@ -28,6 +28,8 @@ const (
 	CapabilityDraftWrite Capability = "draft.write"
 	// CapabilityMailWrite allows mailbox state changes and message moves.
 	CapabilityMailWrite Capability = "mail.write"
+	// CapabilityAccountManage allows adding, changing, and removing mailbox accounts and credentials.
+	CapabilityAccountManage Capability = "account.manage"
 	// CapabilityMailSend allows immediate delivery of a draft.
 	CapabilityMailSend Capability = "mail.send"
 	// CapabilityScheduleRead allows reading scheduled delivery state.
@@ -40,7 +42,7 @@ const (
 func (c Capability) Known() bool {
 	switch c {
 	case CapabilityMailRead, CapabilityMailBodyFetch, CapabilityAttachmentRead,
-		CapabilityDraftRead, CapabilityDraftWrite, CapabilityMailWrite,
+		CapabilityDraftRead, CapabilityDraftWrite, CapabilityMailWrite, CapabilityAccountManage,
 		CapabilityMailSend, CapabilityScheduleRead, CapabilityScheduleWrite:
 		return true
 	default:

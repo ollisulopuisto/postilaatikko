@@ -6,7 +6,7 @@ This document describes how external agents, scripts, and LLMs interact with Pos
 
 - **Authenticated local by default**: `postilaatikko-helper serve` starts the API on `127.0.0.1:8029`. Remote binding is explicit and requires TLS plus exact allowed Host names.
 - **No Browser Access / No CORS**: Any request bearing an `Origin` header is rejected immediately with `403 Forbidden`.
-- **Capability-Based Bearer Tokens**: Access is governed by granular capability grants (`mail.read`, `mail.body.fetch`, `mail.attachment.read`, `mail.write`, etc.).
+- **Capability-Based Bearer Tokens**: Access is governed by granular capability grants (`mail.read`, `mail.body.fetch`, `mail.attachment.read`, `mail.write`, `account.manage`, etc.).
 - **Untrusted Content**: Email bodies, subjects, headers, and attachments are untrusted user content and must be treated as passive data, never as system instructions.
 - **Idempotent Mutations**: State-changing endpoints require an `Idempotency-Key` header.
 
@@ -184,6 +184,10 @@ postilaatikko-helper serve --identity studio
 # Create a credential and copy bearerToken into a client immediately.
 postilaatikko-helper api-client create --name "phone" --capability mail.read
 
+# Account management grants authority to add/change/remove accounts and credentials.
+postilaatikko-helper api-client create --name "account setup" \
+  --capability mail.read --capability account.manage
+
 # Add only capabilities that client needs; repeat --capability as needed.
 postilaatikko-helper api-client create --name "automation" \
   --capability mail.read --capability mail.body.fetch
@@ -209,7 +213,7 @@ The same flags can be passed to `install-agent` to persist them in the macOS Lau
 
 The `api-client` commands manage credentials. The create command prints a high-entropy bearer token once; the database stores only its SHA-256 digest. Keep the displayed token private and use a password manager or the client's secure credential store. A grant authorizes only the listed capabilities. Starting `serve` exposes the mailbox API; remote access still requires the explicit TLS and Host settings above. This flow does not create a phone pairing code.
 
-The desktop provisions a dedicated local grant with `mail.read` and `mail.body.fetch`, and stores its bearer token in the OS keyring. It routes bounded conversation pages, global search, thread reads, explicit body fetches, and supported same-account mail actions through the helper when connected. If the helper cannot be reached, the desktop uses the existing local path; authorization, credential, capability, and action errors do not trigger fallback. Routine listing and sync remain header-only. Revoked credentials are not silently reissued; explicit reconnection UX remains follow-up work. Multi-account and cross-account moves continue through the desktop's safe path.
+The desktop provisions a dedicated local grant with `mail.read` and `mail.body.fetch`, and stores its bearer token in the OS keyring. Settings can separately grant `mail.write` for mailbox mutations and `account.manage` for account/credential management; each explicit upgrade preserves prior capabilities, stores a replacement token in the keyring, then revokes the prior grant. The desktop routes bounded conversation pages, global search, thread reads, explicit body fetches, and supported same-account mail actions through the helper when connected. If the helper cannot be reached, the desktop uses the existing local path; authorization, credential, capability, and action errors do not trigger fallback. Routine listing and sync remain header-only. Revoked credentials are not silently reissued. Account-management routes are added in a subsequent task. Multi-account and cross-account moves continue through the desktop's safe path.
 
 ---
 
