@@ -1859,4 +1859,7 @@ var migrations = []Migration{
 		ALTER TABLE mail_action_operations ADD COLUMN affected_triage_json BLOB NOT NULL DEFAULT '[]';
 		ALTER TABLE mail_action_events ADD COLUMN affected_triage_json BLOB NOT NULL DEFAULT '[]';
 	`},
+	{Version: 74, SQL: `
+		ALTER TABLE mail_action_operations ADD COLUMN affected_messages_json BLOB NOT NULL DEFAULT '[]';
+	`},
 }

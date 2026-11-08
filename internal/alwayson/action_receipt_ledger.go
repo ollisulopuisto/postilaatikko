@@ -36,23 +36,29 @@ func (l *actionReceiptLedger) RecoverInterrupted(ctx context.Context) error {
 		return fmt.Errorf("begin interrupted mail action recovery: %w", err)
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, `SELECT operation_id, affected_triage_json FROM mail_action_operations WHERE state = 'processing'`)
+	rows, err := tx.QueryContext(ctx, `SELECT operation_id, affected_messages_json, affected_triage_json FROM mail_action_operations WHERE state = 'processing'`)
 	if err != nil {
 		return fmt.Errorf("list interrupted mail actions: %w", err)
 	}
 	var interrupted []struct {
-		operationID string
-		affected    []v1.AffectedTriageRef
+		operationID      string
+		affectedMessages []v1.AffectedMessageRef
+		affected         []v1.AffectedTriageRef
 	}
 	for rows.Next() {
 		var operationID string
-		var payload []byte
-		if err := rows.Scan(&operationID, &payload); err != nil {
+		var messagesPayload, triagePayload []byte
+		if err := rows.Scan(&operationID, &messagesPayload, &triagePayload); err != nil {
+			rows.Close()
+			return err
+		}
+		var affectedMessages []v1.AffectedMessageRef
+		if err := json.Unmarshal(messagesPayload, &affectedMessages); err != nil {
 			rows.Close()
 			return err
 		}
 		var affected []v1.AffectedTriageRef
-		if err := json.Unmarshal(payload, &affected); err != nil {
+		if err := json.Unmarshal(triagePayload, &affected); err != nil {
 			rows.Close()
 			return err
 		}
@@ -60,9 +66,10 @@ func (l *actionReceiptLedger) RecoverInterrupted(ctx context.Context) error {
 			affected[i].Known = false
 		}
 		interrupted = append(interrupted, struct {
-			operationID string
-			affected    []v1.AffectedTriageRef
-		}{operationID, affected})
+			operationID      string
+			affectedMessages []v1.AffectedMessageRef
+			affected         []v1.AffectedTriageRef
+		}{operationID, affectedMessages, affected})
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
@@ -75,7 +82,7 @@ func (l *actionReceiptLedger) RecoverInterrupted(ctx context.Context) error {
 		if _, err := tx.ExecContext(ctx, `UPDATE mail_action_operations SET state='outcome_unknown', updated_at=datetime('now') WHERE operation_id=? AND state='processing'`, item.operationID); err != nil {
 			return fmt.Errorf("recover interrupted mail action: %w", err)
 		}
-		if err := insertActionEvent(ctx, tx, item.operationID, "outcome_unknown", nil, item.affected); err != nil {
+		if err := insertActionEvent(ctx, tx, item.operationID, "outcome_unknown", item.affectedMessages, item.affected); err != nil {
 			return fmt.Errorf("record interrupted mail action event: %w", err)
 		}
 	}
@@ -135,9 +142,10 @@ func (l *actionReceiptLedger) RecoverInterrupted(ctx context.Context) error {
 func (l *actionReceiptLedger) Lookup(ctx context.Context, keyHash string) (v1.ActionReceiptRecord, bool, error) {
 	var record v1.ActionReceiptRecord
 	var state string
-	err := l.db.QueryRowContext(ctx, `SELECT operation_id, request_hash, state, response_status, response_json
+	var affectedJSON []byte
+	err := l.db.QueryRowContext(ctx, `SELECT operation_id, request_hash, state, response_status, response_json, affected_messages_json
 		FROM mail_action_operations WHERE idempotency_key_hash = ?`, keyHash).
-		Scan(&record.OperationID, &record.RequestHash, &state, &record.Status, &record.Response)
+		Scan(&record.OperationID, &record.RequestHash, &state, &record.Status, &record.Response, &affectedJSON)
 	if errors.Is(err, sql.ErrNoRows) {
 		return v1.ActionReceiptRecord{}, false, nil
 	}
@@ -145,25 +153,39 @@ func (l *actionReceiptLedger) Lookup(ctx context.Context, keyHash string) (v1.Ac
 		return v1.ActionReceiptRecord{}, false, err
 	}
 	record.State = v1.OperationState(state)
+	if err := json.Unmarshal(affectedJSON, &record.Affected); err != nil {
+		return v1.ActionReceiptRecord{}, false, err
+	}
 	return record, true, nil
 }
 
 func (l *actionReceiptLedger) Reserve(ctx context.Context, keyHash, requestHash, operationID string, action v1.ActionKind, messageCount int) (v1.ActionReceiptRecord, bool, error) {
-	return l.reserve(ctx, keyHash, requestHash, operationID, action, messageCount, nil)
+	return l.reserve(ctx, keyHash, requestHash, operationID, action, messageCount, nil, nil)
 }
 
 func (l *actionReceiptLedger) ReserveTriage(ctx context.Context, keyHash, requestHash, operationID string, action v1.ActionKind, messageCount int, affected []v1.AffectedTriageRef) (v1.ActionReceiptRecord, bool, error) {
-	return l.reserve(ctx, keyHash, requestHash, operationID, action, messageCount, affected)
+	return l.reserve(ctx, keyHash, requestHash, operationID, action, messageCount, nil, affected)
 }
 
-func (l *actionReceiptLedger) reserve(ctx context.Context, keyHash, requestHash, operationID string, action v1.ActionKind, messageCount int, affected []v1.AffectedTriageRef) (v1.ActionReceiptRecord, bool, error) {
+func (l *actionReceiptLedger) ReserveAction(ctx context.Context, keyHash, requestHash, operationID string, action v1.ActionKind, messageCount int, affected []v1.AffectedMessageRef) (v1.ActionReceiptRecord, bool, error) {
+	return l.reserve(ctx, keyHash, requestHash, operationID, action, messageCount, affected, nil)
+}
+
+func (l *actionReceiptLedger) reserve(ctx context.Context, keyHash, requestHash, operationID string, action v1.ActionKind, messageCount int, affectedMessages []v1.AffectedMessageRef, affectedTriage []v1.AffectedTriageRef) (v1.ActionReceiptRecord, bool, error) {
 	if err := ctx.Err(); err != nil {
 		return v1.ActionReceiptRecord{}, false, err
 	}
-	if affected == nil {
-		affected = []v1.AffectedTriageRef{}
+	if affectedMessages == nil {
+		affectedMessages = []v1.AffectedMessageRef{}
 	}
-	affectedJSON, err := json.Marshal(affected)
+	if affectedTriage == nil {
+		affectedTriage = []v1.AffectedTriageRef{}
+	}
+	affectedJSON, err := json.Marshal(affectedMessages)
+	if err != nil {
+		return v1.ActionReceiptRecord{}, false, err
+	}
+	affectedTriageJSON, err := json.Marshal(affectedTriage)
 	if err != nil {
 		return v1.ActionReceiptRecord{}, false, err
 	}
@@ -173,17 +195,21 @@ func (l *actionReceiptLedger) reserve(ctx context.Context, keyHash, requestHash,
 	}
 	defer tx.Rollback()
 	_, err = tx.ExecContext(ctx, `INSERT INTO mail_action_operations
-		(idempotency_key_hash, request_hash, operation_id, state, action_kind, undo_message_count, affected_triage_json)
-		VALUES (?, ?, ?, 'processing', ?, ?, ?) ON CONFLICT(idempotency_key_hash) DO NOTHING`, keyHash, requestHash, operationID, action, messageCount, affectedJSON)
+		(idempotency_key_hash, request_hash, operation_id, state, action_kind, undo_message_count, affected_messages_json, affected_triage_json)
+		VALUES (?, ?, ?, 'processing', ?, ?, ?, ?) ON CONFLICT(idempotency_key_hash) DO NOTHING`, keyHash, requestHash, operationID, action, messageCount, affectedJSON, affectedTriageJSON)
 	if err != nil {
 		return v1.ActionReceiptRecord{}, false, err
 	}
 	var record v1.ActionReceiptRecord
 	var state string
-	err = tx.QueryRowContext(ctx, `SELECT operation_id, request_hash, state, response_status, response_json
+	var storedAffectedJSON []byte
+	err = tx.QueryRowContext(ctx, `SELECT operation_id, request_hash, state, response_status, response_json, affected_messages_json
 		FROM mail_action_operations WHERE idempotency_key_hash = ?`, keyHash).
-		Scan(&record.OperationID, &record.RequestHash, &state, &record.Status, &record.Response)
+		Scan(&record.OperationID, &record.RequestHash, &state, &record.Status, &record.Response, &storedAffectedJSON)
 	if err != nil {
+		return v1.ActionReceiptRecord{}, false, err
+	}
+	if err := json.Unmarshal(storedAffectedJSON, &record.Affected); err != nil {
 		return v1.ActionReceiptRecord{}, false, err
 	}
 	if record.RequestHash != requestHash {

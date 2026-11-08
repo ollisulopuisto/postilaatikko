@@ -109,6 +109,7 @@ type ActionReceiptRecord struct {
 	State       OperationState
 	Status      int
 	Response    []byte
+	Affected    []AffectedMessageRef
 }
 
 // ActionReceiptStore reserves an operation before provider effects and stores
@@ -117,6 +118,12 @@ type ActionReceiptStore interface {
 	Lookup(context.Context, string) (ActionReceiptRecord, bool, error)
 	Reserve(context.Context, string, string, string, ActionKind, int) (ActionReceiptRecord, bool, error)
 	Complete(context.Context, string, string, ActionKind, OperationState, int, []byte, []byte) error
+}
+
+// ActionTargetReceiptStore atomically stores content-free target references
+// alongside a durable operation reservation before provider effects begin.
+type ActionTargetReceiptStore interface {
+	ReserveAction(context.Context, string, string, string, ActionKind, int, []AffectedMessageRef) (ActionReceiptRecord, bool, error)
 }
 
 // ActionUndoSnapshotter captures the helper-owned prior state needed to reverse
@@ -321,8 +328,37 @@ func (h *ActionsHandler) handleDurableAction(w http.ResponseWriter, r *http.Requ
 		h.writeError(w, r, http.StatusBadRequest, CodeInvalidRequest, fmt.Sprintf("Target resolution failed: %v", err), false)
 		return
 	}
+	var affectedBefore []AffectedMessageRef
+	reader, hasAffectedReader := h.ops.(ActionAffectedRefReader)
+	_, hasTargetStore := h.receipts.(ActionTargetReceiptStore)
+	if hasTargetStore && !hasAffectedReader {
+		h.writeError(w, r, http.StatusInternalServerError, CodeInternal, "Action targets cannot be recorded for recovery", false)
+		return
+	}
+	if hasAffectedReader {
+		affectedBefore, err = reader.ActionAffectedRefs(r.Context(), messageIDs)
+		if err != nil {
+			h.writeError(w, r, http.StatusInternalServerError, CodeInternal, "Could not read action targets for recovery", true)
+			return
+		}
+		if len(affectedBefore) != len(messageIDs) {
+			h.writeError(w, r, http.StatusInternalServerError, CodeInternal, "Could not resolve all action targets for recovery", false)
+			return
+		}
+		for _, ref := range affectedBefore {
+			if ref.AccountID == "" || ref.MessageID == "" || ref.FolderID == "" {
+				h.writeError(w, r, http.StatusInternalServerError, CodeInternal, "Action target reference is incomplete", false)
+				return
+			}
+		}
+	}
 	operationID := generateOpID()
-	stored, owner, err := h.receipts.Reserve(r.Context(), keyHash, requestHash, operationID, req.Action, len(messageIDs))
+	var owner bool
+	if targetStore, ok := h.receipts.(ActionTargetReceiptStore); ok {
+		stored, owner, err = targetStore.ReserveAction(r.Context(), keyHash, requestHash, operationID, req.Action, len(messageIDs), affectedBefore)
+	} else {
+		stored, owner, err = h.receipts.Reserve(r.Context(), keyHash, requestHash, operationID, req.Action, len(messageIDs))
+	}
 	if err != nil {
 		if errors.Is(err, ErrActionReceiptConflict) {
 			h.writeError(w, r, http.StatusConflict, CodeIdempotencyConflict, "Idempotency-Key was already used for a different action request", false)
@@ -341,7 +377,7 @@ func (h *ActionsHandler) handleDurableAction(w http.ResponseWriter, r *http.Requ
 		undoSnapshot, err = snapshotter.CaptureActionUndo(r.Context(), req, messageIDs)
 		if err != nil {
 			state := OperationUnknown
-			response := ActionResponse{Receipt: OperationReceipt{OperationID: operationID, State: state}, MessageIDs: messageIDs}
+			response := ActionResponse{Receipt: OperationReceipt{OperationID: operationID, State: state}, MessageIDs: messageIDs, Affected: affectedBefore}
 			payload, _ := json.Marshal(response)
 			completeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
@@ -366,9 +402,15 @@ func (h *ActionsHandler) handleDurableAction(w http.ResponseWriter, r *http.Requ
 		UndoAvailable: state == OperationSent && len(undoSnapshot) > 0,
 	}
 	if state == OperationSent {
-		if reader, ok := h.ops.(ActionAffectedRefReader); ok {
-			response.Affected, _ = reader.ActionAffectedRefs(r.Context(), messageIDs)
+		if hasAffectedReader {
+			if affectedAfter, readErr := reader.ActionAffectedRefs(r.Context(), messageIDs); readErr == nil {
+				response.Affected = affectedAfter
+			} else {
+				response.Affected = affectedBefore
+			}
 		}
+	} else {
+		response.Affected = affectedBefore
 	}
 	if response.UndoAvailable {
 		response.UndoExpiresAt = time.Now().Add(24 * time.Hour).UTC().Format(time.RFC3339)
@@ -406,7 +448,7 @@ func (h *ActionsHandler) writeStoredAction(w http.ResponseWriter, r *http.Reques
 	if stored.State == "processing" {
 		state = OperationSending
 	}
-	response := ActionResponse{Receipt: OperationReceipt{OperationID: stored.OperationID, State: state, Replayed: true}}
+	response := ActionResponse{Receipt: OperationReceipt{OperationID: stored.OperationID, State: state, Replayed: true}, Affected: stored.Affected}
 	h.writeResponse(w, r, http.StatusOK, response)
 }
 
