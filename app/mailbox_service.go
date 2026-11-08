@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -38,6 +39,8 @@ const (
 	desktopMailboxClientName = "Postilaatikko Desktop Local"
 	desktopMailboxSecretName = "mailbox_service_client"
 	mailboxServiceEndpoint   = "http://127.0.0.1:8029"
+	mailboxAPIRequestTimeout = 2 * time.Second
+	mailboxMutationTimeout   = 30 * time.Second
 )
 
 var (
@@ -49,6 +52,11 @@ var (
 type desktopMailboxCredential struct {
 	ClientID string `json:"clientId"`
 	Token    string `json:"token"`
+}
+
+type mailboxSecretStore interface {
+	GetSecret(name string) (string, error)
+	SetSecret(name, secret string) error
 }
 
 // MailboxServiceStatus describes the local service connection without exposing
@@ -80,13 +88,17 @@ type helperAgentStatus struct {
 }
 
 type mailboxServiceConnector struct {
-	mu         sync.Mutex
-	db         *database.DB
-	keyring    *keyring.Keyring
-	credential *desktopMailboxCredential
-	client     *automationclient.Client
-	searchMu   sync.Mutex
-	searches   map[string]activeMailboxSearch
+	mu               sync.Mutex
+	db               *database.DB
+	keyring          mailboxSecretStore
+	credential       *desktopMailboxCredential
+	client           *automationclient.Client
+	searchMu         sync.Mutex
+	searches         map[string]activeMailboxSearch
+	actionKeys       map[[32]byte]string
+	statusFunc       func(context.Context) MailboxServiceStatus
+	capabilitiesFunc func(context.Context) (*v1.Capabilities, error)
+	mutateActionFunc func(context.Context, v1.ActionRequest, string) (*v1.ActionResponse, error)
 }
 
 type activeMailboxSearch struct {
@@ -161,10 +173,14 @@ func (c *mailboxServiceConnector) getClient() (*automationclient.Client, error) 
 }
 
 func newMailboxAPIClient(token string) *automationclient.Client {
+	return newMailboxAPIClientWithTimeout(token, mailboxAPIRequestTimeout)
+}
+
+func newMailboxAPIClientWithTimeout(token string, timeout time.Duration) *automationclient.Client {
 	return automationclient.New(automationclient.Config{
 		Endpoint: mailboxServiceEndpoint,
 		Token:    token,
-		Timeout:  2 * time.Second,
+		Timeout:  timeout,
 	})
 }
 
@@ -178,6 +194,9 @@ func hasCapability(capabilities []v1.Capability, required v1.Capability) bool {
 }
 
 func (c *mailboxServiceConnector) status(ctx context.Context) MailboxServiceStatus {
+	if c.statusFunc != nil {
+		return c.statusFunc(ctx)
+	}
 	client, err := c.getClient()
 	if err != nil {
 		if errors.Is(err, errDesktopMailboxAuthorizationRequired) {
@@ -200,7 +219,7 @@ func (c *mailboxServiceConnector) status(ctx context.Context) MailboxServiceStat
 	}
 	statusCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	capabilities, err := client.GetCapabilities(statusCtx)
+	capabilities, err := c.getCapabilities(statusCtx, client)
 	if err != nil {
 		return MailboxServiceStatus{ErrorCode: "service_unavailable", Message: "The local mailbox service is not reachable."}
 	}
@@ -220,6 +239,13 @@ func (c *mailboxServiceConnector) status(ctx context.Context) MailboxServiceStat
 		APIVersion:                  capabilities.Version,
 		Capabilities:                granted,
 	}
+}
+
+func (c *mailboxServiceConnector) getCapabilities(ctx context.Context, client *automationclient.Client) (*v1.Capabilities, error) {
+	if c.capabilitiesFunc != nil {
+		return c.capabilitiesFunc(ctx)
+	}
+	return client.GetCapabilities(ctx)
 }
 
 func (c *mailboxServiceConnector) fetchMessageBody(ctx context.Context, accountID, messageID string) error {
@@ -332,11 +358,60 @@ func (c *mailboxServiceConnector) readThread(ctx context.Context, ref views.Thre
 }
 
 func (c *mailboxServiceConnector) mutateAction(ctx context.Context, req v1.ActionRequest) (*v1.ActionResponse, error) {
-	client, err := c.getClient()
+	_, err := c.getClient()
 	if err != nil {
 		return nil, err
 	}
-	return client.MutateAction(ctx, req, uuid.NewString())
+	encoded, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("encode mailbox action for idempotency: %w", err)
+	}
+	requestHash := sha256.Sum256(encoded)
+	c.mu.Lock()
+	if c.actionKeys == nil {
+		c.actionKeys = make(map[[32]byte]string)
+	}
+	idempotencyKey := c.actionKeys[requestHash]
+	if idempotencyKey == "" {
+		idempotencyKey = uuid.NewString()
+	}
+	c.mu.Unlock()
+
+	var response *v1.ActionResponse
+	if c.mutateActionFunc != nil {
+		response, err = c.mutateActionFunc(ctx, req, idempotencyKey)
+	} else {
+		c.mu.Lock()
+		credential := c.credential
+		c.mu.Unlock()
+		if credential == nil || credential.Token == "" {
+			return nil, errDesktopMailboxAuthorizationRequired
+		}
+		mutationClient := newMailboxAPIClientWithTimeout(credential.Token, mailboxMutationTimeout)
+		response, err = mutationClient.MutateAction(ctx, req, idempotencyKey)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err == nil || !isAmbiguousActionError(ctx, err) {
+		delete(c.actionKeys, requestHash)
+		return response, err
+	}
+	c.actionKeys[requestHash] = idempotencyKey
+	return response, err
+}
+
+func isAmbiguousActionError(ctx context.Context, err error) bool {
+	if err == nil {
+		return false
+	}
+	if (ctx != nil && (errors.Is(ctx.Err(), context.Canceled) || errors.Is(ctx.Err(), context.DeadlineExceeded))) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	if strings.Contains(err.Error(), "Matching action is still in progress") {
+		return true
+	}
+	var timeout interface{ Timeout() bool }
+	return errors.As(err, &timeout) && timeout.Timeout()
 }
 
 func (c *mailboxServiceConnector) virtualFolders(ctx context.Context) ([]*virtualfolder.VirtualFolder, error) {
@@ -447,7 +522,7 @@ func (c *mailboxServiceConnector) authorizeCapability(ctx context.Context, capab
 	if err != nil {
 		return err
 	}
-	capabilities, err := client.GetCapabilities(ctx)
+	capabilities, err := c.getCapabilities(ctx, client)
 	if err != nil {
 		return fmt.Errorf("check mailbox service capabilities: %w", err)
 	}

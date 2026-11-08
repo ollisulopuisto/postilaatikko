@@ -153,9 +153,19 @@ func (a *App) setReadStatus(messageIDs []string, isRead bool) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	serviceHandled, err := a.mutateFlagThroughMailboxService(ctx, messages, action)
-	if err != nil {
-		return err
+	serviceHandled, mutationErr := a.mutateFlagThroughMailboxService(ctx, messages, action)
+	changedIDs := messageIDs
+	if mutationErr != nil {
+		if !serviceHandled {
+			return mutationErr
+		}
+		changedIDs, err = a.flagsChangedDuringServiceMutation(messages, "read", isRead)
+		if err != nil {
+			return errors.Join(mutationErr, fmt.Errorf("reconcile read flags after service error: %w", err))
+		}
+		if len(changedIDs) == 0 {
+			return mutationErr
+		}
 	}
 	if !serviceHandled {
 		// Update local DB first (local-first) when the helper is unavailable.
@@ -167,7 +177,7 @@ func (a *App) setReadStatus(messageIDs []string, isRead bool) error {
 
 	// Emit event for UI update with flag state
 	a.emitRuntimeEvent("messages:readChanged", map[string]interface{}{
-		"messageIds": messageIDs,
+		"messageIds": changedIDs,
 		"isRead":     isRead,
 	})
 
@@ -175,7 +185,17 @@ func (a *App) setReadStatus(messageIDs []string, isRead bool) error {
 	go func() {
 		defer recoverPanic("app.actions", "update folder counts")
 		folderCounts := make(map[string]int)
-		for folderID := range byFolder {
+		changedFolders := map[string]struct{}{}
+		changedSet := make(map[string]struct{}, len(changedIDs))
+		for _, id := range changedIDs {
+			changedSet[id] = struct{}{}
+		}
+		for _, msg := range messages {
+			if _, ok := changedSet[msg.ID]; ok {
+				changedFolders[msg.FolderID] = struct{}{}
+			}
+		}
+		for folderID := range changedFolders {
 			unreadCount, err := a.messageStore.CountUnreadByFolder(folderID)
 			if err != nil {
 				log.Error().Err(err).Str("folderID", folderID).Msg("Failed to count unread messages")
@@ -227,7 +247,7 @@ func (a *App) setReadStatus(messageIDs []string, isRead bool) error {
 	// undoable at all — the user can re-flip manually if they need to.
 	// Closes #243.
 
-	return nil
+	return mutationErr
 }
 
 // Star marks messages as starred
@@ -268,9 +288,19 @@ func (a *App) setStarredStatus(messageIDs []string, isStarred bool) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	serviceHandled, err := a.mutateFlagThroughMailboxService(ctx, messages, action)
-	if err != nil {
-		return err
+	serviceHandled, mutationErr := a.mutateFlagThroughMailboxService(ctx, messages, action)
+	changedIDs := messageIDs
+	if mutationErr != nil {
+		if !serviceHandled {
+			return mutationErr
+		}
+		changedIDs, err = a.flagsChangedDuringServiceMutation(messages, "starred", isStarred)
+		if err != nil {
+			return errors.Join(mutationErr, fmt.Errorf("reconcile starred flags after service error: %w", err))
+		}
+		if len(changedIDs) == 0 {
+			return mutationErr
+		}
 	}
 	if !serviceHandled {
 		// Update local DB first when the helper is unavailable.
@@ -281,7 +311,7 @@ func (a *App) setStarredStatus(messageIDs []string, isStarred bool) error {
 	}
 
 	a.emitRuntimeEvent("messages:starredChanged", map[string]interface{}{
-		"messageIds": messageIDs,
+		"messageIds": changedIDs,
 		"isStarred":  isStarred,
 	})
 
@@ -311,7 +341,45 @@ func (a *App) setStarredStatus(messageIDs []string, isStarred bool) error {
 	// the value of undo for a flag flip that the user can trivially
 	// reverse with another star/unstar click. Closes #243.
 
-	return nil
+	return mutationErr
+}
+
+func (a *App) flagsChangedDuringServiceMutation(before []*message.Message, kind string, desired bool) ([]string, error) {
+	ids := make([]string, 0, len(before))
+	for _, item := range before {
+		if item != nil {
+			ids = append(ids, item.ID)
+		}
+	}
+	current, err := a.messageStore.GetByIDs(ids)
+	if err != nil {
+		return nil, err
+	}
+	previous := make(map[string]bool, len(before))
+	for _, item := range before {
+		if item == nil {
+			continue
+		}
+		if kind == "read" {
+			previous[item.ID] = item.IsRead
+			continue
+		}
+		previous[item.ID] = item.IsStarred
+	}
+	changed := make([]string, 0, len(current))
+	for _, item := range current {
+		if item == nil {
+			continue
+		}
+		value := item.IsStarred
+		if kind == "read" {
+			value = item.IsRead
+		}
+		if value == desired && previous[item.ID] != desired {
+			changed = append(changed, item.ID)
+		}
+	}
+	return changed, nil
 }
 
 // syncFlagsToIMAP syncs flag changes to IMAP server

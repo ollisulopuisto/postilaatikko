@@ -16,7 +16,11 @@ import (
 	"github.com/hkdb/aerion/internal/operations"
 )
 
-type mailboxActionOperations struct{ runtime *SyncRuntime }
+type mailboxActionOperations struct {
+	runtime          *SyncRuntime
+	gmailClientFunc  func(accountID string) (*gmail.Client, bool, error)
+	setIMAPFlagsFunc func(accountID, folderID string, messages []*message.Message, kind string, enabled bool) error
+}
 
 func (o *mailboxActionOperations) GetByIDs(ids []string) ([]*message.Message, error) {
 	return o.runtime.messages.GetByIDs(ids)
@@ -180,14 +184,29 @@ func (o *mailboxActionOperations) setFlags(ids []string, kind string, enabled bo
 			if err := client.Modify(o.operationContext(), providerIDs, adds, removes); err != nil {
 				return err
 			}
+			if err := o.persistFlagGroup(group, kind, enabled); err != nil {
+				return err
+			}
 			continue
 		}
 		byFolder := groupMessagesByFolder(group)
 		for _, folderID := range sortedMessageGroupKeys(byFolder) {
-			if err := o.setIMAPFlags(accountID, folderID, messagesForAccount(byFolder, folderID), kind, enabled); err != nil {
+			folderMessages := messagesForAccount(byFolder, folderID)
+			if err := o.setIMAPFlags(accountID, folderID, folderMessages, kind, enabled); err != nil {
+				return err
+			}
+			if err := o.persistFlagGroup(folderMessages, kind, enabled); err != nil {
 				return err
 			}
 		}
+	}
+	return nil
+}
+
+func (o *mailboxActionOperations) persistFlagGroup(messages []*message.Message, kind string, enabled bool) error {
+	ids := make([]string, 0, len(messages))
+	for _, msg := range messages {
+		ids = append(ids, msg.ID)
 	}
 	read, starred := (*bool)(nil), (*bool)(nil)
 	if kind == "read" {
@@ -200,6 +219,9 @@ func (o *mailboxActionOperations) setFlags(ids []string, kind string, enabled bo
 }
 
 func (o *mailboxActionOperations) setIMAPFlags(accountID, folderID string, messages []*message.Message, kind string, enabled bool) error {
+	if o.setIMAPFlagsFunc != nil {
+		return o.setIMAPFlagsFunc(accountID, folderID, messages, kind, enabled)
+	}
 	if len(messages) == 0 {
 		return nil
 	}
@@ -492,6 +514,9 @@ func searchMessageUIDs(client *imap.Client, messageID string) (map[uint32]bool, 
 }
 
 func (o *mailboxActionOperations) gmailClient(accountID string) (*gmail.Client, bool, error) {
+	if o.gmailClientFunc != nil {
+		return o.gmailClientFunc(accountID)
+	}
 	client, err := o.runtime.syncEngine.GmailClient(o.operationContext(), accountID)
 	if errors.Is(err, gmail.ErrNotCapable) {
 		return nil, false, nil

@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Keep desktop flag state and events aligned with provider-confirmed partial bulk changes, and allow longer helper-backed mutations to be retried safely after an ambiguous timeout.
 - Keep All Inboxes conversation lists and counts aligned by resolving the enabled accounts' selected Inbox folders for both helper-backed reads and local fallback.
 - Keep thread actions and automatic read-on-leave limited to messages in the active view, preserve scope during body fetch, and keep service thread reads metadata-only with account-safe stale-reference resolution.
 - Persist desktop window and navigation state in a device-owned database, importing existing state without deleting the service-database copy.
