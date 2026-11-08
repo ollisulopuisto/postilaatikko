@@ -150,7 +150,7 @@ func TestAttachmentRoutesRequireAccountQualifiedMessageScope(t *testing.T) {
 	read := httptest.NewRequest(http.MethodPost, "/v1/messages/attachments/read", bytes.NewBufferString(`{"ref":{"accountId":"account-a","messageId":"msg-a"},"attachmentId":"att-a"}`))
 	readRecorder := httptest.NewRecorder()
 	mux.ServeHTTP(readRecorder, read)
-	if readRecorder.Code != http.StatusOK || string(readRecorder.Body.Bytes()) != string(ops.attachmentBytes) {
+	if readRecorder.Code != http.StatusOK || readRecorder.Body.String() != string(ops.attachmentBytes) {
 		t.Fatalf("attachment bytes = %v, status %d", readRecorder.Body.Bytes(), readRecorder.Code)
 	}
 }

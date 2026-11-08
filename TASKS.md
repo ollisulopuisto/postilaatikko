@@ -377,3 +377,5 @@ Validation: callback regression red (2 ReferenceErrors) before, green2/2 after. 
 Review follow-up: require a real string unified folderType (array coercion reproduced and rejected with new regression), and document command routing/unified-folder behavior under the current version heading.
 
 CI follow-up: refreshed existing conversation-count test double for the unified-folder interface and added table-driven route coverage for all six supported system folders, unread filter and mail.read capability. Preserved the owner's intervening fd4f926 test extraction fix.
+
+Go lint follow-up shared with PR180: explicitly discard deferred rollback cleanup result (already committed transactions return ErrTxDone), remove overwritten provider-group argument without changing derived target refs, simplify UTC normalization condition and test buffer conversion. Local golangci-lint2.12.2 reports0issues for automation/v1,appstate,views; their tests pass. alwayson/full GTK-linked checks await CI because local glib/GTK headers are unavailable.

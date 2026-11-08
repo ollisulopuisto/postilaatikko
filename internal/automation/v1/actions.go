@@ -413,7 +413,7 @@ func (h *ActionsHandler) handleDurableAction(w http.ResponseWriter, r *http.Requ
 			h.writeError(w, r, http.StatusInternalServerError, CodeInternal, "Provider group receipts are unavailable", false)
 			return
 		}
-		h.handleGroupedDurableAction(w, r, keyHash, requestHash, operationID, req, messageIDs, affectedBefore, groupOperations, groupReceipts)
+		h.handleGroupedDurableAction(w, r, keyHash, requestHash, operationID, req, messageIDs, groupOperations, groupReceipts)
 		return
 	}
 	var owner bool
@@ -492,7 +492,7 @@ func (h *ActionsHandler) handleDurableAction(w http.ResponseWriter, r *http.Requ
 	h.writeResponse(w, r, http.StatusOK, response)
 }
 
-func (h *ActionsHandler) handleGroupedDurableAction(w http.ResponseWriter, r *http.Request, keyHash, requestHash, operationID string, req ActionRequest, messageIDs []string, affectedBefore []AffectedMessageRef, operations ActionProviderGroupOperations, receipts ActionProviderGroupReceiptStore) {
+func (h *ActionsHandler) handleGroupedDurableAction(w http.ResponseWriter, r *http.Request, keyHash, requestHash, operationID string, req ActionRequest, messageIDs []string, operations ActionProviderGroupOperations, receipts ActionProviderGroupReceiptStore) {
 	groups, err := operations.PlanActionGroups(r.Context(), req, messageIDs)
 	if err != nil {
 		h.writeError(w, r, http.StatusBadRequest, CodeInvalidRequest, fmt.Sprintf("Could not plan provider action groups: %v", err), false)
@@ -534,7 +534,7 @@ func (h *ActionsHandler) handleGroupedDurableAction(w http.ResponseWriter, r *ht
 		h.writeError(w, r, http.StatusInternalServerError, CodeInternal, "Provider action groups do not cover every target", false)
 		return
 	}
-	affectedBefore = uniqueAffectedMessageRefs(groupRefs)
+	affectedBefore := uniqueAffectedMessageRefs(groupRefs)
 	snapshotter, hasSnapshotter := h.ops.(ActionUndoSnapshotter)
 	for i := range groups {
 		if hasSnapshotter {

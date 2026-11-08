@@ -35,7 +35,7 @@ func (l *actionReceiptLedger) RecoverInterrupted(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("begin interrupted mail action recovery: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // A committed transaction has nothing left to roll back.
 	rows, err := tx.QueryContext(ctx, `SELECT operation_id, affected_messages_json, affected_triage_json FROM mail_action_operations WHERE state = 'processing'`)
 	if err != nil {
 		return fmt.Errorf("list interrupted mail actions: %w", err)
@@ -288,7 +288,7 @@ func (l *actionReceiptLedger) reserve(ctx context.Context, keyHash, requestHash,
 	if err != nil {
 		return v1.ActionReceiptRecord{}, false, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // A committed transaction has nothing left to roll back.
 	_, err = tx.ExecContext(ctx, `INSERT INTO mail_action_operations
 		(idempotency_key_hash, request_hash, operation_id, state, action_kind, undo_message_count, affected_messages_json, affected_triage_json)
 		VALUES (?, ?, ?, 'processing', ?, ?, ?, ?) ON CONFLICT(idempotency_key_hash) DO NOTHING`, keyHash, requestHash, operationID, action, messageCount, affectedJSON, affectedTriageJSON)
@@ -468,7 +468,7 @@ func (l *actionReceiptLedger) Complete(ctx context.Context, keyHash, requestHash
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // A committed transaction has nothing left to roll back.
 	result, err := tx.ExecContext(ctx, `UPDATE mail_action_operations
 		SET state = ?, response_status = ?, response_json = ?, action_kind = ?,
 			undo_payload = ?, undo_state = CASE WHEN length(?) > 0 AND ? THEN 'available' ELSE 'unavailable' END,
@@ -539,7 +539,7 @@ func (l *actionReceiptLedger) ListActionEvents(ctx context.Context, clientID str
 	if err != nil {
 		return v1.ActionEventPage{}, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // A committed transaction has nothing left to roll back.
 	if _, err := tx.ExecContext(ctx, `DELETE FROM mail_action_events WHERE created_at < datetime('now', '-90 days')
 		AND sequence < (SELECT COALESCE(MAX(sequence),0) FROM mail_action_events)`); err != nil {
 		return v1.ActionEventPage{}, err
@@ -607,7 +607,7 @@ func (l *actionReceiptLedger) AcknowledgeActionEvents(ctx context.Context, clien
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // A committed transaction has nothing left to roll back.
 	var current int64
 	err = tx.QueryRowContext(ctx, `SELECT last_sequence FROM mail_action_event_cursors WHERE client_id=?`, clientID).Scan(&current)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -709,7 +709,7 @@ func (l *actionReceiptLedger) ExpireUndoSnapshots(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // A committed transaction has nothing left to roll back.
 	if _, err := tx.ExecContext(ctx, `UPDATE mail_action_operations SET undo_state = 'expired', undo_payload = NULL
 		WHERE undo_state = 'available' AND undo_expires_at <= datetime('now')`); err != nil {
 		return err
@@ -726,7 +726,7 @@ func (l *actionReceiptLedger) ClaimUndo(ctx context.Context, operationID, keyHas
 	if err != nil {
 		return v1.ActionUndoRecord{}, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // A committed transaction has nothing left to roll back.
 	var mappedOperationID, existingRequestHash string
 	err = tx.QueryRowContext(ctx, `SELECT operation_id, request_hash FROM mail_action_undo_requests WHERE idempotency_key_hash = ?`, keyHash).
 		Scan(&mappedOperationID, &existingRequestHash)
@@ -813,7 +813,7 @@ func (l *actionReceiptLedger) CompleteUndo(ctx context.Context, operationID, sta
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }() // A committed transaction has nothing left to roll back.
 	var payload []byte
 	if err := tx.QueryRowContext(ctx, `SELECT undo_payload FROM mail_action_operations WHERE operation_id=?`, operationID).Scan(&payload); err != nil {
 		return err
