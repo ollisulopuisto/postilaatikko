@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hkdb/aerion/internal/account"
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/mailfilter"
 	"github.com/hkdb/aerion/internal/replylater"
@@ -147,6 +148,19 @@ func (c *Client) GetAccount(ctx context.Context, accountID string) (*v1.AccountS
 		return nil, err
 	}
 	return &resp.Data, nil
+}
+
+// GetIdentities lists the account's non-secret sender identities and signatures.
+func (c *Client) GetIdentities(ctx context.Context, accountID string) ([]*account.Identity, error) {
+	data, err := c.doRequest(ctx, http.MethodGet, "/v1/accounts/"+url.PathEscape(accountID)+"/identities", nil, "")
+	if err != nil {
+		return nil, err
+	}
+	var response v1.Response[[]*account.Identity]
+	if err := json.Unmarshal(data, &response); err != nil {
+		return nil, err
+	}
+	return response.Data, nil
 }
 
 // CreateAccount creates account configuration with an optional password envelope.

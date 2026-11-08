@@ -63,10 +63,14 @@ pending-send, and scheduling calls now cross the authenticated IPC connection
 to the main process. Composer IPC has a bounded 30 MiB payload limit for
 attachments; the existing smaller reader-call limit is unchanged.
 
+The parent account API now loads account identities through the authenticated
+helper catalog route when connected. The API returns non-secret identity and
+signature metadata under `mail.read`.
+
 This is an ownership boundary for the child process, not yet the helper handoff:
 the main process methods still use some local account/draft/send/token stores
-and transports. Route those methods through UX-037 and the account APIs, add
-identity reads, enforce explicit `draft.read`, `draft.write`, and `mail.send`
+and transports. Route those methods through UX-037 and the account APIs,
+enforce explicit `draft.read`, `draft.write`, and `mail.send`
 capabilities, then resolve encrypted draft persistence and Gmail provider-send
 semantics before removing the parent fallback.
 

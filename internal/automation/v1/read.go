@@ -25,6 +25,12 @@ type CatalogOperations interface {
 	GetVirtualFolders() ([]*virtualfolder.VirtualFolder, error)
 }
 
+// IdentityCatalogOperations exposes account-owned sender identities needed by
+// compose clients without returning provider credentials.
+type IdentityCatalogOperations interface {
+	GetIdentities(accountID string) ([]*account.Identity, error)
+}
+
 // MessageHeaderOperations defines bounded, folder-scoped header reads.
 type MessageHeaderOperations interface {
 	GetFolder(folderID string) (*folder.Folder, error)
@@ -169,6 +175,19 @@ func (h *ReadHandler) mountAttachmentRoutes(mux *http.ServeMux, requireCap func(
 }
 
 func (h *ReadHandler) mountCatalogRoutes(mux *http.ServeMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+	if identities, ok := h.catalog.(IdentityCatalogOperations); ok {
+		mux.HandleFunc("GET /v1/accounts/{accountID}/identities", func(w http.ResponseWriter, r *http.Request) {
+			if !requireCap(w, r, CapabilityMailRead) {
+				return
+			}
+			items, err := identities.GetIdentities(r.PathValue("accountID"))
+			if err != nil {
+				h.writeError(w, r, http.StatusInternalServerError, CodeInternal, "Failed to load account identities", true)
+				return
+			}
+			h.writeResponse(w, r, http.StatusOK, items, nil)
+		})
+	}
 	mux.HandleFunc("/v1/accounts", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailRead) {
 			return

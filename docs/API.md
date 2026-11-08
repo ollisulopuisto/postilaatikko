@@ -25,6 +25,8 @@ Returns the contract version and the caller's granted capabilities.
 `GET /v1/accounts` and `GET /v1/accounts/{accountId}` return non-secret account
 configuration for settings and account-aware clients. Passwords, OAuth tokens,
 and custom OAuth client secrets are never included.
+`GET /v1/accounts/{accountId}/identities` returns that account's sender
+identities and signatures for compose clients; it does not return credentials.
 
 Account create/update/delete, enable/disable, ordering, and Microsoft shared
 mailbox setup require `account.manage`. These requests use the routes listed in

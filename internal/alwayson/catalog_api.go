@@ -29,6 +29,13 @@ func (o *catalogReadOperations) GetAccounts() ([]*account.Account, error) {
 	return o.accounts.List()
 }
 
+func (o *catalogReadOperations) GetIdentities(accountID string) ([]*account.Identity, error) {
+	if _, err := o.accounts.Get(accountID); err != nil {
+		return nil, err
+	}
+	return o.accounts.GetIdentities(accountID)
+}
+
 func (o *catalogReadOperations) GetFolders(accountID string) ([]*folder.Folder, error) {
 	return o.folders.List(accountID)
 }

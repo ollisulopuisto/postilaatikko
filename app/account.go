@@ -601,16 +601,38 @@ type AccountIdentityGroup struct {
 // GetAllAccountIdentities returns all accounts with their identities in one call.
 // Used by the inline composer to populate the cross-account From dropdown.
 func (a *App) GetAllAccountIdentities() ([]AccountIdentityGroup, error) {
-	accounts, err := a.accountStore.List()
+	ctx := a.accountContext()
+	client, useService, err := a.accountServiceClient(ctx, false)
 	if err != nil {
 		return nil, err
+	}
+	var accounts []*account.Account
+	if useService {
+		items, err := client.GetAccounts(ctx)
+		if err != nil {
+			return nil, err
+		}
+		accounts = make([]*account.Account, 0, len(items))
+		for _, item := range items {
+			accounts = append(accounts, item.ToAccount())
+		}
+	} else {
+		accounts, err = a.accountStore.List()
+		if err != nil {
+			return nil, err
+		}
 	}
 	var groups []AccountIdentityGroup
 	for _, acc := range accounts {
 		if !acc.Enabled {
 			continue
 		}
-		identities, err := a.accountStore.GetIdentities(acc.ID)
+		var identities []*account.Identity
+		if useService {
+			identities, err = client.GetIdentities(ctx, acc.ID)
+		} else {
+			identities, err = a.accountStore.GetIdentities(acc.ID)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -624,6 +646,14 @@ func (a *App) GetAllAccountIdentities() ([]AccountIdentityGroup, error) {
 
 // GetIdentities returns all identities for an account
 func (a *App) GetIdentities(accountID string) ([]*account.Identity, error) {
+	ctx := a.accountContext()
+	client, useService, err := a.accountServiceClient(ctx, false)
+	if err != nil {
+		return nil, err
+	}
+	if useService {
+		return client.GetIdentities(ctx, accountID)
+	}
 	return a.accountStore.GetIdentities(accountID)
 }
 
