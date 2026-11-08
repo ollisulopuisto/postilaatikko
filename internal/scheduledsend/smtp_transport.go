@@ -197,6 +197,145 @@ func (t *SMTPTransport) ApplyAccountPasswordMutation(accountID string, mutation 
 	return operationErr
 }
 
+// ApplyAccountOAuthMutation persists OAuth callback credentials and propagates
+// Microsoft replacements to linked mailboxes as one compensating operation.
+func (t *SMTPTransport) ApplyAccountOAuthMutation(accountID string, mutation v1.OAuthCredentialMutation) error {
+	defer mutation.ClearSecrets()
+	if err := mutation.Normalize(); err != nil {
+		return err
+	}
+	if t == nil || t.creds == nil || t.accounts == nil {
+		return errors.New("helper OAuth credential store is unavailable")
+	}
+	if mutation.Provider != "google" && mutation.Provider != "microsoft" && mutation.Provider != "custom" {
+		return fmt.Errorf("unsupported OAuth provider %q", mutation.Provider)
+	}
+	accountRecord, err := t.accounts.Get(accountID)
+	if err != nil {
+		return err
+	}
+	if accountRecord.AuthType != account.AuthOAuth2 {
+		return v1.InvalidRequest("OAuth credentials require an OAuth account", nil)
+	}
+	currentProvider, err := t.creds.GetOAuthProvider(accountID)
+	if err != nil {
+		return fmt.Errorf("read current OAuth provider: %w", err)
+	}
+	if currentProvider != "" && currentProvider != mutation.Provider {
+		return v1.InvalidRequest("OAuth provider does not match the account's existing authorization", nil)
+	}
+	accountIDs := []string{accountID}
+	if mutation.Provider == "microsoft" {
+		children, err := t.accounts.ListBySharedMailboxParent(accountID)
+		if err != nil {
+			return fmt.Errorf("list linked Microsoft mailboxes: %w", err)
+		}
+		for _, child := range children {
+			accountIDs = append(accountIDs, child.ID)
+		}
+	}
+
+	type snapshot struct {
+		id        string
+		tokens    *credentials.OAuthTokens
+		hasTokens bool
+		custom    credentials.CustomOAuthProvider
+		hasCustom bool
+		stableID  string
+	}
+	snapshots := make([]snapshot, 0, len(accountIDs))
+	for _, id := range accountIDs {
+		current := snapshot{id: id}
+		tokens, err := t.creds.GetOAuthTokens(id)
+		if err == nil {
+			copyTokens := *tokens
+			copyTokens.Scopes = append([]string(nil), tokens.Scopes...)
+			current.tokens, current.hasTokens = &copyTokens, true
+		} else if !errors.Is(err, credentials.ErrCredentialNotFound) {
+			return fmt.Errorf("capture OAuth token state: %w", err)
+		}
+		provider, ok, err := t.creds.GetCustomOAuthProvider(id)
+		if err != nil {
+			return fmt.Errorf("capture custom provider state: %w", err)
+		}
+		if ok {
+			provider.Scopes = append([]string(nil), provider.Scopes...)
+			current.custom, current.hasCustom = provider, true
+		}
+		current.stableID, err = t.accounts.GetOAuthStableID(id)
+		if err != nil {
+			return fmt.Errorf("capture OAuth identity state: %w", err)
+		}
+		snapshots = append(snapshots, current)
+	}
+
+	tokens := &credentials.OAuthTokens{
+		Provider: mutation.Provider, AccessToken: mutation.AccessToken,
+		RefreshToken: mutation.RefreshToken, ExpiresAt: mutation.ExpiresAt,
+		Scopes: append([]string(nil), mutation.Scopes...),
+	}
+	var custom *credentials.CustomOAuthProvider
+	if mutation.Custom != nil {
+		custom = &credentials.CustomOAuthProvider{
+			AuthURL: mutation.Custom.AuthURL, TokenURL: mutation.Custom.TokenURL,
+			UserinfoEndpoint: mutation.Custom.UserinfoEndpoint,
+			Scopes:           append([]string(nil), mutation.Custom.Scopes...),
+			ClientID:         mutation.Custom.ClientID, ClientSecret: mutation.Custom.ClientSecret,
+		}
+	}
+
+	attempted := 0
+	var operationErr error
+	for _, current := range snapshots {
+		attempted++
+		if err := t.creds.SetOAuthTokens(current.id, tokens); err != nil {
+			operationErr = fmt.Errorf("store OAuth tokens: %w", err)
+			break
+		}
+		if custom != nil {
+			if err := t.creds.SetCustomOAuthProvider(current.id, *custom); err != nil {
+				operationErr = fmt.Errorf("store custom OAuth provider: %w", err)
+				break
+			}
+		}
+		if mutation.StableID != "" {
+			if err := t.accounts.SetOAuthStableID(current.id, mutation.StableID); err != nil {
+				operationErr = fmt.Errorf("store OAuth stable identity: %w", err)
+				break
+			}
+		}
+	}
+	if operationErr == nil {
+		return nil
+	}
+
+	var restoreErrs []error
+	for i := attempted - 1; i >= 0; i-- {
+		current := snapshots[i]
+		if current.hasTokens {
+			if err := t.creds.SetOAuthTokens(current.id, current.tokens); err != nil {
+				restoreErrs = append(restoreErrs, err)
+			}
+		} else if err := t.creds.DeleteOAuthMailTokens(current.id); err != nil {
+			restoreErrs = append(restoreErrs, err)
+		}
+		if current.hasCustom {
+			if err := t.creds.SetCustomOAuthProvider(current.id, current.custom); err != nil {
+				restoreErrs = append(restoreErrs, err)
+			}
+		} else if err := t.creds.DeleteCustomOAuthProvider(current.id); err != nil {
+			restoreErrs = append(restoreErrs, err)
+		}
+		if err := t.accounts.SetOAuthStableID(current.id, current.stableID); err != nil {
+			restoreErrs = append(restoreErrs, err)
+		}
+	}
+	if restoreErr := errors.Join(restoreErrs...); restoreErr != nil {
+		return errors.Join(v1.ErrCredentialRepairRequired, operationErr, restoreErr)
+	}
+	return operationErr
+}
+
 // ValidateSharedMailbox verifies Microsoft OAuth IMAP access using the primary account's token.
 func (t *SMTPTransport) ValidateSharedMailbox(ctx context.Context, primaryAccountID, sharedEmail string) error {
 	if t == nil || t.creds == nil || t.accounts == nil {

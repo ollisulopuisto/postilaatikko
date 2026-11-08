@@ -82,6 +82,7 @@ type SyncRuntime struct {
 	accountMutationMu           sync.Mutex
 	credentialCleanup           func(string) error
 	passwordMutation            func(string, v1.PasswordCredentialMutation, func() error) error
+	oauthMutation               func(string, v1.OAuthCredentialMutation) error
 	accountMutationFingerprint  func([]byte) []byte
 	sharedMailboxValidate       func(context.Context, string, string) error
 	sharedMailboxCredentialCopy func(string, string) error
@@ -227,6 +228,45 @@ func (r *SyncRuntime) SetAccountPasswordMutationHandler(handler func(string, v1.
 	}
 	r.passwordMutation = handler
 	r.accountMutationFingerprint = fingerprint
+	return nil
+}
+
+// SetAccountOAuthMutationHandler wires the helper's OAuth token writer before runtime start.
+func (r *SyncRuntime) SetAccountOAuthMutationHandler(handler func(string, v1.OAuthCredentialMutation) error) error {
+	if r == nil || handler == nil {
+		return errors.New("account OAuth mutation handler is required")
+	}
+	r.ctxMu.Lock()
+	defer r.ctxMu.Unlock()
+	if r.started {
+		return errors.New("cannot configure account OAuth mutation after runtime start")
+	}
+	r.oauthMutation = handler
+	return nil
+}
+
+// SetAccountOAuthCredentials stores OAuth callback material only in the helper.
+func (r *SyncRuntime) SetAccountOAuthCredentials(accountID string, mutation v1.OAuthCredentialMutation) error {
+	if r == nil || r.accounts == nil || r.oauthMutation == nil {
+		return errors.New("helper OAuth credential management is unavailable")
+	}
+	defer mutation.ClearSecrets()
+	r.accountMutationMu.Lock()
+	defer r.accountMutationMu.Unlock()
+	if err := mutation.Normalize(); err != nil {
+		return err
+	}
+	acc, err := r.accounts.Get(accountID)
+	if err != nil {
+		return err
+	}
+	if acc.AuthType != account.AuthOAuth2 {
+		return v1.InvalidRequest("OAuth credentials require an OAuth account", nil)
+	}
+	if err := r.oauthMutation(accountID, mutation); err != nil {
+		return err
+	}
+	r.refreshAccountAfterChange(acc, true)
 	return nil
 }
 

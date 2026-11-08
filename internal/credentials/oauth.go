@@ -197,6 +197,28 @@ func (s *Store) DeleteOAuthTokens(accountID string) error {
 	return nil
 }
 
+// DeleteOAuthMailTokens removes only the account's mail OAuth slot. Extension
+// OAuth credentials such as calendar or contacts grants remain untouched.
+func (s *Store) DeleteOAuthMailTokens(accountID string) error {
+	if accountID == "" {
+		return fmt.Errorf("account id is required")
+	}
+	if s.keyringEnabled {
+		for _, key := range []string{accountID + ":access_token", accountID + ":refresh_token"} {
+			if err := s.deleteKeyringEntryStrict(key); err != nil {
+				return fmt.Errorf("remove OAuth credential from keyring: %w", err)
+			}
+		}
+	}
+	if _, err := s.db.Exec(`UPDATE accounts SET encrypted_access_token = NULL, encrypted_refresh_token = NULL WHERE id = ?`, accountID); err != nil {
+		return fmt.Errorf("clear encrypted OAuth token fallback: %w", err)
+	}
+	if _, err := s.db.Exec(`DELETE FROM oauth_tokens WHERE account_id = ? AND client_config_id IN ('google-mail', 'microsoft-mail', 'custom-mail')`, accountID); err != nil {
+		return fmt.Errorf("delete OAuth mail metadata: %w", err)
+	}
+	return nil
+}
+
 // UpdateOAuthAccessToken updates just the access token and expiry (after refresh)
 // for the account's mail tokens. Per-extension slots have their own update path
 // in UpdateOAuthAccessTokenForClientConfig (oauth_clientconfig.go).
