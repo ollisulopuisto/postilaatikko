@@ -166,7 +166,7 @@ export function scopeError(scope: unknown): string | null {
       if (!has(scope, 'accountId') || !has(scope, 'folderId')) return 'folder scope needs accountId and folderId'
       return only('accountId', 'folderId') ? null : 'folder scope takes only accountId and folderId'
     case 'unified_folder':
-      if (!['drafts', 'sent', 'trash', 'starred', 'archive', 'spam'].includes(String(scope.folderType))) return 'unified folder scope needs a supported folderType'
+      if (!isString(scope.folderType) || !['drafts', 'sent', 'trash', 'starred', 'archive', 'spam'].includes(scope.folderType)) return 'unified folder scope needs a supported folderType'
       return only('folderType') ? null : 'unified folder scope takes only folderType'
     case 'virtual_folder':
       if (!has(scope, 'virtualFolderId')) return 'virtual_folder scope needs virtualFolderId'
