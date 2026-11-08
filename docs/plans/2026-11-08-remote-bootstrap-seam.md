@@ -17,3 +17,7 @@
 - A later call with a real legacy DB performs the pending imports once, without deleting legacy rows or overwriting device values.
 - Remote connector setup does not require or query the local service DB; local mode still validates grants and auto-provisions exactly as before.
 - Focused tests, affected package builds, and `git diff --check` pass.
+
+## Status
+
+Completed in `0161ce9`. Device schema initialization can run independently from legacy row imports, and remote credentials/client construction no longer requires a local mailbox database. `Preflight` still uses the existing local-helper startup flow; switching it to remote-first depends on the next app-startup boundary.
