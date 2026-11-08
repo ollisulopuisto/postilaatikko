@@ -2,6 +2,10 @@
 // PLAYWRIGHT_MODULE can point at an independently installed Playwright package.
 import fs from 'node:fs/promises'
 import assert from 'node:assert/strict'
+import os from 'node:os'
+import path from 'node:path'
+const outputDir = process.env.LAYOUT_SCREENSHOT_DIR || path.join(os.tmpdir(), 'post-bubble-layout')
+await fs.mkdir(outputDir, { recursive: true })
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright')
 const source = await fs.readFile(new URL('../../src/lib/components/viewer/ConversationViewer.svelte', import.meta.url), 'utf8')
 const row = source.match(/class=\{readerMode === 'conversation' \? `([^`]+)`/)[1]
@@ -34,7 +38,7 @@ try {
       assert.ok(box.frame.width > (width > 800 ? 600 : 240), 'HTML iframe keeps available reader width')
       assert.ok(Math.abs(box.avatar.bottom - (box.bubble.bottom - 24)) < 30, 'avatar aligns near bubble tail')
     }
-    await page.screenshot({ path: `/downloads/post192-html-${width}.png` })
+    await page.screenshot({ path: path.join(outputDir, `post192-html-${width}.png`) })
     console.log(`PASS ${width}px: avatar/bubble/tail geometry and HTML iframe width`)
   }
 } finally { await browser.close() }
