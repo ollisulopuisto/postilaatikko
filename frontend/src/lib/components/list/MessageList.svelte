@@ -55,6 +55,7 @@
   import { publishUndoOperationCompleted, publishUndoOperationCreated, UNDO_OPERATION_COMPLETED_EVENT, UNDO_OPERATION_CREATED_EVENT, type UndoOperationCreatedDetail } from './undoMutationEvents'
   import { runMessageMutation } from './mutationInFlight'
   import { openCommandPalette } from '$lib/stores/commandPalette.svelte'
+  import { messageAnimations, MESSAGE_EXIT_ANIM_DURATION_MS } from '$lib/stores/messageAnimations.svelte'
 
   interface Props {
     accountId?: string | null
@@ -1912,6 +1913,20 @@
   }
 
   export function handleActionComplete(autoSelectNext: boolean = false) {
+    if (messageAnimations.isAnyAnimating()) {
+      // Allow the exit animation to visibly conclude before the backend reload
+      // removes the elements from the DOM.
+      const release = messageAnimations.holdActive()
+      setTimeout(() => {
+        // Keep removed rows hidden until the replacement data has arrived.
+        void doHandleActionComplete(autoSelectNext).finally(release)
+      }, MESSAGE_EXIT_ANIM_DURATION_MS)
+      return
+    }
+    doHandleActionComplete(autoSelectNext)
+  }
+
+  async function doHandleActionComplete(autoSelectNext: boolean = false) {
     // Capture before clearing the viewer: pendingReadOnLeave may immediately
     // change the origin to read while this action reloads the list.
     const selection = autoSelectNext
@@ -1941,7 +1956,7 @@
     const totalLoaded = Math.max(conversations.length, PAGE_SIZE)
     offset = 0
 
-    loadConversations(totalLoaded).then(() => {
+    await loadConversations(totalLoaded).then(() => {
       // Restore scroll position
       if (listContainerRef) {
         requestAnimationFrame(() => {
@@ -2387,6 +2402,7 @@
           handleActionComplete(true)
         } finally {
           moveMutationInFlight = false
+          messageAnimations.settleRemoval(messageIds)
         }
       })
     } catch (err) {
@@ -2495,6 +2511,7 @@
       showDeleteConfirm = true
       return
     }
+    messageAnimations.startRemoval(messageIds, 'trash')
     void runMessageMutation(messageIds, async () => {
       moveMutationInFlight = true
       try {
@@ -2510,8 +2527,10 @@
         clearChecked()
       } finally {
         moveMutationInFlight = false
+        messageAnimations.settleRemoval(messageIds)
       }
     }).catch((err) => {
+      messageAnimations.finishRemoval(messageIds)
       console.error('Delete failed:', err)
       toasts.error($_('toast.failedToDelete'))
     })
@@ -3366,7 +3385,11 @@
   confirmLabel={$_('dialog.confirmDeletePermanently')}
   variant="destructive"
   onConfirm={handleConfirmPermanentDelete}
-  onCancel={() => { showDeleteConfirm = false; pendingDeleteIds = [] }}
+  onCancel={() => {
+    messageAnimations.finishRemoval(pendingDeleteIds)
+    showDeleteConfirm = false
+    pendingDeleteIds = []
+  }}
 />
 
 <!-- Empty Trash Confirmation Dialog -->

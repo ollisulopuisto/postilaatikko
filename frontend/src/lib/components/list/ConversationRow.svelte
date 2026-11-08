@@ -40,6 +40,7 @@
   import { publishUndoOperationCompleted, publishUndoOperationCreated } from './undoMutationEvents'
   import { isRowOpenTarget } from '../viewer/bubbleLayout'
   import { runMessageMutation } from './mutationInFlight'
+  import { messageAnimations } from '$lib/stores/messageAnimations.svelte'
 
   interface Props {
     conversation: message.Conversation
@@ -244,6 +245,7 @@
 
   async function handleDoneClick(e: MouseEvent) {
     e.stopPropagation()
+    messageAnimations.startRemoval(ownMessageIds, 'archive')
     try {
       const messageIds = await resolveOwnMessageTarget()
       await runMessageMutation(ownMessageIds, async () => {
@@ -258,9 +260,11 @@
           onActionComplete?.(true)
         } finally {
           moveMutationInFlight = false
+          messageAnimations.settleRemoval(ownMessageIds)
         }
       })
     } catch (err) {
+      messageAnimations.finishRemoval(ownMessageIds)
       console.error('Archive failed:', err)
       toasts.error($_('toast.failedToArchive'))
     }
@@ -290,6 +294,8 @@
 
   function handleQuickDelete(e: MouseEvent) {
     e.stopPropagation()
+    // Trash opens a confirmation dialog; its parent starts any removal.
+    if (folderType !== 'trash') messageAnimations.startRemoval(ownMessageIds, 'trash')
     onDelete?.(ownMessageIds)
   }
 
@@ -320,6 +326,7 @@
   const ownMessageIds = $derived(
     conversation.messageIds || conversation.messages?.map((m) => m.id) || []
   )
+  const activeAnimationKind = $derived(messageAnimations.hasAnimating(ownMessageIds))
 
   async function resolveOwnMessageTarget(): Promise<string[]> {
     const owningAccountId = conversation.accountId || accountId
@@ -543,7 +550,7 @@
   <div
     data-conversation-row
     draggable={getLayoutMode() !== 'narrow'}
-    class="group relative w-full flex items-start overflow-hidden touch-pan-y {densityClasses.row[density]} text-left border-b border-border transition-colors duration-300 cursor-pointer outline-none {selected
+    class="group relative w-full flex items-start overflow-hidden touch-pan-y {densityClasses.row[density]} text-left border-b border-border transition-colors duration-300 cursor-pointer outline-none {activeAnimationKind ? `row-anim-${activeAnimationKind}` : ''} {selected
       ? 'bg-primary/20'
       : 'hover:bg-muted/50'} {getAccentBarUnread() && hasUnread ? 'border-l-2 border-l-primary' : ''} {swipeAnim === 'select' ? 'swipe-select-anim' : ''} {swipeAnim === 'delete' ? 'swipe-delete-anim' : ''}"
     onmouseenter={() => onHover?.()}
@@ -897,6 +904,121 @@
     100% {
       opacity: 0;
       transform: scale(0.8);
+    }
+  }
+
+  /* Operation exit animations and immediate feedback */
+  :global(.row-anim-archive) {
+    animation: row-exit-archive 220ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    pointer-events: none;
+  }
+
+  :global(.row-anim-trash) {
+    animation: row-exit-trash 220ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    pointer-events: none;
+  }
+
+  :global(.row-anim-move) {
+    animation: row-exit-move 220ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    pointer-events: none;
+  }
+
+  :global(.row-anim-spam) {
+    animation: row-exit-spam 220ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    pointer-events: none;
+  }
+
+  @keyframes -global-row-exit-archive {
+    0% {
+      opacity: 1;
+      transform: translateX(0) scale(1);
+      max-height: 120px;
+    }
+    40% {
+      opacity: 0.5;
+      transform: translateX(18px) scale(0.98);
+      background-color: hsl(var(--muted) / 0.7);
+    }
+    100% {
+      opacity: 0;
+      transform: translateX(45px) scale(0.92);
+      max-height: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+      border-bottom-width: 0;
+    }
+  }
+
+  @keyframes -global-row-exit-trash {
+    0% {
+      opacity: 1;
+      transform: translateX(0) scale(1);
+      max-height: 120px;
+    }
+    30% {
+      opacity: 0.6;
+      transform: translateX(-15px) scale(0.98);
+      background-color: hsl(var(--destructive) / 0.15);
+    }
+    100% {
+      opacity: 0;
+      transform: translateX(-45px) scale(0.92);
+      max-height: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+      border-bottom-width: 0;
+    }
+  }
+
+  @keyframes -global-row-exit-move {
+    0% {
+      opacity: 1;
+      transform: scale(1) translateX(0);
+      max-height: 120px;
+    }
+    40% {
+      opacity: 0.5;
+      transform: scale(0.96) translateX(-12px);
+      background-color: hsl(var(--muted) / 0.5);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(0.88) translateX(-24px);
+      max-height: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+      border-bottom-width: 0;
+    }
+  }
+
+  @keyframes -global-row-exit-spam {
+    0% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      max-height: 120px;
+    }
+    40% {
+      opacity: 0.5;
+      transform: translateY(10px) scale(0.98);
+      background-color: hsl(var(--muted) / 0.6);
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(24px) scale(0.92);
+      max-height: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+      border-bottom-width: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :global(.row-anim-archive),
+    :global(.row-anim-trash),
+    :global(.row-anim-move),
+    :global(.row-anim-spam) {
+      animation: none !important;
+      opacity: 0.3 !important;
     }
   }
 </style>

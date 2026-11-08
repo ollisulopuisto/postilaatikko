@@ -40,6 +40,7 @@
   import { preserveThreadMessageScope } from './threadScope'
   import { publishUndoOperationCompleted, publishUndoOperationCreated } from '../list/undoMutationEvents'
   import { runMessageMutation } from '../list/mutationInFlight'
+  import { messageAnimations } from '$lib/stores/messageAnimations.svelte'
   import { getThreadSnapshot, setThreadSnapshot } from './threadSnapshotCache'
 
   interface Props {
@@ -216,6 +217,7 @@
     try {
       messageIds = await resolveDisplayedMessageTarget(messageIds)
       if (folderPickerMode === 'move') {
+        messageAnimations.startRemoval(messageIds, 'move')
         await runMessageMutation(messageIds, async () => {
           moveMutationInFlight = true
           try {
@@ -226,6 +228,7 @@
             onActionComplete?.(true)
           } finally {
             moveMutationInFlight = false
+            messageAnimations.settleRemoval(messageIds)
           }
         })
       } else {
@@ -235,6 +238,7 @@
         })
       }
     } catch (err) {
+      messageAnimations.finishRemoval(messageIds)
       console.error('Move failed:', err)
       toasts.error($_('toast.failedToMove'))
     }
@@ -1240,6 +1244,7 @@
     let messageIds = conversation.messages.map(m => m.id)
     try {
       messageIds = await resolveDisplayedMessageTarget(messageIds)
+      messageAnimations.startRemoval(messageIds, 'move')
       await runMessageMutation(messageIds, async () => {
         moveMutationInFlight = true
         try {
@@ -1251,9 +1256,11 @@
           onActionComplete?.(true)
         } finally {
           moveMutationInFlight = false
+          messageAnimations.settleRemoval(messageIds)
         }
       })
     } catch (err) {
+      messageAnimations.finishRemoval(messageIds)
       console.error('Move to inbox failed:', err)
       toasts.error($_('toast.failedToMove'))
     }
@@ -1264,6 +1271,7 @@
     let messageIds = conversation.messages.map(m => m.id)
     try {
       messageIds = await resolveDisplayedMessageTarget(messageIds)
+      messageAnimations.startRemoval(messageIds, 'archive')
       await runMessageMutation(messageIds, async () => {
         moveMutationInFlight = true
         try {
@@ -1274,9 +1282,11 @@
           onActionComplete?.(true)
         } finally {
           moveMutationInFlight = false
+          messageAnimations.settleRemoval(messageIds)
         }
       })
     } catch (err) {
+      messageAnimations.finishRemoval(messageIds)
       console.error('Archive failed:', err)
       toasts.error($_('toast.failedToArchive'))
     }
@@ -1288,6 +1298,7 @@
     let archived = false
     try {
       messageIds = await resolveDisplayedMessageTarget(messageIds)
+      messageAnimations.startRemoval(messageIds, 'archive')
       await runMessageMutation(messageIds, async () => {
         moveMutationInFlight = true
         try {
@@ -1307,9 +1318,11 @@
           onActionComplete?.(true)
         } finally {
           moveMutationInFlight = false
+          messageAnimations.settleRemoval(messageIds)
         }
       })
     } catch (err) {
+      messageAnimations.finishRemoval(messageIds)
       console.error('Archive and mark read failed:', err)
       toasts.error($_(archived ? 'toast.failedToUpdateReadStatus' : 'toast.failedToArchive'))
     }
@@ -1320,6 +1333,7 @@
     let messageIds = conversation.messages.map(m => m.id)
     try {
       messageIds = await resolveDisplayedMessageTarget(messageIds)
+      messageAnimations.startRemoval(messageIds, 'archive')
       await runMessageMutation(messageIds, async () => {
         moveMutationInFlight = true
         try {
@@ -1331,9 +1345,11 @@
           onActionComplete?.(true)
         } finally {
           moveMutationInFlight = false
+          messageAnimations.settleRemoval(messageIds)
         }
       })
     } catch (err) {
+      messageAnimations.finishRemoval(messageIds)
       console.error('Done failed:', err)
       toasts.error($_('toast.failedToArchive'))
     }
@@ -1350,6 +1366,7 @@
       let messageIds = conversation.messages.map(m => m.id)
       try {
         messageIds = await resolveDisplayedMessageTarget(messageIds)
+        messageAnimations.startRemoval(messageIds, 'trash')
         await runMessageMutation(messageIds, async () => {
           moveMutationInFlight = true
           try {
@@ -1362,9 +1379,11 @@
             onActionComplete?.(true)
           } finally {
             moveMutationInFlight = false
+            messageAnimations.settleRemoval(messageIds)
           }
         })
       } catch (err) {
+        messageAnimations.finishRemoval(messageIds)
         console.error('Delete failed:', err)
         toasts.error($_('toast.failedToDelete'))
       }
@@ -1386,6 +1405,7 @@
           onActionComplete?.(true)
         } finally {
           moveMutationInFlight = false
+          messageAnimations.settleRemoval(messageIds)
         }
       })
     } catch (err) {
@@ -1412,6 +1432,7 @@
             // Will auto-reload via messages:deleted event
           } finally {
             moveMutationInFlight = false
+            messageAnimations.settleRemoval([messageID])
           }
         })
       } catch (err) {
@@ -1434,6 +1455,7 @@
             // Will auto-reload via messages:deleted event
           } finally {
             moveMutationInFlight = false
+            messageAnimations.settleRemoval([messageID])
           }
         })
       } catch (err) {
@@ -1448,6 +1470,7 @@
     let messageIds = conversation.messages.map(m => m.id)
     try {
       messageIds = await resolveDisplayedMessageTarget(messageIds)
+      messageAnimations.startRemoval(messageIds, 'spam')
       await runMessageMutation(messageIds, async () => {
         moveMutationInFlight = true
         try {
@@ -1470,9 +1493,11 @@
           onActionComplete?.(true)
         } finally {
           moveMutationInFlight = false
+          messageAnimations.settleRemoval(messageIds)
         }
       })
     } catch (err) {
+      messageAnimations.finishRemoval(messageIds)
       console.error('Spam toggle failed:', err)
       toasts.error($_(isSpamFolder ? 'toast.failedToMarkAsNotSpam' : 'toast.failedToMarkAsSpam'))
     }
