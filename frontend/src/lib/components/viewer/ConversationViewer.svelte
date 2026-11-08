@@ -941,11 +941,6 @@
     return `${date.toLocaleDateString()} at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
   }
 
-  function getFaviconUrl(email: string): string {
-    const domain = email.trim().split('@')[1]?.toLowerCase()
-    return domain ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=64` : ''
-  }
-
   // Parse recipient list (JSON array format from backend)
   function parseRecipients(recipientStr: string | undefined): Array<{ name: string; email: string }> {
     if (!recipientStr) return []
@@ -2193,7 +2188,7 @@
                 onReply={openReply}
               >
                 <div class={readerMode === 'conversation' ? `conversation-bubble-row flex items-end gap-2.5 ${bubble?.side === 'right' ? 'justify-start flex-row-reverse' : 'justify-start'}` : ''}>
-                  {#if readerMode === 'conversation' && getShowViewerCircles()}
+                  {#if readerMode === 'conversation' && getShowViewerCircles() && !expandedHeaders.has(msg.id)}
                     {@const avatarPhoto = contactPhotos.get(msg.fromEmail)}
                     <div class="conversation-bubble-avatar shrink-0 mb-1">
                       <Avatar
@@ -2202,7 +2197,7 @@
                         size={40}
                         photoData={avatarPhoto?.data}
                         photoMediaType={avatarPhoto?.mediaType}
-                        faviconUrl={getFaviconUrl(msg.fromEmail)}
+
                       />
                     </div>
                   {/if}
@@ -2254,7 +2249,7 @@
                       size={40}
                       photoData={avatarPhoto?.data}
                       photoMediaType={avatarPhoto?.mediaType}
-                      faviconUrl={getFaviconUrl(msg.fromEmail)}
+
                     />
                   {/if}
 
@@ -2690,7 +2685,9 @@
     --bubble-fill: color-mix(in srgb, var(--bubble-accent) 12%, hsl(var(--background)));
     position: relative;
     overflow: visible;
-    max-width: min(82%, 76rem);
+    width: min(82%, 76rem);
+    max-width: calc(100% - 3.125rem);
+    min-width: 0;
     border-radius: 1rem;
     background: var(--bubble-fill) !important;
     border-color: color-mix(in srgb, var(--bubble-accent) 30%, hsl(var(--border)));
@@ -2719,7 +2716,7 @@
     border-top: 1px solid hsl(var(--border));
     border-right: 1px solid hsl(var(--border));
   }
-  @media (max-width: 800px) { .conversation-bubble { max-width: 90%; } }
+  @media (max-width: 800px) { .conversation-bubble { width: 90%; } }
   .viewer-toolbar-action :global(svg) {
     transition: color 150ms ease, transform 150ms ease;
   }

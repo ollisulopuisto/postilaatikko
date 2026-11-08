@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- Show sender avatars beside conversation bubble tails when viewer circles are enabled.
+- Show local sender avatars beside collapsed conversation bubble tails when viewer circles are enabled, without external favicon requests; keep HTML message widths readable.
 
 ## Postilaatikko 2026.11.08.1
 

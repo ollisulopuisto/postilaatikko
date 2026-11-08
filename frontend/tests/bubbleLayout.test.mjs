@@ -52,9 +52,9 @@ test('message bubble records provide sender side required for avatar alignment n
 })
 
 
-test('reversed outgoing avatar row starts at the right edge', async () => {
+test('conversation avatars use local fallback and disappear with expanded details', async () => {
   const { readFile } = await import('node:fs/promises')
   const source = await readFile(new URL('../src/lib/components/viewer/ConversationViewer.svelte', import.meta.url), 'utf8')
-  assert.match(source, /bubble\?\.side === 'right' \? 'justify-start flex-row-reverse'/)
-  assert.doesNotMatch(source, /justify-end flex-row-reverse/)
+  assert.doesNotMatch(source, /getFaviconUrl|google\.com\/s2/)
+  assert.match(source, /getShowViewerCircles\(\) && !expandedHeaders.has\(msg.id\)/)
 })
