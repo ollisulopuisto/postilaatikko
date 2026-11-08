@@ -61,6 +61,11 @@ The helper mounts provider-aware search and account-qualified thread/body reads:
 - `POST /v1/filters/mutations` (Requires `mail.write`)
   - Request body uses `operation` with `rule` for `create`/`update`, `id` for `delete`, or `ids` for `reorder`.
   - Rule validation is performed by the helper against its account/folder catalog, including the cross-account destination constraint.
+- `GET /v1/reply-later` (Requires `mail.read`)
+  - Returns account-qualified Reply Later queue entries and whether each conversation is present in the local message index.
+- `POST /v1/reply-later/mutations` (Requires `mail.write`)
+  - Request body: `{ "ref": { "accountId": "acc-1", "conversationId": "thread-1" }, "inQueue": true }`.
+  - The helper applies the matching hidden Gmail label when the local OAuth grant includes Gmail modify scope. Non-Gmail and read-only Gmail grants keep Reply Later membership local, matching desktop behavior.
 - `POST /v1/views/mutations` (Requires `mail.write`)
   - Request body uses `operation` with `virtualFolder` for `create`/`update`, `id` for `delete`/`refresh`, or `ids` for `reorder`.
   - Create/update rebuild the service-owned virtual-view cache before returning. `refresh` explicitly rebuilds one view's cached index.

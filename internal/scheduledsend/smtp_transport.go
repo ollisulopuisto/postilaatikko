@@ -2,12 +2,14 @@ package scheduledsend
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/textproto"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	goimap "github.com/emersion/go-imap/v2"
@@ -27,13 +29,14 @@ import (
 // SMTPTransport uses accounts and credentials configured locally in the helper's
 // Postilaatikko installation. No credential is accepted from a queued command.
 type SMTPTransport struct {
-	db          *database.DB
-	schemaOwner *syncowner.Lock
-	accounts    *account.Store
-	creds       *credentials.Store
-	certs       *certificate.Store
-	folders     *folder.Store
-	oauth       *oauth2.Manager
+	db            *database.DB
+	schemaOwner   *syncowner.Lock
+	accounts      *account.Store
+	creds         *credentials.Store
+	certs         *certificate.Store
+	folders       *folder.Store
+	oauth         *oauth2.Manager
+	triageLabelMu sync.Mutex
 }
 
 // OpenSMTPTransport opens an existing helper-local app database. Setup accounts
@@ -159,6 +162,92 @@ func (t *SMTPTransport) GmailTokenSource(ctx context.Context, accountID string, 
 		return "", gmail.ErrReauthRequired
 	}
 	return tokens.AccessToken, nil
+}
+
+// SetGmailTriageLabel mirrors Reply Later's Gmail label behavior for helper API
+// operations. Accounts without Gmail modify scope keep app-local queue state.
+func (t *SMTPTransport) SetGmailTriageLabel(ctx context.Context, accountID, conversationID, queue string, enabled bool) error {
+	acc, err := t.accounts.Get(accountID)
+	if err != nil {
+		return err
+	}
+	if acc == nil || acc.AuthType != account.AuthOAuth2 || !strings.EqualFold(strings.TrimSpace(acc.IMAPHost), "imap.gmail.com") {
+		return nil
+	}
+	tokens, err := t.creds.GetOAuthTokens(accountID)
+	if errors.Is(err, credentials.ErrCredentialNotFound) || (err == nil && (tokens == nil || (tokens.Provider != "google" && tokens.Provider != "custom"))) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("load helper Gmail OAuth credentials: %w", err)
+	}
+	if !gmail.ScopesCoverModify(tokens.Scopes) {
+		return nil
+	}
+	if strings.TrimSpace(conversationID) == "" {
+		return errors.New("conversation ID is required")
+	}
+	labelNames := map[string]string{"read-later": "Postilaatikko/Triage/Read Later", "reply-later": "Postilaatikko/Triage/Reply Later"}
+	labelName, ok := labelNames[queue]
+	if !ok {
+		return fmt.Errorf("unsupported Gmail triage queue: %s", queue)
+	}
+	t.triageLabelMu.Lock()
+	defer t.triageLabelMu.Unlock()
+	client := gmail.NewClient(func(ctx context.Context, force bool) (string, error) {
+		var refreshed *credentials.OAuthTokens
+		var refreshErr error
+		if force {
+			refreshed, refreshErr = t.tokensWithForce(ctx, accountID, true)
+		} else {
+			refreshed, refreshErr = t.tokens(ctx, accountID)
+		}
+		if refreshErr != nil {
+			return "", refreshErr
+		}
+		if refreshed == nil || !gmail.ScopesCoverModify(refreshed.Scopes) {
+			return "", gmail.ErrReauthRequired
+		}
+		return refreshed.AccessToken, nil
+	})
+	var labelID string
+	lookupErr := t.db.QueryRowContext(ctx, `SELECT label_id FROM gmail_triage_labels WHERE account_id=? AND queue=?`, accountID, queue).Scan(&labelID)
+	if lookupErr != nil && !errors.Is(lookupErr, sql.ErrNoRows) {
+		return fmt.Errorf("load Gmail triage label: %w", lookupErr)
+	}
+	if labelID == "" {
+		labels, err := client.Labels(ctx)
+		if err != nil {
+			return fmt.Errorf("list Gmail labels: %w", err)
+		}
+		for _, label := range labels {
+			if label.Name == labelName && label.Type == "user" {
+				labelID = label.ID
+				break
+			}
+		}
+		if labelID == "" {
+			created, err := client.CreateHiddenUserLabel(ctx, labelName)
+			if err != nil {
+				return fmt.Errorf("create hidden Gmail triage label: %w", err)
+			}
+			labelID = created.ID
+		}
+		if _, err := t.db.ExecContext(ctx, `INSERT INTO gmail_triage_labels(account_id,queue,label_id) VALUES(?,?,?) ON CONFLICT(account_id,queue) DO UPDATE SET label_id=excluded.label_id`, accountID, queue, labelID); err != nil {
+			return fmt.Errorf("save Gmail triage label: %w", err)
+		}
+	}
+	threadID := strings.TrimPrefix(conversationID, "gmail:"+accountID+":")
+	var add, remove []string
+	if enabled {
+		add = []string{labelID}
+	} else {
+		remove = []string{labelID}
+	}
+	if err := client.ModifyThread(ctx, threadID, add, remove); err != nil {
+		return fmt.Errorf("update Gmail triage label: %w", err)
+	}
+	return nil
 }
 
 // Deliver submits immutable MIME through SMTP. Once SMTP accepts the message,

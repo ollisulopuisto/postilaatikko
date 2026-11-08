@@ -26,6 +26,7 @@ import (
 	"github.com/hkdb/aerion/internal/mailfilter"
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/operations"
+	"github.com/hkdb/aerion/internal/replylater"
 	"github.com/hkdb/aerion/internal/servicebootstrap"
 	"github.com/hkdb/aerion/internal/views"
 	"github.com/hkdb/aerion/internal/virtualfolder"
@@ -312,6 +313,22 @@ func (c *mailboxServiceConnector) mutateFilterRule(ctx context.Context, req v1.F
 		return err
 	}
 	return client.MutateFilterRule(ctx, req)
+}
+
+func (c *mailboxServiceConnector) replyLaterQueue(ctx context.Context) ([]replylater.Ref, error) {
+	client, err := c.getClient()
+	if err != nil {
+		return nil, err
+	}
+	return client.GetReplyLaterQueue(ctx)
+}
+
+func (c *mailboxServiceConnector) setReplyLaterMembership(ctx context.Context, ref replylater.Ref, inQueue bool) (bool, error) {
+	client, err := c.getClient()
+	if err != nil {
+		return false, err
+	}
+	return client.SetReplyLaterMembership(ctx, ref, inQueue)
 }
 
 func (c *mailboxServiceConnector) authorizeWrites(ctx context.Context) error {

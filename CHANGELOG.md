@@ -24,6 +24,7 @@
 - Add capability-checked headless handlers for account, folder, and saved-view API reads, backed by the existing local stores.
 - Let the helper use Gmail API access tokens from its local OAuth credential store for provider-aware mailbox operations; OAuth secrets remain local to the helper.
 - Route saved-view and automatic filter-rule administration through authenticated helper API operations when the helper is connected.
+- Route Reply Later queue reads and membership changes through the helper, preserving Gmail labels and desktop Undo history.
 
 ## Postilaatikko 2026.11.07.1
 

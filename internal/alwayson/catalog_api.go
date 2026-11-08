@@ -192,6 +192,7 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 	v1.MountCatalogRoutes(mux, operations, automation.RequireGrantCapability)
 	v1.MountVirtualFolderMutationRoutes(mux, r, automation.RequireGrantCapability)
 	v1.MountFilterRuleRoutes(mux, r, automation.RequireGrantCapability)
+	v1.MountReplyLaterRoutes(mux, r, automation.RequireGrantCapability)
 	v1.MountMessageHeaderRoutes(mux, operations, automation.RequireGrantCapability)
 	v1.MountConversationListRoute(mux, operations, automation.RequireGrantCapability)
 	v1.MountSearchRoute(mux, readOperations, automation.RequireGrantCapability)

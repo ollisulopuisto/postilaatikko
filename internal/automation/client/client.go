@@ -12,6 +12,7 @@ import (
 
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/mailfilter"
+	"github.com/hkdb/aerion/internal/replylater"
 	"github.com/hkdb/aerion/internal/views"
 	"github.com/hkdb/aerion/internal/virtualfolder"
 )
@@ -193,6 +194,32 @@ func (c *Client) GetFilterRules(ctx context.Context) ([]*mailfilter.Rule, error)
 func (c *Client) MutateFilterRule(ctx context.Context, req v1.FilterRuleMutationRequest) error {
 	_, err := c.doRequest(ctx, http.MethodPost, "/v1/filters/mutations", req, "")
 	return err
+}
+
+// GetReplyLaterQueue lists helper-owned Reply Later entries.
+func (c *Client) GetReplyLaterQueue(ctx context.Context) ([]replylater.Ref, error) {
+	bytes, err := c.doRequest(ctx, http.MethodGet, "/v1/reply-later", nil, "")
+	if err != nil {
+		return nil, err
+	}
+	var resp v1.Response[[]replylater.Ref]
+	if err := json.Unmarshal(bytes, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// SetReplyLaterMembership updates one account-qualified conversation's queue state.
+func (c *Client) SetReplyLaterMembership(ctx context.Context, ref replylater.Ref, inQueue bool) (bool, error) {
+	bytes, err := c.doRequest(ctx, http.MethodPost, "/v1/reply-later/mutations", v1.ReplyLaterMutationRequest{Ref: ref, InQueue: inQueue}, "")
+	if err != nil {
+		return false, err
+	}
+	var resp v1.Response[v1.ReplyLaterMutationResponse]
+	if err := json.Unmarshal(bytes, &resp); err != nil {
+		return false, err
+	}
+	return resp.Data.Changed, nil
 }
 
 // Search queries messages across a given view scope.

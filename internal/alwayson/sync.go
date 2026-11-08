@@ -33,6 +33,9 @@ import (
 // responsible for choosing or storing authentication secrets.
 type IMAPConfigSource func(context.Context, string) (*imap.ClientConfig, error)
 
+// GmailTriageLabeler applies an optional Gmail provider label for queue changes.
+type GmailTriageLabeler func(context.Context, string, string, string, bool) error
+
 // SyncRuntime owns one local database handle, IMAP pool, sync engine, and
 // scheduler. The caller starts it under the independently supervised helper's
 // context and closes it before releasing the credential provider.
@@ -48,6 +51,7 @@ type SyncRuntime struct {
 	attachments    *message.AttachmentStore
 	virtualFolders *virtualfolder.Store
 	replyLater     *replylater.Store
+	gmailTriage    GmailTriageLabeler
 	triage         *triage.Store
 	schemaOwner    *syncowner.Lock
 	filterOp       mailmove.FilterOperation
@@ -167,6 +171,59 @@ func (r *SyncRuntime) SetGmailTokenSource(source mailSync.GmailTokenSource) erro
 	}
 	r.syncEngine.SetGmailTokenSource(source)
 	return nil
+}
+
+// SetGmailTriageLabeler configures helper-local Gmail label updates before Start.
+func (r *SyncRuntime) SetGmailTriageLabeler(labeler GmailTriageLabeler) error {
+	if r == nil || r.replyLater == nil {
+		return errors.New("always-on runtime is not open")
+	}
+	r.ctxMu.Lock()
+	defer r.ctxMu.Unlock()
+	if r.started {
+		return errors.New("cannot configure Gmail triage after runtime start")
+	}
+	r.gmailTriage = labeler
+	return nil
+}
+
+// GetReplyLaterQueue returns the persisted helper-owned Reply Later entries.
+func (r *SyncRuntime) GetReplyLaterQueue() ([]replylater.Ref, error) {
+	if r == nil || r.replyLater == nil {
+		return nil, errors.New("always-on runtime is not open")
+	}
+	return r.replyLater.List()
+}
+
+// SetReplyLaterMembership updates provider labeling before helper-owned queue state.
+func (r *SyncRuntime) SetReplyLaterMembership(ctx context.Context, accountID, conversationID string, inQueue bool) (bool, error) {
+	if r == nil || r.replyLater == nil {
+		return false, errors.New("always-on runtime is not open")
+	}
+	ref := replylater.Ref{AccountID: accountID, ConversationID: conversationID}
+	if _, err := r.replyLater.Contains(ref); err != nil {
+		return false, err
+	}
+	r.ctxMu.RLock()
+	labeler := r.gmailTriage
+	r.ctxMu.RUnlock()
+	if ctx == nil {
+		r.ctxMu.RLock()
+		ctx = r.ctx
+		r.ctxMu.RUnlock()
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if labeler != nil {
+		if err := labeler(ctx, accountID, conversationID, "reply-later", inQueue); err != nil {
+			return false, err
+		}
+	}
+	if inQueue {
+		return r.replyLater.Add(ref)
+	}
+	return r.replyLater.Remove(ref)
 }
 
 // Start begins the existing bounded, header-first periodic sync scheduler.

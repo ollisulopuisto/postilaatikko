@@ -1,6 +1,6 @@
 # Service Database Ownership Protocol
 
-**Status:** Ownership protocol based on main `6f6197d`, extended by HOSTED-SERVER-025 through HOSTED-SERVER-028. The helper bootstrap handshake and migration-owner transfer are implemented; HOSTED-SERVER-026 routes saved-view definitions and mutations, HOSTED-SERVER-027 routes automatic filter-rule definitions, and HOSTED-SERVER-028 wires helper-local OAuth credentials into the Gmail API client. The desktop still opens other service-owned stores, so full database separation remains incomplete.
+**Status:** Ownership protocol based on main `6f6197d`, extended by HOSTED-SERVER-025 through HOSTED-SERVER-029. The helper bootstrap handshake and migration-owner transfer are implemented; HOSTED-SERVER-026 routes saved-view definitions and mutations, HOSTED-SERVER-027 routes automatic filter-rule definitions, HOSTED-SERVER-028 wires helper-local OAuth credentials into the Gmail API client, and HOSTED-SERVER-029 routes Reply Later membership. The desktop still opens other service-owned stores, so full database separation remains incomplete.
 
 ## Current store map
 
@@ -11,7 +11,7 @@
 | Messages, attachments and sync state | `messageStore`, `attachmentStore`, direct provider fetch fallbacks | Same stores; sync, filter moves, API reads/actions | Headers, conversations, search, thread/body, attachment list/read, flags and supported moves | Service for authoritative provider state; desktop cache must be rebuildable and separate. |
 | Saved views and virtual folders | `virtualFolderStore`, cache/read methods | `virtualFolderStore` and cache maintenance | Full definition list and CRUD/order/cache-refresh API; virtual-folder search and derived unread/cache reads still use the shared DB | Service for persisted query definitions and indexes; desktop presentation state stays local. |
 | Automatic filters and jobs | `filterStore` execution reads | `mailfilter.Store`, durable `JobStore`, background execution | Rule list and CRUD/order API; no uncertain-job inspection/recovery routes | Service for rules, execution and job state; UI manages through authenticated API. |
-| Triage and Reply Later | `triageStore`, `replyLaterStore`, direct UI operations | Same stores | No API routes currently mounted | Service for cross-device mailbox workflow state. |
+| Triage and Reply Later | `triageStore`, direct Read Later/Snooze operations; Reply Later queue reads | `triage.Store`, `replylater.Store` | Reply Later list and membership routes; Read Later/Snooze still have no API | Service for cross-device mailbox workflow state. |
 | Drafts and immediate send | `draftStore`, SMTP/provider send, sent reconciliation | No draft store or normal send worker | No draft/send routes | Service for durable mailbox drafts/send state after API supports receipt, cancellation and reconciliation semantics. |
 | Device and security data | settings, app state, content policy, contacts/CardDAV, certificates, S/MIME and PGP stores | Not constructed by `SyncRuntime` | No API routes needed for local-only presentation; auth grants are service DB data | Keep device layout/preferences and OS-specific contact/key UX local. Decide per-store whether provider trust/configuration belongs with service credentials. |
 | API grants and helper lifecycle | Desktop keyring credential and connector; local lifecycle controls | SQLite token store and listener | Authenticated localhost API with revocation | Grants and server state stay service-owned; desktop keeps only its client token in the OS keyring. |
@@ -39,7 +39,7 @@ The service API needs account setup/update and credential handoff, provider fold
 
 The remaining implementation sequence is:
 
-1. Move persisted mailbox workflow operations (views, filters, triage, drafts) to authenticated service APIs and route the desktop through them. HOSTED-SERVER-026 covers saved-view definitions, mutations, ordering, and cache refresh; HOSTED-SERVER-027 covers filter-rule CRUD/order. Durable filter-job inspection/recovery, triage/Reply Later, and drafts/send remain.
+1. Move persisted mailbox workflow operations (views, filters, triage, drafts) to authenticated service APIs and route the desktop through them. HOSTED-SERVER-026 covers saved-view definitions, mutations, ordering, and cache refresh; HOSTED-SERVER-027 covers filter-rule CRUD/order; HOSTED-SERVER-029 covers Reply Later reads/membership with Gmail labels and desktop Undo. Durable filter-job inspection/recovery, Read Later/Snooze, and drafts/send remain.
 2. Move account/folder setup and provider credential access behind the service boundary, including detached compose.
 3. Move device-only stores to a desktop database and remove service-store construction from desktop processes.
 4. Verify upgrade, rollback refusal, concurrent launch, stopped service, first run, old-helper upgrade, manual-service recovery, and interruption recovery on every supported platform. Resolve custom-port manual-service detection and exercise the LaunchAgent upgrade lifecycle on a real macOS account.

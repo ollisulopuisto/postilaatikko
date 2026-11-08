@@ -289,6 +289,10 @@ func run(args []string) error {
 			_ = syncRuntime.Close()
 			return err
 		}
+		if err := syncRuntime.SetGmailTriageLabeler(transport.SetGmailTriageLabel); err != nil {
+			_ = syncRuntime.Close()
+			return err
+		}
 		apiConfig := apiListenerConfig{address: *apiListen, cert: *apiCert, key: *apiKey, allowedHost: apiAllowedHosts}
 		if pushConfigured {
 			if err := syncRuntime.ConfigureGmailPush(pushConfig); err != nil {

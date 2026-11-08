@@ -31,6 +31,16 @@ func (ops replyLaterAutomationOperations) ChangeReplyLaterWithUndo(accountID, co
 // GetReplyLaterQueue returns explicit triage references, including references
 // whose conversation is not currently present in the local message index.
 func (a *App) GetReplyLaterQueue() ([]replylater.Ref, error) {
+	if a.mailboxService != nil {
+		ctx := a.helperCommandContext()
+		status := a.mailboxService.status(ctx)
+		if status.Connected {
+			return a.mailboxService.replyLaterQueue(ctx)
+		}
+		if status.ErrorCode != "service_unavailable" {
+			return nil, fmt.Errorf("load Reply Later queue from mailbox service: %s", status.Message)
+		}
+	}
 	if a.replyLaterStore == nil {
 		return nil, fmt.Errorf("Reply Later queue is not ready")
 	}
@@ -39,18 +49,22 @@ func (a *App) GetReplyLaterQueue() ([]replylater.Ref, error) {
 
 // GetReplyLaterCount returns the number of explicit queued conversations.
 func (a *App) GetReplyLaterCount() (int, error) {
-	if a.replyLaterStore == nil {
-		return 0, fmt.Errorf("Reply Later queue is not ready")
-	}
-	return a.replyLaterStore.Count()
+	queue, err := a.GetReplyLaterQueue()
+	return len(queue), err
 }
 
 // IsReplyLater reports explicit queue membership for an account conversation.
 func (a *App) IsReplyLater(accountID, conversationID string) (bool, error) {
-	if a.replyLaterStore == nil {
-		return false, fmt.Errorf("Reply Later queue is not ready")
+	queue, err := a.GetReplyLaterQueue()
+	if err != nil {
+		return false, err
 	}
-	return a.replyLaterStore.Contains(replylater.Ref{AccountID: accountID, ConversationID: conversationID})
+	for _, ref := range queue {
+		if ref.AccountID == accountID && ref.ConversationID == conversationID {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // ReplyLaterChangeResult exposes a targeted undo token for one queue change.
@@ -78,15 +92,20 @@ func (a *App) ChangeReplyLaterWithUndo(accountID, conversationID string, inQueue
 		return ReplyLaterChangeResult{}, fmt.Errorf("Reply Later queue is not ready")
 	}
 	ref := replylater.Ref{AccountID: accountID, ConversationID: conversationID}
-	if err := a.changeReplyLaterProvider(accountID, conversationID, inQueue); err != nil {
-		return ReplyLaterChangeResult{}, err
-	}
-	var changed bool
-	var err error
-	if inQueue {
-		changed, err = a.replyLaterStore.Add(ref)
+	changed, handled, err := a.changeReplyLaterThroughService(ref, inQueue)
+	if handled {
+		if err != nil {
+			return ReplyLaterChangeResult{}, err
+		}
 	} else {
-		changed, err = a.replyLaterStore.Remove(ref)
+		if err := a.changeReplyLaterProvider(accountID, conversationID, inQueue); err != nil {
+			return ReplyLaterChangeResult{}, err
+		}
+		if inQueue {
+			changed, err = a.replyLaterStore.Add(ref)
+		} else {
+			changed, err = a.replyLaterStore.Remove(ref)
+		}
 	}
 	if err != nil || !changed {
 		return ReplyLaterChangeResult{Changed: changed}, err
@@ -107,11 +126,19 @@ func (a *App) SetReplyLaterMembership(ref replylater.Ref, inQueue bool) error {
 	if a.replyLaterStore == nil {
 		return fmt.Errorf("Reply Later queue is not ready")
 	}
+	changed, handled, err := a.changeReplyLaterThroughService(ref, inQueue)
+	if handled {
+		if err != nil {
+			return err
+		}
+		if changed {
+			a.emitReplyLaterChanged(ref, inQueue)
+		}
+		return nil
+	}
 	if err := a.changeReplyLaterProvider(ref.AccountID, ref.ConversationID, inQueue); err != nil {
 		return err
 	}
-	var changed bool
-	var err error
 	if inQueue {
 		changed, err = a.replyLaterStore.Add(ref)
 	} else {
@@ -124,6 +151,28 @@ func (a *App) SetReplyLaterMembership(ref replylater.Ref, inQueue bool) error {
 		a.emitReplyLaterChanged(ref, inQueue)
 	}
 	return nil
+}
+
+func (a *App) changeReplyLaterThroughService(ref replylater.Ref, inQueue bool) (bool, bool, error) {
+	if a.mailboxService == nil {
+		return false, false, nil
+	}
+	ctx := a.helperCommandContext()
+	status := a.mailboxService.status(ctx)
+	if !status.Connected {
+		if status.ErrorCode == "service_unavailable" {
+			return false, false, nil
+		}
+		return false, true, fmt.Errorf("mailbox service is not ready for Reply Later: %s", status.Message)
+	}
+	if !status.WriteAuthorized {
+		return false, true, errDesktopMailboxWriteAuthorizationRequired
+	}
+	changed, err := a.mailboxService.setReplyLaterMembership(ctx, ref, inQueue)
+	if err != nil {
+		return false, true, fmt.Errorf("update Reply Later through local mailbox service: %w", err)
+	}
+	return changed, true, nil
 }
 
 func (a *App) emitReplyLaterChanged(ref replylater.Ref, inQueue bool) {
