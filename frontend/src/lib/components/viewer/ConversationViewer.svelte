@@ -40,6 +40,7 @@
   import { preserveThreadMessageScope } from './threadScope'
   import { publishUndoOperationCompleted, publishUndoOperationCreated } from '../list/undoMutationEvents'
   import { runMessageMutation } from '../list/mutationInFlight'
+  import { messageAnimations } from '$lib/stores/messageAnimations.svelte'
   import { getThreadSnapshot, setThreadSnapshot } from './threadSnapshotCache'
 
   interface Props {
@@ -216,6 +217,7 @@
     try {
       messageIds = await resolveDisplayedMessageTarget(messageIds)
       if (folderPickerMode === 'move') {
+        messageAnimations.startRemoval(messageIds, 'move')
         await runMessageMutation(messageIds, async () => {
           moveMutationInFlight = true
           try {
@@ -235,6 +237,7 @@
         })
       }
     } catch (err) {
+      messageAnimations.finishRemoval(messageIds)
       console.error('Move failed:', err)
       toasts.error($_('toast.failedToMove'))
     }
@@ -1243,6 +1246,7 @@
   async function handleMoveToInbox() {
     if (!conversation?.messages) return
     let messageIds = conversation.messages.map(m => m.id)
+    messageAnimations.startRemoval(messageIds, 'move')
     try {
       messageIds = await resolveDisplayedMessageTarget(messageIds)
       await runMessageMutation(messageIds, async () => {
@@ -1259,6 +1263,7 @@
         }
       })
     } catch (err) {
+      messageAnimations.finishRemoval(messageIds)
       console.error('Move to inbox failed:', err)
       toasts.error($_('toast.failedToMove'))
     }
@@ -1267,6 +1272,7 @@
   async function handleArchive() {
     if (!conversation?.messages) return
     let messageIds = conversation.messages.map(m => m.id)
+    messageAnimations.startRemoval(messageIds, 'archive')
     try {
       messageIds = await resolveDisplayedMessageTarget(messageIds)
       await runMessageMutation(messageIds, async () => {
@@ -1282,6 +1288,7 @@
         }
       })
     } catch (err) {
+      messageAnimations.finishRemoval(messageIds)
       console.error('Archive failed:', err)
       toasts.error($_('toast.failedToArchive'))
     }
@@ -1290,6 +1297,7 @@
   async function handleArchiveAndMarkRead() {
     if (!conversation?.messages) return
     let messageIds = conversation.messages.map(m => m.id)
+    messageAnimations.startRemoval(messageIds, 'archive')
     let archived = false
     try {
       messageIds = await resolveDisplayedMessageTarget(messageIds)
@@ -1315,6 +1323,7 @@
         }
       })
     } catch (err) {
+      messageAnimations.finishRemoval(messageIds)
       console.error('Archive and mark read failed:', err)
       toasts.error($_(archived ? 'toast.failedToUpdateReadStatus' : 'toast.failedToArchive'))
     }
@@ -1323,6 +1332,7 @@
   async function handleDone() {
     if (!conversation?.messages) return
     let messageIds = conversation.messages.map(m => m.id)
+    messageAnimations.startRemoval(messageIds, 'archive')
     try {
       messageIds = await resolveDisplayedMessageTarget(messageIds)
       await runMessageMutation(messageIds, async () => {
@@ -1339,6 +1349,7 @@
         }
       })
     } catch (err) {
+      messageAnimations.finishRemoval(messageIds)
       console.error('Done failed:', err)
       toasts.error($_('toast.failedToArchive'))
     }
@@ -1353,6 +1364,7 @@
     } else {
       // Move to trash (undoable)
       let messageIds = conversation.messages.map(m => m.id)
+      messageAnimations.startRemoval(messageIds, 'trash')
       try {
         messageIds = await resolveDisplayedMessageTarget(messageIds)
         await runMessageMutation(messageIds, async () => {
@@ -1370,6 +1382,7 @@
           }
         })
       } catch (err) {
+        messageAnimations.finishRemoval(messageIds)
         console.error('Delete failed:', err)
         toasts.error($_('toast.failedToDelete'))
       }
@@ -1451,6 +1464,7 @@
   async function handleSpam() {
     if (!conversation?.messages) return
     let messageIds = conversation.messages.map(m => m.id)
+    messageAnimations.startRemoval(messageIds, 'spam')
     try {
       messageIds = await resolveDisplayedMessageTarget(messageIds)
       await runMessageMutation(messageIds, async () => {
@@ -1478,6 +1492,7 @@
         }
       })
     } catch (err) {
+      messageAnimations.finishRemoval(messageIds)
       console.error('Spam toggle failed:', err)
       toasts.error($_(isSpamFolder ? 'toast.failedToMarkAsNotSpam' : 'toast.failedToMarkAsSpam'))
     }

@@ -55,6 +55,7 @@
   import { publishUndoOperationCompleted, publishUndoOperationCreated, UNDO_OPERATION_COMPLETED_EVENT, UNDO_OPERATION_CREATED_EVENT, type UndoOperationCreatedDetail } from './undoMutationEvents'
   import { runMessageMutation } from './mutationInFlight'
   import { openCommandPalette } from '$lib/stores/commandPalette.svelte'
+  import { messageAnimations, MESSAGE_EXIT_ANIM_DURATION_MS } from '$lib/stores/messageAnimations.svelte'
 
   interface Props {
     accountId?: string | null
@@ -1912,6 +1913,19 @@
   }
 
   export function handleActionComplete(autoSelectNext: boolean = false) {
+    if (messageAnimations.isAnyAnimating()) {
+      // Allow the exit animation to visibly conclude before the backend reload
+      // removes the elements from the DOM.
+      setTimeout(() => {
+        messageAnimations.clear()
+        doHandleActionComplete(autoSelectNext)
+      }, MESSAGE_EXIT_ANIM_DURATION_MS)
+      return
+    }
+    doHandleActionComplete(autoSelectNext)
+  }
+
+  function doHandleActionComplete(autoSelectNext: boolean = false) {
     // Capture before clearing the viewer: pendingReadOnLeave may immediately
     // change the origin to read while this action reloads the list.
     const selection = autoSelectNext
@@ -2495,6 +2509,7 @@
       showDeleteConfirm = true
       return
     }
+    messageAnimations.startRemoval(messageIds, 'trash')
     void runMessageMutation(messageIds, async () => {
       moveMutationInFlight = true
       try {
@@ -2512,6 +2527,7 @@
         moveMutationInFlight = false
       }
     }).catch((err) => {
+      messageAnimations.finishRemoval(messageIds)
       console.error('Delete failed:', err)
       toasts.error($_('toast.failedToDelete'))
     })
