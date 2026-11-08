@@ -530,6 +530,10 @@ export function GetAttachments(arg1) {
   return window['go']['app']['App']['GetAttachments'](arg1);
 }
 
+export function GetMessageAttachments(arg1, arg2) {
+  return window['go']['app']['App']['GetMessageAttachments'](arg1, arg2);
+}
+
 export function GetAutoCheckUpdates() {
   return window['go']['app']['App']['GetAutoCheckUpdates']();
 }
@@ -672,6 +676,10 @@ export function GetImageAllowlist() {
 
 export function GetInlineAttachments(arg1) {
   return window['go']['app']['App']['GetInlineAttachments'](arg1);
+}
+
+export function GetInlineAttachmentsForAccount(arg1, arg2) {
+  return window['go']['app']['App']['GetInlineAttachmentsForAccount'](arg1, arg2);
 }
 
 export function GetLanguage() {
@@ -1266,6 +1274,10 @@ export function OpenAttachment(arg1) {
   return window['go']['app']['App']['OpenAttachment'](arg1);
 }
 
+export function OpenAttachmentForAccount(arg1, arg2, arg3) {
+  return window['go']['app']['App']['OpenAttachmentForAccount'](arg1, arg2, arg3);
+}
+
 export function OpenComposerWindow(arg1, arg2, arg3, arg4, arg5) {
   return window['go']['app']['App']['OpenComposerWindow'](arg1, arg2, arg3, arg4, arg5);
 }
@@ -1472,6 +1484,14 @@ export function SaveAllEncryptedAttachments(arg1) {
 
 export function SaveAttachmentAs(arg1) {
   return window['go']['app']['App']['SaveAttachmentAs'](arg1);
+}
+
+export function SaveAttachmentAsForAccount(arg1, arg2, arg3) {
+  return window['go']['app']['App']['SaveAttachmentAsForAccount'](arg1, arg2, arg3);
+}
+
+export function SaveAllAttachmentsForAccount(arg1, arg2) {
+  return window['go']['app']['App']['SaveAllAttachmentsForAccount'](arg1, arg2);
 }
 
 export function SaveDraft(arg1, arg2, arg3) {

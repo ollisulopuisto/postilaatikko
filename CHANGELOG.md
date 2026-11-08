@@ -4,6 +4,7 @@
 
 - Start a desktop configured for a remote mailbox helper without opening the local mailbox database. Route core navigation, saved-view cache/counts, folder counts, thread reads, and explicit body fetches through the helper.
 - Route remote-only inline compose drafts, replies, and sends through helper-owned APIs, retaining draft revisions and send receipt keys across retries without opening local compose/provider stores.
+- Load remote attachment metadata through account-scoped helper reads and fetch inline/file attachment bytes only when rendering inline content or opening/saving files.
 - Serve virtual-folder sidebar unread counts from the authenticated helper for connected desktops while preserving existing count semantics and local-helper fallback.
 - Connect the desktop to a user-operated remote mailbox helper over HTTPS with per-device credentials stored in the OS keychain. Routed service operations fail closed on remote errors; remote-only startup remains follow-up work.
 - Keep virtual-folder result caches warm in the independent helper and serve cached conversations with freshness metadata to connected desktop clients.

@@ -164,6 +164,55 @@ func (c *Client) GetIdentities(ctx context.Context, accountID string) ([]*accoun
 	return response.Data, nil
 }
 
+// ListAttachments reads bounded metadata for one account-qualified message.
+func (c *Client) ListAttachments(ctx context.Context, ref v1.MessageRef) ([]v1.AttachmentSummary, error) {
+	data, err := c.doRequest(ctx, http.MethodPost, "/v1/messages/attachments/list", v1.AttachmentListRequest{Ref: ref}, "")
+	if err != nil {
+		return nil, err
+	}
+	var response v1.Response[v1.Page[v1.AttachmentSummary]]
+	if err := json.Unmarshal(data, &response); err != nil {
+		return nil, err
+	}
+	return response.Data.Items, nil
+}
+
+// ReadAttachmentBytes explicitly fetches one account-qualified attachment.
+func (c *Client) ReadAttachmentBytes(ctx context.Context, ref v1.MessageRef, attachmentID string) ([]byte, string, error) {
+	requestBytes, err := json.Marshal(v1.AttachmentReadRequest{Ref: ref, AttachmentID: attachmentID})
+	if err != nil {
+		return nil, "", fmt.Errorf("marshal attachment request: %w", err)
+	}
+	defer clear(requestBytes)
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint+"/v1/messages/attachments/read", bytes.NewReader(requestBytes))
+	if err != nil {
+		return nil, "", fmt.Errorf("create attachment request: %w", err)
+	}
+	request.Header.Set("Authorization", "Bearer "+c.token)
+	request.Header.Set("Content-Type", "application/json")
+	response, err := c.httpClient.Do(request)
+	if err != nil {
+		return nil, "", fmt.Errorf("execute attachment request: %w", err)
+	}
+	defer response.Body.Close()
+	const maxResponseBytes = 50 << 20
+	data, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
+	if err != nil {
+		return nil, "", fmt.Errorf("read attachment response: %w", err)
+	}
+	if len(data) > maxResponseBytes {
+		return nil, "", fmt.Errorf("attachment response exceeds %d bytes", maxResponseBytes)
+	}
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		var errResponse v1.ErrorResponse
+		if json.Unmarshal(data, &errResponse) == nil && errResponse.Error.Code != "" {
+			return nil, "", fmt.Errorf("api error (%s): %s", errResponse.Error.Code, errResponse.Error.Message)
+		}
+		return nil, "", fmt.Errorf("api error (http %d): %s", response.StatusCode, string(data))
+	}
+	return data, response.Header.Get("Content-Type"), nil
+}
+
 // CreateAccount creates account configuration with an optional password envelope.
 func (c *Client) CreateAccount(ctx context.Context, mutation v1.AccountMutation, credentials v1.PasswordCredentialMutation, idempotencyKey string) (*v1.AccountSummary, error) {
 	mutation.Credentials = &credentials

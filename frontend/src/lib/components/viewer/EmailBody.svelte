@@ -2,7 +2,7 @@
   import Icon from '@iconify/svelte'
   import { normalizeConversationHtml } from './conversationHtml'
   import { ClipboardSetText } from '../../../../wailsjs/runtime/runtime'
-  import { GetInlineAttachments, AddImageAllowlist, OpenURL, SetAlwaysLoadImages } from '../../../../wailsjs/go/app/App'
+  import { GetInlineAttachmentsForAccount, AddImageAllowlist, OpenURL, SetAlwaysLoadImages } from '../../../../wailsjs/go/app/App'
   import { linkifyText, isAllowedEmailURL } from '../../utils/emailLinks'
   import { hasBlockedRemoteImages, restoreBlockedImages } from '../../utils/blockedImages'
   import { getCached, setCache, getCacheGeneration } from '../../stores/inlineAttachmentCache'
@@ -26,7 +26,7 @@
     darken?: boolean
   }
 
-  let { messageId, accountId: _accountId, bodyHtml = '', bodyText = '', fromEmail = '', onCompose, onImagesLoaded, encryptedInlineAttachments, darken = false, compact = false }: Props = $props()
+  let { messageId, accountId = '', bodyHtml = '', bodyText = '', fromEmail = '', onCompose, onImagesLoaded, encryptedInlineAttachments, darken = false, compact = false }: Props = $props()
 
   // State for remote image handling
   let imagesBlocked = $state(true)
@@ -740,7 +740,7 @@ ${processedHtml}
 
     let active = true
     const generation = getCacheGeneration()
-    GetInlineAttachments(id)
+    GetInlineAttachmentsForAccount(accountId, id)
       .then((result: Record<string, string>) => {
         if (!active || generation !== getCacheGeneration()) return
         const data = result || {}

@@ -585,19 +585,16 @@ func (h *ReadHandler) handleAttachmentList(w http.ResponseWriter, r *http.Reques
 		h.writeError(w, r, http.StatusBadRequest, CodeInvalidRequest, "Message ref requires accountId and messageId", false)
 		return
 	}
+	msg, err := h.messages.GetMessage(req.Ref.AccountID, req.Ref.MessageID)
+	if err != nil || msg == nil || msg.AccountID != req.Ref.AccountID || msg.ID != req.Ref.MessageID {
+		h.writeError(w, r, http.StatusNotFound, CodeNotFound, "Message not found", false)
+		return
+	}
 
 	atts, err := h.attachments.GetAttachments(req.Ref.MessageID)
 	if err != nil {
 		h.writeError(w, r, http.StatusInternalServerError, CodeInternal, "Failed to retrieve attachments", true)
 		return
-	}
-
-	type AttachmentSummary struct {
-		ID          string `json:"id"`
-		Filename    string `json:"filename"`
-		ContentType string `json:"contentType"`
-		Size        int    `json:"size"`
-		IsInline    bool   `json:"isInline"`
 	}
 
 	items := make([]AttachmentSummary, 0, len(atts))
@@ -607,6 +604,7 @@ func (h *ReadHandler) handleAttachmentList(w http.ResponseWriter, r *http.Reques
 			Filename:    a.Filename,
 			ContentType: a.ContentType,
 			Size:        a.Size,
+			ContentID:   a.ContentID,
 			IsInline:    a.IsInline,
 		})
 	}
@@ -628,6 +626,11 @@ func (h *ReadHandler) handleAttachmentRead(w http.ResponseWriter, r *http.Reques
 
 	if req.Ref.AccountID == "" || req.Ref.MessageID == "" || req.AttachmentID == "" {
 		h.writeError(w, r, http.StatusBadRequest, CodeInvalidRequest, "Requires accountId, messageId, and attachmentId", false)
+		return
+	}
+	msg, err := h.messages.GetMessage(req.Ref.AccountID, req.Ref.MessageID)
+	if err != nil || msg == nil || msg.AccountID != req.Ref.AccountID || msg.ID != req.Ref.MessageID {
+		h.writeError(w, r, http.StatusNotFound, CodeNotFound, "Message not found", false)
 		return
 	}
 

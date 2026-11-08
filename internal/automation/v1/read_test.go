@@ -118,6 +118,43 @@ func TestReadHandler_AccountsAndFolders(t *testing.T) {
 	}
 }
 
+func TestAttachmentRoutesRequireAccountQualifiedMessageScope(t *testing.T) {
+	ops := &mockReadOperations{
+		msg:             &message.Message{ID: "msg-a", AccountID: "account-a"},
+		attachments:     []*message.Attachment{{ID: "att-a", MessageID: "msg-a", Filename: "inline.png", ContentType: "image/png", Size: 4, ContentID: "cid-a", IsInline: true}},
+		attachmentBytes: []byte{0, 1, 2, 255},
+	}
+	mux, _ := setupReadTestServer(ops, map[v1.Capability]bool{v1.CapabilityAttachmentRead: true})
+
+	wrongScope := httptest.NewRequest(http.MethodPost, "/v1/messages/attachments/list", bytes.NewBufferString(`{"ref":{"accountId":"account-b","messageId":"msg-a"}}`))
+	wrongScopeRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(wrongScopeRecorder, wrongScope)
+	if wrongScopeRecorder.Code != http.StatusNotFound {
+		t.Fatalf("wrong-scope list status = %d, want 404", wrongScopeRecorder.Code)
+	}
+
+	list := httptest.NewRequest(http.MethodPost, "/v1/messages/attachments/list", bytes.NewBufferString(`{"ref":{"accountId":"account-a","messageId":"msg-a"}}`))
+	listRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(listRecorder, list)
+	if listRecorder.Code != http.StatusOK {
+		t.Fatalf("attachment list status = %d, body %s", listRecorder.Code, listRecorder.Body.String())
+	}
+	var response v1.Response[v1.Page[v1.AttachmentSummary]]
+	if err := json.Unmarshal(listRecorder.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Data.Items) != 1 || response.Data.Items[0].ContentID != "cid-a" {
+		t.Fatalf("attachment summaries = %#v", response.Data.Items)
+	}
+
+	read := httptest.NewRequest(http.MethodPost, "/v1/messages/attachments/read", bytes.NewBufferString(`{"ref":{"accountId":"account-a","messageId":"msg-a"},"attachmentId":"att-a"}`))
+	readRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(readRecorder, read)
+	if readRecorder.Code != http.StatusOK || string(readRecorder.Body.Bytes()) != string(ops.attachmentBytes) {
+		t.Fatalf("attachment bytes = %v, status %d", readRecorder.Body.Bytes(), readRecorder.Code)
+	}
+}
+
 func TestReadHandler_MessageBodyExplicitFetch(t *testing.T) {
 	ops := &mockReadOperations{
 		msg: &message.Message{

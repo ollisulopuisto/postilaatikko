@@ -126,3 +126,53 @@ func TestRemotePrepareComposerSendRejectsDeviceLocalCrypto(t *testing.T) {
 		t.Fatal("expected local-only crypto request to fail explicitly")
 	}
 }
+
+func TestRemoteAttachmentReadsUseAccountScopedHelper(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/v1/messages/attachments/list":
+			_ = json.NewEncoder(w).Encode(v1.Response[v1.Page[v1.AttachmentSummary]]{Data: v1.Page[v1.AttachmentSummary]{Items: []v1.AttachmentSummary{
+				{ID: "inline-a", Filename: "logo.png", ContentType: "image/png", Size: 4, ContentID: "cid-a", IsInline: true},
+				{ID: "file-a", Filename: "report.pdf", ContentType: "application/pdf", Size: 16},
+			}, Complete: true}})
+		case "/v1/messages/attachments/read":
+			var request v1.AttachmentReadRequest
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Error(err)
+			}
+			if request.Ref.AccountID != "account-a" || request.Ref.MessageID != "message-a" || request.AttachmentID != "inline-a" {
+				t.Errorf("attachment read ref = %#v", request)
+			}
+			w.Header().Set("Content-Type", "image/png")
+			_, _ = w.Write([]byte{0, 1, 2, 255})
+		default:
+			t.Errorf("unexpected remote request: %s", r.URL)
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	app := &App{
+		ctx:               context.Background(),
+		remoteServiceMode: true,
+		mailboxService: &mailboxServiceConnector{
+			client: automationclient.New(automationclient.Config{Endpoint: server.URL, Token: "device-token"}),
+			statusFunc: func(context.Context) MailboxServiceStatus {
+				return MailboxServiceStatus{Connected: true, Capabilities: []string{string(v1.CapabilityAttachmentRead)}}
+			},
+		},
+	}
+
+	attachments, err := app.GetMessageAttachments("account-a", "message-a")
+	if err != nil || len(attachments) != 2 || attachments[1].ID != "file-a" {
+		t.Fatalf("GetMessageAttachments = %#v, %v", attachments, err)
+	}
+	inline, err := app.GetInlineAttachmentsForAccount("account-a", "message-a")
+	if err != nil || inline["cid-a"] != "data:image/png;base64,AAEC/w==" || len(inline) != 1 {
+		t.Fatalf("GetInlineAttachmentsForAccount = %#v, %v", inline, err)
+	}
+	if app.db != nil || app.attachmentStore != nil || app.messageStore != nil {
+		t.Fatal("remote attachment reads initialized local mailbox stores")
+	}
+}

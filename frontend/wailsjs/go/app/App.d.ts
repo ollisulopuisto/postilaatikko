@@ -293,6 +293,8 @@ export function GetAttachment(arg1:string):Promise<message.Attachment>;
 
 export function GetAttachments(arg1:string):Promise<Array<message.Attachment>>;
 
+export function GetMessageAttachments(arg1:string,arg2:string):Promise<Array<message.Attachment>>;
+
 export function GetAutoCheckUpdates():Promise<boolean>;
 
 export function GetAutoDetectedFolders(arg1:string):Promise<Record<string, string>>;
@@ -364,6 +366,8 @@ export function GetIdentity(arg1:string):Promise<account.Identity>;
 export function GetImageAllowlist():Promise<Array<settings.AllowlistEntry>>;
 
 export function GetInlineAttachments(arg1:string):Promise<Record<string, string>>;
+
+export function GetInlineAttachmentsForAccount(arg1:string,arg2:string):Promise<Record<string, string>>;
 
 export function GetLanguage():Promise<string>;
 
@@ -654,6 +658,8 @@ export function NotifyStartupComplete():Promise<void>;
 
 export function OpenAttachment(arg1:string):Promise<void>;
 
+export function OpenAttachmentForAccount(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function OpenComposerWindow(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<void>;
 
 export function OpenEncryptedAttachment(arg1:string,arg2:string):Promise<void>;
@@ -755,6 +761,10 @@ export function SaveAllAttachments(arg1:string):Promise<string>;
 export function SaveAllEncryptedAttachments(arg1:string):Promise<string>;
 
 export function SaveAttachmentAs(arg1:string):Promise<string>;
+
+export function SaveAttachmentAsForAccount(arg1:string,arg2:string,arg3:string):Promise<string>;
+
+export function SaveAllAttachmentsForAccount(arg1:string,arg2:string):Promise<string>;
 
 export function SaveDraft(arg1:string,arg2:smtp.ComposeMessage,arg3:string):Promise<app.DraftResult>;
 

@@ -151,6 +151,16 @@ type AttachmentReadRequest struct {
 	AttachmentID string     `json:"attachmentId"`
 }
 
+// AttachmentSummary contains non-sensitive metadata for one message attachment.
+type AttachmentSummary struct {
+	ID          string `json:"id"`
+	Filename    string `json:"filename"`
+	ContentType string `json:"contentType"`
+	Size        int    `json:"size"`
+	ContentID   string `json:"contentId,omitempty"`
+	IsInline    bool   `json:"isInline"`
+}
+
 // ScopedError associates a safe failure with an account when the failure is
 // limited to one account in a cross-account request.
 type ScopedError struct {

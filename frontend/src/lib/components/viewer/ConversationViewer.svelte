@@ -2574,6 +2574,7 @@
                             {$_('viewer.attachments')}
                           </h3>
                           <AttachmentList
+                            accountId={msg.accountId || accountId || ''}
                             messageId={msg.id}
                             encryptedAttachments={pgpResults[msg.id]?.attachments ?? smimeResults[msg.id]?.attachments}
                           />

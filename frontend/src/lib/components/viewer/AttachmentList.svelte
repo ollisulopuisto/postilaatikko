@@ -1,6 +1,6 @@
 <script lang="ts">
   import Icon from '@iconify/svelte'
-  import { GetAttachments, SaveAttachmentAs, SaveAllAttachments, OpenAttachment, SaveEncryptedAttachmentAs, OpenEncryptedAttachment, SaveAllEncryptedAttachments, OpenFile, OpenFolder } from '../../../../wailsjs/go/app/App'
+  import { GetMessageAttachments, SaveAttachmentAsForAccount, SaveAllAttachmentsForAccount, OpenAttachmentForAccount, SaveEncryptedAttachmentAs, OpenEncryptedAttachment, SaveAllEncryptedAttachments, OpenFile, OpenFolder } from '../../../../wailsjs/go/app/App'
   // @ts-ignore - wailsjs path
   import { message as messageModels } from '../../../../wailsjs/go/models'
   import { toasts } from '$lib/stores/toast'
@@ -16,11 +16,12 @@
   }
 
   interface Props {
+    accountId: string
     messageId: string
     encryptedAttachments?: DecryptedAttachment[]
   }
 
-  let { messageId, encryptedAttachments }: Props = $props()
+  let { accountId, messageId, encryptedAttachments }: Props = $props()
 
   // State
   let attachments = $state<messageModels.Attachment[]>([])
@@ -48,7 +49,7 @@
     attachments = []
     loading = true
     try {
-      const result = await GetAttachments(msgId)
+      const result = await GetMessageAttachments(accountId, msgId)
       if (messageId !== msgId) return
       attachments = result || []
     } catch (err) {
@@ -63,7 +64,7 @@
   async function handleDownload(att: messageModels.Attachment) {
     downloadingIds = new Set([...downloadingIds, att.id])
     try {
-      const path = await SaveAttachmentAs(att.id)
+      const path = await SaveAttachmentAsForAccount(accountId, messageId, att.id)
       if (path) {
         toasts.success($_('toast.attachmentSaved', { values: { filename: att.filename } }), [
           {
@@ -87,7 +88,7 @@
   async function handleOpen(att: messageModels.Attachment) {
     downloadingIds = new Set([...downloadingIds, att.id])
     try {
-      await OpenAttachment(att.id)
+      await OpenAttachmentForAccount(accountId, messageId, att.id)
     } catch (err) {
       console.error('Failed to open attachment:', err)
       toasts.error($_('toast.failedToOpenAttachment', { values: { filename: att.filename } }))
@@ -148,7 +149,7 @@
           ])
         }
       } else {
-        const folder = await SaveAllAttachments(messageId)
+        const folder = await SaveAllAttachmentsForAccount(accountId, messageId)
         if (folder) {
           toasts.success($_('toast.attachmentsSaved', { values: { count: attachments.length } }), [
             {
