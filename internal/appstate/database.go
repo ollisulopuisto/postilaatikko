@@ -7,9 +7,10 @@ import (
 )
 
 const (
-	deviceStateImportVersion    = 1
-	deviceSettingsImportVersion = 2
-	deviceContentPolicyVersion  = 3
+	deviceStateImportVersion      = 1
+	deviceSettingsImportVersion   = 2
+	deviceContentPolicyVersion    = 3
+	deviceCertificateTrustVersion = 4
 )
 
 // InitializeDeviceDatabase creates the device-owned app-state schema and
@@ -59,6 +60,21 @@ func InitializeDeviceDatabase(deviceDB, legacyDB *sql.DB) error {
 		return fmt.Errorf("create device folder content policy index: %w", err)
 	}
 	if _, err := deviceDB.Exec(`
+		CREATE TABLE IF NOT EXISTS trusted_certificates (
+			id TEXT PRIMARY KEY,
+			fingerprint TEXT NOT NULL,
+			host TEXT NOT NULL,
+			subject TEXT NOT NULL,
+			issuer TEXT NOT NULL,
+			not_before DATETIME,
+			not_after DATETIME,
+			accepted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(host, fingerprint)
+		)
+	`); err != nil {
+		return fmt.Errorf("create device trusted certificates table: %w", err)
+	}
+	if _, err := deviceDB.Exec(`
 		CREATE TABLE IF NOT EXISTS device_database_migrations (
 			version INTEGER PRIMARY KEY,
 			applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -80,6 +96,9 @@ func InitializeDeviceDatabase(deviceDB, legacyDB *sql.DB) error {
 		return err
 	}
 	if err := importDeviceContentPoliciesOnce(tx, legacyDB); err != nil {
+		return err
+	}
+	if err := importDeviceCertificateTrustOnce(tx, legacyDB); err != nil {
 		return err
 	}
 	if err := tx.Commit(); err != nil {
@@ -237,6 +256,54 @@ func importDeviceContentPoliciesOnce(tx *sql.Tx, legacyDB *sql.DB) error {
 		}
 	}
 	return recordDeviceMigration(tx, deviceContentPolicyVersion)
+}
+
+func importDeviceCertificateTrustOnce(tx *sql.Tx, legacyDB *sql.DB) error {
+	applied, err := deviceMigrationApplied(tx, deviceCertificateTrustVersion)
+	if err != nil {
+		return fmt.Errorf("check certificate trust import marker: %w", err)
+	}
+	if applied {
+		return nil
+	}
+	if legacyDB != nil {
+		rows, err := queryIfTableExists(legacyDB, "trusted_certificates", `SELECT id, fingerprint, host, subject, issuer, not_before, not_after, accepted_at FROM trusted_certificates ORDER BY accepted_at, id`)
+		if err != nil {
+			return fmt.Errorf("read legacy trusted certificates: %w", err)
+		}
+		if rows != nil {
+			for rows.Next() {
+				var id, fingerprint, host, subject, issuer string
+				var notBefore, notAfter, acceptedAt sql.NullString
+				if err := rows.Scan(&id, &fingerprint, &host, &subject, &issuer, &notBefore, &notAfter, &acceptedAt); err != nil {
+					rows.Close()
+					return fmt.Errorf("scan legacy trusted certificate: %w", err)
+				}
+				if _, err := tx.Exec(`
+					INSERT INTO trusted_certificates(id, fingerprint, host, subject, issuer, not_before, not_after, accepted_at)
+					VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(host, fingerprint) DO NOTHING
+				`, id, fingerprint, host, subject, issuer, nullableValue(notBefore), nullableValue(notAfter), nullableValue(acceptedAt)); err != nil {
+					rows.Close()
+					return fmt.Errorf("import trusted certificate for %s: %w", host, err)
+				}
+			}
+			if err := rows.Err(); err != nil {
+				rows.Close()
+				return fmt.Errorf("read legacy trusted certificates: %w", err)
+			}
+			if err := rows.Close(); err != nil {
+				return fmt.Errorf("close legacy trusted certificates: %w", err)
+			}
+		}
+	}
+	return recordDeviceMigration(tx, deviceCertificateTrustVersion)
+}
+
+func nullableValue(value sql.NullString) any {
+	if !value.Valid {
+		return nil
+	}
+	return value.String
 }
 
 func deviceMigrationApplied(tx *sql.Tx, version int) (bool, error) {

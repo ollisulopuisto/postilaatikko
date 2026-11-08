@@ -702,7 +702,7 @@ func (a *App) Startup(ctx context.Context) {
 	a.carddavStore = carddav.NewStore(db.DB)
 
 	// Initialize certificate trust store (TOFU)
-	a.certStore = certificate.NewStore(db.DB)
+	a.certStore = certificate.NewStore(a.deviceDB.DB)
 
 	// Initialize S/MIME support
 	a.smimeStore = smime.NewStore(db.DB, log)

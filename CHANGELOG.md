@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Store desktop TLS trust decisions in the device database while retaining legacy certificate rows in the mailbox database.
 - Store explicit folder body-prefetch choices in the device database and remove them when the mailbox account is removed.
 - Store desktop preferences and trusted remote-image entries in the device database, importing existing values without deleting their mailbox-database copies.
 - Keep desktop flag state and events aligned with provider-confirmed partial bulk changes, and allow longer helper-backed mutations to be retried safely after an ambiguous timeout.

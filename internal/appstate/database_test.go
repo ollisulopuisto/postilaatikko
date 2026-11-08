@@ -105,6 +105,66 @@ func TestInitializeDeviceDatabaseUpgradesSettingsAfterAppStateImport(t *testing.
 	assertStoredValue(t, device.DB, `SELECT value FROM settings WHERE key='language'`, "fi")
 }
 
+func TestInitializeDeviceDatabaseCopiesTrustedCertificatesOnce(t *testing.T) {
+	legacy, err := database.Open(filepath.Join(t.TempDir(), "legacy.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer legacy.Close()
+	if _, err := legacy.Exec(`CREATE TABLE trusted_certificates (
+		id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, host TEXT NOT NULL,
+		subject TEXT NOT NULL, issuer TEXT NOT NULL, not_before DATETIME,
+		not_after DATETIME, accepted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(host, fingerprint)
+	)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := legacy.Exec(`INSERT INTO trusted_certificates
+		(id, fingerprint, host, subject, issuer, accepted_at)
+		VALUES ('legacy-id', 'legacy-fingerprint', 'mail.example.com', 'legacy subject', 'legacy issuer', '2026-11-03 10:00:00')`); err != nil {
+		t.Fatal(err)
+	}
+
+	device, err := database.Open(filepath.Join(t.TempDir(), "device.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer device.Close()
+	if _, err := device.Exec(`CREATE TABLE device_database_migrations (version INTEGER PRIMARY KEY, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := device.Exec(`INSERT INTO device_database_migrations(version) VALUES (1), (2), (3)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := device.Exec(`CREATE TABLE trusted_certificates (
+		id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, host TEXT NOT NULL,
+		subject TEXT NOT NULL, issuer TEXT NOT NULL, not_before DATETIME,
+		not_after DATETIME, accepted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(host, fingerprint)
+	)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := device.Exec(`INSERT INTO trusted_certificates
+		(id, fingerprint, host, subject, issuer)
+		VALUES ('device-id', 'device-fingerprint', 'local.example.com', 'device subject', 'device issuer')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitializeDeviceDatabase(device.DB, legacy.DB); err != nil {
+		t.Fatal(err)
+	}
+	assertStoredValue(t, device.DB, `SELECT subject FROM trusted_certificates WHERE host='mail.example.com'`, "legacy subject")
+	assertStoredValue(t, device.DB, `SELECT subject FROM trusted_certificates WHERE host='local.example.com'`, "device subject")
+	assertStoredValue(t, legacy.DB, `SELECT subject FROM trusted_certificates WHERE id='legacy-id'`, "legacy subject")
+
+	if _, err := device.Exec(`DELETE FROM trusted_certificates WHERE id='legacy-id'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := InitializeDeviceDatabase(device.DB, legacy.DB); err != nil {
+		t.Fatal(err)
+	}
+	assertNoRows(t, device.DB, `SELECT id FROM trusted_certificates WHERE id='legacy-id'`)
+}
+
 func assertStoredValue(t *testing.T, db *sql.DB, query, want string) {
 	t.Helper()
 	var got string
