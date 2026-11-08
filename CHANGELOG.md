@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Show local sender avatars beside collapsed conversation bubble tails when viewer circles are enabled, without external favicon requests; keep HTML message widths readable.
+
 ## Postilaatikko 2026.11.08.1
 
 - Exercise the notarization password prompt and exact quoted-keychain path round-trip in release credential checks.
