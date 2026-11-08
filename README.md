@@ -10,7 +10,7 @@ Get an available package from this repository's [Releases](https://github.com/ol
 
 For a macOS DMG:
 
-1. Download the DMG and its `SHA256.txt` into the same directory. Run `shasum -a 256 -c SHA256.txt` there.
+1. Download the DMG. If that release includes `SHA256.txt`, save both files in the same directory and run `shasum -a 256 -c SHA256.txt` there. Older tagged releases may omit this file; compare `shasum -a 256 path/to/download.dmg` with the asset digest when available instead.
 2. Open the DMG and drag **Postilaatikko.app** to **Applications**.
 3. Open the app and add your mail accounts. Provider authorization and optional contacts/calendar access are separate setup steps.
 
