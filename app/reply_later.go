@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 
 	agentapi "github.com/hkdb/aerion/internal/automation/v1"
@@ -31,15 +32,13 @@ func (ops replyLaterAutomationOperations) ChangeReplyLaterWithUndo(accountID, co
 // GetReplyLaterQueue returns explicit triage references, including references
 // whose conversation is not currently present in the local message index.
 func (a *App) GetReplyLaterQueue() ([]replylater.Ref, error) {
-	if a.mailboxService != nil {
-		ctx := a.helperCommandContext()
-		status := a.mailboxService.status(ctx)
-		if status.Connected {
-			return a.mailboxService.replyLaterQueue(ctx)
+	ctx := a.helperCommandContext()
+	service, handled, err := a.undoService(ctx, false)
+	if handled {
+		if err != nil {
+			return nil, err
 		}
-		if status.ErrorCode != "service_unavailable" {
-			return nil, fmt.Errorf("load Reply Later queue from mailbox service: %s", status.Message)
-		}
+		return service.replyLaterQueue(ctx)
 	}
 	if a.replyLaterStore == nil {
 		return nil, fmt.Errorf("Reply Later queue is not ready")
@@ -158,23 +157,20 @@ func (a *App) SetReplyLaterMembership(ref replylater.Ref, inQueue bool) error {
 }
 
 func (a *App) changeReplyLaterThroughService(ref replylater.Ref, inQueue bool) (bool, string, bool, error) {
-	if a.mailboxService == nil {
+	ctx := a.helperCommandContext()
+	service, handled, err := a.undoService(ctx, true)
+	if !handled {
 		return false, "", false, nil
 	}
-	ctx := a.helperCommandContext()
-	status := a.mailboxService.status(ctx)
-	if !status.Connected {
-		if status.ErrorCode == "service_unavailable" {
-			return false, "", false, nil
-		}
-		return false, "", true, fmt.Errorf("mailbox service is not ready for Reply Later: %s", status.Message)
-	}
-	if !status.WriteAuthorized {
-		return false, "", true, errDesktopMailboxWriteAuthorizationRequired
-	}
-	response, err := a.mailboxService.setReplyLaterMembershipWithReceipt(ctx, ref, inQueue)
 	if err != nil {
-		return false, "", true, fmt.Errorf("update Reply Later through local mailbox service: %w", err)
+		return false, "", true, err
+	}
+	response, err := service.setReplyLaterMembershipWithReceipt(ctx, ref, inQueue)
+	if err != nil {
+		return false, "", true, fmt.Errorf("update Reply Later through mailbox service: %w", err)
+	}
+	if response == nil {
+		return false, "", true, errors.New("mailbox service returned no Reply Later receipt")
 	}
 	return response.Changed, response.Receipt.OperationID, true, nil
 }
