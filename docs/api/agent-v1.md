@@ -241,6 +241,18 @@ The current route families in v1 are:
 The exact route schemas are added with their implementation task. These names
 reserve the v1 resource boundaries; they are not claims that routes are live.
 
+UX-037 mounts `GET /v1/drafts`, `GET|PUT|DELETE /v1/drafts/{draftId}`,
+`POST /v1/drafts`, `POST /v1/replies`, and `POST /v1/send` on the authenticated
+helper. Draft reads/writes are account-qualified and updates/deletes require
+the current storage revision. Reply preparation uses only cached message body
+content; clients explicitly fetch a body first when needed. Immediate send
+accepts a desktop-prepared RFC822 message and an SMTP envelope, and requires an
+`Idempotency-Key`. A repeated key with a different request returns
+`idempotency_conflict`; an interrupted send is retained as `outcome_unknown`
+and is never automatically retried. `sent` means the SMTP server accepted the
+message, not that the recipient received it. The helper cannot store encrypted
+draft bodies yet; private-key encryption and signing remain desktop operations.
+
 ## Error envelope
 
 Errors use stable machine-readable codes and safe user-facing messages. The

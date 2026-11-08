@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Add helper-owned draft read/write, cached-body reply preparation, and explicit immediate send with revision checks and durable idempotency receipts.
 - Hand OAuth callback tokens and per-account custom provider credentials to the authenticated helper, with compensating rollback and Microsoft shared-mailbox propagation.
 - Route IMAP and SMTP password changes through authenticated helper account operations with explicit keep/replace/clear actions, credential snapshot compensation, and secret-safe idempotency fingerprints.
 - Make the bundled helper the mailbox schema migrator. Desktop startup now requires a versioned helper/API/schema handshake, and active desktop, composer, and helper processes hold shared schema locks so upgrades cannot migrate while they use the database.

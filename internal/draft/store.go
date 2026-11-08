@@ -2,6 +2,7 @@ package draft
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,6 +11,8 @@ import (
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/rs/zerolog"
 )
+
+var ErrDraftRevisionConflict = errors.New("draft revision conflict")
 
 // Store provides draft persistence operations
 type Store struct {
@@ -71,6 +74,18 @@ func (s *Store) Create(d *Draft) error {
 
 // Update updates an existing draft
 func (s *Store) Update(d *Draft) error {
+	return s.update(d, "")
+}
+
+// UpdateIfRevision atomically replaces a draft only if its storage version is current.
+func (s *Store) UpdateIfRevision(d *Draft, revision string) error {
+	if revision == "" {
+		return ErrDraftRevisionConflict
+	}
+	return s.update(d, revision)
+}
+
+func (s *Store) update(d *Draft, revision string) error {
 	d.UpdatedAt = time.Now()
 
 	query := `
@@ -83,10 +98,14 @@ func (s *Store) Update(d *Draft) error {
 			attachments_data = ?,
 			sync_status = ?, imap_uid = ?,
 			folder_id = ?, last_sync_attempt = ?, sync_error = ?, updated_at = ?
-		WHERE id = ?
 	`
+	if revision == "" {
+		query += ` WHERE id = ?`
+	} else {
+		query += ` WHERE id = ? AND quote(updated_at) = ?`
+	}
 
-	result, err := s.db.Exec(query,
+	args := []any{
 		d.ToList, d.CcList, d.BccList, d.Subject,
 		d.BodyHTML, d.BodyText, nullString(d.InReplyToID), nullString(d.ReplyType),
 		nullString(d.ReferencesList), nullString(d.IdentityID), d.SignMessage,
@@ -96,7 +115,11 @@ func (s *Store) Update(d *Draft) error {
 		d.SyncStatus, nullUint32(d.IMAPUID),
 		nullString(d.FolderID), nullTime(d.LastSyncAttempt), nullString(d.SyncError), d.UpdatedAt,
 		d.ID,
-	)
+	}
+	if revision != "" {
+		args = append(args, revision)
+	}
+	result, err := s.db.Exec(query, args...)
 	if err != nil {
 		return fmt.Errorf("failed to update draft: %w", err)
 	}
@@ -105,6 +128,9 @@ func (s *Store) Update(d *Draft) error {
 		return err
 	}
 	if count != 1 {
+		if revision != "" {
+			return ErrDraftRevisionConflict
+		}
 		return ErrDraftNotFound
 	}
 
@@ -234,6 +260,25 @@ func (s *Store) Delete(id string) error {
 	}
 
 	s.log.Debug().Str("id", id).Msg("Deleted draft")
+	return nil
+}
+
+// DeleteIfRevision removes the draft only when the caller's revision is current.
+func (s *Store) DeleteIfRevision(id, revision string) error {
+	if id == "" || revision == "" {
+		return ErrDraftRevisionConflict
+	}
+	result, err := s.db.Exec(`DELETE FROM drafts WHERE id = ? AND quote(updated_at) = ?`, id, revision)
+	if err != nil {
+		return fmt.Errorf("failed to delete draft: %w", err)
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count != 1 {
+		return ErrDraftRevisionConflict
+	}
 	return nil
 }
 
