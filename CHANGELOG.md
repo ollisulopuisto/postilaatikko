@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Make the bundled helper the mailbox schema migrator. Desktop startup now requires a versioned helper/API/schema handshake, and active desktop, composer, and helper processes hold shared schema locks so upgrades cannot migrate while they use the database.
 - Bundle the headless helper beside the desktop app in supported Linux, Windows, macOS, Flatpak, release, and development packages.
 - Add macOS General Settings controls to install, start, and stop the independently supervised background mail service.
 - Install the macOS helper agent with bounded mailbox sync and automatic filters enabled by default; use `--no-sync` for a Send Later-only agent. The foreground `serve` command keeps sync opt-in.

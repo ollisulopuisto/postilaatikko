@@ -49,6 +49,7 @@ type SyncRuntime struct {
 	virtualFolders *virtualfolder.Store
 	replyLater     *replylater.Store
 	triage         *triage.Store
+	schemaOwner    *syncowner.Lock
 	filterOp       mailmove.FilterOperation
 	filterer       *mailmove.IMAPFilterMover
 	gmailPush      *GmailPushConfig
@@ -89,8 +90,31 @@ func OpenSyncRuntime(dataDirectory string, credentials IMAPConfigSource) (*SyncR
 		_ = db.Close()
 		return nil, err
 	}
-	if err := db.Migrate(); err != nil {
-		return closeOnError(fmt.Errorf("migrate local mail database: %w", err))
+	schemaLockPath := filepath.Join(dataDirectory, "mail-schema.owner.lock")
+	currentVersion, err := db.CurrentSchemaVersion()
+	if err != nil {
+		return closeOnError(err)
+	}
+	maxSchemaVersion := database.MaxSchemaVersion()
+	if currentVersion > maxSchemaVersion {
+		return closeOnError(&database.ErrSchemaTooNew{DBVersion: currentVersion, BuildVersion: maxSchemaVersion})
+	}
+	var schemaOwner *syncowner.Lock
+	if currentVersion == maxSchemaVersion {
+		schemaOwner, err = syncowner.TryAcquireShared(schemaLockPath)
+	} else {
+		schemaOwner, err = syncowner.TryAcquire(schemaLockPath)
+		if err == nil {
+			if err = db.Migrate(); err == nil {
+				err = schemaOwner.DowngradeToShared()
+			}
+		}
+	}
+	if err != nil {
+		if schemaOwner != nil {
+			_ = schemaOwner.Release()
+		}
+		return closeOnError(fmt.Errorf("prepare local mail database schema: %w", err))
 	}
 
 	accounts := account.NewStore(db)
@@ -100,7 +124,7 @@ func OpenSyncRuntime(dataDirectory string, credentials IMAPConfigSource) (*SyncR
 	virtualFolders := virtualfolder.NewStore(db)
 	replyLater := replylater.NewStore(db)
 	triageStore := triage.NewStore(db)
-	runtime := &SyncRuntime{db: db, accounts: accounts, messages: messages, attachments: attachments, virtualFolders: virtualFolders, replyLater: replyLater, triage: triageStore, replyContent: replycontent.NewService(replycontent.ServiceOptions{}), ctx: context.Background(), syncLockPath: filepath.Join(dataDirectory, "mail-sync.owner.lock")}
+	runtime := &SyncRuntime{db: db, schemaOwner: schemaOwner, accounts: accounts, messages: messages, attachments: attachments, virtualFolders: virtualFolders, replyLater: replyLater, triage: triageStore, replyContent: replycontent.NewService(replycontent.ServiceOptions{}), ctx: context.Background(), syncLockPath: filepath.Join(dataDirectory, "mail-sync.owner.lock")}
 	pool := imap.NewPool(imap.DefaultPoolConfig(), func(accountID string) (*imap.ClientConfig, error) {
 		runtime.ctxMu.RLock()
 		ctx := runtime.ctx
@@ -188,7 +212,7 @@ func (r *SyncRuntime) Close() error {
 			r.stopFilterWorker()
 		}
 		r.pool.CloseAll()
-		closeErr = r.db.Close()
+		closeErr = errors.Join(r.db.Close(), r.schemaOwner.Release())
 	})
 	return closeErr
 }

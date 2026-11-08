@@ -5,12 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,6 +25,7 @@ import (
 	"github.com/hkdb/aerion/internal/keyring"
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/operations"
+	"github.com/hkdb/aerion/internal/servicebootstrap"
 	"github.com/hkdb/aerion/internal/views"
 )
 
@@ -460,9 +465,6 @@ func (a *App) StopMailboxService() (MailboxServiceLifecycleStatus, error) {
 }
 
 func (a *App) mailboxHelperPath() (string, error) {
-	if runtime.GOOS != "darwin" {
-		return "", errors.New("local helper service management is supported on macOS only")
-	}
 	executable, err := os.Executable()
 	if err != nil {
 		return "", fmt.Errorf("locate Postilaatikko app executable: %w", err)
@@ -471,7 +473,11 @@ func (a *App) mailboxHelperPath() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve Postilaatikko app executable: %w", err)
 	}
-	helperPath := filepath.Join(filepath.Dir(executable), "postilaatikko-helper")
+	helperName := "postilaatikko-helper"
+	if runtime.GOOS == "windows" {
+		helperName += ".exe"
+	}
+	helperPath := filepath.Join(filepath.Dir(executable), helperName)
 	info, err := os.Stat(helperPath)
 	if err != nil {
 		return "", fmt.Errorf("locate bundled mailbox helper: %w", err)
@@ -480,6 +486,68 @@ func (a *App) mailboxHelperPath() (string, error) {
 		return "", errors.New("bundled mailbox helper is not an executable file")
 	}
 	return helperPath, nil
+}
+
+func (a *App) bootstrapMailboxDatabase() error {
+	if a.paths == nil || a.paths.Data == "" {
+		return errors.New("application data directory is unavailable for mailbox service bootstrap")
+	}
+	output, err := a.runMailboxHelperCommand("bootstrap", "--data", a.paths.Data)
+	if err != nil {
+		return fmt.Errorf("prepare mailbox service database: %w", err)
+	}
+	var status servicebootstrap.Status
+	if err := json.Unmarshal(output, &status); err != nil {
+		return fmt.Errorf("decode mailbox service bootstrap response: %w", err)
+	}
+	if status.ProtocolVersion != servicebootstrap.ProtocolVersion || status.APIVersion != v1.Version {
+		return fmt.Errorf("mailbox helper bootstrap/API version %d/%s is incompatible with desktop %d/%s", status.ProtocolVersion, status.APIVersion, servicebootstrap.ProtocolVersion, v1.Version)
+	}
+	if status.MaxSchemaVersion != database.MaxSchemaVersion() || status.SchemaVersion != status.MaxSchemaVersion {
+		return fmt.Errorf("mailbox helper reported incompatible database schema %d/%d; desktop supports %d", status.SchemaVersion, status.MaxSchemaVersion, database.MaxSchemaVersion())
+	}
+	if err := a.verifyRunningMailboxService(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (a *App) verifyRunningMailboxService() error {
+	connection, err := net.DialTimeout("tcp", "127.0.0.1:8028", 300*time.Millisecond)
+	if err != nil {
+		var operationError *net.OpError
+		if errors.As(err, &operationError) && errors.Is(operationError.Err, syscall.ECONNREFUSED) {
+			return nil
+		}
+		return fmt.Errorf("check local mailbox helper compatibility: %w", err)
+	}
+	_ = connection.Close()
+	client := &http.Client{Timeout: 300 * time.Millisecond, Transport: &http.Transport{Proxy: nil}}
+	response, err := client.Get("http://127.0.0.1:8028/healthz")
+	if err != nil {
+		return fmt.Errorf("read local mailbox helper compatibility: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("running local mailbox service returned health status %d", response.StatusCode)
+	}
+	var status struct {
+		Service string `json:"service"`
+		servicebootstrap.Status
+	}
+	if err := json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&status); err != nil {
+		return fmt.Errorf("decode running mailbox service status: %w", err)
+	}
+	if status.Service != "mail-service" && status.Service != "send-later" {
+		return errors.New("another service is listening on the local mailbox helper port")
+	}
+	if status.ProtocolVersion != servicebootstrap.ProtocolVersion ||
+		status.APIVersion != v1.Version ||
+		status.SchemaVersion != database.MaxSchemaVersion() ||
+		status.MaxSchemaVersion != database.MaxSchemaVersion() {
+		return fmt.Errorf("running mailbox helper is incompatible (bootstrap protocol %d, schema %d/%d); stop or update the helper and retry", status.ProtocolVersion, status.SchemaVersion, status.MaxSchemaVersion)
+	}
+	return nil
 }
 
 func (a *App) runMailboxHelperCommand(args ...string) ([]byte, error) {

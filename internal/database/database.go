@@ -171,6 +171,32 @@ func (db *DB) Path() string {
 	return db.path
 }
 
+// MaxSchemaVersion returns the newest schema migration known to this build.
+func MaxSchemaVersion() int {
+	if len(migrations) == 0 {
+		return 0
+	}
+	return migrations[len(migrations)-1].Version
+}
+
+// CurrentSchemaVersion returns the database's recorded schema version. A
+// database without a migrations table is treated as an unmigrated database.
+func (db *DB) CurrentSchemaVersion() (int, error) {
+	var table string
+	err := db.QueryRow(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'migrations'`).Scan(&table)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("inspect migration table: %w", err)
+	}
+	var version int
+	if err := db.QueryRow("SELECT COALESCE(MAX(version), 0) FROM migrations").Scan(&version); err != nil {
+		return 0, fmt.Errorf("read current migration version: %w", err)
+	}
+	return version, nil
+}
+
 // ErrSchemaTooNew is returned by Migrate when the database's recorded migration
 // version is HIGHER than the highest migration this build knows about. This
 // happens when a user downgrades Aerion after a newer version applied a

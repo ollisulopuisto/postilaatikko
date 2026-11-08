@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	goSync "sync"
 	"time"
@@ -29,6 +30,7 @@ import (
 	"github.com/hkdb/aerion/internal/settings"
 	"github.com/hkdb/aerion/internal/smime"
 	"github.com/hkdb/aerion/internal/smtp"
+	"github.com/hkdb/aerion/internal/syncowner"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -53,8 +55,9 @@ type ComposeMode struct {
 // ComposerApp is a lightweight app struct for detached composer windows.
 // It connects to the main window via IPC and shares the same database.
 type ComposerApp struct {
-	ctx    context.Context
-	config ComposerConfig
+	ctx         context.Context
+	config      ComposerConfig
+	schemaOwner *syncowner.Lock
 
 	// Debug mode function reference (injected from main)
 	debugMode func() bool
@@ -152,10 +155,17 @@ func (c *ComposerApp) Startup(ctx context.Context) {
 		log.Fatal().Err(err).Msg("Failed to get platform paths")
 	}
 	c.paths = paths
+	schemaOwner, err := syncowner.TryAcquireShared(filepath.Join(paths.Data, "mail-schema.owner.lock"))
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to protect mailbox database schema")
+	}
+	c.schemaOwner = schemaOwner
 
 	// Open database (shared with main window)
 	db, err := database.Open(paths.DatabasePath())
 	if err != nil {
+		_ = schemaOwner.Release()
+		c.schemaOwner = nil
 		log.Fatal().Err(err).Msg("Failed to open database")
 	}
 	c.db = db
@@ -305,6 +315,10 @@ func (c *ComposerApp) Shutdown(ctx context.Context) {
 	// Close database
 	if c.db != nil {
 		c.db.Close()
+	}
+	if c.schemaOwner != nil {
+		_ = c.schemaOwner.Release()
+		c.schemaOwner = nil
 	}
 
 	log.Info().Msg("Composer window shutdown complete")

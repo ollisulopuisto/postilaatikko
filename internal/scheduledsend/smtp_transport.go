@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/hkdb/aerion/internal/gmail"
 	"net/textproto"
 	"os"
 	"path/filepath"
@@ -17,21 +16,24 @@ import (
 	"github.com/hkdb/aerion/internal/credentials"
 	"github.com/hkdb/aerion/internal/database"
 	"github.com/hkdb/aerion/internal/folder"
+	"github.com/hkdb/aerion/internal/gmail"
 	"github.com/hkdb/aerion/internal/imap"
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/oauth2"
 	"github.com/hkdb/aerion/internal/smtp"
+	"github.com/hkdb/aerion/internal/syncowner"
 )
 
 // SMTPTransport uses accounts and credentials configured locally in the helper's
 // Postilaatikko installation. No credential is accepted from a queued command.
 type SMTPTransport struct {
-	db       *database.DB
-	accounts *account.Store
-	creds    *credentials.Store
-	certs    *certificate.Store
-	folders  *folder.Store
-	oauth    *oauth2.Manager
+	db          *database.DB
+	schemaOwner *syncowner.Lock
+	accounts    *account.Store
+	creds       *credentials.Store
+	certs       *certificate.Store
+	folders     *folder.Store
+	oauth       *oauth2.Manager
 }
 
 // OpenSMTPTransport opens an existing helper-local app database. Setup accounts
@@ -46,13 +48,26 @@ func OpenSMTPTransport(dataDirectory string) (*SMTPTransport, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := db.Migrate(); err != nil {
-		db.Close()
+	owner, err := syncowner.TryAcquireShared(filepath.Join(dataDirectory, "mail-schema.owner.lock"))
+	if err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("protect helper database schema: %w", err)
+	}
+	current, err := db.CurrentSchemaVersion()
+	if err != nil {
+		_ = owner.Release()
+		_ = db.Close()
 		return nil, err
+	}
+	if current != database.MaxSchemaVersion() {
+		_ = owner.Release()
+		_ = db.Close()
+		return nil, fmt.Errorf("helper database schema is %d; run helper bootstrap for schema %d", current, database.MaxSchemaVersion())
 	}
 	creds, err := credentials.NewStore(db.DB, dataDirectory)
 	if err != nil {
-		db.Close()
+		_ = owner.Release()
+		_ = db.Close()
 		return nil, err
 	}
 	// These resolver hooks are process-wide, just as in app preflight. This
@@ -69,12 +84,14 @@ func OpenSMTPTransport(dataDirectory string) (*SMTPTransport, error) {
 		choice, err := creds.GetOAuthActiveChoice(id)
 		return choice, err == nil && choice != ""
 	}
-	return &SMTPTransport{db: db, accounts: account.NewStore(db), creds: creds,
+	return &SMTPTransport{db: db, schemaOwner: owner, accounts: account.NewStore(db), creds: creds,
 		certs: certificate.NewStore(db.DB), folders: folder.NewStore(db), oauth: oauth2.NewManager()}, nil
 }
 
 // Close releases the helper-local account database after delivery has stopped.
-func (t *SMTPTransport) Close() error { return t.db.Close() }
+func (t *SMTPTransport) Close() error {
+	return errors.Join(t.db.Close(), t.schemaOwner.Release())
+}
 
 // Accounts lists helper-local account IDs for the explicit pairing/setup flow.
 func (t *SMTPTransport) Accounts() ([]*account.Account, error) { return t.accounts.List() }

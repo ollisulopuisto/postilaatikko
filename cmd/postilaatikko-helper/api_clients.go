@@ -52,6 +52,9 @@ func runAPIClientCommand(args []string, defaultData string) (result error) {
 	if action == "revoke" && *clientID == "" {
 		return errors.New("api-client revoke requires --client")
 	}
+	if err := prepareExistingServiceDatabase(*dataDirectory, true); err != nil {
+		return fmt.Errorf("prepare account database: %w", err)
+	}
 
 	databasePath := filepath.Join(*dataDirectory, "aerion.db")
 	info, err := os.Stat(databasePath)
@@ -62,14 +65,20 @@ func runAPIClientCommand(args []string, defaultData string) (result error) {
 	if err != nil {
 		return fmt.Errorf("open account database: %w", err)
 	}
+	var schemaOwnerRelease func() error
 	defer func() {
 		if err := db.Close(); err != nil {
 			result = errors.Join(result, fmt.Errorf("close account database: %w", err))
 		}
+		if schemaOwnerRelease != nil {
+			result = errors.Join(result, schemaOwnerRelease())
+		}
 	}()
-	if err := db.Migrate(); err != nil {
-		return fmt.Errorf("migrate account database: %w", err)
+	owner, err := acquireSchemaOwnership(db, *dataDirectory)
+	if err != nil {
+		return fmt.Errorf("prepare account database: %w", err)
 	}
+	schemaOwnerRelease = owner.Release
 	store := automation.NewSQLiteTokenStore(db)
 
 	switch action {

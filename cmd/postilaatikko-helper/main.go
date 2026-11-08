@@ -22,8 +22,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hkdb/aerion/internal/alwayson"
+	v1 "github.com/hkdb/aerion/internal/automation/v1"
+	"github.com/hkdb/aerion/internal/database"
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/scheduledsend"
+	"github.com/hkdb/aerion/internal/servicebootstrap"
 )
 
 type allowFlags []string
@@ -49,7 +52,7 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: postilaatikko-helper init|public-key|accounts|pair|revoke|serve|install-agent|agent-status|start-agent|stop-agent|uninstall-agent|schedule|submit|status|cancel|list|resolve|api-client [flags]")
+		return errors.New("usage: postilaatikko-helper bootstrap|init|public-key|accounts|pair|revoke|serve|install-agent|agent-status|start-agent|stop-agent|uninstall-agent|schedule|submit|status|cancel|list|resolve|api-client [flags]")
 	}
 	command := args[0]
 	dataDefault, err := defaultDataDirectory()
@@ -143,6 +146,19 @@ func run(args []string) error {
 	}
 	if command == "uninstall-agent" {
 		return uninstallAgent(ctx)
+	}
+	if command == "bootstrap" {
+		return runBootstrap(*data)
+	}
+	switch command {
+	case "accounts", "pair", "install-agent":
+		if err := prepareExistingServiceDatabase(*data, true); err != nil {
+			return err
+		}
+	case "serve":
+		if err := prepareExistingServiceDatabase(*data, false); err != nil {
+			return err
+		}
 	}
 	if command == "init" {
 		identity, err := scheduledsend.CreateIdentity(*identityName)
@@ -456,7 +472,21 @@ func helperHandler(store *scheduledsend.Store, syncEnabled bool) http.Handler {
 		}
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprintf(w, `{"status":"ok","service":%q}`, serviceName)
+		_ = json.NewEncoder(w).Encode(struct {
+			Status           string `json:"status"`
+			Service          string `json:"service"`
+			ProtocolVersion  int    `json:"protocolVersion"`
+			APIVersion       string `json:"apiVersion"`
+			SchemaVersion    int    `json:"schemaVersion"`
+			MaxSchemaVersion int    `json:"maxSchemaVersion"`
+		}{
+			Status:           "ok",
+			Service:          serviceName,
+			ProtocolVersion:  servicebootstrap.ProtocolVersion,
+			APIVersion:       v1.Version,
+			SchemaVersion:    database.MaxSchemaVersion(),
+			MaxSchemaVersion: database.MaxSchemaVersion(),
+		})
 	})
 	mux.Handle("/v1/commands", store.Handler())
 	return mux

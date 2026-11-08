@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	goSync "sync"
@@ -218,6 +219,7 @@ type App struct {
 
 	// Database
 	db             *database.DB
+	schemaOwner    *syncowner.Lock
 	mailboxService *mailboxServiceConnector
 
 	// Stores
@@ -482,7 +484,7 @@ func StartupDialogInfoFor(err error) StartupDialogInfo {
 
 // Preflight performs the early-startup steps that must succeed BEFORE the
 // Wails window is shown: logging init, platform paths, directory creation,
-// database open + migration, credential store init, and OAuth override
+// helper-owned database bootstrap, database open, credential store init, and OAuth override
 // wiring. Returns an error on any failure; main.go is responsible for
 // surfacing the failure to the user (via StartupDialogInfoFor + a native
 // dialog) and exiting before wails.Run is called.
@@ -522,9 +524,19 @@ func (a *App) preflight() (startupErr error) {
 		Str("data", paths.Data).
 		Str("cache", paths.Cache).
 		Msg("Initialized paths")
+	if err := a.bootstrapMailboxDatabase(); err != nil {
+		return err
+	}
+	schemaOwner, err := syncowner.TryAcquireShared(filepath.Join(paths.Data, "mail-schema.owner.lock"))
+	if err != nil {
+		return fmt.Errorf("protect mailbox database schema: %w", err)
+	}
+	a.schemaOwner = schemaOwner
 
 	db, err := database.Open(paths.DatabasePath())
 	if err != nil {
+		_ = schemaOwner.Release()
+		a.schemaOwner = nil
 		return fmt.Errorf("open database: %w", err)
 	}
 	a.db = db
@@ -534,14 +546,13 @@ func (a *App) preflight() (startupErr error) {
 				log.Warn().Err(err).Msg("Close database after failed startup")
 			}
 			a.db = nil
+			_ = schemaOwner.Release()
+			a.schemaOwner = nil
 		}
 	}()
 	log.Info().Str("path", paths.DatabasePath()).Msg("Opened database")
 
-	if err := db.Migrate(); err != nil {
-		return err
-	}
-	log.Info().Msg("Database migrations complete")
+	log.Info().Msg("Opened helper-bootstrapped mailbox database")
 
 	credStore, err := credentials.NewStore(db.DB, paths.Data)
 	if err != nil {
@@ -1209,6 +1220,10 @@ func (a *App) shutdown(ctx context.Context) {
 
 	if a.db != nil {
 		a.db.Close()
+		if a.schemaOwner != nil {
+			_ = a.schemaOwner.Release()
+			a.schemaOwner = nil
+		}
 		log.Info().Msg("Database closed")
 	}
 
