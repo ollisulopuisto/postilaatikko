@@ -55,6 +55,8 @@
 
 ## Postilaatikko 2026.11.07.1
 
+- Add an opt-in arm64 draft test-release build that checks current merged main, runs frontend checks, verifies both executable architectures, signs and notarizes the DMG, and uploads directly to a draft GitHub Release without Actions artifacts or cache writes.
+
 - Make conversation bubbles narrower and align them by sender, with subtle participant colors that remain distinguishable in group threads.
 
 ## Postilaatikko 2026.11.06.3

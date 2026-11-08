@@ -226,7 +226,7 @@ jobs:
       - name: Verify arm64-only app and helper
         run: |
           set -euo pipefail
-          test "$(lipo -archs build/bin/postilaatikko.app/Contents/MacOS/postilaatikko)" = arm64
+          test "$(lipo -archs build/bin/postilaatikko.app/Contents/MacOS/eterno-mail)" = arm64
           test "$(lipo -archs build/bin/postilaatikko.app/Contents/MacOS/postilaatikko-helper)" = arm64
 
       - name: Sign app with Developer ID
