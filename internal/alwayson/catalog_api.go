@@ -417,6 +417,13 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 	if r == nil || r.db == nil || r.mailService == nil || r.syncEngine == nil {
 		return nil, errors.New("always-on runtime is not open")
 	}
+	actionReceipts := newActionReceiptLedger(r.db)
+	r.actionReceiptRecoveryOnce.Do(func() {
+		r.actionReceiptRecoveryErr = actionReceipts.RecoverInterrupted(context.Background())
+	})
+	if r.actionReceiptRecoveryErr != nil {
+		return nil, fmt.Errorf("recover action receipts: %w", r.actionReceiptRecoveryErr)
+	}
 	operations := &catalogReadOperations{
 		accounts:       r.accounts,
 		folders:        r.folders,
@@ -441,6 +448,8 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 	v1.MountConversationCountRoute(mux, operations, automation.RequireGrantCapability)
 	v1.MountSearchRoute(mux, readOperations, automation.RequireGrantCapability)
 	v1.MountThreadBodyRoutes(mux, readOperations, automation.RequireGrantCapability)
-	v1.NewActionsHandler(&mailboxActionOperations{runtime: r}).MountRoutes(mux, automation.RequireGrantCapability)
+	v1.NewActionsHandlerWithReceiptStore(&mailboxActionOperations{runtime: r}, actionReceipts,
+		func(key string) string { return actionReceipts.digestKey(key, r.accountMutationFingerprint) },
+	).MountRoutes(mux, automation.RequireGrantCapability)
 	return mux, nil
 }

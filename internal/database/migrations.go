@@ -1801,4 +1801,21 @@ var migrations = []Migration{
 			updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 		);
 	`},
+	{Version: 70, SQL: `
+		-- Mail action idempotency receipts survive helper restarts. The caller key
+		-- and mail content are never stored; response_json contains only the
+		-- bounded action receipt and account-qualified message references.
+		CREATE TABLE IF NOT EXISTS mail_action_operations (
+			idempotency_key_hash TEXT PRIMARY KEY,
+			request_hash TEXT NOT NULL,
+			operation_id TEXT NOT NULL,
+			state TEXT NOT NULL CHECK(state IN ('processing','sent','outcome_unknown')),
+			response_status INTEGER NOT NULL DEFAULT 0,
+			response_json BLOB,
+			created_at TEXT NOT NULL DEFAULT (datetime('now')),
+			updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+		);
+		CREATE INDEX IF NOT EXISTS idx_mail_action_operations_updated
+			ON mail_action_operations(updated_at);
+	`},
 }

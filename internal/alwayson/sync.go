@@ -77,6 +77,8 @@ type SyncRuntime struct {
 	lifecycleWG                 sync.WaitGroup
 	maintenanceWG               sync.WaitGroup
 	maintenanceCancel           context.CancelFunc
+	actionReceiptRecoveryOnce   sync.Once
+	actionReceiptRecoveryErr    error
 	started                     bool
 	maintenanceOnce             sync.Once
 	filterStopOnce              sync.Once
