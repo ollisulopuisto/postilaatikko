@@ -141,6 +141,11 @@ func (p *Paths) DatabasePath() string {
 	return filepath.Join(p.Data, "aerion.db")
 }
 
+// DeviceDatabasePath returns the path to the desktop-owned state database.
+func (p *Paths) DeviceDatabasePath() string {
+	return filepath.Join(p.Data, "device.db")
+}
+
 // ContactsDatabasePath returns the path to the contacts database
 func (p *Paths) ContactsDatabasePath() string {
 	return filepath.Join(p.Data, "contacts.db")

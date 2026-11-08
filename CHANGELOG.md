@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Persist desktop window and navigation state in a device-owned database, importing existing state without deleting the service-database copy.
 - Add helper-owned draft read/write, cached-body reply preparation, and explicit immediate send with revision checks and durable idempotency receipts.
 - Hand OAuth callback tokens and per-account custom provider credentials to the authenticated helper, with compensating rollback and Microsoft shared-mailbox propagation.
 - Route IMAP and SMTP password changes through authenticated helper account operations with explicit keep/replace/clear actions, credential snapshot compensation, and secret-safe idempotency fingerprints.

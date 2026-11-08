@@ -219,6 +219,7 @@ type App struct {
 
 	// Database
 	db             *database.DB
+	deviceDB       *database.DB
 	schemaOwner    *syncowner.Lock
 	mailboxService *mailboxServiceConnector
 
@@ -542,6 +543,12 @@ func (a *App) preflight() (startupErr error) {
 	a.db = db
 	defer func() {
 		if startupErr != nil {
+			if a.deviceDB != nil {
+				if err := a.deviceDB.Close(); err != nil {
+					log.Warn().Err(err).Msg("Close device database after failed startup")
+				}
+				a.deviceDB = nil
+			}
 			if err := db.Close(); err != nil {
 				log.Warn().Err(err).Msg("Close database after failed startup")
 			}
@@ -553,6 +560,14 @@ func (a *App) preflight() (startupErr error) {
 	log.Info().Str("path", paths.DatabasePath()).Msg("Opened database")
 
 	log.Info().Msg("Opened helper-bootstrapped mailbox database")
+	deviceDB, err := database.Open(paths.DeviceDatabasePath())
+	if err != nil {
+		return fmt.Errorf("open device database: %w", err)
+	}
+	a.deviceDB = deviceDB
+	if err := appstate.InitializeDeviceDatabase(deviceDB.DB, db.DB); err != nil {
+		return fmt.Errorf("initialize device database: %w", err)
+	}
 
 	credStore, err := credentials.NewStore(db.DB, paths.Data)
 	if err != nil {
@@ -666,7 +681,7 @@ func (a *App) Startup(ctx context.Context) {
 	a.contactStore.SetMacOSContactsSource(macoscontacts.New())
 	a.draftStore = draft.NewStore(db)
 	a.settingsStore = settings.NewStore(db)
-	a.appStateStore = appstate.NewStore(db.DB)
+	a.appStateStore = appstate.NewStore(a.deviceDB.DB)
 	a.imageAllowlistStore = settings.NewImageAllowlistStore(db)
 
 	// Scale database connection pool based on number of accounts
@@ -1225,6 +1240,13 @@ func (a *App) shutdown(ctx context.Context) {
 			a.schemaOwner = nil
 		}
 		log.Info().Msg("Database closed")
+	}
+	if a.deviceDB != nil {
+		if err := a.deviceDB.Close(); err != nil {
+			log.Warn().Err(err).Msg("Failed to close device database")
+		}
+		a.deviceDB = nil
+		log.Info().Msg("Device database closed")
 	}
 
 	log.Info().Msg("Aerion shutdown complete")
