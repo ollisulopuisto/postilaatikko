@@ -89,7 +89,7 @@ type ActionReceiptStore interface {
 // ActionUndoSnapshotter captures the helper-owned prior state needed to reverse
 // a mutation. The serialized result must contain identifiers/flags only.
 type ActionUndoSnapshotter interface {
-	CaptureActionUndo(context.Context, ActionKind, []string) ([]byte, error)
+	CaptureActionUndo(context.Context, ActionRequest, []string) ([]byte, error)
 }
 
 type actionIdempotencyRecord struct {
@@ -305,7 +305,7 @@ func (h *ActionsHandler) handleDurableAction(w http.ResponseWriter, r *http.Requ
 
 	var undoSnapshot []byte
 	if snapshotter, ok := h.ops.(ActionUndoSnapshotter); ok {
-		undoSnapshot, err = snapshotter.CaptureActionUndo(r.Context(), req.Action, messageIDs)
+		undoSnapshot, err = snapshotter.CaptureActionUndo(r.Context(), req, messageIDs)
 		if err != nil {
 			state := OperationUnknown
 			response := ActionResponse{Receipt: OperationReceipt{OperationID: operationID, State: state}, MessageIDs: messageIDs}

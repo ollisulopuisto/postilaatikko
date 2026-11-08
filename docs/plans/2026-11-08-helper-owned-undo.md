@@ -8,6 +8,7 @@ Move reversible mail action state and Undo execution into the helper so remote a
 
 - Extend the durable action receipt schema with action kind, safe summary timestamps, undo state, expiry, and the minimum prior-state snapshot needed for supported inverse operations.
 - Capture previous folder and flags from helper-owned message rows before provider calls. Include account-qualified message/folder IDs, never message content or headers.
+- Record expected post-action folder/flags and refuse an Undo if the message has changed location or flags since the action, so a later user edit is not overwritten.
 - Persist the snapshot atomically with the terminal successful action receipt. Ambiguous or partially failed actions remain non-undoable until reconciliation.
 - Implement helper-side inverse operations for archive, mark-read/unread, star/unstar, trash, and move, restoring each message's exact prior folder/flag state.
 - Add authenticated, bounded Undo history, Undo latest, and Undo by operation endpoints. Reuse `mail.write` for Undo and expose no message IDs in history.

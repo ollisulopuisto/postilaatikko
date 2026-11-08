@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
+	"github.com/hkdb/aerion/internal/folder"
 	"github.com/hkdb/aerion/internal/message"
 )
 
@@ -16,14 +17,18 @@ type mailboxActionUndoSnapshot struct {
 }
 
 type mailboxActionUndoSnapshotEntry struct {
-	AccountID string `json:"accountId"`
-	MessageID string `json:"messageId"`
-	FolderID  string `json:"folderId"`
-	IsRead    bool   `json:"isRead"`
-	IsStarred bool   `json:"isStarred"`
+	AccountID         string `json:"accountId"`
+	MessageID         string `json:"messageId"`
+	FolderID          string `json:"folderId"`
+	ExpectedAccountID string `json:"expectedAccountId"`
+	ExpectedFolderID  string `json:"expectedFolderId"`
+	IsRead            bool   `json:"isRead"`
+	IsStarred         bool   `json:"isStarred"`
+	ExpectedIsRead    bool   `json:"expectedIsRead"`
+	ExpectedIsStarred bool   `json:"expectedIsStarred"`
 }
 
-func (o *mailboxActionOperations) CaptureActionUndo(ctx context.Context, action v1.ActionKind, ids []string) ([]byte, error) {
+func (o *mailboxActionOperations) CaptureActionUndo(ctx context.Context, req v1.ActionRequest, ids []string) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -31,17 +36,87 @@ func (o *mailboxActionOperations) CaptureActionUndo(ctx context.Context, action 
 	if err != nil {
 		return nil, err
 	}
-	snapshot := mailboxActionUndoSnapshot{Action: action, Entries: make([]mailboxActionUndoSnapshotEntry, 0, len(messages))}
+	snapshot := mailboxActionUndoSnapshot{Action: req.Action, Entries: make([]mailboxActionUndoSnapshotEntry, 0, len(messages))}
 	for _, msg := range messages {
+		expectedAccountID, expectedFolderID, err := o.actionExpectedLocation(req, msg)
+		if err != nil {
+			return nil, err
+		}
+		expectedRead, expectedStarred := msg.IsRead, msg.IsStarred
+		switch req.Action {
+		case v1.ActionMarkRead:
+			expectedRead = true
+		case v1.ActionMarkUnread:
+			expectedRead = false
+		case v1.ActionStar:
+			expectedStarred = true
+		case v1.ActionUnstar:
+			expectedStarred = false
+		}
 		snapshot.Entries = append(snapshot.Entries, mailboxActionUndoSnapshotEntry{
-			AccountID: msg.AccountID,
-			MessageID: msg.ID,
-			FolderID:  msg.FolderID,
-			IsRead:    msg.IsRead,
-			IsStarred: msg.IsStarred,
+			AccountID:         msg.AccountID,
+			MessageID:         msg.ID,
+			FolderID:          msg.FolderID,
+			ExpectedAccountID: expectedAccountID,
+			ExpectedFolderID:  expectedFolderID,
+			IsRead:            msg.IsRead,
+			IsStarred:         msg.IsStarred,
+			ExpectedIsRead:    expectedRead,
+			ExpectedIsStarred: expectedStarred,
 		})
 	}
 	return json.Marshal(snapshot)
+}
+
+func (o *mailboxActionOperations) actionExpectedLocation(req v1.ActionRequest, msg *message.Message) (string, string, error) {
+	if msg == nil {
+		return "", "", errors.New("undo target is unavailable")
+	}
+	switch req.Action {
+	case v1.ActionArchive:
+		target := folder.TypeArchive
+		_, gmailAccount, err := o.gmailClient(msg.AccountID)
+		if err != nil {
+			return "", "", err
+		}
+		if gmailAccount {
+			target = folder.TypeAll
+		}
+		destination, err := o.runtime.folders.GetByType(msg.AccountID, target)
+		if err != nil {
+			return "", "", err
+		}
+		if destination == nil && target == folder.TypeAll {
+			destination, err = o.runtime.folders.GetByPath(msg.AccountID, "[Gmail]/All Mail")
+			if err != nil {
+				return "", "", err
+			}
+		}
+		if destination == nil {
+			return "", "", errors.New("archive destination is unavailable for undo snapshot")
+		}
+		return destination.AccountID, destination.ID, nil
+	case v1.ActionTrash:
+		destination, err := o.runtime.folders.GetByType(msg.AccountID, folder.TypeTrash)
+		if err != nil {
+			return "", "", err
+		}
+		if destination == nil {
+			return "", "", errors.New("Trash folder is unavailable for undo snapshot")
+		}
+		return destination.AccountID, destination.ID, nil
+	case v1.ActionMove:
+		destination, err := o.runtime.folders.Get(req.Destination)
+		if err != nil {
+			return "", "", err
+		}
+		if destination == nil || destination.AccountID == "" || destination.Path == "" {
+			return "", "", errors.New("move destination is unavailable for undo snapshot")
+		}
+		return destination.AccountID, destination.ID, nil
+	default:
+		return msg.AccountID, msg.FolderID, nil
+	}
 }
 
 func (o *mailboxActionOperations) UndoAction(ctx context.Context, action v1.ActionKind, payload []byte) error {
@@ -58,7 +133,7 @@ func (o *mailboxActionOperations) UndoAction(ctx context.Context, action v1.Acti
 	ids := make([]string, 0, len(snapshot.Entries))
 	byID := make(map[string]mailboxActionUndoSnapshotEntry, len(snapshot.Entries))
 	for _, entry := range snapshot.Entries {
-		if entry.AccountID == "" || entry.MessageID == "" || entry.FolderID == "" {
+		if entry.AccountID == "" || entry.MessageID == "" || entry.FolderID == "" || entry.ExpectedAccountID == "" || entry.ExpectedFolderID == "" {
 			return errors.New("action undo snapshot has incomplete identity")
 		}
 		if _, exists := byID[entry.MessageID]; exists {
@@ -73,8 +148,11 @@ func (o *mailboxActionOperations) UndoAction(ctx context.Context, action v1.Acti
 	}
 	for _, msg := range current {
 		entry := byID[msg.ID]
-		if entry.AccountID != msg.AccountID {
-			return errors.New("action undo target account no longer matches")
+		if entry.ExpectedAccountID != msg.AccountID || entry.ExpectedFolderID != msg.FolderID {
+			return errors.New("action undo target location changed since the operation")
+		}
+		if entry.ExpectedIsRead != msg.IsRead || entry.ExpectedIsStarred != msg.IsStarred {
+			return errors.New("action undo target flags changed since the operation")
 		}
 	}
 
