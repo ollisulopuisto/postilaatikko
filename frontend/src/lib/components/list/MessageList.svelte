@@ -10,6 +10,7 @@
   >()
   const MAX_CACHED_FOLDER_LISTS = 8
   const MAX_CACHED_FOLDER_ROWS = 50
+  const partialActionNotices = new Set<string>()
 </script>
 
 <script lang="ts">
@@ -610,12 +611,33 @@
       }
     })
 
-    EventsOn('mail:reconciled', (data: { state: string; affected?: { accountId: string; folderId: string }[] }) => {
+    EventsOn('mail:reconciled', (data: {
+      operationId?: string
+      state: string
+      partial?: boolean
+      undoAvailable?: boolean
+      groups?: { state: string }[]
+      affected?: { accountId: string; folderId: string }[]
+    }) => {
       if (data.state === 'reset_required') {
         scheduleReload()
         return
       }
-      if (data.state !== 'sent' && data.state !== 'undone') return
+      if (data.partial && data.operationId && !partialActionNotices.has(data.operationId)) {
+        partialActionNotices.add(data.operationId)
+        if (partialActionNotices.size > 100) {
+          const oldest = partialActionNotices.values().next().value
+          if (oldest) partialActionNotices.delete(oldest)
+        }
+        const confirmed = (data.groups || []).filter(group => group.state === 'confirmed').length
+        const uncertain = (data.groups || []).filter(group => group.state !== 'confirmed').length
+        let toastId = ''
+        toastId = toasts.warning(
+          $_('toast.partialActionOutcome', { values: { confirmed, uncertain } }),
+          data.undoAvailable ? [{ label: $_('common.undo'), onClick: () => handleUndo(toastId, data.operationId!) }] : []
+        )
+      }
+      if (data.state !== 'sent' && data.state !== 'undone' && data.state !== 'outcome_unknown') return
       for (const ref of data.affected || []) {
         const relevant = (isUnifiedView && isUnifiedSpecialFolder(ref.accountId, ref.folderId)) ||
           (isVirtualFolderView && virtualFolderContains(ref.folderId)) ||

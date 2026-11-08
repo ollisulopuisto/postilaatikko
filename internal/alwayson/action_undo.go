@@ -243,5 +243,45 @@ func (o *mailboxActionOperations) ActionUndoAffectedRefs(ctx context.Context, pa
 	return refs, nil
 }
 
+func (o *mailboxActionOperations) CombineActionUndoSnapshots(ctx context.Context, payloads [][]byte) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return combineActionUndoSnapshots(payloads)
+}
+
+func combineActionUndoSnapshots(payloads [][]byte) ([]byte, error) {
+	combined := mailboxActionUndoSnapshot{Entries: []mailboxActionUndoSnapshotEntry{}}
+	seen := make(map[string]struct{})
+	for _, payload := range payloads {
+		if len(payload) == 0 {
+			continue
+		}
+		var snapshot mailboxActionUndoSnapshot
+		if err := json.Unmarshal(payload, &snapshot); err != nil {
+			return nil, fmt.Errorf("decode action group undo snapshot: %w", err)
+		}
+		if snapshot.Action == "" || (combined.Action != "" && combined.Action != snapshot.Action) {
+			return nil, errors.New("action group undo snapshots do not match")
+		}
+		combined.Action = snapshot.Action
+		for _, entry := range snapshot.Entries {
+			if entry.MessageID == "" {
+				return nil, errors.New("action group undo snapshot has incomplete identity")
+			}
+			if _, exists := seen[entry.MessageID]; exists {
+				return nil, errors.New("action group undo snapshots contain duplicate messages")
+			}
+			seen[entry.MessageID] = struct{}{}
+			combined.Entries = append(combined.Entries, entry)
+		}
+	}
+	if len(combined.Entries) == 0 {
+		return nil, nil
+	}
+	return json.Marshal(combined)
+}
+
 var _ v1.ActionUndoSnapshotter = (*mailboxActionOperations)(nil)
 var _ v1.ActionUndoOperations = (*mailboxActionOperations)(nil)
+var _ v1.ActionGroupUndoSnapshotCombiner = (*mailboxActionOperations)(nil)

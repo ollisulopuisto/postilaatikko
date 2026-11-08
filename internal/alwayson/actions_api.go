@@ -2,6 +2,8 @@ package alwayson
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"sort"
@@ -20,6 +22,127 @@ type mailboxActionOperations struct {
 	runtime          *SyncRuntime
 	gmailClientFunc  func(accountID string) (*gmail.Client, bool, error)
 	setIMAPFlagsFunc func(accountID, folderID string, messages []*message.Message, kind string, enabled bool) error
+}
+
+func (o *mailboxActionOperations) PlanActionGroups(ctx context.Context, req v1.ActionRequest, ids []string) ([]v1.ActionProviderGroup, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	messages, err := o.loadActionMessages(ids)
+	if err != nil {
+		return nil, err
+	}
+	type groupKey struct {
+		accountID            string
+		sourceFolderID       string
+		destinationAccountID string
+		destinationFolderID  string
+		messageID            string
+	}
+	groupsByKey := make(map[groupKey]*v1.ActionProviderGroup)
+	for _, msg := range messages {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		destinationAccountID, destinationFolderID, err := o.actionExpectedLocation(req, msg)
+		if err != nil {
+			return nil, err
+		}
+		switch req.Action {
+		case v1.ActionArchive, v1.ActionTrash, v1.ActionMove, v1.ActionMoveToInbox, v1.ActionMoveToSpam:
+		default:
+			destinationAccountID, destinationFolderID = "", ""
+		}
+		messageKey := ""
+		if req.Action == v1.ActionMove && destinationAccountID != msg.AccountID {
+			// Cross-account moves are individually copy-confirm-delete operations;
+			// journal each message independently so earlier confirmed copies remain undoable.
+			messageKey = msg.ID
+		}
+		key := groupKey{
+			accountID:            msg.AccountID,
+			sourceFolderID:       msg.FolderID,
+			destinationAccountID: destinationAccountID,
+			destinationFolderID:  destinationFolderID,
+			messageID:            messageKey,
+		}
+		group := groupsByKey[key]
+		if group == nil {
+			groupID := make([]byte, 16)
+			if _, err := rand.Read(groupID); err != nil {
+				return nil, fmt.Errorf("generate provider group ID: %w", err)
+			}
+			group = &v1.ActionProviderGroup{
+				ID:                   "group-" + hex.EncodeToString(groupID),
+				AccountID:            key.accountID,
+				SourceFolderID:       key.sourceFolderID,
+				DestinationAccountID: key.destinationAccountID,
+				DestinationFolderID:  key.destinationFolderID,
+			}
+			groupsByKey[key] = group
+		}
+		group.MessageIDs = append(group.MessageIDs, msg.ID)
+	}
+	keys := make([]groupKey, 0, len(groupsByKey))
+	for key := range groupsByKey {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		left, right := keys[i], keys[j]
+		if left.accountID != right.accountID {
+			return left.accountID < right.accountID
+		}
+		if left.sourceFolderID != right.sourceFolderID {
+			return left.sourceFolderID < right.sourceFolderID
+		}
+		if left.destinationAccountID != right.destinationAccountID {
+			return left.destinationAccountID < right.destinationAccountID
+		}
+		if left.destinationFolderID != right.destinationFolderID {
+			return left.destinationFolderID < right.destinationFolderID
+		}
+		return left.messageID < right.messageID
+	})
+	groups := make([]v1.ActionProviderGroup, 0, len(keys))
+	for _, key := range keys {
+		group := groupsByKey[key]
+		sort.Strings(group.MessageIDs)
+		groups = append(groups, *group)
+	}
+	return groups, nil
+}
+
+func (o *mailboxActionOperations) ExecuteActionGroup(ctx context.Context, req v1.ActionRequest, group v1.ActionProviderGroup) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if len(group.MessageIDs) == 0 || group.AccountID == "" || group.SourceFolderID == "" {
+		return errors.New("action provider group has incomplete identity")
+	}
+	switch req.Action {
+	case v1.ActionArchive:
+		_, err := o.ArchiveMessages(group.MessageIDs)
+		return err
+	case v1.ActionMarkRead:
+		return o.MarkAsRead(group.MessageIDs)
+	case v1.ActionMarkUnread:
+		return o.MarkAsUnread(group.MessageIDs)
+	case v1.ActionStar:
+		return o.StarMessages(group.MessageIDs)
+	case v1.ActionUnstar:
+		return o.UnstarMessages(group.MessageIDs)
+	case v1.ActionTrash:
+		return o.TrashMessages(group.MessageIDs)
+	case v1.ActionMove:
+		_, err := o.MoveMessages(group.MessageIDs, req.Destination)
+		return err
+	case v1.ActionMoveToInbox:
+		return o.MoveMessagesToInbox(group.MessageIDs)
+	case v1.ActionMoveToSpam:
+		return o.MoveMessagesToSpam(group.MessageIDs)
+	default:
+		return fmt.Errorf("unsupported action %q", req.Action)
+	}
 }
 
 func (o *mailboxActionOperations) GetByIDs(ids []string) ([]*message.Message, error) {
@@ -636,3 +759,4 @@ func sortedMessageGroupKeys(groups map[string][]*message.Message) []string {
 
 var _ v1.ActionOperations = (*mailboxActionOperations)(nil)
 var _ operations.MessageLookup = (*mailboxActionOperations)(nil)
+var _ v1.ActionProviderGroupOperations = (*mailboxActionOperations)(nil)

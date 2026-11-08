@@ -531,6 +531,7 @@
     "markedAllAsUnread": "Kaikki merkitty lukemattomiksi",
     "settingsSaved": "Asetukset tallennettu",
     "undone": "Kumottu: {description}",
+    "partialActionOutcome": "Osa palvelinryhmistä on epävarmoja. {confirmed} onnistui; {uncertain} vaatii tarkistuksen.",
     "contactSourceSynced": "Yhteystietolähde synkronoitu",
     "contactSourceForceSynced": "Yhteystietolähde uudelleensynkronoitu palvelimelta",
     "contactSourceForceSyncFailed": "Pakotettu uudelleensynkronointi epäonnistui",

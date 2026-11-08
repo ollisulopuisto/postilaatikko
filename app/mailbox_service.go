@@ -600,7 +600,7 @@ func (c *mailboxServiceConnector) mutateAction(ctx context.Context, req v1.Actio
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if err == nil && response != nil && (response.Receipt.State == v1.OperationUnknown || response.Receipt.State == v1.OperationSending) {
+	if err == nil && response != nil && (response.Receipt.State == v1.OperationUnknown || response.Receipt.State == v1.OperationSending) && !response.Partial {
 		c.actionKeys[requestHash] = idempotencyKey
 		return response, fmt.Errorf("action outcome is ambiguous: %s", response.Receipt.State)
 	}
@@ -704,7 +704,7 @@ func (a *App) mutateResolvedAction(ctx context.Context, ids []string, action v1.
 		Target:      operations.Target{Kind: operations.TargetMatchedMessages, Messages: refs},
 	})
 	if response != nil {
-		a.publishMailboxReconciliation(response.Receipt.OperationID, string(response.Receipt.State), response.Affected, response.AffectedTriage)
+		a.publishMailboxReconciliation(response.Receipt.OperationID, string(response.Receipt.State), response.Affected, response.AffectedTriage, response.Partial, response.UndoAvailable, response.Groups)
 	}
 	if err == nil {
 		service.consumeActionRefs(ids)
@@ -716,14 +716,17 @@ func (a *App) mutateResolvedAction(ctx context.Context, ids []string, action v1.
 	return response, true, err
 }
 
-func (a *App) publishMailboxReconciliation(operationID, state string, affected []v1.AffectedMessageRef, affectedTriage []v1.AffectedTriageRef) {
-	if state == "sent" || state == "undone" || state == "reset_required" {
+func (a *App) publishMailboxReconciliation(operationID, state string, affected []v1.AffectedMessageRef, affectedTriage []v1.AffectedTriageRef, partial, undoAvailable bool, groups []v1.ActionGroupOutcome) {
+	if state == "sent" || state == "undone" || state == "reset_required" || partial {
 		a.invalidateViewCounts()
 	}
 	a.emitRuntimeEvent("mail:reconciled", map[string]interface{}{
-		"operationId": operationID,
-		"state":       state,
-		"affected":    affected,
+		"operationId":   operationID,
+		"state":         state,
+		"affected":      affected,
+		"partial":       partial,
+		"groups":        groups,
+		"undoAvailable": undoAvailable,
 	})
 	a.publishTriageUndoReconciliation(affectedTriage)
 	if state == "outcome_unknown" {
@@ -742,7 +745,7 @@ func (a *App) SyncMailboxActionEvents() error {
 		return err
 	}
 	return service.syncActionEvents(ctx, func(event v1.ActionEvent) {
-		a.publishMailboxReconciliation(event.OperationID, event.State, event.Affected, event.AffectedTriage)
+		a.publishMailboxReconciliation(event.OperationID, event.State, event.Affected, event.AffectedTriage, event.Partial, event.UndoAvailable, event.Groups)
 	})
 }
 
@@ -1180,8 +1183,11 @@ func (a *App) mutateMessagesThroughMailboxService(ctx context.Context, messages 
 	}
 	req.Target = operations.Target{Kind: operations.TargetMatchedMessages, Messages: refs}
 	response, err := a.mailboxService.mutateAction(ctx, req)
+	if response != nil {
+		a.publishMailboxReconciliation(response.Receipt.OperationID, string(response.Receipt.State), response.Affected, response.AffectedTriage, response.Partial, response.UndoAvailable, response.Groups)
+	}
 	if err != nil {
-		return nil, true, fmt.Errorf("run %s through local mailbox service: %w", req.Action, err)
+		return response, true, fmt.Errorf("run %s through local mailbox service: %w", req.Action, err)
 	}
 	return response, true, nil
 }

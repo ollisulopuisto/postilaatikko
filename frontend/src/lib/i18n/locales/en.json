@@ -531,6 +531,7 @@
     "markedAllAsUnread": "Marked all as unread",
     "settingsSaved": "Settings saved",
     "undone": "Undone: {description}",
+    "partialActionOutcome": "Some provider groups are uncertain. {confirmed} succeeded; {uncertain} need checking.",
     "contactSourceSynced": "Contact source synced",
     "contactSourceForceSynced": "Contact source re-synced from server",
     "contactSourceForceSyncFailed": "Force re-sync failed",

@@ -1862,4 +1862,27 @@ var migrations = []Migration{
 	{Version: 74, SQL: `
 		ALTER TABLE mail_action_operations ADD COLUMN affected_messages_json BLOB NOT NULL DEFAULT '[]';
 	`},
+	{Version: 75, SQL: `
+		CREATE TABLE mail_action_groups (
+			operation_id TEXT NOT NULL REFERENCES mail_action_operations(operation_id) ON DELETE CASCADE,
+			group_id TEXT NOT NULL,
+			account_id TEXT NOT NULL,
+			source_folder_id TEXT NOT NULL,
+			destination_account_id TEXT NOT NULL DEFAULT '',
+			destination_folder_id TEXT NOT NULL DEFAULT '',
+			message_ids_json BLOB NOT NULL,
+			undo_payload BLOB,
+			state TEXT NOT NULL CHECK(state IN ('planned','processing','confirmed','outcome_unknown','not_started')),
+			updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+			PRIMARY KEY(operation_id, group_id)
+		);
+		CREATE INDEX idx_mail_action_groups_state ON mail_action_groups(operation_id, state);
+	`},
+	{Version: 76, SQL: `
+		ALTER TABLE mail_action_events ADD COLUMN affected_groups_json BLOB NOT NULL DEFAULT '[]';
+		ALTER TABLE mail_action_events ADD COLUMN partial INTEGER NOT NULL DEFAULT 0 CHECK(partial IN (0,1));
+	`},
+	{Version: 77, SQL: `
+		ALTER TABLE mail_action_events ADD COLUMN undo_available INTEGER NOT NULL DEFAULT 0 CHECK(undo_available IN (0,1));
+	`},
 }

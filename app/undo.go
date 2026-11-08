@@ -84,7 +84,7 @@ func (a *App) undoLatest() (UndoLatestResult, error) {
 		if result.State == "undone" {
 			a.emitRuntimeEvent("undo:completed")
 		}
-		a.publishMailboxReconciliation(result.OperationID, result.State, result.Affected, result.AffectedTriage)
+		a.publishMailboxReconciliation(result.OperationID, result.State, result.Affected, result.AffectedTriage, false, false, nil)
 		a.emitRuntimeEvent("undo:history-changed")
 		if result.State == "outcome_unknown" {
 			return mapped, errors.New("undo outcome is unknown; retry with the same operation key")
@@ -161,7 +161,7 @@ func (a *App) UndoOperation(operationID string) (string, error) {
 		if result == nil {
 			return "", errors.New("mailbox service returned no undo receipt")
 		}
-		a.publishMailboxReconciliation(result.OperationID, result.State, result.Affected, result.AffectedTriage)
+		a.publishMailboxReconciliation(result.OperationID, result.State, result.Affected, result.AffectedTriage, false, false, nil)
 		if result.State == "undone" {
 			a.emitRuntimeEvent("undo:completed")
 		}

@@ -4,7 +4,7 @@
 
 **Goal:** Make multi-account helper actions report durable confirmed and uncertain provider-group outcomes, allow Undo only for confirmed groups, and reconcile affected mailbox state without replaying ambiguous effects.
 
-**Architecture:** Resolve and snapshot all targets before effects, partition them into deterministic provider groups, and persist the complete group plan in the same transaction as the operation reservation. Execute each group once, checkpoint `processing` before provider I/O and `confirmed` or `outcome_unknown` afterwards, and retain only confirmed groups in the Undo snapshot. Persist group states independently of a full response so helper restarts can reconstruct an accurate partial receipt and targeted event.
+**Architecture:** Resolve and snapshot all targets before effects, partition them into deterministic provider groups, and persist the complete group plan and each group's Undo snapshot in the same transaction as the operation reservation. Execute each group once, checkpoint `processing` before provider I/O and `confirmed` or `outcome_unknown` afterwards, and combine only confirmed groups into the Undo snapshot. Persist group states independently of a full response so helper restarts can reconstruct an accurate partial receipt and targeted event.
 
 **Tech Stack:** Go, `internal/automation/v1`, `internal/alwayson`, SQLite migration 75, action receipts/events, helper-owned Undo.
 
@@ -39,10 +39,10 @@ Persist `processing` before each provider call. After any error, record that gro
 ## Task 4: Limit Undo to confirmed groups
 
 **Files:**
-- Modify `internal/alwayson/action_undo.go` to filter the pre-action snapshot to confirmed group message IDs.
+- Modify `internal/alwayson/action_undo.go` to combine pre-action snapshots only for confirmed groups.
 - Modify `internal/alwayson/action_receipt_ledger.go` to expose Undo only when a nonempty confirmed-only snapshot is stored, including partial parent operations.
 
-Unknown groups must never enter the Undo payload. Undo remains atomic and idempotent through the existing endpoints. Keep prior folder/flag guards intact.
+Unknown and not-started groups must not retain an Undo payload. Undo remains atomic and idempotent through the existing endpoints. Keep prior folder/flag guards intact and purge group Undo snapshots when an operation is undone or expires.
 
 ## Task 5: Reconcile, verify, and integrate
 
@@ -61,3 +61,11 @@ Use `gofmt`, `git diff --check`, and focused app/helper builds. Do not add or ru
 - Responses and action events include partial state, per-group outcome, and bounded affected refs without mail content.
 - Partial Undo contains only confirmed message snapshots; unknown groups remain excluded.
 - App/helper packages build and `git diff --check` passes. Automated tests are omitted per the higher-priority session instruction.
+
+## Implementation update
+
+- Migration 75 adds the per-operation provider group journal; migrations 76–77 persist partial group outcomes and Undo availability in the cursor feed.
+- Action plans are partitioned by account/source folder, with cross-account moves split into per-message copy-confirm-delete units. Group IDs are random per operation so they do not expose stable message-derived hashes.
+- The helper checkpoints each group before effects and after success/uncertain failure, continues independent groups, reconstructs interrupted receipts on restart, and combines Undo snapshots only for confirmed groups.
+- Partial action events carry source and possible destination refs. The desktop refreshes unknown outcomes from those bounded refs and offers Undo only when the helper confirms a nonempty confirmed-only snapshot.
+- Verification: Go formatting, `git diff --check`, JSON parsing of the edited English/Finnish locales, and focused app/helper builds pass. Frontend dependencies are absent; no automated tests were run.
