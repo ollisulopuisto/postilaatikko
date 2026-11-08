@@ -14,6 +14,7 @@
   import InlineReply from './InlineReply.svelte'
   import { reactionLayout } from './reactionLayout'
   import { bubbleLayout, senderAddress } from './bubbleLayout'
+  import { deduplicateMessages } from './deduplicateMessages'
   import { isConfiguredAccountEmail } from '$lib/stores/accounts.svelte'
   import ReaderModeToggle from './ReaderModeToggle.svelte'
   import { canExtract } from './replyContent'
@@ -1784,7 +1785,8 @@
   // Otherwise show the whole thread.
   let revealedReactions = $state<Set<string>>(new Set())
   const reactions = $derived(reactionLayout(conversation?.messages || []))
-  const readerMessages = $derived(readerMode === 'traditional' ? (conversation?.messages || []) : (conversation?.messages || []).filter(message => !reactions.hidden.has(message.id) || revealedReactions.has(message.id)))
+  const filteredMessages = $derived(readerMode === 'traditional' ? (conversation?.messages || []) : (conversation?.messages || []).filter(message => !reactions.hidden.has(message.id) || revealedReactions.has(message.id)))
+  const readerMessages = $derived(deduplicateMessages(filteredMessages, folderId || undefined))
   function toggleReactionMessages(ids: string[]) {
     const next = new Set(revealedReactions)
     const hide = ids.every(id => next.has(id))

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Deduplicate thread messages sharing the same RFC Message-ID in conversation views, eliminating redundant multi-label copies (e.g. Gmail Inbox vs All Mail).
+
 ## Postilaatikko 2026.11.08.1
 
 - Preserve generated identity model instances when changing the default address, keeping keyboard focus without breaking packaged frontend type checks.

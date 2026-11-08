@@ -72,3 +72,120 @@ func TestInboxDuplicateSuppressionPreservesDifferentAccountsAndNativeMessages(t 
 		t.Fatalf("distinct native messages/accounts lost: %d %v", len(rows), err)
 	}
 }
+
+func TestGetConversationDeduplicatesCopiesSharingRFCMessageID(t *testing.T) {
+	s, account, inboxFolder := newBodyFailedTestStore(t)
+	// Create all-mail folder in same account
+	allMailFolder := "all-mail-folder"
+	if _, err := s.db.Exec(`INSERT INTO folders(id,account_id,name,path,folder_type) VALUES(?,?,?,?,'all')`, allMailFolder, account, "All Mail", "[Gmail]/All Mail"); err != nil {
+		t.Fatal(err)
+	}
+	sentFolder := "sent-folder"
+	if _, err := s.db.Exec(`INSERT INTO folders(id,account_id,name,path,folder_type) VALUES(?,?,?,?,'sent')`, sentFolder, account, "Sent", "[Gmail]/Sent Mail"); err != nil {
+		t.Fatal(err)
+	}
+
+	threadID := "gmail:" + account + ":thread-123"
+	now := time.Now().UTC()
+
+	// 1. Incoming message copy in Inbox
+	inboxCopy := &Message{
+		ID:        "inbox-msg-1",
+		AccountID: account,
+		FolderID:  inboxFolder,
+		UID:       101,
+		MessageID: "<test-msg-1@example.com>",
+		ThreadID:  threadID,
+		Subject:   "Moro moro",
+		FromName:  "Antti",
+		FromEmail: "antti@example.com",
+		Date:      now.Add(-time.Minute),
+		BodyText:  "Tämä on testi viesti!",
+		BodyFetched: true,
+	}
+	if err := s.Create(inboxCopy); err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Incoming message copy in All Mail (same RFC Message-ID)
+	allMailCopy := &Message{
+		ID:        "allmail-msg-1",
+		AccountID: account,
+		FolderID:  allMailFolder,
+		UID:       102,
+		MessageID: "<test-msg-1@example.com>",
+		ThreadID:  threadID,
+		Subject:   "Moro moro",
+		FromName:  "Antti",
+		FromEmail: "antti@example.com",
+		Date:      now.Add(-time.Minute),
+		BodyText:  "Tämä on testi viesti!",
+		BodyFetched: true,
+	}
+	if err := s.Create(allMailCopy); err != nil {
+		t.Fatal(err)
+	}
+
+	// 3. Third copy (e.g. legacy/native duplicate or another label)
+	thirdCopy := &Message{
+		ID:        "third-msg-1",
+		AccountID: account,
+		FolderID:  allMailFolder,
+		UID:       103,
+		MessageID: "test-msg-1@example.com", // without brackets
+		ThreadID:  threadID,
+		Subject:   "Moro moro",
+		FromName:  "Antti",
+		FromEmail: "antti@example.com",
+		Date:      now.Add(-time.Minute),
+		BodyText:  "Tämä on testi viesti!",
+		BodyFetched: false,
+	}
+	if err := s.Create(thirdCopy); err != nil {
+		t.Fatal(err)
+	}
+
+	// 4. Outgoing reply in Sent folder
+	replyMsg := &Message{
+		ID:        "sent-msg-1",
+		AccountID: account,
+		FolderID:  sentFolder,
+		UID:       104,
+		MessageID: "<reply-msg-1@example.com>",
+		InReplyTo: "<test-msg-1@example.com>",
+		ThreadID:  threadID,
+		Subject:   "Re: Moro moro",
+		FromName:  "Me",
+		FromEmail: "me@example.com",
+		Date:      now,
+		BodyText:  "Ja tässä vastaus",
+		BodyFetched: true,
+	}
+	if err := s.Create(replyMsg); err != nil {
+		t.Fatal(err)
+	}
+
+	conv, err := s.GetConversation(threadID, inboxFolder)
+	if err != nil {
+		t.Fatalf("GetConversation: %v", err)
+	}
+	if conv == nil {
+		t.Fatal("GetConversation returned nil")
+	}
+
+	if len(conv.Messages) != 2 {
+		t.Fatalf("conv.Messages length = %d, want 2 (1 incoming + 1 reply). IDs: %+v", len(conv.Messages), func() []string {
+			ids := make([]string, len(conv.Messages))
+			for i, m := range conv.Messages {
+				ids[i] = fmt.Sprintf("%s (%s, folder %s)", m.ID, m.MessageID, m.FolderID)
+			}
+			return ids
+		}())
+	}
+	if conv.MessageCount != 2 {
+		t.Fatalf("conv.MessageCount = %d, want 2", conv.MessageCount)
+	}
+	if conv.Messages[0].FolderID != inboxFolder {
+		t.Errorf("dedup preferred folder %s, want inbox %s", conv.Messages[0].FolderID, inboxFolder)
+	}
+}
