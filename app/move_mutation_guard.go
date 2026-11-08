@@ -102,12 +102,16 @@ func (a *App) runMoveMutation(
 // identity, so a subsequent Done/Trash/Move waits for remote reconciliation
 // instead of inheriting the consumed Undo operation ID.
 func (a *App) runUndoMoveMutation(messageIDs []string, destFolderID, operationID string) error {
+	return a.runUndoMoveMutationWithService(messageIDs, destFolderID, operationID, false)
+}
+
+func (a *App) runUndoMoveMutationWithService(messageIDs []string, destFolderID, operationID string, useService bool) error {
 	_, _, _, err := a.runMoveMutationWithMode(
 		messageIDs,
 		"undo:"+operationID+":"+destFolderID,
 		true,
 		func() (bool, string, error) {
-			_, moveErr := a.moveToFolder(messageIDs, destFolderID, false, operationID)
+			_, moveErr := a.moveToFolderWithService(messageIDs, destFolderID, false, operationID, useService)
 			return false, operationID, moveErr
 		},
 	)

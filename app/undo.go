@@ -342,8 +342,8 @@ func (a *App) FindLocalMessageIDsByLocalID(accountID, folderID string, localMess
 // MoveMessagesToFolder implements undo.UndoContext
 // Delegates to the standard MoveToFolder pipeline (IMAP + local DB + events)
 func (a *App) MoveMessagesToFolder(messageIDs []string, destFolderID string) error {
-	// This call is itself an Undo operation. Reuse the complete local-first
-	// + IMAP reconciliation pipeline, but never put the reverse move back
-	// onto the undo stack.
-	return a.runUndoMoveMutation(messageIDs, destFolderID, "")
+	// Service-created Undo commands have no local move completion barrier, so
+	// route their reverse operation through the same authenticated service when
+	// connected. Local commands use their traced move callback instead.
+	return a.runUndoMoveMutationWithService(messageIDs, destFolderID, "", true)
 }

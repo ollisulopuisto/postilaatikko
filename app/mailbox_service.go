@@ -320,37 +320,43 @@ func (c *mailboxServiceConnector) authorizeWrites(ctx context.Context) error {
 }
 
 func (a *App) mutateFlagThroughMailboxService(ctx context.Context, messages []*message.Message, action v1.ActionKind) (bool, error) {
+	_, handled, err := a.mutateMessagesThroughMailboxService(ctx, messages, v1.ActionRequest{Action: action})
+	return handled, err
+}
+
+func (a *App) mutateMessagesThroughMailboxService(ctx context.Context, messages []*message.Message, req v1.ActionRequest) (*v1.ActionResponse, bool, error) {
 	if a.mailboxService == nil {
-		return false, nil
+		return nil, false, nil
 	}
 	status := a.mailboxService.status(ctx)
 	if !status.Connected {
 		if status.ErrorCode == "service_unavailable" {
-			return false, nil
+			return nil, false, nil
 		}
-		return false, fmt.Errorf("local mailbox service is unavailable for %s: %s", action, status.Message)
+		return nil, true, fmt.Errorf("local mailbox service is unavailable for %s: %s", req.Action, status.Message)
 	}
 	if !status.WriteAuthorized {
-		return false, errDesktopMailboxWriteAuthorizationRequired
+		return nil, true, errDesktopMailboxWriteAuthorizationRequired
 	}
 	refs := make([]operations.MessageRef, 0, len(messages))
 	for _, item := range messages {
 		if item == nil {
 			continue
 		}
+		if item.ID == "" || item.AccountID == "" {
+			return nil, true, errors.New("mailbox service action requires account-qualified message identities")
+		}
 		refs = append(refs, operations.MessageRef{AccountID: item.AccountID, MessageID: item.ID})
 	}
 	if len(refs) == 0 {
-		return true, nil
+		return &v1.ActionResponse{}, true, nil
 	}
-	_, err := a.mailboxService.mutateAction(ctx, v1.ActionRequest{
-		Action: action,
-		Target: operations.Target{Kind: operations.TargetMatchedMessages, Messages: refs},
-	})
+	req.Target = operations.Target{Kind: operations.TargetMatchedMessages, Messages: refs}
+	response, err := a.mailboxService.mutateAction(ctx, req)
 	if err != nil {
-		return true, fmt.Errorf("run %s through local mailbox service: %w", action, err)
+		return nil, true, fmt.Errorf("run %s through local mailbox service: %w", req.Action, err)
 	}
-	return true, nil
+	return response, true, nil
 }
 
 func (c *mailboxServiceConnector) cancelSearch(sessionID string) {

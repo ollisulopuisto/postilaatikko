@@ -401,6 +401,10 @@ func (a *App) MoveToFolderWithUndo(messageIDs []string, destFolderID string) (Un
 }
 
 func (a *App) moveToFolder(messageIDs []string, destFolderID string, recordUndo bool, operationID string) (string, error) {
+	return a.moveToFolderWithService(messageIDs, destFolderID, recordUndo, operationID, recordUndo)
+}
+
+func (a *App) moveToFolderWithService(messageIDs []string, destFolderID string, recordUndo bool, operationID string, useService bool) (string, error) {
 	log := logging.WithComponent("app")
 
 	if len(messageIDs) == 0 {
@@ -418,7 +422,7 @@ func (a *App) moveToFolder(messageIDs []string, destFolderID string, recordUndo 
 		return operationID, fmt.Errorf("failed to determine message accounts: %w", err)
 	}
 	if spansAccounts {
-		return a.moveToFolderCrossAccount(messageIDs, destFolderID, recordUndo, operationID)
+		return a.moveToFolderCrossAccount(messageIDs, destFolderID, recordUndo, operationID, false)
 	}
 
 	messages, err := a.messageStore.GetByIDs(messageIDs)
@@ -432,6 +436,30 @@ func (a *App) moveToFolder(messageIDs []string, destFolderID string, recordUndo 
 	destFolder, err := a.folderStore.Get(destFolderID)
 	if err != nil || destFolder == nil {
 		return operationID, fmt.Errorf("destination folder not found: %s", destFolderID)
+	}
+	if useService && messages[0].AccountID == destFolder.AccountID {
+		ctx := a.ctx
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		response, handled, serviceErr := a.mutateMessagesThroughMailboxService(ctx, messages, v1.ActionRequest{
+			Action:      v1.ActionMove,
+			Destination: destFolderID,
+		})
+		if serviceErr != nil {
+			return operationID, serviceErr
+		}
+		if handled {
+			if response == nil || response.Receipt.OperationID == "" {
+				return operationID, errors.New("mailbox service move did not return an operation receipt")
+			}
+			operationID = response.Receipt.OperationID
+			if recordUndo {
+				a.recordMailboxServiceMoveUndo(messages, destFolder, operationID)
+			}
+			a.publishMailboxServiceMove(messages, destFolder.ID)
+			return operationID, nil
+		}
 	}
 
 	if a.syncEngine != nil {
@@ -468,7 +496,7 @@ func (a *App) moveToFolder(messageIDs []string, destFolderID string, recordUndo 
 				return nil
 			},
 			func() error {
-				_, nextOperationID, trashErr := a.trashWithUndo(messageIDs, operationID)
+				_, nextOperationID, trashErr := a.trashWithUndoUsingService(messageIDs, operationID, false)
 				operationID = nextOperationID
 				return trashErr
 			},
@@ -696,6 +724,74 @@ func (a *App) moveToFolder(messageIDs []string, destFolderID string, recordUndo 
 	}()
 
 	return operationID, nil
+}
+
+func (a *App) recordMailboxServiceMoveUndo(messages []*message.Message, destination *folder.Folder, operationID string) {
+	if a.undoStack == nil || destination == nil {
+		return
+	}
+	bySource := make(map[string][]*message.Message)
+	for _, item := range messages {
+		if item == nil || item.FolderID == "" || item.AccountID != destination.AccountID {
+			continue
+		}
+		bySource[item.FolderID] = append(bySource[item.FolderID], item)
+	}
+	sourceFolderIDs := make([]string, 0, len(bySource))
+	for sourceFolderID := range bySource {
+		sourceFolderIDs = append(sourceFolderIDs, sourceFolderID)
+	}
+	slices.Sort(sourceFolderIDs)
+	for _, sourceFolderID := range sourceFolderIDs {
+		group := bySource[sourceFolderID]
+		identities := make([]undo.MoveMessageIdentity, 0, len(group))
+		ids := make([]string, 0, len(group))
+		for _, item := range group {
+			identities = append(identities, undo.MoveMessageIdentity{LocalID: item.ID, MessageID: item.MessageID})
+			ids = append(ids, item.ID)
+		}
+		cmd := undo.NewMoveCommand(a, group[0].AccountID, identities, sourceFolderID, destination.ID, "Move to "+destination.Name)
+		operationID = a.undoStack.PushOperation(operationID, cmd, undo.OperationMetadata{
+			Action:     "move:" + string(destination.Type),
+			MessageIDs: ids,
+		})
+		cmd.SetOperationID(operationID)
+	}
+	a.emitRuntimeEvent("undo:history-changed")
+}
+
+func (a *App) publishMailboxServiceMove(messages []*message.Message, destinationFolderID string) {
+	ids := make([]string, 0, len(messages))
+	affectedFolders := map[string]struct{}{destinationFolderID: {}}
+	for _, item := range messages {
+		if item == nil {
+			continue
+		}
+		ids = append(ids, item.ID)
+		affectedFolders[item.FolderID] = struct{}{}
+	}
+	a.emitRuntimeEvent("messages:moved", map[string]interface{}{
+		"messageIds":   ids,
+		"destFolderId": destinationFolderID,
+	})
+
+	folderCounts := make(map[string]int, len(affectedFolders))
+	for folderID := range affectedFolders {
+		unreadCount, err := a.messageStore.CountUnreadByFolder(folderID)
+		if err != nil {
+			continue
+		}
+		totalCount, err := a.messageStore.CountByFolder(folderID)
+		if err != nil {
+			continue
+		}
+		if err := a.folderStore.UpdateCounts(folderID, totalCount, unreadCount); err == nil {
+			folderCounts[folderID] = unreadCount
+		}
+	}
+	if len(folderCounts) > 0 {
+		a.emitRuntimeEvent("folders:countsChanged", folderCounts)
+	}
 }
 
 func (a *App) reconcileMovedMessageUIDsWithRetry(destFolderID string, resolvedUIDs map[string]uint32) ([]message.MovedUIDReconcileResult, error) {
@@ -1332,6 +1428,10 @@ func (a *App) ArchiveWithUndo(messageIDs []string) (UndoableActionResult, error)
 }
 
 func (a *App) archiveWithUndo(messageIDs []string, operationID string) (string, error) {
+	return a.archiveWithUndoUsingService(messageIDs, operationID, true)
+}
+
+func (a *App) archiveWithUndoUsingService(messageIDs []string, operationID string, useService bool) (string, error) {
 	if len(messageIDs) == 0 {
 		return operationID, nil
 	}
@@ -1341,10 +1441,10 @@ func (a *App) archiveWithUndo(messageIDs []string, operationID string) (string, 
 	// single-account slices. SpansMultipleAccounts errors fall through
 	// to the fast path so a metadata hiccup never breaks what works.
 	if spans, _ := a.messageStore.SpansMultipleAccounts(messageIDs); spans {
-		return a.archiveCrossAccount(messageIDs, operationID)
+		return a.archiveCrossAccountWithService(messageIDs, operationID, false)
 	}
 
-	return a.removeFromInboxWithUndo(messageIDs, operationID)
+	return a.removeFromInboxWithService(messageIDs, operationID, useService)
 }
 
 // RemoveFromInbox removes the Inbox label from messages. Gmail represents
@@ -1368,6 +1468,10 @@ func (a *App) RemoveFromInboxWithUndo(messageIDs []string) (UndoableActionResult
 }
 
 func (a *App) removeFromInboxWithUndo(messageIDs []string, operationID string) (string, error) {
+	return a.removeFromInboxWithService(messageIDs, operationID, true)
+}
+
+func (a *App) removeFromInboxWithService(messageIDs []string, operationID string, useService bool) (string, error) {
 	if len(messageIDs) == 0 {
 		return operationID, nil
 	}
@@ -1391,7 +1495,7 @@ func (a *App) removeFromInboxWithUndo(messageIDs []string, operationID string) (
 		return operationID, fmt.Errorf("no destination folder configured")
 	}
 
-	return a.moveToFolder(messageIDs, destination.ID, true, operationID)
+	return a.moveToFolderWithService(messageIDs, destination.ID, true, operationID, useService)
 }
 
 // Trash moves messages to the Trash folder.
@@ -1413,6 +1517,10 @@ func (a *App) TrashWithUndo(messageIDs []string) (TrashUndoResult, error) {
 }
 
 func (a *App) trashWithUndo(messageIDs []string, operationID string) (bool, string, error) {
+	return a.trashWithUndoUsingService(messageIDs, operationID, true)
+}
+
+func (a *App) trashWithUndoUsingService(messageIDs []string, operationID string, useService bool) (bool, string, error) {
 	if len(messageIDs) == 0 {
 		return false, operationID, nil
 	}
@@ -1422,7 +1530,7 @@ func (a *App) trashWithUndo(messageIDs []string, operationID string) (bool, stri
 	// single-account slices. SpansMultipleAccounts errors fall through
 	// to the fast path so a metadata hiccup never breaks what works.
 	if spans, _ := a.messageStore.SpansMultipleAccounts(messageIDs); spans {
-		return a.trashCrossAccount(messageIDs, operationID)
+		return a.trashCrossAccountWithService(messageIDs, operationID, false)
 	}
 
 	messages, err := a.messageStore.GetByIDs(messageIDs[:1])
@@ -1442,23 +1550,27 @@ func (a *App) trashWithUndo(messageIDs []string, operationID string) (bool, stri
 
 	// Non-Gmail: normal move to trash for all messages
 	if !a.isGmailAccount(accountID) {
-		operationID, err = a.moveToFolder(messageIDs, trashFolder.ID, true, operationID)
+		operationID, err = a.moveToFolderWithService(messageIDs, trashFolder.ID, true, operationID, useService)
 		return true, operationID, err
 	}
 
 	// Gmail: partition messages into copies (label-remove) vs sole copies (move to trash)
-	return a.gmailTrashOrSpam(messageIDs, trashFolder, operationID)
+	return a.gmailTrashOrSpamWithService(messageIDs, trashFolder, operationID, useService)
 }
 
 // gmailTrashOrSpam performs a real move to Gmail's Trash/Spam mailbox.
 // Merely deleting the current IMAP label would leave the message in All Mail,
 // which is archive semantics rather than delete/spam semantics.
 func (a *App) gmailTrashOrSpam(messageIDs []string, destFolder *folder.Folder, operationID string) (bool, string, error) {
+	return a.gmailTrashOrSpamWithService(messageIDs, destFolder, operationID, true)
+}
+
+func (a *App) gmailTrashOrSpamWithService(messageIDs []string, destFolder *folder.Folder, operationID string, useService bool) (bool, string, error) {
 	if len(messageIDs) == 0 {
 		return false, operationID, nil
 	}
 
-	operationID, err := a.moveToFolder(messageIDs, destFolder.ID, true, operationID)
+	operationID, err := a.moveToFolderWithService(messageIDs, destFolder.ID, true, operationID, useService)
 	if err != nil {
 		return false, operationID, err
 	}
@@ -1982,6 +2094,10 @@ func (a *App) partitionByAccount(messageIDs []string) (map[string][]string, erro
 // trashCrossAccount fan-outs Trash() per account partition. Aggregates the
 // (bool, error) returns: anyMoved is OR'd across partitions, firstErr wins.
 func (a *App) trashCrossAccount(messageIDs []string, operationID string) (bool, string, error) {
+	return a.trashCrossAccountWithService(messageIDs, operationID, false)
+}
+
+func (a *App) trashCrossAccountWithService(messageIDs []string, operationID string, useService bool) (bool, string, error) {
 	byAccount, err := a.partitionByAccount(messageIDs)
 	if err != nil {
 		return false, operationID, err
@@ -1989,7 +2105,7 @@ func (a *App) trashCrossAccount(messageIDs []string, operationID string) (bool, 
 	var anyMoved bool
 	var firstErr error
 	for _, ids := range byAccount {
-		moved, nextOperationID, err := a.trashWithUndo(ids, operationID)
+		moved, nextOperationID, err := a.trashWithUndoUsingService(ids, operationID, useService)
 		operationID = nextOperationID
 		if moved {
 			anyMoved = true
@@ -2004,6 +2120,10 @@ func (a *App) trashCrossAccount(messageIDs []string, operationID string) (bool, 
 // archiveCrossAccount fan-outs Archive() per account partition. Aggregates
 // first error encountered.
 func (a *App) archiveCrossAccount(messageIDs []string, operationID string) (string, error) {
+	return a.archiveCrossAccountWithService(messageIDs, operationID, false)
+}
+
+func (a *App) archiveCrossAccountWithService(messageIDs []string, operationID string, useService bool) (string, error) {
 	byAccount, err := a.partitionByAccount(messageIDs)
 	if err != nil {
 		return operationID, err
@@ -2011,7 +2131,7 @@ func (a *App) archiveCrossAccount(messageIDs []string, operationID string) (stri
 	var firstErr error
 	for _, ids := range byAccount {
 		var actionErr error
-		operationID, actionErr = a.archiveWithUndo(ids, operationID)
+		operationID, actionErr = a.archiveWithUndoUsingService(ids, operationID, useService)
 		if actionErr != nil && firstErr == nil {
 			firstErr = actionErr
 		}
@@ -2070,7 +2190,7 @@ func (a *App) moveToInboxCrossAccount(messageIDs []string, operationID string) (
 // If a partition fails, stop so later accounts are not moved after the
 // operation has already become partial. The destination account is ordered
 // last so a failed cross-account append leaves its local messages untouched.
-func (a *App) moveToFolderCrossAccount(messageIDs []string, destFolderID string, recordUndo bool, operationID string) (string, error) {
+func (a *App) moveToFolderCrossAccount(messageIDs []string, destFolderID string, recordUndo bool, operationID string, useService bool) (string, error) {
 	byAccount, err := a.partitionByAccount(messageIDs)
 	if err != nil {
 		return operationID, err
@@ -2097,7 +2217,7 @@ func (a *App) moveToFolderCrossAccount(messageIDs []string, destFolderID string,
 	for _, accountID := range accounts {
 		ids := byAccount[accountID]
 		var moveErr error
-		operationID, moveErr = a.moveToFolder(ids, destFolderID, recordUndo, operationID)
+		operationID, moveErr = a.moveToFolderWithService(ids, destFolderID, recordUndo, operationID, useService)
 		if moveErr != nil {
 			if len(completedAccounts) == 0 {
 				return operationID, fmt.Errorf("move failed for account %s: %w", accountID, moveErr)
