@@ -77,6 +77,4 @@ if (( failures )); then
     exit 1
 fi
 
-python3 "$ROOT_DIR/scripts/check_release_metadata.py"
-
 echo "Version consistency check passed: $VERSION"

@@ -91,8 +91,12 @@ jobs:
           KEYCHAIN_PATH="$RUNNER_TEMP/postilaatikko-signing.keychain-db"
           CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
           printf '%s' "$BUILD_CERTIFICATE_BASE64" | base64 -D -o "$CERTIFICATE_PATH"
-          export KEYCHAIN_PATH CERTIFICATE_PATH
-          python3 scripts/macos_ci_credentials.py import-certificate
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -P "$P12_PASSWORD" -T /usr/bin/codesign -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
           rm -f "$CERTIFICATE_PATH"
           security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -F 'Developer ID Application: Olli Sulopuisto (LWSR8T5392)'
       - name: Build macOS app
@@ -207,8 +211,12 @@ jobs:
           KEYCHAIN_PATH="$RUNNER_TEMP/postilaatikko-signing.keychain-db"
           CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
           printf '%s' "$BUILD_CERTIFICATE_BASE64" | base64 -D -o "$CERTIFICATE_PATH"
-          export KEYCHAIN_PATH CERTIFICATE_PATH
-          python3 scripts/macos_ci_credentials.py import-certificate
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -P "$P12_PASSWORD" -T /usr/bin/codesign -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
           rm -f "$CERTIFICATE_PATH"
           security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -F 'Developer ID Application: Olli Sulopuisto (LWSR8T5392)'
 
@@ -232,18 +240,16 @@ jobs:
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
-          APPLE_TEAM_ID: LWSR8T5392
         run: |
           set -euo pipefail
           test -n "$APPLE_ID"
           test -n "$APPLE_APP_PASSWORD"
-          export KEYCHAIN_PATH="$RUNNER_TEMP/postilaatikko-signing.keychain-db"
-          python3 scripts/macos_ci_credentials.py store-notary-credentials
           APP_ZIP="$RUNNER_TEMP/Postilaatikko-${GOARCH}-app.zip"
           ditto -c -k --keepParent build/bin/postilaatikko.app "$APP_ZIP"
           xcrun notarytool submit "$APP_ZIP" \
-            --keychain-profile postilaatikko-ci-notary \
-            --keychain "$RUNNER_TEMP/postilaatikko-signing.keychain-db" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "LWSR8T5392" \
             --wait
           xcrun stapler staple build/bin/postilaatikko.app
           xcrun stapler validate build/bin/postilaatikko.app
@@ -276,12 +282,18 @@ jobs:
           codesign --verify --verbose=2 "$DMG_PATH"
 
       - name: Notarize and staple DMG
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: |
           set -euo pipefail
+          test -n "$APPLE_ID"
+          test -n "$APPLE_APP_PASSWORD"
           DMG_PATH="build/bin/Postilaatikko-${TEST_TAG}-darwin-${GOARCH}.dmg"
           xcrun notarytool submit "$DMG_PATH" \
-            --keychain-profile postilaatikko-ci-notary \
-            --keychain "$RUNNER_TEMP/postilaatikko-signing.keychain-db" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "LWSR8T5392" \
             --wait
           xcrun stapler staple "$DMG_PATH"
           xcrun stapler validate "$DMG_PATH"
@@ -296,13 +308,14 @@ jobs:
         run: |
           set -euo pipefail
           DMG="build/bin/Postilaatikko-${TEST_TAG}-darwin-arm64.dmg"
-          (cd build/bin && shasum -a 256 "$(basename "$DMG")" > SHA256.txt && shasum -a 256 -c SHA256.txt)
+          shasum -a 256 "$DMG" > build/bin/SHA256.txt
           cat > "$RUNNER_TEMP/release-notes.md" <<EOF
           Apple-silicon test build from merged main $BUILD_SHA.
-          App version: $BASE_VERSION. Test build ID: $TEST_TAG.
+          App version remains $BASE_VERSION. Test build ID: $TEST_TAG.
           No unmerged app code is included. Developer ID signed and notarized.
           Frontend typecheck and lint are required before packaging.
-          Automatic What's New and Help > What's New include the shipped $BASE_VERSION changelog section.
+          New helper/remote-mail changes are still under Unreleased in the app changelog;
+          automatic What's New is not updated in this unchanged-main test build.
           Native feature/UI acceptance has not been performed. This is not a stable release.
           EOF
           gh release create "$TEST_TAG" "$DMG" build/bin/SHA256.txt \

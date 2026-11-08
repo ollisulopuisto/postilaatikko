@@ -260,7 +260,6 @@
           onActionComplete?.(true)
         } finally {
           moveMutationInFlight = false
-          messageAnimations.settleRemoval(ownMessageIds)
         }
       })
     } catch (err) {
@@ -294,7 +293,6 @@
 
   function handleQuickDelete(e: MouseEvent) {
     e.stopPropagation()
-    // Trash opens a confirmation dialog; its parent starts any removal.
     if (folderType !== 'trash') messageAnimations.startRemoval(ownMessageIds, 'trash')
     onDelete?.(ownMessageIds)
   }

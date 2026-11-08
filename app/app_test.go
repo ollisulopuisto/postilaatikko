@@ -117,8 +117,6 @@ func TestIsAllowedProtocol(t *testing.T) {
 		{"http://-flag:8080/path", false},
 		{"mailto:--help", false},
 		{"mailto:-flag@example.com", false},
-		{"mailto:%2D%2Dhelp", false},
-		{"mailto:%2d-flag@example.com", false},
 		{"http://example.com\r\ninjected", false},
 		{"http://example.com\x00injected", false},
 	}

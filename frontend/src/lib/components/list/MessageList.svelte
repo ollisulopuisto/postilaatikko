@@ -1915,18 +1915,17 @@
   export function handleActionComplete(autoSelectNext: boolean = false) {
     if (messageAnimations.isAnyAnimating()) {
       // Allow the exit animation to visibly conclude before the backend reload
-      // removes the elements from the DOM.
-      const release = messageAnimations.holdActive()
+      // removes the elements from the DOM. Keep animating IDs active during the
+      // reload fetch so slow queries do not briefly flash removed rows back at full opacity.
       setTimeout(() => {
-        // Keep removed rows hidden until the replacement data has arrived.
-        void doHandleActionComplete(autoSelectNext).finally(release)
+        doHandleActionComplete(autoSelectNext)
       }, MESSAGE_EXIT_ANIM_DURATION_MS)
       return
     }
     doHandleActionComplete(autoSelectNext)
   }
 
-  async function doHandleActionComplete(autoSelectNext: boolean = false) {
+  function doHandleActionComplete(autoSelectNext: boolean = false) {
     // Capture before clearing the viewer: pendingReadOnLeave may immediately
     // change the origin to read while this action reloads the list.
     const selection = autoSelectNext
@@ -1956,7 +1955,7 @@
     const totalLoaded = Math.max(conversations.length, PAGE_SIZE)
     offset = 0
 
-    await loadConversations(totalLoaded).then(() => {
+    loadConversations(totalLoaded).then(() => {
       // Restore scroll position
       if (listContainerRef) {
         requestAnimationFrame(() => {
@@ -2402,7 +2401,6 @@
           handleActionComplete(true)
         } finally {
           moveMutationInFlight = false
-          messageAnimations.settleRemoval(messageIds)
         }
       })
     } catch (err) {
@@ -2527,7 +2525,6 @@
         clearChecked()
       } finally {
         moveMutationInFlight = false
-        messageAnimations.settleRemoval(messageIds)
       }
     }).catch((err) => {
       messageAnimations.finishRemoval(messageIds)
@@ -3385,7 +3382,11 @@
   confirmLabel={$_('dialog.confirmDeletePermanently')}
   variant="destructive"
   onConfirm={handleConfirmPermanentDelete}
-  onCancel={() => { showDeleteConfirm = false; pendingDeleteIds = [] }}
+    onCancel={() => {
+      messageAnimations.finishRemoval(pendingDeleteIds)
+      showDeleteConfirm = false
+      pendingDeleteIds = []
+    }}
 />
 
 <!-- Empty Trash Confirmation Dialog -->

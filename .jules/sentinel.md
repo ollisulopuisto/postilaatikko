@@ -34,8 +34,3 @@
 **Vulnerability:** Native modal link dialogs (`ShowDialogWithLink`) accepted arbitrary `actionURL` values and dispatched them to system openers (`open`, `xdg-open`, `ShellExecute`) without validating scheme or checking for CLI flags, leading dashes, or control characters.
 **Learning:** Pre-startup and native dialog link helpers must apply the same protocol restrictions and CLI flag defenses as the main application's URL opening facilities.
 **Prevention:** Centralize URL scheme validation and argument injection filters in dialog dispatchers, degrading safely to a linkless dialog when an unapproved or malformed action URL is passed.
-
-## 2026-11-08 - Percent-Encoded Dash Validation on Mailto CLI Argument Guards
-**Vulnerability:** Mailto URL validators checked raw string prefixes for `-` (`strings.HasPrefix(target, "-")`), allowing percent-encoded dashes (`%2D-help` or `%2dflag`) to bypass prefix checks before being decoded by downstream OS URL handlers (e.g. `xdg-open` / `xdg-email`).
-**Learning:** Argument injection defenses against CLI flags in URL openers must inspect the decoded/unescaped representation in addition to the raw form, because downstream launchers decode URL percent-encoding prior to command construction.
-**Prevention:** Always unescape URL components (`url.PathUnescape` / `decodeURIComponent`) before verifying that target identifiers do not begin with a dash (`-`).

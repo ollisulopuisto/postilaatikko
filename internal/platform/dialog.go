@@ -96,10 +96,6 @@ func ValidateDialogURL(rawURL string) bool {
 		if strings.HasPrefix(target, "-") {
 			return false
 		}
-		// Also inspect unescaped target to prevent percent-encoded dashes (%2D) from bypassing CLI option guards
-		if unescaped, err := url.PathUnescape(target); err == nil && strings.HasPrefix(unescaped, "-") {
-			return false
-		}
 		return target != "" || parsed.RawQuery != ""
 	default:
 		return false

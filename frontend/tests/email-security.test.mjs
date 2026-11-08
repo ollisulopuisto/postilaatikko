@@ -27,8 +27,6 @@ test('email URL schemes cannot launch local files or scripts', () => {
     'mailto:',
     'mailto:--help',
     'mailto:-flag@example.com',
-    'mailto:%2D%2Dhelp',
-    'mailto:%2d-flag@example.com',
     'http://-flag',
     'https://--version',
     'http://',
