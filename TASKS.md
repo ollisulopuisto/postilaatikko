@@ -367,3 +367,7 @@ Suggested model/effort is a dispatch recommendation, not an existing claim or mo
 | ID | Status | Owner / branch / worktree | Scope |
 | --- | --- | --- | --- |
 | COUNT-REUSE | Review (local only) | Instinct / agent/approved-post-followup / post-work | Shared exact Gmail online-count scans/results, isolated subscribers, criteria/account keys, mutation invalidation and explicit refresh bypass. Separate from P-047; no merge/release/native claim. |
+
+## Instinct release route (2026-11-08)
+
+- ARM64-DRAFT-RELEASE-001: Review. Owner: Instinct; branch `agent/arm64-draft-release`; worktree `/downloads/postilaatikko-arm64-release`. Optional dispatch-only standard public macos-15 runner builds latest merged main, pins arm64, signs/notarizes and uploads directly to a draft test Release without cache writes or Actions artifacts. Existing automatic/artifact build behavior is preserved; the new draft_release input selects the isolated no-artifact route. No app-code/version changes; human merge only. Known main typecheck/lint failures and unchanged What's New are disclosed in test-release notes. Native verification occurs in the build; not locally available.

@@ -9,6 +9,14 @@ on:
       - '.github/ISSUE_TEMPLATE/**'
   workflow_dispatch:
     inputs:
+      draft_release:
+        description: 'Build arm64 merged-main snapshot directly to a draft Release, without artifacts/cache writes'
+        type: boolean
+        default: false
+      source_sha:
+        description: 'Expected main SHA for a draft release; empty resolves latest main'
+        type: string
+        required: false
       architecture:
         description: 'DMG architecture (manual artifact-only hotfix build; CI checks run separately)'
         type: choice
@@ -26,6 +34,7 @@ concurrency:
 
 jobs:
   build:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.draft_release) }}
     # Keep the app and bundled CGO/keychain helper native to the selected CPU.
     runs-on: ${{ inputs.architecture == 'amd64' && 'macos-26-intel' || 'macos-latest' }}
     timeout-minutes: 25
@@ -128,3 +137,184 @@ jobs:
           path: build/bin/Postilaatikko-macos-${{ env.GOARCH }}.dmg
           if-no-files-found: error
           retention-days: 14
+
+  draft-release:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.draft_release }}
+    permissions:
+      contents: write
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      GOARCH: arm64
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Resolve latest merged main
+        id: source
+        env:
+          EXPECTED_SHA: ${{ inputs.source_sha }}
+          REQUESTED_ARCH: ${{ inputs.architecture }}
+        run: |
+          set -euo pipefail
+          test "$REQUESTED_ARCH" = arm64
+          SHA=$(gh api "repos/$GH_REPO/git/ref/heads/main" --jq .object.sha)
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]
+          if [[ -n "$EXPECTED_SHA" && "$EXPECTED_SHA" != "$SHA" ]]; then
+            echo 'Main changed after dispatch; request a fresh build.' >&2
+            exit 1
+          fi
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "BUILD_SHA=$SHA" >> "$GITHUB_ENV"
+      - name: Check out merged app source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.source.outputs.sha }}
+      - name: Check base version and label test build
+        run: |
+          set -euo pipefail
+          ./scripts/version.sh check
+          VERSION=$(tr -d '\r\n' < VERSION)
+          TAG="v${VERSION}-test.${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}"
+          echo "TEST_TAG=$TAG" >> "$GITHUB_ENV"
+          echo "BASE_VERSION=$VERSION" >> "$GITHUB_ENV"
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+          cache: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Install Wails CLI
+        run: env -u GOARCH go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend
+
+      - name: Import Developer ID certificate
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$BUILD_CERTIFICATE_BASE64"
+          test -n "$P12_PASSWORD"
+          test -n "$KEYCHAIN_PASSWORD"
+          KEYCHAIN_PATH="$RUNNER_TEMP/postilaatikko-signing.keychain-db"
+          CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
+          printf '%s' "$BUILD_CERTIFICATE_BASE64" | base64 -D -o "$CERTIFICATE_PATH"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -P "$P12_PASSWORD" -T /usr/bin/codesign -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH"
+          rm -f "$CERTIFICATE_PATH"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -F 'Developer ID Application: Olli Sulopuisto (LWSR8T5392)'
+
+      - name: Build macOS app
+        run: make build
+
+      - name: Verify arm64-only app and helper
+        run: |
+          set -euo pipefail
+          test "$(lipo -archs build/bin/postilaatikko.app/Contents/MacOS/postilaatikko)" = arm64
+          test "$(lipo -archs build/bin/postilaatikko.app/Contents/MacOS/postilaatikko-helper)" = arm64
+
+      - name: Sign app with Developer ID
+        env:
+          APPLE_SIGNING_IDENTITY: "Developer ID Application: Olli Sulopuisto (LWSR8T5392)"
+        run: |
+          codesign --force --deep --options runtime --timestamp --sign "$APPLE_SIGNING_IDENTITY" build/bin/postilaatikko.app
+          codesign --verify --deep --strict --verbose=2 build/bin/postilaatikko.app
+
+      - name: Notarize and staple app
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$APPLE_ID"
+          test -n "$APPLE_APP_PASSWORD"
+          APP_ZIP="$RUNNER_TEMP/Postilaatikko-${GOARCH}-app.zip"
+          ditto -c -k --keepParent build/bin/postilaatikko.app "$APP_ZIP"
+          xcrun notarytool submit "$APP_ZIP" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "LWSR8T5392" \
+            --wait
+          xcrun stapler staple build/bin/postilaatikko.app
+          xcrun stapler validate build/bin/postilaatikko.app
+          rm -f "$APP_ZIP"
+
+      - name: Create drag-and-drop DMG
+        run: |
+          cd build/bin
+          APP_BUNDLE="postilaatikko.app"
+          DMG_NAME="Postilaatikko-${TEST_TAG}-darwin-${GOARCH}.dmg"
+          mkdir -p dmg-staging
+          cp -R "$APP_BUNDLE" dmg-staging/Postilaatikko.app
+          ln -s /Applications dmg-staging/Applications
+          hdiutil create \
+            -volname "Postilaatikko" \
+            -srcfolder dmg-staging \
+            -ov \
+            -format UDZO \
+            "$DMG_NAME"
+          hdiutil verify "$DMG_NAME"
+          rm -rf dmg-staging
+          ls -lh "$DMG_NAME"
+
+      - name: Sign and verify DMG
+        env:
+          APPLE_SIGNING_IDENTITY: "Developer ID Application: Olli Sulopuisto (LWSR8T5392)"
+        run: |
+          DMG_PATH="build/bin/Postilaatikko-${TEST_TAG}-darwin-${GOARCH}.dmg"
+          codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$DMG_PATH"
+          codesign --verify --verbose=2 "$DMG_PATH"
+
+      - name: Notarize and staple DMG
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$APPLE_ID"
+          test -n "$APPLE_APP_PASSWORD"
+          DMG_PATH="build/bin/Postilaatikko-${TEST_TAG}-darwin-${GOARCH}.dmg"
+          xcrun notarytool submit "$DMG_PATH" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "LWSR8T5392" \
+            --wait
+          xcrun stapler staple "$DMG_PATH"
+          xcrun stapler validate "$DMG_PATH"
+
+      - name: Remove signing keychain
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/postilaatikko-signing.keychain-db" || true
+          rm -f "$RUNNER_TEMP"/Postilaatikko-*-app.zip
+
+      - name: Publish draft test release directly
+        run: |
+          set -euo pipefail
+          DMG="build/bin/Postilaatikko-${TEST_TAG}-darwin-arm64.dmg"
+          shasum -a 256 "$DMG" > build/bin/SHA256.txt
+          cat > "$RUNNER_TEMP/release-notes.md" <<EOF
+          Apple-silicon test build from merged main $BUILD_SHA.
+          App version remains $BASE_VERSION. Test build ID: $TEST_TAG.
+          No unmerged app code is included. Developer ID signed and notarized.
+          Main has known frontend typecheck/lint errors, including copy/move command dispatch.
+          New helper/remote-mail changes are still under Unreleased in the app changelog;
+          automatic What's New is not updated in this unchanged-main test build.
+          Native feature/UI acceptance has not been performed. This is not a stable release.
+          EOF
+          gh release create "$TEST_TAG" "$DMG" build/bin/SHA256.txt \
+            --target "$BUILD_SHA" --draft --prerelease \
+            --title "Postilaatikko $BASE_VERSION arm64 TEST $GITHUB_RUN_ID" \
+            --notes-file "$RUNNER_TEMP/release-notes.md"
