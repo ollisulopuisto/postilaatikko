@@ -1125,6 +1125,9 @@ func (a *App) GetComposerDraft(accountID, draftID string) (*smtp.ComposeMessage,
 // SaveComposerDraft keeps draft storage in the helper while preparing
 // optional at-rest encryption with the device-local signing keys.
 func (a *App) SaveComposerDraft(accountID string, msg smtp.ComposeMessage, draftID, revision, requestID string) (*DraftResult, error) {
+	if a.remoteServiceMode && (msg.SignMessage || msg.EncryptMessage || msg.PGPSignMessage || msg.PGPEncryptMessage) {
+		return nil, errors.New("remote message signing and encryption must be configured on the mailbox helper")
+	}
 	ctx := a.accountContext()
 	client, err := a.composerServiceClient(ctx, v1.CapabilityDraftRead, v1.CapabilityDraftWrite)
 	if err != nil {
@@ -1142,9 +1145,6 @@ func (a *App) SaveComposerDraft(accountID string, msg smtp.ComposeMessage, draft
 	}
 	var enc *encryptResult
 	if a.remoteServiceMode {
-		if msg.EncryptMessage || msg.PGPEncryptMessage {
-			return nil, errors.New("remote draft encryption must be configured on the mailbox helper")
-		}
 		attachments := msg.Attachments
 		if len(attachments) > 0 {
 			attachments, err = resolveAttachmentContent(attachments)

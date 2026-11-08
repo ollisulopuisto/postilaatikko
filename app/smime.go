@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -10,8 +11,18 @@ import (
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
+func (a *App) requireLocalCrypto() error {
+	if a.remoteServiceMode {
+		return errors.New("S/MIME and PGP are unavailable in remote mailbox mode")
+	}
+	return nil
+}
+
 // PickSMIMECertificateFile opens a file picker for .p12/.pfx files and returns the path
 func (a *App) PickSMIMECertificateFile() (string, error) {
+	if err := a.requireLocalCrypto(); err != nil {
+		return "", err
+	}
 	path, err := wailsRuntime.OpenFileDialog(a.ctx, wailsRuntime.OpenDialogOptions{
 		Title: "Select S/MIME Certificate",
 		Filters: []wailsRuntime.FileFilter{
@@ -29,6 +40,9 @@ func (a *App) PickSMIMECertificateFile() (string, error) {
 
 // ImportSMIMECertificateFromPath imports a PKCS#12 certificate from a file path with password
 func (a *App) ImportSMIMECertificateFromPath(accountID, filePath, password string) (*smime.ImportResult, error) {
+	if err := a.requireLocalCrypto(); err != nil {
+		return nil, err
+	}
 	data, err := readCertFile(filePath)
 	if err != nil {
 		return nil, err
@@ -45,6 +59,9 @@ func (a *App) ImportSMIMECertificateFromPath(accountID, filePath, password strin
 // ImportSMIMECertificateFromPathBER imports a BER-encoded PKCS#12 certificate
 // by converting it to DER first. Called after user confirms the conversion.
 func (a *App) ImportSMIMECertificateFromPathBER(accountID, filePath, password string) (*smime.ImportResult, error) {
+	if err := a.requireLocalCrypto(); err != nil {
+		return nil, err
+	}
 	data, err := readCertFile(filePath)
 	if err != nil {
 		return nil, err
@@ -126,6 +143,9 @@ func (a *App) storeSMIMECert(accountID string, privateKeyPEM []byte, certChainPE
 
 // ListSMIMECertificates returns all S/MIME certificates for an account
 func (a *App) ListSMIMECertificates(accountID string) ([]*smime.Certificate, error) {
+	if err := a.requireLocalCrypto(); err != nil {
+		return nil, err
+	}
 	certs, err := a.smimeStore.ListCertificates(accountID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list certificates: %w", err)
@@ -138,6 +158,9 @@ func (a *App) ListSMIMECertificates(accountID string) ([]*smime.Certificate, err
 
 // DeleteSMIMECertificate removes an S/MIME certificate and its private key
 func (a *App) DeleteSMIMECertificate(certID string) error {
+	if err := a.requireLocalCrypto(); err != nil {
+		return err
+	}
 	// Delete private key first
 	if err := a.credStore.DeleteSMIMEPrivateKey(certID); err != nil {
 		return fmt.Errorf("failed to delete private key: %w", err)
@@ -153,16 +176,25 @@ func (a *App) DeleteSMIMECertificate(certID string) error {
 
 // SetDefaultSMIMECertificate sets the default signing certificate for an account
 func (a *App) SetDefaultSMIMECertificate(accountID, certID string) error {
+	if err := a.requireLocalCrypto(); err != nil {
+		return err
+	}
 	return a.smimeStore.SetDefaultCertificate(accountID, certID)
 }
 
 // GetSMIMESignPolicy returns the signing policy for an account
 func (a *App) GetSMIMESignPolicy(accountID string) (string, error) {
+	if err := a.requireLocalCrypto(); err != nil {
+		return "", err
+	}
 	return a.smimeStore.GetSignPolicy(accountID)
 }
 
 // SetSMIMESignPolicy sets the signing policy ('never', 'always')
 func (a *App) SetSMIMESignPolicy(accountID, policy string) error {
+	if err := a.requireLocalCrypto(); err != nil {
+		return err
+	}
 	switch policy {
 	case "never", "always":
 		return a.smimeStore.SetSignPolicy(accountID, policy)
@@ -173,6 +205,9 @@ func (a *App) SetSMIMESignPolicy(accountID, policy string) error {
 
 // ListSenderCerts returns all cached sender certificates
 func (a *App) ListSenderCerts() ([]*smime.SenderCert, error) {
+	if err := a.requireLocalCrypto(); err != nil {
+		return nil, err
+	}
 	certs, err := a.smimeStore.ListAllSenderCerts()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list sender certificates: %w", err)
@@ -185,17 +220,26 @@ func (a *App) ListSenderCerts() ([]*smime.SenderCert, error) {
 
 // DeleteSenderCert removes a cached sender certificate
 func (a *App) DeleteSenderCert(certID string) error {
+	if err := a.requireLocalCrypto(); err != nil {
+		return err
+	}
 	return a.smimeStore.DeleteSenderCert(certID)
 }
 
 // HasSMIMECertificate returns whether an account has a default S/MIME certificate configured
 func (a *App) HasSMIMECertificate(accountID string) bool {
+	if a.remoteServiceMode {
+		return false
+	}
 	return a.composeOps.hasSMIMECertificate(accountID)
 }
 
 // GetSMIMECertificateForEmail returns the S/MIME certificate matching the given email.
 // Returns nil if no matching certificate is found.
 func (a *App) GetSMIMECertificateForEmail(accountID, email string) (*smime.Certificate, error) {
+	if err := a.requireLocalCrypto(); err != nil {
+		return nil, err
+	}
 	cert, _, err := a.smimeStore.GetCertificateByEmail(accountID, email)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get certificate for email: %w", err)
@@ -205,11 +249,17 @@ func (a *App) GetSMIMECertificateForEmail(accountID, email string) (*smime.Certi
 
 // GetSMIMEEncryptPolicy returns the encryption policy for an account
 func (a *App) GetSMIMEEncryptPolicy(accountID string) (string, error) {
+	if err := a.requireLocalCrypto(); err != nil {
+		return "", err
+	}
 	return a.smimeStore.GetEncryptPolicy(accountID)
 }
 
 // SetSMIMEEncryptPolicy sets the encryption policy ('never', 'always')
 func (a *App) SetSMIMEEncryptPolicy(accountID, policy string) error {
+	if err := a.requireLocalCrypto(); err != nil {
+		return err
+	}
 	switch policy {
 	case "never", "always":
 		return a.smimeStore.SetEncryptPolicy(accountID, policy)
@@ -220,6 +270,9 @@ func (a *App) SetSMIMEEncryptPolicy(accountID, policy string) error {
 
 // CheckRecipientCerts checks which recipients have S/MIME certificates available
 func (a *App) CheckRecipientCerts(emails []string) (map[string]bool, error) {
+	if err := a.requireLocalCrypto(); err != nil {
+		return nil, err
+	}
 	certPEMs, err := a.smimeStore.GetSenderCertPEMs(emails)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check recipient certs: %w", err)
@@ -235,6 +288,9 @@ func (a *App) CheckRecipientCerts(emails []string) (map[string]bool, error) {
 
 // PickRecipientCertFile opens a file picker for certificate files (.pem, .cer, .crt, .der)
 func (a *App) PickRecipientCertFile() (string, error) {
+	if err := a.requireLocalCrypto(); err != nil {
+		return "", err
+	}
 	path, err := wailsRuntime.OpenFileDialog(a.ctx, wailsRuntime.OpenDialogOptions{
 		Title: "Select Recipient Certificate",
 		Filters: []wailsRuntime.FileFilter{
@@ -252,6 +308,9 @@ func (a *App) PickRecipientCertFile() (string, error) {
 
 // ImportRecipientCert imports a recipient's public certificate from a file
 func (a *App) ImportRecipientCert(email, filePath string) error {
+	if err := a.requireLocalCrypto(); err != nil {
+		return err
+	}
 	if filePath == "" {
 		return fmt.Errorf("no file selected")
 	}

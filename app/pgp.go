@@ -12,6 +12,9 @@ import (
 
 // PickPGPKeyFile opens a file picker for PGP key files (.asc, .gpg, .key, .pub)
 func (a *App) PickPGPKeyFile() (string, error) {
+	if err := a.requireLocalCrypto(); err != nil {
+		return "", err
+	}
 	path, err := wailsRuntime.OpenFileDialog(a.ctx, wailsRuntime.OpenDialogOptions{
 		Title: "Select PGP Key File",
 		Filters: []wailsRuntime.FileFilter{
@@ -29,6 +32,9 @@ func (a *App) PickPGPKeyFile() (string, error) {
 
 // ImportPGPKeyFromPath imports a PGP keypair from a file path with optional passphrase
 func (a *App) ImportPGPKeyFromPath(accountID, filePath, passphrase string) (*pgp.ImportResult, error) {
+	if err := a.requireLocalCrypto(); err != nil {
+		return nil, err
+	}
 	if filePath == "" {
 		return nil, fmt.Errorf("no file selected")
 	}
@@ -93,6 +99,9 @@ func (a *App) ImportPGPKeyFromPath(accountID, filePath, passphrase string) (*pgp
 
 // ListPGPKeys returns all PGP keys for an account
 func (a *App) ListPGPKeys(accountID string) ([]*pgp.Key, error) {
+	if err := a.requireLocalCrypto(); err != nil {
+		return nil, err
+	}
 	keys, err := a.pgpStore.ListKeys(accountID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list keys: %w", err)
@@ -105,6 +114,9 @@ func (a *App) ListPGPKeys(accountID string) ([]*pgp.Key, error) {
 
 // DeletePGPKey removes a PGP key and its private key
 func (a *App) DeletePGPKey(keyID string) error {
+	if err := a.requireLocalCrypto(); err != nil {
+		return err
+	}
 	// Delete private key first
 	if err := a.credStore.DeletePGPPrivateKey(keyID); err != nil {
 		return fmt.Errorf("failed to delete private key: %w", err)
@@ -120,16 +132,25 @@ func (a *App) DeletePGPKey(keyID string) error {
 
 // SetDefaultPGPKey sets the default signing key for an account
 func (a *App) SetDefaultPGPKey(accountID, keyID string) error {
+	if err := a.requireLocalCrypto(); err != nil {
+		return err
+	}
 	return a.pgpStore.SetDefaultKey(accountID, keyID)
 }
 
 // GetPGPSignPolicy returns the PGP signing policy for an account
 func (a *App) GetPGPSignPolicy(accountID string) (string, error) {
+	if err := a.requireLocalCrypto(); err != nil {
+		return "", err
+	}
 	return a.pgpStore.GetSignPolicy(accountID)
 }
 
 // SetPGPSignPolicy sets the PGP signing policy ('never', 'always')
 func (a *App) SetPGPSignPolicy(accountID, policy string) error {
+	if err := a.requireLocalCrypto(); err != nil {
+		return err
+	}
 	switch policy {
 	case "never", "always":
 		return a.pgpStore.SetSignPolicy(accountID, policy)
@@ -140,11 +161,17 @@ func (a *App) SetPGPSignPolicy(accountID, policy string) error {
 
 // GetPGPEncryptPolicy returns the PGP encryption policy for an account
 func (a *App) GetPGPEncryptPolicy(accountID string) (string, error) {
+	if err := a.requireLocalCrypto(); err != nil {
+		return "", err
+	}
 	return a.pgpStore.GetEncryptPolicy(accountID)
 }
 
 // SetPGPEncryptPolicy sets the PGP encryption policy ('never', 'always')
 func (a *App) SetPGPEncryptPolicy(accountID, policy string) error {
+	if err := a.requireLocalCrypto(); err != nil {
+		return err
+	}
 	switch policy {
 	case "never", "always":
 		return a.pgpStore.SetEncryptPolicy(accountID, policy)
@@ -155,6 +182,9 @@ func (a *App) SetPGPEncryptPolicy(accountID, policy string) error {
 
 // ListPGPSenderKeys returns all cached PGP sender public keys
 func (a *App) ListPGPSenderKeys() ([]*pgp.SenderKey, error) {
+	if err := a.requireLocalCrypto(); err != nil {
+		return nil, err
+	}
 	keys, err := a.pgpStore.ListAllSenderKeys()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list sender keys: %w", err)
@@ -167,17 +197,26 @@ func (a *App) ListPGPSenderKeys() ([]*pgp.SenderKey, error) {
 
 // DeletePGPSenderKey removes a cached sender public key
 func (a *App) DeletePGPSenderKey(keyID string) error {
+	if err := a.requireLocalCrypto(); err != nil {
+		return err
+	}
 	return a.pgpStore.DeleteSenderKey(keyID)
 }
 
 // HasPGPKey returns whether an account has a default PGP key configured
 func (a *App) HasPGPKey(accountID string) bool {
+	if a.remoteServiceMode {
+		return false
+	}
 	return a.composeOps.hasPGPKey(accountID)
 }
 
 // GetPGPKeyForEmail returns the PGP key matching the given email.
 // Returns nil if no matching key is found.
 func (a *App) GetPGPKeyForEmail(accountID, email string) (*pgp.Key, error) {
+	if err := a.requireLocalCrypto(); err != nil {
+		return nil, err
+	}
 	key, _, err := a.pgpStore.GetKeyByEmail(accountID, email)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get key for email: %w", err)
@@ -187,6 +226,9 @@ func (a *App) GetPGPKeyForEmail(accountID, email string) (*pgp.Key, error) {
 
 // CheckRecipientPGPKeys checks which recipients have PGP public keys available
 func (a *App) CheckRecipientPGPKeys(emails []string) (map[string]bool, error) {
+	if err := a.requireLocalCrypto(); err != nil {
+		return nil, err
+	}
 	armoredKeys, err := a.pgpStore.GetSenderKeyArmoreds(emails)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check recipient keys: %w", err)
@@ -202,6 +244,9 @@ func (a *App) CheckRecipientPGPKeys(emails []string) (map[string]bool, error) {
 
 // PickRecipientPGPKeyFile opens a file picker for PGP public key files
 func (a *App) PickRecipientPGPKeyFile() (string, error) {
+	if err := a.requireLocalCrypto(); err != nil {
+		return "", err
+	}
 	path, err := wailsRuntime.OpenFileDialog(a.ctx, wailsRuntime.OpenDialogOptions{
 		Title: "Select Recipient PGP Public Key",
 		Filters: []wailsRuntime.FileFilter{
@@ -219,6 +264,9 @@ func (a *App) PickRecipientPGPKeyFile() (string, error) {
 
 // ImportRecipientPGPKey imports a recipient's PGP public key from a file
 func (a *App) ImportRecipientPGPKey(email, filePath string) error {
+	if err := a.requireLocalCrypto(); err != nil {
+		return err
+	}
 	if filePath == "" {
 		return fmt.Errorf("no file selected")
 	}
@@ -237,6 +285,9 @@ func (a *App) ImportRecipientPGPKey(email, filePath string) error {
 // LookupWKD performs a Web Key Directory lookup for the given email address
 // and caches the result if a key is found
 func (a *App) LookupWKD(email string) (string, error) {
+	if err := a.requireLocalCrypto(); err != nil {
+		return "", err
+	}
 	armored, err := pgp.LookupWKD(email)
 	if err != nil {
 		return "", fmt.Errorf("WKD lookup failed: %w", err)
@@ -257,6 +308,9 @@ func (a *App) LookupWKD(email string) (string, error) {
 // LookupHKP performs an HKP key server lookup for the given email address
 // and caches the result if a key is found
 func (a *App) LookupHKP(email string) (string, error) {
+	if err := a.requireLocalCrypto(); err != nil {
+		return "", err
+	}
 	armored, err := pgp.LookupHKP(email, a.getHKPServers())
 	if err != nil {
 		return "", fmt.Errorf("HKP lookup failed: %w", err)
@@ -276,6 +330,9 @@ func (a *App) LookupHKP(email string) (string, error) {
 // LookupPGPKey performs a unified WKD+HKP lookup for the given email address
 // and caches the result if a key is found. WKD is tried first, then HKP.
 func (a *App) LookupPGPKey(email string) (string, error) {
+	if err := a.requireLocalCrypto(); err != nil {
+		return "", err
+	}
 	result, err := pgp.LookupKey(email, a.getHKPServers())
 	if err != nil {
 		return "", fmt.Errorf("PGP key lookup failed: %w", err)
@@ -309,6 +366,9 @@ func (a *App) getHKPServers() []string {
 
 // GetPGPKeyServers returns all configured PGP key servers
 func (a *App) GetPGPKeyServers() ([]pgp.KeyServer, error) {
+	if err := a.requireLocalCrypto(); err != nil {
+		return nil, err
+	}
 	servers, err := a.pgpStore.ListKeyServers()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list key servers: %w", err)
@@ -321,11 +381,17 @@ func (a *App) GetPGPKeyServers() ([]pgp.KeyServer, error) {
 
 // AddPGPKeyServer adds a new key server URL
 func (a *App) AddPGPKeyServer(url string) error {
+	if err := a.requireLocalCrypto(); err != nil {
+		return err
+	}
 	return a.pgpStore.AddKeyServer(url)
 }
 
 // RemovePGPKeyServer removes a key server by ID
 func (a *App) RemovePGPKeyServer(id int) error {
+	if err := a.requireLocalCrypto(); err != nil {
+		return err
+	}
 	return a.pgpStore.RemoveKeyServer(id)
 }
 
