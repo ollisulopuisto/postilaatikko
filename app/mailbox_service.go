@@ -98,6 +98,7 @@ type mailboxServiceConnector struct {
 	credential         *desktopMailboxCredential
 	client             *automationclient.Client
 	searchMu           sync.Mutex
+	actionEventSyncMu  sync.Mutex
 	searches           map[string]activeMailboxSearch
 	actionKeys         map[[32]byte]string
 	undoKeys           map[[32]byte]string
@@ -707,7 +708,7 @@ func (a *App) mutateResolvedAction(ctx context.Context, ids []string, action v1.
 }
 
 func (a *App) publishMailboxReconciliation(operationID, state string, affected []v1.AffectedMessageRef) {
-	if state == "sent" || state == "undone" {
+	if state == "sent" || state == "undone" || state == "reset_required" {
 		a.invalidateViewCounts()
 	}
 	a.emitRuntimeEvent("mail:reconciled", map[string]interface{}{
@@ -715,6 +716,48 @@ func (a *App) publishMailboxReconciliation(operationID, state string, affected [
 		"state":       state,
 		"affected":    affected,
 	})
+	if state == "outcome_unknown" {
+		a.emitRuntimeEvent("undo:history-changed")
+	}
+}
+
+// SyncMailboxActionEvents replays one bounded helper event page to the active desktop.
+func (a *App) SyncMailboxActionEvents() error {
+	ctx := a.actionContext()
+	service, handled, err := a.undoService(ctx, false)
+	if !handled {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return service.syncActionEvents(ctx, func(event v1.ActionEvent) {
+		a.publishMailboxReconciliation(event.OperationID, event.State, event.Affected)
+	})
+}
+
+func (c *mailboxServiceConnector) syncActionEvents(ctx context.Context, dispatch func(v1.ActionEvent)) error {
+	c.actionEventSyncMu.Lock()
+	defer c.actionEventSyncMu.Unlock()
+	client, err := c.getClient()
+	if err != nil {
+		return err
+	}
+	page, err := client.GetActionEvents(ctx, 50)
+	if err != nil {
+		return err
+	}
+	if page.ResetRequired {
+		dispatch(v1.ActionEvent{State: "reset_required"})
+		return client.AcknowledgeActionEvents(ctx, page.Cursor)
+	}
+	for _, event := range page.Events {
+		dispatch(event)
+	}
+	if page.Cursor == 0 {
+		return nil
+	}
+	return client.AcknowledgeActionEvents(ctx, page.Cursor)
 }
 
 func (a *App) actionContext() context.Context {

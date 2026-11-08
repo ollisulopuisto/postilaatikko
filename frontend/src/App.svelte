@@ -70,7 +70,7 @@
   import { publishUndoOperationCompleted, publishUndoOperationCreated } from '$lib/components/list/undoMutationEvents'
   import { runMessageMutation } from '$lib/components/list/mutationInFlight'
   // @ts-ignore - wailsjs path
-  import { PrepareComposerReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, ClearDraftHistory, SendMessageWithDraftGuard, CancelPendingSend, CompletePendingSend, ListPendingSends, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ResolveMailActionTarget, UndoOperation, UndoLatestWithResult, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, RequestQuitApp, CancelQuitAppRequest, OpenComposerWindow, OpenMailWindow, OpenReaderWindow, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
+  import { PrepareComposerReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, ClearDraftHistory, SendMessageWithDraftGuard, CancelPendingSend, CompletePendingSend, ListPendingSends, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ResolveMailActionTarget, UndoOperation, UndoLatestWithResult, SyncMailboxActionEvents, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, RequestQuitApp, CancelQuitAppRequest, OpenComposerWindow, OpenMailWindow, OpenReaderWindow, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
   // @ts-ignore - wailsjs path
   import { smtp, folder, certificate, operations } from '../wailsjs/go/models'
   // @ts-ignore - wailsjs runtime
@@ -335,6 +335,7 @@
   // targeted toast undo without diverting Cmd-Z/Ctrl-Z from global LIFO.
   let lastFlagUndo = $state<{ messageIds: string[], restoreRead: boolean } | null>(null)
   let globalUndoInFlight = false
+  let mailboxEventPollTimer: ReturnType<typeof setInterval> | null = null
   const targetedUndoInFlight = new Set<string>()
 
   // Composer state
@@ -710,12 +711,21 @@
     return Math.max(0, Math.ceil((new Date(ps.dispatchAt).getTime() - pendingNow) / 1000))
   }
 
+  function syncMailboxActionEvents() {
+    void SyncMailboxActionEvents().catch(() => {})
+  }
+
   onDestroy(() => {
     if (pendingTick !== undefined) clearInterval(pendingTick)
     if (contextPaneHideTimer) clearTimeout(contextPaneHideTimer)
+    if (mailboxEventPollTimer !== null) clearInterval(mailboxEventPollTimer)
+    window.removeEventListener('focus', syncMailboxActionEvents)
   })
 
   onMount(async () => {
+    syncMailboxActionEvents()
+    mailboxEventPollTimer = setInterval(syncMailboxActionEvents, 20_000)
+    window.addEventListener('focus', syncMailboxActionEvents)
     contextPaneAutoHide = localStorage.getItem(CONTEXT_PANE_AUTO_HIDE_KEY) === 'true'
     contextPaneRevealed = !contextPaneAutoHide
     EventsOn('undo:history-open', () => {

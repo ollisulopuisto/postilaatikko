@@ -739,6 +739,31 @@ func (c *Client) GetUndoHistory(ctx context.Context, limit int) ([]v1.ActionUndo
 	return resp.Data, nil
 }
 
+// GetActionEvents reads one bounded page after the authenticated client's cursor.
+func (c *Client) GetActionEvents(ctx context.Context, limit int) (v1.ActionEventPage, error) {
+	path := "/v1/action-events"
+	if limit > 0 {
+		path += "?limit=" + url.QueryEscape(fmt.Sprint(limit))
+	}
+	bytes, err := c.doRequest(ctx, http.MethodGet, path, nil, "")
+	if err != nil {
+		return v1.ActionEventPage{}, err
+	}
+	var resp v1.Response[v1.ActionEventPage]
+	if err := json.Unmarshal(bytes, &resp); err != nil {
+		return v1.ActionEventPage{}, err
+	}
+	return resp.Data, nil
+}
+
+// AcknowledgeActionEvents advances the authenticated client's durable cursor.
+func (c *Client) AcknowledgeActionEvents(ctx context.Context, sequence int64) error {
+	_, err := c.doRequest(ctx, http.MethodPost, "/v1/action-events/ack", struct {
+		Sequence int64 `json:"sequence"`
+	}{Sequence: sequence}, "")
+	return err
+}
+
 // UndoLatest asks the helper to atomically claim and reverse its newest action.
 func (c *Client) UndoLatest(ctx context.Context, idempotencyKey string) (*v1.ActionUndoResult, error) {
 	return c.undo(ctx, "/v1/undo/latest", idempotencyKey)

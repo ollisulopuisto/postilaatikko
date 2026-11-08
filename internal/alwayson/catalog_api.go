@@ -457,5 +457,12 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 		func(key string) string { return actionReceipts.digestKey(key, r.accountMutationFingerprint) },
 		automation.RequireGrantCapability,
 	)
+	v1.MountActionEventRoutes(mux, actionReceipts, func(request *http.Request) string {
+		grant := automation.GetClientGrant(request.Context())
+		if grant == nil {
+			return ""
+		}
+		return grant.ClientID
+	}, automation.RequireGrantCapability)
 	return mux, nil
 }

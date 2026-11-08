@@ -1838,4 +1838,21 @@ var migrations = []Migration{
 			updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 		);
 	`},
+	{Version: 72, SQL: `
+		CREATE TABLE IF NOT EXISTS mail_action_events (
+			sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+			operation_id TEXT NOT NULL REFERENCES mail_action_operations(operation_id),
+			state TEXT NOT NULL CHECK(state IN ('sent','undone','outcome_unknown')),
+			affected_json BLOB NOT NULL DEFAULT '[]',
+			created_at TEXT NOT NULL DEFAULT (datetime('now')),
+			UNIQUE(operation_id, state)
+		);
+		CREATE INDEX IF NOT EXISTS idx_mail_action_events_created
+			ON mail_action_events(created_at);
+		CREATE TABLE IF NOT EXISTS mail_action_event_cursors (
+			client_id TEXT PRIMARY KEY,
+			last_sequence INTEGER NOT NULL DEFAULT 0 CHECK(last_sequence >= 0),
+			updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+		);
+	`},
 }

@@ -1846,6 +1846,10 @@ export function UndoLatestWithResult() {
   return window['go']['app']['App']['UndoLatestWithResult']();
 }
 
+export function SyncMailboxActionEvents() {
+  return window['go']['app']['App']['SyncMailboxActionEvents']();
+}
+
 export function UndoOperation(arg1) {
   return window['go']['app']['App']['UndoOperation'](arg1);
 }

@@ -942,6 +942,8 @@ export function Undo():Promise<string>;
 
 export function UndoLatestWithResult():Promise<app.UndoLatestResult>;
 
+export function SyncMailboxActionEvents():Promise<void>;
+
 export function UndoOperation(arg1:string):Promise<string>;
 
 export function UnsnoozeConversation(arg1:string,arg2:string):Promise<boolean>;

@@ -611,6 +611,10 @@
     })
 
     EventsOn('mail:reconciled', (data: { state: string; affected?: { accountId: string; folderId: string }[] }) => {
+      if (data.state === 'reset_required') {
+        scheduleReload()
+        return
+      }
       if (data.state !== 'sent' && data.state !== 'undone') return
       for (const ref of data.affected || []) {
         const relevant = (isUnifiedView && isUnifiedSpecialFolder(ref.accountId, ref.folderId)) ||
