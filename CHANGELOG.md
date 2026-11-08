@@ -3,8 +3,15 @@
 ## [Unreleased]
 
 - Deduplicate thread messages sharing the same RFC Message-ID in conversation views, eliminating redundant multi-label copies (e.g. Gmail Inbox vs All Mail).
+- Show local sender avatars beside collapsed conversation bubble tails when viewer circles are enabled, without external favicon requests; keep HTML message widths readable.
 
 ## Postilaatikko 2026.11.08.1
+
+- Give archive, trash, move and spam actions a short exit animation; keep cancelled Trash deletions visible and hold removed rows until refreshed data replaces them.
+
+- Exercise the notarization password prompt and exact quoted-keychain path round-trip in release credential checks.
+
+- Preserve existing macOS keychain search paths while importing the signing identity, and stop signing on security-tool diagnostics even if the process exits successfully.
 
 - Preserve generated identity model instances when changing the default address, keeping keyboard focus without breaking packaged frontend type checks.
 

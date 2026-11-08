@@ -69,6 +69,7 @@
   import { initLayout, getLayoutMode, getResponsiveView, showViewer, hideViewer, showSidebar, hideSidebar, isResponsive } from '$lib/stores/layout.svelte'
   import { publishUndoOperationCompleted, publishUndoOperationCreated } from '$lib/components/list/undoMutationEvents'
   import { runMessageMutation } from '$lib/components/list/mutationInFlight'
+  import { messageAnimations } from '$lib/stores/messageAnimations.svelte'
   // @ts-ignore - wailsjs path
   import { PrepareComposerReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, ClearDraftHistory, SendMessageWithDraftGuard, CancelPendingSend, CompletePendingSend, ListPendingSends, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ResolveMailActionTarget, UndoOperation, UndoLatestWithResult, SyncMailboxActionEvents, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, RequestQuitApp, CancelQuitAppRequest, OpenComposerWindow, OpenMailWindow, OpenReaderWindow, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
   // @ts-ignore - wailsjs path
@@ -2278,6 +2279,7 @@
   }
 
   async function handleBulkArchive(messageIds: string[]) {
+    messageAnimations.startRemoval(messageIds, 'archive')
     try {
       await runMessageMutation(messageIds, async () => {
         const result = await ArchiveWithUndo(messageIds)
@@ -2287,12 +2289,16 @@
         messageListRef?.handleActionComplete(true)
       })
     } catch (err) {
+      messageAnimations.finishRemoval(messageIds)
       console.error('Archive failed:', err)
       addToast({ type: 'error', message: $_('toast.failedToArchive') })
+    } finally {
+      messageAnimations.settleRemoval(messageIds)
     }
   }
 
   async function handleBulkArchiveAndMarkRead(messageIds: string[]) {
+    messageAnimations.startRemoval(messageIds, 'archive')
     let archived = false
     try {
       await runMessageMutation(messageIds, async () => {
@@ -2312,8 +2318,11 @@
         messageListRef?.handleActionComplete(true)
       })
     } catch (err) {
+      messageAnimations.finishRemoval(messageIds)
       console.error('Archive and mark read failed:', err)
       addToast({ type: 'error', message: $_(archived ? 'toast.failedToUpdateReadStatus' : 'toast.failedToArchive') })
+    } finally {
+      messageAnimations.settleRemoval(messageIds)
     }
   }
 
@@ -2346,6 +2355,7 @@
   }
 
   async function handleBulkSpam(messageIds: string[]) {
+    messageAnimations.startRemoval(messageIds, 'spam')
     try {
       await runMessageMutation(messageIds, async () => {
         const isSpamFolder = selectedFolderType === 'spam'
@@ -2367,9 +2377,12 @@
         messageListRef?.handleActionComplete(true)
       })
     } catch (err) {
+      messageAnimations.finishRemoval(messageIds)
       const isSpamFolder = selectedFolderType === 'spam'
       console.error('Spam toggle failed:', err)
       addToast({ type: 'error', message: $_(isSpamFolder ? 'toast.failedToMarkAsNotSpam' : 'toast.failedToMarkAsSpam') })
+    } finally {
+      messageAnimations.settleRemoval(messageIds)
     }
   }
 
