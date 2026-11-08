@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy, tick } from 'svelte'
+  import { onMount, onDestroy, tick, untrack } from 'svelte'
   import Icon from '@iconify/svelte'
   // @ts-ignore - wailsjs bindings
   import { GetReaderIdentityEmails, GetConversation, GetReadReceiptResponsePolicy, SendReadReceipt, IgnoreReadReceipt, GetMessageSource, ProcessSMIMEMessage, ProcessPGPMessage, FetchMessageBodyForAccount } from '../../../../wailsjs/go/app/App'
@@ -570,8 +570,9 @@
       // Auto-expand unread messages and the last message from cache
       if (cached.messages) {
         const newExpanded = new Set<string>()
-        readerMessages.forEach((m, i) => {
-          if (!m.isRead || i === readerMessages.length - 1) {
+        const cachedReaderMessages = untrack(() => readerMessages)
+        cachedReaderMessages.forEach((m, i) => {
+          if (!m.isRead || i === cachedReaderMessages.length - 1) {
             newExpanded.add(m.id)
           }
         })
@@ -781,8 +782,9 @@
     const tid = threadId
     const fid = folderId
     setReaderMode(next)
-    if (!container || !anchor) return
     await tick()
+    void fetchUnfetchedBodies(readerMessages)
+    if (!container || !anchor) return
     holdScrollAnchor(container, anchor, () => threadId === tid && folderId === fid)
   }
 
@@ -1808,11 +1810,13 @@
   const threadMessages = $derived(deduplicateMessages(conversation?.messages || [], folderId || undefined))
   const reactions = $derived(reactionLayout(threadMessages))
   const readerMessages = $derived(readerMode === 'traditional' ? threadMessages : threadMessages.filter(message => !reactions.hidden.has(message.id) || revealedReactions.has(message.id)))
-  function toggleReactionMessages(ids: string[]) {
+  async function toggleReactionMessages(ids: string[]) {
     const next = new Set(revealedReactions)
     const hide = ids.every(id => next.has(id))
     for (const id of ids) { if (hide) next.delete(id); else next.add(id) }
     revealedReactions = next
+    await tick()
+    void fetchUnfetchedBodies(readerMessages)
   }
   const visibleMessages = $derived(
     inFocusMode && focusModeKind === 'message' && focusedMessageIdInFocus

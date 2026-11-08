@@ -114,3 +114,32 @@ test('body fetch skips hidden duplicate copies even when given the full raw thre
   await fetch(messages)
   assert.deepEqual(calls, [['a', 'visible']])
 })
+
+test('cached expansion reads displayed messages only inside untrack', () => {
+  const effect = viewer.statements.find(node => ts.isExpressionStatement(node) && node.expression.expression?.getText(viewer) === '$effect' && node.getText(viewer).includes('getThreadSnapshot'))
+  assert.ok(effect)
+  const reads = []
+  const visit = node => {
+    if (ts.isIdentifier(node) && node.text === 'readerMessages') {
+      let ancestor = node.parent
+      while (ancestor && ancestor !== effect && !(ts.isCallExpression(ancestor) && ancestor.expression.getText(viewer) === 'untrack')) ancestor = ancestor.parent
+      reads.push(ancestor !== effect && !!ancestor)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(effect)
+  assert.deepEqual(reads, [true], 'load effect must not subscribe to conversation-derived reader state')
+})
+
+test('revealing notifications or changing mode fetches the newly displayed messages', async () => {
+  for (const name of ['toggleReactionMessages', 'switchReaderMode']) {
+    const handler = viewer.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === name)
+    const js = ts.transpileModule(handler.getText(viewer), { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText
+    const state = { mode: 'conversation', revealed: new Set(), ticked: false }
+    const notification = { id: 'reaction', bodyFetched: false }
+    const calls = []
+    const run = new Function('state', 'notification', 'calls', `let readerMode = state.mode; let revealedReactions = state.revealed; const contentContainerRef = null; const conversation = { messages: [notification] }; const threadId='t',folderId='inbox'; let readerMessages=[]; const setReaderMode = mode => { state.mode=mode }; const tick = async () => { state.ticked=true; readerMessages=[notification] }; const fetchUnfetchedBodies = messages => { calls.push({messages,ticked:state.ticked}) }; const captureScrollAnchor=()=>null; const holdScrollAnchor=()=>{}; ${js}; return ${name}`)(state, notification, calls)
+    await run(name === 'switchReaderMode' ? 'traditional' : ['reaction'])
+    assert.deepEqual(calls, [{ messages: [notification], ticked: true }], name + ' fetches after derived visibility updates, even without a scroll anchor')
+  }
+})

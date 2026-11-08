@@ -195,12 +195,12 @@ func TestGetConversationKeepsFetchedLegacyBodyBesideUnfetchedNativeCopy(t *testi
 	threadID := "gmail:" + account + ":cached-thread"
 	legacy := &Message{ID: "legacy-cached", AccountID: account, FolderID: folder, UID: 201,
 		MessageID: "cached@example.org", ThreadID: threadID, Date: time.Now(),
-		BodyText: "cached offline body", BodyHTML: "<p>cached offline body</p>", BodyFetched: true}
+		Subject: "Zebra", Snippet: "Retained snippet", BodyText: "cached offline body", BodyHTML: "<p>cached offline body</p>", BodyFetched: true}
 	if err := s.Create(legacy); err != nil {
 		t.Fatal(err)
 	}
 	native := &Message{ID: "native-empty", AccountID: account, FolderID: folder, UID: 202,
-		MessageID: "<cached@example.org>", ThreadID: threadID, Date: legacy.Date}
+		MessageID: "<cached@example.org>", ThreadID: threadID, Date: legacy.Date.Add(time.Hour), Subject: "Alpha", Snippet: "ZZ discarded snippet"}
 	if err := s.Create(native); err != nil {
 		t.Fatal(err)
 	}
@@ -214,8 +214,22 @@ func TestGetConversationKeepsFetchedLegacyBodyBesideUnfetchedNativeCopy(t *testi
 	if conversation == nil || len(conversation.Messages) != 1 {
 		t.Fatalf("expected one retained cached message, got %+v", conversation)
 	}
+	if conversation.Subject != legacy.Subject || conversation.Snippet != legacy.Snippet || !conversation.LatestDate.Equal(legacy.Date) {
+		t.Fatalf("summary reflects discarded copy: %+v; retained %+v", conversation, legacy)
+	}
 	retained := conversation.Messages[0]
 	if retained.ID != legacy.ID || !retained.BodyFetched || retained.BodyText != legacy.BodyText || retained.BodyHTML != legacy.BodyHTML {
 		t.Fatalf("downloaded body lost to unfetched native copy: %+v", retained)
+	}
+}
+
+func TestGetConversationEmptySummaryDefaults(t *testing.T) {
+	s, _, folder := newBodyFailedTestStore(t)
+	c, err := s.GetConversation("missing-thread", folder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c != nil && (c.Subject != "" || c.Snippet != "" || !c.LatestDate.IsZero() || c.MessageCount != 0) {
+		t.Fatalf("unexpected empty summary: %+v", c)
 	}
 }
