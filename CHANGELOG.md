@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Keep virtual-folder result caches warm in the independent helper and serve cached conversations with freshness metadata to connected desktop clients.
 - Store desktop TLS trust decisions in the device database while retaining legacy certificate rows in the mailbox database.
 - Store explicit folder body-prefetch choices in the device database and remove them when the mailbox account is removed.
 - Store desktop preferences and trusted remote-image entries in the device database, importing existing values without deleting their mailbox-database copies.

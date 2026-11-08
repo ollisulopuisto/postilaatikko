@@ -64,7 +64,7 @@ func (a *App) CancelMailSearch(sessionID string) {
 }
 
 func (a *App) searchMailViaService(req MailSearchRequest) (*MailSearchPage, bool, error) {
-	if a.mailboxService == nil || req.VirtualFolderID != "" || len(req.FolderIDs) > 0 {
+	if a.mailboxService == nil || len(req.FolderIDs) > 0 {
 		return nil, false, nil
 	}
 	status := a.GetMailboxServiceStatus()
@@ -74,23 +74,33 @@ func (a *App) searchMailViaService(req MailSearchRequest) (*MailSearchPage, bool
 		}
 		return nil, true, fmt.Errorf("local mailbox service unavailable: %s", status.Message)
 	}
-	if len(req.AccountIDs) > 1 {
+	if req.VirtualFolderID == "" && len(req.AccountIDs) > 1 {
 		return nil, true, errors.New("the mailbox service search accepts at most one selected account")
 	}
 	if len(req.SessionID) > 128 {
 		return nil, true, errors.New("invalid search session")
 	}
-	var within views.Scope
-	if len(req.AccountIDs) == 1 {
-		within = views.Scope{Kind: views.ScopeAccount, AccountID: req.AccountIDs[0]}
-	} else {
-		within = views.Scope{Kind: views.ScopeAllAccounts}
-	}
 	query := strings.TrimSpace(req.Query)
-	if query == "" {
+	if query == "" && req.VirtualFolderID == "" {
 		return &MailSearchPage{Conversations: []*message.Conversation{}, Issues: []MailSearchIssue{}}, true, nil
 	}
-	scope := views.Scope{Kind: views.ScopeSearch, Query: query, Within: &within}
+	var scope views.Scope
+	if req.VirtualFolderID != "" {
+		within := views.Scope{Kind: views.ScopeVirtualFolder, VirtualFolderID: req.VirtualFolderID}
+		if query == "" {
+			scope = within
+		} else {
+			scope = views.Scope{Kind: views.ScopeSearch, Query: query, Within: &within}
+		}
+	} else {
+		var within views.Scope
+		if len(req.AccountIDs) == 1 {
+			within = views.Scope{Kind: views.ScopeAccount, AccountID: req.AccountIDs[0]}
+		} else {
+			within = views.Scope{Kind: views.ScopeAllAccounts}
+		}
+		scope = views.Scope{Kind: views.ScopeSearch, Query: query, Within: &within}
+	}
 	ctx := a.ctx
 	if ctx == nil {
 		ctx = context.Background()

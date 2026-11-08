@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -289,6 +288,25 @@ type VirtualFolderCachedView struct {
 // index, computing and storing it on first use. Row state (unread, stars,
 // snippets) is hydrated live; only membership and order come from the cache.
 func (a *App) GetVirtualFolderCachedView(virtualFolderID string) (*VirtualFolderCachedView, error) {
+	if a.mailboxService != nil {
+		ctx := a.helperCommandContext()
+		status := a.mailboxService.status(ctx)
+		if status.Connected {
+			cached, err := a.mailboxService.cachedVirtualFolderView(ctx, virtualFolderID)
+			if err != nil {
+				return nil, fmt.Errorf("load virtual-folder cache from mailbox service: %w", err)
+			}
+			return &VirtualFolderCachedView{
+				VirtualFolderID: cached.VirtualFolderID,
+				Conversations:   cached.Conversations,
+				RefreshedAt:     cached.RefreshedAt,
+				HasCache:        cached.HasCache,
+			}, nil
+		}
+		if status.ErrorCode != "service_unavailable" {
+			return nil, fmt.Errorf("load virtual-folder cache from mailbox service: %s", status.Message)
+		}
+	}
 	vf, err := a.virtualFolderStore.Get(virtualFolderID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get virtual folder: %w", err)
@@ -447,34 +465,4 @@ func (a *App) refreshVirtualFolderCache(vf *virtualfolder.VirtualFolder) error {
 		})
 	}
 	return nil
-}
-
-// virtualFolderCacheRefreshInterval is how often cached virtual-folder indexes
-// are recomputed in the background.
-const virtualFolderCacheRefreshInterval = 5 * time.Minute
-
-// startVirtualFolderCacheRefresher periodically refreshes every virtual
-// folder's cached index so saved views open instantly without going stale.
-// Failures on one folder are logged and do not stop the others.
-func (a *App) startVirtualFolderCacheRefresher(ctx context.Context) {
-	log := logging.WithComponent("virtualfolder")
-	ticker := time.NewTicker(virtualFolderCacheRefreshInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			folders, err := a.virtualFolderStore.List()
-			if err != nil {
-				log.Warn().Err(err).Msg("Failed to list virtual folders for cache refresh")
-				continue
-			}
-			for _, vf := range folders {
-				if err := a.RefreshVirtualFolderCache(vf.ID); err != nil {
-					log.Warn().Err(err).Str("virtualFolderID", vf.ID).Msg("Failed to refresh virtual-folder cache")
-				}
-			}
-		}
-	}
 }

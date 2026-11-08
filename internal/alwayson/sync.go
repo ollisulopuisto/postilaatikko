@@ -91,7 +91,10 @@ type SyncRuntime struct {
 	validateSender              func(string, string) error
 	sharedMailboxValidate       func(context.Context, string, string) error
 	sharedMailboxCredentialCopy func(string, string) error
+	virtualFolderCacheInterval  time.Duration
 }
+
+const virtualFolderCacheRefreshInterval = 5 * time.Minute
 
 // OpenSyncRuntime opens an existing Postilaatikko data directory. It refuses
 // to create an empty database: the desktop must first configure accounts.
@@ -755,9 +758,48 @@ func (r *SyncRuntime) Start(ctx context.Context) {
 		r.cancel = cancel
 		r.started = true
 		r.ctxMu.Unlock()
-		r.lifecycleWG.Add(1)
+		r.lifecycleWG.Add(2)
 		go r.runSyncLifecycle(workerContext)
+		interval := r.virtualFolderCacheInterval
+		if interval <= 0 {
+			interval = virtualFolderCacheRefreshInterval
+		}
+		go r.runVirtualFolderCacheMaintenance(workerContext, interval)
 	})
+}
+
+func (r *SyncRuntime) runVirtualFolderCacheMaintenance(ctx context.Context, interval time.Duration) {
+	defer r.lifecycleWG.Done()
+	log := logging.WithComponent("alwayson.virtualfolder")
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		if err := r.refreshAllVirtualFolderCaches(); err != nil {
+			log.Warn().Err(err).Msg("Failed to refresh virtual-folder caches")
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func (r *SyncRuntime) refreshAllVirtualFolderCaches() error {
+	if r == nil || r.virtualFolders == nil {
+		return errors.New("always-on runtime is not open")
+	}
+	views, err := r.virtualFolders.List()
+	if err != nil {
+		return fmt.Errorf("list virtual folders for cache refresh: %w", err)
+	}
+	log := logging.WithComponent("alwayson.virtualfolder")
+	for _, view := range views {
+		if err := r.refreshVirtualFolderCache(view.ID); err != nil {
+			log.Warn().Err(err).Str("virtualFolderID", view.ID).Msg("Failed to refresh virtual-folder cache")
+		}
+	}
+	return nil
 }
 
 // ConfigureGmailPush enables optional Gmail Pub/Sub receive and watch renewal.

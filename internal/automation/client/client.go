@@ -398,6 +398,19 @@ func (c *Client) VirtualFolders(ctx context.Context) ([]*virtualfolder.VirtualFo
 	return result, nil
 }
 
+// CachedVirtualFolderView retrieves the helper-owned, hydrated saved-view cache.
+func (c *Client) CachedVirtualFolderView(ctx context.Context, viewID string) (*v1.CachedVirtualFolderView, error) {
+	data, err := c.doRequest(ctx, http.MethodGet, "/v1/views/"+url.PathEscape(viewID)+"/cache", nil, "")
+	if err != nil {
+		return nil, err
+	}
+	var response v1.Response[v1.CachedVirtualFolderView]
+	if err := json.Unmarshal(data, &response); err != nil {
+		return nil, err
+	}
+	return &response.Data, nil
+}
+
 // GetFilterRules lists service-owned automatic filter rules.
 func (c *Client) GetFilterRules(ctx context.Context) ([]*mailfilter.Rule, error) {
 	bytes, err := c.doRequest(ctx, http.MethodGet, "/v1/filters", nil, "")

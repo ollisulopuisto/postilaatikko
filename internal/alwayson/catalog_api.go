@@ -105,6 +105,46 @@ func (r *SyncRuntime) RefreshVirtualFolderCache(id string) error {
 	return r.refreshVirtualFolderCache(id)
 }
 
+func (r *SyncRuntime) GetCachedVirtualFolderView(id string) (*v1.CachedVirtualFolderView, error) {
+	if r == nil || r.virtualFolders == nil || r.messages == nil {
+		return nil, errors.New("always-on runtime is not open")
+	}
+	vf, err := r.virtualFolders.Get(id)
+	if err != nil {
+		return nil, fmt.Errorf("load virtual folder for cached view: %w", err)
+	}
+	if vf == nil {
+		return nil, fmt.Errorf("%w: %s", v1.ErrCachedVirtualFolderNotFound, id)
+	}
+	refs, refreshedAt, found, err := r.virtualFolders.LoadCache(id)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		if err := r.refreshVirtualFolderCache(id); err != nil {
+			return nil, err
+		}
+		refs, refreshedAt, found, err = r.virtualFolders.LoadCache(id)
+		if err != nil {
+			return nil, err
+		}
+	}
+	conversationRefs := make([]message.ConversationRef, 0, len(refs))
+	for _, ref := range refs {
+		conversationRefs = append(conversationRefs, message.ConversationRef{AccountID: ref.AccountID, ConversationID: ref.ConversationID})
+	}
+	conversations, err := r.messages.ListConversationsByRefs(conversationRefs)
+	if err != nil {
+		return nil, err
+	}
+	return &v1.CachedVirtualFolderView{
+		VirtualFolderID: id,
+		Conversations:   conversations,
+		RefreshedAt:     refreshedAt,
+		HasCache:        found,
+	}, nil
+}
+
 func (r *SyncRuntime) refreshVirtualFolderCache(id string) error {
 	vf, err := r.virtualFolders.Get(id)
 	if err != nil {
@@ -340,6 +380,7 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 	readOperations := &mailboxReadOperations{runtime: r}
 	mux := http.NewServeMux()
 	v1.MountCatalogRoutes(mux, operations, automation.RequireGrantCapability)
+	v1.MountVirtualFolderCacheRoute(mux, r, automation.RequireGrantCapability)
 	v1.NewAccountMutationHandler(r, newAccountMutationLedger(r.db), r.accountMutationFingerprint).MountRoutes(mux, automation.RequireGrantCapability)
 	v1.MountFolderMutationRoutes(mux, r, automation.RequireGrantCapability)
 	v1.MountVirtualFolderMutationRoutes(mux, r, automation.RequireGrantCapability)

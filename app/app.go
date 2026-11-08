@@ -902,7 +902,6 @@ func (a *App) Startup(ctx context.Context) {
 
 	// Periodically refresh cached virtual-folder indexes so saved views open
 	// instantly without going stale.
-	go a.startVirtualFolderCacheRefresher(ctx)
 
 	// Sync any pending drafts from previous sessions
 	go a.syncAllPendingDrafts()

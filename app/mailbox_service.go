@@ -98,6 +98,8 @@ type mailboxServiceConnector struct {
 	actionKeys       map[[32]byte]string
 	statusFunc       func(context.Context) MailboxServiceStatus
 	capabilitiesFunc func(context.Context) (*v1.Capabilities, error)
+	searchFunc       func(context.Context, string, v1.SearchRequest) (*views.ThreadPage, error)
+	cachedViewFunc   func(context.Context, string) (*v1.CachedVirtualFolderView, error)
 	mutateActionFunc func(context.Context, v1.ActionRequest, string) (*v1.ActionResponse, error)
 }
 
@@ -319,6 +321,9 @@ func (c *mailboxServiceConnector) setAllFolderSubscriptions(ctx context.Context,
 }
 
 func (c *mailboxServiceConnector) search(ctx context.Context, sessionID string, req v1.SearchRequest) (*views.ThreadPage, error) {
+	if c.searchFunc != nil {
+		return c.searchFunc(ctx, sessionID, req)
+	}
 	client, err := c.getClient()
 	if err != nil {
 		return nil, err
@@ -420,6 +425,17 @@ func (c *mailboxServiceConnector) virtualFolders(ctx context.Context) ([]*virtua
 		return nil, err
 	}
 	return client.VirtualFolders(ctx)
+}
+
+func (c *mailboxServiceConnector) cachedVirtualFolderView(ctx context.Context, viewID string) (*v1.CachedVirtualFolderView, error) {
+	if c.cachedViewFunc != nil {
+		return c.cachedViewFunc(ctx, viewID)
+	}
+	client, err := c.getClient()
+	if err != nil {
+		return nil, err
+	}
+	return client.CachedVirtualFolderView(ctx, viewID)
 }
 
 func (c *mailboxServiceConnector) mutateVirtualFolder(ctx context.Context, req v1.VirtualFolderMutationRequest) error {
