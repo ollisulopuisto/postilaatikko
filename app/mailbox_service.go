@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -30,17 +31,19 @@ import (
 	"github.com/hkdb/aerion/internal/operations"
 	"github.com/hkdb/aerion/internal/replylater"
 	"github.com/hkdb/aerion/internal/servicebootstrap"
+	"github.com/hkdb/aerion/internal/settings"
 	"github.com/hkdb/aerion/internal/triage"
 	"github.com/hkdb/aerion/internal/views"
 	"github.com/hkdb/aerion/internal/virtualfolder"
 )
 
 const (
-	desktopMailboxClientName = "Postilaatikko Desktop Local"
-	desktopMailboxSecretName = "mailbox_service_client"
-	mailboxServiceEndpoint   = "http://127.0.0.1:8029"
-	mailboxAPIRequestTimeout = 2 * time.Second
-	mailboxMutationTimeout   = 30 * time.Second
+	desktopMailboxClientName       = "Postilaatikko Desktop Local"
+	desktopMailboxSecretName       = "mailbox_service_client"
+	desktopRemoteMailboxSecretName = "mailbox_service_remote_client"
+	mailboxServiceEndpoint         = "http://127.0.0.1:8029"
+	mailboxAPIRequestTimeout       = 2 * time.Second
+	mailboxMutationTimeout         = 30 * time.Second
 )
 
 var (
@@ -50,13 +53,14 @@ var (
 )
 
 type desktopMailboxCredential struct {
-	ClientID string `json:"clientId"`
+	ClientID string `json:"clientId,omitempty"`
 	Token    string `json:"token"`
 }
 
 type mailboxSecretStore interface {
 	GetSecret(name string) (string, error)
 	SetSecret(name, secret string) error
+	DeleteSecret(name string) error
 }
 
 // MailboxServiceStatus describes the local service connection without exposing
@@ -101,6 +105,7 @@ type mailboxServiceConnector struct {
 	searchFunc       func(context.Context, string, v1.SearchRequest) (*views.ThreadPage, error)
 	cachedViewFunc   func(context.Context, string) (*v1.CachedVirtualFolderView, error)
 	mutateActionFunc func(context.Context, v1.ActionRequest, string) (*v1.ActionResponse, error)
+	endpoint         string
 }
 
 type activeMailboxSearch struct {
@@ -122,28 +127,47 @@ func (c *mailboxServiceConnector) getClient() (*automationclient.Client, error) 
 		return nil, errors.New("mailbox service connection is not initialized")
 	}
 
+	endpoint := c.endpoint
+	if endpoint == "" {
+		endpoint = mailboxServiceEndpoint
+	}
+	validatedEndpoint, endpointErr := validateMailboxServiceEndpoint(endpoint)
+	if endpointErr != nil {
+		return nil, endpointErr
+	}
+	endpoint = validatedEndpoint
+	remote := endpoint != mailboxServiceEndpoint
 	tokenStore := automation.NewSQLiteTokenStore(c.db)
-	secret, err := c.keyring.GetSecret(desktopMailboxSecretName)
+	secretName := desktopMailboxSecretName
+	if remote {
+		secretName = desktopRemoteMailboxSecretName
+	}
+	secret, err := c.keyring.GetSecret(secretName)
 	if err == nil {
 		credential := desktopMailboxCredential{}
-		if err := json.Unmarshal([]byte(secret), &credential); err != nil || credential.ClientID == "" || credential.Token == "" {
+		if err := json.Unmarshal([]byte(secret), &credential); err != nil || credential.Token == "" || (!remote && credential.ClientID == "") {
 			return nil, errDesktopMailboxAuthorizationRequired
 		}
-		grant, grantErr := tokenStore.GetGrant(credential.Token)
-		if errors.Is(grantErr, automation.ErrClientNotFound) || errors.Is(grantErr, automation.ErrTokenRevoked) {
-			return nil, errDesktopMailboxAuthorizationRequired
-		}
-		if grantErr != nil {
-			return nil, fmt.Errorf("validate desktop mailbox credential: %w", grantErr)
-		}
-		if grant.ClientID != credential.ClientID || !hasCapability(grant.Capabilities, v1.CapabilityMailRead) || !hasCapability(grant.Capabilities, v1.CapabilityMailBodyFetch) {
-			return nil, errDesktopMailboxAuthorizationRequired
+		if !remote {
+			grant, grantErr := tokenStore.GetGrant(credential.Token)
+			if errors.Is(grantErr, automation.ErrClientNotFound) || errors.Is(grantErr, automation.ErrTokenRevoked) {
+				return nil, errDesktopMailboxAuthorizationRequired
+			}
+			if grantErr != nil {
+				return nil, fmt.Errorf("validate desktop mailbox credential: %w", grantErr)
+			}
+			if grant.ClientID != credential.ClientID || !hasCapability(grant.Capabilities, v1.CapabilityMailRead) || !hasCapability(grant.Capabilities, v1.CapabilityMailBodyFetch) {
+				return nil, errDesktopMailboxAuthorizationRequired
+			}
 		}
 		c.credential = &credential
-		c.client = newMailboxAPIClient(credential.Token)
+		c.client = newMailboxAPIClientAt(endpoint, credential.Token)
 		return c.client, nil
 	} else if !errors.Is(err, keyring.ErrCredentialNotFound) {
 		return nil, err
+	}
+	if remote {
+		return nil, errDesktopMailboxAuthorizationRequired
 	}
 
 	clients, err := tokenStore.ListClients()
@@ -174,13 +198,79 @@ func (c *mailboxServiceConnector) getClient() (*automationclient.Client, error) 
 	return c.client, nil
 }
 
+func validateMailboxServiceEndpoint(endpoint string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(endpoint))
+	if err != nil || parsed == nil || parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", errors.New("enter a mailbox service URL without credentials or query parameters")
+	}
+	if parsed.Path != "" && parsed.Path != "/" {
+		return "", errors.New("mailbox service URL must not include a path")
+	}
+	host := strings.ToLower(parsed.Hostname())
+	loopback := host == "localhost"
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+		loopback = true
+	}
+	if parsed.Scheme == "http" && loopback {
+		return mailboxServiceEndpoint, nil
+	}
+	if parsed.Scheme != "https" {
+		return "", errors.New("remote mailbox services require HTTPS")
+	}
+	return strings.TrimRight(parsed.String(), "/"), nil
+}
+
+func (c *mailboxServiceConnector) setRemoteCredential(endpoint, token string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.endpoint = endpoint
+	c.credential = &desktopMailboxCredential{Token: token}
+	c.client = newMailboxAPIClientAt(endpoint, token)
+}
+
+func (c *mailboxServiceConnector) setEndpoint(endpoint string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.endpoint = endpoint
+	c.client = nil
+	c.credential = nil
+}
+
+func (c *mailboxServiceConnector) clearCredential(endpoint string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.keyring != nil {
+		if err := c.keyring.DeleteSecret(desktopRemoteMailboxSecretName); err != nil && !errors.Is(err, keyring.ErrCredentialNotFound) {
+			return err
+		}
+	}
+	c.endpoint = endpoint
+	c.credential = nil
+	c.client = nil
+	return nil
+}
+
+func (c *mailboxServiceConnector) isRemote() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.endpoint != "" && c.endpoint != mailboxServiceEndpoint
+}
+
 func newMailboxAPIClient(token string) *automationclient.Client {
 	return newMailboxAPIClientWithTimeout(token, mailboxAPIRequestTimeout)
 }
 
 func newMailboxAPIClientWithTimeout(token string, timeout time.Duration) *automationclient.Client {
+	return newMailboxAPIClientAtWithTimeout(mailboxServiceEndpoint, token, timeout)
+}
+
+func newMailboxAPIClientAt(endpoint, token string) *automationclient.Client {
+	return newMailboxAPIClientAtWithTimeout(endpoint, token, mailboxAPIRequestTimeout)
+}
+
+func newMailboxAPIClientAtWithTimeout(endpoint, token string, timeout time.Duration) *automationclient.Client {
 	return automationclient.New(automationclient.Config{
-		Endpoint: mailboxServiceEndpoint,
+		Endpoint: endpoint,
 		Token:    token,
 		Timeout:  timeout,
 	})
@@ -202,6 +292,9 @@ func (c *mailboxServiceConnector) status(ctx context.Context) MailboxServiceStat
 	client, err := c.getClient()
 	if err != nil {
 		if errors.Is(err, errDesktopMailboxAuthorizationRequired) {
+			if c.isRemote() {
+				return MailboxServiceStatus{ErrorCode: "authorization_required", Message: "This desktop needs a valid device grant for the configured remote helper."}
+			}
 			return MailboxServiceStatus{ErrorCode: "authorization_required", Message: "Desktop access to the local mailbox service needs repair."}
 		}
 		return MailboxServiceStatus{ErrorCode: "credential_unavailable", Message: "Desktop service credentials are unavailable."}
@@ -212,20 +305,28 @@ func (c *mailboxServiceConnector) status(ctx context.Context) MailboxServiceStat
 	if credential == nil {
 		return MailboxServiceStatus{ErrorCode: "credential_unavailable", Message: "Desktop service credentials are unavailable."}
 	}
-	grant, err := automation.NewSQLiteTokenStore(c.db).GetGrant(credential.Token)
-	if errors.Is(err, automation.ErrClientNotFound) || errors.Is(err, automation.ErrTokenRevoked) || (err == nil && grant.ClientID != credential.ClientID) {
-		return MailboxServiceStatus{ErrorCode: "authorization_required", Message: "Desktop access to the local mailbox service needs repair."}
-	}
-	if err != nil {
-		return MailboxServiceStatus{ErrorCode: "credential_unavailable", Message: "Desktop service credentials are unavailable."}
+	if !c.isRemote() {
+		grant, err := automation.NewSQLiteTokenStore(c.db).GetGrant(credential.Token)
+		if errors.Is(err, automation.ErrClientNotFound) || errors.Is(err, automation.ErrTokenRevoked) || (err == nil && grant.ClientID != credential.ClientID) {
+			return MailboxServiceStatus{ErrorCode: "authorization_required", Message: "Desktop access to the local mailbox service needs repair."}
+		}
+		if err != nil {
+			return MailboxServiceStatus{ErrorCode: "credential_unavailable", Message: "Desktop service credentials are unavailable."}
+		}
 	}
 	statusCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	capabilities, err := c.getCapabilities(statusCtx, client)
 	if err != nil {
+		if c.isRemote() {
+			return MailboxServiceStatus{ErrorCode: "remote_unavailable", Message: "The configured remote mailbox service is not reachable or did not authorize this device."}
+		}
 		return MailboxServiceStatus{ErrorCode: "service_unavailable", Message: "The local mailbox service is not reachable."}
 	}
 	if capabilities == nil || capabilities.Version != v1.Version || !hasCapability(capabilities.Capabilities, v1.CapabilityMailRead) || !hasCapability(capabilities.Capabilities, v1.CapabilityMailBodyFetch) {
+		if c.isRemote() {
+			return MailboxServiceStatus{ErrorCode: "capability_mismatch", Message: "The remote helper does not provide the required API version and read capabilities."}
+		}
 		return MailboxServiceStatus{ErrorCode: "capability_mismatch", Message: "The local mailbox service does not provide the required read and body-fetch capabilities."}
 	}
 	granted := make([]string, 0, len(capabilities.Capabilities))
@@ -548,6 +649,9 @@ func (c *mailboxServiceConnector) authorizeCapability(ctx context.Context, capab
 	if hasCapability(capabilities.Capabilities, capability) {
 		return nil
 	}
+	if c.isRemote() {
+		return errors.New("grant this capability to a new device client on the remote helper, then reconnect with its new token")
+	}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -661,6 +765,85 @@ func (a *App) GetMailboxServiceStatus() MailboxServiceStatus {
 		ctx = context.Background()
 	}
 	return a.mailboxService.status(ctx)
+}
+
+// GetMailboxServiceEndpoint returns the configured endpoint without exposing credentials.
+func (a *App) GetMailboxServiceEndpoint() string {
+	if a.mailboxService == nil {
+		return mailboxServiceEndpoint
+	}
+	a.mailboxService.mu.Lock()
+	defer a.mailboxService.mu.Unlock()
+	if a.mailboxService.endpoint == "" {
+		return mailboxServiceEndpoint
+	}
+	return a.mailboxService.endpoint
+}
+
+// ConfigureRemoteMailboxService validates and stores a remote helper endpoint
+// and one-time per-device token. The token is kept only in the OS keyring.
+func (a *App) ConfigureRemoteMailboxService(endpoint, token string) (MailboxServiceStatus, error) {
+	if a.mailboxService == nil || a.settingsStore == nil {
+		return MailboxServiceStatus{ErrorCode: "service_unavailable"}, errors.New("mailbox service is not initialized")
+	}
+	validated, err := validateMailboxServiceEndpoint(endpoint)
+	if err != nil {
+		return MailboxServiceStatus{ErrorCode: "invalid_endpoint", Message: err.Error()}, err
+	}
+	if validated == mailboxServiceEndpoint || !strings.HasPrefix(validated, "https://") {
+		err := errors.New("enter the remote helper's HTTPS URL")
+		return MailboxServiceStatus{ErrorCode: "invalid_endpoint", Message: err.Error()}, err
+	}
+	token = strings.TrimSpace(token)
+	if token == "" || strings.ContainsAny(token, " \t\r\n") {
+		err := errors.New("enter the one-time bearer token issued for this desktop")
+		return MailboxServiceStatus{ErrorCode: "invalid_token", Message: err.Error()}, err
+	}
+	client := newMailboxAPIClientAtWithTimeout(validated, token, mailboxAPIRequestTimeout)
+	ctx := a.helperCommandContext()
+	capabilities, err := client.GetCapabilities(ctx)
+	if err != nil {
+		return MailboxServiceStatus{ErrorCode: "remote_authorization_failed", Message: "Could not authenticate to the remote helper. Check its HTTPS certificate, URL, and device grant."}, errors.New("remote helper did not authorize this device")
+	}
+	if capabilities == nil || capabilities.Version != v1.Version || !hasCapability(capabilities.Capabilities, v1.CapabilityMailRead) || !hasCapability(capabilities.Capabilities, v1.CapabilityMailBodyFetch) {
+		err := errors.New("remote helper grant must include the current API version, mail.read, and mail.body.fetch")
+		return MailboxServiceStatus{ErrorCode: "capability_mismatch", Message: err.Error()}, err
+	}
+	encoded, err := json.Marshal(desktopMailboxCredential{Token: token})
+	if err != nil {
+		return MailboxServiceStatus{ErrorCode: "configuration_failed"}, err
+	}
+	oldEndpoint, err := a.settingsStore.Get(settings.KeyMailboxServiceEndpoint)
+	if err != nil {
+		return MailboxServiceStatus{ErrorCode: "configuration_failed"}, err
+	}
+	if err := a.settingsStore.Set(settings.KeyMailboxServiceEndpoint, validated); err != nil {
+		return MailboxServiceStatus{ErrorCode: "configuration_failed"}, err
+	}
+	if err := a.mailboxService.keyring.SetSecret(desktopRemoteMailboxSecretName, string(encoded)); err != nil {
+		_ = a.settingsStore.Set(settings.KeyMailboxServiceEndpoint, oldEndpoint)
+		return MailboxServiceStatus{ErrorCode: "credential_storage_failed"}, errors.New("could not store remote device credential in the OS keyring")
+	}
+	a.mailboxService.setRemoteCredential(validated, token)
+	return a.GetMailboxServiceStatus(), nil
+}
+
+// DisconnectRemoteMailboxService removes the local device credential and
+// returns this desktop to its default loopback helper.
+func (a *App) DisconnectRemoteMailboxService() (MailboxServiceStatus, error) {
+	if a.mailboxService == nil || a.settingsStore == nil {
+		return MailboxServiceStatus{ErrorCode: "service_unavailable"}, errors.New("mailbox service is not initialized")
+	}
+	oldEndpoint := a.GetMailboxServiceEndpoint()
+	if err := a.settingsStore.Set(settings.KeyMailboxServiceEndpoint, mailboxServiceEndpoint); err != nil {
+		return MailboxServiceStatus{ErrorCode: "configuration_failed"}, err
+	}
+	if err := a.mailboxService.clearCredential(mailboxServiceEndpoint); err != nil {
+		_ = a.settingsStore.Set(settings.KeyMailboxServiceEndpoint, oldEndpoint)
+		a.mailboxService.setEndpoint(oldEndpoint)
+		return MailboxServiceStatus{ErrorCode: "credential_removal_failed"}, errors.New("could not remove the remote credential from the OS keyring")
+	}
+	return a.GetMailboxServiceStatus(), nil
 }
 
 // GetMailboxServiceLifecycleStatus reports whether the bundled helper's

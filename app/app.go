@@ -646,7 +646,13 @@ func (a *App) Startup(ctx context.Context) {
 	// the time Startup runs, a.paths, a.db, and a.credStore are non-nil.
 	log := logging.WithComponent("app")
 	db := a.db
+	a.settingsStore = settings.NewStore(a.deviceDB)
 	a.mailboxService = newMailboxServiceConnector(db)
+	if endpoint, err := a.settingsStore.Get(settings.KeyMailboxServiceEndpoint); err != nil {
+		log.Warn().Err(err).Msg("Could not load mailbox service endpoint")
+	} else if endpoint != "" {
+		a.mailboxService.endpoint = endpoint
+	}
 	if _, err := a.mailboxService.getClient(); err != nil {
 		if !errors.Is(err, errDesktopMailboxAuthorizationRequired) {
 			log.Warn().Err(err).Msg("Desktop mailbox service credential bootstrap is unavailable")
@@ -680,7 +686,6 @@ func (a *App) Startup(ctx context.Context) {
 	a.contactStore = contact.NewStore(db.DB)
 	a.contactStore.SetMacOSContactsSource(macoscontacts.New())
 	a.draftStore = draft.NewStore(db)
-	a.settingsStore = settings.NewStore(a.deviceDB)
 	a.appStateStore = appstate.NewStore(a.deviceDB.DB)
 	a.imageAllowlistStore = settings.NewImageAllowlistStore(a.deviceDB)
 

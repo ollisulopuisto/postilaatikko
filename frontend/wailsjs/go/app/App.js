@@ -706,6 +706,18 @@ export function GetMailboxServiceStatus() {
   return window['go']['app']['App']['GetMailboxServiceStatus']();
 }
 
+export function GetMailboxServiceEndpoint() {
+  return window['go']['app']['App']['GetMailboxServiceEndpoint']();
+}
+
+export function ConfigureRemoteMailboxService(arg1, arg2) {
+  return window['go']['app']['App']['ConfigureRemoteMailboxService'](arg1, arg2);
+}
+
+export function DisconnectRemoteMailboxService() {
+  return window['go']['app']['App']['DisconnectRemoteMailboxService']();
+}
+
 export function GetMailboxServiceLifecycleStatus() {
   return window['go']['app']['App']['GetMailboxServiceLifecycleStatus']();
 }

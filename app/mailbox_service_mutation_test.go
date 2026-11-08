@@ -36,6 +36,11 @@ func (s *testMailboxSecretStore) SetSecret(_ string, secret string) error {
 	return nil
 }
 
+func (s *testMailboxSecretStore) DeleteSecret(string) error {
+	s.secret = ""
+	return nil
+}
+
 func TestAuthorizeCapabilityReplacesCredentialAndRevokesOldGrant(t *testing.T) {
 	db := openMailboxMutationTestDB(t)
 	tokenStore := automation.NewSQLiteTokenStore(db)

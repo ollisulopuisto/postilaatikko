@@ -377,6 +377,9 @@ export function GetMacOSContactsStatus():Promise<string>;
 export function GetMailtoMode():Promise<string>;
 
 export function GetMailboxServiceStatus():Promise<{connected:boolean; writeAuthorized:boolean; accountManagementAuthorized:boolean; draftAccessAuthorized:boolean; sendAuthorized:boolean; apiVersion?:string; capabilities?:string[]; errorCode?:string; message?:string}>;
+export function GetMailboxServiceEndpoint():Promise<string>;
+export function ConfigureRemoteMailboxService(arg1:string,arg2:string):Promise<{connected:boolean; writeAuthorized:boolean; accountManagementAuthorized:boolean; draftAccessAuthorized:boolean; sendAuthorized:boolean; apiVersion?:string; capabilities?:string[]; errorCode?:string; message?:string}>;
+export function DisconnectRemoteMailboxService():Promise<{connected:boolean; writeAuthorized:boolean; accountManagementAuthorized:boolean; draftAccessAuthorized:boolean; sendAuthorized:boolean; apiVersion?:string; capabilities?:string[]; errorCode?:string; message?:string}>;
 
 export function GetMailboxServiceLifecycleStatus():Promise<{supported:boolean; helperAvailable:boolean; installed:boolean; running:boolean}>;
 

@@ -8,6 +8,9 @@
     EnableMailboxServiceDraftAccess,
     EnableMailboxServiceSending,
     EnableMailboxServiceWrites,
+    ConfigureRemoteMailboxService,
+    DisconnectRemoteMailboxService,
+    GetMailboxServiceEndpoint,
     GetMailboxServiceLifecycleStatus,
     GetMailboxServiceStatus,
     InstallMailboxService,
@@ -42,8 +45,23 @@
   let sendError = $state(false)
   let lifecycleAction = $state<LifecycleAction | null>(null)
   let lifecycleError = $state(false)
+  let endpoint = $state('http://127.0.0.1:8029')
+  let configuredEndpoint = $state('http://127.0.0.1:8029')
+  let deviceToken = $state('')
+  let remoteSaving = $state(false)
+  let remoteError = $state(false)
+
+  let isRemote = $derived((endpoint !== '' && endpoint !== 'http://127.0.0.1:8029') || configuredEndpoint !== 'http://127.0.0.1:8029')
+  let endpointPending = $derived(endpoint.trim() !== configuredEndpoint)
 
   async function refreshStatus() {
+    try {
+      endpoint = await GetMailboxServiceEndpoint()
+      configuredEndpoint = endpoint
+    } catch {
+      endpoint = 'http://127.0.0.1:8029'
+      configuredEndpoint = endpoint
+    }
     try {
       status = await GetMailboxServiceStatus()
     } catch {
@@ -54,6 +72,37 @@
     } catch {
       lifecycle = { supported: true, helperAvailable: false, installed: false, running: false }
       lifecycleError = true
+    }
+  }
+
+  async function connectRemote() {
+    if (remoteSaving) return
+    remoteSaving = true
+    remoteError = false
+    try {
+      status = await ConfigureRemoteMailboxService(endpoint, deviceToken)
+      deviceToken = ''
+      await refreshStatus()
+    } catch {
+      remoteError = true
+    } finally {
+      remoteSaving = false
+    }
+  }
+
+  async function disconnectRemote() {
+    if (remoteSaving) return
+    remoteSaving = true
+    remoteError = false
+    try {
+      status = await DisconnectRemoteMailboxService()
+      endpoint = await GetMailboxServiceEndpoint()
+      deviceToken = ''
+      await refreshStatus()
+    } catch {
+      remoteError = true
+    } finally {
+      remoteSaving = false
     }
   }
 
@@ -116,7 +165,32 @@
     <p class="text-xs text-muted-foreground">{$_('settingsGeneral.mailboxServiceHelp')}</p>
   </div>
 
-  {#if lifecycle?.supported}
+  <div class="space-y-2 border-t border-border pt-3">
+    <label class="block space-y-1 text-xs" for="mailbox-service-endpoint">
+      <span>{$_('settingsGeneral.mailboxServiceEndpoint')}</span>
+      <input id="mailbox-service-endpoint" bind:value={endpoint} autocomplete="url" spellcheck="false" class="w-full rounded border border-border bg-background px-2 py-1.5 text-sm" />
+    </label>
+    {#if isRemote}
+      <p class="text-xs text-muted-foreground">{$_('settingsGeneral.mailboxServiceRemoteHelp')}</p>
+      <label class="block space-y-1 text-xs" for="mailbox-service-token">
+        <span>{$_('settingsGeneral.mailboxServiceDeviceToken')}</span>
+        <input id="mailbox-service-token" bind:value={deviceToken} type="password" autocomplete="off" spellcheck="false" class="w-full rounded border border-border bg-background px-2 py-1.5 text-sm" />
+      </label>
+      <div class="flex gap-2">
+        <Button onclick={connectRemote} disabled={remoteSaving || !deviceToken.trim()}>
+          {remoteSaving ? $_('settingsGeneral.mailboxServiceConnecting') : $_('settingsGeneral.mailboxServiceConnectRemote')}
+        </Button>
+        <Button variant="outline" onclick={disconnectRemote} disabled={remoteSaving}>
+          {$_('settingsGeneral.mailboxServiceDisconnectRemote')}
+        </Button>
+      </div>
+      {#if remoteError}
+        <p class="text-sm text-destructive" role="alert">{$_('settingsGeneral.mailboxServiceRemoteFailed')}</p>
+      {/if}
+    {/if}
+  </div>
+
+  {#if lifecycle?.supported && !isRemote}
     <div class="space-y-2 border-t border-border pt-3">
       {#if !lifecycle.helperAvailable}
         <p class="text-sm text-muted-foreground">{$_('settingsGeneral.mailboxServiceHelperMissing')}</p>
@@ -142,8 +216,10 @@
     <p class="text-sm text-destructive" role="alert">{$_('settingsGeneral.mailboxServiceLifecycleFailed')}</p>
   {/if}
 
-  {#if !status?.connected}
-    <p class="text-sm text-muted-foreground">{$_('settingsGeneral.mailboxServiceUnavailable')}</p>
+  {#if endpointPending}
+    <p class="text-sm text-muted-foreground">{$_('settingsGeneral.mailboxServiceEndpointPending')}</p>
+  {:else if !status?.connected}
+    <p class="text-sm text-muted-foreground">{isRemote ? $_('settingsGeneral.mailboxServiceRemoteUnavailable') : $_('settingsGeneral.mailboxServiceUnavailable')}</p>
   {:else}
     <div class="space-y-2 border-t border-border pt-3">
       <div class="space-y-1">
@@ -152,6 +228,8 @@
       </div>
       {#if status.writeAuthorized}
         <p class="text-sm text-muted-foreground">{$_('settingsGeneral.mailboxServiceWritesEnabled')}</p>
+      {:else if isRemote}
+        <p class="text-sm text-muted-foreground">{$_('settingsGeneral.mailboxServiceRemoteGrantRequired')}</p>
       {:else}
         <Button onclick={() => enableAccess('mail.write')} disabled={saving !== null}>
           {saving === 'mail.write' ? $_('settingsGeneral.mailboxServiceEnabling') : $_('settingsGeneral.mailboxServiceEnableWrites')}
@@ -169,6 +247,8 @@
       </div>
       {#if status.sendAuthorized}
         <p class="text-sm text-muted-foreground">{$_('settingsGeneral.mailboxServiceSendAccessEnabled')}</p>
+      {:else if isRemote}
+        <p class="text-sm text-muted-foreground">{$_('settingsGeneral.mailboxServiceRemoteGrantRequired')}</p>
       {:else}
         <Button onclick={() => enableAccess('mail.send')} disabled={saving !== null}>
           {saving === 'mail.send' ? $_('settingsGeneral.mailboxServiceEnabling') : $_('settingsGeneral.mailboxServiceEnableSendAccess')}
@@ -186,6 +266,8 @@
       </div>
       {#if status.draftAccessAuthorized}
         <p class="text-sm text-muted-foreground">{$_('settingsGeneral.mailboxServiceDraftAccessEnabled')}</p>
+      {:else if isRemote}
+        <p class="text-sm text-muted-foreground">{$_('settingsGeneral.mailboxServiceRemoteGrantRequired')}</p>
       {:else}
         <Button onclick={() => enableAccess('draft.access')} disabled={saving !== null}>
           {saving === 'draft.access' ? $_('settingsGeneral.mailboxServiceEnabling') : $_('settingsGeneral.mailboxServiceEnableDraftAccess')}
@@ -203,6 +285,8 @@
       </div>
       {#if status.accountManagementAuthorized}
         <p class="text-sm text-muted-foreground">{$_('settingsGeneral.mailboxServiceAccountManagementEnabled')}</p>
+      {:else if isRemote}
+        <p class="text-sm text-muted-foreground">{$_('settingsGeneral.mailboxServiceRemoteGrantRequired')}</p>
       {:else}
         <Button onclick={() => enableAccess('account.manage')} disabled={saving !== null}>
           {saving === 'account.manage' ? $_('settingsGeneral.mailboxServiceEnabling') : $_('settingsGeneral.mailboxServiceEnableAccountManagement')}
