@@ -125,3 +125,17 @@ test('completed reload holds discard all processed ID bookkeeping', async () => 
   assert.equal(messageAnimations.holds.size, 0)
   assert.equal(messageAnimations.generations.size, 0)
 })
+
+
+test('viewer resolves matched target IDs before starting removal state', async () => {
+  const source = await readFile(new URL('../src/lib/components/viewer/ConversationViewer.svelte', import.meta.url), 'utf8')
+  assert.doesNotMatch(source, /messageAnimations.startRemoval\(messageIds, '[^']+'\)\s*try \{\s*messageIds = await resolveDisplayedMessageTarget/)
+  const { messageAnimations } = await loadAnimationsStore()
+  const thread = [{id:'matched',matched:true},{id:'unmatched',matched:false}]
+  const targets = thread.filter(message => message.matched).map(message => message.id)
+  messageAnimations.startRemoval(targets, 'archive')
+  messageAnimations.settleRemoval(targets)
+  await new Promise(resolve => setTimeout(resolve,250))
+  assert.equal(messageAnimations.isAnimating('unmatched'), undefined)
+  assert.equal(messageAnimations.isAnyAnimating(), false)
+})

@@ -1247,9 +1247,9 @@
   async function handleMoveToInbox() {
     if (!conversation?.messages) return
     let messageIds = conversation.messages.map(m => m.id)
-    messageAnimations.startRemoval(messageIds, 'move')
     try {
       messageIds = await resolveDisplayedMessageTarget(messageIds)
+      messageAnimations.startRemoval(messageIds, 'move')
       await runMessageMutation(messageIds, async () => {
         moveMutationInFlight = true
         try {
@@ -1274,9 +1274,9 @@
   async function handleArchive() {
     if (!conversation?.messages) return
     let messageIds = conversation.messages.map(m => m.id)
-    messageAnimations.startRemoval(messageIds, 'archive')
     try {
       messageIds = await resolveDisplayedMessageTarget(messageIds)
+      messageAnimations.startRemoval(messageIds, 'archive')
       await runMessageMutation(messageIds, async () => {
         moveMutationInFlight = true
         try {
@@ -1336,9 +1336,9 @@
   async function handleDone() {
     if (!conversation?.messages) return
     let messageIds = conversation.messages.map(m => m.id)
-    messageAnimations.startRemoval(messageIds, 'archive')
     try {
       messageIds = await resolveDisplayedMessageTarget(messageIds)
+      messageAnimations.startRemoval(messageIds, 'archive')
       await runMessageMutation(messageIds, async () => {
         moveMutationInFlight = true
         try {
@@ -1369,9 +1369,9 @@
     } else {
       // Move to trash (undoable)
       let messageIds = conversation.messages.map(m => m.id)
-      messageAnimations.startRemoval(messageIds, 'trash')
       try {
         messageIds = await resolveDisplayedMessageTarget(messageIds)
+        messageAnimations.startRemoval(messageIds, 'trash')
         await runMessageMutation(messageIds, async () => {
           moveMutationInFlight = true
           try {
@@ -1473,9 +1473,9 @@
   async function handleSpam() {
     if (!conversation?.messages) return
     let messageIds = conversation.messages.map(m => m.id)
-    messageAnimations.startRemoval(messageIds, 'spam')
     try {
       messageIds = await resolveDisplayedMessageTarget(messageIds)
+      messageAnimations.startRemoval(messageIds, 'spam')
       await runMessageMutation(messageIds, async () => {
         moveMutationInFlight = true
         try {
