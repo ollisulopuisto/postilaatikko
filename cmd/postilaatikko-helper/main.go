@@ -425,6 +425,9 @@ func serve(ctx context.Context, store *scheduledsend.Store, transport scheduleds
 		ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 8192}
 	workerContext, cancel := context.WithCancel(ctx)
 	defer cancel()
+	if err := syncRuntime.StartTriageMaintenance(workerContext); err != nil {
+		return err
+	}
 	worker := &scheduledsend.Worker{Store: store, Transport: transport}
 	if withSync {
 		syncRuntime.Start(workerContext)

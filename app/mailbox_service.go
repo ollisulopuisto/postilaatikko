@@ -28,6 +28,7 @@ import (
 	"github.com/hkdb/aerion/internal/operations"
 	"github.com/hkdb/aerion/internal/replylater"
 	"github.com/hkdb/aerion/internal/servicebootstrap"
+	"github.com/hkdb/aerion/internal/triage"
 	"github.com/hkdb/aerion/internal/views"
 	"github.com/hkdb/aerion/internal/virtualfolder"
 )
@@ -329,6 +330,54 @@ func (c *mailboxServiceConnector) setReplyLaterMembership(ctx context.Context, r
 		return false, err
 	}
 	return client.SetReplyLaterMembership(ctx, ref, inQueue)
+}
+
+func (c *mailboxServiceConnector) readLaterQueue(ctx context.Context) ([]triage.Ref, error) {
+	client, err := c.getClient()
+	if err != nil {
+		return nil, err
+	}
+	return client.GetReadLaterQueue(ctx)
+}
+
+func (c *mailboxServiceConnector) setReadLater(ctx context.Context, ref triage.Ref, inQueue bool) (bool, error) {
+	client, err := c.getClient()
+	if err != nil {
+		return false, err
+	}
+	return client.SetReadLater(ctx, ref, inQueue)
+}
+
+func (c *mailboxServiceConnector) snoozedConversations(ctx context.Context) ([]triage.Ref, error) {
+	client, err := c.getClient()
+	if err != nil {
+		return nil, err
+	}
+	return client.GetSnoozedConversations(ctx)
+}
+
+func (c *mailboxServiceConnector) snoozedCount(ctx context.Context) (int, error) {
+	client, err := c.getClient()
+	if err != nil {
+		return 0, err
+	}
+	return client.GetSnoozedCount(ctx)
+}
+
+func (c *mailboxServiceConnector) snooze(ctx context.Context, ref triage.Ref, wakeAt string) error {
+	client, err := c.getClient()
+	if err != nil {
+		return err
+	}
+	return client.SnoozeConversation(ctx, ref, wakeAt)
+}
+
+func (c *mailboxServiceConnector) unsnooze(ctx context.Context, ref triage.Ref) (bool, error) {
+	client, err := c.getClient()
+	if err != nil {
+		return false, err
+	}
+	return client.UnsnoozeConversation(ctx, ref)
 }
 
 func (c *mailboxServiceConnector) authorizeWrites(ctx context.Context) error {

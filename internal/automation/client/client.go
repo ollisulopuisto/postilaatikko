@@ -13,6 +13,7 @@ import (
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/mailfilter"
 	"github.com/hkdb/aerion/internal/replylater"
+	"github.com/hkdb/aerion/internal/triage"
 	"github.com/hkdb/aerion/internal/views"
 	"github.com/hkdb/aerion/internal/virtualfolder"
 )
@@ -216,6 +217,77 @@ func (c *Client) SetReplyLaterMembership(ctx context.Context, ref replylater.Ref
 		return false, err
 	}
 	var resp v1.Response[v1.ReplyLaterMutationResponse]
+	if err := json.Unmarshal(bytes, &resp); err != nil {
+		return false, err
+	}
+	return resp.Data.Changed, nil
+}
+
+// GetReadLaterQueue lists helper-owned Read Later membership.
+func (c *Client) GetReadLaterQueue(ctx context.Context) ([]triage.Ref, error) {
+	bytes, err := c.doRequest(ctx, http.MethodGet, "/v1/triage/read-later", nil, "")
+	if err != nil {
+		return nil, err
+	}
+	var resp v1.Response[[]triage.Ref]
+	if err := json.Unmarshal(bytes, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// SetReadLater changes one account-qualified Read Later membership.
+func (c *Client) SetReadLater(ctx context.Context, ref triage.Ref, inQueue bool) (bool, error) {
+	bytes, err := c.doRequest(ctx, http.MethodPost, "/v1/triage/read-later/mutations", v1.ReadLaterMutationRequest{Ref: ref, InQueue: inQueue}, "")
+	if err != nil {
+		return false, err
+	}
+	var resp v1.Response[v1.TriageMutationResponse]
+	if err := json.Unmarshal(bytes, &resp); err != nil {
+		return false, err
+	}
+	return resp.Data.Changed, nil
+}
+
+// GetSnoozedConversations lists active helper-owned Snoozes.
+func (c *Client) GetSnoozedConversations(ctx context.Context) ([]triage.Ref, error) {
+	bytes, err := c.doRequest(ctx, http.MethodGet, "/v1/triage/snoozes", nil, "")
+	if err != nil {
+		return nil, err
+	}
+	var resp v1.Response[[]triage.Ref]
+	if err := json.Unmarshal(bytes, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// GetSnoozedCount returns the number of active helper-owned Snoozes.
+func (c *Client) GetSnoozedCount(ctx context.Context) (int, error) {
+	bytes, err := c.doRequest(ctx, http.MethodGet, "/v1/triage/snoozes/count", nil, "")
+	if err != nil {
+		return 0, err
+	}
+	var resp v1.Response[int]
+	if err := json.Unmarshal(bytes, &resp); err != nil {
+		return 0, err
+	}
+	return resp.Data, nil
+}
+
+// SnoozeConversation adds or updates a helper-owned Snooze deadline.
+func (c *Client) SnoozeConversation(ctx context.Context, ref triage.Ref, wakeAt string) error {
+	_, err := c.doRequest(ctx, http.MethodPost, "/v1/triage/snoozes/mutations", v1.SnoozeMutationRequest{Operation: "snooze", Ref: ref, WakeAt: wakeAt}, "")
+	return err
+}
+
+// UnsnoozeConversation removes one helper-owned Snooze.
+func (c *Client) UnsnoozeConversation(ctx context.Context, ref triage.Ref) (bool, error) {
+	bytes, err := c.doRequest(ctx, http.MethodPost, "/v1/triage/snoozes/mutations", v1.SnoozeMutationRequest{Operation: "unsnooze", Ref: ref}, "")
+	if err != nil {
+		return false, err
+	}
+	var resp v1.Response[v1.TriageMutationResponse]
 	if err := json.Unmarshal(bytes, &resp); err != nil {
 		return false, err
 	}

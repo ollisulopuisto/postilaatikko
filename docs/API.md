@@ -66,6 +66,16 @@ The helper mounts provider-aware search and account-qualified thread/body reads:
 - `POST /v1/reply-later/mutations` (Requires `mail.write`)
   - Request body: `{ "ref": { "accountId": "acc-1", "conversationId": "thread-1" }, "inQueue": true }`.
   - The helper applies the matching hidden Gmail label when the local OAuth grant includes Gmail modify scope. Non-Gmail and read-only Gmail grants keep Reply Later membership local, matching desktop behavior.
+- `GET /v1/triage/read-later` (Requires `mail.read`)
+  - Returns account-qualified Read Later queue entries.
+- `POST /v1/triage/read-later/mutations` (Requires `mail.write`)
+  - Request body: `{ "ref": { "accountId": "acc-1", "conversationId": "thread-1" }, "inQueue": true }`.
+  - The helper updates the hidden Gmail label when its local OAuth grant includes Gmail modify scope. Non-Gmail and read-only Gmail accounts keep app-local Read Later membership.
+- `GET /v1/triage/snoozes` and `GET /v1/triage/snoozes/count` (Requires `mail.read`)
+  - Return active Snooze references, including their UTC wake deadlines, or the active count.
+- `POST /v1/triage/snoozes/mutations` (Requires `mail.write`)
+  - Request body: `{ "operation": "snooze", "ref": { "accountId": "acc-1", "conversationId": "thread-1" }, "wakeAt": "2026-11-09T09:00:00Z" }`; use `"operation": "unsnooze"` to remove one deadline.
+  - The helper expires due Snoozes every minute even when mailbox sync is disabled.
 - `POST /v1/views/mutations` (Requires `mail.write`)
   - Request body uses `operation` with `virtualFolder` for `create`/`update`, `id` for `delete`/`refresh`, or `ids` for `reorder`.
   - Create/update rebuild the service-owned virtual-view cache before returning. `refresh` explicitly rebuilds one view's cached index.

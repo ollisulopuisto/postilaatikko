@@ -179,22 +179,83 @@ func (a *App) syncGmailTriageQueues(queue string) {
 	}
 }
 
-// GetReadLaterQueue and GetReadLaterCount expose explicit triage membership.
-func (a *App) GetReadLaterQueue() ([]triage.Ref, error) { return a.triageStore.ListReadLater() }
-func (a *App) GetReadLaterCount() (int, error)          { return a.triageStore.CountReadLater() }
+// GetReadLaterQueue exposes explicit triage membership from the mailbox service when available.
+func (a *App) GetReadLaterQueue() ([]triage.Ref, error) {
+	if a.mailboxService != nil {
+		ctx := a.helperCommandContext()
+		status := a.mailboxService.status(ctx)
+		if status.Connected {
+			return a.mailboxService.readLaterQueue(ctx)
+		}
+		if status.ErrorCode != "service_unavailable" {
+			return nil, fmt.Errorf("load Read Later queue from mailbox service: %s", status.Message)
+		}
+	}
+	if a.triageStore == nil {
+		return nil, fmt.Errorf("Read Later queue is not ready")
+	}
+	return a.triageStore.ListReadLater()
+}
+
+func (a *App) GetReadLaterCount() (int, error) {
+	queue, err := a.GetReadLaterQueue()
+	return len(queue), err
+}
 func (a *App) IsReadLater(accountID, conversationID string) (bool, error) {
-	return a.triageStore.IsReadLater(accountID, conversationID)
+	queue, err := a.GetReadLaterQueue()
+	if err != nil {
+		return false, err
+	}
+	for _, ref := range queue {
+		if ref.AccountID == accountID && ref.ConversationID == conversationID {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (a *App) ChangeReadLater(accountID, conversationID string, inQueue bool) (bool, error) {
-	if err := a.setGmailTriageLabel(accountID, conversationID, "read-later", inQueue); err != nil {
-		return false, err
+	ref := triage.Ref{AccountID: accountID, ConversationID: conversationID}
+	changed, handled, err := a.changeReadLaterThroughService(ref, inQueue)
+	if handled {
+		if err != nil {
+			return false, err
+		}
+	} else {
+		if err := a.setGmailTriageLabel(accountID, conversationID, "read-later", inQueue); err != nil {
+			return false, err
+		}
+		if a.triageStore == nil {
+			return false, fmt.Errorf("Read Later queue is not ready")
+		}
+		changed, err = a.triageStore.SetReadLater(ref, inQueue)
 	}
-	changed, err := a.triageStore.SetReadLater(triage.Ref{AccountID: accountID, ConversationID: conversationID}, inQueue)
 	if err == nil && changed {
 		a.emitRuntimeEvent("readLater:changed", map[string]interface{}{"accountId": accountID, "conversationId": conversationID, "inQueue": inQueue})
 	}
 	return changed, err
+}
+
+func (a *App) changeReadLaterThroughService(ref triage.Ref, inQueue bool) (bool, bool, error) {
+	if a.mailboxService == nil {
+		return false, false, nil
+	}
+	ctx := a.helperCommandContext()
+	status := a.mailboxService.status(ctx)
+	if !status.Connected {
+		if status.ErrorCode == "service_unavailable" {
+			return false, false, nil
+		}
+		return false, true, fmt.Errorf("mailbox service is not ready for Read Later: %s", status.Message)
+	}
+	if !status.WriteAuthorized {
+		return false, true, errDesktopMailboxWriteAuthorizationRequired
+	}
+	changed, err := a.mailboxService.setReadLater(ctx, ref, inQueue)
+	if err != nil {
+		return false, true, fmt.Errorf("update Read Later through local mailbox service: %w", err)
+	}
+	return changed, true, nil
 }
 
 func (a *App) AddReadLater(accountID, conversationID string) (bool, error) {
@@ -211,21 +272,108 @@ func (a *App) SnoozeConversation(accountID, conversationID, wakeAt string) error
 	if err != nil {
 		return fmt.Errorf("invalid snooze deadline: %w", err)
 	}
-	if err := a.triageStore.Snooze(triage.Ref{AccountID: accountID, ConversationID: conversationID}, deadline); err != nil {
-		return err
+	ref := triage.Ref{AccountID: accountID, ConversationID: conversationID}
+	handled := false
+	if a.mailboxService != nil {
+		ctx := a.helperCommandContext()
+		status := a.mailboxService.status(ctx)
+		if status.Connected {
+			if !status.WriteAuthorized {
+				return errDesktopMailboxWriteAuthorizationRequired
+			}
+			if err := a.mailboxService.snooze(ctx, ref, deadline.UTC().Format(time.RFC3339Nano)); err != nil {
+				return fmt.Errorf("snooze through local mailbox service: %w", err)
+			}
+			handled = true
+		} else if status.ErrorCode != "service_unavailable" {
+			return fmt.Errorf("mailbox service is not ready for Snooze: %s", status.Message)
+		}
+	}
+	if !handled {
+		if a.triageStore == nil {
+			return fmt.Errorf("Snooze store is not ready")
+		}
+		if err := a.triageStore.Snooze(ref, deadline); err != nil {
+			return err
+		}
 	}
 	a.emitRuntimeEvent("snooze:changed", map[string]interface{}{"accountId": accountID, "conversationId": conversationID, "wakeAt": deadline.UTC().Format(time.RFC3339Nano)})
 	return nil
 }
 func (a *App) UnsnoozeConversation(accountID, conversationID string) (bool, error) {
-	changed, err := a.triageStore.Unsnooze(accountID, conversationID)
+	ref := triage.Ref{AccountID: accountID, ConversationID: conversationID}
+	changed, handled, err := a.unsnoozeThroughService(ref)
+	if handled {
+		if err != nil {
+			return false, err
+		}
+	} else {
+		if a.triageStore == nil {
+			return false, fmt.Errorf("Snooze store is not ready")
+		}
+		changed, err = a.triageStore.Unsnooze(accountID, conversationID)
+	}
 	if err == nil && changed {
 		a.emitRuntimeEvent("snooze:changed", map[string]interface{}{"accountId": accountID, "conversationId": conversationID, "wakeAt": ""})
 	}
 	return changed, err
 }
-func (a *App) GetSnoozedConversations() ([]triage.Ref, error) { return a.triageStore.ListSnoozed() }
-func (a *App) GetSnoozedCount() (int, error)                  { return a.triageStore.CountSnoozed() }
+
+func (a *App) unsnoozeThroughService(ref triage.Ref) (bool, bool, error) {
+	if a.mailboxService == nil {
+		return false, false, nil
+	}
+	ctx := a.helperCommandContext()
+	status := a.mailboxService.status(ctx)
+	if !status.Connected {
+		if status.ErrorCode == "service_unavailable" {
+			return false, false, nil
+		}
+		return false, true, fmt.Errorf("mailbox service is not ready for Snooze: %s", status.Message)
+	}
+	if !status.WriteAuthorized {
+		return false, true, errDesktopMailboxWriteAuthorizationRequired
+	}
+	changed, err := a.mailboxService.unsnooze(ctx, ref)
+	if err != nil {
+		return false, true, fmt.Errorf("unsnooze through local mailbox service: %w", err)
+	}
+	return changed, true, nil
+}
+
+func (a *App) GetSnoozedConversations() ([]triage.Ref, error) {
+	if a.mailboxService != nil {
+		ctx := a.helperCommandContext()
+		status := a.mailboxService.status(ctx)
+		if status.Connected {
+			return a.mailboxService.snoozedConversations(ctx)
+		}
+		if status.ErrorCode != "service_unavailable" {
+			return nil, fmt.Errorf("load Snoozed conversations from mailbox service: %s", status.Message)
+		}
+	}
+	if a.triageStore == nil {
+		return nil, fmt.Errorf("Snooze store is not ready")
+	}
+	return a.triageStore.ListSnoozed()
+}
+
+func (a *App) GetSnoozedCount() (int, error) {
+	if a.mailboxService != nil {
+		ctx := a.helperCommandContext()
+		status := a.mailboxService.status(ctx)
+		if status.Connected {
+			return a.mailboxService.snoozedCount(ctx)
+		}
+		if status.ErrorCode != "service_unavailable" {
+			return 0, fmt.Errorf("count Snoozed conversations from mailbox service: %s", status.Message)
+		}
+	}
+	if a.triageStore == nil {
+		return 0, fmt.Errorf("Snooze store is not ready")
+	}
+	return a.triageStore.CountSnoozed()
+}
 
 func (a *App) runSnoozeWakeLoop() {
 	ctx := a.ctx
@@ -234,18 +382,59 @@ func (a *App) runSnoozeWakeLoop() {
 	}
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
+	type snoozeKey struct{ accountID, conversationID string }
+	known := map[snoozeKey]time.Time{}
+	if current, err := a.GetSnoozedConversations(); err == nil {
+		for _, ref := range current {
+			known[snoozeKey{ref.AccountID, ref.ConversationID}] = ref.WakeAt
+		}
+	}
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case now := <-ticker.C:
-			count, err := a.triageStore.ExpireSnoozes(now)
+			status := MailboxServiceStatus{ErrorCode: "service_unavailable"}
+			if a.mailboxService != nil {
+				status = a.mailboxService.status(ctx)
+			}
+			if !status.Connected && status.ErrorCode == "service_unavailable" {
+				count, err := a.triageStore.ExpireSnoozes(now)
+				if err == nil && count > 0 {
+					a.emitRuntimeEvent("snooze:expired", map[string]interface{}{"count": count})
+				}
+				current, err := a.triageStore.ListSnoozed()
+				if err == nil {
+					known = make(map[snoozeKey]time.Time, len(current))
+					for _, ref := range current {
+						known[snoozeKey{ref.AccountID, ref.ConversationID}] = ref.WakeAt
+					}
+				}
+				continue
+			}
+			if !status.Connected {
+				continue
+			}
+			current, err := a.mailboxService.snoozedConversations(ctx)
 			if err != nil {
 				continue
 			}
-			if count > 0 {
-				a.emitRuntimeEvent("snooze:expired", map[string]interface{}{"count": count})
+			currentSet := make(map[snoozeKey]time.Time, len(current))
+			for _, ref := range current {
+				currentSet[snoozeKey{ref.AccountID, ref.ConversationID}] = ref.WakeAt
 			}
+			var expired int
+			for key, wakeAt := range known {
+				if !wakeAt.After(now) {
+					if _, exists := currentSet[key]; !exists {
+						expired++
+					}
+				}
+			}
+			if expired > 0 {
+				a.emitRuntimeEvent("snooze:expired", map[string]interface{}{"count": expired})
+			}
+			known = currentSet
 		}
 	}
 }

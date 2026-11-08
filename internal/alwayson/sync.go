@@ -40,39 +40,42 @@ type GmailTriageLabeler func(context.Context, string, string, string, bool) erro
 // scheduler. The caller starts it under the independently supervised helper's
 // context and closes it before releasing the credential provider.
 type SyncRuntime struct {
-	db             *database.DB
-	accounts       *account.Store
-	messages       *message.Store
-	pool           *imap.Pool
-	scheduler      *mailSync.Scheduler
-	mailService    *mailservice.Service
-	syncEngine     *mailSync.Engine
-	replyContent   *replycontent.Service
-	attachments    *message.AttachmentStore
-	virtualFolders *virtualfolder.Store
-	replyLater     *replylater.Store
-	gmailTriage    GmailTriageLabeler
-	triage         *triage.Store
-	schemaOwner    *syncowner.Lock
-	filterOp       mailmove.FilterOperation
-	filterer       *mailmove.IMAPFilterMover
-	gmailPush      *GmailPushConfig
-	filterJobs     *mailfilter.JobStore
-	rules          *mailfilter.Store
-	folders        *folder.Store
-	filterWake     chan struct{}
-	filterStop     chan struct{}
-	syncLockPath   string
-	ctxMu          sync.RWMutex
-	ctx            context.Context
-	cancel         context.CancelFunc
-	filterCancel   context.CancelFunc
-	filterWG       sync.WaitGroup
-	lifecycleWG    sync.WaitGroup
-	started        bool
-	filterStopOnce sync.Once
-	startOnce      sync.Once
-	closeOnce      sync.Once
+	db                *database.DB
+	accounts          *account.Store
+	messages          *message.Store
+	pool              *imap.Pool
+	scheduler         *mailSync.Scheduler
+	mailService       *mailservice.Service
+	syncEngine        *mailSync.Engine
+	replyContent      *replycontent.Service
+	attachments       *message.AttachmentStore
+	virtualFolders    *virtualfolder.Store
+	replyLater        *replylater.Store
+	gmailTriage       GmailTriageLabeler
+	triage            *triage.Store
+	schemaOwner       *syncowner.Lock
+	filterOp          mailmove.FilterOperation
+	filterer          *mailmove.IMAPFilterMover
+	gmailPush         *GmailPushConfig
+	filterJobs        *mailfilter.JobStore
+	rules             *mailfilter.Store
+	folders           *folder.Store
+	filterWake        chan struct{}
+	filterStop        chan struct{}
+	syncLockPath      string
+	ctxMu             sync.RWMutex
+	ctx               context.Context
+	cancel            context.CancelFunc
+	filterCancel      context.CancelFunc
+	filterWG          sync.WaitGroup
+	lifecycleWG       sync.WaitGroup
+	maintenanceWG     sync.WaitGroup
+	maintenanceCancel context.CancelFunc
+	started           bool
+	maintenanceOnce   sync.Once
+	filterStopOnce    sync.Once
+	startOnce         sync.Once
+	closeOnce         sync.Once
 }
 
 // OpenSyncRuntime opens an existing Postilaatikko data directory. It refuses
@@ -226,6 +229,101 @@ func (r *SyncRuntime) SetReplyLaterMembership(ctx context.Context, accountID, co
 	return r.replyLater.Remove(ref)
 }
 
+// GetReadLaterQueue lists helper-owned Read Later membership.
+func (r *SyncRuntime) GetReadLaterQueue() ([]triage.Ref, error) {
+	if r == nil || r.triage == nil {
+		return nil, errors.New("always-on runtime is not open")
+	}
+	return r.triage.ListReadLater()
+}
+
+// SetReadLater updates helper-owned membership and its optional Gmail label.
+func (r *SyncRuntime) SetReadLater(accountID, conversationID string, inQueue bool) (bool, error) {
+	if r == nil || r.triage == nil {
+		return false, errors.New("always-on runtime is not open")
+	}
+	r.ctxMu.RLock()
+	ctx, labeler := r.ctx, r.gmailTriage
+	r.ctxMu.RUnlock()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if labeler != nil {
+		if err := labeler(ctx, accountID, conversationID, "read-later", inQueue); err != nil {
+			return false, err
+		}
+	}
+	return r.triage.SetReadLater(triage.Ref{AccountID: accountID, ConversationID: conversationID}, inQueue)
+}
+
+// SnoozeConversation stores a helper-owned wake deadline.
+func (r *SyncRuntime) SnoozeConversation(accountID, conversationID string, wakeAt time.Time) error {
+	if r == nil || r.triage == nil {
+		return errors.New("always-on runtime is not open")
+	}
+	return r.triage.Snooze(triage.Ref{AccountID: accountID, ConversationID: conversationID}, wakeAt)
+}
+
+// UnsnoozeConversation removes one helper-owned Snooze.
+func (r *SyncRuntime) UnsnoozeConversation(accountID, conversationID string) (bool, error) {
+	if r == nil || r.triage == nil {
+		return false, errors.New("always-on runtime is not open")
+	}
+	return r.triage.Unsnooze(accountID, conversationID)
+}
+
+// GetSnoozedConversations lists active helper-owned Snoozes.
+func (r *SyncRuntime) GetSnoozedConversations() ([]triage.Ref, error) {
+	if r == nil || r.triage == nil {
+		return nil, errors.New("always-on runtime is not open")
+	}
+	return r.triage.ListSnoozed()
+}
+
+// GetSnoozedCount counts active helper-owned Snoozes.
+func (r *SyncRuntime) GetSnoozedCount() (int, error) {
+	if r == nil || r.triage == nil {
+		return 0, errors.New("always-on runtime is not open")
+	}
+	return r.triage.CountSnoozed()
+}
+
+// StartTriageMaintenance expires due Snoozes even when mailbox sync is disabled.
+func (r *SyncRuntime) StartTriageMaintenance(ctx context.Context) error {
+	if r == nil || r.triage == nil {
+		return errors.New("always-on runtime is not open")
+	}
+	r.maintenanceOnce.Do(func() {
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		maintenanceContext, cancel := context.WithCancel(ctx)
+		r.ctxMu.Lock()
+		r.maintenanceCancel = cancel
+		r.ctxMu.Unlock()
+		r.maintenanceWG.Add(1)
+		go r.runTriageMaintenance(maintenanceContext)
+	})
+	return nil
+}
+
+func (r *SyncRuntime) runTriageMaintenance(ctx context.Context) {
+	defer r.maintenanceWG.Done()
+	log := logging.WithComponent("alwayson.triage")
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for {
+		if _, err := r.triage.ExpireSnoozes(time.Now()); err != nil {
+			log.Warn().Err(err).Msg("Failed to expire due Snoozes")
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
 // Start begins the existing bounded, header-first periodic sync scheduler.
 func (r *SyncRuntime) Start(ctx context.Context) {
 	if r == nil {
@@ -275,7 +373,12 @@ func (r *SyncRuntime) Close() error {
 	r.closeOnce.Do(func() {
 		r.ctxMu.RLock()
 		cancel, started := r.cancel, r.started
+		maintenanceCancel := r.maintenanceCancel
 		r.ctxMu.RUnlock()
+		if maintenanceCancel != nil {
+			maintenanceCancel()
+			r.maintenanceWG.Wait()
+		}
 		if started && cancel != nil {
 			cancel()
 			r.lifecycleWG.Wait()
