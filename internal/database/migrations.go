@@ -1790,4 +1790,15 @@ var migrations = []Migration{
 	  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 	);
 	`},
+	{Version: 69, SQL: `
+		CREATE TABLE IF NOT EXISTS send_api_idempotency (
+			idempotency_key TEXT PRIMARY KEY,
+			request_hash TEXT NOT NULL,
+			operation_id TEXT NOT NULL,
+			state TEXT NOT NULL CHECK(state IN ('processing','retry','sending','sent','failed','outcome_unknown')),
+			code TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL DEFAULT (datetime('now')),
+			updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+		);
+	`},
 }

@@ -14,6 +14,7 @@ import (
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/mailfilter"
 	"github.com/hkdb/aerion/internal/replylater"
+	"github.com/hkdb/aerion/internal/smtp"
 	"github.com/hkdb/aerion/internal/triage"
 	"github.com/hkdb/aerion/internal/views"
 	"github.com/hkdb/aerion/internal/virtualfolder"
@@ -54,6 +55,10 @@ func New(cfg Config) *Client {
 }
 
 func (c *Client) doRequest(ctx context.Context, method, path string, body any, idempotencyKey string) ([]byte, error) {
+	return c.doRequestWithHeaders(ctx, method, path, body, idempotencyKey, nil)
+}
+
+func (c *Client) doRequestWithHeaders(ctx context.Context, method, path string, body any, idempotencyKey string, headers map[string]string) ([]byte, error) {
 	var bodyReader io.Reader
 	var requestBytes []byte
 	defer func() { clear(requestBytes) }()
@@ -78,6 +83,9 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body any, i
 	}
 	if idempotencyKey != "" {
 		req.Header.Set("Idempotency-Key", idempotencyKey)
+	}
+	for name, value := range headers {
+		req.Header.Set(name, value)
 	}
 
 	resp, err := c.httpClient.Do(req)
@@ -157,6 +165,89 @@ func (c *Client) UpdateAccount(ctx context.Context, accountID string, mutation v
 func (c *Client) SetAccountOAuthCredentials(ctx context.Context, accountID string, mutation v1.OAuthCredentialMutation, idempotencyKey string) error {
 	_, err := c.doRequest(ctx, http.MethodPost, "/v1/accounts/"+url.PathEscape(accountID)+"/oauth", mutation, idempotencyKey)
 	return err
+}
+
+// ListDrafts returns the bounded set of drafts for one helper-owned account.
+func (c *Client) ListDrafts(ctx context.Context, accountID string) ([]v1.DraftDocument, error) {
+	query := url.Values{"accountId": []string{accountID}}
+	data, err := c.doRequest(ctx, http.MethodGet, "/v1/drafts?"+query.Encode(), nil, "")
+	if err != nil {
+		return nil, err
+	}
+	var response v1.Response[[]v1.DraftDocument]
+	if err := json.Unmarshal(data, &response); err != nil {
+		return nil, err
+	}
+	return response.Data, nil
+}
+
+// GetDraft returns one account-qualified draft and its compare-and-swap revision.
+func (c *Client) GetDraft(ctx context.Context, accountID, draftID string) (*v1.DraftDocument, error) {
+	query := url.Values{"accountId": []string{accountID}}
+	data, err := c.doRequest(ctx, http.MethodGet, "/v1/drafts/"+url.PathEscape(draftID)+"?"+query.Encode(), nil, "")
+	if err != nil {
+		return nil, err
+	}
+	var response v1.Response[v1.DraftDocument]
+	if err := json.Unmarshal(data, &response); err != nil {
+		return nil, err
+	}
+	return &response.Data, nil
+}
+
+// CreateDraft creates a helper-owned draft.
+func (c *Client) CreateDraft(ctx context.Context, mutation v1.DraftMutation) (*v1.DraftDocument, error) {
+	return c.draftMutation(ctx, http.MethodPost, "/v1/drafts", mutation)
+}
+
+// UpdateDraft replaces a draft only when its previously-read revision is current.
+func (c *Client) UpdateDraft(ctx context.Context, draftID string, mutation v1.DraftMutation) (*v1.DraftDocument, error) {
+	return c.draftMutation(ctx, http.MethodPut, "/v1/drafts/"+url.PathEscape(draftID), mutation)
+}
+
+func (c *Client) draftMutation(ctx context.Context, method, path string, mutation v1.DraftMutation) (*v1.DraftDocument, error) {
+	data, err := c.doRequest(ctx, method, path, mutation, "")
+	if err != nil {
+		return nil, err
+	}
+	var response v1.Response[v1.DraftDocument]
+	if err := json.Unmarshal(data, &response); err != nil {
+		return nil, err
+	}
+	return &response.Data, nil
+}
+
+// DeleteDraft removes one draft only when its revision is current.
+func (c *Client) DeleteDraft(ctx context.Context, accountID, draftID, revision string) error {
+	query := url.Values{"accountId": []string{accountID}}
+	_, err := c.doRequestWithHeaders(ctx, http.MethodDelete, "/v1/drafts/"+url.PathEscape(draftID)+"?"+query.Encode(), nil, "", map[string]string{"If-Match": revision})
+	return err
+}
+
+// PrepareReply asks the helper to build reply/reply-all/forward context from a cached message.
+func (c *Client) PrepareReply(ctx context.Context, request v1.ReplyPreparationRequest) (*smtp.ComposeMessage, error) {
+	data, err := c.doRequest(ctx, http.MethodPost, "/v1/replies", request, "")
+	if err != nil {
+		return nil, err
+	}
+	var response v1.Response[smtp.ComposeMessage]
+	if err := json.Unmarshal(data, &response); err != nil {
+		return nil, err
+	}
+	return &response.Data, nil
+}
+
+// SendPreparedMessage sends already prepared MIME through the helper exactly once per key.
+func (c *Client) SendPreparedMessage(ctx context.Context, request v1.SendRequest, idempotencyKey string) (*v1.SendResponse, error) {
+	data, err := c.doRequest(ctx, http.MethodPost, "/v1/send", request, idempotencyKey)
+	if err != nil {
+		return nil, err
+	}
+	var response v1.Response[v1.SendResponse]
+	if err := json.Unmarshal(data, &response); err != nil {
+		return nil, err
+	}
+	return &response.Data, nil
 }
 
 func (c *Client) accountMutation(ctx context.Context, method, path string, mutation any, idempotencyKey string) (*v1.AccountSummary, error) {

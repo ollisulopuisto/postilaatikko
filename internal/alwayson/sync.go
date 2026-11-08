@@ -17,6 +17,7 @@ import (
 	"github.com/hkdb/aerion/internal/account"
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/database"
+	"github.com/hkdb/aerion/internal/draft"
 	"github.com/hkdb/aerion/internal/email/replycontent"
 	"github.com/hkdb/aerion/internal/folder"
 	"github.com/hkdb/aerion/internal/imap"
@@ -26,6 +27,7 @@ import (
 	"github.com/hkdb/aerion/internal/mailservice"
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/replylater"
+	"github.com/hkdb/aerion/internal/scheduledsend"
 	mailSync "github.com/hkdb/aerion/internal/sync"
 	"github.com/hkdb/aerion/internal/syncowner"
 	"github.com/hkdb/aerion/internal/triage"
@@ -46,6 +48,7 @@ type SyncRuntime struct {
 	db                          *database.DB
 	accounts                    *account.Store
 	messages                    *message.Store
+	drafts                      *draft.Store
 	pool                        *imap.Pool
 	scheduler                   *mailSync.Scheduler
 	mailService                 *mailservice.Service
@@ -84,6 +87,8 @@ type SyncRuntime struct {
 	passwordMutation            func(string, v1.PasswordCredentialMutation, func() error) error
 	oauthMutation               func(string, v1.OAuthCredentialMutation) error
 	accountMutationFingerprint  func([]byte) []byte
+	immediateSend               func(context.Context, scheduledsend.Delivery) error
+	validateSender              func(string, string) error
 	sharedMailboxValidate       func(context.Context, string, string) error
 	sharedMailboxCredentialCopy func(string, string) error
 }
@@ -137,11 +142,12 @@ func OpenSyncRuntime(dataDirectory string, credentials IMAPConfigSource) (*SyncR
 	accounts := account.NewStore(db)
 	folders := folder.NewStore(db)
 	messages := message.NewStore(db)
+	drafts := draft.NewStore(db)
 	attachments := message.NewAttachmentStore(db)
 	virtualFolders := virtualfolder.NewStore(db)
 	replyLater := replylater.NewStore(db)
 	triageStore := triage.NewStore(db)
-	runtime := &SyncRuntime{db: db, schemaOwner: schemaOwner, accounts: accounts, messages: messages, attachments: attachments, virtualFolders: virtualFolders, replyLater: replyLater, triage: triageStore, replyContent: replycontent.NewService(replycontent.ServiceOptions{}), ctx: context.Background(), syncLockPath: filepath.Join(dataDirectory, "mail-sync.owner.lock")}
+	runtime := &SyncRuntime{db: db, schemaOwner: schemaOwner, accounts: accounts, messages: messages, drafts: drafts, attachments: attachments, virtualFolders: virtualFolders, replyLater: replyLater, triage: triageStore, replyContent: replycontent.NewService(replycontent.ServiceOptions{}), ctx: context.Background(), syncLockPath: filepath.Join(dataDirectory, "mail-sync.owner.lock")}
 	pool := imap.NewPool(imap.DefaultPoolConfig(), func(accountID string) (*imap.ClientConfig, error) {
 		runtime.ctxMu.RLock()
 		ctx := runtime.ctx
@@ -169,6 +175,20 @@ func OpenSyncRuntime(dataDirectory string, credentials IMAPConfigSource) (*SyncR
 	router := mailfilter.NewAutomaticRouter(runtime.rules, folders, runtime.enqueueFilter)
 	engine.SetNewMessageHandler(func(_ string, _ string, msg *message.Message) { router.Route(msg) })
 	return runtime, nil
+}
+
+// SetImmediateSendHandler wires helper-local delivery and sender validation before Start.
+func (r *SyncRuntime) SetImmediateSendHandler(send func(context.Context, scheduledsend.Delivery) error, validateSender func(string, string) error) error {
+	if r == nil || send == nil || validateSender == nil {
+		return errors.New("helper immediate-send dependencies are required")
+	}
+	r.ctxMu.Lock()
+	defer r.ctxMu.Unlock()
+	if r.started {
+		return errors.New("cannot configure immediate send after runtime start")
+	}
+	r.immediateSend, r.validateSender = send, validateSender
+	return nil
 }
 
 // SetGmailTokenSource configures helper-local OAuth access for Gmail API

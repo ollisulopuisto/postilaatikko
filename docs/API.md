@@ -90,6 +90,16 @@ The helper mounts provider-aware search and account-qualified thread/body reads:
 - `POST /v1/messages/attachments/list` (Requires `mail.attachment.read`)
 - `POST /v1/messages/attachments/read` (Requires `mail.attachment.read`)
 
+### Drafts, reply preparation and immediate send
+
+- `GET /v1/drafts?accountId={id}` and `GET /v1/drafts/{draftId}?accountId={id}` require `draft.read`.
+- `POST /v1/drafts` and `PUT /v1/drafts/{draftId}` require `draft.write`. Create sends `{ "accountId": "acc-1", "message": { ... } }`; update also sends the `revision` returned on read. A stale revision returns `revision_conflict`.
+- `DELETE /v1/drafts/{draftId}?accountId={id}` requires `draft.write` and the current revision in `If-Match`.
+- `POST /v1/replies` requires `draft.write` and accepts `{ "accountId": "acc-1", "messageId": "msg-1", "mode": "reply|reply-all|forward" }`. The message body must already be cached; this route does not fetch it.
+- `POST /v1/send` requires `mail.send` and `Idempotency-Key`. It accepts account, authorized sender, SMTP envelope recipients, prepared RFC822 bytes, and an optional draft ID/revision. SMTP acceptance is reported as sent; it does not confirm recipient delivery. Retries replay the same receipt, and an interrupted/ambiguous send is marked outcome unknown without automatic resend.
+
+Draft storage currently rejects S/MIME or PGP body encryption flags because private-key operations remain in the desktop. Prepare/sign/encrypt the RFC822 payload on the desktop before sending. Draft persistence stores editable compose content and attachment descriptors in the helper database.
+
 ### 5. Mail Mutations
 - `POST /v1/filters/mutations` (Requires `mail.write`)
   - Request body uses `operation` with `rule` for `create`/`update`, `id` for `delete`, or `ids` for `reorder`.
