@@ -185,7 +185,7 @@ func (o *mailboxActionOperations) ActionUndoTriageRefs(ctx context.Context, payl
 		return nil, errors.New("triage undo snapshot does not match operation")
 	}
 	entry := snapshot.Entries[0]
-	ref := v1.AffectedTriageRef{AccountID: entry.AccountID, ConversationID: entry.ConversationID}
+	ref := v1.AffectedTriageRef{AccountID: entry.AccountID, ConversationID: entry.ConversationID, Known: true}
 	switch snapshot.Action {
 	case v1.ActionReplyLaterAdd, v1.ActionReplyLaterRemove:
 		ref.Queue = "replyLater"

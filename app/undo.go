@@ -84,8 +84,7 @@ func (a *App) undoLatest() (UndoLatestResult, error) {
 		if result.State == "undone" {
 			a.emitRuntimeEvent("undo:completed")
 		}
-		a.publishMailboxReconciliation(result.OperationID, result.State, result.Affected)
-		a.publishTriageUndoReconciliation(result.AffectedTriage)
+		a.publishMailboxReconciliation(result.OperationID, result.State, result.Affected, result.AffectedTriage)
 		a.emitRuntimeEvent("undo:history-changed")
 		if result.State == "outcome_unknown" {
 			return mapped, errors.New("undo outcome is unknown; retry with the same operation key")
@@ -162,8 +161,7 @@ func (a *App) UndoOperation(operationID string) (string, error) {
 		if result == nil {
 			return "", errors.New("mailbox service returned no undo receipt")
 		}
-		a.publishMailboxReconciliation(result.OperationID, result.State, result.Affected)
-		a.publishTriageUndoReconciliation(result.AffectedTriage)
+		a.publishMailboxReconciliation(result.OperationID, result.State, result.Affected, result.AffectedTriage)
 		if result.State == "undone" {
 			a.emitRuntimeEvent("undo:completed")
 		}
@@ -215,6 +213,17 @@ func (a *App) UndoOperation(operationID string) (string, error) {
 func (a *App) publishTriageUndoReconciliation(refs []v1.AffectedTriageRef) {
 	for _, ref := range refs {
 		payload := map[string]interface{}{"accountId": ref.AccountID, "conversationId": ref.ConversationID}
+		if !ref.Known {
+			switch ref.Queue {
+			case "replyLater":
+				a.emitRuntimeEvent("replyLater:refresh", payload)
+			case "readLater":
+				a.emitRuntimeEvent("readLater:refresh", payload)
+			case "snoozed":
+				a.emitRuntimeEvent("snooze:refresh", payload)
+			}
+			continue
+		}
 		switch ref.Queue {
 		case "replyLater":
 			payload["inQueue"] = ref.InQueue

@@ -36,18 +36,33 @@ func (l *actionReceiptLedger) RecoverInterrupted(ctx context.Context) error {
 		return fmt.Errorf("begin interrupted mail action recovery: %w", err)
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, `SELECT operation_id FROM mail_action_operations WHERE state = 'processing'`)
+	rows, err := tx.QueryContext(ctx, `SELECT operation_id, affected_triage_json FROM mail_action_operations WHERE state = 'processing'`)
 	if err != nil {
 		return fmt.Errorf("list interrupted mail actions: %w", err)
 	}
-	var interrupted []string
+	var interrupted []struct {
+		operationID string
+		affected    []v1.AffectedTriageRef
+	}
 	for rows.Next() {
 		var operationID string
-		if err := rows.Scan(&operationID); err != nil {
+		var payload []byte
+		if err := rows.Scan(&operationID, &payload); err != nil {
 			rows.Close()
 			return err
 		}
-		interrupted = append(interrupted, operationID)
+		var affected []v1.AffectedTriageRef
+		if err := json.Unmarshal(payload, &affected); err != nil {
+			rows.Close()
+			return err
+		}
+		for i := range affected {
+			affected[i].Known = false
+		}
+		interrupted = append(interrupted, struct {
+			operationID string
+			affected    []v1.AffectedTriageRef
+		}{operationID, affected})
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
@@ -56,11 +71,11 @@ func (l *actionReceiptLedger) RecoverInterrupted(ctx context.Context) error {
 	if err := rows.Close(); err != nil {
 		return err
 	}
-	for _, operationID := range interrupted {
-		if _, err := tx.ExecContext(ctx, `UPDATE mail_action_operations SET state='outcome_unknown', updated_at=datetime('now') WHERE operation_id=? AND state='processing'`, operationID); err != nil {
+	for _, item := range interrupted {
+		if _, err := tx.ExecContext(ctx, `UPDATE mail_action_operations SET state='outcome_unknown', updated_at=datetime('now') WHERE operation_id=? AND state='processing'`, item.operationID); err != nil {
 			return fmt.Errorf("recover interrupted mail action: %w", err)
 		}
-		if err := insertActionEvent(ctx, tx, operationID, "outcome_unknown", nil); err != nil {
+		if err := insertActionEvent(ctx, tx, item.operationID, "outcome_unknown", nil, item.affected); err != nil {
 			return fmt.Errorf("record interrupted mail action event: %w", err)
 		}
 	}
@@ -71,21 +86,32 @@ func (l *actionReceiptLedger) RecoverInterrupted(ctx context.Context) error {
 	var interruptedUndos []struct {
 		operationID string
 		payload     []byte
+		affected    []v1.AffectedTriageRef
 	}
-	undoRows, err := tx.QueryContext(ctx, `SELECT operation_id, undo_payload FROM mail_action_operations WHERE undo_state = 'outcome_unknown' AND operation_id IN (SELECT operation_id FROM mail_action_undo_requests WHERE state = 'reserved')`)
+	undoRows, err := tx.QueryContext(ctx, `SELECT operation_id, undo_payload, affected_triage_json FROM mail_action_operations WHERE undo_state = 'outcome_unknown' AND operation_id IN (SELECT operation_id FROM mail_action_undo_requests WHERE state = 'reserved')`)
 	if err != nil {
 		return fmt.Errorf("list interrupted mail undos: %w", err)
 	}
 	for undoRows.Next() {
-		var item struct {
-			operationID string
-			payload     []byte
-		}
-		if err := undoRows.Scan(&item.operationID, &item.payload); err != nil {
+		var operationID string
+		var payload, affectedJSON []byte
+		if err := undoRows.Scan(&operationID, &payload, &affectedJSON); err != nil {
 			undoRows.Close()
 			return err
 		}
-		interruptedUndos = append(interruptedUndos, item)
+		var affected []v1.AffectedTriageRef
+		if err := json.Unmarshal(affectedJSON, &affected); err != nil {
+			undoRows.Close()
+			return err
+		}
+		for i := range affected {
+			affected[i].Known = false
+		}
+		interruptedUndos = append(interruptedUndos, struct {
+			operationID string
+			payload     []byte
+			affected    []v1.AffectedTriageRef
+		}{operationID, payload, affected})
 	}
 	if err := undoRows.Err(); err != nil {
 		undoRows.Close()
@@ -95,7 +121,7 @@ func (l *actionReceiptLedger) RecoverInterrupted(ctx context.Context) error {
 		return err
 	}
 	for _, item := range interruptedUndos {
-		if err := insertActionEvent(ctx, tx, item.operationID, "outcome_unknown", nil); err != nil {
+		if err := insertActionEvent(ctx, tx, item.operationID, "outcome_unknown", nil, item.affected); err != nil {
 			return fmt.Errorf("record interrupted mail undo event: %w", err)
 		}
 	}
@@ -123,7 +149,22 @@ func (l *actionReceiptLedger) Lookup(ctx context.Context, keyHash string) (v1.Ac
 }
 
 func (l *actionReceiptLedger) Reserve(ctx context.Context, keyHash, requestHash, operationID string, action v1.ActionKind, messageCount int) (v1.ActionReceiptRecord, bool, error) {
+	return l.reserve(ctx, keyHash, requestHash, operationID, action, messageCount, nil)
+}
+
+func (l *actionReceiptLedger) ReserveTriage(ctx context.Context, keyHash, requestHash, operationID string, action v1.ActionKind, messageCount int, affected []v1.AffectedTriageRef) (v1.ActionReceiptRecord, bool, error) {
+	return l.reserve(ctx, keyHash, requestHash, operationID, action, messageCount, affected)
+}
+
+func (l *actionReceiptLedger) reserve(ctx context.Context, keyHash, requestHash, operationID string, action v1.ActionKind, messageCount int, affected []v1.AffectedTriageRef) (v1.ActionReceiptRecord, bool, error) {
 	if err := ctx.Err(); err != nil {
+		return v1.ActionReceiptRecord{}, false, err
+	}
+	if affected == nil {
+		affected = []v1.AffectedTriageRef{}
+	}
+	affectedJSON, err := json.Marshal(affected)
+	if err != nil {
 		return v1.ActionReceiptRecord{}, false, err
 	}
 	tx, err := l.db.BeginTx(ctx, nil)
@@ -132,8 +173,8 @@ func (l *actionReceiptLedger) Reserve(ctx context.Context, keyHash, requestHash,
 	}
 	defer tx.Rollback()
 	_, err = tx.ExecContext(ctx, `INSERT INTO mail_action_operations
-		(idempotency_key_hash, request_hash, operation_id, state, action_kind, undo_message_count)
-		VALUES (?, ?, ?, 'processing', ?, ?) ON CONFLICT(idempotency_key_hash) DO NOTHING`, keyHash, requestHash, operationID, action, messageCount)
+		(idempotency_key_hash, request_hash, operation_id, state, action_kind, undo_message_count, affected_triage_json)
+		VALUES (?, ?, ?, 'processing', ?, ?, ?) ON CONFLICT(idempotency_key_hash) DO NOTHING`, keyHash, requestHash, operationID, action, messageCount, affectedJSON)
 	if err != nil {
 		return v1.ActionReceiptRecord{}, false, err
 	}
@@ -191,13 +232,13 @@ func (l *actionReceiptLedger) Complete(ctx context.Context, keyHash, requestHash
 	if action == "" {
 		return tx.Commit()
 	}
-	if err := insertActionEvent(ctx, tx, responseData.Receipt.OperationID, string(state), responseData.Affected); err != nil {
+	if err := insertActionEvent(ctx, tx, responseData.Receipt.OperationID, string(state), responseData.Affected, responseData.AffectedTriage); err != nil {
 		return err
 	}
 	return tx.Commit()
 }
 
-func insertActionEvent(ctx context.Context, tx *sql.Tx, operationID, state string, affected []v1.AffectedMessageRef) error {
+func insertActionEvent(ctx context.Context, tx *sql.Tx, operationID, state string, affected []v1.AffectedMessageRef, affectedTriage []v1.AffectedTriageRef) error {
 	if state != "sent" && state != "undone" && state != "outcome_unknown" {
 		return fmt.Errorf("invalid action event state %q", state)
 	}
@@ -208,8 +249,15 @@ func insertActionEvent(ctx context.Context, tx *sql.Tx, operationID, state strin
 	if err != nil {
 		return fmt.Errorf("encode affected action references: %w", err)
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO mail_action_events (operation_id, state, affected_json)
-		VALUES (?, ?, ?) ON CONFLICT(operation_id, state) DO NOTHING`, operationID, state, payload)
+	if affectedTriage == nil {
+		affectedTriage = []v1.AffectedTriageRef{}
+	}
+	triagePayload, err := json.Marshal(affectedTriage)
+	if err != nil {
+		return fmt.Errorf("encode affected triage references: %w", err)
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO mail_action_events (operation_id, state, affected_json, affected_triage_json)
+		VALUES (?, ?, ?, ?) ON CONFLICT(operation_id, state) DO NOTHING`, operationID, state, payload, triagePayload)
 	return err
 }
 
@@ -244,19 +292,23 @@ func (l *actionReceiptLedger) ListActionEvents(ctx context.Context, clientID str
 		page.Cursor = newest.Int64
 		return page, tx.Commit()
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT sequence, operation_id, state, affected_json, created_at
+	rows, err := tx.QueryContext(ctx, `SELECT sequence, operation_id, state, affected_json, affected_triage_json, created_at
 		FROM mail_action_events WHERE sequence > ? ORDER BY sequence LIMIT ?`, cursor, limit)
 	if err != nil {
 		return v1.ActionEventPage{}, err
 	}
 	for rows.Next() {
 		var item v1.ActionEvent
-		var affected []byte
-		if err := rows.Scan(&item.Sequence, &item.OperationID, &item.State, &affected, &item.CreatedAt); err != nil {
+		var affected, affectedTriage []byte
+		if err := rows.Scan(&item.Sequence, &item.OperationID, &item.State, &affected, &affectedTriage, &item.CreatedAt); err != nil {
 			rows.Close()
 			return v1.ActionEventPage{}, err
 		}
 		if err := json.Unmarshal(affected, &item.Affected); err != nil {
+			rows.Close()
+			return v1.ActionEventPage{}, err
+		}
+		if err := json.Unmarshal(affectedTriage, &item.AffectedTriage); err != nil {
 			rows.Close()
 			return v1.ActionEventPage{}, err
 		}
@@ -315,6 +367,44 @@ func undoMessageCount(payload []byte) int {
 		return 0
 	}
 	return len(snapshot.Entries)
+}
+
+func actionUndoTriageRefs(payload []byte, known bool) ([]v1.AffectedTriageRef, error) {
+	if len(payload) == 0 {
+		return []v1.AffectedTriageRef{}, nil
+	}
+	var snapshot struct {
+		Action  v1.ActionKind `json:"action"`
+		Entries []struct {
+			AccountID      string `json:"accountId"`
+			ConversationID string `json:"conversationId"`
+			PriorInQueue   bool   `json:"priorInQueue"`
+			PriorWakeAt    string `json:"priorWakeAt"`
+			PriorSnoozed   bool   `json:"priorSnoozed"`
+		} `json:"entries"`
+	}
+	if err := json.Unmarshal(payload, &snapshot); err != nil {
+		return nil, err
+	}
+	if len(snapshot.Entries) == 0 {
+		return []v1.AffectedTriageRef{}, nil
+	}
+	entry := snapshot.Entries[0]
+	ref := v1.AffectedTriageRef{AccountID: entry.AccountID, ConversationID: entry.ConversationID, Known: known}
+	switch snapshot.Action {
+	case v1.ActionReplyLaterAdd, v1.ActionReplyLaterRemove:
+		ref.Queue, ref.InQueue = "replyLater", entry.PriorInQueue
+	case v1.ActionReadLaterAdd, v1.ActionReadLaterRemove:
+		ref.Queue, ref.InQueue = "readLater", entry.PriorInQueue
+	case v1.ActionSnooze, v1.ActionUnsnooze:
+		ref.Queue, ref.InQueue, ref.WakeAt = "snoozed", entry.PriorSnoozed, entry.PriorWakeAt
+	default:
+		return []v1.AffectedTriageRef{}, nil
+	}
+	if ref.AccountID == "" || ref.ConversationID == "" {
+		return nil, errors.New("triage undo snapshot has incomplete identity")
+	}
+	return []v1.AffectedTriageRef{ref}, nil
 }
 
 func (l *actionReceiptLedger) ListUndoHistory(ctx context.Context, limit int) ([]v1.ActionUndoSummary, error) {
@@ -476,7 +566,13 @@ func (l *actionReceiptLedger) CompleteUndo(ctx context.Context, operationID, sta
 			affected = append(affected, v1.AffectedMessageRef{AccountID: entry.AccountID, MessageID: entry.MessageID, FolderID: entry.FolderID})
 		}
 	}
-	if err := insertActionEvent(ctx, tx, operationID, state, affected); err != nil {
+	var affectedTriage []v1.AffectedTriageRef
+	if triageRefs, err := actionUndoTriageRefs(payload, state == "undone"); err != nil {
+		return err
+	} else {
+		affectedTriage = triageRefs
+	}
+	if err := insertActionEvent(ctx, tx, operationID, state, affected, affectedTriage); err != nil {
 		return err
 	}
 	return tx.Commit()

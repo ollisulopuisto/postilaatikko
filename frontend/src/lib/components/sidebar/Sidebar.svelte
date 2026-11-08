@@ -221,8 +221,9 @@
     void GetSnoozedCount().then(count => snoozedCount = count).catch(() => {})
     const refreshSnoozedCount = () => { void GetSnoozedCount().then(count => snoozedCount = count).catch(() => {}) }
     const stopSnoozeChanged = EventsOn('snooze:changed', refreshSnoozedCount)
+    const stopSnoozeRefresh = EventsOn('snooze:refresh', refreshSnoozedCount)
     const stopSnoozeExpired = EventsOn('snooze:expired', refreshSnoozedCount)
-    return () => { stopSnoozeChanged(); stopSnoozeExpired() }
+    return () => { stopSnoozeChanged(); stopSnoozeRefresh(); stopSnoozeExpired() }
   })
 
   $effect(() => {

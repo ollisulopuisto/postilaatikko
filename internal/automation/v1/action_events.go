@@ -10,11 +10,12 @@ import (
 
 // ActionEvent is a content-free mailbox mutation notice for cache reconciliation.
 type ActionEvent struct {
-	Sequence    int64                `json:"sequence"`
-	OperationID string               `json:"operationId"`
-	State       string               `json:"state"`
-	Affected    []AffectedMessageRef `json:"affected,omitempty"`
-	CreatedAt   string               `json:"createdAt"`
+	Sequence       int64                `json:"sequence"`
+	OperationID    string               `json:"operationId"`
+	State          string               `json:"state"`
+	Affected       []AffectedMessageRef `json:"affected,omitempty"`
+	AffectedTriage []AffectedTriageRef  `json:"affectedTriage,omitempty"`
+	CreatedAt      string               `json:"createdAt"`
 }
 
 // ActionEventPage is one bounded page after the authenticated client's cursor.

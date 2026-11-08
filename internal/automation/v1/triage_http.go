@@ -22,10 +22,11 @@ type SnoozeMutationRequest struct {
 
 // TriageMutationResponse reports whether the requested membership changed.
 type TriageMutationResponse struct {
-	Changed       bool             `json:"changed"`
-	Receipt       OperationReceipt `json:"receipt"`
-	UndoAvailable bool             `json:"undoAvailable,omitempty"`
-	UndoExpiresAt string           `json:"undoExpiresAt,omitempty"`
+	Changed        bool                `json:"changed"`
+	Receipt        OperationReceipt    `json:"receipt"`
+	AffectedTriage []AffectedTriageRef `json:"affectedTriage,omitempty"`
+	UndoAvailable  bool                `json:"undoAvailable,omitempty"`
+	UndoExpiresAt  string              `json:"undoExpiresAt,omitempty"`
 }
 
 // TriageOperations owns Read Later and Snooze state.

@@ -58,6 +58,7 @@ type AffectedTriageRef struct {
 	Queue          string `json:"queue"`
 	AccountID      string `json:"accountId"`
 	ConversationID string `json:"conversationId"`
+	Known          bool   `json:"known"`
 	InQueue        bool   `json:"inQueue"`
 	WakeAt         string `json:"wakeAt,omitempty"`
 }
@@ -173,8 +174,13 @@ func handleActionUndo(w http.ResponseWriter, r *http.Request, operationID string
 			if reader, ok := operations.(ActionUndoAffectedRefReader); ok {
 				result.Affected, _ = reader.ActionUndoAffectedRefs(r.Context(), record.Payload)
 			}
-			if reader, ok := operations.(ActionUndoTriageRefReader); ok {
-				result.AffectedTriage, _ = reader.ActionUndoTriageRefs(r.Context(), record.Payload)
+		}
+		if reader, ok := operations.(ActionUndoTriageRefReader); ok {
+			result.AffectedTriage, _ = reader.ActionUndoTriageRefs(r.Context(), record.Payload)
+			if record.UndoState == "outcome_unknown" {
+				for index := range result.AffectedTriage {
+					result.AffectedTriage[index].Known = false
+				}
 			}
 		}
 		writeUndoResponse(w, r, http.StatusOK, result)
@@ -185,7 +191,14 @@ func handleActionUndo(w http.ResponseWriter, r *http.Request, operationID string
 			writeHeaderError(w, r, http.StatusInternalServerError, CodeInternal, "Undo outcome is uncertain and its receipt could not be saved", true)
 			return
 		}
-		writeUndoResponse(w, r, http.StatusOK, ActionUndoResult{OperationID: record.OperationID, Action: record.Action, State: "outcome_unknown"})
+		result := ActionUndoResult{OperationID: record.OperationID, Action: record.Action, State: "outcome_unknown"}
+		if reader, ok := operations.(ActionUndoTriageRefReader); ok {
+			result.AffectedTriage, _ = reader.ActionUndoTriageRefs(r.Context(), record.Payload)
+			for index := range result.AffectedTriage {
+				result.AffectedTriage[index].Known = false
+			}
+		}
+		writeUndoResponse(w, r, http.StatusOK, result)
 		return
 	}
 	if err := completeActionUndo(store, record.OperationID, "undone"); err != nil {

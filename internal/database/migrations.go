@@ -1855,4 +1855,8 @@ var migrations = []Migration{
 			updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 		);
 	`},
+	{Version: 73, SQL: `
+		ALTER TABLE mail_action_operations ADD COLUMN affected_triage_json BLOB NOT NULL DEFAULT '[]';
+		ALTER TABLE mail_action_events ADD COLUMN affected_triage_json BLOB NOT NULL DEFAULT '[]';
+	`},
 }

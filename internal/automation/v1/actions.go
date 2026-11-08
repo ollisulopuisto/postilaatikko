@@ -50,11 +50,12 @@ type ActionRequest struct {
 
 // ActionResponse describes the outcome and provides an operation receipt.
 type ActionResponse struct {
-	Receipt       OperationReceipt     `json:"receipt"`
-	MessageIDs    []string             `json:"messageIds"`
-	Affected      []AffectedMessageRef `json:"affected,omitempty"`
-	UndoAvailable bool                 `json:"undoAvailable,omitempty"`
-	UndoExpiresAt string               `json:"undoExpiresAt,omitempty"`
+	Receipt        OperationReceipt     `json:"receipt"`
+	MessageIDs     []string             `json:"messageIds"`
+	Affected       []AffectedMessageRef `json:"affected,omitempty"`
+	AffectedTriage []AffectedTriageRef  `json:"affectedTriage,omitempty"`
+	UndoAvailable  bool                 `json:"undoAvailable,omitempty"`
+	UndoExpiresAt  string               `json:"undoExpiresAt,omitempty"`
 }
 
 // AffectedMessageRef identifies a changed mailbox row without exposing content.

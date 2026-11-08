@@ -29,6 +29,13 @@ type TriageMutationOperations interface {
 	ApplyTriageMutation(context.Context, TriageMutationRequest, func([]byte) error) (bool, []byte, error)
 }
 
+// TriageActionReceiptStore atomically persists account-qualified queue refs
+// with the operation reservation, so interrupted provider effects remain
+// targeted and recoverable after restart.
+type TriageActionReceiptStore interface {
+	ReserveTriage(context.Context, string, string, string, ActionKind, int, []AffectedTriageRef) (ActionReceiptRecord, bool, error)
+}
+
 // TriageMutationsHandler executes helper-owned queue changes with durable
 // idempotency and snapshots stored in the shared action receipt ledger.
 type TriageMutationsHandler struct {
@@ -159,7 +166,15 @@ func (h *TriageMutationsHandler) handle(w http.ResponseWriter, r *http.Request, 
 	operationID := generateOpID()
 	reserved := false
 	reserve := func(snapshot []byte) error {
-		stored, owner, err := h.receipts.Reserve(r.Context(), keyHash, requestHash, operationID, request.Action, 1)
+		ref := triageMutationRef(request, false)
+		var stored ActionReceiptRecord
+		var owner bool
+		var err error
+		if triageReceipts, ok := h.receipts.(TriageActionReceiptStore); ok {
+			stored, owner, err = triageReceipts.ReserveTriage(r.Context(), keyHash, requestHash, operationID, request.Action, 1, []AffectedTriageRef{ref})
+		} else {
+			stored, owner, err = h.receipts.Reserve(r.Context(), keyHash, requestHash, operationID, request.Action, 1)
+		}
 		if err != nil {
 			return err
 		}
@@ -201,6 +216,12 @@ func (h *TriageMutationsHandler) handle(w http.ResponseWriter, r *http.Request, 
 		Changed: changed && state == OperationSent,
 		Receipt: OperationReceipt{OperationID: operationID, State: state},
 	}
+	ref := triageMutationRef(request, state == OperationSent)
+	if state == OperationSent && !changed {
+		response.AffectedTriage = nil
+	} else {
+		response.AffectedTriage = []AffectedTriageRef{ref}
+	}
 	actionKind := request.Action
 	if !response.Changed || state != OperationSent {
 		undoPayload = nil
@@ -225,6 +246,26 @@ func (h *TriageMutationsHandler) handle(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	writeTriageMutationResponse(w, r, response)
+}
+
+func triageMutationRef(request TriageMutationRequest, known bool) AffectedTriageRef {
+	ref := AffectedTriageRef{AccountID: request.AccountID, ConversationID: request.ConversationID, Known: known}
+	switch request.Action {
+	case ActionReplyLaterAdd, ActionReplyLaterRemove:
+		ref.Queue = "replyLater"
+		ref.InQueue = request.InQueue
+	case ActionReadLaterAdd, ActionReadLaterRemove:
+		ref.Queue = "readLater"
+		ref.InQueue = request.InQueue
+	case ActionSnooze:
+		ref.Queue = "snoozed"
+		ref.InQueue = true
+		ref.WakeAt = request.WakeAt.UTC().Format(time.RFC3339Nano)
+	case ActionUnsnooze:
+		ref.Queue = "snoozed"
+		ref.InQueue = false
+	}
+	return ref
 }
 
 func (h *TriageMutationsHandler) writeStored(w http.ResponseWriter, r *http.Request, stored ActionReceiptRecord, requestHash string) {

@@ -658,11 +658,18 @@
     stopReplyLaterListener = EventsOn('replyLater:changed', () => {
       if (filterMode === 'replyLater' || (isUnifiedView && folderId === 'replyLater')) scheduleReload()
     })
+    EventsOn('replyLater:refresh', () => {
+      if (filterMode === 'replyLater' || (isUnifiedView && folderId === 'replyLater')) scheduleReload()
+    })
 
     EventsOn('readLater:changed', () => {
       if (filterMode === 'readLater' || (isUnifiedView && folderId === 'readLater')) scheduleReload()
     })
+    EventsOn('readLater:refresh', () => {
+      if (filterMode === 'readLater' || (isUnifiedView && folderId === 'readLater')) scheduleReload()
+    })
     EventsOn('snooze:changed', () => scheduleReload())
+    EventsOn('snooze:refresh', () => scheduleReload())
     EventsOn('snooze:expired', () => scheduleReload())
 
     // Listen for message read-state changes. Star changes ride their own

@@ -704,7 +704,7 @@ func (a *App) mutateResolvedAction(ctx context.Context, ids []string, action v1.
 		Target:      operations.Target{Kind: operations.TargetMatchedMessages, Messages: refs},
 	})
 	if response != nil {
-		a.publishMailboxReconciliation(response.Receipt.OperationID, string(response.Receipt.State), response.Affected)
+		a.publishMailboxReconciliation(response.Receipt.OperationID, string(response.Receipt.State), response.Affected, response.AffectedTriage)
 	}
 	if err == nil {
 		service.consumeActionRefs(ids)
@@ -716,7 +716,7 @@ func (a *App) mutateResolvedAction(ctx context.Context, ids []string, action v1.
 	return response, true, err
 }
 
-func (a *App) publishMailboxReconciliation(operationID, state string, affected []v1.AffectedMessageRef) {
+func (a *App) publishMailboxReconciliation(operationID, state string, affected []v1.AffectedMessageRef, affectedTriage []v1.AffectedTriageRef) {
 	if state == "sent" || state == "undone" || state == "reset_required" {
 		a.invalidateViewCounts()
 	}
@@ -725,6 +725,7 @@ func (a *App) publishMailboxReconciliation(operationID, state string, affected [
 		"state":       state,
 		"affected":    affected,
 	})
+	a.publishTriageUndoReconciliation(affectedTriage)
 	if state == "outcome_unknown" {
 		a.emitRuntimeEvent("undo:history-changed")
 	}
@@ -741,7 +742,7 @@ func (a *App) SyncMailboxActionEvents() error {
 		return err
 	}
 	return service.syncActionEvents(ctx, func(event v1.ActionEvent) {
-		a.publishMailboxReconciliation(event.OperationID, event.State, event.Affected)
+		a.publishMailboxReconciliation(event.OperationID, event.State, event.Affected, event.AffectedTriage)
 	})
 }
 

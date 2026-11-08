@@ -19,6 +19,7 @@ async function load(force = false): Promise<void> {
   if (!subscribed) {
     subscribed = true
     EventsOn('readLater:changed', (event: MembershipEvent) => update(event, event.inQueue))
+    EventsOn('readLater:refresh', () => { void load(true).catch(() => {}) })
     EventsOn('readLater:synced', () => { void load(true).catch(() => {}) })
     EventsOn('snooze:expired', () => { void load(true).catch(() => {}) })
   }
