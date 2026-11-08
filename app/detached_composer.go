@@ -202,6 +202,12 @@ func (c *ComposerApp) handleIPCMessage(msg ipc.Message) {
 	log.Debug().Str("type", msg.Type).Msg("Received IPC message")
 
 	switch msg.Type {
+	case ipc.TypePasteRequested:
+		wailsRuntime.EventsEmit(c.ctx, "native:paste-requested")
+
+	case ipc.TypeUndoRequested:
+		wailsRuntime.EventsEmit(c.ctx, "composer:undo-requested")
+
 	case ipc.TypeThemeChanged:
 		var payload ipc.ThemeChangedPayload
 		if err := msg.ParsePayload(&payload); err == nil {

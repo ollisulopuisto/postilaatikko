@@ -112,6 +112,7 @@
     // ComposerApp.BeforeClose and must use the same safe composer flow as the
     // custom titlebar button.
     EventsOn('composer:close-requested', requestClose)
+    EventsOn('composer:undo-requested', () => window.dispatchEvent(new Event('postilaatikko:composer-undo')))
 
     // Load compose mode and initial data
     try {
@@ -150,6 +151,7 @@
     EventsOff('theme:changed')
     EventsOff('app:shutdown')
     EventsOff('composer:close-requested')
+    EventsOff('composer:undo-requested')
   })
 
   // Window control functions

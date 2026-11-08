@@ -16,7 +16,7 @@
   "undoHistory": {
     "outcomeUnknown": "Tulos epäselvä · tarkista postilaatikko ennen uutta yritystä",
     "title": "Kumoushistoria",
-    "description": "Viimeisimmät sähköpostitoiminnot, jotka voit vielä kumota. Cmd-Z Macissa (Ctrl-Z muilla alustoilla) kumoaa aina viimeisimmän toiminnon.",
+    "description": "Viimeisimmät sähköpostitoiminnot, jotka voit vielä kumota. Cmd-Z Macissa (Ctrl-Z muilla alustoilla) kumoaa viimeisimmän sähköpostitoiminnon, kun et muokkaa viestiä kirjoittimessa.",
     "loading": "Ladataan kumoushistoriaa…",
     "empty": "Kumottavia toimintoja ei ole.",
     "loadFailed": "Kumoushistoriaa ei voitu ladata.",

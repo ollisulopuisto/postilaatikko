@@ -446,6 +446,13 @@
     await historyRefreshNav()
   }
 
+  function handleNativeUndoEvent() {
+    if (!document.hasFocus()) return
+    const active = document.activeElement
+    if (!(active instanceof HTMLElement) || !active.closest('[data-composer-root]')) return
+    void historyUndo()
+  }
+
   let historyCanUndo = $state(false)
   let historyCanRedo = $state(false)
   let historyPanelOpen = $state(false)
@@ -995,6 +1002,8 @@
 
   // Initialize
   onMount(async () => {
+    window.addEventListener('postilaatikko:composer-undo', handleNativeUndoEvent)
+
     historyCtl = new DraftHistoryController(
       historyDraftKey(),
       {
@@ -1477,6 +1486,7 @@
   }
 
   onDestroy(() => {
+    window.removeEventListener('postilaatikko:composer-undo', handleNativeUndoEvent)
     // Unsubscribe from draft sync events
     EventsOff('draft:syncStatusChanged')
     // Clear any pending save timeout
@@ -2359,6 +2369,7 @@
   ondrop={handleDrop}
   role="region"
   aria-label={$_('aria.emailComposer')}
+  data-composer-root
 >
   {#if historyPanelOpen}
     <div class="absolute right-2 top-12 z-50 w-72 max-h-80 overflow-auto rounded-lg border border-border bg-popover p-2 shadow-lg" role="dialog" aria-label={$_('composer.history')}>

@@ -16,7 +16,7 @@
   "undoHistory": {
     "outcomeUnknown": "Outcome unknown · inspect mailbox before retrying",
     "title": "Undo History",
-    "description": "Recent mailbox actions you can still undo. Cmd-Z on Mac (Ctrl-Z elsewhere) undoes the latest action.",
+    "description": "Recent mailbox actions you can still undo. Cmd-Z on Mac (Ctrl-Z elsewhere) undoes the latest mailbox action when a composer is not being edited.",
     "loading": "Loading undo history…",
     "empty": "There are no actions available to undo.",
     "loadFailed": "Undo history could not be loaded.",

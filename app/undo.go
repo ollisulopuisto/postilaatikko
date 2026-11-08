@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/hkdb/aerion/internal/imap"
+	"github.com/hkdb/aerion/internal/ipc"
 	"github.com/hkdb/aerion/internal/logging"
 	undoPkg "github.com/hkdb/aerion/internal/undo"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -275,6 +276,11 @@ func (a *App) RequestUndoHistoryFromMenu() {
 // RequestUndoFromMenu routes the native Edit > Undo item through the same UI
 // path as Cmd-Z so selection reconciliation and feedback remain consistent.
 func (a *App) RequestUndoFromMenu() {
+	if a.ipcServer != nil {
+		if msg, err := ipc.NewMessage(ipc.TypeUndoRequested, nil); err == nil {
+			_ = a.ipcServer.Broadcast(msg)
+		}
+	}
 	a.emitRuntimeEvent("undo:requested")
 }
 
@@ -290,6 +296,11 @@ func (a *App) RunEditMenuCommand(command string) {
 			return
 		}
 		a.emitRuntimeEvent("native:paste-text", text)
+		if a.ipcServer != nil {
+			if msg, err := ipc.NewMessage(ipc.TypePasteRequested, nil); err == nil {
+				_ = a.ipcServer.Broadcast(msg)
+			}
+		}
 	case "cut", "copy", "selectAll":
 		// Reader selections belong to a sandboxed iframe, not the parent
 		// document. Route native Edit menu commands to that focused frame.

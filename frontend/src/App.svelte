@@ -722,7 +722,15 @@
       setActiveExtension('mail')
       showUndoHistory = true
     })
-    EventsOn('undo:requested', () => { void handleGlobalUndo() })
+    EventsOn('undo:requested', () => {
+      if (!document.hasFocus()) return
+      const active = document.activeElement
+      if (showComposer && active instanceof HTMLElement && active.closest('[data-composer-root]')) {
+        window.dispatchEvent(new Event('postilaatikko:composer-undo'))
+        return
+      }
+      void handleGlobalUndo()
+    })
     EventsOn('whatsnew:requested', () => {
       whatsNewHistory = true
       showWhatsNewDialog = true

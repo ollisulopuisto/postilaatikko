@@ -3,7 +3,7 @@ import { initI18n } from './lib/i18n'
 import ComposerApp from './ComposerApp.svelte'
 import { mount } from 'svelte'
 // @ts-ignore - Wails runtime
-import { EventsOn } from '../wailsjs/runtime/runtime'
+import { ClipboardGetText, EventsOn } from '../wailsjs/runtime/runtime'
 import { insertClipboardTextAtFocus } from './lib/nativePaste'
 
 // Initialize i18n and wait for locale to load before mounting
@@ -11,6 +11,14 @@ import { insertClipboardTextAtFocus } from './lib/nativePaste'
 async function bootstrap() {
   await waitForRuntime()
   EventsOn('native:paste-text', (text: string) => insertClipboardTextAtFocus(text))
+  EventsOn('native:paste-requested', async () => {
+    if (!document.hasFocus()) return
+    try {
+      insertClipboardTextAtFocus(await ClipboardGetText())
+    } catch (error) {
+      console.warn('[composer] clipboard text unavailable', error)
+    }
+  })
   await initI18n()
   mount(ComposerApp, { target: document.getElementById('app')! })
 }

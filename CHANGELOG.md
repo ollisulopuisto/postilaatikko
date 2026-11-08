@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Route Cmd/Ctrl+V through the system clipboard fallback in composer windows and send composer Undo to its local draft history while editing; mailbox Undo remains scoped to durable helper operations.
 - Reconcile helper-owned actions and Undo through bounded account/message/folder references, refresh only affected open views, and retain uncertain outcomes in Undo History with explicit status.
 - Start a desktop configured for a remote mailbox helper without opening the local mailbox database. Route core navigation, saved-view cache/counts, folder counts, thread reads, and explicit body fetches through the helper.
 - Route remote-only inline compose drafts, replies, and sends through helper-owned APIs, retaining draft revisions and send receipt keys across retries without opening local compose/provider stores.

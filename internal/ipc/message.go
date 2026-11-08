@@ -29,6 +29,12 @@ const (
 
 // Message type constants for Main -> Composer (broadcast) communication
 const (
+	// TypePasteRequested asks focused composer windows to read their own clipboard.
+	TypePasteRequested = "paste_requested"
+
+	// TypeUndoRequested asks the focused composer to undo its local draft edit.
+	TypeUndoRequested = "undo_requested"
+
 	// TypeThemeChanged indicates the system theme changed
 	TypeThemeChanged = "theme_changed"
 

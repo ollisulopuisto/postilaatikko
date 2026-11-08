@@ -11,8 +11,21 @@ export function insertClipboardTextAtFocus(text: string): void {
   if (input && (active as HTMLInputElement | HTMLTextAreaElement).disabled) return
   if (input && (active as HTMLInputElement | HTMLTextAreaElement).readOnly) return
 
-  // insertText is permitted from a native menu callback, unlike execCommand
-  //('paste'), which WebKit blocks because it is not a trusted paste gesture.
-  // Keyboard ⌘V bypasses this path and remains a native paste for rich data.
+  if (input) {
+    const field = active as HTMLInputElement | HTMLTextAreaElement
+    const start = field.selectionStart ?? field.value.length
+    const end = field.selectionEnd ?? start
+    if (field instanceof HTMLInputElement && field.type === 'email') {
+      field.value = `${field.value.slice(0, start)}${text}${field.value.slice(end)}`
+    } else {
+      field.setRangeText(text, start, end, 'end')
+    }
+    field.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertFromPaste', data: text }))
+    return
+  }
+
+  // execCommand insertText preserves the editor's input transaction and
+  // history integration. execCommand('paste') is blocked by WebKit because
+  // this callback is not a trusted paste gesture.
   document.execCommand('insertText', false, text)
 }
