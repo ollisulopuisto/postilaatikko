@@ -239,8 +239,11 @@
           <!-- Default radio button -->
           <button
             type="button"
+            role="radio"
+            aria-checked={identity.isDefault}
+            aria-label={identity.isDefault ? $_('identity.defaultAddress') : `${$_('identity.setAsDefaultAddress')} (${identity.email})`}
             onclick={() => handleSetDefault(identity)}
-            class="flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors
+            class="flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
               {identity.isDefault
                 ? 'border-primary bg-primary'
                 : 'border-muted-foreground hover:border-primary'}"
@@ -269,12 +272,13 @@
           </div>
 
           <!-- Actions -->
-          <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity">
             <Button
               variant="ghost"
               size="sm"
               onclick={() => handleEditIdentity(identity)}
               class="h-8 w-8 p-0"
+              aria-label={$_('common.edit')}
               title={$_('common.edit')}
             >
               <Icon icon="mdi:pencil" class="w-4 h-4" />
@@ -285,6 +289,7 @@
               onclick={() => handleDeleteIdentity(identity)}
               disabled={identity.isDefault || deletingId === identity.id}
               class="h-8 w-8 p-0 text-destructive hover:text-destructive"
+              aria-label={identity.isDefault ? $_('identity.cannotDeleteDefaultTitle') : $_('common.delete')}
               title={identity.isDefault ? $_('identity.cannotDeleteDefaultTitle') : $_('common.delete')}
             >
               {#if deletingId === identity.id}
@@ -342,12 +347,13 @@
                 <div class="text-xs text-muted-foreground truncate">{mailbox.name}</div>
               {/if}
             </div>
-            <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity">
               <Button
                 variant="ghost"
                 size="sm"
                 onclick={() => { editingSharedMailbox = mailbox; showSharedMailboxEditor = true }}
                 class="h-8 w-8 p-0"
+                aria-label={$_('common.edit')}
                 title={$_('common.edit')}
               >
                 <Icon icon="mdi:pencil" class="w-4 h-4" />
@@ -357,6 +363,7 @@
                 size="sm"
                 onclick={() => handleDeleteSharedMailbox(mailbox)}
                 class="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                aria-label={$_('common.delete')}
                 title={$_('common.delete')}
               >
                 <Icon icon="mdi:delete" class="w-4 h-4" />
