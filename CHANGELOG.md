@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Serve virtual-folder sidebar unread counts from the authenticated helper for connected desktops while preserving existing count semantics and local-helper fallback.
 - Connect the desktop to a user-operated remote mailbox helper over HTTPS with per-device credentials stored in the OS keychain. Routed service operations fail closed on remote errors; remote-only startup remains follow-up work.
 - Keep virtual-folder result caches warm in the independent helper and serve cached conversations with freshness metadata to connected desktop clients.
 - Store desktop TLS trust decisions in the device database while retaining legacy certificate rows in the mailbox database.

@@ -145,6 +145,13 @@ func (r *SyncRuntime) GetCachedVirtualFolderView(id string) (*v1.CachedVirtualFo
 	}, nil
 }
 
+func (r *SyncRuntime) GetVirtualFolderUnreadCounts() (map[string]int, error) {
+	if r == nil || r.virtualFolders == nil {
+		return nil, errors.New("always-on runtime is not open")
+	}
+	return r.virtualFolders.UnreadCounts()
+}
+
 func (r *SyncRuntime) refreshVirtualFolderCache(id string) error {
 	vf, err := r.virtualFolders.Get(id)
 	if err != nil {
@@ -381,6 +388,7 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 	mux := http.NewServeMux()
 	v1.MountCatalogRoutes(mux, operations, automation.RequireGrantCapability)
 	v1.MountVirtualFolderCacheRoute(mux, r, automation.RequireGrantCapability)
+	v1.MountVirtualFolderUnreadCountRoute(mux, r, automation.RequireGrantCapability)
 	v1.NewAccountMutationHandler(r, newAccountMutationLedger(r.db), r.accountMutationFingerprint).MountRoutes(mux, automation.RequireGrantCapability)
 	v1.MountFolderMutationRoutes(mux, r, automation.RequireGrantCapability)
 	v1.MountVirtualFolderMutationRoutes(mux, r, automation.RequireGrantCapability)

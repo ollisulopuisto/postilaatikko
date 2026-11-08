@@ -1,6 +1,6 @@
 # Mailbox Database Ownership Audit
 
-**Status:** Evidence collected from main `7f2acb5` after HOSTED-SERVER-021. This is an architecture and dependency audit; it changes no runtime behavior.
+**Status:** Architecture and dependency audit updated through HOSTED-SERVER-048. Connected desktop virtual-folder unread-count reads now use the authenticated helper API; the desktop still shares the service database for other stores and local fallback.
 
 ## Current database and migration ownership
 
@@ -21,7 +21,7 @@ The helper service is not yet the database owner. It is an additional process ov
 
 The authenticated helper API currently mounts:
 
-- account, folder, saved-view, message-header, conversation-list and search reads;
+- account, folder, saved-view, saved-view unread-count, message-header, conversation-list and search reads;
 - thread reads, explicit message-body fetch, and attachment list/read;
 - idempotent account-qualified archive, mark-read/unread, star/unstar, trash and move actions.
 
@@ -35,7 +35,7 @@ The desktop and helper store construction is visible at `app/app.go:637-689` and
 - virtual-folder and saved-view mutations/cache lifecycle, persistent filter-rule CRUD, and user recovery of uncertain automatic filter jobs;
 - draft CRUD, normal immediate send and sent-message reconciliation;
 - desktop-local undo journal, preferences, contact/calendar stores, and other device-local settings;
-- local list/count/source reads and provider operations that retain explicit local fallback behavior.
+- remaining local list/count/source reads and provider operations that retain explicit local fallback behavior. Connected saved-view unread counts now route to the helper; fallback is limited to local-helper unavailability, while remote authorization/configuration failures fail closed.
 
 Some of these are local presentation/device data and need not move to a remote service. Mailbox authority needs a clear split: authoritative provider/mail state and service workflows must be service-owned; local layout, keychain access and presentation cache may remain desktop-owned. The current single database does not enforce that boundary.
 

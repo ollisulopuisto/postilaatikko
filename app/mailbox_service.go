@@ -104,6 +104,7 @@ type mailboxServiceConnector struct {
 	capabilitiesFunc func(context.Context) (*v1.Capabilities, error)
 	searchFunc       func(context.Context, string, v1.SearchRequest) (*views.ThreadPage, error)
 	cachedViewFunc   func(context.Context, string) (*v1.CachedVirtualFolderView, error)
+	unreadCountsFunc func(context.Context) (map[string]int, error)
 	mutateActionFunc func(context.Context, v1.ActionRequest, string) (*v1.ActionResponse, error)
 	endpoint         string
 }
@@ -537,6 +538,17 @@ func (c *mailboxServiceConnector) cachedVirtualFolderView(ctx context.Context, v
 		return nil, err
 	}
 	return client.CachedVirtualFolderView(ctx, viewID)
+}
+
+func (c *mailboxServiceConnector) virtualFolderUnreadCounts(ctx context.Context) (map[string]int, error) {
+	if c.unreadCountsFunc != nil {
+		return c.unreadCountsFunc(ctx)
+	}
+	client, err := c.getClient()
+	if err != nil {
+		return nil, err
+	}
+	return client.VirtualFolderUnreadCounts(ctx)
 }
 
 func (c *mailboxServiceConnector) mutateVirtualFolder(ctx context.Context, req v1.VirtualFolderMutationRequest) error {

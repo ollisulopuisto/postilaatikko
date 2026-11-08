@@ -36,6 +36,19 @@ func (a *App) GetVirtualFolders() ([]*virtualfolder.VirtualFolder, error) {
 
 // GetVirtualFolderUnreadCounts returns unread conversation counts for all virtual folders.
 func (a *App) GetVirtualFolderUnreadCounts() (map[string]int, error) {
+	if a.mailboxService != nil {
+		ctx := a.helperCommandContext()
+		status := a.mailboxService.status(ctx)
+		if status.Connected {
+			return a.mailboxService.virtualFolderUnreadCounts(ctx)
+		}
+		if status.ErrorCode != "service_unavailable" {
+			return nil, fmt.Errorf("load virtual-folder unread counts from mailbox service: %s", status.Message)
+		}
+	}
+	if a.virtualFolderStore == nil {
+		return nil, fmt.Errorf("virtual-folder store is not ready")
+	}
 	return a.virtualFolderStore.UnreadCounts()
 }
 

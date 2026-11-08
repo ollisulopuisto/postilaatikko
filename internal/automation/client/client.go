@@ -398,6 +398,22 @@ func (c *Client) VirtualFolders(ctx context.Context) ([]*virtualfolder.VirtualFo
 	return result, nil
 }
 
+// VirtualFolderUnreadCounts returns helper-owned saved-view sidebar counts.
+func (c *Client) VirtualFolderUnreadCounts(ctx context.Context) (map[string]int, error) {
+	data, err := c.doRequest(ctx, http.MethodGet, "/v1/views/unread-counts", nil, "")
+	if err != nil {
+		return nil, err
+	}
+	var response v1.Response[map[string]int]
+	if err := json.Unmarshal(data, &response); err != nil {
+		return nil, err
+	}
+	if response.Data == nil {
+		return map[string]int{}, nil
+	}
+	return response.Data, nil
+}
+
 // CachedVirtualFolderView retrieves the helper-owned, hydrated saved-view cache.
 func (c *Client) CachedVirtualFolderView(ctx context.Context, viewID string) (*v1.CachedVirtualFolderView, error) {
 	data, err := c.doRequest(ctx, http.MethodGet, "/v1/views/"+url.PathEscape(viewID)+"/cache", nil, "")
