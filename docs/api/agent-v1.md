@@ -208,7 +208,7 @@ The initial route families reserved by v1 are:
 
 | Route family | Capability | Task |
 | --- | --- | --- |
-| `GET /v1/accounts`, `GET /v1/folders`, `GET /v1/views` | `mail.read` | UX-021 / UX-038 |
+| `GET /v1/accounts`, `GET /v1/accounts/{accountId}`, `GET /v1/folders`, `GET /v1/views` | `mail.read` | UX-021 / UX-038 |
 | `POST`, `PUT`, `PATCH`, `DELETE /v1/accounts` | `account.manage` | HOSTED-SERVER-035; not yet mounted |
 | `POST /v1/search`, `POST /v1/threads/read`, `POST /v1/messages/body` | `mail.read`; explicit fetch also needs `mail.body.fetch` | UX-021 |
 | `POST /v1/messages/attachments/list`, `POST /v1/messages/attachments/read` | `mail.attachment.read` | UX-021 |

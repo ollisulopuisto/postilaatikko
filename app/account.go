@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -17,11 +18,57 @@ import (
 
 // GetAccounts returns all configured accounts
 func (a *App) GetAccounts() ([]*account.Account, error) {
+	if a.mailboxService != nil {
+		ctx := a.ctx
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		status := a.mailboxService.status(ctx)
+		if status.Connected {
+			client, err := a.mailboxService.getClient()
+			if err != nil {
+				return nil, err
+			}
+			accounts, err := client.GetAccounts(ctx)
+			if err != nil {
+				return nil, err
+			}
+			result := make([]*account.Account, 0, len(accounts))
+			for _, item := range accounts {
+				result = append(result, item.ToAccount())
+			}
+			return result, nil
+		}
+		if status.ErrorCode != "service_unavailable" {
+			return nil, fmt.Errorf("mailbox service account access unavailable: %s", status.Message)
+		}
+	}
 	return a.accountStore.List()
 }
 
 // GetAccount returns a single account by ID
 func (a *App) GetAccount(id string) (*account.Account, error) {
+	if a.mailboxService != nil {
+		ctx := a.ctx
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		status := a.mailboxService.status(ctx)
+		if status.Connected {
+			client, err := a.mailboxService.getClient()
+			if err != nil {
+				return nil, err
+			}
+			item, err := client.GetAccount(ctx, id)
+			if err != nil {
+				return nil, err
+			}
+			return item.ToAccount(), nil
+		}
+		if status.ErrorCode != "service_unavailable" {
+			return nil, fmt.Errorf("mailbox service account access unavailable: %s", status.Message)
+		}
+	}
 	return a.accountStore.Get(id)
 }
 

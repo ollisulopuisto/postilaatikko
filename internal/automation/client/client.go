@@ -125,6 +125,19 @@ func (c *Client) GetAccounts(ctx context.Context) ([]v1.AccountSummary, error) {
 	return resp.Data, nil
 }
 
+// GetAccount retrieves one account's non-secret configuration by ID.
+func (c *Client) GetAccount(ctx context.Context, accountID string) (*v1.AccountSummary, error) {
+	bytes, err := c.doRequest(ctx, http.MethodGet, "/v1/accounts/"+url.PathEscape(accountID), nil, "")
+	if err != nil {
+		return nil, err
+	}
+	var resp v1.Response[v1.AccountSummary]
+	if err := json.Unmarshal(bytes, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.Data, nil
+}
+
 // GetFolders lists folders, optionally filtered by account.
 func (c *Client) GetFolders(ctx context.Context, accountID string) ([]v1.FolderSummary, error) {
 	path := "/v1/folders"

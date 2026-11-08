@@ -12,7 +12,7 @@
 
 ## Task 2: Implement account API and helper lifecycle
 
-1. Define a secret-free account DTO and bounded list/detail API.
+1. Define a secret-free account DTO and bounded list/detail API. The initial read slice is implemented: list and detail routes expose account settings without credential fields, and the desktop uses the service when connected.
 2. Add account create/update/delete/enable/order/shared-mailbox APIs, guarded by `account.manage`; preserve account validation and expose only non-secret response fields.
 3. Make retries safe with an idempotency key and durable operation record or stable operation key; never persist secret request fields. Preserve an account row if credential cleanup is not yet safely handled by the later credential task.
 4. Invalidate helper IMAP connections and refresh/cancel sync scheduling when account state changes; ensure SMTP transport resolves current account data/credentials or define a safe reopen hook.

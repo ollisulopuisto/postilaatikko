@@ -22,6 +22,10 @@ it the API reads the existing local mailbox database and bodies remain on demand
 `GET /v1/capabilities`
 Returns the contract version and the caller's granted capabilities.
 
+`GET /v1/accounts` and `GET /v1/accounts/{accountId}` return non-secret account
+configuration for settings and account-aware clients. Passwords, OAuth tokens,
+and custom OAuth client secrets are never included.
+
 ### 2. Accounts & Folders
 - `GET /v1/accounts` (Requires `mail.read`)
 - `GET /v1/folders?accountId={id}` (Requires `mail.read`)
