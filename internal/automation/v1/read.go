@@ -230,11 +230,20 @@ func (h *ReadHandler) handleAccounts(w http.ResponseWriter, r *http.Request) {
 
 // FolderSummary contains safe folder metadata.
 type FolderSummary struct {
-	ID        string `json:"id"`
-	AccountID string `json:"accountId"`
-	Name      string `json:"name"`
-	Path      string `json:"path"`
-	Type      string `json:"type,omitempty"`
+	ID              string     `json:"id"`
+	AccountID       string     `json:"accountId"`
+	Name            string     `json:"name"`
+	Path            string     `json:"path"`
+	Type            string     `json:"type,omitempty"`
+	ParentID        string     `json:"parentId,omitempty"`
+	UIDValidity     uint32     `json:"uidValidity"`
+	UIDNext         uint32     `json:"uidNext"`
+	HighestModSeq   uint64     `json:"highestModSeq"`
+	FlagsSyncModSeq uint64     `json:"flagsSyncModSeq"`
+	Subscribed      bool       `json:"subscribed"`
+	TotalCount      int        `json:"totalCount"`
+	UnreadCount     int        `json:"unreadCount"`
+	LastSync        *time.Time `json:"lastSync,omitempty"`
 }
 
 func (h *ReadHandler) handleFolders(w http.ResponseWriter, r *http.Request) {
@@ -262,11 +271,11 @@ func (h *ReadHandler) handleFolders(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, f := range folders {
 			allFolders = append(allFolders, FolderSummary{
-				ID:        f.ID,
-				AccountID: f.AccountID,
-				Name:      f.Name,
-				Path:      f.Path,
-				Type:      string(f.Type),
+				ID: f.ID, AccountID: f.AccountID, Name: f.Name, Path: f.Path,
+				Type: string(f.Type), ParentID: f.ParentID, UIDValidity: f.UIDValidity,
+				UIDNext: f.UIDNext, HighestModSeq: f.HighestModSeq, FlagsSyncModSeq: f.FlagsSyncModSeq,
+				Subscribed: f.Subscribed,
+				TotalCount: f.TotalCount, UnreadCount: f.UnreadCount, LastSync: f.LastSync,
 			})
 		}
 	}

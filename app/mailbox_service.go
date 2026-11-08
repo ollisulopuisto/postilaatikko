@@ -22,6 +22,7 @@ import (
 	automationclient "github.com/hkdb/aerion/internal/automation/client"
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/database"
+	"github.com/hkdb/aerion/internal/folder"
 	"github.com/hkdb/aerion/internal/keyring"
 	"github.com/hkdb/aerion/internal/mailfilter"
 	"github.com/hkdb/aerion/internal/message"
@@ -235,6 +236,53 @@ func (c *mailboxServiceConnector) listConversations(ctx context.Context, req v1.
 		return nil, err
 	}
 	return client.ListConversations(ctx, req)
+}
+
+func (c *mailboxServiceConnector) folders(ctx context.Context, accountID string) ([]*folder.Folder, error) {
+	client, err := c.getClient()
+	if err != nil {
+		return nil, err
+	}
+	summaries, err := client.GetFolders(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]*folder.Folder, 0, len(summaries))
+	for _, summary := range summaries {
+		items = append(items, &folder.Folder{
+			ID: summary.ID, AccountID: summary.AccountID, Name: summary.Name, Path: summary.Path,
+			Type: folder.Type(summary.Type), ParentID: summary.ParentID,
+			UIDValidity: summary.UIDValidity, UIDNext: summary.UIDNext,
+			HighestModSeq: summary.HighestModSeq, FlagsSyncModSeq: summary.FlagsSyncModSeq,
+			Subscribed: summary.Subscribed,
+			TotalCount: summary.TotalCount, UnreadCount: summary.UnreadCount, LastSync: summary.LastSync,
+		})
+	}
+	return items, nil
+}
+
+func (c *mailboxServiceConnector) syncFolders(ctx context.Context, accountID string) error {
+	client, err := c.getClient()
+	if err != nil {
+		return err
+	}
+	return client.SyncFolders(ctx, accountID)
+}
+
+func (c *mailboxServiceConnector) setFolderSubscription(ctx context.Context, accountID, folderID string, subscribed bool) error {
+	client, err := c.getClient()
+	if err != nil {
+		return err
+	}
+	return client.SetFolderSubscription(ctx, accountID, folderID, subscribed)
+}
+
+func (c *mailboxServiceConnector) setAllFolderSubscriptions(ctx context.Context, accountID string, subscribed bool) error {
+	client, err := c.getClient()
+	if err != nil {
+		return err
+	}
+	return client.SetAllFolderSubscriptions(ctx, accountID, subscribed)
 }
 
 func (c *mailboxServiceConnector) search(ctx context.Context, sessionID string, req v1.SearchRequest) (*views.ThreadPage, error) {

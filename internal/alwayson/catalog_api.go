@@ -1,14 +1,18 @@
 package alwayson
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/hkdb/aerion/internal/account"
 	"github.com/hkdb/aerion/internal/automation"
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/folder"
+	"github.com/hkdb/aerion/internal/gmail"
+	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/mailfilter"
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/virtualfolder"
@@ -168,6 +172,137 @@ func (r *SyncRuntime) ReorderFilterRules(ids []string) error {
 	return r.rules.Reorder(ids)
 }
 
+// SyncFolders refreshes one account's provider folder catalog in the helper.
+func (r *SyncRuntime) SyncFolders(ctx context.Context, accountID string) error {
+	if r == nil || r.syncEngine == nil || r.accounts == nil {
+		return errors.New("always-on runtime is not open")
+	}
+	if strings.TrimSpace(accountID) == "" {
+		return errors.New("account ID is required")
+	}
+	account, err := r.accounts.Get(accountID)
+	if err != nil {
+		return fmt.Errorf("load account for folder sync: %w", err)
+	}
+	if account == nil {
+		return fmt.Errorf("account not found: %s", accountID)
+	}
+	return r.syncEngine.SyncFolders(ctx, accountID)
+}
+
+// SetFolderSubscription applies provider subscription state and updates the helper cache.
+func (r *SyncRuntime) SetFolderSubscription(ctx context.Context, accountID, folderID string, subscribed bool) error {
+	if r == nil || r.syncEngine == nil || r.folders == nil || r.accounts == nil {
+		return errors.New("always-on runtime is not open")
+	}
+	account, err := r.accounts.Get(accountID)
+	if err != nil {
+		return fmt.Errorf("load account for folder subscription: %w", err)
+	}
+	if account == nil {
+		return fmt.Errorf("account not found: %s", accountID)
+	}
+	f, err := r.folders.Get(folderID)
+	if err != nil {
+		return fmt.Errorf("load folder for subscription: %w", err)
+	}
+	if f == nil || f.AccountID != accountID {
+		return errors.New("folder not found for account")
+	}
+
+	client, apiErr := r.syncEngine.GmailClient(ctx, accountID)
+	if apiErr == nil {
+		label, err := r.syncEngine.GmailLabelID(ctx, client, f)
+		if err != nil {
+			return err
+		}
+		if label != "" {
+			if err := client.SetLabelVisible(ctx, label, subscribed); err != nil {
+				return fmt.Errorf("update Gmail folder visibility: %w", err)
+			}
+		}
+		return r.folders.UpdateSubscribed(folderID, subscribed)
+	}
+	if !errors.Is(apiErr, gmail.ErrNotCapable) {
+		return fmt.Errorf("prepare Gmail folder subscription: %w", apiErr)
+	}
+
+	connection, err := r.syncEngine.GetPoolConnection(ctx, accountID)
+	if err != nil {
+		return fmt.Errorf("get IMAP connection for folder subscription: %w", err)
+	}
+	defer r.syncEngine.ReleasePoolConnection(connection)
+	if subscribed {
+		err = connection.Client().Subscribe(f.Path)
+	} else {
+		err = connection.Client().Unsubscribe(f.Path)
+	}
+	if err != nil {
+		return fmt.Errorf("update IMAP folder subscription: %w", err)
+	}
+	return r.folders.UpdateSubscribed(folderID, subscribed)
+}
+
+// SetAllFolderSubscriptions applies the provider-specific bulk subscription behavior.
+func (r *SyncRuntime) SetAllFolderSubscriptions(ctx context.Context, accountID string, subscribed bool) error {
+	if r == nil || r.syncEngine == nil || r.folders == nil || r.accounts == nil {
+		return errors.New("always-on runtime is not open")
+	}
+	account, err := r.accounts.Get(accountID)
+	if err != nil {
+		return fmt.Errorf("load account for folder subscriptions: %w", err)
+	}
+	if account == nil {
+		return fmt.Errorf("account not found: %s", accountID)
+	}
+	folders, err := r.folders.List(accountID)
+	if err != nil {
+		return fmt.Errorf("list folders for account: %w", err)
+	}
+	log := logging.WithComponent("alwayson.folders")
+	client, apiErr := r.syncEngine.GmailClient(ctx, accountID)
+	if apiErr == nil {
+		for _, f := range folders {
+			label, err := r.syncEngine.GmailLabelID(ctx, client, f)
+			if err != nil {
+				return err
+			}
+			if label != "" {
+				if err := client.SetLabelVisible(ctx, label, subscribed); err != nil {
+					return fmt.Errorf("update Gmail folder visibility: %w", err)
+				}
+			}
+			if err := r.folders.UpdateSubscribed(f.ID, subscribed); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if !errors.Is(apiErr, gmail.ErrNotCapable) {
+		return fmt.Errorf("prepare Gmail folder subscriptions: %w", apiErr)
+	}
+	connection, err := r.syncEngine.GetPoolConnection(ctx, accountID)
+	if err != nil {
+		return fmt.Errorf("get IMAP connection for folder subscriptions: %w", err)
+	}
+	defer r.syncEngine.ReleasePoolConnection(connection)
+	for _, f := range folders {
+		if subscribed {
+			err = connection.Client().Subscribe(f.Path)
+		} else {
+			err = connection.Client().Unsubscribe(f.Path)
+		}
+		if err != nil {
+			log.Warn().Err(err).Str("folder", f.Path).Msg("Failed to update IMAP folder subscription")
+			continue
+		}
+		if err := r.folders.UpdateSubscribed(f.ID, subscribed); err != nil {
+			log.Warn().Err(err).Str("folder", f.Path).Msg("Failed to update folder subscription cache")
+		}
+	}
+	return nil
+}
+
 // ListUncertainFilterJobs returns durable automatic moves for inspection only.
 func (r *SyncRuntime) ListUncertainFilterJobs(offset, limit int) ([]mailfilter.FilterJobInspection, error) {
 	if r == nil || r.filterJobs == nil {
@@ -198,6 +333,7 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 	readOperations := &mailboxReadOperations{runtime: r}
 	mux := http.NewServeMux()
 	v1.MountCatalogRoutes(mux, operations, automation.RequireGrantCapability)
+	v1.MountFolderMutationRoutes(mux, r, automation.RequireGrantCapability)
 	v1.MountVirtualFolderMutationRoutes(mux, r, automation.RequireGrantCapability)
 	v1.MountFilterRuleRoutes(mux, r, automation.RequireGrantCapability)
 	v1.MountFilterJobRoutes(mux, r, automation.RequireGrantCapability)

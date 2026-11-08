@@ -15,7 +15,20 @@ import (
 
 // GetFolders returns all folders for an account
 func (a *App) GetFolders(accountID string) ([]*folder.Folder, error) {
-	folders, err := a.folderStore.List(accountID)
+	var folders []*folder.Folder
+	var err error
+	if a.mailboxService != nil {
+		ctx := a.helperCommandContext()
+		status := a.mailboxService.status(ctx)
+		if status.Connected {
+			folders, err = a.mailboxService.folders(ctx, accountID)
+		} else if status.ErrorCode != "service_unavailable" {
+			return nil, fmt.Errorf("list folders from mailbox service: %s", status.Message)
+		}
+	}
+	if folders == nil && err == nil {
+		folders, err = a.folderStore.List(accountID)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -27,7 +40,7 @@ func (a *App) GetFolders(accountID string) ([]*folder.Folder, error) {
 
 // GetFolderTree returns folders as a tree structure
 func (a *App) GetFolderTree(accountID string) ([]*folder.FolderTree, error) {
-	folders, err := a.folderStore.List(accountID)
+	folders, err := a.GetFolders(accountID)
 	if err != nil {
 		return nil, err
 	}
@@ -39,6 +52,22 @@ func (a *App) GetFolderTree(accountID string) ([]*folder.FolderTree, error) {
 
 // SyncFolders synchronizes the folder list with the IMAP server
 func (a *App) SyncFolders(accountID string) error {
+	if a.mailboxService != nil {
+		ctx := a.helperCommandContext()
+		status := a.mailboxService.status(ctx)
+		if status.Connected {
+			if !status.WriteAuthorized {
+				return errDesktopMailboxWriteAuthorizationRequired
+			}
+			if err := a.mailboxService.syncFolders(ctx, accountID); err != nil {
+				return fmt.Errorf("sync folders through mailbox service: %w", err)
+			}
+			return nil
+		}
+		if status.ErrorCode != "service_unavailable" {
+			return fmt.Errorf("mailbox service is not ready for folder sync: %s", status.Message)
+		}
+	}
 	if err := a.ensureSyncOwnership(); err != nil {
 		return err
 	}
@@ -58,7 +87,7 @@ func (a *App) SyncFolders(accountID string) error {
 func (a *App) GetAccountFoldersForMapping(accountID string) ([]*folder.Folder, error) {
 	log := logging.WithComponent("app")
 
-	folders, err := a.folderStore.List(accountID)
+	folders, err := a.GetFolders(accountID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list folders: %w", err)
 	}
@@ -66,13 +95,10 @@ func (a *App) GetAccountFoldersForMapping(accountID string) ([]*folder.Folder, e
 	// If no folders, trigger sync first
 	if len(folders) == 0 {
 		log.Info().Str("accountID", accountID).Msg("No folders found, triggering sync")
-		if err := a.ensureSyncOwnership(); err != nil {
-			return nil, err
-		}
-		if err := a.syncEngine.SyncFolders(a.ctx, accountID); err != nil {
+		if err := a.SyncFolders(accountID); err != nil {
 			return nil, fmt.Errorf("failed to sync folders: %w", err)
 		}
-		folders, err = a.folderStore.List(accountID)
+		folders, err = a.GetFolders(accountID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to list folders after sync: %w", err)
 		}
@@ -86,7 +112,7 @@ func (a *App) GetAccountFoldersForMapping(accountID string) ([]*folder.Folder, e
 // GetAutoDetectedFolders returns the auto-detected special folders for an account.
 // Returns map of folder type -> folder path (e.g., {"sent": "Sent Mail", "trash": "Deleted Items"}).
 func (a *App) GetAutoDetectedFolders(accountID string) (map[string]string, error) {
-	folders, err := a.folderStore.List(accountID)
+	folders, err := a.GetFolders(accountID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list folders: %w", err)
 	}
@@ -100,6 +126,27 @@ func (a *App) GetAutoDetectedFolders(accountID string) (map[string]string, error
 	return result, nil
 }
 
+func (a *App) setFolderSubscriptionThroughService(accountID, folderID string, subscribed bool) (bool, error) {
+	if a.mailboxService == nil {
+		return false, nil
+	}
+	ctx := a.helperCommandContext()
+	status := a.mailboxService.status(ctx)
+	if !status.Connected {
+		if status.ErrorCode == "service_unavailable" {
+			return false, nil
+		}
+		return true, fmt.Errorf("mailbox service is not ready for folder subscription: %s", status.Message)
+	}
+	if !status.WriteAuthorized {
+		return true, errDesktopMailboxWriteAuthorizationRequired
+	}
+	if err := a.mailboxService.setFolderSubscription(ctx, accountID, folderID, subscribed); err != nil {
+		return true, fmt.Errorf("update folder subscription through mailbox service: %w", err)
+	}
+	return true, nil
+}
+
 // GetSpecialFolder returns the folder for a special type, checking account mappings first.
 // If no mapping is set, falls back to auto-detected folder type.
 func (a *App) GetSpecialFolder(accountID string, folderType folder.Type) (*folder.Folder, error) {
@@ -111,27 +158,37 @@ func (a *App) GetSpecialFolder(accountID string, folderType folder.Type) (*folde
 	if acc == nil {
 		return nil, fmt.Errorf("account not found: %s", accountID)
 	}
+	folders, err := a.GetFolders(accountID)
+	if err != nil {
+		return nil, err
+	}
 
 	// Check if account has a manual mapping
 	mappedPath := acc.GetFolderMapping(string(folderType))
 	if mappedPath != "" {
-		f, err := a.folderStore.GetByPath(accountID, mappedPath)
-		if err != nil {
-			return nil, err
-		}
-		if f != nil {
-			return f, nil
+		for _, f := range folders {
+			if f.Path == mappedPath {
+				return f, nil
+			}
 		}
 		// Mapped folder not found, fall through to auto-detect
 	}
 
 	// Fall back to auto-detected type
-	return a.folderStore.GetByType(accountID, folderType)
+	for _, f := range folders {
+		if f.Type == folderType {
+			return f, nil
+		}
+	}
+	return nil, nil
 }
 
 // SubscribeFolder subscribes to an IMAP folder for automatic sync.
 func (a *App) SubscribeFolder(accountID, folderID string) error {
 	log := logging.WithComponent("app")
+	if handled, err := a.setFolderSubscriptionThroughService(accountID, folderID, true); handled {
+		return err
+	}
 
 	f, err := a.folderStore.Get(folderID)
 	if err != nil {
@@ -182,6 +239,9 @@ func (a *App) SubscribeFolder(accountID, folderID string) error {
 // UnsubscribeFolder unsubscribes from an IMAP folder for automatic sync.
 func (a *App) UnsubscribeFolder(accountID, folderID string) error {
 	log := logging.WithComponent("app")
+	if handled, err := a.setFolderSubscriptionThroughService(accountID, folderID, false); handled {
+		return err
+	}
 
 	f, err := a.folderStore.Get(folderID)
 	if err != nil {
@@ -232,8 +292,24 @@ func (a *App) UnsubscribeFolder(accountID, folderID string) error {
 // SubscribeAllFolders subscribes to all IMAP folders for an account.
 func (a *App) SubscribeAllFolders(accountID string) error {
 	log := logging.WithComponent("app")
+	if a.mailboxService != nil {
+		ctx := a.helperCommandContext()
+		status := a.mailboxService.status(ctx)
+		if status.Connected {
+			if !status.WriteAuthorized {
+				return errDesktopMailboxWriteAuthorizationRequired
+			}
+			if err := a.mailboxService.setAllFolderSubscriptions(ctx, accountID, true); err != nil {
+				return fmt.Errorf("subscribe folders through mailbox service: %w", err)
+			}
+			return nil
+		}
+		if status.ErrorCode != "service_unavailable" {
+			return fmt.Errorf("mailbox service is not ready for folder subscriptions: %s", status.Message)
+		}
+	}
 
-	folders, err := a.folderStore.List(accountID)
+	folders, err := a.GetFolders(accountID)
 	if err != nil {
 		return fmt.Errorf("failed to list folders: %w", err)
 	}

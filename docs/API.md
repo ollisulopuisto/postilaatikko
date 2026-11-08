@@ -25,6 +25,15 @@ Returns the contract version and the caller's granted capabilities.
 ### 2. Accounts & Folders
 - `GET /v1/accounts` (Requires `mail.read`)
 - `GET /v1/folders?accountId={id}` (Requires `mail.read`)
+  - Returns folder identity, hierarchy, provider cursor and subscription metadata, and cached counts for the selected account.
+- `POST /v1/folders/sync` (Requires `mail.write`)
+  - Request body: `{ "accountId": "acc-1" }`.
+  - Refreshes provider folders through helper-local credentials.
+- `POST /v1/folders/subscription` (Requires `mail.write`)
+  - Request body: `{ "accountId": "acc-1", "folderId": "folder-1", "subscribed": true }`.
+  - Applies Gmail label visibility or IMAP SUBSCRIBE/UNSUBSCRIBE after verifying that the folder belongs to the account.
+- `POST /v1/folders/subscriptions` (Requires `mail.write`)
+  - Request body: `{ "accountId": "acc-1", "subscribed": true }` applies the provider's existing bulk subscription behavior.
 - `GET /v1/views` (Requires `mail.read`)
   - Returns complete saved-view definitions, including folder membership and search/triage criteria.
 - `GET /v1/filters` (Requires `mail.read`)

@@ -28,6 +28,7 @@
 - Route Read Later and Snooze reads and mutations through the helper, preserving Gmail labels and local fallback only while the helper is unavailable.
 - Expire due Snoozes in the helper independently of mailbox sync so deadlines are honored while the desktop is closed.
 - Expose bounded, read-only inspection of automatic filter moves with uncertain provider outcomes; inspection never retries or changes mail.
+- Route folder catalog reads, provider discovery, and subscription changes through the authenticated helper when available.
 
 ## Postilaatikko 2026.11.07.1
 

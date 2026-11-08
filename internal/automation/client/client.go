@@ -142,6 +142,30 @@ func (c *Client) GetFolders(ctx context.Context, accountID string) ([]v1.FolderS
 	return resp.Data, nil
 }
 
+// SyncFolders asks the helper to refresh one account's provider folder catalog.
+func (c *Client) SyncFolders(ctx context.Context, accountID string) error {
+	_, err := c.doRequest(ctx, http.MethodPost, "/v1/folders/sync", v1.FolderSyncRequest{AccountID: accountID}, "")
+	return err
+}
+
+// SetFolderSubscription updates one account-qualified provider folder subscription.
+func (c *Client) SetFolderSubscription(ctx context.Context, accountID, folderID string, subscribed bool) error {
+	subscribedValue := subscribed
+	_, err := c.doRequest(ctx, http.MethodPost, "/v1/folders/subscription", v1.FolderSubscriptionRequest{
+		AccountID: accountID, FolderID: folderID, Subscribed: &subscribedValue,
+	}, "")
+	return err
+}
+
+// SetAllFolderSubscriptions updates all provider folder subscriptions for an account.
+func (c *Client) SetAllFolderSubscriptions(ctx context.Context, accountID string, subscribed bool) error {
+	subscribedValue := subscribed
+	_, err := c.doRequest(ctx, http.MethodPost, "/v1/folders/subscriptions", v1.FolderSubscriptionsRequest{
+		AccountID: accountID, Subscribed: &subscribedValue,
+	}, "")
+	return err
+}
+
 // GetViews lists saved views/virtual folders.
 func (c *Client) GetViews(ctx context.Context) ([]v1.ViewSummary, error) {
 	bytes, err := c.doRequest(ctx, http.MethodGet, "/v1/views", nil, "")
