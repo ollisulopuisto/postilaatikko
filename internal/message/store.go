@@ -592,6 +592,30 @@ func (s *Store) GetUnifiedInboxUnreadCount() (int, error) {
 	return count, nil
 }
 
+// GetUnreadCountByFolderIDs sums cached unread counts for a resolved folder set.
+// Callers use this for unified views whose folder identity is account-specific.
+func (s *Store) GetUnreadCountByFolderIDs(folderIDs []string) (int, error) {
+	if len(folderIDs) == 0 {
+		return 0, nil
+	}
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(folderIDs)), ",")
+	args := make([]any, len(folderIDs))
+	for index, folderID := range folderIDs {
+		args[index] = folderID
+	}
+	var count int
+	query := fmt.Sprintf(`
+		SELECT COALESCE(SUM(f.unread_count), 0)
+		FROM folders f
+		JOIN accounts a ON a.id = f.account_id AND a.enabled = 1
+		WHERE f.id IN (%s)
+	`, placeholders)
+	if err := s.db.QueryRow(query, args...).Scan(&count); err != nil {
+		return 0, fmt.Errorf("failed to count unread messages for resolved folders: %w", err)
+	}
+	return count, nil
+}
+
 // CountUnreadByFolder returns the unread message count for a folder
 func (s *Store) CountUnreadByFolder(folderID string) (int, error) {
 	var count int

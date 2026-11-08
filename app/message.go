@@ -189,7 +189,11 @@ func (a *App) GetUnifiedInboxConversations(offset, limit int, sortOrder, filter 
 		go a.enqueueUnifiedInboxConversationPrefetch(conversations)
 		return conversations, nil
 	}
-	conversations, err = a.messageStore.ListConversationsUnifiedInbox(offset, limit, sortOrder, filter)
+	folderIDs, err := a.unifiedSpecialFolderIDs(string(folder.TypeInbox))
+	if err != nil {
+		return nil, err
+	}
+	conversations, err = a.messageStore.ListConversationsByFolderIDs(folderIDs, offset, limit, sortOrder, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -265,12 +269,20 @@ func (a *App) listServiceConversations(scope views.Scope, offset, limit int, sor
 
 // GetUnifiedInboxCount returns the total conversation count across all inbox folders
 func (a *App) GetUnifiedInboxCount(filter string) (int, error) {
-	return a.messageStore.CountConversationsUnifiedInbox(filter)
+	folderIDs, err := a.unifiedSpecialFolderIDs(string(folder.TypeInbox))
+	if err != nil {
+		return 0, err
+	}
+	return a.messageStore.CountConversationsByFolderIDs(folderIDs, filter)
 }
 
 // GetUnifiedInboxUnreadCount returns the total unread count across all inbox folders
 func (a *App) GetUnifiedInboxUnreadCount() (int, error) {
-	return a.messageStore.GetUnifiedInboxUnreadCount()
+	folderIDs, err := a.unifiedSpecialFolderIDs(string(folder.TypeInbox))
+	if err != nil {
+		return 0, err
+	}
+	return a.messageStore.GetUnreadCountByFolderIDs(folderIDs)
 }
 
 // GetConversation returns all messages in a conversation/thread
