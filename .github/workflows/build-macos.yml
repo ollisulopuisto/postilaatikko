@@ -299,11 +299,10 @@ jobs:
           (cd build/bin && shasum -a 256 "$(basename "$DMG")" > SHA256.txt && shasum -a 256 -c SHA256.txt)
           cat > "$RUNNER_TEMP/release-notes.md" <<EOF
           Apple-silicon test build from merged main $BUILD_SHA.
-          App version remains $BASE_VERSION. Test build ID: $TEST_TAG.
+          App version: $BASE_VERSION. Test build ID: $TEST_TAG.
           No unmerged app code is included. Developer ID signed and notarized.
           Frontend typecheck and lint are required before packaging.
-          New helper/remote-mail changes are still under Unreleased in the app changelog;
-          automatic What's New is not updated in this unchanged-main test build.
+          Automatic What's New and Help > What's New include the shipped $BASE_VERSION changelog section.
           Native feature/UI acceptance has not been performed. This is not a stable release.
           EOF
           gh release create "$TEST_TAG" "$DMG" build/bin/SHA256.txt \
