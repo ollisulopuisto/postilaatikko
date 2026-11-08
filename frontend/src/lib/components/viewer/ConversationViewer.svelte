@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy, tick } from 'svelte'
+  import { onMount, onDestroy, tick, untrack } from 'svelte'
   import Icon from '@iconify/svelte'
   // @ts-ignore - wailsjs bindings
   import { GetReaderIdentityEmails, GetConversation, GetReadReceiptResponsePolicy, SendReadReceipt, IgnoreReadReceipt, GetMessageSource, ProcessSMIMEMessage, ProcessPGPMessage, FetchMessageBodyForAccount } from '../../../../wailsjs/go/app/App'
@@ -14,6 +14,7 @@
   import InlineReply from './InlineReply.svelte'
   import { reactionLayout } from './reactionLayout'
   import { bubbleLayout, senderAddress } from './bubbleLayout'
+  import { deduplicateMessages } from './deduplicateMessages'
   import { isConfiguredAccountEmail } from '$lib/stores/accounts.svelte'
   import ReaderModeToggle from './ReaderModeToggle.svelte'
   import { canExtract } from './replyContent'
@@ -569,8 +570,9 @@
       // Auto-expand unread messages and the last message from cache
       if (cached.messages) {
         const newExpanded = new Set<string>()
-        cached.messages.forEach((m, i) => {
-          if (!m.isRead || i === cached.messages!.length - 1) {
+        const cachedReaderMessages = untrack(() => readerMessages)
+        cachedReaderMessages.forEach((m, i) => {
+          if (!m.isRead || i === cachedReaderMessages.length - 1) {
             newExpanded.add(m.id)
           }
         })
@@ -665,8 +667,8 @@
       // Expand any new unread messages
       if (conversation.messages) {
         const newExpanded = new Set(expandedMessages)
-        conversation.messages.forEach((m, i) => {
-          if (!m.isRead || i === conversation!.messages!.length - 1) {
+        readerMessages.forEach((m, i) => {
+          if (!m.isRead || i === readerMessages.length - 1) {
             newExpanded.add(m.id)
           }
         })
@@ -704,9 +706,9 @@
       // Auto-expand unread messages and the last message
       if (conversation?.messages) {
         const newExpanded = new Set<string>()
-        conversation.messages.forEach((m, i) => {
+        readerMessages.forEach((m, i) => {
           // Expand if unread or if it's the last message
-          if (!m.isRead || i === conversation!.messages!.length - 1) {
+          if (!m.isRead || i === readerMessages.length - 1) {
             newExpanded.add(m.id)
           }
         })
@@ -719,7 +721,7 @@
         processPGPMessages(conversation.messages)
 
         // Fetch bodies for messages that don't have them yet (on-demand)
-        fetchUnfetchedBodies(conversation.messages)
+        fetchUnfetchedBodies(readerMessages)
       }
     } catch (err) {
       console.error('Failed to load conversation:', err)
@@ -780,8 +782,9 @@
     const tid = threadId
     const fid = folderId
     setReaderMode(next)
-    if (!container || !anchor) return
     await tick()
+    void fetchUnfetchedBodies(readerMessages)
+    if (!container || !anchor) return
     holdScrollAnchor(container, anchor, () => threadId === tid && folderId === fid)
   }
 
@@ -809,7 +812,9 @@
   async function fetchUnfetchedBodies(messages: messageModels.Message[]) {
     const generation = viewGeneration
     let refreshedConversation = false
+    const displayedIds = new Set(readerMessages.map(message => message.id))
     for (const msg of messages) {
+      if (!displayedIds.has(msg.id)) continue
       if (generation !== viewGeneration) return
       if ((msg as any).bodyFetched === false && !msg.bodyHtml && !msg.bodyText) {
         bodyFetchErrors = { ...bodyFetchErrors, [msg.id]: '' }
@@ -929,14 +934,14 @@
 
   function expandAll() {
     if (conversation?.messages) {
-      expandedMessages = new Set(conversation.messages.map(m => m.id))
+      expandedMessages = new Set(readerMessages.map(m => m.id))
     }
   }
 
   function collapseAll() {
     // Keep only the last message expanded
-    if (conversation?.messages && conversation.messages.length > 0) {
-      expandedMessages = new Set([conversation.messages[conversation.messages.length - 1].id])
+    if (readerMessages.length > 0) {
+      expandedMessages = new Set([readerMessages[readerMessages.length - 1].id])
     }
   }
 
@@ -983,8 +988,7 @@
   }
 
   export function getLastMessageId(): string | null {
-    const messages = readerMode === 'traditional' ? (conversation?.messages || []) : reactions.messages
-    return messages[messages.length - 1]?.id || null
+    return readerMessages[readerMessages.length - 1]?.id || null
   }
 
   // Re-fetch conversation to pick up flag changes (star, read) from external actions
@@ -1803,13 +1807,16 @@
   // In message-focus mode, narrow to the single targeted message.
   // Otherwise show the whole thread.
   let revealedReactions = $state<Set<string>>(new Set())
-  const reactions = $derived(reactionLayout(conversation?.messages || []))
-  const readerMessages = $derived(readerMode === 'traditional' ? (conversation?.messages || []) : (conversation?.messages || []).filter(message => !reactions.hidden.has(message.id) || revealedReactions.has(message.id)))
-  function toggleReactionMessages(ids: string[]) {
+  const threadMessages = $derived(deduplicateMessages(conversation?.messages || [], folderId || undefined))
+  const reactions = $derived(reactionLayout(threadMessages))
+  const readerMessages = $derived(readerMode === 'traditional' ? threadMessages : threadMessages.filter(message => !reactions.hidden.has(message.id) || revealedReactions.has(message.id)))
+  async function toggleReactionMessages(ids: string[]) {
     const next = new Set(revealedReactions)
     const hide = ids.every(id => next.has(id))
     for (const id of ids) { if (hide) next.delete(id); else next.add(id) }
     revealedReactions = next
+    await tick()
+    void fetchUnfetchedBodies(readerMessages)
   }
   const visibleMessages = $derived(
     inFocusMode && focusModeKind === 'message' && focusedMessageIdInFocus

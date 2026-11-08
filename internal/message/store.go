@@ -2087,6 +2087,7 @@ func (s *Store) GetConversation(threadID, folderID string) (*Conversation, error
 	}
 	defer rows.Close()
 
+	var rawMessages []*Message
 	for rows.Next() {
 		m := &Message{}
 		var messageID, inReplyTo, references, threadIDVal, toList, ccList, bccList, replyTo, snippetVal, bodyText, bodyHTML, readReceiptTo sql.NullString
@@ -2181,7 +2182,41 @@ func (s *Store) GetConversation(threadID, folderID string) (*Conversation, error
 			Int("bodyHTMLLen", len(m.BodyHTML)).
 			Msg("GetConversation found message")
 
-		c.Messages = append(c.Messages, m)
+		rawMessages = append(rawMessages, m)
+	}
+
+	c.Messages = DeduplicateThreadMessages(rawMessages, folderID, nil)
+
+	c.MessageCount = len(c.Messages)
+	c.UnreadCount = 0
+	c.IsStarred = false
+	c.HasAttachments = false
+	// Match the summary to the retained copies, preserving the existing MIN
+	// subject / MAX snippet semantics. Empty threads keep their SQL defaults.
+	if len(c.Messages) > 0 {
+		c.Subject = c.Messages[0].Subject
+		c.Snippet = c.Messages[0].Snippet
+		c.LatestDate = c.Messages[0].Date
+	}
+	for _, m := range c.Messages {
+		if m.Subject < c.Subject {
+			c.Subject = m.Subject
+		}
+		if m.Snippet > c.Snippet {
+			c.Snippet = m.Snippet
+		}
+		if m.Date.After(c.LatestDate) {
+			c.LatestDate = m.Date
+		}
+		if !m.IsRead {
+			c.UnreadCount++
+		}
+		if m.IsStarred {
+			c.IsStarred = true
+		}
+		if m.HasAttachments {
+			c.HasAttachments = true
+		}
 	}
 
 	s.log.Debug().
