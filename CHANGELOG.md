@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Show local sender avatars beside collapsed conversation bubble tails when viewer circles are enabled, without external favicon requests; keep HTML message widths readable.
+
 ## Postilaatikko 2026.11.08.1
 
 - Give archive, trash, move and spam actions a short exit animation; keep cancelled Trash deletions visible and hold removed rows until refreshed data replaces them.
