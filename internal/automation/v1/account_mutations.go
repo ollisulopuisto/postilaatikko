@@ -26,47 +26,115 @@ type AccountMutationLedger interface {
 	Complete(context.Context, string, string, int, []byte) error
 }
 
+var ErrCredentialRepairRequired = errors.New("account credential change requires repair")
+
+// PasswordAction selects how one stored account password is handled.
+type PasswordAction string
+
+const (
+	// PasswordKeep leaves the stored value unchanged.
+	PasswordKeep PasswordAction = "keep"
+	// PasswordReplace stores the supplied replacement value.
+	PasswordReplace PasswordAction = "replace"
+	// PasswordClear removes the stored value.
+	PasswordClear PasswordAction = "clear"
+)
+
+// PasswordCredentialMutation carries one-time account password actions.
+// Secret values are accepted only in requests and are never returned.
+type PasswordCredentialMutation struct {
+	IMAPAction   PasswordAction `json:"imapAction,omitempty"`
+	IMAPPassword string         `json:"imapPassword,omitempty"`
+	SMTPAction   PasswordAction `json:"smtpAction,omitempty"`
+	SMTPPassword string         `json:"smtpPassword,omitempty"`
+}
+
+func (m *PasswordCredentialMutation) Normalize() error {
+	if m == nil {
+		return nil
+	}
+	if m.IMAPAction == "" {
+		m.IMAPAction = PasswordKeep
+	}
+	if m.SMTPAction == "" {
+		m.SMTPAction = PasswordKeep
+	}
+	for _, field := range []struct {
+		action   PasswordAction
+		password string
+		label    string
+	}{{m.IMAPAction, m.IMAPPassword, "IMAP"}, {m.SMTPAction, m.SMTPPassword, "SMTP"}} {
+		switch field.action {
+		case PasswordKeep, PasswordClear:
+			if field.password != "" {
+				return InvalidRequest(field.label+" password must be omitted unless replacing it", nil)
+			}
+		case PasswordReplace:
+			if field.password == "" {
+				return InvalidRequest(field.label+" password is required for replacement", nil)
+			}
+		default:
+			return InvalidRequest(field.label+" password action is invalid", nil)
+		}
+	}
+	return nil
+}
+
+func (m PasswordCredentialMutation) HasChanges() bool {
+	return m.IMAPAction == PasswordReplace || m.IMAPAction == PasswordClear || m.SMTPAction == PasswordReplace || m.SMTPAction == PasswordClear
+}
+
+func (m *PasswordCredentialMutation) ClearSecrets() {
+	if m == nil {
+		return
+	}
+	m.IMAPPassword = ""
+	m.SMTPPassword = ""
+}
+
 // AccountMutationOperations applies account configuration changes in the helper.
 type AccountMutationOperations interface {
-	CreateAccount(AccountMutation) (*account.Account, error)
-	UpdateAccount(string, AccountMutation) (*account.Account, error)
+	CreateAccount(AccountMutation, PasswordCredentialMutation) (*account.Account, error)
+	UpdateAccount(string, AccountMutation, PasswordCredentialMutation) (*account.Account, error)
 	DeleteAccount(string) error
 	SetAccountEnabled(string, bool) (*account.Account, error)
 	ReorderAccounts([]string) error
 	AddSharedMailbox(context.Context, SharedMailboxMutation) (*account.Account, error)
 }
 
-// AccountMutation contains account configuration but deliberately has no password or token fields.
+// AccountMutation contains public account settings and an optional one-time
+// password envelope. Password values are never returned or persisted in receipts.
 type AccountMutation struct {
-	Name                     string                `json:"name"`
-	DisplayName              string                `json:"displayName"`
-	Email                    string                `json:"email"`
-	IMAPHost                 string                `json:"imapHost"`
-	IMAPPort                 int                   `json:"imapPort"`
-	IMAPSecurity             account.SecurityType  `json:"imapSecurity"`
-	IMAPAuthMechanism        account.AuthMechanism `json:"imapAuthMechanism"`
-	SMTPHost                 string                `json:"smtpHost"`
-	SMTPPort                 int                   `json:"smtpPort"`
-	SMTPSecurity             account.SecurityType  `json:"smtpSecurity"`
-	SMTPAuthMechanism        account.AuthMechanism `json:"smtpAuthMechanism"`
-	NoOutgoingServer         bool                  `json:"noOutgoingServer"`
-	SMTPUsername             string                `json:"smtpUsername"`
-	ReplyForwardIdentityID   string                `json:"replyForwardIdentityId"`
-	AuthType                 account.AuthType      `json:"authType"`
-	Username                 string                `json:"username"`
-	Color                    string                `json:"color"`
-	SyncPeriodDays           int                   `json:"syncPeriodDays"`
-	SyncInterval             int                   `json:"syncInterval"`
-	SyncAllFolders           bool                  `json:"syncAllFolders"`
-	SyncFoldersEnabled       bool                  `json:"syncFoldersEnabled"`
-	ReadReceiptRequestPolicy string                `json:"readReceiptRequestPolicy"`
-	SentFolderPath           string                `json:"sentFolderPath,omitempty"`
-	DraftsFolderPath         string                `json:"draftsFolderPath,omitempty"`
-	TrashFolderPath          string                `json:"trashFolderPath,omitempty"`
-	SpamFolderPath           string                `json:"spamFolderPath,omitempty"`
-	ArchiveFolderPath        string                `json:"archiveFolderPath,omitempty"`
-	AllMailFolderPath        string                `json:"allMailFolderPath,omitempty"`
-	StarredFolderPath        string                `json:"starredFolderPath,omitempty"`
+	Credentials              *PasswordCredentialMutation `json:"credentials,omitempty"`
+	Name                     string                      `json:"name"`
+	DisplayName              string                      `json:"displayName"`
+	Email                    string                      `json:"email"`
+	IMAPHost                 string                      `json:"imapHost"`
+	IMAPPort                 int                         `json:"imapPort"`
+	IMAPSecurity             account.SecurityType        `json:"imapSecurity"`
+	IMAPAuthMechanism        account.AuthMechanism       `json:"imapAuthMechanism"`
+	SMTPHost                 string                      `json:"smtpHost"`
+	SMTPPort                 int                         `json:"smtpPort"`
+	SMTPSecurity             account.SecurityType        `json:"smtpSecurity"`
+	SMTPAuthMechanism        account.AuthMechanism       `json:"smtpAuthMechanism"`
+	NoOutgoingServer         bool                        `json:"noOutgoingServer"`
+	SMTPUsername             string                      `json:"smtpUsername"`
+	ReplyForwardIdentityID   string                      `json:"replyForwardIdentityId"`
+	AuthType                 account.AuthType            `json:"authType"`
+	Username                 string                      `json:"username"`
+	Color                    string                      `json:"color"`
+	SyncPeriodDays           int                         `json:"syncPeriodDays"`
+	SyncInterval             int                         `json:"syncInterval"`
+	SyncAllFolders           bool                        `json:"syncAllFolders"`
+	SyncFoldersEnabled       bool                        `json:"syncFoldersEnabled"`
+	ReadReceiptRequestPolicy string                      `json:"readReceiptRequestPolicy"`
+	SentFolderPath           string                      `json:"sentFolderPath,omitempty"`
+	DraftsFolderPath         string                      `json:"draftsFolderPath,omitempty"`
+	TrashFolderPath          string                      `json:"trashFolderPath,omitempty"`
+	SpamFolderPath           string                      `json:"spamFolderPath,omitempty"`
+	ArchiveFolderPath        string                      `json:"archiveFolderPath,omitempty"`
+	AllMailFolderPath        string                      `json:"allMailFolderPath,omitempty"`
+	StarredFolderPath        string                      `json:"starredFolderPath,omitempty"`
 }
 
 // ToAccountConfig maps public non-secret fields to the existing account-store configuration.
@@ -115,14 +183,19 @@ type AccountOrderMutation struct {
 }
 
 type AccountMutationHandler struct {
-	operations AccountMutationOperations
-	ledger     AccountMutationLedger
-	reader     ReadHandler
+	operations  AccountMutationOperations
+	ledger      AccountMutationLedger
+	reader      ReadHandler
+	fingerprint func([]byte) []byte
 }
 
 // NewAccountMutationHandler creates the helper's authenticated account mutation handler.
-func NewAccountMutationHandler(operations AccountMutationOperations, ledger AccountMutationLedger) *AccountMutationHandler {
-	return &AccountMutationHandler{operations: operations, ledger: ledger}
+func NewAccountMutationHandler(operations AccountMutationOperations, ledger AccountMutationLedger, fingerprinters ...func([]byte) []byte) *AccountMutationHandler {
+	handler := &AccountMutationHandler{operations: operations, ledger: ledger}
+	if len(fingerprinters) > 0 {
+		handler.fingerprint = fingerprinters[0]
+	}
+	return handler
 }
 
 // MountRoutes mounts all account mutation endpoints; reads remain under mail.read.
@@ -135,8 +208,9 @@ func (h *AccountMutationHandler) MountRoutes(mux *http.ServeMux, requireCap func
 		if !h.decode(w, r, &req) {
 			return
 		}
+		defer req.Credentials.ClearSecrets()
 		h.mutate(w, r, req, func() (any, int, ErrorCode, string, error) {
-			acc, err := h.operations.CreateAccount(req)
+			acc, err := h.operations.CreateAccount(req, passwordMutation(req.Credentials))
 			return accountSummaryFrom(acc), http.StatusCreated, CodeInternal, "Could not create account", err
 		})
 	})
@@ -148,12 +222,13 @@ func (h *AccountMutationHandler) MountRoutes(mux *http.ServeMux, requireCap func
 		if !h.decode(w, r, &req) {
 			return
 		}
+		defer req.Credentials.ClearSecrets()
 		accountID := r.PathValue("accountID")
 		h.mutate(w, r, struct {
 			AccountID string          `json:"accountId"`
 			Mutation  AccountMutation `json:"mutation"`
 		}{accountID, req}, func() (any, int, ErrorCode, string, error) {
-			acc, err := h.operations.UpdateAccount(accountID, req)
+			acc, err := h.operations.UpdateAccount(accountID, req, passwordMutation(req.Credentials))
 			return accountSummaryFrom(acc), http.StatusOK, CodeInternal, "Could not update account", err
 		})
 	})
@@ -218,8 +293,15 @@ func (h *AccountMutationHandler) MountRoutes(mux *http.ServeMux, requireCap func
 	})
 }
 
+func passwordMutation(mutation *PasswordCredentialMutation) PasswordCredentialMutation {
+	if mutation == nil {
+		return PasswordCredentialMutation{IMAPAction: PasswordKeep, SMTPAction: PasswordKeep}
+	}
+	return *mutation
+}
+
 func (h *AccountMutationHandler) decode(w http.ResponseWriter, r *http.Request, target any) bool {
-	decoder := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
 		h.reader.writeError(w, r, http.StatusBadRequest, CodeInvalidRequest, "Malformed or unsupported account request", false)
@@ -248,8 +330,23 @@ func (h *AccountMutationHandler) mutate(w http.ResponseWriter, r *http.Request, 
 		h.reader.writeError(w, r, http.StatusBadRequest, CodeInvalidRequest, "Malformed account request", false)
 		return
 	}
-	hashBytes := sha256.Sum256(encodedRequest)
-	hash := hex.EncodeToString(hashBytes[:])
+	defer clear(encodedRequest)
+	var hash string
+	if h.fingerprint != nil {
+		fingerprint := h.fingerprint(encodedRequest)
+		if len(fingerprint) == 0 {
+			h.reader.writeError(w, r, http.StatusInternalServerError, CodeInternal, "Secure account operation fingerprinting failed", false)
+			return
+		}
+		hash = hex.EncodeToString(fingerprint)
+	} else {
+		if bytes.Contains(encodedRequest, []byte(`"imapPassword":`)) || bytes.Contains(encodedRequest, []byte(`"smtpPassword":`)) {
+			h.reader.writeError(w, r, http.StatusInternalServerError, CodeInternal, "Secure credential receipt fingerprinting is unavailable", false)
+			return
+		}
+		hashBytes := sha256.Sum256(encodedRequest)
+		hash = hex.EncodeToString(hashBytes[:])
+	}
 	prior, status, err := h.ledger.Reserve(r.Context(), key, hash)
 	if errors.Is(err, ErrAccountMutationKeyConflict) {
 		h.reader.writeError(w, r, http.StatusConflict, CodeIdempotencyConflict, "Idempotency-Key was already used for a different account operation", false)
@@ -289,6 +386,8 @@ func (h *AccountMutationHandler) mutate(w http.ResponseWriter, r *http.Request, 
 
 func accountMutationError(err error, fallbackCode ErrorCode, fallbackMessage string) (int, ErrorCode, string) {
 	switch {
+	case errors.Is(err, ErrCredentialRepairRequired):
+		return http.StatusInternalServerError, CodeCredentialRepairRequired, "Credential update could not be fully restored; account repair is required"
 	case errors.Is(err, account.ErrAccountNotFound):
 		return http.StatusNotFound, CodeNotFound, "Account not found"
 	case errors.Is(err, account.ErrAccountExists):

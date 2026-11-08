@@ -19,6 +19,8 @@ const (
 	CodeNotFound ErrorCode = "not_found"
 	// CodeConflict indicates that the requested resource state conflicts with existing data.
 	CodeConflict ErrorCode = "conflict"
+	// CodeCredentialRepairRequired indicates a secret update could not be fully compensated.
+	CodeCredentialRepairRequired ErrorCode = "credential_repair_required"
 	// CodeAccountUnreachable indicates incomplete results for an unavailable account.
 	CodeAccountUnreachable ErrorCode = "account_unreachable"
 	// CodeProviderError indicates a provider operation failed.

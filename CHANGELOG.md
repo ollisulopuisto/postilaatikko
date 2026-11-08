@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Route IMAP and SMTP password changes through authenticated helper account operations with explicit keep/replace/clear actions, credential snapshot compensation, and secret-safe idempotency fingerprints.
 - Make the bundled helper the mailbox schema migrator. Desktop startup now requires a versioned helper/API/schema handshake, and active desktop, composer, and helper processes hold shared schema locks so upgrades cannot migrate while they use the database.
 - Bundle the headless helper beside the desktop app in supported Linux, Windows, macOS, Flatpak, release, and development packages.
 - Add macOS General Settings controls to install, start, and stop the independently supervised background mail service.

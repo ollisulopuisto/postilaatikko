@@ -191,7 +191,9 @@ func (s *Store) DeletePassword(accountID string) error {
 		return fmt.Errorf("failed to clear password: %w", err)
 	}
 	if s.keyringEnabled {
-		s.deleteKeyringEntry(accountID)
+		if err := s.deleteKeyringEntryStrict(accountID); err != nil {
+			return fmt.Errorf("failed to remove password from OS keyring: %w", err)
+		}
 	}
 	return nil
 }
@@ -423,7 +425,9 @@ func (s *Store) DeleteSMTPPassword(accountID string) error {
 		return fmt.Errorf("failed to clear SMTP password: %w", err)
 	}
 	if s.keyringEnabled {
-		s.deleteKeyringEntry(smtpPasswordKeyringKey(accountID))
+		if err := s.deleteKeyringEntryStrict(smtpPasswordKeyringKey(accountID)); err != nil {
+			return fmt.Errorf("failed to remove SMTP password from OS keyring: %w", err)
+		}
 	}
 	return nil
 }
@@ -436,6 +440,11 @@ func (s *Store) clearDBSMTPPassword(accountID string) {
 // IsKeyringEnabled returns whether the OS keyring is being used
 func (s *Store) IsKeyringEnabled() bool {
 	return s.keyringEnabled
+}
+
+// Fingerprint computes a device-keyed digest suitable for idempotency receipts.
+func (s *Store) Fingerprint(value []byte) []byte {
+	return s.encryptor.Fingerprint(value)
 }
 
 // SetSMIMEPrivateKey stores an S/MIME private key for a certificate
@@ -913,4 +922,11 @@ func (s *Store) deleteKeyringEntry(key string) {
 	if err := gokeyring.Delete(serviceName, key); err != nil && !errors.Is(err, gokeyring.ErrNotFound) {
 		s.log.Warn().Msg("Failed to delete credential from OS keyring")
 	}
+}
+
+func (s *Store) deleteKeyringEntryStrict(key string) error {
+	if err := gokeyring.Delete(serviceName, key); err != nil && !errors.Is(err, gokeyring.ErrNotFound) {
+		return err
+	}
+	return nil
 }

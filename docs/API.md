@@ -30,7 +30,11 @@ Account create/update/delete, enable/disable, ordering, and Microsoft shared
 mailbox setup require `account.manage`. These requests use the routes listed in
 `docs/api/agent-v1.md` and require an `Idempotency-Key`. Account mutations store
 only a request fingerprint and the public response for replay; credentials must
-be configured through the separate credential handoff flow.
+be configured through the request's one-time password envelope. Create/update
+requests may include `credentials` with `imapAction` and `smtpAction` set to
+`keep`, `replace`, or `clear`; replacement values are accepted only in request
+bodies and are excluded from responses and stored receipts. Secret-bearing
+receipts use a device-keyed digest.
 
 ### 2. Accounts & Folders
 - `GET /v1/accounts` (Requires `mail.read`)
@@ -223,7 +227,7 @@ The same flags can be passed to `install-agent` to persist them in the macOS Lau
 
 The `api-client` commands manage credentials. The create command prints a high-entropy bearer token once; the database stores only its SHA-256 digest. Keep the displayed token private and use a password manager or the client's secure credential store. A grant authorizes only the listed capabilities. Starting `serve` exposes the mailbox API; remote access still requires the explicit TLS and Host settings above. This flow does not create a phone pairing code.
 
-The desktop provisions a dedicated local grant with `mail.read` and `mail.body.fetch`, and stores its bearer token in the OS keyring. Settings can separately grant `mail.write` for mailbox mutations and `account.manage` for account/credential management; each explicit upgrade preserves prior capabilities, stores a replacement token in the keyring, then revokes the prior grant. The desktop routes bounded conversation pages, global search, thread reads, explicit body fetches, and supported same-account mail actions through the helper when connected. If the helper cannot be reached, the desktop uses the existing local path; authorization, credential, capability, and action errors do not trigger fallback. Routine listing and sync remain header-only. Revoked credentials are not silently reissued. Account-management routes are added in a subsequent task. Multi-account and cross-account moves continue through the desktop's safe path.
+The desktop provisions a dedicated local grant with `mail.read` and `mail.body.fetch`, and stores its bearer token in the OS keyring. Settings can separately grant `mail.write` for mailbox mutations and `account.manage` for account/credential management; each explicit upgrade preserves prior capabilities, stores a replacement token in the keyring, then revokes the prior grant. The desktop routes bounded conversation pages, global search, thread reads, explicit body fetches, supported same-account mail actions, and connected account/password changes through the helper. If the helper cannot be reached, the desktop uses the existing local path; authorization, credential, capability, and action errors do not trigger fallback. Routine listing and sync remain header-only. Revoked credentials are not silently reissued. Multi-account and cross-account moves continue through the desktop's safe path.
 
 ---
 

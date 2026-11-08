@@ -98,7 +98,14 @@ func (a *App) AddAccount(config account.AccountConfig) (*account.Account, error)
 	}
 	var acc *account.Account
 	if useService {
-		created, createErr := serviceClient.CreateAccount(ctx, v1.AccountMutationFromConfig(config), accountMutationKey())
+		passwords := v1.PasswordCredentialMutation{IMAPAction: v1.PasswordKeep, SMTPAction: v1.PasswordKeep}
+		if config.Password != "" {
+			passwords.IMAPAction, passwords.IMAPPassword = v1.PasswordReplace, config.Password
+		}
+		if config.SMTPUsername != "" && config.SMTPPassword != "" {
+			passwords.SMTPAction, passwords.SMTPPassword = v1.PasswordReplace, config.SMTPPassword
+		}
+		created, createErr := serviceClient.CreateAccount(ctx, v1.AccountMutationFromConfig(config), passwords, accountMutationKey())
 		if createErr != nil {
 			log.Error().Err(createErr).Str("email", logging.RedactEmail(config.Email)).Msg("Failed to create account through mailbox service")
 			return nil, createErr
@@ -112,8 +119,8 @@ func (a *App) AddAccount(config account.AccountConfig) (*account.Account, error)
 		return nil, err
 	}
 
-	// Store password in credential store
-	if config.Password != "" {
+	// The helper owns password writes whenever account mutations use the service.
+	if !useService && config.Password != "" {
 		if err := a.credStore.SetPassword(acc.ID, config.Password); err != nil {
 			log.Error().Err(err).Str("account_id", acc.ID).Msg("Failed to store password")
 			// Delete the account since we can't store credentials
@@ -129,7 +136,7 @@ func (a *App) AddAccount(config account.AccountConfig) (*account.Account, error)
 	// SMTPPassword is silently ignored — "Same as incoming server" keeps
 	// the SMTP keyring slot empty so the send path falls through to the
 	// IMAP password.
-	if config.SMTPUsername != "" && config.SMTPPassword != "" {
+	if !useService && config.SMTPUsername != "" && config.SMTPPassword != "" {
 		if err := a.credStore.SetSMTPPassword(acc.ID, config.SMTPPassword); err != nil {
 			log.Error().Err(err).Str("account_id", acc.ID).Msg("Failed to store SMTP password")
 			if delErr := a.rollbackAccountCreate(acc.ID, serviceClient, useService); delErr != nil {
@@ -346,6 +353,24 @@ func (a *App) UpdateAccount(id string, config account.AccountConfig) (*account.A
 
 	// Check if sync period changed
 	syncPeriodChanged := existingAcc.SyncPeriodDays != config.SyncPeriodDays
+	if useService {
+		passwords := v1.PasswordCredentialMutation{IMAPAction: v1.PasswordKeep, SMTPAction: v1.PasswordKeep}
+		if config.Password != "" {
+			passwords.IMAPAction, passwords.IMAPPassword = v1.PasswordReplace, config.Password
+		}
+		switch {
+		case existingAcc.SMTPUsername != "" && config.SMTPUsername == "":
+			passwords.SMTPAction = v1.PasswordClear
+		case config.SMTPUsername != "" && config.SMTPPassword != "":
+			passwords.SMTPAction, passwords.SMTPPassword = v1.PasswordReplace, config.SMTPPassword
+		}
+		updated, updateErr := serviceClient.UpdateAccount(ctx, id, v1.AccountMutationFromConfig(config), passwords, accountMutationKey())
+		if updateErr != nil {
+			log.Error().Err(updateErr).Str("account_id", id).Msg("Failed to update account through mailbox service")
+			return nil, updateErr
+		}
+		return updated.ToAccount(), nil
+	}
 
 	updatePassword := config.Password != ""
 	updateSMTPPassword := config.SMTPUsername != "" && config.SMTPPassword != ""
@@ -390,16 +415,7 @@ func (a *App) UpdateAccount(id string, config account.AccountConfig) (*account.A
 		}
 	}
 
-	var acc *account.Account
-	if useService {
-		updated, updateErr := serviceClient.UpdateAccount(ctx, id, v1.AccountMutationFromConfig(config), accountMutationKey())
-		err = updateErr
-		if updateErr == nil {
-			acc = updated.ToAccount()
-		}
-	} else {
-		acc, err = a.accountStore.Update(id, &config)
-	}
+	acc, err := a.accountStore.Update(id, &config)
 	if err != nil {
 		log.Error().Err(err).Str("account_id", id).Msg("Failed to update account")
 		return nil, a.accountCredentialUpdateError(id, "account configuration", err, previousPassword, passwordAttempted, previousSMTPPassword, smtpPasswordAttempted)

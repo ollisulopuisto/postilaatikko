@@ -55,12 +55,15 @@ func New(cfg Config) *Client {
 
 func (c *Client) doRequest(ctx context.Context, method, path string, body any, idempotencyKey string) ([]byte, error) {
 	var bodyReader io.Reader
+	var requestBytes []byte
+	defer func() { clear(requestBytes) }()
 	if body != nil {
 		data, err := json.Marshal(body)
 		if err != nil {
 			return nil, fmt.Errorf("marshal request: %w", err)
 		}
-		bodyReader = bytes.NewReader(data)
+		requestBytes = data
+		bodyReader = bytes.NewReader(requestBytes)
 	}
 
 	url := c.endpoint + path
@@ -138,13 +141,15 @@ func (c *Client) GetAccount(ctx context.Context, accountID string) (*v1.AccountS
 	return &resp.Data, nil
 }
 
-// CreateAccount creates account configuration without accepting credentials.
-func (c *Client) CreateAccount(ctx context.Context, mutation v1.AccountMutation, idempotencyKey string) (*v1.AccountSummary, error) {
+// CreateAccount creates account configuration with an optional password envelope.
+func (c *Client) CreateAccount(ctx context.Context, mutation v1.AccountMutation, credentials v1.PasswordCredentialMutation, idempotencyKey string) (*v1.AccountSummary, error) {
+	mutation.Credentials = &credentials
 	return c.accountMutation(ctx, http.MethodPost, "/v1/accounts", mutation, idempotencyKey)
 }
 
-// UpdateAccount changes account configuration without accepting credentials.
-func (c *Client) UpdateAccount(ctx context.Context, accountID string, mutation v1.AccountMutation, idempotencyKey string) (*v1.AccountSummary, error) {
+// UpdateAccount changes account configuration with an optional password envelope.
+func (c *Client) UpdateAccount(ctx context.Context, accountID string, mutation v1.AccountMutation, credentials v1.PasswordCredentialMutation, idempotencyKey string) (*v1.AccountSummary, error) {
+	mutation.Credentials = &credentials
 	return c.accountMutation(ctx, http.MethodPut, "/v1/accounts/"+url.PathEscape(accountID), mutation, idempotencyKey)
 }
 

@@ -81,6 +81,8 @@ type SyncRuntime struct {
 	closeOnce                   sync.Once
 	accountMutationMu           sync.Mutex
 	credentialCleanup           func(string) error
+	passwordMutation            func(string, v1.PasswordCredentialMutation, func() error) error
+	accountMutationFingerprint  func([]byte) []byte
 	sharedMailboxValidate       func(context.Context, string, string) error
 	sharedMailboxCredentialCopy func(string, string) error
 }
@@ -213,13 +215,35 @@ func (r *SyncRuntime) SetAccountCredentialLifecycle(cleanup func(string) error, 
 	return nil
 }
 
+// SetAccountPasswordMutationHandler wires the helper credential transaction before runtime start.
+func (r *SyncRuntime) SetAccountPasswordMutationHandler(handler func(string, v1.PasswordCredentialMutation, func() error) error, fingerprint func([]byte) []byte) error {
+	if r == nil || handler == nil || fingerprint == nil {
+		return errors.New("account password mutation handler and secure fingerprint are required")
+	}
+	r.ctxMu.Lock()
+	defer r.ctxMu.Unlock()
+	if r.started {
+		return errors.New("cannot configure account password mutation after runtime start")
+	}
+	r.passwordMutation = handler
+	r.accountMutationFingerprint = fingerprint
+	return nil
+}
+
 // CreateAccount adds non-secret account configuration to the helper-owned catalog.
-func (r *SyncRuntime) CreateAccount(mutation v1.AccountMutation) (*account.Account, error) {
+func (r *SyncRuntime) CreateAccount(mutation v1.AccountMutation, passwords v1.PasswordCredentialMutation) (*account.Account, error) {
 	if r == nil || r.accounts == nil {
 		return nil, errors.New("always-on runtime is not open")
 	}
+	defer passwords.ClearSecrets()
 	r.accountMutationMu.Lock()
 	defer r.accountMutationMu.Unlock()
+	if err := passwords.Normalize(); err != nil {
+		return nil, err
+	}
+	if passwords.HasChanges() && r.passwordMutation == nil {
+		return nil, errors.New("helper password mutation is unavailable")
+	}
 	config := mutation.ToAccountConfig()
 	if err := config.Validate(); err != nil {
 		return nil, v1.InvalidRequest("Account configuration is invalid", err)
@@ -228,17 +252,45 @@ func (r *SyncRuntime) CreateAccount(mutation v1.AccountMutation) (*account.Accou
 	if err != nil {
 		return nil, err
 	}
+	if r.passwordMutation != nil {
+		if err := r.passwordMutation(created.ID, passwords, nil); err != nil {
+			if errors.Is(err, v1.ErrCredentialRepairRequired) {
+				disableErr := r.accounts.SetEnabled(created.ID, false)
+				return nil, errors.Join(v1.ErrCredentialRepairRequired, fmt.Errorf("account was retained for password repair: %w", errors.Join(err, disableErr)))
+			}
+			if r.credentialCleanup == nil {
+				disableErr := r.accounts.SetEnabled(created.ID, false)
+				return nil, errors.Join(v1.ErrCredentialRepairRequired, fmt.Errorf("account was retained because credential cleanup is unavailable: %w", errors.Join(err, disableErr)))
+			}
+			if cleanupErr := r.credentialCleanup(created.ID); cleanupErr != nil {
+				disableErr := r.accounts.SetEnabled(created.ID, false)
+				return nil, errors.Join(v1.ErrCredentialRepairRequired, fmt.Errorf("account was retained because credential cleanup failed: %w", errors.Join(err, cleanupErr, disableErr)))
+			}
+			if deleteErr := r.accounts.Delete(created.ID); deleteErr != nil {
+				disableErr := r.accounts.SetEnabled(created.ID, false)
+				return nil, errors.Join(v1.ErrCredentialRepairRequired, fmt.Errorf("account creation failed and account cleanup failed: %w", errors.Join(err, deleteErr, disableErr)))
+			}
+			return nil, err
+		}
+	}
 	r.refreshAccountAfterChange(created, true)
 	return created, nil
 }
 
 // UpdateAccount changes non-secret account configuration in the helper.
-func (r *SyncRuntime) UpdateAccount(id string, mutation v1.AccountMutation) (*account.Account, error) {
+func (r *SyncRuntime) UpdateAccount(id string, mutation v1.AccountMutation, passwords v1.PasswordCredentialMutation) (*account.Account, error) {
 	if r == nil || r.accounts == nil || r.folders == nil {
 		return nil, errors.New("always-on runtime is not open")
 	}
+	defer passwords.ClearSecrets()
 	r.accountMutationMu.Lock()
 	defer r.accountMutationMu.Unlock()
+	if err := passwords.Normalize(); err != nil {
+		return nil, err
+	}
+	if passwords.HasChanges() && r.passwordMutation == nil {
+		return nil, errors.New("helper password mutation is unavailable")
+	}
 	config := mutation.ToAccountConfig()
 	if err := config.Validate(); err != nil {
 		return nil, v1.InvalidRequest("Account configuration is invalid", err)
@@ -259,7 +311,18 @@ func (r *SyncRuntime) UpdateAccount(id string, mutation v1.AccountMutation) (*ac
 			return nil, v1.InvalidRequest(fmt.Sprintf("%s folder mapping does not belong to this account", label), nil)
 		}
 	}
-	updated, err := r.accounts.Update(id, &config)
+	var updated *account.Account
+	var err error
+	commitAccount := func() error {
+		var updateErr error
+		updated, updateErr = r.accounts.Update(id, &config)
+		return updateErr
+	}
+	if r.passwordMutation != nil {
+		err = r.passwordMutation(id, passwords, commitAccount)
+	} else {
+		err = commitAccount()
+	}
 	if err != nil {
 		return nil, err
 	}

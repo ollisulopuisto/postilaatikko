@@ -333,7 +333,7 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 	readOperations := &mailboxReadOperations{runtime: r}
 	mux := http.NewServeMux()
 	v1.MountCatalogRoutes(mux, operations, automation.RequireGrantCapability)
-	v1.NewAccountMutationHandler(r, newAccountMutationLedger(r.db)).MountRoutes(mux, automation.RequireGrantCapability)
+	v1.NewAccountMutationHandler(r, newAccountMutationLedger(r.db), r.accountMutationFingerprint).MountRoutes(mux, automation.RequireGrantCapability)
 	v1.MountFolderMutationRoutes(mux, r, automation.RequireGrantCapability)
 	v1.MountVirtualFolderMutationRoutes(mux, r, automation.RequireGrantCapability)
 	v1.MountFilterRuleRoutes(mux, r, automation.RequireGrantCapability)

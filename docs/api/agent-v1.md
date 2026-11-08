@@ -195,8 +195,9 @@ account-qualified explicit target. Repeating a completed operation with the
 same key returns its original result; reusing the key with a different
 operation returns `idempotency_conflict`. If an operation is interrupted before
 its receipt is saved, retrying returns `idempotency_conflict` while that
-operation remains unresolved, avoiding an unsafe duplicate. Requests without a key are rejected for operations
-that can change drafts, mailbox state, delivery, or queue membership.
+operation remains unresolved, avoiding an unsafe duplicate. Requests without a
+key are rejected for operations that can change drafts, mailbox state, delivery,
+or queue membership.
 
 Where a resource has a revision, updates include the revision the client read.
 A stale revision returns `revision_conflict` with no mutation. Message moves
@@ -206,12 +207,18 @@ the durable operation/job identifier and delivery state; transport timeout is
 not evidence that a send failed, and clients must query the operation instead
 of creating a second send.
 
-The initial route families reserved by v1 are:
+Account create/update bodies may include a `credentials` object with explicit
+`imapAction` and `smtpAction` values (`keep`, `replace`, or `clear`). A password
+value is accepted only when its action is `replace`. Passwords are processed by
+the helper, excluded from responses and receipt records, and fingerprinted with
+a device-keyed HMAC for idempotency.
+
+The current route families in v1 are:
 
 | Route family | Capability | Task |
 | --- | --- | --- |
 | `GET /v1/accounts`, `GET /v1/accounts/{accountId}`, `GET /v1/folders`, `GET /v1/views` | `mail.read` | UX-021 / UX-038 |
-| `POST /v1/accounts`, `PUT /v1/accounts/{accountId}`, `DELETE /v1/accounts/{accountId}`, `PATCH /v1/accounts/{accountId}/enabled`, `PUT /v1/accounts/order`, `POST /v1/accounts/shared-mailboxes` | `account.manage` | HOSTED-SERVER-035 |
+| `POST /v1/accounts`, `PUT /v1/accounts/{accountId}`, `DELETE /v1/accounts/{accountId}`, `PATCH /v1/accounts/{accountId}/enabled`, `PUT /v1/accounts/order`, `POST /v1/accounts/shared-mailboxes` | `account.manage` | HOSTED-SERVER-035 / -036 |
 | `POST /v1/search`, `POST /v1/threads/read`, `POST /v1/messages/body` | `mail.read`; explicit fetch also needs `mail.body.fetch` | UX-021 |
 | `POST /v1/messages/attachments/list`, `POST /v1/messages/attachments/read` | `mail.attachment.read` | UX-021 |
 | `/v1/drafts` | `draft.read`, `draft.write` | UX-037 |
