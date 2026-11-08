@@ -58,7 +58,13 @@ func TestReaderCallPreservesArgumentsAndReportsParentError(t *testing.T) {
 
 func TestReaderAllowlistExcludesAccountAndQueueAdministration(t *testing.T) {
 	methods := (&App{}).readerMethods()
-	for _, name := range []string{"RemoveAccount", "UpdateAccount", "SaveUIState", "QuitApp", "InitializeSendLaterClient"} {
+	// Detached readers host the same reply composer and Send Later dialog.
+	for _, name := range []string{"InitializeSendLaterClient", "SendMessageWithDraftGuard"} {
+		if _, ok := methods[name]; !ok {
+			t.Errorf("reply composer operation unavailable: %s", name)
+		}
+	}
+	for _, name := range []string{"RemoveAccount", "UpdateAccount", "SaveUIState", "QuitApp"} {
 		if _, ok := methods[name]; ok {
 			t.Fatalf("unexpected reader operation %s", name)
 		}

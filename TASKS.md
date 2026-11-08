@@ -373,3 +373,23 @@ Suggested model/effort is a dispatch recommendation, not an existing claim or mo
 - ARM64-DRAFT-RELEASE-001: Review. Owner: Instinct; branch `agent/arm64-draft-release`; worktree `/downloads/postilaatikko-arm64-release`. Optional dispatch-only standard public macos-15 runner builds latest merged main, pins arm64, signs/notarizes and uploads directly to a draft test Release without cache writes or Actions artifacts. Existing automatic/artifact build behavior is preserved; the new draft_release input selects the isolated no-artifact route. No app-code/version changes; human merge only. Known main typecheck/lint failures and unchanged What's New are disclosed in test-release notes. Native verification occurs in the build; not locally available.
 
 PR182 review: architecture verification now targets Wails output executable `eterno-mail`; current-version changelog records the route; parsed-workflow regression tests cover exclusive job selection, real SHA/CPU guards, architecture checks (red before fix), direct draft publication and no-artifact/cache constraints.
+
+## Frontend check repair (2026-11-08)
+
+- FRONTEND-CHECKS-001: Review. Owner Instinct; branch `agent/fix-main-frontend-checks`; worktree `/downloads/postilaatikko-check-fix`. Fix current main's 21 type errors and 3 lint errors without weakening checks; regression-test copy/move dispatch; no merge.
+
+Validation: callback regression red (2 ReferenceErrors) before, green2/2 after. `npm run check`: before21errors/1warning, after0errors/1existing nonreactive viewerRef warning +8shortcut checks pass. `npm run lint`: before3errors, after0. Full frontend tests799/799 pass (three baseline failures repaired: stale native Paste/registry wiring assertions, unified-folder guard Go parity). `npm run build` passes before/after. Wails declarations synchronized to existing Go/JS methods and UndoHistoryEntry fields; no new backend methods. No native Mac/UI acceptance performed.
+
+Review follow-up: require a real string unified folderType (array coercion reproduced and rejected with new regression), and document command routing/unified-folder behavior under the current version heading.
+
+CI follow-up: refreshed existing conversation-count test double for the unified-folder interface and added table-driven route coverage for all six supported system folders, unread filter and mail.read capability. Preserved the owner's intervening fd4f926 test extraction fix.
+
+Go lint follow-up shared with PR180: explicitly discard deferred rollback cleanup result (already committed transactions return ErrTxDone), remove overwritten provider-group argument without changing derived target refs, simplify UTC normalization condition and test buffer conversion. Local golangci-lint2.12.2 reports0issues for automation/v1,appstate,views; their tests pass. alwayson/full GTK-linked checks await CI because local glib/GTK headers are unavailable.
+
+Backend CI follow-up: fix lazy OAuth-provider fallback deletion (real account-removal error); keep local read/star through the partial-success reconciliation path while remote mode retains helper target resolution; build the real helper for preflight tests and prove the corrupt-key failure is genuine; migration tests start at the historical schema instead of manually rewinding a current database; allowlist tests require the reply composer's existing Send Later operations while still excluding account/global administration. Local `CGO_ENABLED=0 go test ./...` exits0 with a temporary uncommitted no-op startup-notification shim because GTK headers are unavailable. Shim removed before commit; native CI remains decisive.
+
+## PR180 check repair (2026-11-08)
+
+Owner Instinct, worktree `/downloads/postilaatikko-pr180`, repair branch `repair/pr180-tests` pushes to existing attachment-regex PR180. Preserve its optimization and strict unified scope guard. Reuse frontend fixes/test coverage from PR181, repair shared backend lint errors, and retain regression guards. No main push or merge.
+
+Verification:825/825frontend tests pass; frontend check0errors/1pre-existing viewerRef warning; lint passes; production build passes. `go test ./internal/automation/v1 ./internal/appstate ./internal/views` and golangci-lint2.12.2 on those packages pass (0issues). Full native-linked Go test/lint requires CI because local glib/GTK headers are unavailable. Review pending; no merge.

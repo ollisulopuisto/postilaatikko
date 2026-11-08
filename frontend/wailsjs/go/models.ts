@@ -1159,6 +1159,9 @@ export namespace app {
 	    // Go type: time
 	    expiresAt: any;
 	    messageCount: number;
+	    state: string;
+	    undoState: string;
+	    undoAvailable: boolean;
 
 	    static createFrom(source: any = {}) {
 	        return new UndoHistoryEntry(source);
@@ -1172,6 +1175,9 @@ export namespace app {
 	        this.createdAt = this.convertValues(source["createdAt"], null);
 	        this.expiresAt = this.convertValues(source["expiresAt"], null);
 	        this.messageCount = source["messageCount"];
+	        this.state = source["state"];
+	        this.undoState = source["undoState"];
+	        this.undoAvailable = source["undoAvailable"];
 	    }
 
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

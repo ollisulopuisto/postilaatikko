@@ -971,3 +971,7 @@ export function UpdateLocalFlags(arg1:Array<string>,arg2:any,arg3:any):Promise<v
 export function UpdateScheduledMessage(arg1:string,arg2:string):Promise<app.ScheduleResult>;
 
 export function UpdateVirtualFolder(arg1:virtualfolder.VirtualFolder):Promise<void>;
+
+export function IsRemoteServiceMode():Promise<boolean>;
+
+export function SendMessageWithRequestID(arg1:string,arg2:smtp.ComposeMessage,arg3:string):Promise<void>;
