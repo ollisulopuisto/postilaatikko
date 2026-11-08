@@ -2,8 +2,124 @@ package app
 
 import (
 	extcontactsbe "github.com/hkdb/aerion/extensions/contacts/backend"
+	coreapi "github.com/hkdb/aerion/internal/core/api/v1"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+// Contacts_* methods are explicitly promoted on App by the embedded bridge.
+// These wrappers keep that Wails surface safe in remote mode, where the bridge
+// is deliberately not initialized because Contacts remains device-local.
+// Contacts_ListContactsForBrowse searches and pages extension contacts.
+func (a *App) Contacts_ListContactsForBrowse(query, sourceID string, limit, offset int) ([]coreapi.Contact, error) {
+	if err := a.requireLocalContacts(); err != nil {
+		return nil, err
+	}
+	return a.ContactsBridge.Contacts_ListContactsForBrowse(query, sourceID, limit, offset)
+}
+
+// Contacts_GetContactDetail returns one contact from the Contacts extension.
+func (a *App) Contacts_GetContactDetail(emailOrID string) (*coreapi.Contact, error) {
+	if err := a.requireLocalContacts(); err != nil {
+		return nil, err
+	}
+	return a.ContactsBridge.Contacts_GetContactDetail(emailOrID)
+}
+
+// Contacts_CreateContact creates a local or CardDAV contact.
+func (a *App) Contacts_CreateContact(input coreapi.ContactCreateInput) (string, error) {
+	if err := a.requireLocalContacts(); err != nil {
+		return "", err
+	}
+	return a.ContactsBridge.Contacts_CreateContact(input)
+}
+
+// Contacts_ListAddressbooks lists addressbooks for a contact source.
+func (a *App) Contacts_ListAddressbooks(sourceID string) ([]coreapi.Addressbook, error) {
+	if err := a.requireLocalContacts(); err != nil {
+		return nil, err
+	}
+	return a.ContactsBridge.Contacts_ListAddressbooks(sourceID)
+}
+
+// Contacts_ListSources lists configured contact sources.
+func (a *App) Contacts_ListSources() ([]coreapi.ContactSource, error) {
+	if err := a.requireLocalContacts(); err != nil {
+		return nil, err
+	}
+	return a.ContactsBridge.Contacts_ListSources()
+}
+
+// Contacts_LinkAccountSource creates a contact source for an email account.
+func (a *App) Contacts_LinkAccountSource(accountID, name string, syncInterval int) (string, error) {
+	if err := a.requireLocalContacts(); err != nil {
+		return "", err
+	}
+	return a.ContactsBridge.Contacts_LinkAccountSource(accountID, name, syncInterval)
+}
+
+// Contacts_SyncSource syncs one contact source.
+func (a *App) Contacts_SyncSource(sourceID string) error {
+	if err := a.requireLocalContacts(); err != nil {
+		return err
+	}
+	return a.ContactsBridge.Contacts_SyncSource(sourceID)
+}
+
+// Contacts_SyncAllSources syncs every configured contact source.
+func (a *App) Contacts_SyncAllSources() error {
+	if err := a.requireLocalContacts(); err != nil {
+		return err
+	}
+	return a.ContactsBridge.Contacts_SyncAllSources()
+}
+
+// Contacts_UpdateContact updates a contact in its source.
+func (a *App) Contacts_UpdateContact(idOrEmail string, patch coreapi.ContactPatch) error {
+	if err := a.requireLocalContacts(); err != nil {
+		return err
+	}
+	return a.ContactsBridge.Contacts_UpdateContact(idOrEmail, patch)
+}
+
+// Contacts_DeleteLocalContact deletes a contact from its source.
+func (a *App) Contacts_DeleteLocalContact(idOrEmail string) error {
+	if err := a.requireLocalContacts(); err != nil {
+		return err
+	}
+	return a.ContactsBridge.Contacts_DeleteLocalContact(idOrEmail)
+}
+
+// Contacts_EnableWriteAccess authorizes writable access to a contact source.
+func (a *App) Contacts_EnableWriteAccess(sourceID, authContextKind, authContextIdentifier, expectedEmail string) error {
+	if err := a.requireLocalContacts(); err != nil {
+		return err
+	}
+	return a.ContactsBridge.Contacts_EnableWriteAccess(sourceID, authContextKind, authContextIdentifier, expectedEmail)
+}
+
+// Contacts_ResizeContactPhoto prepares an image for a contact photo.
+func (a *App) Contacts_ResizeContactPhoto(b64In string) (extcontactsbe.ResizedContactPhoto, error) {
+	if err := a.requireLocalContacts(); err != nil {
+		return extcontactsbe.ResizedContactPhoto{}, err
+	}
+	return a.ContactsBridge.Contacts_ResizeContactPhoto(b64In)
+}
+
+// Contacts_ReauthorizeSource renews authorization for a contact source.
+func (a *App) Contacts_ReauthorizeSource(sourceID string) error {
+	if err := a.requireLocalContacts(); err != nil {
+		return err
+	}
+	return a.ContactsBridge.Contacts_ReauthorizeSource(sourceID)
+}
+
+// Contacts_CancelSourceAuthorization cancels an in-progress contact OAuth flow.
+func (a *App) Contacts_CancelSourceAuthorization() {
+	if a.remoteServiceMode {
+		return
+	}
+	a.ContactsBridge.Contacts_CancelSourceAuthorization()
+}
 
 // initContactsExtension wires the Contacts extension's Bridge into App
 // during Startup. All bridge logic lives in extensions/contacts/backend/

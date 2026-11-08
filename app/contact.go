@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -16,9 +17,19 @@ import (
 // Contact API - Exposed to frontend via Wails bindings
 // ============================================================================
 
+func (a *App) requireLocalContacts() error {
+	if a.remoteServiceMode {
+		return errors.New("Contacts and CardDAV are unavailable in remote mailbox mode")
+	}
+	return nil
+}
+
 // SearchContacts searches for contacts matching the query
 // Returns contacts from multiple sources: local database, vCard files, CardDAV, and Google Contacts
 func (a *App) SearchContacts(query string, limit int) ([]*contact.Contact, error) {
+	if err := a.requireLocalContacts(); err != nil {
+		return nil, err
+	}
 	// Synced Google contacts, saved/collected addresses and vCards are local.
 	// Autocomplete must not authorize Contacts or refresh Mail credentials.
 	return a.contactStore.Search(query, limit)
@@ -26,21 +37,33 @@ func (a *App) SearchContacts(query string, limit int) ([]*contact.Contact, error
 
 // GetContact returns a single contact by ID
 func (a *App) GetContact(id string) (*contact.Contact, error) {
+	if err := a.requireLocalContacts(); err != nil {
+		return nil, err
+	}
 	return a.contactStore.Get(id)
 }
 
 // AddContact adds or updates a contact
 func (a *App) AddContact(email, displayName string) error {
+	if err := a.requireLocalContacts(); err != nil {
+		return err
+	}
 	return a.contactStore.AddOrUpdate(email, displayName)
 }
 
 // DeleteContact deletes a contact
 func (a *App) DeleteContact(id string) error {
+	if err := a.requireLocalContacts(); err != nil {
+		return err
+	}
 	return a.contactStore.Delete(id)
 }
 
 // ListContacts returns all contacts
 func (a *App) ListContacts(limit int) ([]*contact.Contact, error) {
+	if err := a.requireLocalContacts(); err != nil {
+		return nil, err
+	}
 	return a.contactStore.List(limit)
 }
 
@@ -49,6 +72,9 @@ func (a *App) ListContacts(limit int) ([]*contact.Contact, error) {
 // in the avatar slot (opt-in setting). Resolves the whole batch in one query —
 // the frontend batches per list load rather than calling per row.
 func (a *App) GetContactPhotos(emails []string) ([]contact.ContactPhoto, error) {
+	if err := a.requireLocalContacts(); err != nil {
+		return nil, err
+	}
 	if len(emails) == 0 {
 		return []contact.ContactPhoto{}, nil
 	}
@@ -59,6 +85,9 @@ func (a *App) GetContactPhotos(emails []string) ([]contact.ContactPhoto, error) 
 // accounts. A Google account's own profile is not part of People connections,
 // so it cannot be obtained through GetContactPhotos.
 func (a *App) GetAccountProfilePhotos(emails []string) ([]contact.ContactPhoto, error) {
+	if err := a.requireLocalContacts(); err != nil {
+		return nil, err
+	}
 	log := logging.WithComponent("app.account-profile-photo")
 
 	wanted := make(map[string]struct{}, len(emails))

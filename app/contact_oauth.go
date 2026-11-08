@@ -132,6 +132,9 @@ func (a *App) finishContactOAuth(session *pendingContactOAuth) {
 // StartContactsOnlyOAuthFlow starts optional Contacts authorization. Mail has
 // its own OAuth manager, pending response and credential namespace.
 func (a *App) StartContactsOnlyOAuthFlow(provider string) error {
+	if err := a.requireLocalContacts(); err != nil {
+		return err
+	}
 	session, err := a.beginContactOAuth(provider, "")
 	if err != nil {
 		return err
@@ -162,6 +165,9 @@ func (a *App) StartContactsOnlyOAuthFlow(provider string) error {
 
 // CompleteContactSourceOAuthSetup only reads the dedicated Contacts response.
 func (a *App) CompleteContactSourceOAuthSetup(name string, syncInterval int) (*carddav.Source, error) {
+	if err := a.requireLocalContacts(); err != nil {
+		return nil, err
+	}
 	a.contactOAuthMu.Lock()
 	defer a.contactOAuthMu.Unlock()
 	session := a.pendingContactOAuth
@@ -180,6 +186,9 @@ func (a *App) CompleteContactSourceOAuthSetup(name string, syncInterval int) (*c
 // LinkAccountContactSource treats Mail as an identity hint, never as a token
 // source. The explicit user action opens separate Contacts consent and waits.
 func (a *App) LinkAccountContactSource(accountID, name string, syncInterval int) (*carddav.Source, error) {
+	if err := a.requireLocalContacts(); err != nil {
+		return nil, err
+	}
 	acc, err := a.accountStore.Get(accountID)
 	if err != nil {
 		return nil, err
@@ -221,6 +230,9 @@ func (a *App) LinkAccountContactSource(accountID, name string, syncInterval int)
 // ReauthorizeContactSource migrates legacy Google sources and repairs expired
 // or revoked Contacts grants without touching Gmail. Cached contacts survive.
 func (a *App) ReauthorizeContactSource(sourceID string) error {
+	if err := a.requireLocalContacts(); err != nil {
+		return err
+	}
 	source, err := a.carddavStore.GetSource(sourceID)
 	if err != nil {
 		return err
@@ -367,6 +379,10 @@ func (a *App) clearContactOAuth() {
 }
 
 func (a *App) CancelContactSourceOAuthFlow() {
+	if a.remoteServiceMode {
+		wailsRuntime.EventsEmit(a.ctx, "contact-source-oauth:cancelled", nil)
+		return
+	}
 	a.clearContactOAuth()
 	wailsRuntime.EventsEmit(a.ctx, "contact-source-oauth:cancelled", nil)
 }

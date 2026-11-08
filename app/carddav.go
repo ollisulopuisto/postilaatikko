@@ -27,11 +27,17 @@ type LinkedAccountInfo struct {
 
 // DiscoverCardDAVAddressbooks discovers available addressbooks from a CardDAV server
 func (a *App) DiscoverCardDAVAddressbooks(url, username, password string) ([]carddav.AddressbookInfo, error) {
+	if err := a.requireLocalContacts(); err != nil {
+		return nil, err
+	}
 	return carddav.DiscoverAddressbooks(url, username, password)
 }
 
 // TestCardDAVConnection tests connection to a CardDAV server
 func (a *App) TestCardDAVConnection(url, username, password string) error {
+	if err := a.requireLocalContacts(); err != nil {
+		return err
+	}
 	return carddav.TestConnection(url, username, password)
 }
 
@@ -40,6 +46,9 @@ func (a *App) TestCardDAVConnection(url, username, password string) error {
 // whose token also authorizes CardDAV, e.g. Stalwart). The account token getter is
 // already custom-OAuth-aware and refreshing; discovery doubles as the connection test.
 func (a *App) DiscoverCardDAVAddressbooksOAuth(url, accountID string) ([]carddav.AddressbookInfo, error) {
+	if err := a.requireLocalContacts(); err != nil {
+		return nil, err
+	}
 	tokens, err := a.getValidOAuthToken(accountID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get OAuth token: %w", err)
@@ -50,16 +59,25 @@ func (a *App) DiscoverCardDAVAddressbooksOAuth(url, accountID string) ([]carddav
 
 // GetContactSources returns all configured contact sources
 func (a *App) GetContactSources() ([]*carddav.Source, error) {
+	if err := a.requireLocalContacts(); err != nil {
+		return nil, err
+	}
 	return a.carddavStore.ListSources()
 }
 
 // GetContactSource returns a single contact source by ID
 func (a *App) GetContactSource(id string) (*carddav.Source, error) {
+	if err := a.requireLocalContacts(); err != nil {
+		return nil, err
+	}
 	return a.carddavStore.GetSource(id)
 }
 
 // AddContactSource creates a new contact source with addressbooks
 func (a *App) AddContactSource(config carddav.SourceConfig) (*carddav.Source, error) {
+	if err := a.requireLocalContacts(); err != nil {
+		return nil, err
+	}
 	log := logging.WithComponent("app")
 
 	// Create the source
@@ -94,6 +112,9 @@ func (a *App) AddContactSource(config carddav.SourceConfig) (*carddav.Source, er
 
 // UpdateContactSource updates an existing contact source
 func (a *App) UpdateContactSource(id string, config carddav.SourceConfig) error {
+	if err := a.requireLocalContacts(); err != nil {
+		return err
+	}
 	log := logging.WithComponent("app")
 
 	existingSource, err := a.carddavStore.GetSource(id)
@@ -176,6 +197,9 @@ func (a *App) UpdateContactSource(id string, config carddav.SourceConfig) error 
 
 // DeleteContactSource deletes a contact source and all its data
 func (a *App) DeleteContactSource(id string) error {
+	if err := a.requireLocalContacts(); err != nil {
+		return err
+	}
 	a.contactTokenMu.Lock()
 	defer a.contactTokenMu.Unlock()
 	log := logging.WithComponent("app")
@@ -205,17 +229,26 @@ func (a *App) DeleteContactSource(id string) error {
 
 // GetSourceAddressbooks returns all addressbooks for a source
 func (a *App) GetSourceAddressbooks(sourceID string) ([]*carddav.Addressbook, error) {
+	if err := a.requireLocalContacts(); err != nil {
+		return nil, err
+	}
 	return a.carddavStore.ListAddressbooks(sourceID)
 }
 
 // SetAddressbookEnabled enables or disables an addressbook
 func (a *App) SetAddressbookEnabled(addressbookID string, enabled bool) error {
+	if err := a.requireLocalContacts(); err != nil {
+		return err
+	}
 	return a.carddavStore.SetAddressbookEnabled(addressbookID, enabled)
 }
 
 // SetContactSourceWritable flips the writable flag for a source that supports
 // writes. Google Contacts sources are permanently read-only.
 func (a *App) SetContactSourceWritable(sourceID string, writable bool) error {
+	if err := a.requireLocalContacts(); err != nil {
+		return err
+	}
 	if writable {
 		source, err := a.carddavStore.GetSource(sourceID)
 		if err != nil {
@@ -230,11 +263,17 @@ func (a *App) SetContactSourceWritable(sourceID string, writable bool) error {
 
 // SyncContactSource manually triggers a sync for a source
 func (a *App) SyncContactSource(id string) error {
+	if err := a.requireLocalContacts(); err != nil {
+		return err
+	}
 	return a.carddavSyncer.SyncSource(id)
 }
 
 // SyncAllContactSources manually triggers a sync for all sources
 func (a *App) SyncAllContactSources() error {
+	if err := a.requireLocalContacts(); err != nil {
+		return err
+	}
 	return a.carddavSyncer.SyncAllSources()
 }
 
@@ -245,6 +284,9 @@ func (a *App) SyncAllContactSources() error {
 // where the old parser only stored email + display name. Mirrors
 // App.ForceSyncFolder for mail messages.
 func (a *App) ForceSyncContactSource(sourceID string) error {
+	if err := a.requireLocalContacts(); err != nil {
+		return err
+	}
 	abs, err := a.carddavStore.ListAddressbooks(sourceID)
 	if err != nil {
 		return fmt.Errorf("failed to list addressbooks: %w", err)
@@ -259,11 +301,17 @@ func (a *App) ForceSyncContactSource(sourceID string) error {
 
 // GetContactSourceErrors returns all sources that have errors
 func (a *App) GetContactSourceErrors() ([]*carddav.SourceError, error) {
+	if err := a.requireLocalContacts(); err != nil {
+		return nil, err
+	}
 	return a.carddavStore.GetSourcesWithErrors()
 }
 
 // GetContactSourceStats returns statistics for contact sources
 func (a *App) GetContactSourceStats() (map[string]interface{}, error) {
+	if err := a.requireLocalContacts(); err != nil {
+		return nil, err
+	}
 	sources, err := a.carddavStore.ListSources()
 	if err != nil {
 		return nil, err
@@ -285,6 +333,9 @@ func (a *App) GetContactSourceStats() (map[string]interface{}, error) {
 
 // GetLinkedAccountsForContactSync returns email accounts that can be linked to contact sources
 func (a *App) GetLinkedAccountsForContactSync() ([]LinkedAccountInfo, error) {
+	if err := a.requireLocalContacts(); err != nil {
+		return nil, err
+	}
 	log := logging.WithComponent("app")
 
 	accounts, err := a.accountStore.List()
@@ -345,6 +396,9 @@ func (a *App) GetLinkedAccountsForContactSync() ([]LinkedAccountInfo, error) {
 // so these populate the OAuth-account picker in the Add CardDAV Source dialog.
 // Unlike GetLinkedAccountsForContactSync (Google People API), this is the DAV path.
 func (a *App) GetCustomOAuthAccounts() ([]LinkedAccountInfo, error) {
+	if err := a.requireLocalContacts(); err != nil {
+		return nil, err
+	}
 	accounts, err := a.accountStore.List()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list accounts: %w", err)
