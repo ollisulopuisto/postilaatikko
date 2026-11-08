@@ -100,7 +100,7 @@ The helper mounts provider-aware search and account-qualified thread/body reads:
 - `POST /v1/replies` requires `draft.write` and accepts `{ "accountId": "acc-1", "messageId": "msg-1", "mode": "reply|reply-all|forward" }`. The message body must already be cached; this route does not fetch it.
 - `POST /v1/send` requires `mail.send` and `Idempotency-Key`. It accepts account, authorized sender, SMTP envelope recipients, prepared RFC822 bytes, and an optional draft ID/revision. SMTP acceptance is reported as sent; it does not confirm recipient delivery. Retries replay the same receipt, and an interrupted/ambiguous send is marked outcome unknown without automatic resend.
 
-Draft storage currently rejects S/MIME or PGP body encryption flags because private-key operations remain in the desktop. Prepare/sign/encrypt the RFC822 payload on the desktop before sending. Draft persistence stores editable compose content and attachment descriptors in the helper database.
+For encrypted drafts, the desktop encrypts the draft body and attachments locally and sends only `encrypted`, `encryptedBody`, `pgpEncrypted`, `pgpEncryptedBody`, and `attachmentsData` with compose metadata. The helper stores the opaque ciphertext and revision without private-key access. Immediate-send RFC822 preparation, signing, and encryption also remain on the desktop before delivery through the helper.
 
 ### 5. Mail Mutations
 - `POST /v1/filters/mutations` (Requires `mail.write`)

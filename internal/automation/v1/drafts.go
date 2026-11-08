@@ -17,18 +17,28 @@ var ErrDraftRevisionConflict = draft.ErrDraftRevisionConflict
 
 // DraftDocument is the compose-facing view of a helper-owned draft.
 type DraftDocument struct {
-	ID        string              `json:"id"`
-	AccountID string              `json:"accountId"`
-	Revision  string              `json:"revision"`
-	UpdatedAt string              `json:"updatedAt"`
-	Message   smtp.ComposeMessage `json:"message"`
+	ID               string              `json:"id"`
+	AccountID        string              `json:"accountId"`
+	Revision         string              `json:"revision"`
+	UpdatedAt        string              `json:"updatedAt"`
+	Message          smtp.ComposeMessage `json:"message"`
+	Encrypted        bool                `json:"encrypted,omitempty"`
+	EncryptedBody    []byte              `json:"encryptedBody,omitempty"`
+	PGPEncrypted     bool                `json:"pgpEncrypted,omitempty"`
+	PGPEncryptedBody []byte              `json:"pgpEncryptedBody,omitempty"`
+	AttachmentsData  []byte              `json:"attachmentsData,omitempty"`
 }
 
 // DraftMutation creates or replaces a draft. Revision is mandatory for updates.
 type DraftMutation struct {
-	AccountID string              `json:"accountId"`
-	Revision  string              `json:"revision,omitempty"`
-	Message   smtp.ComposeMessage `json:"message"`
+	AccountID        string              `json:"accountId"`
+	Revision         string              `json:"revision,omitempty"`
+	Message          smtp.ComposeMessage `json:"message"`
+	Encrypted        bool                `json:"encrypted,omitempty"`
+	EncryptedBody    []byte              `json:"encryptedBody,omitempty"`
+	PGPEncrypted     bool                `json:"pgpEncrypted,omitempty"`
+	PGPEncryptedBody []byte              `json:"pgpEncryptedBody,omitempty"`
+	AttachmentsData  []byte              `json:"attachmentsData,omitempty"`
 }
 
 type ReplyPreparationRequest struct {
@@ -57,7 +67,7 @@ var ErrSendIdempotencyConflict = errors.New("send idempotency key conflict")
 type DraftOperations interface {
 	ListDrafts(string) ([]DraftDocument, error)
 	GetDraft(string, string) (*DraftDocument, error)
-	SaveDraft(string, string, string, smtp.ComposeMessage) (*DraftDocument, error)
+	SaveDraft(string, DraftMutation) (*DraftDocument, error)
 	DeleteDraft(string, string, string) error
 	PrepareReply(ReplyPreparationRequest) (*smtp.ComposeMessage, error)
 	Send(context.Context, SendRequest, string, string) (*SendResponse, error)
@@ -117,7 +127,7 @@ func (h *DraftsHandler) MountRoutes(mux *http.ServeMux, requireCap func(http.Res
 			writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, "accountId is required and a new draft cannot include a revision", false)
 			return
 		}
-		item, err := h.operations.SaveDraft("", req.AccountID, "", req.Message)
+		item, err := h.operations.SaveDraft("", req)
 		if err != nil {
 			writeDraftError(w, r, err)
 			return
@@ -136,7 +146,7 @@ func (h *DraftsHandler) MountRoutes(mux *http.ServeMux, requireCap func(http.Res
 			writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, "accountId and revision are required", false)
 			return
 		}
-		item, err := h.operations.SaveDraft(r.PathValue("draftID"), req.AccountID, req.Revision, req.Message)
+		item, err := h.operations.SaveDraft(r.PathValue("draftID"), req)
 		if err != nil {
 			writeDraftError(w, r, err)
 			return

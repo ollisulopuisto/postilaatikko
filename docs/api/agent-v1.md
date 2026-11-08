@@ -250,8 +250,10 @@ accepts a desktop-prepared RFC822 message and an SMTP envelope, and requires an
 `Idempotency-Key`. A repeated key with a different request returns
 `idempotency_conflict`; an interrupted send is retained as `outcome_unknown`
 and is never automatically retried. `sent` means the SMTP server accepted the
-message, not that the recipient received it. The helper cannot store encrypted
-draft bodies yet; private-key encryption and signing remain desktop operations.
+message, not that the recipient received it. For encrypted drafts, the desktop
+encrypts the body locally and passes opaque ciphertext fields to the helper;
+private keys remain on the desktop. Draft reads return the ciphertext for local
+decryption.
 
 ## Error envelope
 

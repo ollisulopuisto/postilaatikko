@@ -59,10 +59,11 @@ func (r *SyncRuntime) GetDraft(id, accountID string) (*v1.DraftDocument, error) 
 	return r.draftDocument(item)
 }
 
-func (r *SyncRuntime) SaveDraft(id, accountID, revision string, composed smtp.ComposeMessage) (*v1.DraftDocument, error) {
+func (r *SyncRuntime) SaveDraft(id string, mutation v1.DraftMutation) (*v1.DraftDocument, error) {
 	if r == nil || r.drafts == nil || r.accounts == nil {
 		return nil, errors.New("draft service is unavailable")
 	}
+	accountID, revision, composed := mutation.AccountID, mutation.Revision, mutation.Message
 	acc, err := r.accounts.Get(accountID)
 	if err != nil {
 		return nil, err
@@ -70,8 +71,20 @@ func (r *SyncRuntime) SaveDraft(id, accountID, revision string, composed smtp.Co
 	if acc == nil || !acc.Enabled {
 		return nil, errors.New("account is unavailable")
 	}
-	if composed.EncryptMessage || composed.PGPEncryptMessage {
-		return nil, v1.InvalidRequest("Draft body encryption must be prepared by the desktop key workflow", nil)
+	if mutation.Encrypted && mutation.PGPEncrypted || mutation.Encrypted && len(mutation.EncryptedBody) == 0 || mutation.PGPEncrypted && len(mutation.PGPEncryptedBody) == 0 {
+		return nil, v1.InvalidRequest("Encrypted draft payload is incomplete or has conflicting encryption modes", nil)
+	}
+	if mutation.Encrypted != composed.EncryptMessage || mutation.PGPEncrypted != composed.PGPEncryptMessage {
+		return nil, v1.InvalidRequest("Draft encryption flags must match the opaque ciphertext payload", nil)
+	}
+	if (mutation.Encrypted || mutation.PGPEncrypted) && (composed.HTMLBody != "" || composed.TextBody != "" || len(composed.Attachments) > 0) {
+		return nil, v1.InvalidRequest("Encrypted draft content must be sent only as opaque ciphertext", nil)
+	}
+	if mutation.Encrypted && len(mutation.PGPEncryptedBody) > 0 || mutation.PGPEncrypted && len(mutation.EncryptedBody) > 0 {
+		return nil, v1.InvalidRequest("Draft contains ciphertext for a different encryption mode", nil)
+	}
+	if !mutation.Encrypted && len(mutation.EncryptedBody) > 0 || !mutation.PGPEncrypted && len(mutation.PGPEncryptedBody) > 0 {
+		return nil, v1.InvalidRequest("Draft contains ciphertext without its encryption mode", nil)
 	}
 	if err := r.validateDraftSender(acc, composed); err != nil {
 		return nil, err
@@ -109,10 +122,15 @@ func (r *SyncRuntime) SaveDraft(id, accountID, revision string, composed smtp.Co
 		current.ReferencesList = string(references)
 		current.IdentityID = composed.IdentityID
 		current.SignMessage, current.PGPSignMessage = composed.SignMessage, composed.PGPSignMessage
+		current.Encrypted, current.EncryptedBody = mutation.Encrypted, mutation.EncryptedBody
+		current.PGPEncrypted, current.PGPEncryptedBody = mutation.PGPEncrypted, mutation.PGPEncryptedBody
 		current.SyncStatus = draft.SyncStatusPending
-		current.AttachmentsData, err = json.Marshal(composed.Attachments)
-		if err != nil {
-			return nil, err
+		current.AttachmentsData = mutation.AttachmentsData
+		if len(current.AttachmentsData) == 0 && !mutation.Encrypted && !mutation.PGPEncrypted {
+			current.AttachmentsData, err = json.Marshal(composed.Attachments)
+			if err != nil {
+				return nil, err
+			}
 		}
 		if err := r.drafts.UpdateIfRevision(current, revision); err != nil {
 			return nil, err
@@ -139,14 +157,19 @@ func (r *SyncRuntime) SaveDraft(id, accountID, revision string, composed smtp.Co
 	if err != nil {
 		return nil, err
 	}
-	attachments, err := json.Marshal(composed.Attachments)
-	if err != nil {
-		return nil, err
+	attachments := mutation.AttachmentsData
+	if len(attachments) == 0 && !mutation.Encrypted && !mutation.PGPEncrypted {
+		attachments, err = json.Marshal(composed.Attachments)
+		if err != nil {
+			return nil, err
+		}
 	}
 	item := &draft.Draft{ID: uuid.NewString(), AccountID: accountID, ToList: toList, CcList: ccList, BccList: bccList,
 		Subject: composed.Subject, BodyHTML: composed.HTMLBody, BodyText: composed.TextBody, InReplyToID: composed.InReplyTo,
 		ReferencesList: string(references), IdentityID: composed.IdentityID, SignMessage: composed.SignMessage,
-		PGPSignMessage: composed.PGPSignMessage, AttachmentsData: attachments, SyncStatus: draft.SyncStatusPending}
+		Encrypted: mutation.Encrypted, EncryptedBody: mutation.EncryptedBody, PGPSignMessage: composed.PGPSignMessage,
+		PGPEncrypted: mutation.PGPEncrypted, PGPEncryptedBody: mutation.PGPEncryptedBody,
+		AttachmentsData: attachments, SyncStatus: draft.SyncStatusPending}
 	if err := r.drafts.Create(item); err != nil {
 		return nil, err
 	}
@@ -502,6 +525,8 @@ func (r *SyncRuntime) draftDocument(item *draft.Draft) (*v1.DraftDocument, error
 		from = smtp.Address{Name: identity.Name, Address: identity.Email}
 	}
 	return &v1.DraftDocument{ID: item.ID, AccountID: item.AccountID, Revision: item.StorageVersion, UpdatedAt: item.UpdatedAt.Format(time.RFC3339Nano),
+		Encrypted: item.Encrypted, EncryptedBody: item.EncryptedBody, PGPEncrypted: item.PGPEncrypted,
+		PGPEncryptedBody: item.PGPEncryptedBody, AttachmentsData: item.AttachmentsData,
 		Message: smtp.ComposeMessage{From: from, IdentityID: item.IdentityID, To: to, Cc: cc, Bcc: bcc, Subject: item.Subject,
 			HTMLBody: item.BodyHTML, TextBody: item.BodyText, Attachments: attachments, InReplyTo: item.InReplyToID, References: references,
 			SignMessage: item.SignMessage, PGPSignMessage: item.PGPSignMessage}}, nil

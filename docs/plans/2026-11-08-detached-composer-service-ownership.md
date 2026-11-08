@@ -71,18 +71,16 @@ This is an ownership boundary for the child process, not yet the helper handoff:
 the main process methods still use some local account/draft/send/token stores
 and transports. Route those methods through UX-037 and the account APIs,
 enforce explicit `draft.read`, `draft.write`, and `mail.send`
-capabilities, then resolve encrypted draft persistence and Gmail provider-send
-semantics before removing the parent fallback.
+capabilities, then resolve Gmail provider-send semantics before removing the
+parent fallback.
 
 Focused `go build ./app ./cmd/postilaatikko-helper` and `git diff --check` pass.
 Tests and live provider/UI checks were not run.
 
 ## Review risks / limits to resolve
 
-- UX-037's current helper draft API rejects encrypted-body draft persistence.
-  The composer must not silently save plaintext where the previous path stored
-  encrypted draft content. Choose a safe explicit failure or add a protected
-  desktop-local encrypted draft cache before claiming parity.
+- UX-037's helper draft API now accepts opaque desktop-encrypted body payloads;
+  route composer reads/writes through it and verify the parent decrypts locally.
 - UX-037 currently delivers through helper-local SMTP transport. Confirm Gmail
   account delivery semantics and provider-specific threading before removing
   the composer Gmail send path.
