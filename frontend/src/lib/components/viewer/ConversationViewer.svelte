@@ -1300,10 +1300,10 @@
   async function handleArchiveAndMarkRead() {
     if (!conversation?.messages) return
     let messageIds = conversation.messages.map(m => m.id)
-    messageAnimations.startRemoval(messageIds, 'archive')
     let archived = false
     try {
       messageIds = await resolveDisplayedMessageTarget(messageIds)
+      messageAnimations.startRemoval(messageIds, 'archive')
       await runMessageMutation(messageIds, async () => {
         moveMutationInFlight = true
         try {

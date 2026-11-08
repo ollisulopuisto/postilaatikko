@@ -127,15 +127,53 @@ test('completed reload holds discard all processed ID bookkeeping', async () => 
 })
 
 
-test('viewer resolves matched target IDs before starting removal state', async () => {
+async function loadArchiveAndMarkReadHandler(dependencies) {
   const source = await readFile(new URL('../src/lib/components/viewer/ConversationViewer.svelte', import.meta.url), 'utf8')
-  assert.doesNotMatch(source, /messageAnimations.startRemoval\(messageIds, '[^']+'\)\s*try \{\s*messageIds = await resolveDisplayedMessageTarget/)
+  const script = source.slice(source.indexOf('>', source.indexOf('<script')) + 1, source.indexOf('</script>'))
+  const parsed = ts.createSourceFile('ConversationViewer.ts', script, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+  const handler = parsed.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'handleArchiveAndMarkRead')
+  assert.ok(handler, 'the real archive-and-read handler must be exercised')
+  const { outputText } = ts.transpileModule(handler.getText(parsed), {
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+  })
+  return new Function(...Object.keys(dependencies), 'let moveMutationInFlight = false;\n' + outputText + '\nreturn handleArchiveAndMarkRead')(...Object.values(dependencies))
+}
+
+test('archive-and-read animates and mutates only resolved matched targets', async () => {
   const { messageAnimations } = await loadAnimationsStore()
-  const thread = [{id:'matched',matched:true},{id:'unmatched',matched:false}]
-  const targets = thread.filter(message => message.matched).map(message => message.id)
-  messageAnimations.startRemoval(targets, 'archive')
-  messageAnimations.settleRemoval(targets)
-  await new Promise(resolve => setTimeout(resolve,250))
-  assert.equal(messageAnimations.isAnimating('unmatched'), undefined)
+  const calls = []
+  let resolveTargets
+  const targets = new Promise(resolve => { resolveTargets = resolve })
+  const handler = await loadArchiveAndMarkReadHandler({
+    conversation: { messages: [{ id: 'matched' }, { id: 'unmatched' }] },
+    resolveDisplayedMessageTarget: ids => { calls.push(['resolve', ids]); return targets },
+    messageAnimations,
+    runMessageMutation: async (ids, mutation) => {
+      calls.push(['mutate', ids])
+      assert.equal(messageAnimations.isAnimating('matched'), 'archive')
+      assert.equal(messageAnimations.isAnimating('unmatched'), undefined)
+      await mutation()
+    },
+    ArchiveWithUndo: async ids => { calls.push(['archive', ids]); return { operationId: 'op' } },
+    MarkAsRead: async ids => { calls.push(['read', ids]) },
+    publishUndoOperationCreated: () => {},
+    showArchiveUndoToast: () => {},
+    onActionComplete: () => {},
+    toasts: { error: message => assert.fail(message) },
+    $_: key => key,
+    console,
+  })
+  const pending = handler()
+  assert.equal(messageAnimations.isAnyAnimating(), false, 'no removal before target resolution')
+  resolveTargets(['matched'])
+  await pending
+  assert.deepEqual(calls, [
+    ['resolve', ['matched', 'unmatched']],
+    ['mutate', ['matched']],
+    ['archive', ['matched']],
+    ['read', ['matched']],
+  ])
+  await new Promise(resolve => setTimeout(resolve, 250))
   assert.equal(messageAnimations.isAnyAnimating(), false)
+  assert.equal(messageAnimations.isAnimating('unmatched'), undefined)
 })
