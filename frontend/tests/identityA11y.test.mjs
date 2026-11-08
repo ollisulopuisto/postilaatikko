@@ -5,58 +5,45 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const source = fs.readFileSync(path.resolve(__dirname, '../src/lib/components/settings/account/AccountIdentityTab.svelte'), 'utf-8')
 
-test('AccountIdentityTab identity action buttons and radio have accessible attributes and keyboard disclosure', () => {
-  const filePath = path.resolve(__dirname, '../src/lib/components/settings/account/AccountIdentityTab.svelte')
-  const content = fs.readFileSync(filePath, 'utf-8')
+function listBlock(marker) {
+  const start = source.indexOf(marker)
+  assert.notEqual(start, -1, `${marker} must exist`)
+  return source.slice(start, source.indexOf('{/each}', start))
+}
 
-  // Check native radio input with shared name for arrow key navigation
-  assert.ok(
-    content.includes('type="radio"'),
-    'default identity selector should be a native radio input'
-  )
-  assert.ok(
-    content.includes('name="defaultIdentity"'),
-    'default identity selector should share the group name defaultIdentity'
-  )
-  assert.ok(
-    content.includes('checked={identity.isDefault}'),
-    'default identity selector should reflect checked state'
-  )
-  assert.ok(
-    content.includes("aria-label={identity.isDefault ? $_('identity.defaultAddress') : `${$_('identity.setAsDefaultAddress')} (${identity.email})`}"),
-    'default identity selector should have an accessible aria-label'
-  )
-  assert.ok(
-    content.includes('focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'),
-    'default identity selector should have visible focus indicator ring'
-  )
+function assertActionDisclosure(block, label) {
+  const wrapper = block.match(/<div class="([^"]*opacity-0[^"]*)">/)
+  assert.ok(wrapper, `${label} must have its own action wrapper`)
+  for (const token of ['group-hover:opacity-100', 'group-focus-within:opacity-100', 'focus-within:opacity-100']) {
+    assert.ok(wrapper[1].split(/\s+/).includes(token), `${label} wrapper needs ${token}`)
+  }
+  assert.ok(block.includes("aria-label={$_('common.edit')}"), `${label} Edit needs a name`)
+}
 
-  // Check action buttons container disclosure on keyboard focus-within for both lists
-  const focusWithinMatches = content.match(/group-focus-within:opacity-100 focus-within:opacity-100/g)
-  assert.ok(
-    focusWithinMatches && focusWithinMatches.length >= 2,
-    `both identity list and shared mailbox list action containers must reveal on keyboard focus-within (found ${focusWithinMatches?.length})`
-  )
-
-  // Check action buttons have aria-label
-  assert.ok(
-    content.includes("aria-label={$_('common.edit')}"),
-    'edit action button should have aria-label'
-  )
-  assert.ok(
-    content.includes("aria-label={identity.isDefault ? $_('identity.cannotDeleteDefaultTitle') : $_('common.delete')}"),
-    'identity delete action button should have aria-label'
-  )
+test('default identity uses native account-qualified radio grouping and browser keyboard behavior', () => {
+  const block = listBlock('{#each identities as identity (identity.id)}')
+  const input = block.match(/<input\s[\s\S]*?\/>/)
+  assert.ok(input, 'default identity must be a native radio input')
+  assert.match(input[0], /type="radio"/)
+  assert.match(input[0], /name=\{`default-identity-\$\{accountId\}`\}/)
+  assert.match(input[0], /bind:group=\{selectedDefaultId\}/)
+  assert.match(input[0], /onchange=\{\(\) => handleSetDefault\(identity\)\}/)
+  assert.match(input[0], /aria-label=\{`\$\{identity.email\}/)
+  assert.match(input[0], /focus-visible:ring-2/)
+  assert.ok(!block.includes('role="radio"'), 'do not fake native radio behavior on buttons')
+  assert.ok(!input[0].includes('tabindex='), 'let the browser manage the radio group tab stop')
 })
 
-test('AccountIdentityTab shared mailbox action buttons have accessible names and focus-within disclosure', () => {
-  const filePath = path.resolve(__dirname, '../src/lib/components/settings/account/AccountIdentityTab.svelte')
-  const content = fs.readFileSync(filePath, 'utf-8')
+test('identity actions independently disclose on keyboard focus and have names', () => {
+  const block = listBlock('{#each identities as identity (identity.id)}')
+  assertActionDisclosure(block, 'identity')
+  assert.ok(block.includes("aria-label={identity.isDefault ? $_('identity.cannotDeleteDefaultTitle') : $_('common.delete')}"))
+})
 
-  // Shared mailbox delete button aria-label
-  assert.ok(
-    content.includes("aria-label={$_('common.delete')}"),
-    'shared mailbox delete button should have aria-label'
-  )
+test('shared-mailbox actions independently disclose on keyboard focus and have names', () => {
+  const block = listBlock('{#each sharedMailboxes as mailbox (mailbox.id)}')
+  assertActionDisclosure(block, 'shared mailbox')
+  assert.ok(block.includes("aria-label={$_('common.delete')}"))
 })
