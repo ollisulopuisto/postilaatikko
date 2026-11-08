@@ -245,8 +245,8 @@ jobs:
             --keychain-profile postilaatikko-ci-notary \
             --keychain "$RUNNER_TEMP/postilaatikko-signing.keychain-db" \
             --wait
-          xcrun stapler staple build/bin/postilaatikko.app
-          xcrun stapler validate build/bin/postilaatikko.app
+          python3 scripts/macos_stapler.py staple build/bin/postilaatikko.app
+          python3 scripts/macos_stapler.py validate build/bin/postilaatikko.app
           rm -f "$APP_ZIP"
 
       - name: Create drag-and-drop DMG
@@ -283,8 +283,8 @@ jobs:
             --keychain-profile postilaatikko-ci-notary \
             --keychain "$RUNNER_TEMP/postilaatikko-signing.keychain-db" \
             --wait
-          xcrun stapler staple "$DMG_PATH"
-          xcrun stapler validate "$DMG_PATH"
+          python3 scripts/macos_stapler.py staple "$DMG_PATH"
+          python3 scripts/macos_stapler.py validate "$DMG_PATH"
 
       - name: Remove signing keychain
         if: always()
