@@ -1019,12 +1019,9 @@ func (a *App) GetDraftForEdit(ref string) (*DraftEditResult, error) {
 // when compose capabilities are granted, then decrypts any opaque body locally.
 func (a *App) GetComposerDraftForEdit(accountID, ref string) (*DraftEditResult, error) {
 	ctx := a.accountContext()
-	client, useService, err := a.composerServiceClient(ctx, v1.CapabilityDraftRead)
+	client, err := a.composerServiceClient(ctx, v1.CapabilityDraftRead)
 	if err != nil {
 		return nil, err
-	}
-	if !useService {
-		return a.GetDraftForEdit(ref)
 	}
 	items, err := client.ListDrafts(ctx, accountID)
 	if err != nil {
@@ -1052,12 +1049,9 @@ func (a *App) GetComposerDraft(accountID, draftID string) (*smtp.ComposeMessage,
 // optional at-rest encryption with the device-local signing keys.
 func (a *App) SaveComposerDraft(accountID string, msg smtp.ComposeMessage, draftID, revision, requestID string) (*DraftResult, error) {
 	ctx := a.accountContext()
-	client, useService, err := a.composerServiceClient(ctx, v1.CapabilityDraftRead, v1.CapabilityDraftWrite)
+	client, err := a.composerServiceClient(ctx, v1.CapabilityDraftRead, v1.CapabilityDraftWrite)
 	if err != nil {
 		return nil, err
-	}
-	if !useService {
-		return a.SaveDraft(accountID, msg, draftID)
 	}
 	if draftID != "" && revision == "" {
 		current, err := a.GetComposerDraftForEdit(accountID, draftID)
@@ -1097,12 +1091,9 @@ func (a *App) SaveComposerDraft(accountID string, msg smtp.ComposeMessage, draft
 // DeleteComposerDraft removes a helper-owned draft using its read revision.
 func (a *App) DeleteComposerDraft(accountID, draftID, revision string) error {
 	ctx := a.accountContext()
-	client, useService, err := a.composerServiceClient(ctx, v1.CapabilityDraftWrite)
+	client, err := a.composerServiceClient(ctx, v1.CapabilityDraftWrite)
 	if err != nil {
 		return err
-	}
-	if !useService {
-		return a.DeleteDraft(draftID)
 	}
 	if revision == "" {
 		current, err := a.GetComposerDraftForEdit(accountID, draftID)

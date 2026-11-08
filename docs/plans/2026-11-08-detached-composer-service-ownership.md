@@ -56,35 +56,41 @@ task.
 
 ## Progress checkpoint
 
-The detached `ComposerApp` no longer opens the shared database, initializes a
-credential store, or creates account/draft/message/folder/IMAP/crypto stores.
-Its account, identity, message, draft, reply, send, contacts, key, draft-history,
-pending-send, and scheduling calls now cross the authenticated IPC connection
-to the main process. Composer IPC has a bounded 30 MiB payload limit for
-attachments; the existing smaller reader-call limit is unchanged.
+The detached `ComposerApp` does not open the shared database or initialize
+account, credential, message, draft, folder, IMAP, OAuth, or crypto stores. Its
+mailbox operations cross authenticated IPC to the main process. Composer IPC
+has a bounded 30 MiB payload limit for attachments; the smaller reader-call
+limit is unchanged.
 
-The parent account API now loads account identities through the authenticated
-helper catalog route when connected. The API returns non-secret identity and
-signature metadata under `mail.read`.
+The parent now routes detached compose account/identity/original-message reads,
+draft CRUD, reply preparation, and immediate send through authenticated helper
+APIs. A helper disconnect produces an error while the composer retains its
+in-memory fields; these calls do not fall back to local database writes. Draft
+read/write and mail-send permissions are separate explicit grants. Draft body
+encryption and signing remain device-local; the helper stores opaque encrypted
+payloads. New-draft create IDs and send idempotency keys remain stable through
+same-session retries. Saved-draft send keys derive from the draft revision, and
+the desktop checks the helper's durable receipt before preparing another send;
+safe-retry receipts derive a stable next attempt key. The helper performs
+provider token refresh and delivery, including Gmail API threading using the
+compose message's Gmail thread ID.
 
-This is an ownership boundary for the child process, not yet the helper handoff:
-the main process methods still use some local account/draft/send/token stores
-and transports. Route those methods through UX-037 and the account APIs,
-enforce explicit `draft.read`, `draft.write`, and `mail.send`
-capabilities, then resolve Gmail provider-send semantics before removing the
-parent fallback.
+Reply preparation explicitly fetches the original body through the helper and
+returns inline and forward attachments from helper-owned storage/provider
+fetches. Original-message header reads omit body content.
 
-Focused `go build ./app ./cmd/postilaatikko-helper` and `git diff --check` pass.
-Tests and live provider/UI checks were not run.
+Focused `go build ./app ./cmd/postilaatikko-helper`, locale JSON parsing, and
+`git diff --check` pass. Tests were not run. The frontend static checker is
+unavailable because `frontend/node_modules` is absent. Live SMTP, Gmail, and
+native composer behavior remain unverified.
 
 ## Review risks / limits to resolve
 
-- UX-037's helper draft API now accepts opaque desktop-encrypted body payloads;
-  route composer reads/writes through it and verify the parent decrypts locally.
-- UX-037 currently delivers through helper-local SMTP transport. Confirm Gmail
-  account delivery semantics and provider-specific threading before removing
-  the composer Gmail send path.
-- Sender certificate and PGP material stays local; verify preparation produces
-  the final signed/encrypted RFC822 payload before handing it to the helper.
-- In-flight edits and send/draft failure must remain recoverable in the live
-  composer session. Delivery ambiguity must reuse the existing idempotency key.
+- Confirm live Gmail threading and SMTP delivery after install; focused builds
+  do not verify provider acceptance or native composer behavior.
+- Sender certificate and PGP material stays local, and the desktop passes the
+  prepared signed/encrypted RFC822 payload to the helper. Device verification
+  remains necessary for those crypto combinations.
+- Unsaved messages have no helper draft revision to anchor a durable key. A
+  process restart during an ambiguous send of an unsaved message still needs
+  receipt recovery before a new send attempt is safe.

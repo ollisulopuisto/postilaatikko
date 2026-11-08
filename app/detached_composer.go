@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hkdb/aerion/internal/account"
+	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/contact"
 	"github.com/hkdb/aerion/internal/draft"
 	"github.com/hkdb/aerion/internal/ipc"
@@ -65,10 +67,14 @@ type ComposerApp struct {
 	closeAuthorized bool
 
 	// Composer state
-	originalMessage *message.Message     // For reply/forward
-	currentDraft    *draft.Draft         // Current draft being edited
-	composeMessage  *smtp.ComposeMessage // Prepared compose message
-	pendingDraftID  string               // Stable helper idempotency key across ambiguous create retries
+	originalMessage           *message.Message     // For reply/forward
+	currentDraft              *draft.Draft         // Current draft being edited
+	composeMessage            *smtp.ComposeMessage // Prepared compose message
+	pendingDraftID            string               // Stable helper idempotency key across ambiguous create retries
+	pendingSendID             string               // Stable helper idempotency key across ambiguous delivery retries
+	pendingSendBody           *v1.SendRequest      // Immutable prepared MIME retained until send outcome is known
+	pendingSendForm           []byte               // Serialized composer fields used to reject changed retries
+	pendingSendReceiptChecked bool
 }
 
 // NewComposerApp creates a new ComposerApp with the given configuration.
@@ -289,18 +295,6 @@ func (c *ComposerApp) loadInitialData() error {
 		return nil
 	}
 
-	// If replying/forwarding, load the original message
-	if c.config.MessageID != "" && c.config.Mode != "new" {
-		msg, err := callParentValue[*message.Message](c, "GetOriginalMessage", c.config.MessageID)
-		if err != nil {
-			return fmt.Errorf("failed to load original message: %w", err)
-		}
-		if msg != nil {
-			c.originalMessage = msg
-			log.Info().Str("message_ref", logging.ShortHash(c.config.MessageID)).Str("mode", c.config.Mode).Msg("Loaded original message")
-		}
-	}
-
 	return nil
 }
 
@@ -376,6 +370,17 @@ func (a *App) GetOriginalMessage(messageID string) (*message.Message, error) {
 	return a.messageStore.Get(messageID)
 }
 
+// GetComposerOriginalMessage reads account-qualified composer context through
+// the helper, with the cached desktop path retained when the helper is absent.
+func (a *App) GetComposerOriginalMessage(accountID, messageID string) (*message.Message, error) {
+	ctx := a.accountContext()
+	client, err := a.composerServiceClient(ctx, v1.CapabilityMailRead)
+	if err != nil {
+		return nil, err
+	}
+	return client.GetMessage(ctx, accountID, messageID)
+}
+
 // GetShowTitleBar returns whether the custom title bar should be shown.
 func (c *ComposerApp) GetShowTitleBar() (bool, error) {
 	return callParentValue[bool](c, "GetShowTitleBar")
@@ -429,7 +434,7 @@ func (c *ComposerApp) GetOriginalMessage() (*message.Message, error) {
 	if c.config.MessageID == "" {
 		return nil, nil
 	}
-	return callParentValue[*message.Message](c, "GetOriginalMessage", c.config.MessageID)
+	return callParentValue[*message.Message](c, "GetComposerOriginalMessage", c.config.AccountID, c.config.MessageID)
 }
 
 // GetDraft returns the current draft being edited.
@@ -496,7 +501,7 @@ func (c *ComposerApp) PrepareReply() (*smtp.ComposeMessage, error) {
 
 	// For reply/forward, use the same logic as main app
 	// This is a simplified version - the full logic is in app.go PrepareReply
-	msg, err := callParentValue[*smtp.ComposeMessage](c, "PrepareReply", c.config.MessageID, c.config.Mode)
+	msg, err := callParentValue[*smtp.ComposeMessage](c, "PrepareComposerReply", c.config.AccountID, c.config.MessageID, c.config.Mode)
 	if err != nil {
 		return nil, err
 	}
@@ -511,12 +516,104 @@ func (c *ComposerApp) SearchContacts(query string, limit int) ([]*contact.Contac
 
 // SendMessage sends the composed email.
 func (c *ComposerApp) SendMessage(accountID string, msg smtp.ComposeMessage) error {
-	_, err := c.callParent("SendMessage", accountID, msg)
-	if err == nil {
+	if c.pendingSendID == "" {
+		if c.currentDraft != nil && c.currentDraft.StorageVersion != "" {
+			key := "postilaatikko-send:" + c.currentDraft.ID + ":" + c.currentDraft.StorageVersion
+			c.pendingSendID = uuid.NewSHA1(uuid.NameSpaceURL, []byte(key)).String()
+		} else {
+			c.pendingSendID = uuid.NewString()
+		}
+	}
+	form, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+	if c.pendingSendBody != nil && !bytes.Equal(form, c.pendingSendForm) {
+		return fmt.Errorf("the previous send outcome is unresolved; retry the unchanged message first")
+	}
+	if c.pendingSendBody == nil {
+		if !c.pendingSendReceiptChecked {
+			key := c.pendingSendID
+			for attempt := 0; attempt < 100; attempt++ {
+				lookup, err := callParentValue[*v1.SendReceiptLookup](c, "GetComposerSendReceipt", key)
+				if err != nil {
+					return err
+				}
+				if lookup == nil || !lookup.Found {
+					c.pendingSendID = key
+					c.pendingSendReceiptChecked = true
+					break
+				}
+				if lookup.Response == nil {
+					return fmt.Errorf("helper returned an empty send receipt")
+				}
+				switch lookup.Response.Receipt.State {
+				case v1.OperationSent:
+					c.currentDraft = nil
+					c.pendingSendID = ""
+					c.pendingSendReceiptChecked = false
+					if lookup.Response.Code != "" {
+						return fmt.Errorf("message was already sent, but helper reported %s", lookup.Response.Code)
+					}
+					return nil
+				case v1.OperationUnknown, v1.OperationSending:
+					return fmt.Errorf("a prior send has an unresolved delivery outcome; do not send this draft again")
+				case v1.OperationRetry, v1.OperationFailed:
+					key = uuid.NewSHA1(uuid.NameSpaceURL, []byte("postilaatikko-send-retry:"+lookup.Response.Receipt.OperationID)).String()
+				default:
+					return fmt.Errorf("helper returned an invalid send state %q", lookup.Response.Receipt.State)
+				}
+			}
+			if !c.pendingSendReceiptChecked {
+				return fmt.Errorf("too many prior send attempts to resolve safely")
+			}
+		}
+		draftID, revision := "", ""
+		if c.currentDraft != nil {
+			draftID, revision = c.currentDraft.ID, c.currentDraft.StorageVersion
+		}
+		c.pendingSendBody, err = callParentValue[*v1.SendRequest](c, "PrepareComposerSend", accountID, msg, draftID, revision)
+		if err != nil {
+			return err
+		}
+		if c.pendingSendBody == nil {
+			return fmt.Errorf("desktop returned no prepared message")
+		}
+		c.pendingSendForm = append(c.pendingSendForm[:0], form...)
+	}
+	result, err := callParentValue[*v1.SendResponse](c, "SendPreparedComposerMessage", *c.pendingSendBody, c.pendingSendID)
+	if err != nil {
+		return err
+	}
+	if result == nil {
+		return fmt.Errorf("desktop returned no send receipt")
+	}
+	switch result.Receipt.State {
+	case v1.OperationSent:
 		c.currentDraft = nil
 		c.pendingDraftID = ""
+		c.pendingSendID = ""
+		c.pendingSendBody = nil
+		c.pendingSendForm = nil
+		c.pendingSendReceiptChecked = false
+		if result.Code != "" {
+			return fmt.Errorf("message was sent, but helper reported %s", result.Code)
+		}
+		return nil
+	case v1.OperationUnknown:
+		return fmt.Errorf("message delivery outcome is unknown; retry with the unchanged message to retrieve the same receipt")
+	case v1.OperationRetry, v1.OperationFailed:
+		c.pendingSendID = ""
+		c.pendingSendBody = nil
+		c.pendingSendForm = nil
+		c.pendingSendReceiptChecked = false
+		if result.Code != "" {
+			return fmt.Errorf("message was not sent (%s)", result.Code)
+		}
+		return fmt.Errorf("message was not sent (%s)", result.Receipt.State)
+	default:
+		return fmt.Errorf("helper returned an invalid send state %q", result.Receipt.State)
 	}
-	return err
 }
 
 // SaveDraft saves the current compose state as a draft.

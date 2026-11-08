@@ -14,6 +14,7 @@ import (
 	"github.com/hkdb/aerion/internal/account"
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/mailfilter"
+	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/replylater"
 	"github.com/hkdb/aerion/internal/smtp"
 	"github.com/hkdb/aerion/internal/triage"
@@ -258,6 +259,19 @@ func (c *Client) SendPreparedMessage(ctx context.Context, request v1.SendRequest
 		return nil, err
 	}
 	var response v1.Response[v1.SendResponse]
+	if err := json.Unmarshal(data, &response); err != nil {
+		return nil, err
+	}
+	return &response.Data, nil
+}
+
+// GetSendReceipt reads the durable result for an existing send idempotency key.
+func (c *Client) GetSendReceipt(ctx context.Context, idempotencyKey string) (*v1.SendReceiptLookup, error) {
+	data, err := c.doRequest(ctx, http.MethodGet, "/v1/send/receipts/"+url.PathEscape(idempotencyKey), nil, "")
+	if err != nil {
+		return nil, err
+	}
+	var response v1.Response[v1.SendReceiptLookup]
 	if err := json.Unmarshal(data, &response); err != nil {
 		return nil, err
 	}
@@ -561,6 +575,20 @@ func (c *Client) ReadThread(ctx context.Context, req v1.ThreadReadRequest) (*vie
 		return nil, err
 	}
 	return &resp.Data, nil
+}
+
+// GetMessage returns account-qualified message metadata without the body.
+func (c *Client) GetMessage(ctx context.Context, accountID, messageID string) (*message.Message, error) {
+	query := url.Values{"accountId": []string{accountID}}
+	data, err := c.doRequest(ctx, http.MethodGet, "/v1/messages/"+url.PathEscape(messageID)+"/header?"+query.Encode(), nil, "")
+	if err != nil {
+		return nil, err
+	}
+	var response v1.Response[message.Message]
+	if err := json.Unmarshal(data, &response); err != nil {
+		return nil, err
+	}
+	return &response.Data, nil
 }
 
 // ReadBody reads or explicitly fetches message body and extracted reply content.

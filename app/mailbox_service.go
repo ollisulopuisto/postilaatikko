@@ -58,6 +58,7 @@ type MailboxServiceStatus struct {
 	WriteAuthorized             bool     `json:"writeAuthorized"`
 	AccountManagementAuthorized bool     `json:"accountManagementAuthorized"`
 	DraftAccessAuthorized       bool     `json:"draftAccessAuthorized"`
+	SendAuthorized              bool     `json:"sendAuthorized"`
 	APIVersion                  string   `json:"apiVersion,omitempty"`
 	Capabilities                []string `json:"capabilities,omitempty"`
 	ErrorCode                   string   `json:"errorCode,omitempty"`
@@ -215,6 +216,7 @@ func (c *mailboxServiceConnector) status(ctx context.Context) MailboxServiceStat
 		WriteAuthorized:             hasCapability(capabilities.Capabilities, v1.CapabilityMailWrite),
 		AccountManagementAuthorized: hasCapability(capabilities.Capabilities, v1.CapabilityAccountManage),
 		DraftAccessAuthorized:       hasCapability(capabilities.Capabilities, v1.CapabilityDraftRead) && hasCapability(capabilities.Capabilities, v1.CapabilityDraftWrite),
+		SendAuthorized:              hasCapability(capabilities.Capabilities, v1.CapabilityMailSend),
 		APIVersion:                  capabilities.Version,
 		Capabilities:                granted,
 	}
@@ -776,6 +778,21 @@ func (a *App) EnableMailboxServiceDraftAccess() (MailboxServiceStatus, error) {
 		return a.mailboxService.status(ctx), err
 	}
 	if err := a.mailboxService.authorizeCapability(ctx, v1.CapabilityDraftWrite); err != nil {
+		return a.mailboxService.status(ctx), err
+	}
+	return a.mailboxService.status(ctx), nil
+}
+
+// EnableMailboxServiceSending explicitly grants this desktop immediate-send access.
+func (a *App) EnableMailboxServiceSending() (MailboxServiceStatus, error) {
+	if a.mailboxService == nil {
+		return MailboxServiceStatus{ErrorCode: "service_unavailable", Message: "The local mailbox service is not reachable."}, errors.New("mailbox service is not initialized")
+	}
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := a.mailboxService.authorizeCapability(ctx, v1.CapabilityMailSend); err != nil {
 		return a.mailboxService.status(ctx), err
 	}
 	return a.mailboxService.status(ctx), nil

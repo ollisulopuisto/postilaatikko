@@ -49,17 +49,27 @@ type ReplyPreparationRequest struct {
 }
 
 type SendRequest struct {
-	AccountID string   `json:"accountId"`
-	From      string   `json:"from"`
-	To        []string `json:"to"`
-	RFC822    []byte   `json:"rfc822"`
-	DraftID   string   `json:"draftId,omitempty"`
-	Revision  string   `json:"revision,omitempty"`
+	AccountID     string   `json:"accountId"`
+	From          string   `json:"from"`
+	To            []string `json:"to"`
+	RFC822        []byte   `json:"rfc822"`
+	GmailThreadID string   `json:"gmailThreadId,omitempty"`
+	DraftID       string   `json:"draftId,omitempty"`
+	Revision      string   `json:"revision,omitempty"`
 }
 
 type SendResponse struct {
 	Receipt OperationReceipt `json:"receipt"`
 	Code    string           `json:"code,omitempty"`
+}
+
+type SendReceiptLookup struct {
+	Found    bool          `json:"found"`
+	Response *SendResponse `json:"response,omitempty"`
+}
+
+type SendReceiptOperations interface {
+	GetSendReceipt(string) (*SendResponse, bool, error)
 }
 
 var ErrSendIdempotencyConflict = errors.New("send idempotency key conflict")
@@ -230,6 +240,27 @@ func (h *DraftsHandler) MountRoutes(mux *http.ServeMux, requireCap func(http.Res
 			return
 		}
 		writeAPIResponse(w, r, http.StatusOK, response)
+	})
+	mux.HandleFunc("GET /v1/send/receipts/{idempotencyKey}", func(w http.ResponseWriter, r *http.Request) {
+		if !requireCap(w, r, CapabilityMailSend) {
+			return
+		}
+		operations, ok := h.operations.(SendReceiptOperations)
+		if !ok {
+			writeHeaderError(w, r, http.StatusNotImplemented, CodeInternal, "Send receipt lookup is unavailable", false)
+			return
+		}
+		key := strings.TrimSpace(r.PathValue("idempotencyKey"))
+		if key == "" || len(key) > 200 {
+			writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, "A valid idempotency key is required", false)
+			return
+		}
+		response, found, err := operations.GetSendReceipt(key)
+		if err != nil {
+			writeHeaderError(w, r, http.StatusInternalServerError, CodeInternal, "Could not read send receipt", true)
+			return
+		}
+		writeAPIResponse(w, r, http.StatusOK, SendReceiptLookup{Found: found, Response: response})
 	})
 }
 

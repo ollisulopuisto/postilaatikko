@@ -127,6 +127,25 @@ func (h *ReadHandler) mountSearchRoute(mux *http.ServeMux, requireCap func(http.
 }
 
 func (h *ReadHandler) mountThreadBodyRoutes(mux *http.ServeMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+	mux.HandleFunc("GET /v1/messages/{messageID}/header", func(w http.ResponseWriter, r *http.Request) {
+		if !requireCap(w, r, CapabilityMailRead) {
+			return
+		}
+		accountID := strings.TrimSpace(r.URL.Query().Get("accountId"))
+		messageID := strings.TrimSpace(r.PathValue("messageID"))
+		if accountID == "" || messageID == "" {
+			h.writeError(w, r, http.StatusBadRequest, CodeInvalidRequest, "accountId and messageId are required", false)
+			return
+		}
+		item, err := h.messages.GetMessage(accountID, messageID)
+		if err != nil || item == nil || item.AccountID != accountID {
+			h.writeError(w, r, http.StatusNotFound, CodeNotFound, "Message not found", false)
+			return
+		}
+		header := *item
+		header.BodyText, header.BodyHTML = "", ""
+		h.writeResponse(w, r, http.StatusOK, &header, nil)
+	})
 	mux.HandleFunc("/v1/threads/read", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailRead) {
 			return

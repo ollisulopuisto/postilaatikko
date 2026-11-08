@@ -322,8 +322,69 @@ func (r *SyncRuntime) PrepareReply(req v1.ReplyPreparationRequest) (*smtp.Compos
 	if original.MessageID != "" {
 		refs = append(refs, angleMessageID(original.MessageID))
 	}
+	attachments := r.replyAttachments(original, req.Mode, quotedHTML)
 	return &smtp.ComposeMessage{From: from, To: to, Cc: cc, Subject: subject, HTMLBody: htmlBody, TextBody: body,
-		InReplyTo: angleMessageID(original.MessageID), References: refs, GmailThreadID: gmailThreadID(original), IdentityID: identityID(identity)}, nil
+		InReplyTo: angleMessageID(original.MessageID), References: refs, GmailThreadID: gmailThreadID(original),
+		IdentityID: identityID(identity), Attachments: attachments}, nil
+}
+
+func (r *SyncRuntime) replyAttachments(original *message.Message, mode, quotedHTML string) []smtp.Attachment {
+	if r.attachments == nil || original == nil {
+		return nil
+	}
+	var result []smtp.Attachment
+	inline, err := r.attachments.GetInlineByMessage(original.ID)
+	if err == nil {
+		for cid, dataURL := range inline {
+			if mode != "forward" && !strings.Contains(quotedHTML, "cid:"+cid) {
+				continue
+			}
+			contentType, encoded, ok := strings.Cut(strings.TrimPrefix(dataURL, "data:"), ";base64,")
+			if !ok || encoded == "" {
+				continue
+			}
+			result = append(result, smtp.Attachment{ContentBase64: encoded, ContentType: contentType, ContentID: cid, Inline: true, Filename: cid})
+		}
+	}
+	if mode != "forward" || r.syncEngine == nil {
+		return result
+	}
+	items, err := r.attachments.GetByMessage(original.ID)
+	if err != nil {
+		return result
+	}
+	regular := make([]*message.Attachment, 0, len(items))
+	for _, item := range items {
+		if item != nil && !item.IsInline {
+			regular = append(regular, item)
+		}
+	}
+	if len(regular) == 0 {
+		return result
+	}
+	raw, err := r.syncEngine.FetchRawMessage(r.runtimeContext(), original.AccountID, original.FolderID, original.UID)
+	if err != nil {
+		return result
+	}
+	downloader := email.NewAttachmentDownloader("")
+	for _, item := range regular {
+		content, err := downloader.ExtractAttachmentContent(raw, item.Filename)
+		if err != nil {
+			continue
+		}
+		result = append(result, smtp.Attachment{Content: content, ContentType: item.ContentType, Filename: item.Filename})
+	}
+	return result
+}
+
+func (r *SyncRuntime) runtimeContext() context.Context {
+	r.ctxMu.RLock()
+	ctx := r.ctx
+	r.ctxMu.RUnlock()
+	if ctx == nil {
+		return context.Background()
+	}
+	return ctx
 }
 
 func quoteReplyText(value string) string {
@@ -394,7 +455,7 @@ func (r *SyncRuntime) Send(ctx context.Context, req v1.SendRequest, key, hash st
 		}
 		return response, nil
 	}
-	delivery := scheduledsend.Delivery{AccountID: req.AccountID, From: req.From, To: req.To, RFC822: req.RFC822, DueAt: time.Now()}
+	delivery := scheduledsend.Delivery{AccountID: req.AccountID, From: req.From, To: req.To, RFC822: req.RFC822, GmailThreadID: req.GmailThreadID, DueAt: time.Now()}
 	deliveryErr := r.immediateSend(ctx, delivery)
 	state, code := v1.OperationSent, ""
 	if deliveryErr != nil {
@@ -436,7 +497,7 @@ func (r *SyncRuntime) existingSendReceipt(key, hash string) (*v1.SendResponse, b
 	if err != nil {
 		return nil, false, err
 	}
-	if existingHash != hash {
+	if hash != "" && existingHash != hash {
 		return nil, true, v1.ErrSendIdempotencyConflict
 	}
 	if state == "processing" {
@@ -452,6 +513,13 @@ func (r *SyncRuntime) existingSendReceipt(key, hash string) (*v1.SendResponse, b
 		state = string(v1.OperationSending)
 	}
 	return &v1.SendResponse{Receipt: v1.OperationReceipt{OperationID: existingID, State: v1.OperationState(state), Replayed: true}, Code: code}, true, nil
+}
+
+func (r *SyncRuntime) GetSendReceipt(key string) (*v1.SendResponse, bool, error) {
+	if r == nil || r.db == nil {
+		return nil, false, errors.New("send receipt storage is unavailable")
+	}
+	return r.existingSendReceipt(strings.TrimSpace(key), "")
 }
 
 func validateSendRequest(req v1.SendRequest) error {

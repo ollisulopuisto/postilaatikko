@@ -6,6 +6,7 @@
   import {
     EnableMailboxServiceAccountManagement,
     EnableMailboxServiceDraftAccess,
+    EnableMailboxServiceSending,
     EnableMailboxServiceWrites,
     GetMailboxServiceLifecycleStatus,
     GetMailboxServiceStatus,
@@ -19,6 +20,7 @@
     writeAuthorized: boolean
     accountManagementAuthorized: boolean
     draftAccessAuthorized: boolean
+    sendAuthorized: boolean
     errorCode?: string
   }
 
@@ -33,10 +35,11 @@
 
   let status = $state<ServiceStatus | null>(null)
   let lifecycle = $state<LifecycleStatus | null>(null)
-  let saving = $state<'mail.write' | 'account.manage' | 'draft.access' | null>(null)
+  let saving = $state<'mail.write' | 'account.manage' | 'draft.access' | 'mail.send' | null>(null)
   let writeError = $state(false)
   let accountManagementError = $state(false)
   let draftAccessError = $state(false)
+  let sendError = $state(false)
   let lifecycleAction = $state<LifecycleAction | null>(null)
   let lifecycleError = $state(false)
 
@@ -44,7 +47,7 @@
     try {
       status = await GetMailboxServiceStatus()
     } catch {
-      status = { connected: false, writeAuthorized: false, accountManagementAuthorized: false, draftAccessAuthorized: false, errorCode: 'status_failed' }
+      status = { connected: false, writeAuthorized: false, accountManagementAuthorized: false, draftAccessAuthorized: false, sendAuthorized: false, errorCode: 'status_failed' }
     }
     try {
       lifecycle = await GetMailboxServiceLifecycleStatus()
@@ -54,20 +57,23 @@
     }
   }
 
-  async function enableAccess(capability: 'mail.write' | 'account.manage' | 'draft.access') {
+  async function enableAccess(capability: 'mail.write' | 'account.manage' | 'draft.access' | 'mail.send') {
     if (saving !== null) return
     saving = capability
     writeError = false
     accountManagementError = false
     draftAccessError = false
+    sendError = false
     try {
       if (capability === 'mail.write') status = await EnableMailboxServiceWrites()
       else if (capability === 'account.manage') status = await EnableMailboxServiceAccountManagement()
-      else status = await EnableMailboxServiceDraftAccess()
+      else if (capability === 'draft.access') status = await EnableMailboxServiceDraftAccess()
+      else status = await EnableMailboxServiceSending()
     } catch {
       if (capability === 'mail.write') writeError = true
       else if (capability === 'account.manage') accountManagementError = true
-      else draftAccessError = true
+      else if (capability === 'draft.access') draftAccessError = true
+      else sendError = true
       await refreshStatus()
     } finally {
       saving = null
@@ -153,6 +159,23 @@
       {/if}
       {#if writeError}
         <p class="text-sm text-destructive" role="alert">{$_('settingsGeneral.mailboxServiceEnableFailed')}</p>
+      {/if}
+    </div>
+
+    <div class="space-y-2 border-t border-border pt-3">
+      <div class="space-y-1">
+        <h4 class="text-sm font-medium">{$_('settingsGeneral.mailboxServiceSendAccess')}</h4>
+        <p class="text-xs text-muted-foreground">{$_('settingsGeneral.mailboxServiceSendAccessHelp')}</p>
+      </div>
+      {#if status.sendAuthorized}
+        <p class="text-sm text-muted-foreground">{$_('settingsGeneral.mailboxServiceSendAccessEnabled')}</p>
+      {:else}
+        <Button onclick={() => enableAccess('mail.send')} disabled={saving !== null}>
+          {saving === 'mail.send' ? $_('settingsGeneral.mailboxServiceEnabling') : $_('settingsGeneral.mailboxServiceEnableSendAccess')}
+        </Button>
+      {/if}
+      {#if sendError}
+        <p class="text-sm text-destructive" role="alert">{$_('settingsGeneral.mailboxServiceSendAccessFailed')}</p>
       {/if}
     </div>
 
