@@ -46,6 +46,7 @@
   import { accountStore } from '$lib/stores/accounts.svelte'
   import { virtualFoldersStore } from '$lib/stores/virtualFolders.svelte'
   import { replyLaterQueue } from '$lib/stores/replyLater.svelte'
+  import { readLaterQueue } from '$lib/stores/readLater.svelte'
   import { getLayoutMode, hideViewer } from '$lib/stores/layout.svelte'
   import { isDialogGuardActive, onDialogGuardChange } from '$lib/stores/dialogGuard'
   import { captureAutoSelectNext, findAutoSelectNext, flattenVisibleInboxGroups } from './autoSelectNext'
@@ -96,6 +97,7 @@
 
   // State
   let conversations = $state<message.Conversation[]>([])
+  let laterQueueMutationInFlight = $state(false)
   let totalCount = $state(0)
   let virtualCursor = $state('')
   let onlineCountRevision = $state(0)
@@ -202,6 +204,7 @@
 
   onMount(() => {
     void replyLaterQueue.load().catch(() => {})
+    void readLaterQueue.load().catch(() => {})
     initializeInboxDisplayPreferences()
     inboxDisplayMode = getInboxDisplayMode()
     const handleInboxDisplayChange = (event: Event) => {
@@ -945,6 +948,27 @@
         .flatMap((conversation: any) => refsForConversation(conversation))
         .map((ref) => [`${ref.accountId}:${ref.messageId}`, ref] as const)
     ).values()]
+  )
+
+  const selectedQueueRefs = $derived(
+    [...new Map(
+      [...conversations, ...searchResults, ...serverSearchResults]
+        .filter((conversation) => checkedThreadIds.has(conversation.threadId))
+        .map((conversation: any) => {
+          const owningAccountId = conversation.accountId || accountId || ''
+          return owningAccountId && owningAccountId !== 'unified' && owningAccountId !== 'virtual'
+            ? [`${owningAccountId}:${conversation.threadId}`, { accountId: owningAccountId, conversationId: conversation.threadId }] as const
+            : null
+        })
+        .filter((ref): ref is readonly [string, { accountId: string; conversationId: string }] => ref !== null)
+    ).values()]
+  )
+
+  const selectedAllReadLater = $derived(
+    selectedQueueRefs.length > 0 && selectedQueueRefs.every(ref => readLaterQueue.has(ref.accountId, ref.conversationId))
+  )
+  const selectedAllReplyLater = $derived(
+    selectedQueueRefs.length > 0 && selectedQueueRefs.every(ref => replyLaterQueue.has(ref.accountId, ref.conversationId))
   )
 
   // Aggregated star/read state for multi-select context menu
@@ -2472,6 +2496,10 @@
   }
 
   function runSelectedAction(actionId: string) {
+    if (actionId === 'mail.readLater' || actionId === 'mail.replyLater') {
+      void toggleSelectedLaterQueue(actionId === 'mail.readLater' ? 'readLater' : 'replyLater')
+      return
+    }
     if (actionId === 'mail.moveToInbox') {
       void handleMoveToInbox()
       return
@@ -2483,6 +2511,41 @@
     void onBulkAction?.(actionId, { permanent: folderType === 'trash' })
   }
 
+  async function toggleSelectedLaterQueue(kind: 'readLater' | 'replyLater') {
+    if (laterQueueMutationInFlight || selectedQueueRefs.length === 0) return
+    laterQueueMutationInFlight = true
+    try {
+      const queue = kind === 'readLater' ? readLaterQueue : replyLaterQueue
+      await queue.load()
+      const inQueue = !selectedQueueRefs.every(ref => queue.has(ref.accountId, ref.conversationId))
+      let changed = 0
+      let failed = 0
+      for (const ref of selectedQueueRefs) {
+        try {
+          const result = kind === 'readLater'
+            ? await readLaterQueue.setWithUndo(ref.accountId, ref.conversationId, inQueue)
+            : await replyLaterQueue.set(ref.accountId, ref.conversationId, inQueue)
+          if (!result?.changed) continue
+          changed += 1
+          const operationId = result.operationId
+          toasts.success($_(inQueue ? `${kind}.added` : `${kind}.removed`), operationId ? [{
+            label: $_('common.undo'),
+            onClick: () => { void UndoOperation(operationId).catch(() => toasts.error($_('toast.undoFailed'))) },
+          }] : undefined)
+        } catch (err) {
+          failed += 1
+          console.error(`Failed to update ${kind} queue for selected conversation:`, err)
+        }
+      }
+      if (changed === 0 || failed > 0) toasts.error($_(`${kind}.failed`))
+    } catch (err) {
+      console.error(`Failed to load ${kind} queue:`, err)
+      toasts.error($_(`${kind}.failed`))
+    } finally {
+      laterQueueMutationInFlight = false
+    }
+  }
+
   const selectionActions = $derived.by(() => {
     const actions = [
       {
@@ -2490,6 +2553,18 @@
         label: $_(selectedHasUnread ? 'viewer.markAsRead' : 'viewer.markAsUnread'),
         icon: selectedHasUnread ? 'mdi:email-open-outline' : 'mdi:email-outline',
         shortcut: selectedHasUnread ? 'mail.markRead' : 'mail.markUnread',
+      },
+      {
+        id: 'mail.replyLater',
+        label: $_(selectedAllReplyLater ? 'replyLater.remove' : 'replyLater.add'),
+        icon: 'mdi:reply',
+        shortcut: 'mail.replyLater',
+      },
+      {
+        id: 'mail.readLater',
+        label: $_(selectedAllReadLater ? 'readLater.remove' : 'readLater.add'),
+        icon: 'mdi:book-clock-outline',
+        shortcut: 'mail.readLater',
       },
       {
         id: 'mail.star',
@@ -2891,7 +2966,7 @@
       actions={folderType === 'trash'
         ? [{ id: 'mail.moveToInbox', label: $_('viewer.moveToInbox'), icon: 'mdi:inbox-arrow-down-outline' }, ...selectionActions]
         : selectionActions}
-      disabled={moveMutationInFlight}
+      disabled={moveMutationInFlight || laterQueueMutationInFlight}
       onAction={runSelectedAction}
       onMove={toggleMoveToDialog}
       onMore={enableCommandPalette ? openCommandPalette : undefined}
