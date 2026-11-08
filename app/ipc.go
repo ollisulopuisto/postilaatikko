@@ -60,7 +60,7 @@ func (a *App) handleIPCMessage(clientID string, msg ipc.Message) {
 		Msg("Received IPC message")
 
 	switch msg.Type {
-	case readerCallType, mailWindowCallType:
+	case readerCallType, mailWindowCallType, composerCallType:
 		a.handleReaderCall(clientID, msg)
 
 	case ipc.TypeMessageSent:

@@ -217,18 +217,26 @@ func (a *App) GetOpenReaderInTabPreference() bool {
 }
 
 func (a *App) handleReaderCall(clientID string, msg ipc.Message) {
+	const composerMaxBytes = 30 << 20
 	var request struct {
 		Operation string          `json:"operation"`
 		Args      json.RawMessage `json:"args"`
 	}
 	var result any
 	err := msg.ParsePayload(&request)
+	if len(msg.Payload) > composerMaxBytes && msg.Type == composerCallType {
+		err = errors.New("composer request exceeds the IPC size limit")
+	}
 	if err == nil {
 		methods := a.readerMethods()
 		if msg.Type == mailWindowCallType {
 			methods = a.mailWindowMethods()
 		}
-		result, err = readerbridge.Dispatch(methods, request.Operation, request.Args)
+		if msg.Type == composerCallType {
+			result, err = readerbridge.DispatchLimit(methods, request.Operation, request.Args, composerMaxBytes)
+		} else {
+			result, err = readerbridge.Dispatch(methods, request.Operation, request.Args)
+		}
 	}
 	reply, marshalErr := ipc.NewReply(msg, msg.Type, result)
 	if marshalErr != nil {
@@ -236,7 +244,11 @@ func (a *App) handleReaderCall(clientID string, msg ipc.Message) {
 		err = marshalErr
 	}
 	// Stay within the existing IPC frame limit; report oversize data explicitly.
-	if len(reply.Payload) > 9<<20 {
+	maxReplyBytes := 9 << 20
+	if msg.Type == composerCallType {
+		maxReplyBytes = composerMaxBytes
+	}
+	if len(reply.Payload) > maxReplyBytes {
 		reply.Payload = nil
 		err = errors.New("thread exceeds reader IPC size limit")
 	}
@@ -253,6 +265,52 @@ func (a *App) readerMethods() map[string]any {
 		"CopyToFolder":                  a.CopyToFolder,
 		"DeletePermanently":             a.DeletePermanently,
 		"FetchMessageBody":              a.FetchMessageBody,
+		"GetAccount":                    a.GetAccount,
+		"GetIdentities":                 a.GetIdentities,
+		"GetOriginalMessage":            a.GetOriginalMessage,
+		"GetDraft":                      a.GetDraft,
+		"GetDraftForEdit":               a.GetDraftForEdit,
+		"SaveDraft":                     a.SaveDraft,
+		"DeleteDraft":                   a.DeleteDraft,
+		"PrepareReply":                  a.PrepareReply,
+		"SearchContacts":                a.SearchContacts,
+		"SendMessage":                   a.SendMessage,
+		"HasSMIMECertificate":           a.HasSMIMECertificate,
+		"GetSMIMECertificateForEmail":   a.GetSMIMECertificateForEmail,
+		"GetSMIMESignPolicy":            a.GetSMIMESignPolicy,
+		"GetSMIMEEncryptPolicy":         a.GetSMIMEEncryptPolicy,
+		"CheckRecipientCerts":           a.CheckRecipientCerts,
+		"PickRecipientCertFile":         a.PickRecipientCertFile,
+		"ImportRecipientCert":           a.ImportRecipientCert,
+		"HasPGPKey":                     a.HasPGPKey,
+		"GetPGPKeyForEmail":             a.GetPGPKeyForEmail,
+		"GetPGPSignPolicy":              a.GetPGPSignPolicy,
+		"GetPGPEncryptPolicy":           a.GetPGPEncryptPolicy,
+		"CheckRecipientPGPKeys":         a.CheckRecipientPGPKeys,
+		"PickRecipientPGPKeyFile":       a.PickRecipientPGPKeyFile,
+		"ImportRecipientPGPKey":         a.ImportRecipientPGPKey,
+		"LookupWKD":                     a.LookupWKD,
+		"LookupHKP":                     a.LookupHKP,
+		"LookupPGPKey":                  a.LookupPGPKey,
+		"DraftHistoryCommit":            a.DraftHistoryCommit,
+		"DraftHistoryTree":              a.DraftHistoryTree,
+		"DraftHistoryState":             a.DraftHistoryState,
+		"DraftHistoryCheckout":          a.DraftHistoryCheckout,
+		"ClearDraftHistory":             a.ClearDraftHistory,
+		"MoveDraftHistory":              a.MoveDraftHistory,
+		"PutDraftAttachmentBlob":        a.PutDraftAttachmentBlob,
+		"GetDraftAttachmentBlob":        a.GetDraftAttachmentBlob,
+		"DraftHistoryCommitBlobs":       a.DraftHistoryCommitBlobs,
+		"QueuePendingSend":              a.QueuePendingSend,
+		"GetSendLaterSetup":             a.GetSendLaterSetup,
+		"InitializeSendLaterClient":     a.InitializeSendLaterClient,
+		"SaveSendLaterConfig":           a.SaveSendLaterConfig,
+		"ScheduleMessage":               a.ScheduleMessage,
+		"ListScheduledMessages":         a.ListScheduledMessages,
+		"UpdateScheduledMessage":        a.UpdateScheduledMessage,
+		"RescheduleMessage":             a.RescheduleMessage,
+		"GetScheduledPage":              a.GetScheduledPage,
+		"SendMessageWithDraftGuard":     a.SendMessageWithDraftGuard,
 		"GetAccentBarUnread":            a.GetAccentBarUnread,
 		"GetAccountProfilePhotos":       a.GetAccountProfilePhotos,
 		"GetReaderIdentityEmails":       a.GetReaderIdentityEmails,
@@ -278,7 +336,7 @@ func (a *App) readerMethods() map[string]any {
 		"GetMessageListSortOrder":       a.GetMessageListSortOrder,
 		"GetMessageSource":              a.GetMessageSource,
 		"GetNativeTitleBar":             a.GetNativeTitleBar,
-		"GetOpenReaderInTabPreference":   a.GetOpenReaderInTabPreference,
+		"GetOpenReaderInTabPreference":  a.GetOpenReaderInTabPreference,
 		"GetReadReceiptResponsePolicy":  a.GetReadReceiptResponsePolicy,
 		"GetReplyContent":               a.GetReplyContent,
 		"GetRunBackground":              a.GetRunBackground,

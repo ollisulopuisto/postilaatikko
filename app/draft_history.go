@@ -47,35 +47,31 @@ func (a *App) MoveDraftHistory(oldKey, newKey string) error {
 	return a.draftHistoryStore().Move(oldKey, newKey)
 }
 
-func (c *ComposerApp) draftHistoryStore() *drafthistory.Store {
-	return drafthistory.NewStore(c.db.DB)
-}
-
-// Detached-composer twins: the child process binds only ComposerApp, so it
-// needs its own history bindings against the shared database.
-
 func (c *ComposerApp) DraftHistoryCommit(draftKey, parentID, label, payload string) (string, error) {
-	return c.draftHistoryStore().Commit(draftKey, parentID, label, payload)
+	return callParentValue[string](c, "DraftHistoryCommit", draftKey, parentID, label, payload)
 }
 
 func (c *ComposerApp) DraftHistoryTree(draftKey string) (*drafthistory.Tree, error) {
-	return c.draftHistoryStore().Tree(draftKey)
+	return callParentValue[*drafthistory.Tree](c, "DraftHistoryTree", draftKey)
 }
 
 func (c *ComposerApp) DraftHistoryState(nodeID string) (string, error) {
-	return c.draftHistoryStore().State(nodeID)
+	return callParentValue[string](c, "DraftHistoryState", nodeID)
 }
 
 func (c *ComposerApp) DraftHistoryCheckout(draftKey, nodeID string) error {
-	return c.draftHistoryStore().Checkout(draftKey, nodeID)
+	_, err := c.callParent("DraftHistoryCheckout", draftKey, nodeID)
+	return err
 }
 
 func (c *ComposerApp) ClearDraftHistory(draftKey string) error {
-	return c.draftHistoryStore().Clear(draftKey)
+	_, err := c.callParent("ClearDraftHistory", draftKey)
+	return err
 }
 
 func (c *ComposerApp) MoveDraftHistory(oldKey, newKey string) error {
-	return c.draftHistoryStore().Move(oldKey, newKey)
+	_, err := c.callParent("MoveDraftHistory", oldKey, newKey)
+	return err
 }
 
 // PutDraftAttachmentBlob stores attachment content (base64 over Wails RPC to
@@ -126,13 +122,13 @@ func (a *App) DraftHistoryCommitBlobs(draftKey, parentID, label, payload string,
 }
 
 func (c *ComposerApp) PutDraftAttachmentBlob(name, mime, contentBase64 string) (string, error) {
-	return putDraftAttachmentBlob(c.draftHistoryStore(), name, mime, contentBase64)
+	return callParentValue[string](c, "PutDraftAttachmentBlob", name, mime, contentBase64)
 }
 
 func (c *ComposerApp) GetDraftAttachmentBlob(hash string) (*DraftAttachmentBlob, error) {
-	return getDraftAttachmentBlob(c.draftHistoryStore(), hash)
+	return callParentValue[*DraftAttachmentBlob](c, "GetDraftAttachmentBlob", hash)
 }
 
 func (c *ComposerApp) DraftHistoryCommitBlobs(draftKey, parentID, label, payload string, blobHashes []string) (string, error) {
-	return c.draftHistoryStore().CommitBlobs(draftKey, parentID, label, payload, blobHashes)
+	return callParentValue[string](c, "DraftHistoryCommitBlobs", draftKey, parentID, label, payload, blobHashes)
 }

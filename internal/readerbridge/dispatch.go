@@ -12,12 +12,19 @@ import (
 // Dispatch invokes only an explicitly supplied operation, with its exact typed
 // arguments. No arbitrary App method name or reflection on App is exposed.
 func Dispatch(methods map[string]any, operation string, args json.RawMessage) (any, error) {
+	return DispatchLimit(methods, operation, args, 1<<20)
+}
+
+// DispatchLimit is Dispatch with a caller-selected bound for the serialized
+// arguments. Composer IPC uses a larger bound because message attachments are
+// passed as base64 while ordinary reader operations stay small.
+func DispatchLimit(methods map[string]any, operation string, args json.RawMessage, maxBytes int) (any, error) {
 	method, ok := methods[operation]
 	if !ok {
 		return nil, errors.New("operation unavailable in reader window")
 	}
-	if len(args) > 1<<20 {
-		return nil, errors.New("reader request too large")
+	if maxBytes <= 0 || len(args) > maxBytes {
+		return nil, errors.New("IPC request too large")
 	}
 	var raw []json.RawMessage
 	if err := json.Unmarshal(args, &raw); err != nil {

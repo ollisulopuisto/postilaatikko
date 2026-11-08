@@ -6,33 +6,24 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	goSync "sync"
 	"time"
 
 	"github.com/hkdb/aerion/internal/account"
-	"github.com/hkdb/aerion/internal/certificate"
 	"github.com/hkdb/aerion/internal/contact"
-	"github.com/hkdb/aerion/internal/credentials"
-	"github.com/hkdb/aerion/internal/database"
 	"github.com/hkdb/aerion/internal/draft"
-	"github.com/hkdb/aerion/internal/email"
-	"github.com/hkdb/aerion/internal/folder"
-	"github.com/hkdb/aerion/internal/imap"
 	"github.com/hkdb/aerion/internal/ipc"
 	"github.com/hkdb/aerion/internal/logging"
-	"github.com/hkdb/aerion/internal/macoscontacts"
 	"github.com/hkdb/aerion/internal/message"
-	"github.com/hkdb/aerion/internal/oauth2"
 	"github.com/hkdb/aerion/internal/pgp"
 	"github.com/hkdb/aerion/internal/platform"
-	"github.com/hkdb/aerion/internal/settings"
 	"github.com/hkdb/aerion/internal/smime"
 	"github.com/hkdb/aerion/internal/smtp"
-	"github.com/hkdb/aerion/internal/syncowner"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+const composerCallType = "composer_call"
 
 // ComposerConfig holds the configuration for a composer window.
 type ComposerConfig struct {
@@ -53,11 +44,11 @@ type ComposeMode struct {
 }
 
 // ComposerApp is a lightweight app struct for detached composer windows.
-// It connects to the main window via IPC and shares the same database.
+// It owns only a Wails window and authenticated IPC connection; the parent
+// process performs mailbox, credential, contact and cryptographic operations.
 type ComposerApp struct {
-	ctx         context.Context
-	config      ComposerConfig
-	schemaOwner *syncowner.Lock
+	ctx    context.Context
+	config ComposerConfig
 
 	// Debug mode function reference (injected from main)
 	debugMode func() bool
@@ -66,51 +57,9 @@ type ComposerApp struct {
 	ipcClient ipc.Client
 	ipcToken  string
 
-	// Database (shared with main window, read-only for most operations)
-	db            *database.DB
-	accountStore  *account.Store
-	folderStore   *folder.Store
-	messageStore  *message.Store
-	contactStore  *contact.Store
-	draftStore    *draft.Store
-	credStore     *credentials.Store
-	certStore     *certificate.Store
-	settingsStore *settings.Store
-
-	// IMAP pool for sending/draft operations
-	imapPool *imap.Pool
-
-	// OAuth2 manager for token refresh
-	oauth2Manager *oauth2.Manager
-
-	// S/MIME signing, encryption, and decryption
-	smimeStore     *smime.Store
-	smimeSigner    *smime.Signer
-	smimeEncryptor *smime.Encryptor
-	smimeDecryptor *smime.Decryptor
-
-	// PGP signing, encryption, and decryption
-	pgpStore     *pgp.Store
-	pgpSigner    *pgp.Signer
-	pgpEncryptor *pgp.Encryptor
-	pgpDecryptor *pgp.Decryptor
-
-	// Shared draft operations
-	draftOps draftOps
-
-	// Shared compose operations
-	composeOps composeOps
-
-	// Paths
-	paths *platform.Paths
-
 	// WindowDecorationStatus is the pre-Wails decision for this composer window.
 	WindowDecorationStatus platform.WindowDecorationStatus
 
-	// Draft IMAP sync goroutine tracking
-	draftSyncCancel context.CancelFunc
-	draftSyncDone   chan struct{}
-	draftSyncMu     goSync.Mutex
 	closeMu         goSync.Mutex
 	closeAuthorized bool
 
@@ -148,113 +97,6 @@ func (c *ComposerApp) Startup(ctx context.Context) {
 		Str("mode", c.config.Mode).
 		Str("ipcAddress", c.config.IPCAddress).
 		Msg("Composer window starting")
-
-	// Get platform paths
-	paths, err := platform.GetPaths()
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to get platform paths")
-	}
-	c.paths = paths
-	schemaOwner, err := syncowner.TryAcquireShared(filepath.Join(paths.Data, "mail-schema.owner.lock"))
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to protect mailbox database schema")
-	}
-	c.schemaOwner = schemaOwner
-
-	// Open database (shared with main window)
-	db, err := database.Open(paths.DatabasePath())
-	if err != nil {
-		_ = schemaOwner.Release()
-		c.schemaOwner = nil
-		log.Fatal().Err(err).Msg("Failed to open database")
-	}
-	c.db = db
-
-	// Initialize stores
-	c.accountStore = account.NewStore(db)
-	c.folderStore = folder.NewStore(db)
-	c.messageStore = message.NewStore(db)
-	c.contactStore = contact.NewStore(db.DB)
-	c.contactStore.SetMacOSContactsSource(macoscontacts.New())
-
-	// Initialize vCard scanner for contact autocomplete (shared .vcf files)
-	vcardScanner := contact.NewVCardScanner(contact.DefaultVCardPaths(), 20*time.Minute)
-	c.contactStore.SetVCardScanner(vcardScanner)
-	go func() {
-		if _, err := vcardScanner.Scan(); err != nil {
-			log.Debug().Err(err).Msg("vCard scan failed")
-		}
-	}()
-
-	// Removed in 2b.2.a: contactStore.Search now natively walks both local and
-	// carddav contacts via the unified contact_records schema. The carddav
-	// store and search-bridge wiring is no longer needed here.
-
-	c.draftStore = draft.NewStore(db)
-	c.settingsStore = settings.NewStore(db)
-
-	// Initialize credential store
-	credStore, err := credentials.NewStore(db.DB, paths.Data)
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialize credential store")
-	}
-	c.credStore = credStore
-
-	// Initialize certificate trust store (TOFU)
-	c.certStore = certificate.NewStore(db.DB)
-
-	// Initialize S/MIME store, signer, and encryptor
-	c.smimeStore = smime.NewStore(db.DB, log)
-	c.smimeSigner = smime.NewSigner(c.smimeStore, credStore, log)
-	c.smimeEncryptor = smime.NewEncryptor(c.smimeStore, credStore, log)
-	c.smimeDecryptor = smime.NewDecryptor(c.smimeStore, credStore, log)
-
-	// Initialize PGP store, signer, and encryptor
-	c.pgpStore = pgp.NewStore(db.DB, log)
-	c.pgpSigner = pgp.NewSigner(c.pgpStore, credStore, log)
-	c.pgpEncryptor = pgp.NewEncryptor(c.pgpStore, credStore, log)
-	c.pgpDecryptor = pgp.NewDecryptor(c.pgpStore, credStore, log)
-
-	// Initialize IMAP pool for send/draft operations
-	poolConfig := imap.DefaultPoolConfig()
-	poolConfig.MaxConnections = 1 // Composer only needs 1 connection
-	c.imapPool = imap.NewPool(poolConfig, c.getIMAPCredentials)
-
-	// Initialize shared draft operations
-	c.draftOps = draftOps{
-		gmailClient:    c.composeOps.gmailClient,
-		accountStore:   c.accountStore,
-		folderStore:    c.folderStore,
-		messageStore:   c.messageStore,
-		draftStore:     c.draftStore,
-		imapPool:       c.imapPool,
-		smimeSigner:    c.smimeSigner,
-		smimeEncryptor: c.smimeEncryptor,
-		smimeDecryptor: c.smimeDecryptor,
-		pgpSigner:      c.pgpSigner,
-		pgpEncryptor:   c.pgpEncryptor,
-		pgpDecryptor:   c.pgpDecryptor,
-	}
-
-	// Initialize OAuth2 manager for token refresh
-	c.oauth2Manager = oauth2.NewManager()
-
-	// Initialize shared compose operations
-	c.composeOps = composeOps{
-		accountStore:   c.accountStore,
-		folderStore:    c.folderStore,
-		credStore:      c.credStore,
-		certStore:      c.certStore,
-		contactStore:   c.contactStore,
-		oauth2Manager:  c.oauth2Manager,
-		smimeStore:     c.smimeStore,
-		smimeSigner:    c.smimeSigner,
-		smimeEncryptor: c.smimeEncryptor,
-		pgpStore:       c.pgpStore,
-		pgpSigner:      c.pgpSigner,
-		pgpEncryptor:   c.pgpEncryptor,
-		draftOps:       &c.draftOps,
-	}
 
 	// Connect to main window's IPC server
 	if err := c.connectIPC(ctx); err != nil {
@@ -305,20 +147,6 @@ func (c *ComposerApp) Shutdown(ctx context.Context) {
 	// Close IPC connection
 	if c.ipcClient != nil {
 		c.ipcClient.Close()
-	}
-
-	// Close IMAP connections
-	if c.imapPool != nil {
-		c.imapPool.CloseAll()
-	}
-
-	// Close database
-	if c.db != nil {
-		c.db.Close()
-	}
-	if c.schemaOwner != nil {
-		_ = c.schemaOwner.Release()
-		c.schemaOwner = nil
 	}
 
 	log.Info().Msg("Composer window shutdown complete")
@@ -385,6 +213,50 @@ func (c *ComposerApp) handleIPCMessage(msg ipc.Message) {
 	}
 }
 
+// callParent invokes one allowlisted desktop operation over the authenticated
+// IPC connection. Detached composers never open the mailbox database.
+func (c *ComposerApp) callParent(operation string, args ...any) (json.RawMessage, error) {
+	if c.ipcClient == nil {
+		return nil, fmt.Errorf("desktop service is unavailable")
+	}
+	encodedArgs, err := json.Marshal(args)
+	if err != nil {
+		return nil, err
+	}
+	request, err := ipc.NewMessage(composerCallType, struct {
+		Operation string          `json:"operation"`
+		Args      json.RawMessage `json:"args"`
+	}{operation, encodedArgs})
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(c.ctx, 2*time.Minute)
+	defer cancel()
+	reply, err := c.ipcClient.SendAndWait(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	if reply.Error != "" {
+		return nil, fmt.Errorf("%s", reply.Error)
+	}
+	return reply.Payload, nil
+}
+
+func callParentValue[T any](c *ComposerApp, operation string, args ...any) (T, error) {
+	var value T
+	data, err := c.callParent(operation, args...)
+	if err != nil {
+		return value, err
+	}
+	if len(data) == 0 || string(data) == "null" {
+		return value, nil
+	}
+	if err := json.Unmarshal(data, &value); err != nil {
+		return value, err
+	}
+	return value, nil
+}
+
 // loadInitialData loads the initial data based on compose mode.
 func (c *ComposerApp) loadInitialData() error {
 	log := logging.WithComponent("composer")
@@ -397,24 +269,17 @@ func (c *ComposerApp) loadInitialData() error {
 
 	// If resuming a draft, load it
 	if c.config.DraftID != "" {
-		draft, remoteMessage, err := c.draftOps.resolveDraftReference(c.config.DraftID)
+		loaded, err := callParentValue[*DraftEditResult](c, "GetDraftForEdit", c.config.DraftID)
 		if err != nil {
 			log.Error().Err(err).Str("draftID", c.config.DraftID).Msg("Failed to get draft from store")
 			return fmt.Errorf("failed to load draft: %w", err)
 		}
-		if draft == nil && remoteMessage != nil {
-			draft, err = c.draftOps.materializeRemoteDraft(remoteMessage)
-			if err != nil {
-				return err
-			}
-		}
-		if draft != nil {
-			c.currentDraft = draft
-			c.config.DraftID = draft.ID
+		if loaded != nil {
+			c.currentDraft = &draft.Draft{ID: loaded.DraftID, AccountID: c.config.AccountID}
+			c.config.DraftID = loaded.DraftID
 			log.Info().
 				Str("draftID", c.config.DraftID).
-				Str("subject", draft.Subject).
-				Uint32("imapUID", draft.IMAPUID).
+				Str("subject", loaded.Message.Subject).
 				Msg("Loaded draft into currentDraft")
 		} else {
 			log.Warn().Str("draftID", c.config.DraftID).Msg("Draft not found in database")
@@ -424,7 +289,7 @@ func (c *ComposerApp) loadInitialData() error {
 
 	// If replying/forwarding, load the original message
 	if c.config.MessageID != "" && c.config.Mode != "new" {
-		msg, err := c.messageStore.Get(c.config.MessageID)
+		msg, err := callParentValue[*message.Message](c, "GetOriginalMessage", c.config.MessageID)
 		if err != nil {
 			return fmt.Errorf("failed to load original message: %w", err)
 		}
@@ -458,8 +323,9 @@ func (c *ComposerApp) notifyClosed() {
 
 	var draftID *int64
 	if c.currentDraft != nil {
-		id, _ := parseIntID(c.currentDraft.ID)
-		draftID = &id
+		if id, err := parseIntID(c.currentDraft.ID); err == nil {
+			draftID = &id
+		}
 	}
 
 	msg, err := ipc.NewMessage(ipc.TypeComposerClosed, ipc.ComposerClosedPayload{
@@ -471,95 +337,23 @@ func (c *ComposerApp) notifyClosed() {
 	_ = c.ipcClient.Send(msg)
 }
 
-// notifyMessageSent sends a message-sent notification to the main window.
-func (c *ComposerApp) notifyMessageSent(accountID string, folderID int64) {
-	if c.ipcClient == nil {
-		return
-	}
-
-	msg, err := ipc.NewMessage(ipc.TypeMessageSent, ipc.MessageSentPayload{
-		AccountID: accountID,
-		FolderID:  folderID,
-	})
-	if err != nil {
-		return
-	}
-	_ = c.ipcClient.Send(msg)
-}
-
-// notifyDraftSaved sends a draft-saved notification to the main window.
-func (c *ComposerApp) notifyDraftSaved(accountID string, draftID string) {
-	if c.ipcClient == nil {
-		return
-	}
-
-	msg, err := ipc.NewMessage(ipc.TypeDraftSaved, ipc.DraftSavedPayload{
-		AccountID: accountID,
-		DraftID:   draftID,
-	})
-	if err != nil {
-		return
-	}
-	_ = c.ipcClient.Send(msg)
-}
-
-// notifyDraftDeleted sends a draft-deleted notification to the main window.
-func (c *ComposerApp) notifyDraftDeleted(accountID string) {
-	if c.ipcClient == nil {
-		return
-	}
-
-	msg, err := ipc.NewMessage(ipc.TypeDraftDeleted, ipc.DraftDeletedPayload{
-		AccountID: accountID,
-	})
-	if err != nil {
-		return
-	}
-	_ = c.ipcClient.Send(msg)
-}
-
-// getIMAPCredentials returns IMAP credentials for an account.
-// Handles both password and OAuth2 authentication.
-func (c *ComposerApp) getIMAPCredentials(accountID string) (*imap.ClientConfig, error) {
-	return c.composeOps.getIMAPCredentials(c.ctx, accountID)
-}
-
-// ============================================================================
 // Wails-bound methods (exposed to frontend)
 // ============================================================================
 
 // GetAccount returns the account for the given account ID.
 func (c *ComposerApp) GetAccount(accountID string) (*account.Account, error) {
-	return c.accountStore.Get(accountID)
+	return callParentValue[*account.Account](c, "GetAccount", accountID)
 }
 
 // GetIdentities returns all identities for the given account.
 func (c *ComposerApp) GetIdentities(accountID string) ([]*account.Identity, error) {
-	return c.accountStore.GetIdentities(accountID)
+	return callParentValue[[]*account.Identity](c, "GetIdentities", accountID)
 }
 
 // GetAllAccountIdentities returns all enabled accounts with their identities.
 // Used by the detached composer to populate the cross-account From dropdown.
 func (c *ComposerApp) GetAllAccountIdentities() ([]AccountIdentityGroup, error) {
-	accounts, err := c.accountStore.List()
-	if err != nil {
-		return nil, err
-	}
-	var groups []AccountIdentityGroup
-	for _, acc := range accounts {
-		if !acc.Enabled {
-			continue
-		}
-		identities, err := c.accountStore.GetIdentities(acc.ID)
-		if err != nil {
-			return nil, err
-		}
-		groups = append(groups, AccountIdentityGroup{
-			Account:    acc,
-			Identities: identities,
-		})
-	}
-	return groups, nil
+	return callParentValue[[]AccountIdentityGroup](c, "GetAllAccountIdentities")
 }
 
 // GetComposeMode returns the compose mode and related data.
@@ -572,14 +366,22 @@ func (c *ComposerApp) GetComposeMode() *ComposeMode {
 	}
 }
 
+// GetOriginalMessage returns the account-scoped cached message for a composer.
+func (a *App) GetOriginalMessage(messageID string) (*message.Message, error) {
+	if a == nil || a.messageStore == nil {
+		return nil, fmt.Errorf("message service is unavailable")
+	}
+	return a.messageStore.Get(messageID)
+}
+
 // GetShowTitleBar returns whether the custom title bar should be shown.
 func (c *ComposerApp) GetShowTitleBar() (bool, error) {
-	return c.settingsStore.GetShowTitleBar()
+	return callParentValue[bool](c, "GetShowTitleBar")
 }
 
 // GetNativeTitleBar returns whether the native OS title bar is enabled.
 func (c *ComposerApp) GetNativeTitleBar() (bool, error) {
-	return c.settingsStore.GetNativeTitleBar()
+	return callParentValue[bool](c, "GetNativeTitleBar")
 }
 
 // GetWindowDecorationStatus returns the decision used to create this window.
@@ -589,14 +391,14 @@ func (c *ComposerApp) GetWindowDecorationStatus() platform.WindowDecorationStatu
 
 // GetThemeMode returns the current theme mode setting.
 func (c *ComposerApp) GetThemeMode() (string, error) {
-	return c.settingsStore.GetThemeMode()
+	return callParentValue[string](c, "GetThemeMode")
 }
 
 // GetDarkComposerBody returns whether the composer message body should use a
 // dark background while in dark mode (the detached composer reads it so it opens
 // with the surface matching the user's choice).
 func (c *ComposerApp) GetDarkComposerBody() (bool, error) {
-	return c.settingsStore.GetDarkComposerBody()
+	return callParentValue[bool](c, "GetDarkComposerBody")
 }
 
 // GetSystemTheme returns the current system theme preference detected via
@@ -625,7 +427,7 @@ func (c *ComposerApp) GetOriginalMessage() (*message.Message, error) {
 	if c.config.MessageID == "" {
 		return nil, nil
 	}
-	return c.messageStore.Get(c.config.MessageID)
+	return callParentValue[*message.Message](c, "GetOriginalMessage", c.config.MessageID)
 }
 
 // GetDraft returns the current draft being edited.
@@ -633,18 +435,21 @@ func (c *ComposerApp) GetDraft() (*smtp.ComposeMessage, error) {
 	if c.currentDraft == nil {
 		return nil, nil
 	}
-	return c.draftToComposeMessage(c.currentDraft), nil
+	return callParentValue[*smtp.ComposeMessage](c, "GetDraft", c.currentDraft.ID)
 }
 
 // PrepareReply builds a ComposeMessage for the current mode.
 func (c *ComposerApp) PrepareReply() (*smtp.ComposeMessage, error) {
 	if c.config.Mode == "new" || c.config.MessageID == "" {
 		// New message - return compose, optionally pre-filled from mailto URL
-		acc, err := c.accountStore.Get(c.config.AccountID)
+		acc, err := c.GetAccount(c.config.AccountID)
 		if err != nil {
 			return nil, err
 		}
-		identities, _ := c.accountStore.GetIdentities(c.config.AccountID)
+		identities, err := c.GetIdentities(c.config.AccountID)
+		if err != nil {
+			return nil, err
+		}
 
 		var fromIdentity *account.Identity
 		for _, id := range identities {
@@ -689,125 +494,49 @@ func (c *ComposerApp) PrepareReply() (*smtp.ComposeMessage, error) {
 
 	// For reply/forward, use the same logic as main app
 	// This is a simplified version - the full logic is in app.go PrepareReply
-	msg, err := c.messageStore.Get(c.config.MessageID)
+	msg, err := callParentValue[*smtp.ComposeMessage](c, "PrepareReply", c.config.MessageID, c.config.Mode)
 	if err != nil {
 		return nil, err
 	}
-	if msg == nil {
-		return nil, fmt.Errorf("message not found: %s", c.config.MessageID)
-	}
-
-	c.originalMessage = msg
-	c.composeMessage = c.buildReplyMessage(msg, c.config.Mode)
+	c.composeMessage = msg
 	return c.composeMessage, nil
 }
 
 // SearchContacts searches for contacts matching the query.
 func (c *ComposerApp) SearchContacts(query string, limit int) ([]*contact.Contact, error) {
-	return c.contactStore.Search(query, limit)
+	return callParentValue[[]*contact.Contact](c, "SearchContacts", query, limit)
 }
 
 // SendMessage sends the composed email.
 func (c *ComposerApp) SendMessage(accountID string, msg smtp.ComposeMessage) error {
-	// Cancel in-flight draft sync before send+delete
-	if c.currentDraft != nil {
-		c.cancelDraftSync()
-	}
-
-	_, err := c.composeOps.sendMessage(c.ctx, accountID, msg, c.currentDraft)
-	if err != nil {
-		return err
-	}
-
-	// Post-send: IPC notification + state cleanup
-	if c.currentDraft != nil {
-		c.notifyDraftDeleted(accountID)
+	_, err := c.callParent("SendMessage", accountID, msg)
+	if err == nil {
 		c.currentDraft = nil
 	}
-
-	// Get sent folder ID for notification
-	sentFolder, _ := c.folderStore.GetByType(accountID, folder.TypeSent)
-	var sentFolderID int64
-	if sentFolder != nil {
-		sentFolderID, _ = parseIntID(sentFolder.ID)
-	}
-
-	// Notify main window
-	c.notifyMessageSent(accountID, sentFolderID)
-
-	return nil
-}
-
-// cancelDraftSync signals any in-flight syncDraftToIMAP goroutine to abort and
-// returns immediately. The goroutine self-cleans via the post-APPEND guard in
-// syncToIMAP if it had already committed an APPEND to the server, so the caller
-// (DeleteDraft / next SaveDraft) doesn't need to block on the goroutine exiting.
-func (c *ComposerApp) cancelDraftSync() {
-	c.draftSyncMu.Lock()
-	cancel := c.draftSyncCancel
-	c.draftSyncMu.Unlock()
-
-	if cancel == nil {
-		return
-	}
-	cancel()
+	return err
 }
 
 // SaveDraft saves the current compose state as a draft.
 // If existingDraftID is provided, updates that draft instead of creating a new one.
 func (c *ComposerApp) SaveDraft(accountID string, msg smtp.ComposeMessage, existingDraftID string) (*draft.Draft, error) {
-	log := logging.WithComponent("composer")
-
-	log.Debug().
-		Str("existingDraftID", existingDraftID).
-		Str("subject", msg.Subject).
-		Msg("Saving draft")
-
-	localDraft, remoteMessage, err := c.draftOps.resolveDraftReference(existingDraftID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve draft reference: %w", err)
+	if existingDraftID == "" && c.currentDraft != nil {
+		existingDraftID = c.currentDraft.ID
 	}
-	if localDraft == nil && remoteMessage != nil {
-		localDraft, err = c.draftOps.materializeRemoteDraft(remoteMessage)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// Fall back to c.currentDraft if no draft loaded yet
-	if localDraft == nil && c.currentDraft != nil {
-		localDraft = c.currentDraft
-		log.Debug().Str("draftID", localDraft.ID).Msg("Using c.currentDraft")
-	}
-
-	enc, err := c.draftOps.encryptDraftBody(accountID, msg.From.Address, msg)
+	result, err := callParentValue[*DraftResult](c, "SaveDraft", accountID, msg, existingDraftID)
 	if err != nil {
 		return nil, err
 	}
-
-	localDraft, err = c.draftOps.saveDraftToDB(accountID, localDraft, msg, enc)
-	if err != nil {
-		return nil, err
+	if result == nil || result.Draft == nil {
+		return nil, fmt.Errorf("desktop returned no saved draft")
 	}
-
-	// Keep c.currentDraft in sync
-	c.currentDraft = localDraft
-
-	// The main process owns detached-draft IMAP synchronization. It survives
-	// this window closing immediately after the local DB save and prevents a
-	// child-process APPEND from racing the parent's pending-draft sync.
-	c.notifyDraftSaved(localDraft.AccountID, localDraft.ID)
-
-	log.Info().Str("draftID", localDraft.ID).Bool("encrypted", enc.encrypted).Bool("pgpEncrypted", enc.pgpEncrypted).Msg("Draft saved locally; main process will sync")
-	return localDraft, nil
+	c.currentDraft = result.Draft
+	c.config.DraftID = result.Draft.ID
+	return result.Draft, nil
 }
 
 // DeleteDraft deletes a draft from local DB and IMAP.
 // If draftID is empty, falls back to c.currentDraft.ID or c.config.DraftID.
 func (c *ComposerApp) DeleteDraft(draftID string) error {
-	log := logging.WithComponent("composer")
-
-	// Determine which draft ID to use
 	if draftID == "" && c.currentDraft != nil {
 		draftID = c.currentDraft.ID
 	}
@@ -816,76 +545,15 @@ func (c *ComposerApp) DeleteDraft(draftID string) error {
 	}
 
 	if draftID == "" {
-		log.Debug().Msg("No draft ID provided, nothing to delete")
 		return nil
 	}
-
-	log.Debug().Str("draftID", draftID).Msg("DeleteDraft called")
-
-	// Cancel any in-flight IMAP sync goroutine and wait for it to finish.
-	// This ensures the goroutine can't upload the draft after we delete it.
-	c.cancelDraftSync()
-
-	draftToDelete, remoteMessage, err := c.draftOps.resolveDraftReference(draftID)
-	if err != nil {
-		log.Warn().Err(err).Str("draftID", draftID).Msg("Failed to load draft for deletion")
-		return fmt.Errorf("failed to load draft: %w", err)
-	}
-	if draftToDelete == nil && remoteMessage != nil {
-		draftToDelete, err = c.draftOps.materializeRemoteDraft(remoteMessage)
-		if err != nil {
-			return err
-		}
-	}
-	if draftToDelete == nil {
-		log.Debug().Str("draftID", draftID).Msg("Draft not found in database, nothing to delete")
-		return nil
-	}
-
-	log.Info().
-		Str("draftID", draftToDelete.ID).
-		Uint32("imapUID", draftToDelete.IMAPUID).
-		Str("syncStatus", string(draftToDelete.SyncStatus)).
-		Msg("Deleting draft")
-
-	_, err = c.draftOps.deleteDraftCore(c.ctx, draftToDelete)
-	if err != nil {
+	if _, err := c.callParent("DeleteDraft", draftID); err != nil {
 		return err
 	}
-
-	// Notify main window to refresh Drafts folder
-	c.notifyDraftDeleted(draftToDelete.AccountID)
-
-	log.Info().Str("draftID", draftToDelete.ID).Msg("Draft deleted successfully")
-
-	// Clear currentDraft if it matches
-	if c.currentDraft != nil && c.currentDraft.ID == draftToDelete.ID {
+	if c.currentDraft != nil && c.currentDraft.ID == draftID {
 		c.currentDraft = nil
 	}
-
 	return nil
-}
-
-// syncDraftToIMAP syncs a draft to the IMAP server.
-// This runs in a background goroutine and emits events to this window's frontend.
-func (c *ComposerApp) syncDraftToIMAP(ctx context.Context, localDraft *draft.Draft, msg smtp.ComposeMessage) {
-	emitStatus := func(status draft.SyncStatus, imapUID uint32, syncError string) {
-		wailsRuntime.EventsEmit(c.ctx, "draft:syncStatusChanged", map[string]interface{}{
-			"draftId":    localDraft.ID,
-			"syncStatus": status,
-			"imapUid":    imapUID,
-			"error":      syncError,
-		})
-	}
-
-	draftsFolder := c.draftOps.syncToIMAP(ctx, localDraft, msg, emitStatus)
-	if draftsFolder == nil {
-		return
-	}
-
-	// Notify main window now that the draft is on IMAP
-	// This triggers the main window to sync the Drafts folder
-	c.notifyDraftSaved(localDraft.AccountID, localDraft.ID)
 }
 
 // CloseWindow requests the window to close.
@@ -907,159 +575,31 @@ func (c *ComposerApp) ReadFileAsAttachment(filePath string) (*ComposerAttachment
 }
 
 // ============================================================================
-// Helper methods
-// ============================================================================
-
-// draftToComposeMessage converts a draft to a ComposeMessage.
-// If the draft is encrypted (S/MIME or PGP), decrypts the body first.
-func (c *ComposerApp) draftToComposeMessage(d *draft.Draft) *smtp.ComposeMessage {
-	return c.draftOps.toComposeMessage(d)
-}
-
-// buildReplyMessage builds a compose message for reply/forward.
-// This is a simplified version of the logic in app.go PrepareReply.
-func (c *ComposerApp) buildReplyMessage(msg *message.Message, mode string) *smtp.ComposeMessage {
-	// Prefer the identity the original message was addressed to (#325), then the
-	// default identity, then the first.
-	identities, _ := c.accountStore.GetIdentities(c.config.AccountID)
-	fromIdentity := selectReplyFromIdentity(identities, msg)
-
-	from := smtp.Address{}
-	if fromIdentity != nil {
-		from = smtp.Address{Name: fromIdentity.Name, Address: fromIdentity.Email}
-	}
-
-	// Build subject
-	subject := msg.Subject
-	switch mode {
-	case "forward":
-		if !strings.HasPrefix(strings.ToLower(subject), "fwd:") && !strings.HasPrefix(strings.ToLower(subject), "fw:") {
-			subject = "Fwd: " + subject
-		}
-	default: // reply, reply-all
-		if !strings.HasPrefix(strings.ToLower(subject), "re:") {
-			subject = "Re: " + subject
-		}
-	}
-
-	// Build recipients
-	var to, cc []smtp.Address
-	selfEmails := make(map[string]bool)
-	for _, id := range identities {
-		selfEmails[strings.ToLower(id.Email)] = true
-	}
-
-	originalFrom := []smtp.Address{{Name: msg.FromName, Address: msg.FromEmail}}
-
-	switch mode {
-	case "reply":
-		to = filterSelfAddresses(originalFrom, selfEmails)
-	case "reply-all":
-		to = filterSelfAddresses(originalFrom, selfEmails)
-		// Add original To (excluding self)
-		originalTo := parseAddressList(msg.ToList)
-		to = append(to, filterSelfAddresses(originalTo, selfEmails)...)
-		// Add original Cc (excluding self and duplicates)
-		originalCc := parseAddressList(msg.CcList)
-		toSet := make(map[string]bool)
-		for _, addr := range to {
-			toSet[strings.ToLower(addr.Address)] = true
-		}
-		for _, addr := range filterSelfAddresses(originalCc, selfEmails) {
-			if !toSet[strings.ToLower(addr.Address)] {
-				cc = append(cc, addr)
-			}
-		}
-	case "forward":
-		// Leave empty for user to fill
-	}
-
-	// Build quoted body
-	dateStr := msg.Date.Format("Mon, Jan 2 2006 at 3:04:05 PM MST")
-	sender := msg.FromEmail
-	if msg.FromName != "" {
-		sender = msg.FromName + " <" + msg.FromEmail + ">"
-	}
-
-	// Plaintext quote source: prefer the original's text part, but fall back to
-	// deriving it from HTML so HTML-only originals still produce a real quote
-	// (msg.BodyText is empty for HTML-only mail).
-	quotedText := msg.BodyText
-	if strings.TrimSpace(quotedText) == "" && msg.BodyHTML != "" {
-		quotedText = email.ExtractPlainTextFromHTML(msg.BodyHTML)
-	}
-
-	var htmlBody, textBody string
-	if mode == "forward" {
-		htmlBody = fmt.Sprintf("<br><br>---------- Forwarded message ----------<br>From: %s<br>Subject: %s<br>Date: %s<br>To: %s<br><br>%s",
-			escapeHTML(sender), escapeHTML(msg.Subject), escapeHTML(dateStr), escapeHTML(msg.ToList), msg.BodyHTML)
-		textBody = fmt.Sprintf("\n\n---------- Forwarded message ----------\nFrom: %s\nSubject: %s\nDate: %s\nTo: %s\n\n%s",
-			sender, msg.Subject, dateStr, msg.ToList, quotedText)
-	} else {
-		citation := fmt.Sprintf("On %s, %s wrote:", dateStr, sender)
-		htmlBody = fmt.Sprintf("<br><br>%s<br><blockquote type=\"cite\">%s</blockquote>", escapeHTML(citation), msg.BodyHTML)
-		textBody = fmt.Sprintf("\n\n%s\n%s", citation, quoteText(quotedText))
-	}
-
-	var references []string
-	if msg.References != "" {
-		_ = json.Unmarshal([]byte(msg.References), &references)
-	}
-	if msg.MessageID != "" {
-		references = append(references, ensureAngleBrackets(msg.MessageID))
-	}
-
-	return &smtp.ComposeMessage{
-		From:          from,
-		To:            to,
-		Cc:            cc,
-		Subject:       subject,
-		HTMLBody:      htmlBody,
-		TextBody:      textBody,
-		InReplyTo:     ensureAngleBrackets(msg.MessageID),
-		References:    references,
-		GmailThreadID: gmailThreadIDFromMessage(msg),
-	}
-}
-
 // HasSMIMECertificate returns whether the account has a valid default S/MIME certificate.
 func (c *ComposerApp) HasSMIMECertificate(accountID string) bool {
-	return c.composeOps.hasSMIMECertificate(accountID)
+	value, _ := callParentValue[bool](c, "HasSMIMECertificate", accountID)
+	return value
 }
 
 // GetSMIMECertificateForEmail returns the S/MIME certificate matching the given email.
 // Returns nil if no matching certificate is found.
 func (c *ComposerApp) GetSMIMECertificateForEmail(accountID string, email string) (*smime.Certificate, error) {
-	cert, _, err := c.smimeStore.GetCertificateByEmail(accountID, email)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get certificate for email: %w", err)
-	}
-	return cert, nil
+	return callParentValue[*smime.Certificate](c, "GetSMIMECertificateForEmail", accountID, email)
 }
 
 // GetSMIMESignPolicy returns the signing policy for the account.
 func (c *ComposerApp) GetSMIMESignPolicy(accountID string) (string, error) {
-	return c.smimeStore.GetSignPolicy(accountID)
+	return callParentValue[string](c, "GetSMIMESignPolicy", accountID)
 }
 
 // GetSMIMEEncryptPolicy returns the encryption policy for the account.
 func (c *ComposerApp) GetSMIMEEncryptPolicy(accountID string) (string, error) {
-	return c.smimeStore.GetEncryptPolicy(accountID)
+	return callParentValue[string](c, "GetSMIMEEncryptPolicy", accountID)
 }
 
 // CheckRecipientCerts checks which recipients have S/MIME certificates available.
 func (c *ComposerApp) CheckRecipientCerts(emails []string) (map[string]bool, error) {
-	certPEMs, err := c.smimeStore.GetSenderCertPEMs(emails)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check recipient certs: %w", err)
-	}
-
-	result := make(map[string]bool)
-	for _, email := range emails {
-		_, hasCert := certPEMs[email]
-		result[email] = hasCert
-	}
-	return result, nil
+	return callParentValue[map[string]bool](c, "CheckRecipientCerts", emails)
 }
 
 // PickRecipientCertFile opens a file picker for certificate files.
@@ -1088,52 +628,35 @@ func (c *ComposerApp) ImportRecipientCert(email, filePath string) error {
 		return fmt.Errorf("email address required")
 	}
 
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to read certificate file: %w", err)
-	}
-
-	return c.smimeStore.ImportSenderCertFromFile(email, data)
+	_, err := c.callParent("ImportRecipientCert", email, filePath)
+	return err
 }
 
 // HasPGPKey returns whether the account has a valid default PGP key.
 func (c *ComposerApp) HasPGPKey(accountID string) bool {
-	return c.composeOps.hasPGPKey(accountID)
+	value, _ := callParentValue[bool](c, "HasPGPKey", accountID)
+	return value
 }
 
 // GetPGPKeyForEmail returns the PGP key matching the given email.
 // Returns nil if no matching key is found.
 func (c *ComposerApp) GetPGPKeyForEmail(accountID string, email string) (*pgp.Key, error) {
-	key, _, err := c.pgpStore.GetKeyByEmail(accountID, email)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get key for email: %w", err)
-	}
-	return key, nil
+	return callParentValue[*pgp.Key](c, "GetPGPKeyForEmail", accountID, email)
 }
 
 // GetPGPSignPolicy returns the PGP signing policy for the account.
 func (c *ComposerApp) GetPGPSignPolicy(accountID string) (string, error) {
-	return c.pgpStore.GetSignPolicy(accountID)
+	return callParentValue[string](c, "GetPGPSignPolicy", accountID)
 }
 
 // GetPGPEncryptPolicy returns the PGP encryption policy for the account.
 func (c *ComposerApp) GetPGPEncryptPolicy(accountID string) (string, error) {
-	return c.pgpStore.GetEncryptPolicy(accountID)
+	return callParentValue[string](c, "GetPGPEncryptPolicy", accountID)
 }
 
 // CheckRecipientPGPKeys checks which recipients have PGP public keys available.
 func (c *ComposerApp) CheckRecipientPGPKeys(emails []string) (map[string]bool, error) {
-	armoredKeys, err := c.pgpStore.GetSenderKeyArmoreds(emails)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check recipient PGP keys: %w", err)
-	}
-
-	result := make(map[string]bool)
-	for _, email := range emails {
-		_, hasKey := armoredKeys[email]
-		result[email] = hasKey
-	}
-	return result, nil
+	return callParentValue[map[string]bool](c, "CheckRecipientPGPKeys", emails)
 }
 
 // PickRecipientPGPKeyFile opens a file picker for PGP public key files.
@@ -1162,79 +685,23 @@ func (c *ComposerApp) ImportRecipientPGPKey(email, filePath string) error {
 		return fmt.Errorf("email address required")
 	}
 
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to read key file: %w", err)
-	}
-
-	return c.pgpStore.ImportSenderKeyFromFile(email, data)
+	_, err := c.callParent("ImportRecipientPGPKey", email, filePath)
+	return err
 }
 
 // LookupWKD performs a Web Key Directory lookup for the given email address.
 func (c *ComposerApp) LookupWKD(email string) (string, error) {
-	armored, err := pgp.LookupWKD(email)
-	if err != nil {
-		return "", fmt.Errorf("WKD lookup failed: %w", err)
-	}
-	if armored == "" {
-		return "", nil
-	}
-
-	// Cache the discovered key
-	if err := c.pgpStore.CacheSenderKey(email, armored, "wkd"); err != nil {
-		return armored, nil
-	}
-
-	return armored, nil
+	return callParentValue[string](c, "LookupWKD", email)
 }
 
 // LookupHKP performs an HKP key server lookup for the given email address.
 func (c *ComposerApp) LookupHKP(email string) (string, error) {
-	armored, err := pgp.LookupHKP(email, c.getHKPServers())
-	if err != nil {
-		return "", fmt.Errorf("HKP lookup failed: %w", err)
-	}
-	if armored == "" {
-		return "", nil
-	}
-
-	if err := c.pgpStore.CacheSenderKey(email, armored, "hkp"); err != nil {
-		return armored, nil
-	}
-
-	return armored, nil
+	return callParentValue[string](c, "LookupHKP", email)
 }
 
 // LookupPGPKey performs a unified WKD+HKP lookup for the given email address.
 func (c *ComposerApp) LookupPGPKey(email string) (string, error) {
-	result, err := pgp.LookupKey(email, c.getHKPServers())
-	if err != nil {
-		return "", fmt.Errorf("PGP key lookup failed: %w", err)
-	}
-	if result == nil {
-		return "", nil
-	}
-
-	if err := c.pgpStore.CacheSenderKey(email, result.Armored, result.Source); err != nil {
-		return result.Armored, nil
-	}
-
-	return result.Armored, nil
-}
-
-// getHKPServers reads configured key servers from the database table.
-// Falls back to DefaultHKPServers if the table is empty.
-func (c *ComposerApp) getHKPServers() []string {
-	servers, err := c.pgpStore.ListKeyServers()
-	if err != nil || len(servers) == 0 {
-		return pgp.DefaultHKPServers
-	}
-
-	urls := make([]string, len(servers))
-	for i, s := range servers {
-		urls[i] = s.URL
-	}
-	return urls
+	return callParentValue[string](c, "LookupPGPKey", email)
 }
 
 // parseIntID parses a string ID to int64.

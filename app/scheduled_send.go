@@ -270,64 +270,33 @@ func (a *App) SendMessageWithDraftGuard(accountID string, message smtp.ComposeMe
 
 // GetSendLaterSetup returns public device pairing and account helper settings.
 func (c *ComposerApp) GetSendLaterSetup(accountID string) (SendLaterSetup, error) {
-	return getSendLaterSetup(c.ctx, c.paths.Data, accountID)
+	return callParentValue[SendLaterSetup](c, "GetSendLaterSetup", accountID)
 }
 
 // InitializeSendLaterClient explicitly creates the installation's keyring key.
 func (c *ComposerApp) InitializeSendLaterClient() (string, error) {
-	return initializeSendLaterClient(c.ctx, c.paths.Data)
+	return callParentValue[string](c, "InitializeSendLaterClient")
 }
 
 // SaveSendLaterConfig pins the user's verified helper key and account mapping.
 func (c *ComposerApp) SaveSendLaterConfig(config scheduledsend.ClientConfig) error {
-	store, err := clientStore(c.paths.Data)
-	if err != nil {
-		return err
-	}
-	defer store.Close()
-	return store.SaveConfig(c.ctx, config)
+	_, err := c.callParent("SaveSendLaterConfig", config)
+	return err
 }
 
 // ScheduleMessage prepares MIME once and queues an E2EE delivery to the helper.
 func (c *ComposerApp) ScheduleMessage(accountID string, message smtp.ComposeMessage, draftID, due string) (ScheduleResult, error) {
-	result, err := scheduleMessage(c.ctx, c.paths.Data, &c.composeOps, c.draftStore, accountID, message, draftID, due)
-	if err == nil {
-		result.Job = c.cleanupScheduled(result.Job)
-	}
-	return result, err
+	return callParentValue[ScheduleResult](c, "ScheduleMessage", accountID, message, draftID, due)
 }
 
 // ListScheduledMessages returns bounded local metadata without loading bodies.
 func (c *ComposerApp) ListScheduledMessages(accountID string) ([]scheduledsend.ClientJob, error) {
-	store, err := clientStore(c.paths.Data)
-	if err != nil {
-		return nil, err
-	}
-	defer store.Close()
-	return store.List(c.ctx, accountID)
+	return callParentValue[[]scheduledsend.ClientJob](c, "ListScheduledMessages", accountID)
 }
 
 // UpdateScheduledMessage retries, refreshes, or cancels a stored encrypted job.
 func (c *ComposerApp) UpdateScheduledMessage(id, action string) (ScheduleResult, error) {
-	result, err := updateScheduledMessage(c.ctx, c.paths.Data, id, action)
-	if err == nil {
-		result.Job = c.cleanupScheduled(result.Job)
-	}
-	return result, err
-}
-
-func (c *ComposerApp) cleanupScheduled(job scheduledsend.ClientJob) scheduledsend.ClientJob {
-	result := cleanupScheduledDraft(c.ctx, c.paths.Data, job, &c.draftOps, func(id string) {
-		if c.currentDraft != nil && c.currentDraft.ID == id {
-			c.cancelDraftSync()
-		}
-	}, func(accountID, draftID string) {
-		_ = c.draftHistoryStore().Clear(accountID + ":" + draftID)
-	})
-	if result.DraftCleanup == "removed" && job.DraftCleanup != "removed" {
-		c.notifyDraftDeleted(job.AccountID)
-	}
-	return result
+	return callParentValue[ScheduleResult](c, "UpdateScheduledMessage", id, action)
 }
 
 func rescheduleMessage(ctx context.Context, data, id, due string) (ScheduleResult, error) {
@@ -384,22 +353,16 @@ func (a *App) GetScheduledPage(accountID string, history bool, limit, offset int
 
 // RescheduleMessage changes a pending job's time using an authenticated revision.
 func (c *ComposerApp) RescheduleMessage(id, due string) (ScheduleResult, error) {
-	result, err := rescheduleMessage(c.ctx, c.paths.Data, id, due)
-	if err == nil {
-		result.Job = c.cleanupScheduled(result.Job)
-	}
-	return result, err
+	return callParentValue[ScheduleResult](c, "RescheduleMessage", id, due)
 }
 
 // GetScheduledPage returns paged delivery status and encrypted local previews.
 func (c *ComposerApp) GetScheduledPage(accountID string, history bool, limit, offset int) (scheduledsend.ClientPage, error) {
-	return scheduledPage(c.ctx, c.paths.Data, accountID, history, limit, offset)
+	return callParentValue[scheduledsend.ClientPage](c, "GetScheduledPage", accountID, history, limit, offset)
 }
 
 // SendMessageWithDraftGuard prevents Send Now from an already scheduled draft.
 func (c *ComposerApp) SendMessageWithDraftGuard(accountID string, message smtp.ComposeMessage, draftID string) error {
-	if err := guardScheduledDraft(c.ctx, c.paths.Data, accountID, draftID); err != nil {
-		return err
-	}
-	return c.SendMessage(accountID, message)
+	_, err := c.callParent("SendMessageWithDraftGuard", accountID, message, draftID)
+	return err
 }
