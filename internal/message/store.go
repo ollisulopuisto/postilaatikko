@@ -2031,8 +2031,8 @@ func (s *Store) GetConversation(threadID, folderID string) (*Conversation, error
 			OR REPLACE(REPLACE(m.message_id, '<', ''), '>', '') = ?
 			OR REPLACE(REPLACE(m.in_reply_to, '<', ''), '>', '') = ?
 		)
-		%s %s%s
-	`, trashFilter, folderFilter, preferNativeGmailCopy)
+		%s %s
+	`, trashFilter, folderFilter)
 
 	c := &Conversation{ThreadID: threadID}
 	var latestDateStr sql.NullString
@@ -2077,9 +2077,9 @@ func (s *Store) GetConversation(threadID, folderID string) (*Conversation, error
 			OR REPLACE(REPLACE(m.message_id, '<', ''), '>', '') = ?
 			OR REPLACE(REPLACE(m.in_reply_to, '<', ''), '>', '') = ?
 		)
-		%s %s%s
+		%s %s
 		ORDER BY m.date ASC
-	`, trashFilter, folderFilter, preferNativeGmailCopy)
+	`, trashFilter, folderFilter)
 
 	rows, err := s.db.Query(messagesQuery, accountID, normalizedThreadID, normalizedThreadID, normalizedThreadID, folderID)
 	if err != nil {
@@ -2185,50 +2185,7 @@ func (s *Store) GetConversation(threadID, folderID string) (*Conversation, error
 		rawMessages = append(rawMessages, m)
 	}
 
-	// Deduplicate messages sharing the same RFC Message-ID.
-	// When multiple copies exist (e.g. Inbox vs All Mail), choose the best copy:
-	// 1. Matching the currently requested folderID
-	// 2. Having body already fetched
-	// 3. Having an RFC Message-ID
-	// Preserve earliest chronological position in the thread.
-	type dedupEntry struct {
-		index int
-		msg   *Message
-	}
-	dedupMap := make(map[string]dedupEntry)
-	orderedKeys := make([]string, 0, len(rawMessages))
-
-	isBetterMessageCopy := func(candidate, existing *Message) bool {
-		candidateInFolder := candidate.FolderID == folderID
-		existingInFolder := existing.FolderID == folderID
-		if candidateInFolder != existingInFolder {
-			return candidateInFolder
-		}
-		if candidate.BodyFetched != existing.BodyFetched {
-			return candidate.BodyFetched
-		}
-		return false
-	}
-
-	for _, m := range rawMessages {
-		key := normalizeMessageID(m.MessageID)
-		if key == "" {
-			key = m.ID
-		}
-		if prev, exists := dedupMap[key]; exists {
-			if isBetterMessageCopy(m, prev.msg) {
-				dedupMap[key] = dedupEntry{index: prev.index, msg: m}
-			}
-		} else {
-			dedupMap[key] = dedupEntry{index: len(orderedKeys), msg: m}
-			orderedKeys = append(orderedKeys, key)
-		}
-	}
-
-	c.Messages = make([]*Message, len(orderedKeys))
-	for i, key := range orderedKeys {
-		c.Messages[i] = dedupMap[key].msg
-	}
+	c.Messages = DeduplicateThreadMessages(rawMessages, folderID, nil)
 
 	c.MessageCount = len(c.Messages)
 	c.UnreadCount = 0

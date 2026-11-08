@@ -142,6 +142,17 @@ func (o *mailboxReadOperations) GetThread(ctx context.Context, ref views.ThreadR
 	if err != nil {
 		return nil, err
 	}
+	// Match raw copies first, then count and expose only the same preferred
+	// account-scoped copies that the reader displays.
+	folderID := ""
+	base := scope
+	if scope.Kind == views.ScopeSearch && scope.Within != nil {
+		base = *scope.Within
+	}
+	if base.Kind == views.ScopeFolder {
+		folderID = base.FolderID
+	}
+	messages = message.DeduplicateThreadMessages(messages, folderID, matched)
 	result := &views.ThreadView{Ref: ref, Messages: make([]views.ThreadMessage, 0, len(messages)), Participants: []views.Address{}}
 	seenParticipants := map[string]bool{}
 	for _, msg := range messages {

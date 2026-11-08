@@ -570,8 +570,8 @@
       // Auto-expand unread messages and the last message from cache
       if (cached.messages) {
         const newExpanded = new Set<string>()
-        cached.messages.forEach((m, i) => {
-          if (!m.isRead || i === cached.messages!.length - 1) {
+        readerMessages.forEach((m, i) => {
+          if (!m.isRead || i === readerMessages.length - 1) {
             newExpanded.add(m.id)
           }
         })
@@ -666,8 +666,8 @@
       // Expand any new unread messages
       if (conversation.messages) {
         const newExpanded = new Set(expandedMessages)
-        conversation.messages.forEach((m, i) => {
-          if (!m.isRead || i === conversation!.messages!.length - 1) {
+        readerMessages.forEach((m, i) => {
+          if (!m.isRead || i === readerMessages.length - 1) {
             newExpanded.add(m.id)
           }
         })
@@ -705,9 +705,9 @@
       // Auto-expand unread messages and the last message
       if (conversation?.messages) {
         const newExpanded = new Set<string>()
-        conversation.messages.forEach((m, i) => {
+        readerMessages.forEach((m, i) => {
           // Expand if unread or if it's the last message
-          if (!m.isRead || i === conversation!.messages!.length - 1) {
+          if (!m.isRead || i === readerMessages.length - 1) {
             newExpanded.add(m.id)
           }
         })
@@ -720,7 +720,7 @@
         processPGPMessages(conversation.messages)
 
         // Fetch bodies for messages that don't have them yet (on-demand)
-        fetchUnfetchedBodies(conversation.messages)
+        fetchUnfetchedBodies(readerMessages)
       }
     } catch (err) {
       console.error('Failed to load conversation:', err)
@@ -810,7 +810,9 @@
   async function fetchUnfetchedBodies(messages: messageModels.Message[]) {
     const generation = viewGeneration
     let refreshedConversation = false
+    const displayedIds = new Set(readerMessages.map(message => message.id))
     for (const msg of messages) {
+      if (!displayedIds.has(msg.id)) continue
       if (generation !== viewGeneration) return
       if ((msg as any).bodyFetched === false && !msg.bodyHtml && !msg.bodyText) {
         bodyFetchErrors = { ...bodyFetchErrors, [msg.id]: '' }
@@ -930,14 +932,14 @@
 
   function expandAll() {
     if (conversation?.messages) {
-      expandedMessages = new Set(conversation.messages.map(m => m.id))
+      expandedMessages = new Set(readerMessages.map(m => m.id))
     }
   }
 
   function collapseAll() {
     // Keep only the last message expanded
-    if (conversation?.messages && conversation.messages.length > 0) {
-      expandedMessages = new Set([conversation.messages[conversation.messages.length - 1].id])
+    if (readerMessages.length > 0) {
+      expandedMessages = new Set([readerMessages[readerMessages.length - 1].id])
     }
   }
 
@@ -984,8 +986,7 @@
   }
 
   export function getLastMessageId(): string | null {
-    const messages = readerMode === 'traditional' ? (conversation?.messages || []) : reactions.messages
-    return messages[messages.length - 1]?.id || null
+    return readerMessages[readerMessages.length - 1]?.id || null
   }
 
   // Re-fetch conversation to pick up flag changes (star, read) from external actions
@@ -1804,9 +1805,9 @@
   // In message-focus mode, narrow to the single targeted message.
   // Otherwise show the whole thread.
   let revealedReactions = $state<Set<string>>(new Set())
-  const reactions = $derived(reactionLayout(conversation?.messages || []))
-  const filteredMessages = $derived(readerMode === 'traditional' ? (conversation?.messages || []) : (conversation?.messages || []).filter(message => !reactions.hidden.has(message.id) || revealedReactions.has(message.id)))
-  const readerMessages = $derived(deduplicateMessages(filteredMessages, folderId || undefined))
+  const threadMessages = $derived(deduplicateMessages(conversation?.messages || [], folderId || undefined))
+  const reactions = $derived(reactionLayout(threadMessages))
+  const readerMessages = $derived(readerMode === 'traditional' ? threadMessages : threadMessages.filter(message => !reactions.hidden.has(message.id) || revealedReactions.has(message.id)))
   function toggleReactionMessages(ids: string[]) {
     const next = new Set(revealedReactions)
     const hide = ids.every(id => next.has(id))

@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- Deduplicate thread messages sharing the same RFC Message-ID in conversation views, eliminating redundant multi-label copies (e.g. Gmail Inbox vs All Mail).
+- Deduplicate thread messages sharing the same RFC Message-ID in conversation views, eliminating redundant multi-label copies (e.g. Gmail Inbox vs All Mail). Preserve downloaded bodies, reply targets and reaction chips on the retained copy; fetch only displayed bodies and keep connected-reader counts consistent.
 - Show local sender avatars beside collapsed conversation bubble tails when viewer circles are enabled, without external favicon requests; keep HTML message widths readable.
 
 ## Postilaatikko 2026.11.08.1

@@ -112,3 +112,35 @@ func TestGetThreadResponseIncludesAttachmentSummaryButNoPrivateBodyOrPath(t *tes
 		}
 	}
 }
+
+func TestGetThreadCountsAndCompletenessUseRetainedCopies(t *testing.T) {
+	operations, db := setupThreadReadTest(t)
+	defer db.Close()
+	// The service path must prefer the same in-scope cached copy as the viewer.
+	if _, err := db.Exec(`UPDATE messages SET message_id='<same@example.org>' WHERE id='msg-inbox'`); err != nil {
+		t.Fatal(err)
+	}
+	for _, copy := range []message.Message{
+		{ID: "duplicate-inbox-empty", AccountID: "acc-1", FolderID: "inbox", UID: 3, ThreadID: "thread-current", MessageID: "same@example.org", Date: time.Now()},
+		{ID: "duplicate-context-empty", AccountID: "acc-1", FolderID: "sent", UID: 4, ThreadID: "thread-current", MessageID: "<same@example.org>", Date: time.Now()},
+	} {
+		if err := operations.runtime.messages.Create(&copy); err != nil {
+			t.Fatal(err)
+		}
+	}
+	view, err := operations.GetThread(context.Background(), views.ThreadRef{AccountID: "acc-1", ThreadID: "thread-current"}, views.Scope{
+		Kind: views.ScopeFolder, AccountID: "acc-1", FolderID: "inbox",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.MessageCount != 2 || len(view.Messages) != 2 || view.MatchedCount != 1 {
+		t.Fatalf("hidden copies inflated counts: count=%d messages=%d matched=%d", view.MessageCount, len(view.Messages), view.MatchedCount)
+	}
+	if view.Messages[0].Ref.MessageID != "msg-inbox" || view.Messages[0].ContentState != views.ContentCached {
+		t.Fatalf("lost selected cached copy: %+v", view.Messages[0])
+	}
+	if view.Completeness != views.CompletenessOf(view.Messages) {
+		t.Fatalf("completeness does not describe retained messages: %+v", view.Completeness)
+	}
+}
