@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Install the macOS helper agent with bounded mailbox sync and automatic filters enabled by default; use `--no-sync` for a Send Later-only agent. The foreground `serve` command keeps sync opt-in.
 - Route physical-folder and All Inboxes conversation pages through the authenticated local mailbox service when available, including triage filters and refresh windows larger than one page; preserve local fallback only when the helper is unreachable.
 - Add an authenticated, bounded conversation-list API for real folders and All Inboxes, with stable sorting, triage filters, and header-only summaries.
 - Route explicit desktop message-body fetches through the authenticated localhost helper when connected, retaining local fetching only when the helper is unreachable.

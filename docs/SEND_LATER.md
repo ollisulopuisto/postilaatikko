@@ -62,13 +62,13 @@ Off-loopback connections require HTTPS with a certificate trusted by the client:
 
 The client would use the corresponding reachable HTTPS hostname. Redirects and untrusted TLS certificates are rejected; the pinned helper key is an additional E2EE identity check. Request size, concurrent request count and network timeouts are bounded. The helper caps its logical queue at 10,000 job records and 512 MiB of encrypted envelopes. Existing jobs can still be cancelled at capacity. Revision tombstones are retained to reject delayed replays; there is no automatic history pruning. SQLite WAL and free pages can use additional disk space. A public relay remains a separate deployment with its own quotas, retention policy and rotation requirements.
 
-To run the existing bounded, header-first mailbox sync scheduler and automatic filters while the desktop is closed, pass `--sync`:
+To run the existing bounded, header-first mailbox sync scheduler and automatic filters in the foreground, pass `--sync`:
 
 ```sh
 "$POSTILAATIKKO_HELPER" serve --identity studio --sync
 ```
 
-Sync uses periodic polling as its recovery path. Optional Gmail Pub/Sub pull reception provides faster change hints without adding an inbound listener; the helper renews Gmail watches daily and acknowledges notifications only after the existing incremental sync succeeds.
+The helper and desktop share a process lock, so they do not sync concurrently. If the desktop owns the lock, the helper keeps Send Later and its API available while it waits, then takes sync ownership after the desktop exits. If the helper exits while the desktop is open, the desktop can reacquire the lock and resume its scheduler. Sync uses periodic polling as its recovery path. Optional Gmail Pub/Sub pull reception provides faster change hints without adding an inbound listener; the helper renews Gmail watches daily and acknowledges notifications only after the existing incremental sync succeeds.
 
 ### Optional Gmail Pub/Sub notifications
 
@@ -85,12 +85,14 @@ postilaatikko-helper serve --sync \
 
 Pass the same flags to `install-agent` to persist the configuration. Add `--gmail-pubsub-credentials /absolute/path/service-account.json` when using a service-account key file. The subscription must already exist and refer to the configured topic. With none of the Pub/Sub flags, the helper uses periodic sync only; partial Pub/Sub configuration is rejected.
 
-During this transition, use `--sync` only while the desktop app is closed; the app still has its own sync scheduler. Automatic cross-account filter execution and desktop API handoff are not migrated yet.
+The desktop routes bounded conversation pages, search, thread reads, explicit body fetches, and supported same-account mail actions through the authenticated local API when connected. Routine lists and sync remain header-only, and message bodies remain on demand. The helper applies saved cross-account filter rules while it owns the sync lock. Cross-account user moves remain on the desktop path until account-aware Undo is available.
 
-Once local setup works, install the macOS login agent using the same flags. Add `--sync` only if the desktop will remain closed while the agent runs:
+Install the macOS login agent to keep the service independent of the desktop. It enables bounded mailbox sync and automatic filters by default; use `--no-sync` only for a Send Later-only agent:
 
 ```sh
-"$POSTILAATIKKO_HELPER" install-agent --identity studio --sync
+"$POSTILAATIKKO_HELPER" install-agent --identity studio
+# Optional: install only the Send Later endpoint and authenticated API.
+"$POSTILAATIKKO_HELPER" install-agent --identity studio --no-sync
 ```
 
 It starts at login and restarts after failure. Use `uninstall-agent` to stop and remove it before changing its configuration. A login agent requires that user to be logged in; the keychain must be available. It does not make a sleeping/offline Studio able to send. The mail UI can be closed while the helper runs. Restarting/upgrading during a send can leave an ambiguous outcome that needs inspection.

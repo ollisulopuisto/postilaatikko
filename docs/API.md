@@ -156,7 +156,7 @@ postilaatikko-helper api-client list
 postilaatikko-helper api-client revoke --client client-<id>
 ```
 
-To start header-first background sync and automatic filters while the desktop is closed, run `serve --sync`. This uses the existing bounded periodic sync path. Optional Gmail Pub/Sub pull reception and daily watch renewal can be enabled with `--gmail-pubsub-project`, `--gmail-pubsub-topic`, and `--gmail-pubsub-subscription`; no inbound callback listener is exposed. Periodic sync remains the recovery path.
+To start header-first background sync and automatic filters in the foreground, run `serve --sync`. The helper and desktop share a process lock and never run background sync concurrently; the helper waits for desktop ownership to end and then takes over. Optional Gmail Pub/Sub pull reception and daily watch renewal can be enabled with `--gmail-pubsub-project`, `--gmail-pubsub-topic`, and `--gmail-pubsub-subscription`; no inbound callback listener is exposed. Periodic sync remains the recovery path.
 
 Remote API access is optional. Bind the API separately, provide a certificate trusted by clients, and allow only the public DNS name used in the request Host header:
 
@@ -168,11 +168,11 @@ postilaatikko-helper serve --identity studio \
   --api-allowed-host mail.example.com
 ```
 
-The same flags can be passed to `install-agent` to persist them in the macOS LaunchAgent. Keep the account database and TLS private key in operator-controlled storage, and revoke client grants with `api-client revoke` when a device is retired.
+The same flags can be passed to `install-agent` to persist them in the macOS LaunchAgent. `install-agent` enables bounded sync by default; pass `--no-sync` for a Send Later-only agent. Keep the account database and TLS private key in operator-controlled storage, and revoke client grants with `api-client revoke` when a device is retired.
 
 The `api-client` commands manage credentials. The create command prints a high-entropy bearer token once; the database stores only its SHA-256 digest. Keep the displayed token private and use a password manager or the client's secure credential store. A grant authorizes only the listed capabilities. Starting `serve` exposes the mailbox API; remote access still requires the explicit TLS and Host settings above. This flow does not create a phone pairing code.
 
-The desktop provisions a dedicated local grant with `mail.read` and `mail.body.fetch`, and stores its bearer token in the OS keyring. It exposes authenticated connection status through Wails and routes explicit message-body fetches through the helper when connected. If the helper cannot be reached, the desktop uses its existing local body-fetch path. Authorization, credential, and capability errors do not trigger that fallback. Routine listing and sync remain header-only. Revoked credentials are not silently reissued; explicit reconnection UX is a follow-up. Other mailbox reads and actions still use the existing desktop path until their handoff tasks are integrated.
+The desktop provisions a dedicated local grant with `mail.read` and `mail.body.fetch`, and stores its bearer token in the OS keyring. It routes bounded conversation pages, global search, thread reads, explicit body fetches, and supported same-account mail actions through the helper when connected. If the helper cannot be reached, the desktop uses the existing local path; authorization, credential, capability, and action errors do not trigger fallback. Routine listing and sync remain header-only. Revoked credentials are not silently reissued; explicit reconnection UX remains follow-up work. Multi-account and cross-account moves continue through the desktop's safe path.
 
 ---
 
