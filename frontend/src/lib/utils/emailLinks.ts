@@ -19,6 +19,13 @@ export function isAllowedEmailURL(value: string): boolean {
       // starting with a dash to prevent CLI flag/argument injection in URL handlers.
       const target = parsed.pathname
       if (target.startsWith('-')) return false
+      try {
+        const decoded = decodeURIComponent(target)
+        if (decoded.startsWith('-')) return false
+      } catch {
+        // Malformed percent-encoding is treated as invalid
+        return false
+      }
       return !!target || !!parsed.search
     }
     return false

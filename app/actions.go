@@ -150,7 +150,11 @@ func (a *App) setReadStatus(messageIDs []string, isRead bool) error {
 	if isRead {
 		remoteAction = v1.ActionMarkRead
 	}
-	if response, handled, err := a.mutateResolvedAction(ctx, messageIDs, remoteAction, ""); handled {
+	if a.mailboxService != nil && a.mailboxService.isRemote() {
+		response, handled, err := a.mutateResolvedAction(ctx, messageIDs, remoteAction, "")
+		if !handled && err == nil {
+			return errors.New("remote mailbox service did not handle flag action")
+		}
 		if err != nil {
 			return err
 		}
@@ -300,7 +304,11 @@ func (a *App) setStarredStatus(messageIDs []string, isStarred bool) error {
 	if isStarred {
 		remoteAction = v1.ActionStar
 	}
-	if _, handled, err := a.mutateResolvedAction(ctx, messageIDs, remoteAction, ""); handled {
+	if a.mailboxService != nil && a.mailboxService.isRemote() {
+		_, handled, err := a.mutateResolvedAction(ctx, messageIDs, remoteAction, "")
+		if !handled && err == nil {
+			return errors.New("remote mailbox service did not handle flag action")
+		}
 		if err != nil {
 			return err
 		}

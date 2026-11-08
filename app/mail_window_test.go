@@ -14,12 +14,18 @@ import (
 
 func TestMailWindowAllowlist(t *testing.T) {
 	methods := (&App{}).mailWindowMethods()
+	// Detached readers host the same reply composer and Send Later dialog.
+	for _, name := range []string{"InitializeSendLaterClient", "SendMessageWithDraftGuard"} {
+		if _, ok := methods[name]; !ok {
+			t.Errorf("reply composer operation unavailable: %s", name)
+		}
+	}
 	for _, name := range []string{"GetConversations", "GetConversation", "GetFolderTree", "SearchMail", "GetVirtualFolders", "GetVirtualFolderCachedView", "CreateVirtualFolder", "RefreshViewHeaders", "OpenComposerWindow", "OpenReaderWindow", "OpenMailWindow", "MarkAsRead", "ArchiveWithUndo"} {
 		if _, ok := methods[name]; !ok {
 			t.Errorf("mail operation unavailable: %s", name)
 		}
 	}
-	for _, name := range []string{"SaveUIState", "SetMessageListSortOrder", "RemoveAccount", "UpdateAccount", "QuitApp", "InitializeSendLaterClient", "SendMessageWithDraftGuard"} {
+	for _, name := range []string{"SaveUIState", "SetMessageListSortOrder", "RemoveAccount", "UpdateAccount", "QuitApp"} {
 		if _, ok := methods[name]; ok {
 			t.Errorf("child may change shared state through %s", name)
 		}

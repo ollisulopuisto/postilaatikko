@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 - Improve accessibility and keyboard navigation in Account Settings identity lists with account-specific native radio groups, focus retained after changing the default address, visible focus indicators, and focus disclosure for row action buttons. Failed default changes restore the selected address.
+- Reject mailto URLs with percent-encoded leading dashes (%2D) in URL openers to prevent CLI option injection in system mail handlers.
 - Browse and search unified Sent, Drafts, Trash, Spam, Starred, and Archive through a remote helper; the helper resolves account folders and merges Archive with All Mail while excluding Inbox copies.
 - Replay bounded helper action and Undo events by authenticated client cursor after disconnects; refresh an affected open view or request one reset when retained history has expired.
 - Route Cmd/Ctrl+V through the system clipboard fallback in composer windows and send composer Undo to its local draft history while editing; mailbox Undo remains scoped to durable helper operations.
@@ -55,6 +56,16 @@
 - Route account creation, configuration, deletion, enable/order, and Microsoft shared-mailbox setup through the helper with durable idempotency receipts and recoverable credential cleanup.
 
 ## Postilaatikko 2026.11.07.1
+
+- Add an opt-in arm64 draft test-release build that checks current merged main, runs frontend checks, verifies both executable architectures, signs and notarizes the DMG, and uploads directly to a draft GitHub Release without Actions artifacts or cache writes.
+
+- Preserve provider-confirmed partial read/star changes on desktop errors and allow account removal before a custom OAuth fallback was ever saved.
+
+- Fix Move To and Copy To command dispatch so the folder picker follows the currently focused message list or conversation instead of failing.
+- Recognize supported unified system-folder scopes consistently with the mailbox service, while rejecting malformed non-string folder types.
+
+- Reuse compiled attachment keyword patterns when checking a draft for forgotten attachments.
+- Repair current-focus routing for Move To and Copy To and keep unified-folder scope checks aligned with the mailbox service.
 
 - Make conversation bubbles narrower and align them by sender, with subtle participant colors that remain distinguishable in group threads.
 
