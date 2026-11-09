@@ -2406,8 +2406,12 @@
     let archived = false
     try {
       // Remember which messages were unread so Undo can put that back.
-      const flags = await Promise.all(messageIds.map(id => GetMessage(id).then(m => (m && !m.isRead ? id : null)).catch(() => null)))
-      const unreadIds = flags.filter((id): id is string => id !== null)
+      let unreadIds = messageListRef?.getUnreadSnapshot(messageIds)
+      if (!unreadIds) {
+        // Mixed rows, or rows not loaded: ask the backend per message (local store only).
+        const flags = await Promise.all(messageIds.map(id => GetMessage(id).then(m => (m && !m.isRead ? id : null)).catch(() => null)))
+        unreadIds = flags.filter((id): id is string => id !== null)
+      }
       await runMessageMutation(messageIds, async () => {
         const result = await ArchiveWithUndo(messageIds)
         if (result.coalesced) return

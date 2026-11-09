@@ -2333,6 +2333,28 @@
     return conv.messageIds || conv.messages?.map((m: any) => m.id) || []
   }
 
+  // Which of these messages are unread, from the rows already loaded (works without a
+  // local store). Returns undefined when a row is mixed read/unread, since the row only
+  // carries a count: the caller then asks the backend per message.
+  export function getUnreadSnapshot(ids: string[]): string[] | undefined {
+    const wanted = new Set(ids)
+    const unread: string[] = []
+    const covered = new Set<string>()
+    for (const conv of activeList as any[]) {
+      const msgIds: string[] = conv.messageIds || conv.messages?.map((m: any) => m.id) || []
+      if (msgIds.length === 0 || !msgIds.every(id => wanted.has(id))) continue
+      const count = conv.unreadCount || 0
+      if (count === 0) {
+        msgIds.forEach(id => covered.add(id))
+      } else if (count >= msgIds.length) {
+        msgIds.forEach(id => { covered.add(id); unread.push(id) })
+      } else {
+        return undefined
+      }
+    }
+    return ids.every(id => covered.has(id)) ? unread : undefined
+  }
+
   export function getSelectedMessageRefs(): { accountId: string; messageId: string }[] {
     if (!selectedThreadId) return []
     const conversation = activeList.find((item) => item.threadId === selectedThreadId) as any

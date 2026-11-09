@@ -26,9 +26,23 @@ export function setUnreadRestorer(fn: (messageIds: string[]) => Promise<unknown>
   restoreUnread = fn
 }
 
+// Undo windows are short, so only the most recent operations can still be undone.
+// Older snapshots are dropped so a long session does not accumulate them.
+export const MAX_UNREAD_SNAPSHOTS = 100
+
 export function rememberUnreadForUndo(operationId: string, unreadMessageIds: string[]) {
   if (!operationId || unreadMessageIds.length === 0) return
+  unreadBeforeArchive.delete(operationId)
   unreadBeforeArchive.set(operationId, [...unreadMessageIds])
+  while (unreadBeforeArchive.size > MAX_UNREAD_SNAPSHOTS) {
+    const oldest = unreadBeforeArchive.keys().next().value
+    if (oldest === undefined) break
+    unreadBeforeArchive.delete(oldest)
+  }
+}
+
+export function unreadSnapshotCount(): number {
+  return unreadBeforeArchive.size
 }
 
 export function publishUndoOperationCompleted(operationId: string) {
