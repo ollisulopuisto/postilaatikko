@@ -2590,6 +2590,7 @@
         onBack={closeFolderBrowser}
         treeMode={contextPaneMode === 'folders'}
         onCloseTree={closeFolderBrowser}
+        escapeOwnedElsewhere={pendingSends.length > 0 || showComposer}
         collapsed={false}
         showCollapseControl={false}
       />

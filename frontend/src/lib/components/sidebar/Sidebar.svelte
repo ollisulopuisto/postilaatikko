@@ -147,6 +147,8 @@
     /** Show the full folder tree filling this pane instead of the slide-over. */
     treeMode?: boolean
     onCloseTree?: () => void
+    /** True while an undo-send countdown or the composer owns Escape. */
+    escapeOwnedElsewhere?: boolean
   }
 
   let {
@@ -170,6 +172,7 @@
     navigationEnabled = true,
     treeMode = false,
     onCloseTree,
+    escapeOwnedElsewhere = false,
   }: Props = $props()
 
   // Dialog state
@@ -858,6 +861,7 @@
     treeOpen: showAllFolders || treeMode,
     query: allFoldersQuery,
     defaultPrevented: e.defaultPrevented,
+    ownedElsewhere: escapeOwnedElsewhere,
     overlayOpen: !!document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"]'),
   })
   if (action === 'ignore') return

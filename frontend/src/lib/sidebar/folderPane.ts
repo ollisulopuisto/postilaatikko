@@ -51,8 +51,9 @@ export function dragListWidth(clientX: number, columnLeft: number, min: number, 
 
 export type TreeEscapeAction = 'ignore' | 'clear-query' | 'close'
 
-/** Escape while the tree is open: leave it alone when something else owns the key. */
-export function treeEscapeAction(opts: { treeOpen: boolean; query: string; defaultPrevented: boolean; overlayOpen: boolean }): TreeEscapeAction {
-  if (!opts.treeOpen || opts.defaultPrevented || opts.overlayOpen) return 'ignore'
+/** Escape while the tree is open: leave it alone when something else owns the key
+ *  (open overlay, an undo-send countdown, or the composer). */
+export function treeEscapeAction(opts: { treeOpen: boolean; query: string; defaultPrevented: boolean; overlayOpen: boolean; ownedElsewhere?: boolean }): TreeEscapeAction {
+  if (!opts.treeOpen || opts.defaultPrevented || opts.overlayOpen || opts.ownedElsewhere) return 'ignore'
   return opts.query ? 'clear-query' : 'close'
 }

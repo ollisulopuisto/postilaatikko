@@ -115,3 +115,16 @@ test('review fixes: close restores list focus, tabs and rail honor Cmd-D, strips
   assert.match(rail, /active=\{foldersOpen\}/)
   assert.match(app, /aria-expanded="false"/)
 })
+
+test('Escape with the tree open: Undo Send countdown and the composer keep precedence', () => {
+  const base = { treeOpen: true, query: '', defaultPrevented: false, overlayOpen: false }
+  // Pending send or open composer -> tree ignores Escape, so App's pendingCancel / Composer handleClose run.
+  assert.equal(pane.treeEscapeAction({ ...base, ownedElsewhere: true }), 'ignore')
+  assert.equal(pane.treeEscapeAction({ ...base, query: 'x', ownedElsewhere: true }), 'ignore')
+  assert.equal(pane.treeEscapeAction({ ...base, ownedElsewhere: false }), 'close')
+  // Wiring: App passes both conditions, Sidebar feeds it to the decision.
+  assert.match(app, /escapeOwnedElsewhere=\{pendingSends\.length > 0 \|\| showComposer\}/)
+  assert.match(sidebar, /ownedElsewhere: escapeOwnedElsewhere/)
+  // And App's handler still cancels the pending send on Escape.
+  assert.match(app, /e\.key === 'Escape' && !ps\.dispatching\)\s*\{\s*e\.preventDefault\(\)\s*void pendingCancel\(ps\)/)
+})
