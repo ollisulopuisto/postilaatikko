@@ -2,7 +2,9 @@
 
 ## [Unreleased]
 
-## Postilaatikko 2026.11.09.13
+## Postilaatikko 2026.11.09.14
+
+- Give unfetched server rows mailbox-qualified provisional IDs, so same-UID results in different accounts or folders remain independently checked while resolving.
 
 - Carry checked server rows forward when their provisional IDs resolve to canonical conversations. Keyboard opening also pins Inbox card position like clicking.
 

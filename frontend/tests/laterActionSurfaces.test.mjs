@@ -213,3 +213,29 @@ test('canonical server resolution carries checked IDs forward and opening pins i
   assert.match(shared,/pinInboxGroupForConversation\(threadId\)/)
   assert.doesNotMatch(shared,/checkedThreadIds = new Set/)
 })
+
+test('same-UID server rows keep independent checked keys through canonical resolution', async () => {
+  const ts=(await import('typescript')).default
+  const identityCode=ts.transpileModule(await read(base+'list/serverSearchResults.ts'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText
+  const {serverSearchResultIdentity}=await import(`data:text/javascript;base64,${Buffer.from(identityCode).toString('base64')}`)
+  const adapter=list.slice(list.indexOf('  function adaptServerResult'),list.indexOf('  // Toggle search visibility'))
+  const resolution=list.slice(list.indexOf('  function migrateCheckedServerThread'),list.indexOf('  function isMissingServerSearchResult'))
+  const code=ts.transpileModule(adapter+resolution,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText
+  const factory=new Function('serverSearchResultIdentity',`
+    let serverResultFetchGeneration=0,searchQuery='q',searchSource='server',selectedThreadId='',serverSearchResults=[],checkedThreadIds=new Set();
+    const FetchServerMessage=async(account)=>({accountId:account,id:'msg-'+account,threadId:'thread-'+account}),onConversationSelect=()=>{};
+    ${code}
+    return {adapt:adaptServerResult,open:fetchAndSelectServerResult,setup:rows=>{serverSearchResults=rows;checkedThreadIds=new Set(rows.map(r=>r.threadId));selectedThreadId=rows[0].threadId},checks:()=>checkedThreadIds,rows:()=>serverSearchResults};`)
+  const state=factory(serverSearchResultIdentity)
+  const rows=[['A','inbox'],['B','inbox'],['A','archive']].map(([accountId,folderId])=>state.adapt({accountId,folderId,uid:42,isLocal:false}))
+  assert.equal(new Set(rows.map(r=>r.threadId)).size,3)
+  state.setup(rows)
+  await state.open(rows[0],'inbox','A')
+  assert.equal(state.checks().size,3)
+  assert.equal(state.checks().has('thread-A'),true)
+  assert.equal(state.checks().has(rows[1].threadId),true)
+  assert.equal(state.checks().has(rows[2].threadId),true)
+  assert.deepEqual(state.rows().filter(r=>state.checks().has(r.threadId)).map(r=>r.accountId),['A','B','A'])
+  assert.equal(state.rows()[1]._queueCanonical,false)
+  assert.equal(state.rows()[2]._queueCanonical,false)
+})

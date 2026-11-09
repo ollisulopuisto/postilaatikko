@@ -1663,7 +1663,7 @@
   // Map IMAPSearchResult to ConversationRow-compatible shape
   function adaptServerResult(r: any): any {
     return {
-      threadId: r.messageId || `server-uid-${r.uid}`,
+      threadId: r.messageId || `server-${serverSearchResultIdentity({ accountId: r.accountId, folderId: r.folderId, _uid: r.uid, threadId: '' })}`,
       subject: r.subject,
       snippet: r.isLocal ? r.snippet : '',
       messageCount: 1,
