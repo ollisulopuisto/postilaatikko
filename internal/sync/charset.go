@@ -181,6 +181,42 @@ func looksLikeGibberish(s string) bool {
 	return false
 }
 
+// bytesContainsFoldASCII checks if s contains substr (which must be lowercase ASCII)
+// ignoring ASCII case, without allocating strings or heap memory.
+func bytesContainsFoldASCII(s []byte, substr string) bool {
+	if len(substr) == 0 {
+		return true
+	}
+	limit := len(s) - len(substr)
+	if limit < 0 {
+		return false
+	}
+	sub0 := substr[0]
+	for i := 0; i <= limit; i++ {
+		c := s[i]
+		if c >= 'A' && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		if c == sub0 {
+			match := true
+			for j := 1; j < len(substr); j++ {
+				cj := s[i+j]
+				if cj >= 'A' && cj <= 'Z' {
+					cj += 'a' - 'A'
+				}
+				if cj != substr[j] {
+					match = false
+					break
+				}
+			}
+			if match {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // extractCharsetFromHTML extracts charset from HTML meta tags
 // This is used as a fallback when Content-Type header doesn't specify charset
 func extractCharsetFromHTML(html []byte) string {
@@ -190,6 +226,13 @@ func extractCharsetFromHTML(html []byte) string {
 	searchBytes := html
 	if len(html) > 1024 {
 		searchBytes = html[:1024]
+	}
+
+	// Performance optimization: Meta charsets require both a "<meta" element
+	// and a "charset" attribute or directive. If either ASCII token is missing,
+	// return immediately with 0 allocations, avoiding expensive regex scans.
+	if !bytesContainsFoldASCII(searchBytes, "<meta") || !bytesContainsFoldASCII(searchBytes, "charset") {
+		return ""
 	}
 
 	if match := charsetMetaRe.FindSubmatch(searchBytes); len(match) > 1 {
