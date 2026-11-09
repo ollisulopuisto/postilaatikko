@@ -1,0 +1,51 @@
+// Registry-driven key dispatch. The registry (registry.ts) is the only place a
+// key is bound: this module turns a KeyboardEvent into the registry entry whose
+// combo matches, and the host (App.svelte) runs the handler registered for
+// that entry's id. There are no per-key switch cases in the host for the
+// commands that go through here.
+
+import { CORE_SHORTCUTS, type ShortcutDef } from './registry'
+import { parseCombo } from './format'
+
+const NAMED: Record<string, string> = { Space: ' ' }
+
+function isWordKey(key: string): boolean {
+  return key.length > 1 || /[a-z0-9]/i.test(key)
+}
+
+/** True when the event is exactly this combo. Mod is Ctrl or Cmd. */
+export function matchCombo(e: KeyboardEvent, combo: string): boolean {
+  const { mods, key } = parseCombo(combo)
+  const wantMod = mods.includes('Mod')
+  const wantCtrl = mods.includes('Ctrl')
+  const wantMeta = mods.includes('Meta')
+  const wantAlt = mods.includes('Alt')
+  const wantShift = mods.includes('Shift')
+  if (wantMod) {
+    if (!(e.ctrlKey || e.metaKey)) return false
+  } else {
+    if (e.ctrlKey !== wantCtrl || e.metaKey !== wantMeta) return false
+  }
+  if (e.altKey !== wantAlt) return false
+  // Shift is implied by punctuation such as ! # ? and, on some layouts, /.
+  if (isWordKey(key) && e.shiftKey !== wantShift) return false
+  const expected = NAMED[key] ?? key
+  return expected.length === 1 ? e.key.toLowerCase() === expected.toLowerCase() || e.key === expected : e.key === expected
+}
+
+export type FocusPane = 'sidebar' | 'messageList' | 'viewer'
+
+/**
+ * The registry entry for this event, limited to the ids the host handles.
+ * Entries in the viewer group apply only when the viewer has focus. When two
+ * entries share a combo, the one in the focused pane's group wins.
+ */
+export function resolveShortcut(e: KeyboardEvent, focus: FocusPane | string, ids: Iterable<string>, defs: ShortcutDef[] = CORE_SHORTCUTS): ShortcutDef | undefined {
+  const handled = new Set(ids)
+  const hits = defs.filter(d =>
+    handled.has(d.id) &&
+    (!d.panes || d.panes.includes('mail')) &&
+    (d.group !== 'viewer' || focus === 'viewer') &&
+    d.combos.some(c => !d.legacy?.includes(c) && matchCombo(e, c)))
+  return hits.find(d => d.group === focus) ?? hits[0]
+}

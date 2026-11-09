@@ -112,7 +112,7 @@ test('shortcut ids are unique and reference known groups', () => {
     ids.add(def.id)
     assert.ok(groups.has(def.group), `${def.id}: unknown group ${def.group}`)
     assert.ok(def.combos.length > 0, `${def.id}: no combos`)
-    const kinds = [def.predicates?.length > 0, !!def.inline, !!def.external].filter(Boolean).length
+    const kinds = [def.predicates?.length > 0, !!def.inline, !!def.external, !!def.dispatch].filter(Boolean).length
     assert.ok(kinds > 0, `${def.id}: needs predicates, inline or external binding`)
   }
 })
