@@ -402,3 +402,11 @@ Backend CI follow-up: fix lazy OAuth-provider fallback deletion (real account-re
 Owner Instinct, worktree `/downloads/postilaatikko-pr180`, repair branch `repair/pr180-tests` pushes to existing attachment-regex PR180. Preserve its optimization and strict unified scope guard. Reuse frontend fixes/test coverage from PR181, repair shared backend lint errors, and retain regression guards. No main push or merge.
 
 Verification:825/825frontend tests pass; frontend check0errors/1pre-existing viewerRef warning; lint passes; production build passes. `go test ./internal/automation/v1 ./internal/appstate ./internal/views` and golangci-lint2.12.2 on those packages pass (0issues). Full native-linked Go test/lint requires CI because local glib/GTK headers are unavailable. Review pending; no merge.
+
+## README refresh (2026-11-09)
+
+- Status: Review. Owner: Instinct. Branch: `docs/readme-refresh-20261109`. Worktree: `/downloads/postilaatikko-readme`. Initial reviewed commit: `dd45a7ec087956790c8b2070d665ede0971ba5cc`; subsequent review fixes are recorded in this branch history.
+- Scope: Rewrite README from current code, distinguish built features from native/live acceptance, cover install/build/privacy, preserve upstream credit. No screenshots without verified provenance.
+- Verification: Source cross-checks and all relative links pass. Markdown rendered in Chromium and actual top/install/build/privacy sections inspected for readable layout. No screenshots added to the repository. CI and external review pending. No application changes or release.
+
+README review follow-up: qualify checksum instructions because tagged releases do not all include SHA256.txt; retain exact draft checksum verification where provided.
