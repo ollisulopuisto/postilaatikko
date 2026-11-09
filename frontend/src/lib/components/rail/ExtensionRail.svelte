@@ -1,5 +1,5 @@
 <script lang="ts">
-  let { onRevealContext = () => {}, onHideContext = () => {} }: { onRevealContext?: () => void; onHideContext?: () => void } = $props()
+  let { onRevealContext = () => {}, onHideContext = () => {}, foldersOpen = false }: { onRevealContext?: () => void; onHideContext?: () => void; foldersOpen?: boolean } = $props()
   import RailButton from './RailButton.svelte'
   import { getRailTabs } from '$lib/stores/extensionRegistry.svelte'
   import { getActiveExtension, setActiveExtension } from '$lib/stores/uiState.svelte'
@@ -54,7 +54,7 @@
 <svelte:window onkeydown={keydown} />
 <nav class="flex flex-col items-stretch w-12 flex-shrink-0 bg-muted/30 border-r border-border pt-2" aria-label={$_('navigation.quickAccess')} onmouseenter={onRevealContext} onmouseleave={onHideContext}>
   <RailButton icon="mdi:email" label="Mail" active={getActiveExtension() === 'mail'} onclick={() => setActiveExtension('mail')} />
-  <RailButton icon="mdi:folder-multiple-outline" label={withShortcut($_('shortcuts.action.folders'), 'app.folders')} active={false} onclick={() => void executeCommand('app.folders')} />
+  <RailButton icon="mdi:folder-multiple-outline" label={withShortcut($_('shortcuts.action.folders'), 'app.folders')} active={foldersOpen} onclick={() => void executeCommand('app.folders')} />
   {#each nav.quick as entry, index (entry.id)}
     <RailButton
       icon={quickIcon(entry)}

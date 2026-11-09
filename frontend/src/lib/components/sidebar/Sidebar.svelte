@@ -21,6 +21,7 @@
   import { isAccountExpanded, setAccountExpanded, setFolderCollapsed, getUIState, getUIStateVersion, saveUIState, setActiveExtension } from '$lib/stores/uiState.svelte'
   import { setFocusedPane } from '$lib/stores/keyboard.svelte'
   import { withShortcut, ariaKeyshortcuts } from '$lib/keyboard/format'
+  import { treeEscapeAction } from '$lib/sidebar/folderPane'
   import { openShortcutsOverlay } from '$lib/stores/shortcutsOverlay.svelte'
   import { openCommandPalette } from '$lib/stores/commandPalette.svelte'
   import { _ } from '$lib/i18n'
@@ -849,9 +850,20 @@
   onCancel={() => { deletingVirtualFolder = null }}
 />
 
-<svelte:window onkeydown={(e) => {
-  if ((showAllFolders || treeMode) && e.key === 'Escape') {
-    if (allFoldersQuery) { e.preventDefault(); allFoldersQuery = '' }
-    else { showAllFolders = false; if (treeMode) onCloseTree?.() }
-  }
+<!-- Capture phase: the tree consumes its own Escape so the window handler that
+     clears the selected conversation never sees it. -->
+<svelte:window onkeydowncapture={(e) => {
+  if (e.key !== 'Escape') return
+  const action = treeEscapeAction({
+    treeOpen: showAllFolders || treeMode,
+    query: allFoldersQuery,
+    defaultPrevented: e.defaultPrevented,
+    overlayOpen: !!document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"]'),
+  })
+  if (action === 'ignore') return
+  e.preventDefault()
+  e.stopPropagation()
+  if (action === 'clear-query') { allFoldersQuery = ''; return }
+  showAllFolders = false
+  if (treeMode) onCloseTree?.()
 }} />

@@ -250,7 +250,7 @@ export const CORE_SHORTCUTS: ShortcutDef[] = [
   // Composer (only while the composer is open)
   { id: 'composer.send', icon: 'mdi:send', label: 'shortcuts.action.send', group: 'composer', combos: ['Mod+Enter'], panes: MAIL, inline: composer('Enter') },
   { id: 'composer.attach', icon: 'mdi:paperclip', label: 'shortcuts.action.attach', group: 'composer', combos: ['Alt+a'], panes: MAIL, inline: composer('a') },
-  { id: 'composer.detach', label: 'shortcuts.action.detach', group: 'composer', combos: ['Mod+Shift+d'], panes: MAIL, inline: composer('D') },
+  { id: 'composer.detach', label: 'shortcuts.action.detach', group: 'composer', combos: ['Mod+Shift+d'], panes: MAIL, inline: composer('d', 'D') },
   { id: 'composer.toolbar', label: 'shortcuts.action.toolbar', group: 'composer', combos: ['Alt+t'], panes: MAIL, inline: composer('t') },
   { id: 'composer.pgp', label: 'shortcuts.action.pgp', group: 'composer', combos: ['Alt+p'], panes: MAIL, inline: composer('p', 's', 'S', 'e', 'E') },
   { id: 'composer.smime', label: 'shortcuts.action.smime', group: 'composer', combos: ['Alt+s'], panes: MAIL, inline: composer('s') },

@@ -64,6 +64,7 @@
   import { shortcutsOverlay, openShortcutsOverlay } from '$lib/stores/shortcutsOverlay.svelte'
   import { executeCommand, openCommandPalette, registerCommand } from '$lib/stores/commandPalette.svelte'
   import { withShortcut } from '$lib/keyboard/format'
+  import { sharedPaneWidths, dragListWidth } from '$lib/sidebar/folderPane'
   import { getListAction, runListAction as runActionOnTarget } from '$lib/actions/listActions'
   import { resolveListTarget } from '$lib/actions/target'
   import type { ActionTarget, ListTarget, MessageActionExecutor, RunOptions } from '$lib/actions/types'
@@ -88,6 +89,8 @@
   let messageListRef: MessageList | null = null
   let viewerRef: ConversationViewer | null = null
   let messageListContainerRef: HTMLElement | null = null
+  // The folder pane's aside: its left edge is the shared column's left edge in every mode.
+  let contextColumnRef: HTMLElement | null = null
   let effectiveTitleBarMode = $state('native')
 
   // React to theme mode changes from settings store
@@ -103,7 +106,6 @@
   let selectedFolderType = $state<string | null>(null)
   // Wide windows keep the folder tree and message list in one shared column:
   // one opens while the other folds to a strip.
-  const FOLDED_PANE_WIDTH = 36
   const sharedColumn = $derived(getLayoutMode() === 'full')
   let contextPaneMode = $state<'folders' | 'messages'>('messages')
   let contextPaneAutoHide = $state(false)
@@ -235,15 +237,20 @@
     setFocusedPane('sidebar')
   }
 
+  function closeFolderBrowser() {
+    // One exit for the tree: the close button, Escape, Cmd-D, the narrow Back button and the scrim.
+    contextPaneMode = 'messages'
+    if (getLayoutMode() === 'narrow') hideSidebar()
+    setFocusedPane('messageList')
+    // The tree's search field is about to disappear; keep keyboard focus in the list pane.
+    void tick().then(() => messageListContainerRef?.focus())
+  }
+
   function toggleFolderBrowser() {
     // Same swap as the panel icon beside the folder title: folder tree <-> message list.
     if (getActiveExtension() !== 'mail') setActiveExtension('mail')
-    if (getLayoutMode() === 'narrow' && contextPaneMode === 'folders') {
-      hideSidebar()
-    }
     if (contextPaneMode === 'folders') {
-      contextPaneMode = 'messages'
-      setFocusedPane('messageList')
+      closeFolderBrowser()
       return
     }
     revealContextPane()
@@ -1401,11 +1408,8 @@
       // subtracting the configured sidebar width. The configured value is
       // different from the rendered 56px width when the sidebar is collapsed,
       // which caused the divider to jump on the first mouse movement.
-      const listLeft = messageListContainerRef?.getBoundingClientRect().left ?? 0
-      listWidth = Math.max(
-        paneConstraints.list.min,
-        Math.min(paneConstraints.list.max, e.clientX - listLeft)
-      )
+      const columnLeft = (sharedColumn ? contextColumnRef : messageListContainerRef)?.getBoundingClientRect().left ?? 0
+      listWidth = dragListWidth(e.clientX, columnLeft, paneConstraints.list.min, paneConstraints.list.max)
     }
   }
 
@@ -1462,6 +1466,11 @@
         if (e.key.toLowerCase() === 'w' && !e.shiftKey) {
           e.preventDefault()
           closeWorkspaceTab(activeMailWorkspace)
+          return
+        }
+        if (e.key.toLowerCase() === 'd' && !e.shiftKey) {
+          e.preventDefault()
+          toggleFolderBrowser()
           return
         }
       }
@@ -2515,7 +2524,7 @@
 
   <!-- Main Content -->
   <div class="flex flex-1 min-h-0 overflow-hidden relative">
-    <ExtensionRail onRevealContext={revealContextPane} onHideContext={scheduleContextPaneHide} />
+    <ExtensionRail onRevealContext={revealContextPane} onHideContext={scheduleContextPaneHide} foldersOpen={contextPaneMode === 'folders' && getActiveExtension() === 'mail'} />
 
     {#if getActiveExtension() === 'scheduled'}
       <ScheduledPane />
@@ -2537,9 +2546,10 @@
     <div style:display={getActiveExtension() === 'mail' ? 'contents' : 'none'}>
     <!-- Sidebar (Folder List) -->
     <aside
+      bind:this={contextColumnRef}
       class="spark-sidebar-host flex-col {getLayoutMode() === 'narrow' ? `responsive-sidebar-overlay w-72 border-r border-border bg-background ${getResponsiveView() === 'sidebar' ? 'responsive-sidebar-visible' : ''}` : 'flex-shrink-0 border-r border-border bg-muted/30'}"
       class:pane-folded={sharedColumn && contextPaneMode !== 'folders'}
-      style="{sharedColumn ? `width: ${contextPaneMode === 'folders' ? listWidth - FOLDED_PANE_WIDTH : FOLDED_PANE_WIDTH}px` : getLayoutMode() === 'full' ? `width: ${listWidth}px` : ''}"
+      style="{sharedColumn ? `width: ${sharedPaneWidths(listWidth, contextPaneMode).folders}px` : getLayoutMode() === 'full' ? `width: ${listWidth}px` : ''}"
       style:display={contextPaneVisible && (sharedColumn || contextPaneMode === 'folders') ? 'flex' : 'none'}
       onmouseenter={revealContextPane}
       onmouseleave={scheduleContextPaneHide}
@@ -2547,7 +2557,7 @@
       onclick={() => handlePaneClick('sidebar')}
     >
       {#if sharedColumn && contextPaneMode !== 'folders'}
-        <button type="button" class="pane-fold-button" title={withShortcut($_('shortcuts.action.folders'), 'app.folders')} aria-label={$_('shortcuts.action.folders')} onclick={(e) => { e.stopPropagation(); toggleFolderBrowser() }}>
+        <button type="button" class="pane-fold-button" title={withShortcut($_('shortcuts.action.folders'), 'app.folders')} aria-label={$_('shortcuts.action.folders')} aria-expanded="false" onclick={(e) => { e.stopPropagation(); toggleFolderBrowser() }}>
           <Icon icon="mdi:folder-multiple-outline" width="18" />
           <span>{$_('responsive.folders')}</span>
         </button>
@@ -2577,9 +2587,9 @@
         isFocused={activeMailWorkspace === 'primary' && getFocusedPane() === 'sidebar'}
         isFlashing={isPaneFlashing('sidebar')}
         showBackButton={getLayoutMode() === 'narrow'}
-        onBack={hideSidebar}
+        onBack={closeFolderBrowser}
         treeMode={contextPaneMode === 'folders'}
-        onCloseTree={toggleFolderBrowser}
+        onCloseTree={closeFolderBrowser}
         collapsed={false}
         showCollapseControl={false}
       />
@@ -2592,7 +2602,7 @@
         role="button"
         tabindex="-1"
         class="responsive-scrim {getResponsiveView() === 'sidebar' ? 'responsive-scrim-visible' : ''}"
-        onclick={hideSidebar}
+        onclick={closeFolderBrowser}
         aria-label={$_('aria.closeSidebar')}
       ></div>
     {/if}
@@ -2603,7 +2613,7 @@
       bind:this={messageListContainerRef}
       class="spark-mail-list-pane min-h-0 flex flex-col overflow-hidden {isResponsive() ? 'flex-1 min-w-0 border-r border-border bg-background' : 'flex-shrink-0 border-r border-border bg-background'}"
       class:pane-folded={sharedColumn && contextPaneMode === 'folders'}
-      style="{sharedColumn ? `width: ${contextPaneMode === 'messages' ? listWidth - FOLDED_PANE_WIDTH : FOLDED_PANE_WIDTH}px` : getLayoutMode() === 'full' ? `width: ${listWidth}px` : ''}"
+      style="{sharedColumn ? `width: ${sharedPaneWidths(listWidth, contextPaneMode).messages}px` : getLayoutMode() === 'full' ? `width: ${listWidth}px` : ''}"
       style:display={contextPaneVisible && (sharedColumn || contextPaneMode === 'messages') ? 'flex' : 'none'}
       onmouseenter={revealContextPane}
       onmouseleave={scheduleContextPaneHide}
@@ -2613,7 +2623,7 @@
       onclick={() => handlePaneClick('messageList')}
     >
       {#if sharedColumn && contextPaneMode === 'folders'}
-        <button type="button" class="pane-fold-button" title={$_('responsive.messages')} aria-label={$_('responsive.messages')} onclick={(e) => { e.stopPropagation(); toggleFolderBrowser() }}>
+        <button type="button" class="pane-fold-button" title={$_('responsive.messages')} aria-label={$_('responsive.messages')} aria-expanded="false" onclick={(e) => { e.stopPropagation(); toggleFolderBrowser() }}>
           <Icon icon="mdi:email-outline" width="18" />
           <span>{$_('responsive.messages')}</span>
         </button>
