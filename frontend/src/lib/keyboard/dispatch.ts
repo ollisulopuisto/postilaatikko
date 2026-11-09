@@ -37,7 +37,12 @@ export function matchCombo(e: KeyboardEvent, combo: string): boolean {
   // Shift is implied by punctuation such as ! # ? and, on some layouts, /.
   if (isWordKey(key) && e.shiftKey !== wantShift) return false
   const expected = NAMED[key] ?? key
-  return expected.length === 1 ? e.key.toLowerCase() === expected.toLowerCase() || e.key === expected : e.key === expected
+  if (expected.length !== 1 || !/[a-z]/i.test(expected)) return e.key === expected
+  // Letters: a bare binding matches the produced case exactly, so Caps Lock (uppercase
+  // without shiftKey) never fires a lowercase mail key, and Shift+Caps (lowercase) never
+  // fires a Shift binding. Modifier chords keep the old handler's case-insensitive match.
+  if (wantMod || wantCtrl || wantMeta || wantAlt) return e.key.toLowerCase() === expected.toLowerCase()
+  return wantShift ? e.key === expected.toUpperCase() : e.key === expected
 }
 
 export type FocusPane = 'sidebar' | 'messageList' | 'viewer'

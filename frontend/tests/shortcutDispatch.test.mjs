@@ -114,3 +114,17 @@ test('focus mode and image loading work from the list and sidebar, select-all st
   assert.equal(resolveShortcut(ev('a', { ctrlKey: true }), 'messageList', layoutIds), undefined)
   assert.equal(resolveShortcut(ev('a', { ctrlKey: true }), 'viewer', layoutIds)?.id, 'viewer.selectText')
 })
+
+test('Caps Lock does not fire bare letter bindings, shifted chords still match by produced case', () => {
+  const letterIds = ['mail.trash', 'mail.archiveAndMarkRead', 'viewer.threadFocus', 'app.commandPalette']
+  // Caps Lock: uppercase letter, no shiftKey - must not trash or archive
+  assert.equal(resolveShortcut(ev('D'), 'messageList', letterIds), undefined)
+  assert.equal(resolveShortcut(ev('E'), 'messageList', letterIds), undefined)
+  // Shift+Caps Lock produces a lowercase letter: not the Shift binding either
+  assert.equal(resolveShortcut(ev('f', { shiftKey: true }), 'viewer', letterIds), undefined)
+  // The real Shift binding still works
+  assert.equal(resolveShortcut(ev('F', { shiftKey: true }), 'viewer', letterIds)?.id, 'viewer.threadFocus')
+  // Modifier chords stay case-insensitive, like the old toLowerCase handler
+  assert.equal(resolveShortcut(ev('K', { ctrlKey: true }), 'messageList', letterIds)?.id, 'app.commandPalette')
+  assert.equal(resolveShortcut(ev('k', { ctrlKey: true }), 'messageList', letterIds)?.id, 'app.commandPalette')
+})

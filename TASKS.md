@@ -428,3 +428,5 @@ README review follow-up: qualify checksum instructions because tagged releases d
 - Scope: Consolidate the owner's three sketch rounds on compose-as-a-bubble into one build spec (`docs/plans/2026-11-09-compose-bubble-build-spec.md`) and record the durable decisions, including the whole-app visible-action rule, in ROADMAP.md. Documentation only; no code, no build.
 - Held for the owner: quote versus new-text order (composer placement and sent-result top/bottom-posting, replies vs forwards); variants and recommendation on the round-3 sketches page.
 - Verification: documentation-only diff (new plan doc plus ROADMAP.md and TASKS.md entries). Implementation splits into PR-sized tasks here when claimed.
+
+| KEYMAP-CAPS-001 | Easy | Preserve produced case for bare mail letters, with Caps Lock regressions. | Instinct / `agent/keymap-registry` / worktree `/tmp/pl` / commit see PR #207 | 925 tests pass, lint and svelte-check pass. |
