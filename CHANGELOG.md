@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 - Stop continuous CPU use while an email is open in the reader: the inline-image loading placeholder is now static (no animated SVG) and iframe height updates are skipped when unchanged.
+- Skip meta-charset regex scans on HTML parts without a `<meta` and `charset` token, keeping long-s (`charſet`) spellings on the regex path.
 ## Postilaatikko 2026.11.09.16
 
 - Preserve the opened search UID when several rows share a conversation. Reader restoration matches the account and folder, and keyboard focus changes do not reapply an older reader selection.
