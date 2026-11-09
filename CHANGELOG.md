@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- Command palette: Cmd/Ctrl+K now opens it (Cmd/Ctrl+P still works). Undo, star, mark read, mark unread and the theme switch keep it open so you can repeat them. It lists your last 8 commands first, and now includes Toggle read, Read later, Reply later, Move to and Copy to. The sidebar button still opens it.
+- Command palette (Cmd/Ctrl+P; Cmd/Ctrl+K stays Archive): undo, star, mark read, mark unread and the theme switch keep it open so you can repeat them. It lists the last 8 commands you ran from it first, and now includes Toggle read, Read later, Reply later, Move to and Copy to. The sidebar button still opens it.
 - Stop continuous CPU use while an email is open in the reader: the inline-image loading placeholder is now static (no animated SVG) and iframe height updates are skipped when unchanged.
 - Skip meta-charset regex scans on HTML parts without a `<meta` and `charset` token, keeping long-s (`charſet`) spellings on the regex path.
 ## Postilaatikko 2026.11.09.16

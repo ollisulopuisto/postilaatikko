@@ -10,6 +10,7 @@
     executeCommand,
     isCommandAvailable,
     getRecentCommands,
+    recordRecentCommand,
   } from '$lib/stores/commandPalette.svelte'
   import { formatShortcut, isMacPlatform } from '$lib/keyboard/format'
   import { getActiveExtension } from '$lib/stores/uiState.svelte'
@@ -158,8 +159,15 @@
 
   function runCommand(cmd: PaletteItem) {
     // Repeatable commands (undo, star, theme) leave the palette open.
-    if (!getCommand(cmd.id)?.keepOpen) closeCommandPalette()
+    const keepOpen = !!getCommand(cmd.id)?.keepOpen
+    if (!keepOpen) closeCommandPalette()
+    recordRecentCommand(cmd.id)
     cmd.action()
+    if (keepOpen) {
+      // The list may have re-ordered (recents). Follow the command by id, so
+      // the next Enter repeats it instead of running whatever moved into its slot.
+      selectedIndex = Math.max(0, filteredCommands.findIndex(item => item.id === cmd.id))
+    }
   }
 
   function handleBackdropClick(e: MouseEvent) {

@@ -18,7 +18,7 @@ On macOS, `⌘` works wherever `Ctrl` is listed below, unless macOS reserves the
 | Shortcut | Action |
 |----------|--------|
 | `?` | Show the keyboard shortcuts overlay (not in text fields or while composing) |
-| `Ctrl+K` / `Ctrl+P` / `Ctrl+Shift+P` (macOS: `⌘K` / `⌘P` / `⌘⇧P`) | Open the command palette (Alfred-style quick launcher). Undo, star, mark read/unread and the theme switch keep it open so you can repeat them; your last 8 commands are listed first |
+| `Ctrl+P` / `Ctrl+Shift+P` (macOS: `⌘P` / `⌘⇧P`) | Open the command palette (Alfred-style quick launcher). Undo, star, mark read/unread and the theme switch keep it open so you can repeat them; your last 8 palette commands are listed first. `Ctrl+K` stays Archive, so it does not open the palette; the sidebar button also opens it |
 | `⌘+,` (macOS) | Open Preferences |
 | `Ctrl+Q` | Quit application |
 | `Ctrl+N` | Compose new message |

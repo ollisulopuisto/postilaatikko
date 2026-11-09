@@ -9,8 +9,7 @@ interface CommandRegistration { run: CommandHandler; isAvailable?: () => boolean
 const RECENT_KEY = 'postilaatikko.palette.recent'
 const RECENT_MAX = 8
 
-/** The last commands run from the palette, newest first. */
-export function getRecentCommands(): string[] {
+function loadRecent(): string[] {
   try {
     const raw = JSON.parse(globalThis.localStorage?.getItem(RECENT_KEY) ?? '[]')
     return Array.isArray(raw) ? raw.filter((id): id is string => typeof id === 'string').slice(0, RECENT_MAX) : []
@@ -19,10 +18,22 @@ export function getRecentCommands(): string[] {
   }
 }
 
+// Reactive, so the palette re-orders as soon as a command is run from it.
+let recent = $state<string[]>(loadRecent())
+
+/** The last commands run from the palette, newest first. */
+export function getRecentCommands(): string[] {
+  return recent
+}
+
+/**
+ * Record a command the user picked in the palette. Called by the palette only:
+ * keyboard shortcuts and other callers of executeCommand do not add history.
+ */
 export function recordRecentCommand(id: string) {
+  recent = [id, ...recent.filter(entry => entry !== id)].slice(0, RECENT_MAX)
   try {
-    const next = [id, ...getRecentCommands().filter(entry => entry !== id)].slice(0, RECENT_MAX)
-    globalThis.localStorage?.setItem(RECENT_KEY, JSON.stringify(next))
+    globalThis.localStorage?.setItem(RECENT_KEY, JSON.stringify(recent))
   } catch {
     // Storage can be unavailable; recents are a convenience only.
   }
@@ -82,7 +93,6 @@ export async function executeCommand(id: CommandId): Promise<boolean> {
   const registration = registrations.get(id)
   if (!registration || registration.isAvailable?.() === false) return false
   if (!getCommand(id)?.keepOpen) closeCommandPalette()
-  recordRecentCommand(id)
   try {
     await registration.run()
     return true
