@@ -121,9 +121,9 @@ export function PERMANENT_DELETE(e: KeyboardEvent): boolean {
 export const SHORTCUTS_HELP = (e: KeyboardEvent): boolean =>
   e.key === '?' && LAYOUT_SYMBOL(e)
 
-// Cmd+P / Ctrl+P or Cmd+Shift+P / Ctrl+Shift+P — open the command palette.
+// Cmd+K / Ctrl+K, Cmd+P / Ctrl+P or Cmd+Shift+P / Ctrl+Shift+P — open the command palette.
 export const COMMAND_PALETTE = (e: KeyboardEvent): boolean =>
-  ctrlOrMeta(e) && (e.key === 'p' || e.key === 'P')
+  ctrlOrMeta(e) && !e.altKey && (e.key === 'k' || e.key === 'K' || e.key === 'p' || e.key === 'P')
 
 // `m` — toggle read/unread of the message target. Modifiers are excluded so
 // Alt+M (move to folder) and the Ctrl/Cmd shortcuts keep their own meaning.
