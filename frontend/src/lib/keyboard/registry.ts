@@ -112,6 +112,8 @@ export interface CommandDefinition {
   icon?: string
   dynamicTitle?: 'activeView' | 'theme'
   dynamicIcon?: 'theme'
+  /** Repeatable command: the palette stays open after it runs. */
+  keepOpen?: boolean
 }
 
 const MAIL: ShortcutPane[] = ['mail']
@@ -140,27 +142,27 @@ export const CORE_COMMANDS = [
   { id: 'view.contacts', category: 'commandPalette.categories.view', titleKey: 'commandPalette.categories.contacts', icon: 'mdi:account-box-outline', dynamicTitle: 'activeView' },
   { id: 'app.preferences', category: 'commandPalette.categories.settings', shortcutId: 'app.preferences' },
   { id: 'app.shortcuts', category: 'commandPalette.categories.general', shortcutId: 'app.shortcuts' },
-  { id: 'theme.toggle', category: 'commandPalette.categories.view', icon: 'mdi:weather-night', dynamicTitle: 'theme', dynamicIcon: 'theme' },
+  { id: 'theme.toggle', category: 'commandPalette.categories.view', icon: 'mdi:weather-night', dynamicTitle: 'theme', dynamicIcon: 'theme', keepOpen: true },
   { id: 'mail.reply', category: 'commandPalette.categories.mail', shortcutId: 'mail.reply' },
   { id: 'mail.replyAll', category: 'commandPalette.categories.mail', shortcutId: 'mail.replyAll' },
   { id: 'mail.forward', category: 'commandPalette.categories.mail', shortcutId: 'mail.forward' },
-  { id: 'mail.archive', category: 'commandPalette.categories.mail', shortcutId: 'mail.archive' },
+  { id: 'mail.archive', palette: false },
   { id: 'mail.archiveAndMarkRead', category: 'commandPalette.categories.mail', shortcutId: 'mail.archiveAndMarkRead' },
   { id: 'mail.spam', category: 'commandPalette.categories.mail', shortcutId: 'mail.spam' },
   { id: 'mail.trash', category: 'commandPalette.categories.mail', shortcutId: 'mail.trash' },
-  { id: 'mail.markRead', category: 'commandPalette.categories.mail', shortcutId: 'mail.markRead' },
-  { id: 'mail.markUnread', category: 'commandPalette.categories.mail', shortcutId: 'mail.markUnread' },
-  { id: 'mail.star', category: 'commandPalette.categories.mail', shortcutId: 'mail.star' },
-  { id: 'app.undo', category: 'commandPalette.categories.general', shortcutId: 'app.undo' },
+  { id: 'mail.markRead', category: 'commandPalette.categories.mail', shortcutId: 'mail.markRead', keepOpen: true },
+  { id: 'mail.markUnread', category: 'commandPalette.categories.mail', shortcutId: 'mail.markUnread', keepOpen: true },
+  { id: 'mail.star', category: 'commandPalette.categories.mail', shortcutId: 'mail.star', keepOpen: true },
+  { id: 'app.undo', category: 'commandPalette.categories.general', shortcutId: 'app.undo', keepOpen: true },
   { id: 'focus.messageList', category: 'commandPalette.categories.navigation', titleKey: 'shortcuts.action.paneNext', icon: 'mdi:view-list-outline' },
   { id: 'focus.viewer', category: 'commandPalette.categories.navigation', titleKey: 'shortcuts.action.threadFocus', icon: 'mdi:eye-outline' },
   { id: 'focus.sidebar', category: 'commandPalette.categories.navigation', titleKey: 'shortcuts.action.folderNext', icon: 'mdi:dock-left' },
   { id: 'app.quit', category: 'commandPalette.categories.general', shortcutId: 'app.quit' },
-  { id: 'mail.toggleRead', palette: false, shortcutId: 'mail.toggleRead' },
-  { id: 'mail.readLater', palette: false, shortcutId: 'mail.readLater' },
-  { id: 'mail.replyLater', palette: false, shortcutId: 'mail.replyLater' },
-  { id: 'mail.moveTo', palette: false, shortcutId: 'mail.moveTo' },
-  { id: 'mail.copyTo', palette: false, shortcutId: 'mail.copyTo' },
+  { id: 'mail.toggleRead', category: 'commandPalette.categories.mail', shortcutId: 'mail.toggleRead' },
+  { id: 'mail.readLater', category: 'commandPalette.categories.mail', shortcutId: 'mail.readLater' },
+  { id: 'mail.replyLater', category: 'commandPalette.categories.mail', shortcutId: 'mail.replyLater' },
+  { id: 'mail.moveTo', category: 'commandPalette.categories.mail', shortcutId: 'mail.moveTo' },
+  { id: 'mail.copyTo', category: 'commandPalette.categories.mail', shortcutId: 'mail.copyTo' },
   { id: 'mail.deletePermanently', palette: false, shortcutId: 'mail.deletePermanently' },
 ] as const satisfies readonly CommandDefinition[]
 
@@ -178,7 +180,7 @@ const composer = (...keys: string[]): ShortcutInlineBinding => ({ file: 'Compose
 
 export const CORE_SHORTCUTS: ShortcutDef[] = [
   // General
-  { id: 'app.commandPalette', icon: 'mdi:console-line', label: 'shortcuts.action.commandPalette', group: 'general', combos: ['Mod+p', 'Mod+Shift+p'], predicates: [KEY.COMMAND_PALETTE] },
+  { id: 'app.commandPalette', icon: 'mdi:console-line', label: 'shortcuts.action.commandPalette', group: 'general', combos: ['Mod+k', 'Mod+p', 'Mod+Shift+p'], predicates: [KEY.COMMAND_PALETTE] },
   { id: 'app.shortcuts', icon: 'mdi:keyboard-outline', label: 'shortcuts.action.showShortcuts', group: 'general', combos: ['?'], predicates: [KEY.SHORTCUTS_HELP] },
   { id: 'app.preferences', label: 'shortcuts.action.preferences', group: 'general', combos: ['Meta+,'], macOnly: true, inline: app('Comma') },
   { id: 'app.compose', icon: 'mdi:pencil-plus-outline', label: 'shortcuts.action.compose', group: 'general', combos: ['c', 'Mod+n'], panes: MAIL, inline: app('c', 'n') },
@@ -228,7 +230,6 @@ export const CORE_SHORTCUTS: ShortcutDef[] = [
   { id: 'mail.replyAll', icon: 'mdi:reply-all', label: 'shortcuts.action.replyAll', group: 'messageActions', combos: ['Mod+Shift+r', 'a'], panes: MAIL, inline: app('a', 'r') },
   { id: 'mail.forward', icon: 'mdi:share', label: 'shortcuts.action.forward', group: 'messageActions', combos: ['Mod+f', 'f'], panes: MAIL, inline: app('f') },
   { id: 'mail.archiveAndMarkRead', icon: 'mdi:archive-check-outline', label: 'shortcuts.action.archiveAndMarkRead', group: 'messageActions', combos: ['e'], panes: MAIL, inline: app('e') },
-  { id: 'mail.archive', icon: 'mdi:archive-outline', label: 'shortcuts.action.archive', group: 'messageActions', combos: ['Mod+k'], panes: MAIL, inline: app('k') },
   { id: 'mail.readLater', icon: 'mdi:book-clock-outline', label: 'shortcuts.action.readLater', group: 'messageActions', combos: ['l'], panes: MAIL, inline: app('l') },
   { id: 'mail.replyLater', icon: 'mdi:clock-outline', label: 'shortcuts.action.replyLater', group: 'messageActions', combos: ['Shift+l'], panes: MAIL, inline: app('L') },
   { id: 'mail.spam', icon: 'mdi:alert-octagon-outline', label: 'shortcuts.action.spam', group: 'messageActions', combos: ['!', 'Mod+j'], panes: MAIL, inline: app('!', 'j') },

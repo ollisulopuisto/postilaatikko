@@ -157,6 +157,7 @@ test('archive-and-read animates and mutates only resolved matched targets', asyn
     ArchiveWithUndo: async ids => { calls.push(['archive', ids]); return { operationId: 'op' } },
     MarkAsRead: async ids => { calls.push(['read', ids]) },
     publishUndoOperationCreated: () => {},
+    rememberUnreadForUndo: () => {},
     showArchiveUndoToast: () => {},
     onActionComplete: () => {},
     toasts: { error: message => assert.fail(message) },

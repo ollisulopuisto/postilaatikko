@@ -52,6 +52,7 @@
   import { getLayoutMode, hideViewer } from '$lib/stores/layout.svelte'
   import { isDialogGuardActive, onDialogGuardChange } from '$lib/stores/dialogGuard'
   import { captureAutoSelectNext, findAutoSelectNext, flattenVisibleInboxGroups } from './autoSelectNext'
+  import { applyReadDelta } from './readCounts'
   import { removeServerSearchResults, restoreSearchResults, serverSearchResultIdentity, ServerSearchRequestState, updateServerSearchCounts } from './serverSearchResults'
   import { publishUndoOperationCompleted, publishUndoOperationCreated, UNDO_OPERATION_COMPLETED_EVENT, UNDO_OPERATION_CREATED_EVENT, type UndoOperationCreatedDetail } from './undoMutationEvents'
   import { runMessageMutation } from './mutationInFlight'
@@ -714,7 +715,7 @@
     // `messages:starredChanged` event and don't affect unread counts here.
     EventsOn('messages:readChanged', (data: { messageIds: string[], isRead: boolean }) => {
       // Update conversations locally instead of reloading from DB
-      let anyUpdated = false
+      let anyUpdated: boolean
       const selected = conversations.find(conversation => conversation.threadId === selectedThreadId)
       const selectedMessageIds = selected?.messageIds || []
       if (
@@ -728,14 +729,13 @@
         // is selected, while the underlying read status can update normally.
         pinInboxGroupForConversation(selected.threadId)
       }
-      for (const c of conversations) {
-        const affectedCount = (c.messageIds || []).filter(id => data.messageIds.includes(id)).length
-        if (affectedCount > 0) {
-          anyUpdated = true
-          const delta = data.isRead ? -affectedCount : affectedCount
-          c.unreadCount = Math.max(0, (c.unreadCount || 0) + delta)
-        }
-      }
+      // Search rows are separate cached arrays with their own unread counts. Keep them in
+      // step, or the unread snapshot taken for archive-and-mark-read (and the unread dots)
+      // would use a count that is already out of date.
+      const touched = new Set<object>()
+      anyUpdated = applyReadDelta(conversations, data.messageIds, data.isRead, touched)
+      if (applyReadDelta(searchResults, data.messageIds, data.isRead, touched)) searchResults = searchResults
+      if (applyReadDelta(serverSearchResults, data.messageIds, data.isRead, touched)) serverSearchResults = serverSearchResults
       if (anyUpdated) {
         conversations = conversations
         if (isVirtualFolderView) scheduleReload()
@@ -2333,6 +2333,28 @@
     return conv.messageIds || conv.messages?.map((m: any) => m.id) || []
   }
 
+  // Which of these messages are unread, from the rows already loaded (works without a
+  // local store). Returns undefined when a row is mixed read/unread, since the row only
+  // carries a count: the caller then asks the backend per message.
+  export function getUnreadSnapshot(ids: string[]): string[] | undefined {
+    const wanted = new Set(ids)
+    const unread: string[] = []
+    const covered = new Set<string>()
+    for (const conv of activeList as any[]) {
+      const msgIds: string[] = conv.messageIds || conv.messages?.map((m: any) => m.id) || []
+      if (msgIds.length === 0 || !msgIds.every(id => wanted.has(id))) continue
+      const count = conv.unreadCount || 0
+      if (count === 0) {
+        msgIds.forEach(id => covered.add(id))
+      } else if (count >= msgIds.length) {
+        msgIds.forEach(id => { covered.add(id); unread.push(id) })
+      } else {
+        return undefined
+      }
+    }
+    return ids.every(id => covered.has(id)) ? unread : undefined
+  }
+
   export function getSelectedMessageRefs(): { accountId: string; messageId: string }[] {
     if (!selectedThreadId) return []
     const conversation = activeList.find((item) => item.threadId === selectedThreadId) as any
@@ -2747,7 +2769,7 @@
       { id: 'mail.moveTo', label: $_('contextMenu.moveTo'), icon: 'mdi:folder-move-outline', shortcut: 'mail.moveTo' },
     ]
     if (folderType !== 'trash') {
-      actions.push({ id: 'mail.archive', label: $_('viewer.archive'), icon: 'mdi:archive-outline', shortcut: 'mail.archive' })
+      actions.push({ id: 'mail.archiveAndMarkRead', label: $_('shortcuts.action.archiveAndMarkRead'), icon: 'mdi:archive-check-outline', shortcut: 'mail.archiveAndMarkRead' })
       actions.push({
         id: 'mail.spam',
         label: $_(folderType === 'spam' ? 'contextMenu.markAsNotSpam' : 'contextMenu.markAsSpam'),

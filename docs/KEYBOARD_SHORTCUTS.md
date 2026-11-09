@@ -18,7 +18,7 @@ On macOS, `⌘` works wherever `Ctrl` is listed below, unless macOS reserves the
 | Shortcut | Action |
 |----------|--------|
 | `?` | Show the keyboard shortcuts overlay (not in text fields or while composing) |
-| `Ctrl+P` / `Ctrl+Shift+P` (macOS: `⌘P` / `⌘⇧P`) | Open the command palette (Alfred-style quick launcher) |
+| `Ctrl+K` / `Ctrl+P` / `Ctrl+Shift+P` (macOS: `⌘K` / `⌘P` / `⌘⇧P`) | Open the command palette (Alfred-style quick launcher). Undo, star, mark read/unread and the theme switch keep it open so you can repeat them; your last 8 palette commands are listed first. the sidebar button also opens it |
 | `⌘+,` (macOS) | Open Preferences |
 | `Ctrl+Q` | Quit application |
 | `Ctrl+N` | Compose new message |
@@ -60,7 +60,6 @@ All `Alt` pane and folder navigation is disabled while focus mode is on.
 | `Ctrl+U` | Mark as read (keyboard-focused or checked messages) |
 | `Ctrl+Shift+U` | Mark as unread (keyboard-focused or checked messages) |
 | `e` | Archive and mark as read (keyboard-focused or checked messages) |
-| `Ctrl+K` | Archive without changing read status (keyboard-focused or checked messages) |
 | `l` | Add/remove from Read Later |
 | `Shift+L` | Add/remove from Reply Later |
 | `Ctrl+J` | Mark as spam (keyboard-focused or checked messages) |
@@ -341,3 +340,7 @@ Mirrors mail's "Folder Navigation" shortcuts. These fire regardless of which con
 | `Ctrl+Shift+S` | Sync the contact source currently focused in the sidebar (no-op with warning toast when a built-in entry like "All" / "Local" is focused) |
 
 > Within a focused pane, `Up`/`K` and `Down`/`J` cycle rows (contact list, sidebar sources) and `Enter` opens / activates — same kit predicates Mail's list and folder tree use.
+
+## Collision rules
+
+`frontend/tests/shortcutCollisions.test.mjs` fails when two actions share a key in one context (rail pane plus registry group). Reuse across focus groups (sidebar, list, viewer, composer) must be listed there with the reason. Cmd/Ctrl+K is the palette only; E is archive and mark read.

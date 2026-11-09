@@ -40,10 +40,12 @@
   import { contactPhotos } from '$lib/stores/contactPhotos.svelte'
   import { PendingReadOnLeave } from './pendingReadOnLeave'
   import { preserveThreadMessageScope } from './threadScope'
-  import { publishUndoOperationCompleted, publishUndoOperationCreated } from '../list/undoMutationEvents'
+  import { publishUndoOperationCompleted, publishUndoOperationCreated, rememberUnreadForUndo, setUnreadRestorer } from '../list/undoMutationEvents'
   import { runMessageMutation } from '../list/mutationInFlight'
   import { messageAnimations } from '$lib/stores/messageAnimations.svelte'
   import { getThreadSnapshot, setThreadSnapshot } from './threadSnapshotCache'
+
+  setUnreadRestorer(ids => MarkAsUnread(ids))
 
   interface Props {
     threadId?: string | null
@@ -73,6 +75,7 @@
     onToggleThreadFocus?: () => void
     onToggleMessageFocus?: (messageId: string) => void
   }
+
 
   let {
     threadId = null,
@@ -1303,6 +1306,7 @@
     let archived = false
     try {
       messageIds = await resolveDisplayedMessageTarget(messageIds)
+      const unreadIds = (conversation?.messages ?? []).filter(m => !m.isRead && messageIds.includes(m.id)).map(m => m.id)
       messageAnimations.startRemoval(messageIds, 'archive')
       await runMessageMutation(messageIds, async () => {
         moveMutationInFlight = true
@@ -1310,6 +1314,7 @@
           const result = await ArchiveWithUndo(messageIds)
           if (result.coalesced) return
           archived = true
+          rememberUnreadForUndo(result.operationId, unreadIds)
           try {
             await MarkAsRead(messageIds)
           } catch (err) {
@@ -2083,10 +2088,10 @@
         {/if}
         <button
           class="viewer-toolbar-action p-2 rounded-md hover:bg-muted transition-all duration-150 hover:-translate-y-0.5 hover:scale-105 hover:shadow-sm active:translate-y-0 active:scale-95"
-          data-tooltip={withShortcut($_('viewer.archive'), 'mail.archive')}
-          aria-label={$_('viewer.archive')}
-          aria-keyshortcuts={ariaKeyshortcuts('mail.archive')}
-          onclick={handleArchive}
+          data-tooltip={withShortcut($_('shortcuts.action.archiveAndMarkRead'), 'mail.archiveAndMarkRead')}
+          aria-label={$_('shortcuts.action.archiveAndMarkRead')}
+          aria-keyshortcuts={ariaKeyshortcuts('mail.archiveAndMarkRead')}
+          onclick={archiveAndMarkRead}
           disabled={moveMutationInFlight}
         >
           <Icon icon="mdi:archive-outline" class="w-5 h-5 text-muted-foreground" />
