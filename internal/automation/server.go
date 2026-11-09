@@ -248,6 +248,11 @@ func (s *Server) wrapMiddleware(next http.Handler) http.Handler {
 		reqID := generateRequestID()
 		w.Header().Set("X-Request-Id", reqID)
 
+		// Defense-in-depth HTTP security headers: prevent MIME sniffing, frame embedding, and sensitive data caching
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Cache-Control", "no-store")
+
 		// 1. Origin Protection: reject any browser Origin header (no CORS allowed)
 		if origin := r.Header.Get("Origin"); origin != "" {
 			writeError(w, reqID, http.StatusForbidden, v1.CodeCapabilityDenied, "Browser origins are not permitted", false)
