@@ -1,4 +1,5 @@
 {
+  "messageHistory": {"label": "Avatut viestit", "back": "Takaisin edelliseen viestiin", "forward": "Eteenpäin seuraavaan viestiin"},
   "onlineCount": {
     "counting": "Lasketaan keskusteluja palvelimelta…",
     "complete": "{total} keskustelua · {unread} lukematta",
@@ -204,6 +205,7 @@
     "failed": "Keskustelun lykkääminen epäonnistui"
   },
   "messageList": {
+    "newAbove": "{count} uutta ylempänä",
     "refreshVirtualFolder": "Päivitä virtuaalikansio",
     "searchMessages": "Etsi viestejä...",
     "noMessages": "Tässä kansiossa ei ole viestejä",
@@ -1343,7 +1345,8 @@
   },
   "responsive": {
     "back": "Takaisin",
-    "folders": "Kansiot"
+    "folders": "Kansiot",
+    "messages": "Viestit"
   },
   "images": {
     "addresses": "Osoitteet",
@@ -1401,6 +1404,7 @@
       "compose": "Uusi viesti",
       "search": "Haku",
       "undo": "Kumoa viimeisin toiminto",
+      "folders": "Näytä kansiopuu tai viestilista",
       "syncAll": "Synkronoi kaikki tilit (uudelleen peruuttaa)",
       "syncFolder": "Synkronoi nykyinen kansio (uudelleen peruuttaa)",
       "nextRail": "Seuraava näkymä sivupalkissa",
