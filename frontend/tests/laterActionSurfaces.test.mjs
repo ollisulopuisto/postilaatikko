@@ -82,7 +82,7 @@ test('queue readiness never removes ordinary checked message refs and disables m
 })
 
 test('local server result resolution uses message-id fallback without bypassing identity or race checks', () => {
-  const start=list.indexOf('  async function resolveLocalServerConversation')
+  const start=list.indexOf('  function migrateCheckedServerThread')
   const end=list.indexOf('  // Fetch a non-local server result',start)
   const handler=list.slice(start,end)
   assert.match(handler,/const canonicalId = message.threadId \|\| message.id/)
@@ -121,7 +121,7 @@ test('fetching a result with a shared mailbox UID updates only its account-quali
   const source=list.slice(list.indexOf('  async function fetchAndSelectServerResult'),list.indexOf('  function isMissingServerSearchResult'))
   const code=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText
   const factory=new Function('serverSearchResults','FetchServerMessage','onConversationSelect','serverSearchResultIdentity',`
-    let serverResultFetchGeneration=0, searchQuery='query', searchSource='server', selectedThreadId='', serverSearchError='';
+    let checkedThreadIds=new Set(); let serverResultFetchGeneration=0, searchQuery='query', searchSource='server', selectedThreadId='', serverSearchError=''; const migrateCheckedServerThread=()=>{};
     ${code}
     return {run:fetchAndSelectServerResult,rows:()=>serverSearchResults};`)
   const a={accountId:'A',folderId:'inbox-A',threadId:'uid-A',_uid:42,_isLocal:false,_queueCanonical:false}
@@ -143,10 +143,10 @@ test('fetching a result with a shared mailbox UID updates only its account-quali
 
 test('late local and fetched server opens cannot replace a newer click or keyboard selection', async () => {
   const ts=(await import('typescript')).default
-  const source=list.slice(list.indexOf('  async function resolveLocalServerConversation'),list.indexOf('  function isMissingServerSearchResult'))
+  const source=list.slice(list.indexOf('  function migrateCheckedServerThread'),list.indexOf('  function isMissingServerSearchResult'))
   const code=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText
   const factory=new Function('serverSearchResults','GetMessage','FetchServerMessage','onConversationSelect','serverSearchResultIdentity',`
-    let serverResultFetchGeneration=0, searchQuery='query', searchSource='server', selectedThreadId='rowA';
+    let checkedThreadIds=new Set(); let serverResultFetchGeneration=0, searchQuery='query', searchSource='server', selectedThreadId='rowA';
     const toasts={error:()=>{throw new Error('stale error surfaced')}};
     ${code}
     return {local:resolveLocalServerConversation,remote:fetchAndSelectServerResult,select:id=>selectedThreadId=id,selected:()=>selectedThreadId,rows:()=>serverSearchResults};`)
@@ -172,11 +172,11 @@ test('late local and fetched server opens cannot replace a newer click or keyboa
 
 test('keyboard opening preserves checked rows and resolves server rows through shared reader path', async () => {
   const ts=(await import('typescript')).default
-  const shared=list.slice(list.indexOf('  function openConversation('),list.indexOf('  async function resolveLocalServerConversation'))
+  const shared=list.slice(list.indexOf('  function openConversation('),list.indexOf('  function migrateCheckedServerThread'))
   const keyboard=list.slice(list.indexOf('  export function openSelected()'),list.indexOf('  // Select a specific thread by ID')).replace('export function','function')
   const code=ts.transpileModule(shared+keyboard,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText
   const factory=new Function('activeList','onConversationSelect','resolveLocalServerConversation','fetchAndSelectServerResult',`
-    let serverResultFetchGeneration=0, selectedThreadId='A', checkedThreadIds=new Set(['A','B']);
+    const pinInboxGroupForConversation=id=>{}; let serverResultFetchGeneration=0, selectedThreadId='A', checkedThreadIds=new Set(['A','B']);
     const isUnifiedView=false,isVirtualFolderView=false,isSearchMode=true,folderId='inbox',accountId='one',searchSource='server';
     const getSelectedIndex=()=>0;
     ${code}
@@ -190,4 +190,26 @@ test('keyboard opening preserves checked rows and resolves server rows through s
     assert.equal(state.generation(),1)
     assert.equal(calls[0][0],kind==='ordinary'?'reader':kind)
   }
+})
+
+test('canonical server resolution carries checked IDs forward and opening pins inbox cards', async () => {
+  const ts=(await import('typescript')).default
+  const source=list.slice(list.indexOf('  function migrateCheckedServerThread'),list.indexOf('  function isMissingServerSearchResult'))
+  const code=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText
+  const factory=new Function('serverSearchResults',`
+    let serverResultFetchGeneration=0, searchQuery='query', searchSource='server',selectedThreadId='provisional';
+    let checkedThreadIds=new Set(['provisional','other']); const toasts={error:()=>{}};
+    const GetMessage=async()=>({accountId:'one',id:'message',threadId:'canonical'}),FetchServerMessage=GetMessage;
+    const onConversationSelect=()=>{},serverSearchResultIdentity=r=>r.accountId+':'+r._uid;
+    ${code}
+    return {local:resolveLocalServerConversation,remote:fetchAndSelectServerResult,checks:()=>[...checkedThreadIds],rows:()=>serverSearchResults};`)
+  for(const kind of ['local','remote']) {
+    const row={threadId:'provisional',accountId:'one',folderId:'inbox',_uid:42,messageIds:['message']}
+    const state=factory([row]); await state[kind](row,'inbox','one')
+    assert.deepEqual(state.checks(),['other','canonical'])
+    assert.equal(state.rows()[0].threadId,'canonical')
+  }
+  const shared=list.slice(list.indexOf('  function openConversation'),list.indexOf('  function migrateCheckedServerThread'))
+  assert.match(shared,/pinInboxGroupForConversation\(threadId\)/)
+  assert.doesNotMatch(shared,/checkedThreadIds = new Set/)
 })

@@ -2,7 +2,9 @@
 
 ## [Unreleased]
 
-## Postilaatikko 2026.11.09.12
+## Postilaatikko 2026.11.09.13
+
+- Carry checked server rows forward when their provisional IDs resolve to canonical conversations. Keyboard opening also pins Inbox card position like clicking.
 
 - Preserve checked rows when opening the focused message with Enter, while using the same server-resolution and stale-request guards as clicking.
 

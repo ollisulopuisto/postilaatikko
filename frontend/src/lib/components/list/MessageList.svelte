@@ -1797,7 +1797,6 @@
 
     // Normal click - select for viewing, clear checks
     checkedThreadIds = new Set()
-    pinInboxGroupForConversation(threadId)
     selectedThreadId = threadId
 
     openConversation(activeList[index] as any)
@@ -1808,6 +1807,7 @@
     if (!conversation) return
     serverResultFetchGeneration += 1
     const threadId = conversation.threadId
+    pinInboxGroupForConversation(threadId)
     // For unified view or search, use real folderId and accountId from conversation data
     const realFolderId = (isUnifiedView || isVirtualFolderView || isSearchMode) && conversation.folderId ? conversation.folderId : folderId!
     const realAccountId = (isUnifiedView || isVirtualFolderView || isSearchMode) && conversation.accountId ? conversation.accountId : accountId!
@@ -1824,6 +1824,14 @@
     onConversationSelect?.(threadId, realFolderId, realAccountId)
   }
 
+  function migrateCheckedServerThread(previousId: string, canonicalId: string) {
+    if (previousId === canonicalId || !checkedThreadIds.has(previousId)) return
+    const updated = new Set(checkedThreadIds)
+    updated.delete(previousId)
+    updated.add(canonicalId)
+    checkedThreadIds = updated
+  }
+
   async function resolveLocalServerConversation(result: any, folder: string, account: string) {
     const generation = ++serverResultFetchGeneration
     const query = searchQuery.trim()
@@ -1832,6 +1840,7 @@
       const message = await GetMessage(result.messageIds?.[0] || '')
       if (generation !== serverResultFetchGeneration || selectedThreadId !== selectionAtStart || searchSource !== 'server' || query !== searchQuery.trim() || !serverSearchResults.includes(result) || message?.accountId !== account || !message.id) return
       const canonicalId = message.threadId || message.id
+      migrateCheckedServerThread(result.threadId, canonicalId)
       serverSearchResults = serverSearchResults.map(item => item === result ? { ...item, threadId: canonicalId, _queueCanonical: true } : item)
       selectedThreadId = canonicalId
       onConversationSelect?.(canonicalId, folder, account)
@@ -1856,6 +1865,7 @@
         // Update the server result to be local
         const idx = serverSearchResults.findIndex(result => serverSearchResultIdentity(result) === identity)
         if (idx >= 0) {
+          migrateCheckedServerThread(serverSearchResults[idx].threadId, msg.threadId || msg.id)
           serverSearchResults[idx] = {
             ...serverSearchResults[idx],
             threadId: msg.threadId || msg.id,
