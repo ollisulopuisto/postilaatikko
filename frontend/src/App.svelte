@@ -1501,6 +1501,16 @@
 
   // Global keyboard shortcut handler
   function handleGlobalKeyDown(e: KeyboardEvent) {
+    // Handle history before the secondary-reader-tab early return, but never
+    // steal macOS line-start/end from search, recipient fields or an editor.
+    if (KEY.HISTORY_BACK(e) || KEY.HISTORY_FORWARD(e)) {
+      if (e.defaultPrevented || e.isComposing || getActiveExtension() !== 'mail' || showComposer ||
+        isInputElement(e.target) || isInputElement(e.composedPath()[0]) || isInputElement(document.activeElement) ||
+        document.querySelector('[role="menu"]') || isDialogGuardActive()) return
+      e.preventDefault()
+      void navigateMessageHistory(KEY.HISTORY_BACK(e) ? -1 : 1)
+      return
+    }
     // Secondary workspaces only own tab-level shortcuts. Keep other mail
     // actions on the primary workspace, while allowing workspace navigation
     // and the standard close-tab shortcut from every secondary tab.
