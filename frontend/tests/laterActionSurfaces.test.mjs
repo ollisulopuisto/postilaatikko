@@ -167,5 +167,27 @@ test('late local and fetched server opens cannot replace a newer click or keyboa
     assert.deepEqual(state.rows(),[a])
   }
   const keyboard=list.slice(list.indexOf('  export function openSelected()'),list.indexOf('  // Select a specific thread by ID'))
-  assert.match(keyboard,/selectConversation\(selectedThreadId, index\)/)
+  assert.match(keyboard,/openConversation\(activeList\[index\] as any\)/)
+})
+
+test('keyboard opening preserves checked rows and resolves server rows through shared reader path', async () => {
+  const ts=(await import('typescript')).default
+  const shared=list.slice(list.indexOf('  function openConversation('),list.indexOf('  async function resolveLocalServerConversation'))
+  const keyboard=list.slice(list.indexOf('  export function openSelected()'),list.indexOf('  // Select a specific thread by ID')).replace('export function','function')
+  const code=ts.transpileModule(shared+keyboard,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText
+  const factory=new Function('activeList','onConversationSelect','resolveLocalServerConversation','fetchAndSelectServerResult',`
+    let serverResultFetchGeneration=0, selectedThreadId='A', checkedThreadIds=new Set(['A','B']);
+    const isUnifiedView=false,isVirtualFolderView=false,isSearchMode=true,folderId='inbox',accountId='one',searchSource='server';
+    const getSelectedIndex=()=>0;
+    ${code}
+    return {open:openSelected,checks:()=>[...checkedThreadIds],generation:()=>serverResultFetchGeneration};`)
+  for(const kind of ['ordinary','local','remote']) {
+    const calls=[]
+    const row={threadId:'A',accountId:'one',folderId:'inbox',_uid:42,...(kind==='local'?{_isLocal:true,_queueCanonical:false}:kind==='remote'?{_isLocal:false}:{})}
+    const state=factory([row],(...args)=>calls.push(['reader',...args]),()=>calls.push(['local']),()=>calls.push(['remote']))
+    state.open()
+    assert.deepEqual(state.checks(),['A','B'])
+    assert.equal(state.generation(),1)
+    assert.equal(calls[0][0],kind==='ordinary'?'reader':kind)
+  }
 })

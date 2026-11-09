@@ -1795,15 +1795,20 @@
       return
     }
 
-    // Every reader selection invalidates asynchronous opening of an older row.
-    serverResultFetchGeneration += 1
     // Normal click - select for viewing, clear checks
     checkedThreadIds = new Set()
     pinInboxGroupForConversation(threadId)
     selectedThreadId = threadId
 
+    openConversation(activeList[index] as any)
+  }
+
+  // Opening is shared by mouse and keyboard. Only mouse selection resets checks.
+  function openConversation(conversation: any) {
+    if (!conversation) return
+    serverResultFetchGeneration += 1
+    const threadId = conversation.threadId
     // For unified view or search, use real folderId and accountId from conversation data
-    const conversation = activeList[index] as any
     const realFolderId = (isUnifiedView || isVirtualFolderView || isSearchMode) && conversation.folderId ? conversation.folderId : folderId!
     const realAccountId = (isUnifiedView || isVirtualFolderView || isSearchMode) && conversation.accountId ? conversation.accountId : accountId!
 
@@ -2263,7 +2268,7 @@
 
     const index = getSelectedIndex()
     if (index >= 0) {
-      selectConversation(selectedThreadId, index)
+      openConversation(activeList[index] as any)
     }
   }
 
