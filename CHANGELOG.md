@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## Postilaatikko 2026.11.09.3
+
+- Go Back and Forward through messages you opened, using the new buttons above the shared folder/message column. History remembers the account, folder, search, and email-tab context for this session; opening another message after Back starts a new forward path. Navigation does not undo or redo mailbox actions or composer edits.
+
 ## Postilaatikko 2026.11.09.2
 
 - Keep your place in the message list when new mail arrives: the visible row stays at the same screen position while mail sorts above it. An "N new above" button jumps to the newest mail without changing the message open in the reader. No docked message row.

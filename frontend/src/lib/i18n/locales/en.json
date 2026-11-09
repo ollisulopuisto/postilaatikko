@@ -1,4 +1,5 @@
 {
+  "messageHistory": {"label": "Visited messages", "back": "Back to previous message", "forward": "Forward to next message"},
   "onlineCount": {
     "counting": "Counting online conversations…",
     "complete": "{total} conversations · {unread} unread",

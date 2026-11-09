@@ -1,6 +1,8 @@
 <script lang="ts">
   import Icon from '@iconify/svelte'
   import MailWindowApp from './MailWindowApp.svelte'
+  import MessageHistoryBar from './lib/components/list/MessageHistoryBar.svelte'
+  import { emptyMessageHistory, visitMessage, stepMessageHistory } from './lib/navigation/messageHistory'
   import type { MailScope } from './lib/windows/mailWindow'
   import { findReaderWorkspaceTab, type MailWorkspaceTab } from './lib/windows/mailWorkspaceTabs'
   import type { NavigationEntry } from './lib/sidebar/cards'
@@ -142,6 +144,52 @@
     }
   }
 
+  let messageHistory = $state(emptyMessageHistory())
+  let restoringMessageHistory = false
+  function recordMessageVisit() {
+    if (restoringMessageHistory) return
+    messageHistory = visitMessage(messageHistory, {
+      scope: currentMailScope(), workspaceId: activeMailWorkspace, selectionSource, triageStatus,
+    })
+  }
+  async function navigateMessageHistory(direction: -1 | 1) {
+    if (restoringMessageHistory) return
+    const next = stepMessageHistory(messageHistory, direction)
+    if (next === messageHistory) return
+    messageHistory = next
+    const visit = next.entries[next.index]
+    const scope = visit.scope
+    restoringMessageHistory = true
+    try {
+      const workspace = mailWorkspaceTabs.find(tab => tab.id === visit.workspaceId)
+      switchMailWorkspace(workspace ? workspace.id : 'primary')
+      selectedAccountId = scope.accountId
+      selectedFolderId = scope.folderId
+      selectedFolderName = scope.folderName
+      selectedFolderType = scope.folderType
+      selectedThreadId = scope.threadId || null
+      selectedConversationAccountId = scope.threadAccountId || scope.accountId
+      selectedConversationFolderId = scope.threadFolderId || scope.folderId
+      selectionSource = visit.selectionSource
+      triageStatus = visit.triageStatus
+      contextPaneMode = 'messages'
+      hideSidebar()
+      showViewer()
+      if (workspace) {
+        updateWorkspaceScope(workspace.id, { ...scope })
+        mailWindowTabInstances[workspace.id]?.restoreMessageVisit(scope)
+      }
+      await tick()
+      if (!workspace) {
+        messageListRef?.setQuickFilter(visit.triageStatus === 'all' ? '' : visit.triageStatus)
+        messageListRef?.setSearchQuery(scope.searchQuery || '')
+        saveUIState({ selectedAccountId, selectedFolderId, selectedFolderName, selectedFolderType,
+          selectedThreadId, selectedConversationAccountId, selectedConversationFolderId })
+      }
+      setFocusedPane('viewer')
+    } finally { restoringMessageHistory = false }
+  }
+
   function workspaceLabel(scope: MailScope, reader: boolean): string {
     if (reader && scope.threadId && scope.threadSubject) return scope.threadSubject
     if (scope.accountId !== 'unified') return scope.folderName || $_('mailWindow.folder')
@@ -213,6 +261,7 @@
         selectedConversationFolderId = primaryMailScope.threadFolderId || null
       }
       contextPaneMode = primaryContextPaneMode
+      recordMessageVisit()
       setFocusedPane('messageList')
       return
     }
@@ -226,6 +275,7 @@
       selectedConversationAccountId = tab.scope.threadAccountId || tab.scope.accountId
       selectedConversationFolderId = tab.scope.threadFolderId || tab.scope.folderId
       contextPaneMode = 'messages'
+      recordMessageVisit()
       setFocusedPane('viewer')
       return
     }
@@ -309,6 +359,7 @@
 
   function updateWorkspaceScope(id: string, scope: MailScope) {
     mailWorkspaceTabs = mailWorkspaceTabs.map(tab => tab.id === id ? { ...tab, scope } : tab)
+    if (activeMailWorkspace === id) recordMessageVisit()
   }
 
   function returnToPrimaryContextForFolderNavigation() {
@@ -803,6 +854,7 @@
       selectedThreadId = data.threadId
       selectedConversationAccountId = data.accountId
       selectedConversationFolderId = data.folderId
+      recordMessageVisit()
 
       // Highlight the thread in the message list (with small delay to ensure list has loaded)
       setTimeout(() => {
@@ -1001,6 +1053,8 @@
         }
       }
     }
+
+    recordMessageVisit()
 
     // Listen for system theme changes from backend (XDG Settings Portal)
     EventsOn('theme:system-preference', (newTheme: string) => {
@@ -1223,6 +1277,7 @@
       })
     }
     showViewer()
+    recordMessageVisit()
 
     // Persist state
     saveUIState({
@@ -2546,6 +2601,9 @@
          the main thread on the second mount. display:contents keeps the flex
          children as direct flex items so the layout doesn't shift. -->
     <div style:display={getActiveExtension() === 'mail' ? 'contents' : 'none'}>
+    <div class="flex min-h-0 min-w-0 flex-col" style:width={getLayoutMode() === 'full' ? `${listWidth}px` : undefined} class:flex-1={isResponsive()} style:display={contextPaneVisible ? 'flex' : 'none'} onmouseenter={revealContextPane} onmouseleave={scheduleContextPaneHide} role="presentation">
+      <MessageHistoryBar canBack={messageHistory.index > 0} canForward={messageHistory.index >= 0 && messageHistory.index < messageHistory.entries.length - 1} onBack={() => void navigateMessageHistory(-1)} onForward={() => void navigateMessageHistory(1)} />
+      <div class="flex flex-1 min-h-0 min-w-0">
     <!-- Sidebar (Folder List) -->
     <aside
       bind:this={contextColumnRef}
@@ -2647,6 +2705,7 @@
           folderId={selectedFolderId}
           folderName={selectedFolderName}
           folderType={selectedFolderType || 'inbox'}
+          readerSelection={selectedThreadId ? { threadId: selectedThreadId, accountId: selectedConversationAccountId || selectedAccountId || '', folderId: selectedConversationFolderId || selectedFolderId || '' } : null}
           onConversationSelect={handleConversationSelect}
           onOpenInTab={openListThreadInTab}
           onReply={handleReply}
@@ -2661,6 +2720,9 @@
         />
       </div>
     </section>
+
+      </div>
+    </div>
 
     <!-- List Resize Handle -->
     {#if getLayoutMode() === 'full'}

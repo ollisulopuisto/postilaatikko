@@ -1,4 +1,5 @@
 {
+  "messageHistory": {"label": "Avatut viestit", "back": "Takaisin edelliseen viestiin", "forward": "Eteenpäin seuraavaan viestiin"},
   "onlineCount": {
     "counting": "Lasketaan keskusteluja palvelimelta…",
     "complete": "{total} keskustelua · {unread} lukematta",

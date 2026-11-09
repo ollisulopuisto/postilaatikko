@@ -63,6 +63,7 @@
     folderId?: string | null
     folderName?: string
     folderType?: string
+    readerSelection?: { threadId: string; accountId: string; folderId: string } | null
     onConversationSelect?: (threadId: string, folderId: string, accountId: string) => void
     onOpenInTab?: (accountId: string, folderId: string, threadId: string, folderType: string, subject: string) => void
     onReply?: (mode: 'reply' | 'reply-all' | 'forward', messageId: string) => void
@@ -83,6 +84,7 @@
     folderId = null,
     folderName = 'Inbox',
     folderType = 'inbox',
+    readerSelection = null,
     onConversationSelect,
     onOpenInTab,
     onReply,
@@ -119,6 +121,12 @@
   // slightly later, especially for unified folders.
   let manualSyncing = $state(false)
   let selectedThreadId = $state<string | null>(null)
+  // Reader/history restoration must also move the list's keyboard-action target.
+  // Reapply after a folder load, which otherwise selects its first row.
+  $effect(() => {
+    const selection = readerSelection
+    if (!loading && selection) selectedThreadId = selection.threadId
+  })
   let lastLoadedFolderId = $state<string | null>(null) // Track folder changes
   let loadGeneration = $state(0) // Invalidates stale async results when folder changes mid-load (#200)
   let countRequestSequence = 0
