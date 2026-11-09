@@ -483,7 +483,7 @@
     "historyBranches": "Haarojen päät",
     "historyEmpty": "Ei muokkauksia vielä",
     "historyEdit": "Muokkaus",
-    "sendQueued": "Lähetetään 30 sekunnin kuluttua - peruuta napsauttamalla lähtölaskentaa",
+    "sendQueued": "Viesti odottaa lähetystä - voit perua lähetyksen Kumoa-painikkeella",
     "failedToSaveDraft": "Luonnoksen tallennus ennen lähetystä epäonnistui",
     "attachmentsNotRestored": "{count} liitettä ei voitu palauttaa"
   },
@@ -1572,6 +1572,9 @@
     }
   },
   "pendingSend": {
+    "queued": "Viesti odottaa lähetystä",
+    "sending": "Lähetetään…",
+    "undo": "Kumoa",
     "countdown": "Lähetetään {seconds} s kuluttua",
     "sendNow": "Lähetä nyt",
     "cancel": "Peruuta",
