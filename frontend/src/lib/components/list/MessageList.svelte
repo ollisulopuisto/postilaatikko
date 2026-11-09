@@ -16,10 +16,11 @@
 <script lang="ts">
   import { refreshVirtualView, isExpectedSearchCancellation } from './virtualFolderRefresh'
   import { pinnedGroupForSelection, retainPinnedConversationPosition, type PinnedInboxGroup } from './activeInboxGroup'
+  import { mailRowKey, captureScrollAnchor, anchoredScrollTop, newRowsBeforeAnchor, extendAnchorWindow } from './scrollAnchor'
   import { retainReadSelection } from '$lib/sidebar/virtualView'
   import { app as searchModels } from '../../../../wailsjs/go/models'
 
-  import { onMount, onDestroy } from 'svelte'
+  import { onMount, onDestroy, tick } from 'svelte'
   import OnlineViewCount from './OnlineViewCount.svelte'
   import Icon from '@iconify/svelte'
   import ConversationRow from './ConversationRow.svelte'
@@ -592,16 +593,9 @@
       // (#348) — same pattern as handleActionComplete. Without this, a sync
       // collapses "Load more" pagination back to the first page and jumps
       // the view to the top.
-      const scrollTop = listContainerRef?.scrollTop ?? 0
       const totalLoaded = Math.max(conversations.length, PAGE_SIZE)
       offset = 0
-      loadConversations(totalLoaded).then(() => {
-        if (listContainerRef) {
-          requestAnimationFrame(() => {
-            listContainerRef!.scrollTop = scrollTop
-          })
-        }
-      })
+      void loadConversations(totalLoaded)
     }, 300)
   }
 
@@ -1119,7 +1113,16 @@
         if (generation !== loadGeneration || isSearchMode) return
         virtualCursor = response.cursor || ''
         virtualIssues = (response.issues || []).map(item => `${item.accountName}: ${item.message}`).join(' · ')
-        const items = response.conversations || []
+        let items = response.conversations || []
+        if (currentOffset === 0 && lastLoadedFolderId === folderId && virtualCursor) {
+          items = await extendAnchorWindow(items, viewportAnchorKey(), row => mailRowKey(row, accountId), async () => {
+            if (!virtualCursor || generation !== loadGeneration || isSearchMode) return []
+            const page = await SearchMail(new searchModels.MailSearchRequest({sessionId: virtualSearchSession, query: '', accountIds: [], virtualFolderId: folderId!, filter: filterMode, cursor: virtualCursor, limit: 100}))
+            virtualCursor = page.cursor || ''
+            return page.conversations || []
+          })
+          if (generation !== loadGeneration || isSearchMode) return
+        }
         // Keep already visible mail during provider failures; errors are not an
         // empty mailbox. Accounts that returned successfully still contribute.
         const failedAccounts = new Set((response.issues || []).map(item => item.accountId))
@@ -1128,7 +1131,7 @@
           for (const prior of conversations) if (failedAccounts.has(prior.accountId || '') && !keys.has(`${prior.accountId}:${prior.threadId}`)) items.push(prior)
         }
         const view = virtualFoldersStore.folders.find(item => item.id === folderId)
-        conversations = currentOffset === 0 ? retainReadSelection(conversations, items, selectedThreadId, (view?.readStatus === 'unread' || filterMode === 'unread') && lastLoadedFolderId === folderId) : [...new Map([...conversations, ...items].map(c => [`${c.accountId}:${c.threadId}`, c])).values()]
+        await replaceConversationRows(currentOffset === 0 ? retainReadSelection(conversations, items, selectedThreadId, (view?.readStatus === 'unread' || filterMode === 'unread') && lastLoadedFolderId === folderId) : [...new Map([...conversations, ...items].map(c => [`${c.accountId}:${c.threadId}`, c])).values()], currentOffset === 0)
         listError = conversations.length === 0 && virtualIssues ? virtualIssues : null
         totalCount = conversations.length + (virtualCursor ? 1 : 0)
         if (currentOffset === 0 && (!selectedThreadId || !conversations.some(c => c.threadId === selectedThreadId))) selectedThreadId = conversations[0]?.threadId || null
@@ -1156,7 +1159,7 @@
           totalCount = count
         }
       })
-      const convList = await withLoadTimeout(
+      let convList = await withLoadTimeout(
         isVirtualFolderView
           ? GetVirtualFolderConversations(folderId!, currentOffset, limit, getMessageListSortOrder())
           : isUnifiedView
@@ -1177,13 +1180,28 @@
         return
       }
 
+      if (lastLoadedFolderId === folderId && convList?.length) {
+        let nextOffset = convList.length
+        convList = await extendAnchorWindow(convList, viewportAnchorKey(), row => mailRowKey(row, accountId), async () => {
+          if (generation !== loadGeneration || isSearchMode) return []
+          const rows = await withLoadTimeout(
+            isUnifiedView
+              ? GetUnifiedFolderConversations(folderId!, nextOffset, PAGE_SIZE, getMessageListSortOrder(), filterMode)
+              : GetConversations(accountId!, folderId!, nextOffset, PAGE_SIZE, getMessageListSortOrder(), filterMode),
+            'scroll anchor headers',
+          )
+          nextOffset += rows?.length ?? 0
+          return rows || []
+        })
+        if (generation !== loadGeneration || isSearchMode) return
+      }
       const previousConversations = conversations
-      conversations = retainReadSelection(
+      await replaceConversationRows(retainReadSelection(
         previousConversations,
         convList || [],
         selectedThreadId,
         (filterMode === 'unread' || (isVirtualFolderView && virtualFoldersStore.folders.find(item => item.id === folderId)?.readStatus === 'unread')) && lastLoadedFolderId === folderId,
-      )
+      ), true)
       totalCount = conversations.length
       listRendered = true
       if (resolvedCount !== null) totalCount = resolvedCount
@@ -1288,7 +1306,6 @@
     listError = null
 
     try {
-      const scrollTop = listContainerRef?.scrollTop ?? 0
       const totalLoaded = Math.max(conversations.length, PAGE_SIZE)
 
       if (isUnifiedView) {
@@ -1300,11 +1317,7 @@
       offset = 0
       await loadConversations(totalLoaded)
 
-      if (listContainerRef) {
-        requestAnimationFrame(() => {
-          listContainerRef!.scrollTop = scrollTop
-        })
-      }
+
     } catch (err) {
       console.error('Failed to sync folder:', err)
       listError = $_('viewer.failedToLoadMessages')
@@ -2056,6 +2069,56 @@
   // Reference to the list container for scrolling
   let listContainerRef = $state<HTMLDivElement | null>(null)
 
+
+  let newAboveKeys = $state<Set<string>>(new Set())
+  let newAboveView = ''
+  const currentListView = () => `${accountId}:${folderId}:${filterMode}:${isSearchMode}`
+  $effect(() => {
+    const view = `${accountId}:${folderId}:${filterMode}:${isSearchMode}`
+    if (view !== newAboveView) { newAboveKeys = new Set(); newAboveView = view }
+  })
+
+  function viewportAnchorKey(): string | null {
+    if (!listContainerRef) return null
+    const top = listContainerRef.getBoundingClientRect().top
+    return [...listContainerRef.querySelectorAll<HTMLElement>('[data-mail-row-key]')].find(row => row.getBoundingClientRect().bottom > top)?.dataset.mailRowKey ?? null
+  }
+
+  async function replaceConversationRows(next: message.Conversation[], refresh: boolean) {
+    const container = listContainerRef
+    const view = currentListView()
+    const rows = container ? [...container.querySelectorAll<HTMLElement>('[data-mail-row-key]')] : []
+    const viewportTop = container?.getBoundingClientRect().top ?? 0
+    const anchor = refresh && lastLoadedFolderId === folderId && !isSearchMode && container
+      ? captureScrollAnchor(rows.map(row => ({ key: row.dataset.mailRowKey!, top: row.getBoundingClientRect().top, bottom: row.getBoundingClientRect().bottom })), viewportTop, container.scrollTop)
+      : null
+    const previousKeys = conversations.map(row => mailRowKey(row, accountId))
+    conversations = next
+    if (!anchor || !container) return
+    await tick()
+    if (view !== currentListView() || container !== listContainerRef) return
+    const currentRows = [...container.querySelectorAll<HTMLElement>('[data-mail-row-key]')]
+    const row = currentRows.find(row => row.dataset.mailRowKey === anchor.key)
+    if (!row) return // Deleted/moved anchor: do not jump to an unrelated message.
+    const target = anchoredScrollTop(anchor, row.getBoundingClientRect().top, container.getBoundingClientRect().top, container.scrollTop)
+    if (target === null) return
+    container.scrollTop = target
+    const nextKeys = next.map(row => mailRowKey(row, accountId))
+    const validKeys = new Set(nextKeys)
+    newAboveKeys = new Set([...newAboveKeys].filter(key => validKeys.has(key)))
+    if (container.scrollTop > 1) {
+      for (const key of newRowsBeforeAnchor(previousKeys, nextKeys, anchor.key)) newAboveKeys.add(key)
+      newAboveKeys = new Set(newAboveKeys)
+    }
+  }
+
+  function showNewestMail() {
+    // Navigation only: never change the selected/open message or mark anything read.
+    listContainerRef?.scrollTo({ top: 0, behavior: 'instant' })
+    newAboveKeys = new Set()
+    listContainerRef?.focus({ preventScroll: true })
+  }
+
   function loadNextPage() {
     if (loading || conversations.length >= totalCount) return
     // Continue at the actual end of the loaded window. This also avoids
@@ -2066,6 +2129,12 @@
 
   function handleListScroll(event: Event) {
     const container = event.currentTarget as HTMLDivElement
+    if (container.scrollTop <= 1) newAboveKeys = new Set()
+    else if (newAboveKeys.size) {
+      const top = container.getBoundingClientRect().top
+      const above = new Set([...container.querySelectorAll<HTMLElement>('[data-mail-row-key]')].filter(row => row.getBoundingClientRect().bottom <= top).map(row => row.dataset.mailRowKey!))
+      newAboveKeys = new Set([...newAboveKeys].filter(key => above.has(key)))
+    }
     // Start loading shortly before the user reaches the end so scrolling is
     // continuous rather than stopping at a manual "Load more" control.
     if (container.scrollHeight - container.scrollTop - container.clientHeight < 180) {
@@ -3052,8 +3121,15 @@
     <p class="px-3 pb-1 text-[10px] text-muted-foreground" role="status">{$_('search.virtualFolderCacheUpdated', { values: { time: virtualCacheRefreshedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) } })}</p>
   {/if}
   {#if isVirtualFolderView && virtualCursor && !loading && !isSearchMode && !virtualIssues}<button type="button" class="px-3 py-2 text-sm text-primary" onclick={loadNextPage}>{$_('search.loadMore')}</button>{/if}
+  {#if newAboveKeys.size > 0 && !isSearchMode}
+    <div class="absolute left-1/2 -translate-x-1/2 top-40 z-20">
+      <button type="button" class="rounded-full bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-md focus-visible:ring-2 focus-visible:ring-primary" onclick={showNewestMail}>
+        ↑ {$_('messageList.newAbove', { values: { count: newAboveKeys.size } })}
+      </button>
+    </div>
+  {/if}
   <!-- Conversation List -->
-  <div bind:this={listContainerRef} class="message-list-scroll flex-1 min-h-0 overflow-y-auto scrollbar-thin" onscroll={handleListScroll}>
+  <div bind:this={listContainerRef} tabindex="-1" style="overflow-anchor: none" class="message-list-scroll flex-1 min-h-0 overflow-y-auto scrollbar-thin" onscroll={handleListScroll}>
     <div
       class={cn(
         'message-list-card',

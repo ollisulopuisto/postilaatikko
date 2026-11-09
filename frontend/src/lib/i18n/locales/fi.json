@@ -204,6 +204,7 @@
     "failed": "Keskustelun lykkääminen epäonnistui"
   },
   "messageList": {
+    "newAbove": "{count} uutta ylempänä",
     "refreshVirtualFolder": "Päivitä virtuaalikansio",
     "searchMessages": "Etsi viestejä...",
     "noMessages": "Tässä kansiossa ei ole viestejä",

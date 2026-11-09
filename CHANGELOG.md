@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## Postilaatikko 2026.11.09.2
+
+- Keep your place in the message list when new mail arrives: the visible row stays at the same screen position while mail sorts above it. An "N new above" button jumps to the newest mail without changing the message open in the reader. No docked message row.
+
 ## Postilaatikko 2026.11.09.1
 
 - Press Cmd/Ctrl+D, or click the new Folders button at the bottom of the left rail, to open the full folder tree. In wide windows the tree and the message list share one column: the open one takes the space and the other folds to a thin strip you can click. Picking a folder, Escape, or Cmd/Ctrl+D again returns to the message list. In narrow windows they swap in the same pane. Open the composer in its own window with Cmd/Ctrl+Shift+D; Cmd/Ctrl+D no longer detaches it.

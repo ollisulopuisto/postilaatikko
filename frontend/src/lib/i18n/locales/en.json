@@ -204,6 +204,7 @@
     "failed": "Could not snooze conversation"
   },
   "messageList": {
+    "newAbove": "{count} new above",
     "refreshVirtualFolder": "Refresh virtual folder",
     "searchMessages": "Search messages...",
     "noMessages": "No messages in this folder",
