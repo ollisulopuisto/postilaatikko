@@ -2,7 +2,9 @@
 
 ## [Unreleased]
 
-## Postilaatikko 2026.11.09.15
+## Postilaatikko 2026.11.09.16
+
+- Preserve the opened search UID when several rows share a conversation. Reader restoration matches the account and folder, and keyboard focus changes do not reapply an older reader selection.
 
 - Keep server row UI identity mailbox-qualified after resolution too. Canonical conversation IDs are separate backend targets, so identical RFC thread IDs across accounts cannot change another row's checked state.
 

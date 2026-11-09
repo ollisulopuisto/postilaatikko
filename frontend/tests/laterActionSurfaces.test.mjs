@@ -273,3 +273,21 @@ test('same canonical RFC thread in two accounts never checks or queues the unsel
   assert.match(row,/conversationId=\{useMultiSelect \? undefined : backendConversationId\}/)
   assert.match(row,/OpenReaderWindow\(accountId, folderId, backendConversationId/)
 })
+
+test('reader restoration preserves selected same-thread UID and matches both account and folder', async () => {
+  const ts=(await import('typescript')).default
+  const source=list.slice(list.indexOf('  function serverRowForReaderSelection'),list.indexOf('  $effect(() => {\n    const selection = readerSelection'))
+  const code=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText
+  const resolve=new Function(code+';return serverRowForReaderSelection;')()
+  const first={threadId:'uid-41',_canonicalConversationId:'T',accountId:'A',folderId:'inbox'}
+  const second={...first,threadId:'uid-42'}
+  const folder={...first,threadId:'uid-43',folderId:'archive'}
+  const account={...first,threadId:'uid-44',accountId:'B'}
+  const rows=[first,second,folder,account]
+  assert.equal(resolve(rows,{threadId:'T',accountId:'A',folderId:'inbox'},'uid-42'),second)
+  assert.equal(resolve(rows,{threadId:'T',accountId:'A',folderId:'inbox'},'uid-43'),first)
+  assert.equal(resolve(rows,{threadId:'T',accountId:'B',folderId:'inbox'},'uid-42'),account)
+  assert.equal(resolve(rows,{threadId:'T',accountId:'A',folderId:'archive'},'uid-42'),folder)
+  assert.equal(resolve(rows,{threadId:'T',accountId:'C',folderId:'inbox'},null),undefined)
+  assert.match(list,/serverRowForReaderSelection\(serverSearchResults, selection, untrack\(\(\) => selectedThreadId\)\)/)
+})

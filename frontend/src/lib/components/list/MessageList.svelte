@@ -20,7 +20,7 @@
   import { retainReadSelection } from '$lib/sidebar/virtualView'
   import { app as searchModels } from '../../../../wailsjs/go/models'
 
-  import { onMount, onDestroy, tick } from 'svelte'
+  import { onMount, onDestroy, tick, untrack } from 'svelte'
   import OnlineViewCount from './OnlineViewCount.svelte'
   import Icon from '@iconify/svelte'
   import ConversationRow from './ConversationRow.svelte'
@@ -123,10 +123,17 @@
   let selectedThreadId = $state<string | null>(null)
   // Reader/history restoration must also move the list's keyboard-action target.
   // Reapply after a folder load, which otherwise selects its first row.
+  function serverRowForReaderSelection(rows: any[], selection: { accountId: string; folderId: string; threadId: string }, currentRowId: string | null) {
+    const matches = (row: any) => row.accountId === selection.accountId && row.folderId === selection.folderId && row._canonicalConversationId === selection.threadId
+    return rows.find(row => row.threadId === currentRowId && matches(row)) || rows.find(matches)
+  }
+
   $effect(() => {
     const selection = readerSelection
     if (!loading && selection) {
-      const serverRow = serverSearchResults.find(row => row.accountId === selection.accountId && row._canonicalConversationId === selection.threadId)
+      // Focus-only moves must not reapply the old reader selection. Keep the
+      // opened UID when multiple messages share one canonical conversation.
+      const serverRow = serverRowForReaderSelection(serverSearchResults, selection, untrack(() => selectedThreadId))
       selectedThreadId = serverRow && showSearch && searchSource === 'server' ? serverRow.threadId : selection.threadId
     }
   })
