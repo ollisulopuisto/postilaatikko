@@ -2652,7 +2652,7 @@
       {#if showFolderToggle}
         <button
           class="p-1.5 -ml-1 rounded-md hover:bg-muted transition-colors"
-          title={$_('responsive.folders')}
+          title={withShortcut($_('responsive.folders'), 'app.folders')}
           aria-label={$_('aria.toggleSidebar')}
           onclick={onToggleSidebar}
         >

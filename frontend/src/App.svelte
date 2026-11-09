@@ -63,6 +63,7 @@
   import { dispatchExtensionShortcut } from '$lib/stores/extensionShortcuts.svelte'
   import { shortcutsOverlay, openShortcutsOverlay } from '$lib/stores/shortcutsOverlay.svelte'
   import { executeCommand, openCommandPalette, registerCommand } from '$lib/stores/commandPalette.svelte'
+  import { withShortcut } from '$lib/keyboard/format'
   import { getListAction, runListAction as runActionOnTarget } from '$lib/actions/listActions'
   import { resolveListTarget } from '$lib/actions/target'
   import type { ActionTarget, ListTarget, MessageActionExecutor, RunOptions } from '$lib/actions/types'
@@ -100,6 +101,10 @@
   let selectedFolderId = $state<string | null>(null)
   let selectedFolderName = $state('Inbox')
   let selectedFolderType = $state<string | null>(null)
+  // Wide windows keep the folder tree and message list in one shared column:
+  // one opens while the other folds to a strip.
+  const FOLDED_PANE_WIDTH = 36
+  const sharedColumn = $derived(getLayoutMode() === 'full')
   let contextPaneMode = $state<'folders' | 'messages'>('messages')
   let contextPaneAutoHide = $state(false)
   let contextPaneRevealed = $state(true)
@@ -228,6 +233,22 @@
   function showFolderBrowser() {
     contextPaneMode = 'folders'
     setFocusedPane('sidebar')
+  }
+
+  function toggleFolderBrowser() {
+    // Same swap as the panel icon beside the folder title: folder tree <-> message list.
+    if (getActiveExtension() !== 'mail') setActiveExtension('mail')
+    if (getLayoutMode() === 'narrow' && contextPaneMode === 'folders') {
+      hideSidebar()
+    }
+    if (contextPaneMode === 'folders') {
+      contextPaneMode = 'messages'
+      setFocusedPane('messageList')
+      return
+    }
+    revealContextPane()
+    if (getLayoutMode() === 'narrow') showSidebar()
+    showFolderBrowser()
   }
 
   function revealContextPane() {
@@ -1014,6 +1035,7 @@
       getPaneNav('messageList')?.focusSearch?.()
       setFocusedPane('messageList')
     })
+    registerCommand('app.folders', () => toggleFolderBrowser())
     registerCommand('app.syncAll', () => {
       sidebarRef?.toggleSync()
     })
@@ -1620,6 +1642,13 @@
 
       // MAIL-DOMAIN Ctrl/Cmd cases (guarded above).
       switch (e.key.toLowerCase()) {
+        case 'd':
+          // Ctrl/Cmd+D swaps the folder tree and the message list. Shift+D is
+          // the composer's detach shortcut and is handled in the composer.
+          if (e.shiftKey) return
+          e.preventDefault()
+          void executeCommand('app.folders')
+          return
         case 'n':
           // Ctrl/Cmd+N — new mail composer. Mail-domain only: when an
           // extension rail is active (e.g., calendar), that extension's
@@ -2509,13 +2538,20 @@
     <!-- Sidebar (Folder List) -->
     <aside
       class="spark-sidebar-host flex-col {getLayoutMode() === 'narrow' ? `responsive-sidebar-overlay w-72 border-r border-border bg-background ${getResponsiveView() === 'sidebar' ? 'responsive-sidebar-visible' : ''}` : 'flex-shrink-0 border-r border-border bg-muted/30'}"
-      style="{getLayoutMode() === 'full' ? `width: ${listWidth}px` : ''}"
-      style:display={contextPaneVisible && contextPaneMode === 'folders' ? 'flex' : 'none'}
+      class:pane-folded={sharedColumn && contextPaneMode !== 'folders'}
+      style="{sharedColumn ? `width: ${contextPaneMode === 'folders' ? listWidth - FOLDED_PANE_WIDTH : FOLDED_PANE_WIDTH}px` : getLayoutMode() === 'full' ? `width: ${listWidth}px` : ''}"
+      style:display={contextPaneVisible && (sharedColumn || contextPaneMode === 'folders') ? 'flex' : 'none'}
       onmouseenter={revealContextPane}
       onmouseleave={scheduleContextPaneHide}
       role="presentation"
       onclick={() => handlePaneClick('sidebar')}
     >
+      {#if sharedColumn && contextPaneMode !== 'folders'}
+        <button type="button" class="pane-fold-button" title={withShortcut($_('shortcuts.action.folders'), 'app.folders')} aria-label={$_('shortcuts.action.folders')} onclick={(e) => { e.stopPropagation(); toggleFolderBrowser() }}>
+          <Icon icon="mdi:folder-multiple-outline" width="18" />
+          <span>{$_('responsive.folders')}</span>
+        </button>
+      {/if}
       <div class="flex min-h-10 shrink-0 items-center gap-1 overflow-hidden border-b border-border px-2 py-1" aria-label={$_('messageList.quickFilters')}>
         <div class="flex shrink-0 items-center gap-1" role="group" aria-label={$_('messageList.quickFilters')}>
           <button type="button" class="flex size-8 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageStatus === 'all' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.all')} title={$_('triage.all')} aria-pressed={triageStatus === 'all'} onclick={() => selectTriageFilter('')}><Icon icon="mdi:inbox-multiple-outline" width="16" /></button>
@@ -2542,6 +2578,8 @@
         isFlashing={isPaneFlashing('sidebar')}
         showBackButton={getLayoutMode() === 'narrow'}
         onBack={hideSidebar}
+        treeMode={contextPaneMode === 'folders'}
+        onCloseTree={toggleFolderBrowser}
         collapsed={false}
         showCollapseControl={false}
       />
@@ -2564,8 +2602,9 @@
     <section
       bind:this={messageListContainerRef}
       class="spark-mail-list-pane min-h-0 flex flex-col overflow-hidden {isResponsive() ? 'flex-1 min-w-0 border-r border-border bg-background' : 'flex-shrink-0 border-r border-border bg-background'}"
-      style="{getLayoutMode() === 'full' ? `width: ${listWidth}px` : ''}"
-      style:display={contextPaneVisible && contextPaneMode === 'messages' ? 'flex' : 'none'}
+      class:pane-folded={sharedColumn && contextPaneMode === 'folders'}
+      style="{sharedColumn ? `width: ${contextPaneMode === 'messages' ? listWidth - FOLDED_PANE_WIDTH : FOLDED_PANE_WIDTH}px` : getLayoutMode() === 'full' ? `width: ${listWidth}px` : ''}"
+      style:display={contextPaneVisible && (sharedColumn || contextPaneMode === 'messages') ? 'flex' : 'none'}
       onmouseenter={revealContextPane}
       onmouseleave={scheduleContextPaneHide}
       role="presentation"
@@ -2573,6 +2612,12 @@
       tabindex="-1"
       onclick={() => handlePaneClick('messageList')}
     >
+      {#if sharedColumn && contextPaneMode === 'folders'}
+        <button type="button" class="pane-fold-button" title={$_('responsive.messages')} aria-label={$_('responsive.messages')} onclick={(e) => { e.stopPropagation(); toggleFolderBrowser() }}>
+          <Icon icon="mdi:email-outline" width="18" />
+          <span>{$_('responsive.messages')}</span>
+        </button>
+      {/if}
       <div class="flex min-h-10 shrink-0 items-center gap-1 overflow-hidden border-b border-border px-2 py-1" aria-label={$_('messageList.quickFilters')}>
         <div class="flex shrink-0 items-center gap-1" role="group" aria-label={$_('messageList.quickFilters')}>
           <button type="button" class="flex size-8 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageStatus === 'all' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.all')} title={$_('triage.all')} aria-pressed={triageStatus === 'all'} onclick={() => selectTriageFilter('')}><Icon icon="mdi:inbox-multiple-outline" width="16" /></button>

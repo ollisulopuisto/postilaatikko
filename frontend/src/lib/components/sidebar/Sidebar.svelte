@@ -143,6 +143,9 @@
     showCollapseControl?: boolean
     onToggleCollapsed?: () => void
     navigationEnabled?: boolean
+    /** Show the full folder tree filling this pane instead of the slide-over. */
+    treeMode?: boolean
+    onCloseTree?: () => void
   }
 
   let {
@@ -164,6 +167,8 @@
     showCollapseControl = true,
     onToggleCollapsed,
     navigationEnabled = true,
+    treeMode = false,
+    onCloseTree,
   }: Props = $props()
 
   // Dialog state
@@ -176,7 +181,7 @@
   const allFolderChoices = $derived(accountStore.accounts.flatMap(item => folderChoices(item.account.id, item.account.name, item.account.email, item.folders)))
   const matchingFolders = $derived(filterFolders(allFolderChoices, allFoldersQuery))
   $effect(() => {
-    if (!showAllFolders) { allFoldersQuery = ''; return }
+    if (!showAllFolders && !treeMode) { allFoldersQuery = ''; return }
     if (!allFoldersSearchInput) return
     const timer = setTimeout(() => allFoldersSearchInput?.focus(), 0)
     return () => clearTimeout(timer)
@@ -715,17 +720,19 @@
     </div>
   </div>
 
-  {#if showAllFolders}
+  {#if showAllFolders || treeMode}
+    {#if !treeMode}
     <div
       class="fixed inset-0 z-20 bg-black/20"
       onclick={() => (showAllFolders = false)}
       tabindex="-1"
       aria-hidden="true"
     ></div>
-    <aside class="sidebar-all-folders-panel" aria-label={$_('sidebar.allFolders')}>
+    {/if}
+    <aside class="sidebar-all-folders-panel" class:sidebar-all-folders-inline={treeMode} aria-label={$_('sidebar.allFolders')}>
       <header class="sidebar-all-folders-header">
         <h2>{$_('sidebar.allFolders')}</h2>
-        <button type="button" class="sidebar-toolbar-button" onclick={() => (showAllFolders = false)} aria-label={$_('aria.dismiss')}>
+        <button type="button" class="sidebar-toolbar-button" onclick={() => { showAllFolders = false; if (treeMode) onCloseTree?.() }} aria-label={$_('aria.dismiss')}>
           <Icon icon="mdi:close" class="h-5 w-5" />
         </button>
       </header>
@@ -843,8 +850,8 @@
 />
 
 <svelte:window onkeydown={(e) => {
-  if (showAllFolders && e.key === 'Escape') {
+  if ((showAllFolders || treeMode) && e.key === 'Escape') {
     if (allFoldersQuery) { e.preventDefault(); allFoldersQuery = '' }
-    else showAllFolders = false
+    else { showAllFolders = false; if (treeMode) onCloseTree?.() }
   }
 }} />

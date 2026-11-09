@@ -2003,7 +2003,7 @@
       e.preventDefault()
       handleSend()
     }
-    if (e.key === 'd' && (e.ctrlKey || e.metaKey)) {
+    if (e.key === 'D' && e.shiftKey && (e.ctrlKey || e.metaKey)) {
       e.preventDefault()
       handlePopOut()
     }
