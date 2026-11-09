@@ -40,7 +40,7 @@
   import { contactPhotos } from '$lib/stores/contactPhotos.svelte'
   import { PendingReadOnLeave } from './pendingReadOnLeave'
   import { preserveThreadMessageScope } from './threadScope'
-  import { publishUndoOperationCompleted, publishUndoOperationCreated } from '../list/undoMutationEvents'
+  import { publishUndoOperationCompleted, publishUndoOperationCreated, rememberUnreadForUndo } from '../list/undoMutationEvents'
   import { runMessageMutation } from '../list/mutationInFlight'
   import { messageAnimations } from '$lib/stores/messageAnimations.svelte'
   import { getThreadSnapshot, setThreadSnapshot } from './threadSnapshotCache'
@@ -1303,6 +1303,7 @@
     let archived = false
     try {
       messageIds = await resolveDisplayedMessageTarget(messageIds)
+      const unreadIds = (conversation?.messages ?? []).filter(m => !m.isRead && messageIds.includes(m.id)).map(m => m.id)
       messageAnimations.startRemoval(messageIds, 'archive')
       await runMessageMutation(messageIds, async () => {
         moveMutationInFlight = true
@@ -1310,6 +1311,7 @@
           const result = await ArchiveWithUndo(messageIds)
           if (result.coalesced) return
           archived = true
+          rememberUnreadForUndo(result.operationId, unreadIds)
           try {
             await MarkAsRead(messageIds)
           } catch (err) {
