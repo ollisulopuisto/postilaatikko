@@ -17,6 +17,7 @@ const server = await createServer({
 })
 after(() => server.close())
 const m = await server.ssrLoadModule('/src/lib/components/list/undoMutationEvents.ts')
+const counts = await server.ssrLoadModule('/src/lib/components/list/readCounts.ts')
 
 globalThis.window = { dispatchEvent() {} }
 globalThis.CustomEvent = class { constructor(type, init) { this.type = type; this.detail = init?.detail } }
@@ -36,13 +37,40 @@ test('an operation with nothing unread stores nothing', () => {
   assert.equal(m.unreadSnapshotCount(), before)
 })
 
-test('the store is capped; the oldest snapshots go first', () => {
+test('an old operation is still undoable after more than 100 newer ones', () => {
   const calls = []
   m.setUnreadRestorer(async ids => { calls.push(ids) })
-  for (let i = 0; i < m.MAX_UNREAD_SNAPSHOTS + 25; i++) m.rememberUnreadForUndo(`cap-${i}`, [`m${i}`])
-  assert.ok(m.unreadSnapshotCount() <= m.MAX_UNREAD_SNAPSHOTS)
-  m.publishUndoOperationCompleted('cap-0')
-  assert.deepEqual(calls, [], 'evicted operation restores nothing')
-  m.publishUndoOperationCompleted(`cap-${m.MAX_UNREAD_SNAPSHOTS + 24}`)
-  assert.deepEqual(calls, [[`m${m.MAX_UNREAD_SNAPSHOTS + 24}`]])
+  m.rememberUnreadForUndo('old-op', ['old'])
+  for (let i = 0; i < 150; i++) m.rememberUnreadForUndo(`many-${i}`, [`m${i}`])
+  m.publishUndoOperationCompleted('old-op')
+  assert.deepEqual(calls, [['old']])
+})
+
+test('snapshots older than the retention window are dropped, newer ones kept', () => {
+  const calls = []
+  m.setUnreadRestorer(async ids => { calls.push(ids) })
+  const t0 = 1_000_000
+  m.rememberUnreadForUndo('ttl-old', ['x'], t0)
+  m.rememberUnreadForUndo('ttl-new', ['y'], t0 + m.UNREAD_SNAPSHOT_TTL_MS + 1)
+  m.publishUndoOperationCompleted('ttl-old')
+  assert.deepEqual(calls, [])
+  m.publishUndoOperationCompleted('ttl-new')
+  assert.deepEqual(calls, [['y']])
+})
+
+test('read changes update search rows too, so a search row read earlier is not snapshotted unread', () => {
+  const list = [{ messageIds: ['a'], unreadCount: 1 }]
+  const search = [{ messageIds: ['a'], unreadCount: 1 }, { messageIds: ['b'], unreadCount: 1 }]
+  const seen = new Set()
+  counts.applyReadDelta(list, ['a'], true, seen)
+  assert.equal(counts.applyReadDelta(search, ['a'], true, seen), true)
+  assert.deepEqual(search.map(r => r.unreadCount), [0, 1])
+})
+
+test('a row shared by two lists is counted once', () => {
+  const row = { messageIds: ['a', 'b'], unreadCount: 2 }
+  const seen = new Set()
+  counts.applyReadDelta([row], ['a'], true, seen)
+  counts.applyReadDelta([row], ['a'], true, seen)
+  assert.equal(row.unreadCount, 1)
 })

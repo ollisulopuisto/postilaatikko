@@ -52,6 +52,7 @@
   import { getLayoutMode, hideViewer } from '$lib/stores/layout.svelte'
   import { isDialogGuardActive, onDialogGuardChange } from '$lib/stores/dialogGuard'
   import { captureAutoSelectNext, findAutoSelectNext, flattenVisibleInboxGroups } from './autoSelectNext'
+  import { applyReadDelta } from './readCounts'
   import { removeServerSearchResults, restoreSearchResults, serverSearchResultIdentity, ServerSearchRequestState, updateServerSearchCounts } from './serverSearchResults'
   import { publishUndoOperationCompleted, publishUndoOperationCreated, UNDO_OPERATION_COMPLETED_EVENT, UNDO_OPERATION_CREATED_EVENT, type UndoOperationCreatedDetail } from './undoMutationEvents'
   import { runMessageMutation } from './mutationInFlight'
@@ -714,7 +715,7 @@
     // `messages:starredChanged` event and don't affect unread counts here.
     EventsOn('messages:readChanged', (data: { messageIds: string[], isRead: boolean }) => {
       // Update conversations locally instead of reloading from DB
-      let anyUpdated = false
+      let anyUpdated: boolean
       const selected = conversations.find(conversation => conversation.threadId === selectedThreadId)
       const selectedMessageIds = selected?.messageIds || []
       if (
@@ -728,14 +729,13 @@
         // is selected, while the underlying read status can update normally.
         pinInboxGroupForConversation(selected.threadId)
       }
-      for (const c of conversations) {
-        const affectedCount = (c.messageIds || []).filter(id => data.messageIds.includes(id)).length
-        if (affectedCount > 0) {
-          anyUpdated = true
-          const delta = data.isRead ? -affectedCount : affectedCount
-          c.unreadCount = Math.max(0, (c.unreadCount || 0) + delta)
-        }
-      }
+      // Search rows are separate cached arrays with their own unread counts. Keep them in
+      // step, or the unread snapshot taken for archive-and-mark-read (and the unread dots)
+      // would use a count that is already out of date.
+      const touched = new Set<object>()
+      anyUpdated = applyReadDelta(conversations, data.messageIds, data.isRead, touched)
+      if (applyReadDelta(searchResults, data.messageIds, data.isRead, touched)) searchResults = searchResults
+      if (applyReadDelta(serverSearchResults, data.messageIds, data.isRead, touched)) serverSearchResults = serverSearchResults
       if (anyUpdated) {
         conversations = conversations
         if (isVirtualFolderView) scheduleReload()

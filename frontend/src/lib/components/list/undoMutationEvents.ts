@@ -18,7 +18,7 @@ export function publishUndoOperationCreated(operationId: string, messageIds: str
 // undo only moves the messages back, so the ids that were unread before are
 // remembered here and marked unread again when that operation is undone, from
 // any undo path (toast, Cmd/Ctrl+Z, undo history).
-const unreadBeforeArchive = new Map<string, string[]>()
+const unreadBeforeArchive = new Map<string, { ids: string[]; at: number }>()
 let restoreUnread: ((messageIds: string[]) => Promise<unknown>) | null = null
 
 /** The host registers how to mark messages unread (keeps this module free of backend imports). */
@@ -26,19 +26,20 @@ export function setUnreadRestorer(fn: (messageIds: string[]) => Promise<unknown>
   restoreUnread = fn
 }
 
-// Undo windows are short, so only the most recent operations can still be undone.
-// Older snapshots are dropped so a long session does not accumulate them.
-export const MAX_UNREAD_SNAPSHOTS = 100
+// Snapshots live exactly as long as the backend can still undo the operation, never
+// by count: a count cap would drop the unread state of an archive that is still
+// undoable (the durable undo history has no count cap). The backend keeps operations
+// for 24h; 7 days leaves room for it to grow without this module going stale, and
+// each entry is a handful of ids.
+export const UNREAD_SNAPSHOT_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
-export function rememberUnreadForUndo(operationId: string, unreadMessageIds: string[]) {
+export function rememberUnreadForUndo(operationId: string, unreadMessageIds: string[], now: number = Date.now()) {
   if (!operationId || unreadMessageIds.length === 0) return
-  unreadBeforeArchive.delete(operationId)
-  unreadBeforeArchive.set(operationId, [...unreadMessageIds])
-  while (unreadBeforeArchive.size > MAX_UNREAD_SNAPSHOTS) {
-    const oldest = unreadBeforeArchive.keys().next().value
-    if (oldest === undefined) break
-    unreadBeforeArchive.delete(oldest)
+  for (const [id, entry] of unreadBeforeArchive) {
+    if (now - entry.at > UNREAD_SNAPSHOT_TTL_MS) unreadBeforeArchive.delete(id)
   }
+  unreadBeforeArchive.delete(operationId)
+  unreadBeforeArchive.set(operationId, { ids: [...unreadMessageIds], at: now })
 }
 
 export function unreadSnapshotCount(): number {
@@ -47,7 +48,7 @@ export function unreadSnapshotCount(): number {
 
 export function publishUndoOperationCompleted(operationId: string) {
   if (!operationId || typeof window === 'undefined') return
-  const unread = unreadBeforeArchive.get(operationId)
+  const unread = unreadBeforeArchive.get(operationId)?.ids
   if (unread) {
     unreadBeforeArchive.delete(operationId)
     void restoreUnread?.(unread)?.catch(err => console.error('Restoring unread after undo failed:', err))
