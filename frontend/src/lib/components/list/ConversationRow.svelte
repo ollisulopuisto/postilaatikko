@@ -28,7 +28,7 @@
   import { message, operations } from '../../../../wailsjs/go/models'
   // @ts-ignore - wailsjs path
   import { OpenReaderWindow, MarkAsRead, MarkAsUnread, RemoveFromInboxWithUndo, ResolveMailActionTarget, UndoOperation } from '../../../../wailsjs/go/app/App'
-  import ReplyLaterButton from '$lib/components/common/ReplyLaterButton.svelte'
+  import LaterQueueButton from '$lib/components/common/LaterQueueButton.svelte'
   import MessageContextMenu from '$lib/components/common/MessageContextMenu.svelte'
   import Avatar from '$lib/components/kit/Avatar.svelte'
   import { toasts } from '$lib/stores/toast'
@@ -50,6 +50,10 @@
     accountId: string
     folderId: string
     folderType: string
+    selectedQueueReady?: boolean
+    backendConversationId?: string
+    queueActionsEnabled?: boolean
+    selectedQueueRefs?: { accountId: string; conversationId: string }[]
     selectedMessageIds: string[]  // All message IDs from checked conversations (for multi-select)
     selectedIsStarred: boolean    // Aggregated star state for multi-select
     selectedIsRead: boolean       // Aggregated read state for multi-select
@@ -77,6 +81,10 @@
     accountId,
     folderId,
     folderType,
+    selectedQueueReady = true,
+    backendConversationId = conversation.threadId,
+    queueActionsEnabled = true,
+    selectedQueueRefs = [],
     selectedMessageIds,
     selectedIsStarred,
     selectedIsRead,
@@ -537,7 +545,9 @@
   bind:this={contextMenuRef}
   messageIds={contextMenuMessageIds}
   replyMessageId={useMultiSelect ? undefined : (ownMessageIds.at(-1) || undefined)}
-  conversationId={useMultiSelect ? undefined : conversation.threadId}
+  conversationId={useMultiSelect ? undefined : backendConversationId}
+  laterTargets={useMultiSelect ? selectedQueueRefs : undefined}
+  laterActionsEnabled={useMultiSelect ? selectedQueueReady : queueActionsEnabled}
   {accountId}
   currentFolderId={folderId}
   {folderType}
@@ -549,7 +559,7 @@
 >
   <div
     data-conversation-row
-    data-mail-row-key={JSON.stringify([conversation.accountId || accountId || '', conversation.threadId])}
+    data-mail-row-key={JSON.stringify([conversation.accountId || accountId || '', backendConversationId || conversation.threadId])}
     draggable={getLayoutMode() !== 'narrow'}
     class="group relative w-full flex items-start overflow-hidden touch-pan-y {densityClasses.row[density]} text-left border-b border-border transition-colors duration-300 cursor-pointer outline-none {activeAnimationKind ? `row-anim-${activeAnimationKind}` : ''} {selected
       ? 'bg-primary/20'
@@ -560,11 +570,12 @@
       if (!isRowOpenTarget(event.target, event.currentTarget)) return
       event.preventDefault()
       cancelPendingSingleClick()
+      if (!backendConversationId) { onSelect(); return }
       if (onOpenInTab) {
-        onOpenInTab(accountId, folderId, conversation.threadId, folderType, conversation.subject || '')
+        onOpenInTab(accountId, folderId, backendConversationId, folderType, conversation.subject || '')
         return
       }
-      try { await OpenReaderWindow(accountId, folderId, conversation.threadId, folderType) }
+      try { await OpenReaderWindow(accountId, folderId, backendConversationId, folderType) }
       catch (error) { toasts.error(String(error)) }
     }}
     onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect() }}}
@@ -745,7 +756,8 @@
               <Icon icon="mdi:folder-outline" class="{densityClasses.icon[density]} opacity-60" />
             </span>
           {/if}
-          <ReplyLaterButton {accountId} conversationId={conversation.threadId} />
+          <LaterQueueButton {accountId} conversationId={queueActionsEnabled ? backendConversationId : ''} kind="readLater" variant="row" />
+          <LaterQueueButton {accountId} conversationId={queueActionsEnabled ? backendConversationId : ''} kind="replyLater" variant="row" />
         </div>
       </div>
 

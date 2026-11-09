@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+## Postilaatikko 2026.11.09.16
+
+- Preserve the opened search UID when several rows share a conversation. Reader restoration matches the account and folder, and keyboard focus changes do not reapply an older reader selection.
+
+- Keep server row UI identity mailbox-qualified after resolution too. Canonical conversation IDs are separate backend targets, so identical RFC thread IDs across accounts cannot change another row's checked state.
+
+- Give unfetched server rows mailbox-qualified provisional IDs, so same-UID results in different accounts or folders remain independently checked while resolving.
+
+- Carry checked server rows forward when their provisional IDs resolve to canonical conversations. Keyboard opening also pins Inbox card position like clicking.
+
+- Preserve checked rows when opening the focused message with Enter, while using the same server-resolution and stale-request guards as clicking.
+
+- Discard late server-message opens when the selection has changed, including keyboard selection. Keyboard opening uses the same canonical-resolution path as clicking.
+
+- Resolve fetched server results by account and folder identity as well as UID, preventing same-UID rows in different mailboxes from being replaced. Validate the fetched message account before enabling queue actions.
+
+- Use only checked rows from the active search source for queue readiness and targets, so hidden cached results cannot block valid local selections.
+
+- Preserve ordinary mailbox action targets while blocking mixed resolved/unresolved queue selections. Local server results with no thread ID use the stored message ID as their canonical conversation.
+
+- Keep queue actions disabled on unresolved IMAP search IDs until opening the result resolves its indexed conversation. A failed item in a multi-selection queue update no longer skips the remaining items.
+
+- Add Read later and Reply later to the reader toolbar, message-row quick actions, per-message reader context menus, snoozed and multi-selected row menus, and HTML-body copy/link menus. Actions keep account-qualified conversation targets, queue state, shortcut hints and targeted Undo.
+
 ## Postilaatikko 2026.11.09.5
 
 - Use Cmd-Left and Cmd-Right to go Back and Forward through visited messages. Search fields, recipient fields and text editors keep their normal line-start/end keys. No bracket shortcuts; mailbox Undo and composer history are unchanged.

@@ -230,7 +230,7 @@ export const CORE_SHORTCUTS: ShortcutDef[] = [
   { id: 'mail.archiveAndMarkRead', icon: 'mdi:archive-check-outline', label: 'shortcuts.action.archiveAndMarkRead', group: 'messageActions', combos: ['e'], panes: MAIL, inline: app('e') },
   { id: 'mail.archive', icon: 'mdi:archive-outline', label: 'shortcuts.action.archive', group: 'messageActions', combos: ['Mod+k'], panes: MAIL, inline: app('k') },
   { id: 'mail.readLater', icon: 'mdi:book-clock-outline', label: 'shortcuts.action.readLater', group: 'messageActions', combos: ['l'], panes: MAIL, inline: app('l') },
-  { id: 'mail.replyLater', icon: 'mdi:reply', label: 'shortcuts.action.replyLater', group: 'messageActions', combos: ['Shift+l'], panes: MAIL, inline: app('L') },
+  { id: 'mail.replyLater', icon: 'mdi:clock-outline', label: 'shortcuts.action.replyLater', group: 'messageActions', combos: ['Shift+l'], panes: MAIL, inline: app('L') },
   { id: 'mail.spam', icon: 'mdi:alert-octagon-outline', label: 'shortcuts.action.spam', group: 'messageActions', combos: ['!', 'Mod+j'], panes: MAIL, inline: app('!', 'j') },
   { id: 'mail.trash', icon: 'mdi:delete-outline', label: 'shortcuts.action.trash', group: 'messageActions', combos: ['#', 'Delete', 'Backspace', 'd'], panes: MAIL, inline: app('#', 'Delete', 'Backspace', 'd') },
   { id: 'mail.deletePermanently', icon: 'mdi:delete-forever', label: 'shortcuts.action.deletePermanently', group: 'messageActions', combos: ['Shift+Delete', 'Shift+Backspace'], panes: MAIL, inline: app('Delete', 'Backspace') },

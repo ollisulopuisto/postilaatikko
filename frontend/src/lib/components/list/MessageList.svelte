@@ -20,7 +20,7 @@
   import { retainReadSelection } from '$lib/sidebar/virtualView'
   import { app as searchModels } from '../../../../wailsjs/go/models'
 
-  import { onMount, onDestroy, tick } from 'svelte'
+  import { onMount, onDestroy, tick, untrack } from 'svelte'
   import OnlineViewCount from './OnlineViewCount.svelte'
   import Icon from '@iconify/svelte'
   import ConversationRow from './ConversationRow.svelte'
@@ -31,7 +31,7 @@
   import { cn } from '$lib/utils'
   import { Button } from '$lib/components/ui/button'
   // @ts-ignore - wailsjs bindings
-  import { RefreshViewHeaders, SearchMail, CancelMailSearch, MoveToInboxWithUndo, GetConversations, GetConversationCount, SyncFolder, ForceSyncFolder, CancelFolderSync, SetMessageListSortOrder, GetUnifiedFolderConversations, GetUnifiedFolderCount, SearchConversations, SearchUnifiedFolder, GetSearchCount, GetSearchCountUnifiedFolder, SyncUnifiedFolder, SyncVirtualFolder, EmptyUnifiedTrash, GetFTSIndexStatus, IsFTSIndexing, TrashWithUndo, DeletePermanently, EmptyTrash, UndoOperation, IMAPSearchFolder, IMAPSearchUnifiedInbox, FetchServerMessage, GetVirtualFolderConversations, GetVirtualFolderCount, GetVirtualFolderCachedView, PrefetchMessageBodies } from '../../../../wailsjs/go/app/App'
+  import { GetMessage, RefreshViewHeaders, SearchMail, CancelMailSearch, MoveToInboxWithUndo, GetConversations, GetConversationCount, SyncFolder, ForceSyncFolder, CancelFolderSync, SetMessageListSortOrder, GetUnifiedFolderConversations, GetUnifiedFolderCount, SearchConversations, SearchUnifiedFolder, GetSearchCount, GetSearchCountUnifiedFolder, SyncUnifiedFolder, SyncVirtualFolder, EmptyUnifiedTrash, GetFTSIndexStatus, IsFTSIndexing, TrashWithUndo, DeletePermanently, EmptyTrash, UndoOperation, IMAPSearchFolder, IMAPSearchUnifiedInbox, FetchServerMessage, GetVirtualFolderConversations, GetVirtualFolderCount, GetVirtualFolderCachedView, PrefetchMessageBodies } from '../../../../wailsjs/go/app/App'
   import { toasts } from '$lib/stores/toast'
   import { withShortcut, ariaKeyshortcuts } from '$lib/keyboard/format'
   import ShortcutHint from '$lib/components/shortcuts/ShortcutHint.svelte'
@@ -123,9 +123,19 @@
   let selectedThreadId = $state<string | null>(null)
   // Reader/history restoration must also move the list's keyboard-action target.
   // Reapply after a folder load, which otherwise selects its first row.
+  function serverRowForReaderSelection(rows: any[], selection: { accountId: string; folderId: string; threadId: string }, currentRowId: string | null) {
+    const matches = (row: any) => row.accountId === selection.accountId && row.folderId === selection.folderId && row._canonicalConversationId === selection.threadId
+    return rows.find(row => row.threadId === currentRowId && matches(row)) || rows.find(matches)
+  }
+
   $effect(() => {
     const selection = readerSelection
-    if (!loading && selection) selectedThreadId = selection.threadId
+    if (!loading && selection) {
+      // Focus-only moves must not reapply the old reader selection. Keep the
+      // opened UID when multiple messages share one canonical conversation.
+      const serverRow = serverRowForReaderSelection(serverSearchResults, selection, untrack(() => selectedThreadId))
+      selectedThreadId = serverRow && showSearch && searchSource === 'server' ? serverRow.threadId : selection.threadId
+    }
   })
   let lastLoadedFolderId = $state<string | null>(null) // Track folder changes
   let loadGeneration = $state(0) // Invalidates stale async results when folder changes mid-load (#200)
@@ -945,6 +955,8 @@
     checkFTSIndexStatus()
   })
 
+  const isSearchMode = $derived(showSearch && searchQuery.trim().length > 0)
+
   // Compute selected message IDs from all checked conversations (for multi-select context menu)
   // Check normal, local-search and server-search result caches.
   // Use Set to deduplicate in case same conversation appears in both arrays
@@ -969,20 +981,30 @@
   const selectedMessageRefs = $derived(
     [...new Map(
       [...conversations, ...searchResults, ...serverSearchResults]
-        .filter((conversation) => checkedThreadIds.has(conversation.threadId))
+        .filter((conversation: any) => checkedThreadIds.has(conversation.threadId))
         .flatMap((conversation: any) => refsForConversation(conversation))
         .map((ref) => [`${ref.accountId}:${ref.messageId}`, ref] as const)
     ).values()]
   )
 
+  // Queue decisions must use the active source, not hidden search caches that
+  // can carry the same message ID with a different canonical-resolution state.
+  const selectedQueueRows = $derived(
+    (isSearchMode ? (serverSearchMode ? serverSearchResults : searchResults) : conversations)
+      .filter((conversation: any) => checkedThreadIds.has(conversation.threadId))
+  )
+  const selectedQueueReady = $derived(!selectedQueueRows.some(
+    (conversation: any) => conversation._queueCanonical === false
+  ))
+
   const selectedQueueRefs = $derived(
     [...new Map(
-      [...conversations, ...searchResults, ...serverSearchResults]
-        .filter((conversation) => checkedThreadIds.has(conversation.threadId))
+      selectedQueueRows
+        .filter((conversation: any) => conversation._queueCanonical !== false)
         .map((conversation: any) => {
           const owningAccountId = conversation.accountId || accountId || ''
           return owningAccountId && owningAccountId !== 'unified' && owningAccountId !== 'virtual'
-            ? [`${owningAccountId}:${conversation.threadId}`, { accountId: owningAccountId, conversationId: conversation.threadId }] as const
+            ? [`${owningAccountId}:${conversation._canonicalConversationId || conversation.threadId}`, { accountId: owningAccountId, conversationId: conversation._canonicalConversationId || conversation.threadId }] as const
             : null
         })
         .filter((ref) => ref !== null)
@@ -1651,7 +1673,9 @@
   // Map IMAPSearchResult to ConversationRow-compatible shape
   function adaptServerResult(r: any): any {
     return {
-      threadId: r.messageId || `server-uid-${r.uid}`,
+      // Stable UI identity never becomes a bare canonical ID: those can match across accounts.
+      threadId: `server-${serverSearchResultIdentity({ accountId: r.accountId, folderId: r.folderId, _uid: r.uid, threadId: r.messageId || '' })}`,
+      _canonicalConversationId: '',
       subject: r.subject,
       snippet: r.isLocal ? r.snippet : '',
       messageCount: 1,
@@ -1664,6 +1688,7 @@
       accountId: r.accountId,
       folderId: r.folderId,
       _isLocal: r.isLocal,
+      _queueCanonical: false,
       _uid: r.uid,
     }
   }
@@ -1681,7 +1706,6 @@
   }
 
   // Check if we're in search mode with results
-  const isSearchMode = $derived(showSearch && searchQuery.trim().length > 0)
   const unavailableReplyLaterRefs = $derived(
     isUnifiedView && folderId === 'replyLater' && !isSearchMode && replyLaterQueue.ready
       ? replyLaterQueue.refs.filter(ref => ref.indexed === false)
@@ -1785,11 +1809,18 @@
 
     // Normal click - select for viewing, clear checks
     checkedThreadIds = new Set()
-    pinInboxGroupForConversation(threadId)
     selectedThreadId = threadId
 
+    openConversation(activeList[index] as any)
+  }
+
+  // Opening is shared by mouse and keyboard. Only mouse selection resets checks.
+  function openConversation(conversation: any) {
+    if (!conversation) return
+    serverResultFetchGeneration += 1
+    const threadId = conversation.threadId
+    pinInboxGroupForConversation(threadId)
     // For unified view or search, use real folderId and accountId from conversation data
-    const conversation = activeList[index] as any
     const realFolderId = (isUnifiedView || isVirtualFolderView || isSearchMode) && conversation.folderId ? conversation.folderId : folderId!
     const realAccountId = (isUnifiedView || isVirtualFolderView || isSearchMode) && conversation.accountId ? conversation.accountId : accountId!
 
@@ -1798,29 +1829,52 @@
       fetchAndSelectServerResult(conversation, realFolderId, realAccountId)
       return
     }
-    onConversationSelect?.(threadId, realFolderId, realAccountId)
+    if (searchSource === 'server' && conversation._queueCanonical === false && conversation._isLocal) {
+      void resolveLocalServerConversation(conversation, realFolderId, realAccountId)
+      return
+    }
+    onConversationSelect?.(conversation._canonicalConversationId || threadId, realFolderId, realAccountId)
+  }
+
+  async function resolveLocalServerConversation(result: any, folder: string, account: string) {
+    const generation = ++serverResultFetchGeneration
+    const query = searchQuery.trim()
+    const selectionAtStart = selectedThreadId
+    try {
+      const message = await GetMessage(result.messageIds?.[0] || '')
+      if (generation !== serverResultFetchGeneration || selectedThreadId !== selectionAtStart || searchSource !== 'server' || query !== searchQuery.trim() || !serverSearchResults.includes(result) || message?.accountId !== account || !message.id) return
+      const canonicalId = message.threadId || message.id
+      serverSearchResults = serverSearchResults.map(item => item === result ? { ...item, _canonicalConversationId: canonicalId, _queueCanonical: true } : item)
+      selectedThreadId = result.threadId
+      onConversationSelect?.(canonicalId, folder, account)
+    } catch (error) {
+      if (generation !== serverResultFetchGeneration || selectedThreadId !== selectionAtStart) return
+      toasts.error(String(error))
+    }
   }
 
   // Fetch a non-local server result, save locally, update the result, then select
   async function fetchAndSelectServerResult(conversation: any, realFolderId: string, realAccountId: string) {
     const generation = ++serverResultFetchGeneration
     const query = searchQuery.trim()
+    const selectionAtStart = selectedThreadId
     const identity = serverSearchResultIdentity(conversation)
     try {
       const msg = await FetchServerMessage(realAccountId, realFolderId, conversation._uid)
-      if (generation !== serverResultFetchGeneration || searchSource !== 'server' || query !== searchQuery.trim() || !serverSearchResults.some(result => serverSearchResultIdentity(result) === identity)) {
+      if (generation !== serverResultFetchGeneration || selectedThreadId !== selectionAtStart || searchSource !== 'server' || query !== searchQuery.trim() || !serverSearchResults.some(result => serverSearchResultIdentity(result) === identity)) {
         return
       }
-      if (msg) {
+      if (msg?.accountId === realAccountId && msg.id) {
         // Update the server result to be local
-        const idx = serverSearchResults.findIndex(r => r._uid === conversation._uid)
+        const idx = serverSearchResults.findIndex(result => serverSearchResultIdentity(result) === identity)
         if (idx >= 0) {
           serverSearchResults[idx] = {
             ...serverSearchResults[idx],
-            threadId: msg.threadId || msg.id,
+            _canonicalConversationId: msg.threadId || msg.id,
             messageIds: [msg.id],
             snippet: msg.snippet || '',
             _isLocal: true,
+            _queueCanonical: !!(msg.threadId || msg.id),
             _uid: conversation._uid,
           }
           serverSearchResults = serverSearchResults
@@ -1829,7 +1883,7 @@
         onConversationSelect?.(msg.threadId || msg.id, realFolderId, realAccountId)
       }
     } catch (err) {
-      if (generation !== serverResultFetchGeneration || searchSource !== 'server' || query !== searchQuery.trim()) {
+      if (generation !== serverResultFetchGeneration || selectedThreadId !== selectionAtStart || searchSource !== 'server' || query !== searchQuery.trim()) {
         return
       }
       if (isMissingServerSearchResult(err)) {
@@ -2226,10 +2280,7 @@
 
     const index = getSelectedIndex()
     if (index >= 0) {
-      const conv = activeList[index] as any
-      const realFolderId = (isUnifiedView || isSearchMode) && conv.folderId ? conv.folderId : folderId!
-      const realAccountId = (isUnifiedView || isSearchMode) && conv.accountId ? conv.accountId : accountId!
-      onConversationSelect?.(selectedThreadId, realFolderId, realAccountId)
+      openConversation(activeList[index] as any)
     }
   }
 
@@ -2270,7 +2321,8 @@
 
   // Get the currently selected thread ID (exposed for parent access)
   export function getSelectedThreadId(): string | null {
-    return selectedThreadId
+    const conversation = activeList.find(item => item.threadId === selectedThreadId) as any
+    return conversation?._canonicalConversationId || (conversation?._queueCanonical === false ? null : selectedThreadId)
   }
 
   // Get message IDs for the keyboard-focused thread (for delete without checking)
@@ -2630,7 +2682,7 @@
   }
 
   async function toggleSelectedLaterQueue(kind: 'readLater' | 'replyLater') {
-    if (laterQueueMutationInFlight || selectedQueueRefs.length === 0) return
+    if (!selectedQueueReady || laterQueueMutationInFlight || selectedQueueRefs.length === 0) return
     laterQueueMutationInFlight = true
     try {
       const queue = kind === 'readLater' ? readLaterQueue : replyLaterQueue
@@ -2675,14 +2727,16 @@
       {
         id: 'mail.replyLater',
         label: $_(selectedAllReplyLater ? 'replyLater.remove' : 'replyLater.add'),
-        icon: 'mdi:reply',
+        icon: 'mdi:clock-outline',
         shortcut: 'mail.replyLater',
+        disabled: !selectedQueueReady,
       },
       {
         id: 'mail.readLater',
         label: $_(selectedAllReadLater ? 'readLater.remove' : 'readLater.add'),
         icon: 'mdi:book-clock-outline',
         shortcut: 'mail.readLater',
+        disabled: !selectedQueueReady,
       },
       {
         id: 'mail.star',
@@ -3221,9 +3275,13 @@
               folderId={resultFolderId}
               {folderType}
               {selectedMessageIds}
+              {selectedQueueRefs}
+              {selectedQueueReady}
               selectedIsStarred={!selectedHasUnstarred}
               selectedIsRead={!selectedHasUnread}
               isNonLocal={result._isLocal === false}
+              queueActionsEnabled={result._queueCanonical === true}
+              backendConversationId={result._canonicalConversationId || ''}
               searchFolderName={result.folderName}
               searchFolderType={result.folderType}
               onOpenInTab={onOpenInTab}
@@ -3292,6 +3350,8 @@
             folderId={isUnifiedView || isVirtualFolderView ? resultFolderId : folderId!}
             folderType={isVirtualFolderView ? result.folderType || 'folder' : folderType}
             {selectedMessageIds}
+            {selectedQueueRefs}
+            {selectedQueueReady}
             selectedIsStarred={!selectedHasUnstarred}
             selectedIsRead={!selectedHasUnread}
             highlightedSubject={result.highlightedSubject}
@@ -3397,6 +3457,8 @@
                   folderType={isVirtualFolderView ? folderTypesByID[convFolderId] || 'folder' : folderType}
                   onOpenInTab={onOpenInTab}
                   {selectedMessageIds}
+                  {selectedQueueRefs}
+                  {selectedQueueReady}
                   selectedIsStarred={!selectedHasUnstarred}
                   selectedIsRead={!selectedHasUnread}
                   onSelect={(e) => selectConversation(conv.threadId, conversationIndex, e)}
@@ -3441,6 +3503,8 @@
           folderType={isVirtualFolderView ? folderTypesByID[convFolderId] || 'folder' : folderType}
           onOpenInTab={onOpenInTab}
           {selectedMessageIds}
+          {selectedQueueRefs}
+          {selectedQueueReady}
           selectedIsStarred={!selectedHasUnstarred}
           selectedIsRead={!selectedHasUnread}
           onSelect={(e) => selectConversation(conv.threadId, index, e)}
