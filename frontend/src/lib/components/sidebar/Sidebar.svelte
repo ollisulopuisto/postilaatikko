@@ -744,7 +744,7 @@
                 <span class="block text-xs text-muted-foreground">{item.accountName} · {item.accountEmail}</span>
               </button>
               <button type="button"
-                class="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-background focus-visible:opacity-100 {isFolderFavorite(item.accountId, item.id) ? 'text-amber-500' : 'text-muted-foreground/60 opacity-0 group-hover:opacity-100'}"
+                class="mr-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-background focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {isFolderFavorite(item.accountId, item.id) ? 'text-amber-500' : 'text-muted-foreground/60 opacity-0 group-hover:opacity-100'}"
                 title={$_('navigation.favorite')} aria-label={$_('navigation.favorite')}
                 aria-pressed={isFolderFavorite(item.accountId, item.id)}
                 disabled={!isFolderFavorite(item.accountId, item.id) && favoritesFull()}

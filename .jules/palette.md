@@ -2,6 +2,10 @@
 
 Critical UX and Accessibility learnings only.
 
+## 2026-11-09 - Focus Rings on Hover-Revealed Favorite and Row Action Buttons
+**Learning:** While `focus-visible:opacity-100` makes hover-revealed or dimmed buttons (`opacity-0 group-hover:opacity-100`) visible when keyboard focus reaches them, omitting explicit focus ring tokens (`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`) leaves them with either low-contrast default browser outlines or subtle bounds that blend into dark card backgrounds.
+**Action:** Pair every `focus-visible:opacity-100` reveal on icon buttons with `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring` to provide an unambiguous, high-contrast focus indicator in both light and dark themes.
+
 ## 2026-11-08 - Conversation Bubble Avatar Alignment and Tail Proximity
 **Learning:** In conversation view modes, speech bubbles have directional tails pointing toward the speaker. Rendering sender avatars inside an expandable message header rather than adjacent to the speech bubble creates visual disconnect, as users expect avatar photos to ground the bubble directly beside its speech tail.
 **Action:** In conversation bubble layouts, align sender avatars beside the speech bubble using a bottom-aligned flex row container (`items-end`), placing the avatar on the left for incoming messages and on the right for outgoing messages to align directly with the bubble's tail.

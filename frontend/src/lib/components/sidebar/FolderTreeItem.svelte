@@ -219,7 +219,7 @@
 
       <button
         type="button"
-        class="mr-1 inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded hover:bg-muted/80 focus-visible:opacity-100 {starred ? 'text-amber-500' : 'text-muted-foreground/60 opacity-0 group-hover:opacity-100'}"
+        class="mr-1 inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded hover:bg-muted/80 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {starred ? 'text-amber-500' : 'text-muted-foreground/60 opacity-0 group-hover:opacity-100'}"
         title={$_('navigation.favorite')}
         aria-label={$_('navigation.favorite')}
         aria-pressed={starred}
