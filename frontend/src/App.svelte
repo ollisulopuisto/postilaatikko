@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from '@iconify/svelte'
+  import PendingSendToast from './lib/components/common/PendingSendToast.svelte'
   import MailWindowApp from './MailWindowApp.svelte'
   import MessageHistoryBar from './lib/components/list/MessageHistoryBar.svelte'
   import { emptyMessageHistory, visitMessage, stepMessageHistory } from './lib/navigation/messageHistory'
@@ -785,10 +786,6 @@
       pendingRemove(ps.id)
       addToast({ type: 'error', message: $_('pendingSend.alreadySending') })
     }
-  }
-
-  function pendingRemaining(ps: PendingSendItem): number {
-    return Math.max(0, Math.ceil((new Date(ps.dispatchAt).getTime() - pendingNow) / 1000))
   }
 
   function syncMailboxActionEvents() {
@@ -2833,23 +2830,13 @@
 
 <!-- Command palette (Cmd+P / Ctrl+P, Alfred style quick launcher). -->
 {#if pendingSends.length > 0}
-  <div class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-full border border-border bg-popover px-4 py-2 shadow-lg" role="status" aria-live="polite">
-    <Icon icon="mdi:send-clock-outline" class="w-4 h-4 text-muted-foreground" />
-    <span class="text-sm">{$_('pendingSend.countdown', { values: { seconds: pendingRemaining(pendingSends[0]) } })}</span>
-    <div class="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
-      <div class="h-full bg-primary transition-all" style="width: {Math.min(100, (pendingRemaining(pendingSends[0]) / 30) * 100)}%"></div>
-    </div>
-    <button
-      class="rounded-full bg-primary px-3 py-1 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-      disabled={pendingSends[0].dispatching}
-      onclick={() => void pendingDispatch(pendingSends[0])}
-    >{$_('pendingSend.sendNow')}</button>
-    <button
-      class="rounded-full px-2.5 py-1 text-sm font-medium hover:bg-muted disabled:opacity-50"
-      disabled={pendingSends[0].dispatching}
-      onclick={() => void pendingCancel(pendingSends[0])}
-    >{$_('pendingSend.cancel')}</button>
-  </div>
+  <PendingSendToast
+    dispatchAt={pendingSends[0].dispatchAt}
+    now={pendingNow}
+    dispatching={!!pendingSends[0].dispatching}
+    onSendNow={() => void pendingDispatch(pendingSends[0])}
+    onUndo={() => void pendingCancel(pendingSends[0])}
+  />
 {/if}
 
 <CommandPalette />

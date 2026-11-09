@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## Postilaatikko 2026.11.09.4
+
+- Make Undo Send quieter: show a thin draining bar along the toast edge instead of a numeric countdown. Undo still cancels the pending send and restores its draft; Send now and the existing send delay are unchanged.
+
 ## Postilaatikko 2026.11.09.3
 
 - Go Back and Forward through messages you opened, using the new buttons above the shared folder/message column. History remembers the account, folder, search, and email-tab context for this session; opening another message after Back starts a new forward path. Navigation does not undo or redo mailbox actions or composer edits.
