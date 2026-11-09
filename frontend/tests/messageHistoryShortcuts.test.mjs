@@ -24,3 +24,19 @@ test('history handling precedes tab guard and rejects editing, overlays, composi
   assert.match(nav, /navigateMessageHistory\(KEY.HISTORY_BACK\(e\) \? -1 : 1\)/)
   assert.doesNotMatch(nav, /UndoOperation|ClearDraftHistory|pendingCancel|runListAction/)
 })
+
+test('history dispatch is gated to macOS like the macOnly registry entries', async () => {
+  const app = await readFile(new URL('../src/App.svelte', import.meta.url), 'utf8')
+  const handler = app.slice(app.indexOf('function handleGlobalKeyDown('), app.indexOf('// Track Left Alt press'))
+  const nav = handler.slice(0, handler.indexOf('// Secondary workspaces'))
+  assert.ok(nav.includes('if (!isMacPlatform()) return'), 'history dispatch must return early off macOS')
+  assert.ok(app.includes("import { isMacPlatform, withShortcut } from '$lib/keyboard/format'"), 'App.svelte must import isMacPlatform')
+})
+
+test('ActionBar roving focus ignores Command/Ctrl/Alt-modified arrows', async () => {
+  const bar = await readFile(new URL('../src/lib/components/kit/ActionBar.svelte', import.meta.url), 'utf8')
+  const handler = bar.slice(bar.indexOf('function handleKeydown('))
+  const body = handler.slice(0, handler.indexOf('event.preventDefault()'))
+  assert.ok(body.includes('event.metaKey'), 'modified arrows must return before preventDefault')
+  assert.ok(body.includes('event.ctrlKey') && body.includes('event.altKey'))
+})

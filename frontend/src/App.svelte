@@ -66,7 +66,7 @@
   import { dispatchExtensionShortcut } from '$lib/stores/extensionShortcuts.svelte'
   import { shortcutsOverlay, openShortcutsOverlay } from '$lib/stores/shortcutsOverlay.svelte'
   import { executeCommand, openCommandPalette, registerCommand } from '$lib/stores/commandPalette.svelte'
-  import { withShortcut } from '$lib/keyboard/format'
+  import { isMacPlatform, withShortcut } from '$lib/keyboard/format'
   import { sharedPaneWidths, dragListWidth } from '$lib/sidebar/folderPane'
   import { getListAction, runListAction as runActionOnTarget } from '$lib/actions/listActions'
   import { resolveListTarget } from '$lib/actions/target'
@@ -1504,6 +1504,9 @@
     // Handle history before the secondary-reader-tab early return, but never
     // steal macOS line-start/end from search, recipient fields or an editor.
     if (KEY.HISTORY_BACK(e) || KEY.HISTORY_FORWARD(e)) {
+      // Cmd-only shortcut: the registry marks it macOnly, so gate the dispatch
+      // the same way (Super-arrows elsewhere must not move history).
+      if (!isMacPlatform()) return
       if (e.defaultPrevented || e.isComposing || getActiveExtension() !== 'mail' || showComposer ||
         isInputElement(e.target) || isInputElement(e.composedPath()[0]) || isInputElement(document.activeElement) ||
         document.querySelector('[role="menu"]') || isDialogGuardActive()) return

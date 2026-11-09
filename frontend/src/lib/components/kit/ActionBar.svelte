@@ -30,6 +30,9 @@
 
   function handleKeydown(event: KeyboardEvent) {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+    // Leave modified arrows to global shortcuts (e.g. Cmd-Left/Right message
+    // history); roving focus owns only unmodified arrow keys.
+    if (event.metaKey || event.ctrlKey || event.altKey) return
     const buttons = toolbar?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')
     if (!buttons?.length) return
     event.preventDefault()
