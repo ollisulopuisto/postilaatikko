@@ -78,6 +78,7 @@
     <DropdownMenu.Content align="end" side="bottom" sideOffset={4} class="z-50 min-w-[200px] rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md">
       {#each overflowActions as action (action.id)}
         <DropdownMenu.Item
+          disabled={disabled || action.disabled}
           onSelect={() => action.id === 'mail.moveTo' ? onMove() : onAction(action.id)}
           class="flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent focus:text-accent-foreground"
         >

@@ -2,7 +2,9 @@
 
 ## [Unreleased]
 
-## Postilaatikko 2026.11.09.7
+## Postilaatikko 2026.11.09.8
+
+- Preserve ordinary mailbox action targets while blocking mixed resolved/unresolved queue selections. Local server results with no thread ID use the stored message ID as their canonical conversation.
 
 - Keep queue actions disabled on unresolved IMAP search IDs until opening the result resolves its indexed conversation. A failed item in a multi-selection queue update no longer skips the remaining items.
 

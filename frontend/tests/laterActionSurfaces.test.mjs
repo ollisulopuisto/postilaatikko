@@ -45,9 +45,9 @@ test('unresolved IMAP result queue actions are disabled and excluded from bulk t
   assert.match(list, /conversation._queueCanonical !== false/)
   assert.match(row, /conversationId=\{queueActionsEnabled \? conversation.threadId : ''\}/)
   assert.match(menu, /if \(!laterActionsEnabled \|\| laterBusy/)
-  assert.match(list, /message\?\.accountId !== account \|\| !message.threadId/)
-  assert.match(list, /threadId: message.threadId, _queueCanonical: true/)
-  assert.match(list, /_queueCanonical: !!msg.threadId/)
+  assert.match(list, /message\?\.accountId !== account \|\| !message.id/)
+  assert.match(list, /threadId: canonicalId, _queueCanonical: true/)
+  assert.match(list, /_queueCanonical: !!\(msg.threadId \|\| msg.id\)/)
 })
 
 test('one failed selected conversation does not skip later targets or lose successful Undo receipts', async () => {
@@ -68,4 +68,26 @@ test('one failed selected conversation does not skip later targets or lose succe
   assert.equal(notices.filter(n=>n[0]==='readLater.added').length,2)
   assert.equal(notices.filter(n=>n[0]==='readLater.failed').length,1)
   assert.ok(notices.filter(n=>n[0]==='readLater.added').every(n=>n[1][0].onClick))
+})
+
+test('queue readiness never removes ordinary checked message refs and disables mixed selections', async () => {
+  const ordinary = list.slice(list.indexOf('  const selectedMessageRefs'), list.indexOf('  const selectedQueueReady'))
+  assert.doesNotMatch(ordinary, /_queueCanonical/)
+  assert.match(list, /if \(!selectedQueueReady \|\| laterQueueMutationInFlight/)
+  assert.equal((list.match(/disabled: !selectedQueueReady/g)||[]).length, 2)
+  assert.equal((list.match(/\{selectedQueueReady\}/g)||[]).length,4)
+  assert.match(row,/laterActionsEnabled=\{useMultiSelect \? selectedQueueReady : queueActionsEnabled\}/)
+  const bar = await read(base+'kit/ActionBar.svelte')
+  assert.equal((bar.match(/disabled=\{disabled \|\| action.disabled\}/g)||[]).length,2)
+})
+
+test('local server result resolution uses message-id fallback without bypassing identity or race checks', () => {
+  const start=list.indexOf('  async function resolveLocalServerConversation')
+  const end=list.indexOf('  // Fetch a non-local server result',start)
+  const handler=list.slice(start,end)
+  assert.match(handler,/const canonicalId = message.threadId \|\| message.id/)
+  assert.match(handler,/generation !== serverResultFetchGeneration/)
+  assert.match(handler,/message\?\.accountId !== account/)
+  assert.match(handler,/!message.id/)
+  assert.match(handler,/onConversationSelect\?\.\(canonicalId, folder, account\)/)
 })

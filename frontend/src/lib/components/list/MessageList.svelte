@@ -969,11 +969,15 @@
   const selectedMessageRefs = $derived(
     [...new Map(
       [...conversations, ...searchResults, ...serverSearchResults]
-        .filter((conversation: any) => checkedThreadIds.has(conversation.threadId) && conversation._queueCanonical !== false)
+        .filter((conversation: any) => checkedThreadIds.has(conversation.threadId))
         .flatMap((conversation: any) => refsForConversation(conversation))
         .map((ref) => [`${ref.accountId}:${ref.messageId}`, ref] as const)
     ).values()]
   )
+
+  const selectedQueueReady = $derived(![...conversations, ...searchResults, ...serverSearchResults].some(
+    (conversation: any) => checkedThreadIds.has(conversation.threadId) && conversation._queueCanonical === false
+  ))
 
   const selectedQueueRefs = $derived(
     [...new Map(
@@ -1811,10 +1815,11 @@
     const query = searchQuery.trim()
     try {
       const message = await GetMessage(result.messageIds?.[0] || '')
-      if (generation !== serverResultFetchGeneration || searchSource !== 'server' || query !== searchQuery.trim() || !serverSearchResults.includes(result) || message?.accountId !== account || !message.threadId) return
-      serverSearchResults = serverSearchResults.map(item => item === result ? { ...item, threadId: message.threadId, _queueCanonical: true } : item)
-      selectedThreadId = message.threadId
-      onConversationSelect?.(message.threadId, folder, account)
+      if (generation !== serverResultFetchGeneration || searchSource !== 'server' || query !== searchQuery.trim() || !serverSearchResults.includes(result) || message?.accountId !== account || !message.id) return
+      const canonicalId = message.threadId || message.id
+      serverSearchResults = serverSearchResults.map(item => item === result ? { ...item, threadId: canonicalId, _queueCanonical: true } : item)
+      selectedThreadId = canonicalId
+      onConversationSelect?.(canonicalId, folder, account)
     } catch (error) { toasts.error(String(error)) }
   }
 
@@ -1838,7 +1843,7 @@
             messageIds: [msg.id],
             snippet: msg.snippet || '',
             _isLocal: true,
-            _queueCanonical: !!msg.threadId,
+            _queueCanonical: !!(msg.threadId || msg.id),
             _uid: conversation._uid,
           }
           serverSearchResults = serverSearchResults
@@ -2648,7 +2653,7 @@
   }
 
   async function toggleSelectedLaterQueue(kind: 'readLater' | 'replyLater') {
-    if (laterQueueMutationInFlight || selectedQueueRefs.length === 0) return
+    if (!selectedQueueReady || laterQueueMutationInFlight || selectedQueueRefs.length === 0) return
     laterQueueMutationInFlight = true
     try {
       const queue = kind === 'readLater' ? readLaterQueue : replyLaterQueue
@@ -2695,12 +2700,14 @@
         label: $_(selectedAllReplyLater ? 'replyLater.remove' : 'replyLater.add'),
         icon: 'mdi:clock-outline',
         shortcut: 'mail.replyLater',
+        disabled: !selectedQueueReady,
       },
       {
         id: 'mail.readLater',
         label: $_(selectedAllReadLater ? 'readLater.remove' : 'readLater.add'),
         icon: 'mdi:book-clock-outline',
         shortcut: 'mail.readLater',
+        disabled: !selectedQueueReady,
       },
       {
         id: 'mail.star',
@@ -3240,6 +3247,7 @@
               {folderType}
               {selectedMessageIds}
               {selectedQueueRefs}
+              {selectedQueueReady}
               selectedIsStarred={!selectedHasUnstarred}
               selectedIsRead={!selectedHasUnread}
               isNonLocal={result._isLocal === false}
@@ -3313,6 +3321,7 @@
             folderType={isVirtualFolderView ? result.folderType || 'folder' : folderType}
             {selectedMessageIds}
             {selectedQueueRefs}
+            {selectedQueueReady}
             selectedIsStarred={!selectedHasUnstarred}
             selectedIsRead={!selectedHasUnread}
             highlightedSubject={result.highlightedSubject}
@@ -3419,6 +3428,7 @@
                   onOpenInTab={onOpenInTab}
                   {selectedMessageIds}
                   {selectedQueueRefs}
+                  {selectedQueueReady}
                   selectedIsStarred={!selectedHasUnstarred}
                   selectedIsRead={!selectedHasUnread}
                   onSelect={(e) => selectConversation(conv.threadId, conversationIndex, e)}
@@ -3464,6 +3474,7 @@
           onOpenInTab={onOpenInTab}
           {selectedMessageIds}
           {selectedQueueRefs}
+          {selectedQueueReady}
           selectedIsStarred={!selectedHasUnstarred}
           selectedIsRead={!selectedHasUnread}
           onSelect={(e) => selectConversation(conv.threadId, index, e)}

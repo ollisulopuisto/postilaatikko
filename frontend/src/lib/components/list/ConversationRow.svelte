@@ -50,6 +50,7 @@
     accountId: string
     folderId: string
     folderType: string
+    selectedQueueReady?: boolean
     queueActionsEnabled?: boolean
     selectedQueueRefs?: { accountId: string; conversationId: string }[]
     selectedMessageIds: string[]  // All message IDs from checked conversations (for multi-select)
@@ -79,6 +80,7 @@
     accountId,
     folderId,
     folderType,
+    selectedQueueReady = true,
     queueActionsEnabled = true,
     selectedQueueRefs = [],
     selectedMessageIds,
@@ -543,7 +545,7 @@
   replyMessageId={useMultiSelect ? undefined : (ownMessageIds.at(-1) || undefined)}
   conversationId={useMultiSelect ? undefined : conversation.threadId}
   laterTargets={useMultiSelect ? selectedQueueRefs : undefined}
-  laterActionsEnabled={useMultiSelect || queueActionsEnabled}
+  laterActionsEnabled={useMultiSelect ? selectedQueueReady : queueActionsEnabled}
   {accountId}
   currentFolderId={folderId}
   {folderType}
