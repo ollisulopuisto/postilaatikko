@@ -74,3 +74,17 @@ test('a row shared by two lists is counted once', () => {
   counts.applyReadDelta([row], ['a'], true, seen)
   assert.equal(row.unreadCount, 1)
 })
+
+test('expired snapshots are pruned without another archive', () => {
+  const calls = []
+  m.setUnreadRestorer(async ids => { calls.push(ids) })
+  const t0 = 5_000_000
+  m.rememberUnreadForUndo('exp-1', ['a'], t0)
+  m.rememberUnreadForUndo('exp-2', ['b'], t0 + 1000)
+  const before = m.unreadSnapshotCount(t0 + 2000)
+  // Only time passes: no new archive happens.
+  m.pruneExpiredUnreadSnapshots(t0 + m.UNREAD_SNAPSHOT_TTL_MS + 500)
+  assert.equal(m.unreadSnapshotCount(t0 + m.UNREAD_SNAPSHOT_TTL_MS + 500), before - 1, 'exp-1 is dropped, exp-2 is not yet')
+  m.pruneExpiredUnreadSnapshots(t0 + m.UNREAD_SNAPSHOT_TTL_MS + 2000)
+  assert.equal(m.unreadSnapshotCount(t0 + m.UNREAD_SNAPSHOT_TTL_MS + 2000), before - 2, 'exp-2 is dropped too')
+})

@@ -33,16 +33,42 @@ export function setUnreadRestorer(fn: (messageIds: string[]) => Promise<unknown>
 // each entry is a handful of ids.
 export const UNREAD_SNAPSHOT_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
-export function rememberUnreadForUndo(operationId: string, unreadMessageIds: string[], now: number = Date.now()) {
-  if (!operationId || unreadMessageIds.length === 0) return
+let pruneTimer: ReturnType<typeof setTimeout> | null = null
+const PRUNE_EVERY_MS = 60 * 60 * 1000
+
+/** Drops snapshots past the retention window. Stops the timer once the map is empty. */
+export function pruneExpiredUnreadSnapshots(now: number = Date.now()) {
   for (const [id, entry] of unreadBeforeArchive) {
     if (now - entry.at > UNREAD_SNAPSHOT_TTL_MS) unreadBeforeArchive.delete(id)
   }
-  unreadBeforeArchive.delete(operationId)
-  unreadBeforeArchive.set(operationId, { ids: [...unreadMessageIds], at: now })
+  if (unreadBeforeArchive.size === 0 && pruneTimer !== null) {
+    clearTimeout(pruneTimer)
+    pruneTimer = null
+  }
 }
 
-export function unreadSnapshotCount(): number {
+// While anything is remembered, an hourly timer prunes expired entries, so a session that
+// stops archiving still lets go of old ids. It does not keep a Node process alive.
+function schedulePrune() {
+  if (pruneTimer !== null || unreadBeforeArchive.size === 0) return
+  pruneTimer = setTimeout(() => {
+    pruneTimer = null
+    pruneExpiredUnreadSnapshots()
+    schedulePrune()
+  }, PRUNE_EVERY_MS)
+  ;(pruneTimer as { unref?: () => void }).unref?.()
+}
+
+export function rememberUnreadForUndo(operationId: string, unreadMessageIds: string[], now: number = Date.now()) {
+  if (!operationId || unreadMessageIds.length === 0) return
+  pruneExpiredUnreadSnapshots(now)
+  unreadBeforeArchive.delete(operationId)
+  unreadBeforeArchive.set(operationId, { ids: [...unreadMessageIds], at: now })
+  schedulePrune()
+}
+
+export function unreadSnapshotCount(now: number = Date.now()): number {
+  pruneExpiredUnreadSnapshots(now)
   return unreadBeforeArchive.size
 }
 
