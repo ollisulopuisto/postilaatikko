@@ -50,6 +50,7 @@
     accountId: string
     folderId: string
     folderType: string
+    queueActionsEnabled?: boolean
     selectedQueueRefs?: { accountId: string; conversationId: string }[]
     selectedMessageIds: string[]  // All message IDs from checked conversations (for multi-select)
     selectedIsStarred: boolean    // Aggregated star state for multi-select
@@ -78,6 +79,7 @@
     accountId,
     folderId,
     folderType,
+    queueActionsEnabled = true,
     selectedQueueRefs = [],
     selectedMessageIds,
     selectedIsStarred,
@@ -541,6 +543,7 @@
   replyMessageId={useMultiSelect ? undefined : (ownMessageIds.at(-1) || undefined)}
   conversationId={useMultiSelect ? undefined : conversation.threadId}
   laterTargets={useMultiSelect ? selectedQueueRefs : undefined}
+  laterActionsEnabled={useMultiSelect || queueActionsEnabled}
   {accountId}
   currentFolderId={folderId}
   {folderType}
@@ -748,8 +751,8 @@
               <Icon icon="mdi:folder-outline" class="{densityClasses.icon[density]} opacity-60" />
             </span>
           {/if}
-          <LaterQueueButton {accountId} conversationId={conversation.threadId} kind="readLater" variant="row" />
-          <LaterQueueButton {accountId} conversationId={conversation.threadId} kind="replyLater" variant="row" />
+          <LaterQueueButton {accountId} conversationId={queueActionsEnabled ? conversation.threadId : ''} kind="readLater" variant="row" />
+          <LaterQueueButton {accountId} conversationId={queueActionsEnabled ? conversation.threadId : ''} kind="replyLater" variant="row" />
         </div>
       </div>
 

@@ -31,7 +31,7 @@
   import { cn } from '$lib/utils'
   import { Button } from '$lib/components/ui/button'
   // @ts-ignore - wailsjs bindings
-  import { RefreshViewHeaders, SearchMail, CancelMailSearch, MoveToInboxWithUndo, GetConversations, GetConversationCount, SyncFolder, ForceSyncFolder, CancelFolderSync, SetMessageListSortOrder, GetUnifiedFolderConversations, GetUnifiedFolderCount, SearchConversations, SearchUnifiedFolder, GetSearchCount, GetSearchCountUnifiedFolder, SyncUnifiedFolder, SyncVirtualFolder, EmptyUnifiedTrash, GetFTSIndexStatus, IsFTSIndexing, TrashWithUndo, DeletePermanently, EmptyTrash, UndoOperation, IMAPSearchFolder, IMAPSearchUnifiedInbox, FetchServerMessage, GetVirtualFolderConversations, GetVirtualFolderCount, GetVirtualFolderCachedView, PrefetchMessageBodies } from '../../../../wailsjs/go/app/App'
+  import { GetMessage, RefreshViewHeaders, SearchMail, CancelMailSearch, MoveToInboxWithUndo, GetConversations, GetConversationCount, SyncFolder, ForceSyncFolder, CancelFolderSync, SetMessageListSortOrder, GetUnifiedFolderConversations, GetUnifiedFolderCount, SearchConversations, SearchUnifiedFolder, GetSearchCount, GetSearchCountUnifiedFolder, SyncUnifiedFolder, SyncVirtualFolder, EmptyUnifiedTrash, GetFTSIndexStatus, IsFTSIndexing, TrashWithUndo, DeletePermanently, EmptyTrash, UndoOperation, IMAPSearchFolder, IMAPSearchUnifiedInbox, FetchServerMessage, GetVirtualFolderConversations, GetVirtualFolderCount, GetVirtualFolderCachedView, PrefetchMessageBodies } from '../../../../wailsjs/go/app/App'
   import { toasts } from '$lib/stores/toast'
   import { withShortcut, ariaKeyshortcuts } from '$lib/keyboard/format'
   import ShortcutHint from '$lib/components/shortcuts/ShortcutHint.svelte'
@@ -969,7 +969,7 @@
   const selectedMessageRefs = $derived(
     [...new Map(
       [...conversations, ...searchResults, ...serverSearchResults]
-        .filter((conversation) => checkedThreadIds.has(conversation.threadId))
+        .filter((conversation: any) => checkedThreadIds.has(conversation.threadId) && conversation._queueCanonical !== false)
         .flatMap((conversation: any) => refsForConversation(conversation))
         .map((ref) => [`${ref.accountId}:${ref.messageId}`, ref] as const)
     ).values()]
@@ -978,7 +978,7 @@
   const selectedQueueRefs = $derived(
     [...new Map(
       [...conversations, ...searchResults, ...serverSearchResults]
-        .filter((conversation) => checkedThreadIds.has(conversation.threadId))
+        .filter((conversation: any) => checkedThreadIds.has(conversation.threadId) && conversation._queueCanonical !== false)
         .map((conversation: any) => {
           const owningAccountId = conversation.accountId || accountId || ''
           return owningAccountId && owningAccountId !== 'unified' && owningAccountId !== 'virtual'
@@ -1664,6 +1664,7 @@
       accountId: r.accountId,
       folderId: r.folderId,
       _isLocal: r.isLocal,
+      _queueCanonical: false,
       _uid: r.uid,
     }
   }
@@ -1798,7 +1799,23 @@
       fetchAndSelectServerResult(conversation, realFolderId, realAccountId)
       return
     }
+    if (searchSource === 'server' && conversation._queueCanonical === false && conversation._isLocal) {
+      void resolveLocalServerConversation(conversation, realFolderId, realAccountId)
+      return
+    }
     onConversationSelect?.(threadId, realFolderId, realAccountId)
+  }
+
+  async function resolveLocalServerConversation(result: any, folder: string, account: string) {
+    const generation = ++serverResultFetchGeneration
+    const query = searchQuery.trim()
+    try {
+      const message = await GetMessage(result.messageIds?.[0] || '')
+      if (generation !== serverResultFetchGeneration || searchSource !== 'server' || query !== searchQuery.trim() || !serverSearchResults.includes(result) || message?.accountId !== account || !message.threadId) return
+      serverSearchResults = serverSearchResults.map(item => item === result ? { ...item, threadId: message.threadId, _queueCanonical: true } : item)
+      selectedThreadId = message.threadId
+      onConversationSelect?.(message.threadId, folder, account)
+    } catch (error) { toasts.error(String(error)) }
   }
 
   // Fetch a non-local server result, save locally, update the result, then select
@@ -1821,6 +1838,7 @@
             messageIds: [msg.id],
             snippet: msg.snippet || '',
             _isLocal: true,
+            _queueCanonical: !!msg.threadId,
             _uid: conversation._uid,
           }
           serverSearchResults = serverSearchResults
@@ -3225,6 +3243,7 @@
               selectedIsStarred={!selectedHasUnstarred}
               selectedIsRead={!selectedHasUnread}
               isNonLocal={result._isLocal === false}
+              queueActionsEnabled={result._queueCanonical === true}
               searchFolderName={result.folderName}
               searchFolderType={result.folderType}
               onOpenInTab={onOpenInTab}

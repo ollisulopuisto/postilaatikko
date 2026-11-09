@@ -2,7 +2,9 @@
 
 ## [Unreleased]
 
-## Postilaatikko 2026.11.09.6
+## Postilaatikko 2026.11.09.7
+
+- Keep queue actions disabled on unresolved IMAP search IDs until opening the result resolves its indexed conversation. A failed item in a multi-selection queue update no longer skips the remaining items.
 
 - Add Read later and Reply later to the reader toolbar, message-row quick actions, per-message reader context menus, snoozed and multi-selected row menus, and HTML-body copy/link menus. Actions keep account-qualified conversation targets, queue state, shortcut hints and targeted Undo.
 

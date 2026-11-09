@@ -38,3 +38,34 @@ test('queue buttons share existing APIs, labels, ready/busy guards, hints and op
     for (const kind of ['readLater','replyLater']) for (const key of ['add','remove','added','removed','failed']) assert.ok(values[kind][key], `${locale}.${kind}.${key}`)
   }
 })
+
+test('unresolved IMAP result queue actions are disabled and excluded from bulk targets', () => {
+  assert.match(list, /_queueCanonical: false/)
+  assert.match(list, /queueActionsEnabled=\{result._queueCanonical === true\}/)
+  assert.match(list, /conversation._queueCanonical !== false/)
+  assert.match(row, /conversationId=\{queueActionsEnabled \? conversation.threadId : ''\}/)
+  assert.match(menu, /if \(!laterActionsEnabled \|\| laterBusy/)
+  assert.match(list, /message\?\.accountId !== account \|\| !message.threadId/)
+  assert.match(list, /threadId: message.threadId, _queueCanonical: true/)
+  assert.match(list, /_queueCanonical: !!msg.threadId/)
+})
+
+test('one failed selected conversation does not skip later targets or lose successful Undo receipts', async () => {
+  const ts = (await import('typescript')).default
+  const start = menu.indexOf('  async function toggleLater(')
+  const end = menu.indexOf('  async function confirmSnooze()', start)
+  const source = menu.slice(start, end) + '\nexport { toggleLater }'
+  const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } })
+  const calls = [], notices = []
+  const queue = { load: async () => {}, has: () => false, setWithUndo: async (account, conversation) => {
+    calls.push([account,conversation]); if (conversation === 'B') throw new Error('offline')
+    return {changed:true,operationId:'op-'+conversation}
+  } }
+  const factory = new Function('queueTargets','laterActionsEnabled','laterBusy','readLaterQueue','replyLaterQueue','toasts','$_','UndoOperation', outputText.replace(/export \{ toggleLater \};?/, '')+'; return toggleLater;')
+  const handler = factory(['A','B','C'].map(conversationId=>({accountId:'one',conversationId})),true,false,queue,{}, {success:(...args)=>notices.push(args),error:(...args)=>notices.push(args)},x=>x,async()=>{})
+  await handler('readLater')
+  assert.deepEqual(calls.map(c=>c[1]), ['A','B','C'])
+  assert.equal(notices.filter(n=>n[0]==='readLater.added').length,2)
+  assert.equal(notices.filter(n=>n[0]==='readLater.failed').length,1)
+  assert.ok(notices.filter(n=>n[0]==='readLater.added').every(n=>n[1][0].onClick))
+})
