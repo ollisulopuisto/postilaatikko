@@ -1,4 +1,4 @@
-/** Keep the active row at its current index across a sorted-list refresh. */
+/** Keep the open row visible when a read-state refresh would drop it from an unread view; otherwise trust the refreshed order. */
 export function retainReadSelection<T extends { threadId: string; unreadCount: number }>(previous: T[], next: T[], selected: string | null, unreadView: boolean): T[] {
   if (!selected) return next
   const index = previous.findIndex(item => item.threadId === selected)
@@ -6,14 +6,9 @@ export function retainReadSelection<T extends { threadId: string; unreadCount: n
 
   if (!row) return next
 
-  const nextIndex = next.findIndex(item => item.threadId === selected)
-  if (nextIndex >= 0) {
-    if (nextIndex === index) return next
-    const result = [...next]
-    const [activeRow] = result.splice(nextIndex, 1)
-    result.splice(Math.min(index, result.length), 0, activeRow)
-    return result
-  }
+  // A row the refresh still returns keeps the order the refresh gave it, so the
+  // open message sits at its true chronological spot instead of staying pinned.
+  if (next.some(item => item.threadId === selected)) return next
 
   if (!unreadView || row.unreadCount > 0) return next
 

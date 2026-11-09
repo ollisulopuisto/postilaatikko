@@ -5,6 +5,7 @@
 ## Postilaatikko 2026.11.09.1
 
 - Press Cmd/Ctrl+D, or click the new Folders button at the bottom of the left rail, to open the full folder tree. In wide windows the tree and the message list share one column: the open one takes the space and the other folds to a thin strip you can click. Picking a folder, Escape, or Cmd/Ctrl+D again returns to the message list. In narrow windows they swap in the same pane. Open the composer in its own window with Cmd/Ctrl+Shift+D; Cmd/Ctrl+D no longer detaches it.
+- The open message now moves to its correct chronological spot when the list refreshes, instead of staying pinned above newer mail. It stays selected and in view.
 
 - Deduplicate thread messages sharing the same RFC Message-ID in conversation views, eliminating redundant multi-label copies (e.g. Gmail Inbox vs All Mail). Preserve downloaded bodies, reply targets and reaction chips on the retained copy; fetch only displayed bodies and keep connected-reader counts consistent.
 - Show local sender avatars beside collapsed conversation bubble tails when viewer circles are enabled, without external favicon requests; keep HTML message widths readable.
