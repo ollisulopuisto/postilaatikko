@@ -340,3 +340,7 @@ Mirrors mail's "Folder Navigation" shortcuts. These fire regardless of which con
 | `Ctrl+Shift+S` | Sync the contact source currently focused in the sidebar (no-op with warning toast when a built-in entry like "All" / "Local" is focused) |
 
 > Within a focused pane, `Up`/`K` and `Down`/`J` cycle rows (contact list, sidebar sources) and `Enter` opens / activates — same kit predicates Mail's list and folder tree use.
+
+## Collision rules
+
+`frontend/tests/shortcutCollisions.test.mjs` fails when two actions share a key in one context (rail pane plus registry group). Reuse across focus groups (sidebar, list, viewer, composer) must be listed there with the reason. Cmd/Ctrl+K is the palette only; E is archive and mark read.
