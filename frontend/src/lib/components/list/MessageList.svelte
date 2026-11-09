@@ -2675,7 +2675,7 @@
       {
         id: 'mail.replyLater',
         label: $_(selectedAllReplyLater ? 'replyLater.remove' : 'replyLater.add'),
-        icon: 'mdi:reply',
+        icon: 'mdi:clock-outline',
         shortcut: 'mail.replyLater',
       },
       {
@@ -3221,6 +3221,7 @@
               folderId={resultFolderId}
               {folderType}
               {selectedMessageIds}
+              {selectedQueueRefs}
               selectedIsStarred={!selectedHasUnstarred}
               selectedIsRead={!selectedHasUnread}
               isNonLocal={result._isLocal === false}
@@ -3292,6 +3293,7 @@
             folderId={isUnifiedView || isVirtualFolderView ? resultFolderId : folderId!}
             folderType={isVirtualFolderView ? result.folderType || 'folder' : folderType}
             {selectedMessageIds}
+            {selectedQueueRefs}
             selectedIsStarred={!selectedHasUnstarred}
             selectedIsRead={!selectedHasUnread}
             highlightedSubject={result.highlightedSubject}
@@ -3397,6 +3399,7 @@
                   folderType={isVirtualFolderView ? folderTypesByID[convFolderId] || 'folder' : folderType}
                   onOpenInTab={onOpenInTab}
                   {selectedMessageIds}
+                  {selectedQueueRefs}
                   selectedIsStarred={!selectedHasUnstarred}
                   selectedIsRead={!selectedHasUnread}
                   onSelect={(e) => selectConversation(conv.threadId, conversationIndex, e)}
@@ -3441,6 +3444,7 @@
           folderType={isVirtualFolderView ? folderTypesByID[convFolderId] || 'folder' : folderType}
           onOpenInTab={onOpenInTab}
           {selectedMessageIds}
+          {selectedQueueRefs}
           selectedIsStarred={!selectedHasUnstarred}
           selectedIsRead={!selectedHasUnread}
           onSelect={(e) => selectConversation(conv.threadId, index, e)}

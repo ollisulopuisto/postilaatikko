@@ -42,6 +42,7 @@
   import { Button } from '$lib/components/ui/button'
 
   interface Props {
+    laterTargets?: { accountId: string; conversationId: string }[]
     conversationId?: string
     messageIds: string[]
     replyMessageId?: string
@@ -57,6 +58,7 @@
   }
 
   let {
+    laterTargets,
     conversationId,
     messageIds,
     replyMessageId,
@@ -70,6 +72,11 @@
     onOpenChange,
     children,
   }: Props = $props()
+
+  const queueTargets = $derived(laterTargets ?? (conversationId ? [{ accountId, conversationId }] : []))
+  const allReadLater = $derived(queueTargets.length > 0 && queueTargets.every(ref => readLaterQueue.has(ref.accountId, ref.conversationId)))
+  const allReplyLater = $derived(queueTargets.length > 0 && queueTargets.every(ref => replyLaterQueue.has(ref.accountId, ref.conversationId)))
+  const laterBusy = $derived(queueTargets.some(ref => readLaterQueue.isBusy(ref.accountId, ref.conversationId) || replyLaterQueue.isBusy(ref.accountId, ref.conversationId)))
 
   // Accounts list — passed to FolderPickerDialog for its account dropdown.
   // Loaded lazily when the context menu opens.
@@ -181,30 +188,22 @@
     }
   }
 
-  async function handleReplyLater() {
-    if (!conversationId) return
-    const inQueue = !replyLaterQueue.has(accountId, conversationId)
+  async function toggleLater(kind: 'readLater' | 'replyLater') {
+    const targets = queueTargets.map(ref => ({ ...ref }))
+    if (laterBusy || targets.length === 0) return
     try {
-      const result = await replyLaterQueue.set(accountId, conversationId, inQueue)
-      if (!result?.changed) return
-      toasts.success($_(inQueue ? 'replyLater.added' : 'replyLater.removed'), [{
-        label: $_('common.undo'), onClick: () => { void UndoOperation(result.operationId).catch(() => toasts.error($_('toast.undoFailed'))) },
-      }])
-    } catch (err) { toasts.error(`${$_('replyLater.failed')}: ${String(err)}`) }
-  }
-
-  async function handleReadLater() {
-    if (!conversationId) return
-    const inQueue = !readLaterQueue.has(accountId, conversationId)
-    try {
-      const result = await readLaterQueue.setWithUndo(accountId, conversationId, inQueue)
-      if (result?.changed) {
-        toasts.success($_(inQueue ? 'readLater.added' : 'readLater.removed'), result.operationId ? [{
-          label: $_('common.undo'),
-          onClick: () => { void UndoOperation(result.operationId).catch(() => toasts.error($_('toast.undoFailed'))) },
+      const queue = kind === 'readLater' ? readLaterQueue : replyLaterQueue
+      await queue.load()
+      const inQueue = !targets.every(ref => queue.has(ref.accountId, ref.conversationId))
+      for (const ref of targets) {
+        const result = kind === 'readLater'
+          ? await readLaterQueue.setWithUndo(ref.accountId, ref.conversationId, inQueue)
+          : await replyLaterQueue.set(ref.accountId, ref.conversationId, inQueue)
+        if (result?.changed) toasts.success($_(`${kind}.${inQueue ? 'added' : 'removed'}`), result.operationId ? [{
+          label: $_('common.undo'), onClick: () => { void UndoOperation(result.operationId).catch(() => toasts.error($_('toast.undoFailed'))) },
         }] : undefined)
       }
-    } catch (err) { toasts.error(`${$_('readLater.failed')}: ${String(err)}`) }
+    } catch (err) { toasts.error(`${$_(`${kind}.failed`)}: ${String(err)}`) }
   }
 
   async function confirmSnooze() {
@@ -514,6 +513,18 @@
       <ContextMenuSeparator />
     {/if}
 
+    {#if queueTargets.length > 0}
+      <ContextMenuItem onSelect={() => void toggleLater('readLater')} disabled={laterBusy || !readLaterQueue.ready}>
+        <Icon icon="mdi:book-clock-outline" class="mr-2 h-4 w-4" />
+        {$_(allReadLater ? 'readLater.remove' : 'readLater.add')}
+        <ShortcutHint id="mail.readLater" />
+      </ContextMenuItem>
+      <ContextMenuItem onSelect={() => void toggleLater('replyLater')} disabled={laterBusy || !replyLaterQueue.ready}>
+        <Icon icon="mdi:clock-outline" class="mr-2 h-4 w-4" />
+        {$_(allReplyLater ? 'replyLater.remove' : 'replyLater.add')}
+        <ShortcutHint id="mail.replyLater" />
+      </ContextMenuItem>
+    {/if}
     {#if conversationId}
       {#if folderType === 'snoozed'}
         <ContextMenuItem onSelect={handleUnsnooze}>
@@ -521,23 +532,13 @@
           {$_('snooze.unsnooze')}
         </ContextMenuItem>
       {:else}
-      <ContextMenuItem onSelect={handleReadLater}>
-        <Icon icon="mdi:book-clock-outline" class="mr-2 h-4 w-4" />
-        {$_(readLaterQueue.has(accountId, conversationId) ? 'readLater.remove' : 'readLater.add')}
-        <ShortcutHint id="mail.readLater" />
-      </ContextMenuItem>
-      <ContextMenuItem onSelect={handleReplyLater}>
-        <Icon icon="mdi:clock-outline" class="mr-2 h-4 w-4" />
-        {$_(replyLaterQueue.has(accountId, conversationId) ? 'replyLater.remove' : 'replyLater.add')}
-        <ShortcutHint id="mail.replyLater" />
-      </ContextMenuItem>
-      <ContextMenuItem onSelect={() => { snoozeDays = '1'; showSnoozeDialog = true }}>
-        <Icon icon="mdi:clock-time-four-outline" class="mr-2 h-4 w-4" />
-        {$_('snooze.action')}
-      </ContextMenuItem>
+        <ContextMenuItem onSelect={() => { snoozeDays = '1'; showSnoozeDialog = true }}>
+          <Icon icon="mdi:clock-time-four-outline" class="mr-2 h-4 w-4" />
+          {$_('snooze.action')}
+        </ContextMenuItem>
       {/if}
-      <ContextMenuSeparator />
     {/if}
+    {#if queueTargets.length > 0 || conversationId}<ContextMenuSeparator />{/if}
 
     <!-- Move/Delete actions -->
     {#if isTrashFolder}

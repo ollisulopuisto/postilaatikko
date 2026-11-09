@@ -28,7 +28,7 @@
   import { message, operations } from '../../../../wailsjs/go/models'
   // @ts-ignore - wailsjs path
   import { OpenReaderWindow, MarkAsRead, MarkAsUnread, RemoveFromInboxWithUndo, ResolveMailActionTarget, UndoOperation } from '../../../../wailsjs/go/app/App'
-  import ReplyLaterButton from '$lib/components/common/ReplyLaterButton.svelte'
+  import LaterQueueButton from '$lib/components/common/LaterQueueButton.svelte'
   import MessageContextMenu from '$lib/components/common/MessageContextMenu.svelte'
   import Avatar from '$lib/components/kit/Avatar.svelte'
   import { toasts } from '$lib/stores/toast'
@@ -50,6 +50,7 @@
     accountId: string
     folderId: string
     folderType: string
+    selectedQueueRefs?: { accountId: string; conversationId: string }[]
     selectedMessageIds: string[]  // All message IDs from checked conversations (for multi-select)
     selectedIsStarred: boolean    // Aggregated star state for multi-select
     selectedIsRead: boolean       // Aggregated read state for multi-select
@@ -77,6 +78,7 @@
     accountId,
     folderId,
     folderType,
+    selectedQueueRefs = [],
     selectedMessageIds,
     selectedIsStarred,
     selectedIsRead,
@@ -538,6 +540,7 @@
   messageIds={contextMenuMessageIds}
   replyMessageId={useMultiSelect ? undefined : (ownMessageIds.at(-1) || undefined)}
   conversationId={useMultiSelect ? undefined : conversation.threadId}
+  laterTargets={useMultiSelect ? selectedQueueRefs : undefined}
   {accountId}
   currentFolderId={folderId}
   {folderType}
@@ -745,7 +748,8 @@
               <Icon icon="mdi:folder-outline" class="{densityClasses.icon[density]} opacity-60" />
             </span>
           {/if}
-          <ReplyLaterButton {accountId} conversationId={conversation.threadId} />
+          <LaterQueueButton {accountId} conversationId={conversation.threadId} kind="readLater" variant="row" />
+          <LaterQueueButton {accountId} conversationId={conversation.threadId} kind="replyLater" variant="row" />
         </div>
       </div>
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import LaterQueueButton from '../common/LaterQueueButton.svelte'
   import Icon from '@iconify/svelte'
   import { normalizeConversationHtml } from './conversationHtml'
   import { ClipboardSetText } from '../../../../wailsjs/runtime/runtime'
@@ -14,6 +15,7 @@
   import { getAlwaysLoadImages, getThemeMode, setAlwaysLoadImages } from '$lib/stores/settings.svelte'
 
   interface Props {
+    conversationId?: string
     messageId: string
     accountId?: string
     bodyHtml?: string
@@ -26,7 +28,7 @@
     darken?: boolean
   }
 
-  let { messageId, accountId = '', bodyHtml = '', bodyText = '', fromEmail = '', onCompose, onImagesLoaded, encryptedInlineAttachments, darken = false, compact = false }: Props = $props()
+  let { conversationId = '', messageId, accountId = '', bodyHtml = '', bodyText = '', fromEmail = '', onCompose, onImagesLoaded, encryptedInlineAttachments, darken = false, compact = false }: Props = $props()
 
   // State for remote image handling
   let imagesBlocked = $state(true)
@@ -936,6 +938,10 @@ ${processedHtml}
       style="left: {ctxMenuX}px; top: {ctxMenuY}px;"
       role="menu"
     >
+      {#if conversationId && accountId}
+        <LaterQueueButton {accountId} {conversationId} kind="readLater" variant="menu" onComplete={() => ctxMenuVisible = false} />
+        <LaterQueueButton {accountId} {conversationId} kind="replyLater" variant="menu" onComplete={() => ctxMenuVisible = false} />
+      {/if}
       {#if ctxMenuText}
         <button
           class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"

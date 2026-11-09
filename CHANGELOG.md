@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## Postilaatikko 2026.11.09.6
+
+- Add Read later and Reply later to the reader toolbar, message-row quick actions, per-message reader context menus, snoozed and multi-selected row menus, and HTML-body copy/link menus. Actions keep account-qualified conversation targets, queue state, shortcut hints and targeted Undo.
+
 ## Postilaatikko 2026.11.09.4
 
 - Make Undo Send quieter: show a thin draining bar along the toast edge instead of a numeric countdown. Undo still cancels the pending send and restores its draft; Send now and the existing send delay are unchanged.
