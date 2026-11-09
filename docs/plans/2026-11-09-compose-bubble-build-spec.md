@@ -139,8 +139,10 @@ conversation view.
   button, not only a shortcut.
 - Send Later, attachments, Cmd+Enter send and the clock icon behave the same in both
   modes.
-- Open for the owner: which mode Cmd+N opens by default, and whether Forward from the
-  traditional thread view opens the traditional composer.
+- Decided 2026-11-09: Cmd+N opens the bubble composer. A Preferences toggle switches
+  the default to the traditional composer.
+- Open for the owner: whether Forward from the traditional thread view opens the
+  traditional composer.
 
 ## Connecting the forwarded part and the note
 
