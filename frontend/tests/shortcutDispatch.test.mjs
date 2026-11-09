@@ -85,3 +85,32 @@ test('App.svelte has no per-key switch for dispatched commands', async () => {
     }
   }
 })
+
+const layoutIds = ['mail.trash', 'mail.spam', 'app.search', 'viewer.threadFocus', 'viewer.loadImages', 'viewer.alwaysLoadImages', 'viewer.selectText']
+const ev = (key, extra = {}) => ({ key, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, getModifierState: () => false, ...extra })
+
+test('layout symbols typed with Option or AltGr still dispatch', () => {
+  // Finnish macOS: Option+3 produces #
+  assert.equal(resolveShortcut(ev('#', { altKey: true }), 'messageList', layoutIds)?.id, 'mail.trash')
+  // AltGr layouts report Ctrl+Alt and the AltGraph modifier
+  assert.equal(resolveShortcut(ev('#', { ctrlKey: true, altKey: true, getModifierState: m => m === 'AltGraph' }), 'messageList', layoutIds)?.id, 'mail.trash')
+  assert.equal(resolveShortcut(ev('!', { altKey: true }), 'messageList', layoutIds)?.id, 'mail.spam')
+  assert.equal(resolveShortcut(ev('/', { altKey: true }), 'messageList', layoutIds)?.id, 'app.search')
+  // Shift+3 style layouts
+  assert.equal(resolveShortcut(ev('#', { shiftKey: true }), 'messageList', layoutIds)?.id, 'mail.trash')
+})
+
+test('an ordinary Ctrl+Alt chord on a symbol key is not a layout symbol', () => {
+  assert.equal(resolveShortcut(ev('#', { ctrlKey: true, altKey: true }), 'messageList', layoutIds), undefined)
+  assert.equal(resolveShortcut(ev('#', { metaKey: true }), 'messageList', layoutIds), undefined)
+})
+
+test('focus mode and image loading work from the list and sidebar, select-all stays viewer-only', () => {
+  for (const pane of ['sidebar', 'messageList', 'viewer']) {
+    assert.equal(resolveShortcut(ev('F', { shiftKey: true }), pane, layoutIds)?.id, 'viewer.threadFocus', pane)
+    assert.equal(resolveShortcut(ev('l', { ctrlKey: true }), pane, layoutIds)?.id, 'viewer.loadImages', pane)
+    assert.equal(resolveShortcut(ev('L', { ctrlKey: true, shiftKey: true }), pane, layoutIds)?.id, 'viewer.alwaysLoadImages', pane)
+  }
+  assert.equal(resolveShortcut(ev('a', { ctrlKey: true }), 'messageList', layoutIds), undefined)
+  assert.equal(resolveShortcut(ev('a', { ctrlKey: true }), 'viewer', layoutIds)?.id, 'viewer.selectText')
+})

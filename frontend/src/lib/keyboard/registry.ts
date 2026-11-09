@@ -79,6 +79,8 @@ export interface ShortcutDef {
   dispatch?: boolean
   /** Menu the command appears in (app menu and context menu are generated from this). Mandatory; see commandMenuCoverage test. */
   menu?: 'File' | 'Edit' | 'View' | 'Mailbox' | 'Message' | 'Go' | 'Window' | 'Help'
+  /** A viewer-group dispatch entry that also applies while the list or sidebar has focus (reader commands that never depended on pane focus). */
+  anyFocus?: boolean
   /** Combos of a dispatch entry that host code still handles directly (migration pending); resolveShortcut ignores them. */
   legacy?: string[]
   /** Name of the library that owns the binding, when neither of the above. */
@@ -251,11 +253,11 @@ export const CORE_SHORTCUTS: ShortcutDef[] = [
   // Conversation viewer (viewer focused)
   { id: 'viewer.scrollDown', label: 'shortcuts.action.scrollDown', group: 'viewer', combos: ['ArrowDown', 'j'], panes: MAIL, predicates: [KEY.LIST_NEXT] },
   { id: 'viewer.scrollUp', label: 'shortcuts.action.scrollUp', group: 'viewer', combos: ['ArrowUp', 'k'], panes: MAIL, predicates: [KEY.LIST_PREV] },
-  { id: 'viewer.threadFocus', icon: 'mdi:fullscreen', label: 'shortcuts.action.threadFocus', group: 'viewer', combos: ['Shift+f'], panes: MAIL, dispatch: true },
+  { id: 'viewer.threadFocus', icon: 'mdi:fullscreen', label: 'shortcuts.action.threadFocus', group: 'viewer', combos: ['Shift+f'], panes: MAIL, dispatch: true, anyFocus: true },
   { id: 'viewer.messageFocus', label: 'shortcuts.action.messageFocus', group: 'viewer', combos: ['Shift+f'], panes: MAIL, external: 'toggleThreadFocus (same key as viewer.threadFocus)' },
   { id: 'viewer.selectText', label: 'shortcuts.action.selectText', group: 'viewer', combos: ['Mod+a'], panes: MAIL, dispatch: true },
-  { id: 'viewer.loadImages', label: 'shortcuts.action.loadImages', group: 'viewer', combos: ['Mod+l'], panes: MAIL, dispatch: true },
-  { id: 'viewer.alwaysLoadImages', label: 'shortcuts.action.alwaysLoadImages', group: 'viewer', combos: ['Mod+Shift+l'], panes: MAIL, dispatch: true },
+  { id: 'viewer.loadImages', label: 'shortcuts.action.loadImages', group: 'viewer', combos: ['Mod+l'], panes: MAIL, dispatch: true, anyFocus: true },
+  { id: 'viewer.alwaysLoadImages', label: 'shortcuts.action.alwaysLoadImages', group: 'viewer', combos: ['Mod+Shift+l'], panes: MAIL, dispatch: true, anyFocus: true },
 
   // Composer (only while the composer is open)
   { id: 'composer.send', icon: 'mdi:send', label: 'shortcuts.action.send', group: 'composer', combos: ['Mod+Enter'], panes: MAIL, inline: composer('Enter') },
