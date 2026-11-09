@@ -1635,7 +1635,6 @@
     }
     const inInput = isInputElement(e.target)
     const focusedPane = getFocusedPane()
-    const hasConversation = selectedThreadId !== null
 
     // Don't intercept keyboard events when a context menu or dropdown is open
     // (bits-ui portals mount [role="menu"] only while open)
