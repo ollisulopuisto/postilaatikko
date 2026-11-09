@@ -112,3 +112,31 @@ test('queue readiness and targets use the active source rather than hidden unres
   const mixed=select(true,true,[unresolved,{...valid,threadId:'resolved',_queueCanonical:true}],[],[],new Set(['msg-no-thread','resolved']),'one',x=>x)
   assert.equal(mixed.selectedQueueReady,false)
 })
+
+test('fetching a result with a shared mailbox UID updates only its account-qualified row', async () => {
+  const ts = (await import('typescript')).default
+  const identitySource=await read(base+'list/serverSearchResults.ts')
+  const identityCode=ts.transpileModule(identitySource,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText
+  const {serverSearchResultIdentity}=await import(`data:text/javascript;base64,${Buffer.from(identityCode).toString('base64')}`)
+  const source=list.slice(list.indexOf('  async function fetchAndSelectServerResult'),list.indexOf('  function isMissingServerSearchResult'))
+  const code=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText
+  const factory=new Function('serverSearchResults','FetchServerMessage','onConversationSelect','serverSearchResultIdentity',`
+    let serverResultFetchGeneration=0, searchQuery='query', searchSource='server', selectedThreadId='', serverSearchError='';
+    ${code}
+    return {run:fetchAndSelectServerResult,rows:()=>serverSearchResults};`)
+  const a={accountId:'A',folderId:'inbox-A',threadId:'uid-A',_uid:42,_isLocal:false,_queueCanonical:false}
+  const b={accountId:'B',folderId:'inbox-B',threadId:'uid-B',_uid:42,_isLocal:false,_queueCanonical:false}
+  const c={...b,folderId:'archive-B',threadId:'uid-C'}
+  const selected=[]
+  const state=factory([a,b,c],async()=>({id:'message-B',threadId:'thread-B',accountId:'B'}),(...args)=>selected.push(args),serverSearchResultIdentity)
+  await state.run(b,'inbox-B','B')
+  assert.deepEqual(state.rows()[0],a)
+  assert.deepEqual(state.rows()[2],c)
+  assert.equal(state.rows()[1].accountId,'B')
+  assert.equal(state.rows()[1].threadId,'thread-B')
+  assert.equal(state.rows()[1]._queueCanonical,true)
+  assert.deepEqual(selected,[['thread-B','inbox-B','B']])
+  const wrong=factory([a,b],async()=>({id:'message-A',threadId:'thread-A',accountId:'A'}),()=>assert.fail('must not open mismatched account'),serverSearchResultIdentity)
+  await wrong.run(b,'inbox-B','B')
+  assert.deepEqual(wrong.rows(),[a,b])
+})

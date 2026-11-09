@@ -1840,9 +1840,9 @@
       if (generation !== serverResultFetchGeneration || searchSource !== 'server' || query !== searchQuery.trim() || !serverSearchResults.some(result => serverSearchResultIdentity(result) === identity)) {
         return
       }
-      if (msg) {
+      if (msg?.accountId === realAccountId && msg.id) {
         // Update the server result to be local
-        const idx = serverSearchResults.findIndex(r => r._uid === conversation._uid)
+        const idx = serverSearchResults.findIndex(result => serverSearchResultIdentity(result) === identity)
         if (idx >= 0) {
           serverSearchResults[idx] = {
             ...serverSearchResults[idx],

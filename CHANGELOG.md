@@ -2,7 +2,9 @@
 
 ## [Unreleased]
 
-## Postilaatikko 2026.11.09.9
+## Postilaatikko 2026.11.09.10
+
+- Resolve fetched server results by account and folder identity as well as UID, preventing same-UID rows in different mailboxes from being replaced. Validate the fetched message account before enabling queue actions.
 
 - Use only checked rows from the active search source for queue readiness and targets, so hidden cached results cannot block valid local selections.
 
