@@ -2051,6 +2051,8 @@
       return
     }
     if (e.key === 'Escape') {
+      // Another owner (e.g. Undo Send cancel in App) already took this Escape.
+      if (e.defaultPrevented) return
       handleClose()
     }
   }

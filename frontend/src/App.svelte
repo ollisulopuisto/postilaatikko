@@ -1515,7 +1515,9 @@
     if (pendingSends.length > 0) {
       const ps = pendingSends[0]
       if (e.key === 'Escape' && !ps.dispatching) {
+        // One owner for this Escape: the Composer's window listener must not also run handleClose.
         e.preventDefault()
+        e.stopImmediatePropagation()
         void pendingCancel(ps)
         return
       }

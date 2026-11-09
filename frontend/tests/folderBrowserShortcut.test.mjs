@@ -128,3 +128,14 @@ test('Escape with the tree open: Undo Send countdown and the composer keep prece
   // And App's handler still cancels the pending send on Escape.
   assert.match(app, /e\.key === 'Escape' && !ps\.dispatching\)\s*\{\s*e\.preventDefault\(\)\s*void pendingCancel\(ps\)/)
 })
+
+test('one Escape, one owner: tree + pending send + composer', async () => {
+  const composer = await readFile(new URL('../src/lib/components/composer/Composer.svelte', import.meta.url), 'utf8')
+  const base = { treeOpen: true, query: '', defaultPrevented: false, overlayOpen: false, ownedElsewhere: true }
+  // 1. Tree stands down.
+  assert.equal(pane.treeEscapeAction(base), 'ignore')
+  // 2. App's pending-send cancel consumes the event for every other window listener.
+  assert.match(app, /e\.key === 'Escape' && !ps\.dispatching\) \{[^}]*e\.preventDefault\(\)\s*e\.stopImmediatePropagation\(\)\s*void pendingCancel\(ps\)/)
+  // 3. If listener order ever flips, the Composer still yields to a handled Escape.
+  assert.match(composer, /if \(e\.key === 'Escape'\) \{[^}]*if \(e\.defaultPrevented\) return\s*handleClose\(\)/)
+})
