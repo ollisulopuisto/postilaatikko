@@ -418,3 +418,10 @@ Verification:825/825frontend tests pass; frontend check0errors/1pre-existing vie
 - Verification: Source cross-checks and all relative links pass. Markdown rendered in Chromium and actual top/install/build/privacy sections inspected for readable layout. No screenshots added to the repository. CI and external review pending. No application changes or release.
 
 README review follow-up: qualify checksum instructions because tagged releases do not all include SHA256.txt; retain exact draft checksum verification where provided.
+
+## Compose bubble build spec (2026-11-09)
+
+- Status: Review. Owner: Instinct. Branch: `agent/compose-bubble-build-spec`. Worktree: `/tmp/postilaatikko`.
+- Scope: Consolidate the owner's three sketch rounds on compose-as-a-bubble into one build spec (`docs/plans/2026-11-09-compose-bubble-build-spec.md`) and record the durable decisions, including the whole-app visible-action rule, in ROADMAP.md. Documentation only; no code, no build.
+- Held for the owner: quote versus new-text order (composer placement and sent-result top/bottom-posting, replies vs forwards); variants and recommendation on the round-3 sketches page.
+- Verification: documentation-only diff (new plan doc plus ROADMAP.md and TASKS.md entries). Implementation splits into PR-sized tasks here when claimed.
