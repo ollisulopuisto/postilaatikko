@@ -91,3 +91,24 @@ test('local server result resolution uses message-id fallback without bypassing 
   assert.match(handler,/!message.id/)
   assert.match(handler,/onConversationSelect\?\.\(canonicalId, folder, account\)/)
 })
+
+test('queue readiness and targets use the active source rather than hidden unresolved cache rows', async () => {
+  const ts = (await import('typescript')).default
+  const source = list.slice(list.indexOf('  const selectedQueueRows'), list.indexOf('  const selectedAllReadLater'))
+  const { outputText } = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022 } })
+  const select = new Function('isSearchMode','serverSearchMode','serverSearchResults','searchResults','conversations','checkedThreadIds','accountId','$derived',outputText+'; return {selectedQueueReady,selectedQueueRefs};')
+  const valid = {accountId:'one',threadId:'msg-no-thread',messageIds:['msg-no-thread']}
+  const unresolved = {...valid,_queueCanonical:false}
+  const checked=new Set(['msg-no-thread'])
+  const local=select(true,false,[unresolved],[valid],[],checked,'one',x=>x)
+  assert.equal(local.selectedQueueReady,true)
+  assert.deepEqual(local.selectedQueueRefs,[{accountId:'one',conversationId:'msg-no-thread'}])
+  const server=select(true,true,[unresolved],[valid],[],checked,'one',x=>x)
+  assert.equal(server.selectedQueueReady,false)
+  assert.deepEqual(server.selectedQueueRefs,[])
+  const folder=select(false,true,[unresolved],[],[valid],checked,'one',x=>x)
+  assert.equal(folder.selectedQueueReady,true)
+  assert.deepEqual(folder.selectedQueueRefs,local.selectedQueueRefs)
+  const mixed=select(true,true,[unresolved,{...valid,threadId:'resolved',_queueCanonical:true}],[],[],new Set(['msg-no-thread','resolved']),'one',x=>x)
+  assert.equal(mixed.selectedQueueReady,false)
+})

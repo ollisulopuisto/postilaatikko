@@ -2,7 +2,9 @@
 
 ## [Unreleased]
 
-## Postilaatikko 2026.11.09.8
+## Postilaatikko 2026.11.09.9
+
+- Use only checked rows from the active search source for queue readiness and targets, so hidden cached results cannot block valid local selections.
 
 - Preserve ordinary mailbox action targets while blocking mixed resolved/unresolved queue selections. Local server results with no thread ID use the stored message ID as their canonical conversation.
 

@@ -945,6 +945,8 @@
     checkFTSIndexStatus()
   })
 
+  const isSearchMode = $derived(showSearch && searchQuery.trim().length > 0)
+
   // Compute selected message IDs from all checked conversations (for multi-select context menu)
   // Check normal, local-search and server-search result caches.
   // Use Set to deduplicate in case same conversation appears in both arrays
@@ -975,14 +977,20 @@
     ).values()]
   )
 
-  const selectedQueueReady = $derived(![...conversations, ...searchResults, ...serverSearchResults].some(
-    (conversation: any) => checkedThreadIds.has(conversation.threadId) && conversation._queueCanonical === false
+  // Queue decisions must use the active source, not hidden search caches that
+  // can carry the same message ID with a different canonical-resolution state.
+  const selectedQueueRows = $derived(
+    (isSearchMode ? (serverSearchMode ? serverSearchResults : searchResults) : conversations)
+      .filter((conversation: any) => checkedThreadIds.has(conversation.threadId))
+  )
+  const selectedQueueReady = $derived(!selectedQueueRows.some(
+    (conversation: any) => conversation._queueCanonical === false
   ))
 
   const selectedQueueRefs = $derived(
     [...new Map(
-      [...conversations, ...searchResults, ...serverSearchResults]
-        .filter((conversation: any) => checkedThreadIds.has(conversation.threadId) && conversation._queueCanonical !== false)
+      selectedQueueRows
+        .filter((conversation: any) => conversation._queueCanonical !== false)
         .map((conversation: any) => {
           const owningAccountId = conversation.accountId || accountId || ''
           return owningAccountId && owningAccountId !== 'unified' && owningAccountId !== 'virtual'
@@ -1686,7 +1694,6 @@
   }
 
   // Check if we're in search mode with results
-  const isSearchMode = $derived(showSearch && searchQuery.trim().length > 0)
   const unavailableReplyLaterRefs = $derived(
     isUnifiedView && folderId === 'replyLater' && !isSearchMode && replyLaterQueue.ready
       ? replyLaterQueue.refs.filter(ref => ref.indexed === false)
