@@ -231,7 +231,10 @@ func extractCharsetFromHTML(html []byte) string {
 	// Performance optimization: Meta charsets require both a "<meta" element
 	// and a "charset" attribute or directive. If either ASCII token is missing,
 	// return immediately with 0 allocations, avoiding expensive regex scans.
-	if !bytesContainsFoldASCII(searchBytes, "<meta") || !bytesContainsFoldASCII(searchBytes, "charset") {
+	// The regexes use Unicode simple folding, where U+017F (long s) matches
+	// "s", so a "charſet" spelling must still reach them.
+	if !bytesContainsFoldASCII(searchBytes, "<meta") ||
+		!(bytesContainsFoldASCII(searchBytes, "charset") || bytes.Contains(searchBytes, []byte("\u017f"))) {
 		return ""
 	}
 
