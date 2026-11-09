@@ -43,10 +43,10 @@ test('unresolved IMAP result queue actions are disabled and excluded from bulk t
   assert.match(list, /_queueCanonical: false/)
   assert.match(list, /queueActionsEnabled=\{result._queueCanonical === true\}/)
   assert.match(list, /conversation._queueCanonical !== false/)
-  assert.match(row, /conversationId=\{queueActionsEnabled \? conversation.threadId : ''\}/)
+  assert.match(row, /conversationId=\{queueActionsEnabled \? backendConversationId : ''\}/)
   assert.match(menu, /if \(!laterActionsEnabled \|\| laterBusy/)
   assert.match(list, /message\?\.accountId !== account \|\| !message.id/)
-  assert.match(list, /threadId: canonicalId, _queueCanonical: true/)
+  assert.match(list, /_canonicalConversationId: canonicalId, _queueCanonical: true/)
   assert.match(list, /_queueCanonical: !!\(msg.threadId \|\| msg.id\)/)
 })
 
@@ -82,7 +82,7 @@ test('queue readiness never removes ordinary checked message refs and disables m
 })
 
 test('local server result resolution uses message-id fallback without bypassing identity or race checks', () => {
-  const start=list.indexOf('  function migrateCheckedServerThread')
+  const start=list.indexOf('  async function resolveLocalServerConversation')
   const end=list.indexOf('  // Fetch a non-local server result',start)
   const handler=list.slice(start,end)
   assert.match(handler,/const canonicalId = message.threadId \|\| message.id/)
@@ -133,7 +133,8 @@ test('fetching a result with a shared mailbox UID updates only its account-quali
   assert.deepEqual(state.rows()[0],a)
   assert.deepEqual(state.rows()[2],c)
   assert.equal(state.rows()[1].accountId,'B')
-  assert.equal(state.rows()[1].threadId,'thread-B')
+  assert.equal(state.rows()[1]._canonicalConversationId,'thread-B')
+  assert.equal(state.rows()[1].threadId,'uid-B')
   assert.equal(state.rows()[1]._queueCanonical,true)
   assert.deepEqual(selected,[['thread-B','inbox-B','B']])
   const wrong=factory([a,b],async()=>({id:'message-A',threadId:'thread-A',accountId:'A'}),()=>assert.fail('must not open mismatched account'),serverSearchResultIdentity)
@@ -143,7 +144,7 @@ test('fetching a result with a shared mailbox UID updates only its account-quali
 
 test('late local and fetched server opens cannot replace a newer click or keyboard selection', async () => {
   const ts=(await import('typescript')).default
-  const source=list.slice(list.indexOf('  function migrateCheckedServerThread'),list.indexOf('  function isMissingServerSearchResult'))
+  const source=list.slice(list.indexOf('  async function resolveLocalServerConversation'),list.indexOf('  function isMissingServerSearchResult'))
   const code=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText
   const factory=new Function('serverSearchResults','GetMessage','FetchServerMessage','onConversationSelect','serverSearchResultIdentity',`
     let checkedThreadIds=new Set(); let serverResultFetchGeneration=0, searchQuery='query', searchSource='server', selectedThreadId='rowA';
@@ -172,7 +173,7 @@ test('late local and fetched server opens cannot replace a newer click or keyboa
 
 test('keyboard opening preserves checked rows and resolves server rows through shared reader path', async () => {
   const ts=(await import('typescript')).default
-  const shared=list.slice(list.indexOf('  function openConversation('),list.indexOf('  function migrateCheckedServerThread'))
+  const shared=list.slice(list.indexOf('  function openConversation('),list.indexOf('  async function resolveLocalServerConversation'))
   const keyboard=list.slice(list.indexOf('  export function openSelected()'),list.indexOf('  // Select a specific thread by ID')).replace('export function','function')
   const code=ts.transpileModule(shared+keyboard,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText
   const factory=new Function('activeList','onConversationSelect','resolveLocalServerConversation','fetchAndSelectServerResult',`
@@ -194,7 +195,7 @@ test('keyboard opening preserves checked rows and resolves server rows through s
 
 test('canonical server resolution carries checked IDs forward and opening pins inbox cards', async () => {
   const ts=(await import('typescript')).default
-  const source=list.slice(list.indexOf('  function migrateCheckedServerThread'),list.indexOf('  function isMissingServerSearchResult'))
+  const source=list.slice(list.indexOf('  async function resolveLocalServerConversation'),list.indexOf('  function isMissingServerSearchResult'))
   const code=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText
   const factory=new Function('serverSearchResults',`
     let serverResultFetchGeneration=0, searchQuery='query', searchSource='server',selectedThreadId='provisional';
@@ -206,10 +207,11 @@ test('canonical server resolution carries checked IDs forward and opening pins i
   for(const kind of ['local','remote']) {
     const row={threadId:'provisional',accountId:'one',folderId:'inbox',_uid:42,messageIds:['message']}
     const state=factory([row]); await state[kind](row,'inbox','one')
-    assert.deepEqual(state.checks(),['other','canonical'])
-    assert.equal(state.rows()[0].threadId,'canonical')
+    assert.deepEqual(state.checks(),['provisional','other'])
+    assert.equal(state.rows()[0]._canonicalConversationId,'canonical')
+    assert.equal(state.rows()[0].threadId,'provisional')
   }
-  const shared=list.slice(list.indexOf('  function openConversation'),list.indexOf('  function migrateCheckedServerThread'))
+  const shared=list.slice(list.indexOf('  function openConversation'),list.indexOf('  async function resolveLocalServerConversation'))
   assert.match(shared,/pinInboxGroupForConversation\(threadId\)/)
   assert.doesNotMatch(shared,/checkedThreadIds = new Set/)
 })
@@ -219,7 +221,7 @@ test('same-UID server rows keep independent checked keys through canonical resol
   const identityCode=ts.transpileModule(await read(base+'list/serverSearchResults.ts'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText
   const {serverSearchResultIdentity}=await import(`data:text/javascript;base64,${Buffer.from(identityCode).toString('base64')}`)
   const adapter=list.slice(list.indexOf('  function adaptServerResult'),list.indexOf('  // Toggle search visibility'))
-  const resolution=list.slice(list.indexOf('  function migrateCheckedServerThread'),list.indexOf('  function isMissingServerSearchResult'))
+  const resolution=list.slice(list.indexOf('  async function resolveLocalServerConversation'),list.indexOf('  function isMissingServerSearchResult'))
   const code=ts.transpileModule(adapter+resolution,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText
   const factory=new Function('serverSearchResultIdentity',`
     let serverResultFetchGeneration=0,searchQuery='q',searchSource='server',selectedThreadId='',serverSearchResults=[],checkedThreadIds=new Set();
@@ -232,10 +234,42 @@ test('same-UID server rows keep independent checked keys through canonical resol
   state.setup(rows)
   await state.open(rows[0],'inbox','A')
   assert.equal(state.checks().size,3)
-  assert.equal(state.checks().has('thread-A'),true)
+  assert.equal(state.checks().has(rows[0].threadId),true)
   assert.equal(state.checks().has(rows[1].threadId),true)
   assert.equal(state.checks().has(rows[2].threadId),true)
   assert.deepEqual(state.rows().filter(r=>state.checks().has(r.threadId)).map(r=>r.accountId),['A','B','A'])
   assert.equal(state.rows()[1]._queueCanonical,false)
   assert.equal(state.rows()[2]._queueCanonical,false)
+})
+
+test('same canonical RFC thread in two accounts never checks or queues the unselected account', async () => {
+  const ts=(await import('typescript')).default
+  const identityCode=ts.transpileModule(await read(base+'list/serverSearchResults.ts'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText
+  const {serverSearchResultIdentity}=await import(`data:text/javascript;base64,${Buffer.from(identityCode).toString('base64')}`)
+  const adapter=list.slice(list.indexOf('  function adaptServerResult'),list.indexOf('  // Toggle search visibility'))
+  const resolution=list.slice(list.indexOf('  async function resolveLocalServerConversation'),list.indexOf('  function isMissingServerSearchResult'))
+  const derived=list.slice(list.indexOf('  const selectedQueueRows'),list.indexOf('  const selectedAllReadLater'))
+  const code=ts.transpileModule(adapter+resolution,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText
+  const queueCode=ts.transpileModule(derived,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText
+  const factory=new Function('serverSearchResultIdentity',`
+    let serverResultFetchGeneration=0,searchQuery='q',searchSource='server',selectedThreadId='',serverSearchResults=[],checkedThreadIds=new Set();
+    const FetchServerMessage=async(account)=>({accountId:account,id:'msg-'+account,threadId:'root@example.org'}),GetMessage=async()=>({accountId:'A',id:'msg-A',threadId:'root@example.org'}),onConversationSelect=()=>{},toasts={error:()=>{}};
+    ${code}
+    return {adapt:adaptServerResult,local:resolveLocalServerConversation,remote:fetchAndSelectServerResult,
+      setup:rows=>{serverSearchResults=rows;checkedThreadIds=new Set([rows[0].threadId]);selectedThreadId=rows[0].threadId},
+      checks:()=>checkedThreadIds,rows:()=>serverSearchResults,
+      targets:()=>{const isSearchMode=true,serverSearchMode=true,conversations=[],searchResults=[],accountId='unified',$derived=x=>x;${queueCode};return selectedQueueRefs}};`)
+  for(const kind of ['local','remote']) {
+    const state=factory(serverSearchResultIdentity)
+    const a=state.adapt({accountId:'A',folderId:'inbox-A',uid:42,isLocal:kind==='local',messageId:kind==='local'?'msg-A':undefined})
+    const b={...state.adapt({accountId:'B',folderId:'inbox-B',uid:42,isLocal:true,messageId:'msg-B'}),_canonicalConversationId:'root@example.org',_queueCanonical:true}
+    state.setup([a,b]); await state[kind](a,'inbox-A','A')
+    assert.equal(state.rows()[0]._canonicalConversationId,'root@example.org')
+    assert.equal(state.rows()[1]._canonicalConversationId,'root@example.org')
+    assert.equal(state.checks().size,1)
+    assert.equal(state.checks().has(b.threadId),false)
+    assert.deepEqual(state.targets(),[{accountId:'A',conversationId:'root@example.org'}])
+  }
+  assert.match(row,/conversationId=\{useMultiSelect \? undefined : backendConversationId\}/)
+  assert.match(row,/OpenReaderWindow\(accountId, folderId, backendConversationId/)
 })

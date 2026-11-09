@@ -125,7 +125,10 @@
   // Reapply after a folder load, which otherwise selects its first row.
   $effect(() => {
     const selection = readerSelection
-    if (!loading && selection) selectedThreadId = selection.threadId
+    if (!loading && selection) {
+      const serverRow = serverSearchResults.find(row => row.accountId === selection.accountId && row._canonicalConversationId === selection.threadId)
+      selectedThreadId = serverRow && showSearch && searchSource === 'server' ? serverRow.threadId : selection.threadId
+    }
   })
   let lastLoadedFolderId = $state<string | null>(null) // Track folder changes
   let loadGeneration = $state(0) // Invalidates stale async results when folder changes mid-load (#200)
@@ -994,7 +997,7 @@
         .map((conversation: any) => {
           const owningAccountId = conversation.accountId || accountId || ''
           return owningAccountId && owningAccountId !== 'unified' && owningAccountId !== 'virtual'
-            ? [`${owningAccountId}:${conversation.threadId}`, { accountId: owningAccountId, conversationId: conversation.threadId }] as const
+            ? [`${owningAccountId}:${conversation._canonicalConversationId || conversation.threadId}`, { accountId: owningAccountId, conversationId: conversation._canonicalConversationId || conversation.threadId }] as const
             : null
         })
         .filter((ref) => ref !== null)
@@ -1663,7 +1666,9 @@
   // Map IMAPSearchResult to ConversationRow-compatible shape
   function adaptServerResult(r: any): any {
     return {
-      threadId: r.messageId || `server-${serverSearchResultIdentity({ accountId: r.accountId, folderId: r.folderId, _uid: r.uid, threadId: '' })}`,
+      // Stable UI identity never becomes a bare canonical ID: those can match across accounts.
+      threadId: `server-${serverSearchResultIdentity({ accountId: r.accountId, folderId: r.folderId, _uid: r.uid, threadId: r.messageId || '' })}`,
+      _canonicalConversationId: '',
       subject: r.subject,
       snippet: r.isLocal ? r.snippet : '',
       messageCount: 1,
@@ -1821,15 +1826,7 @@
       void resolveLocalServerConversation(conversation, realFolderId, realAccountId)
       return
     }
-    onConversationSelect?.(threadId, realFolderId, realAccountId)
-  }
-
-  function migrateCheckedServerThread(previousId: string, canonicalId: string) {
-    if (previousId === canonicalId || !checkedThreadIds.has(previousId)) return
-    const updated = new Set(checkedThreadIds)
-    updated.delete(previousId)
-    updated.add(canonicalId)
-    checkedThreadIds = updated
+    onConversationSelect?.(conversation._canonicalConversationId || threadId, realFolderId, realAccountId)
   }
 
   async function resolveLocalServerConversation(result: any, folder: string, account: string) {
@@ -1840,9 +1837,8 @@
       const message = await GetMessage(result.messageIds?.[0] || '')
       if (generation !== serverResultFetchGeneration || selectedThreadId !== selectionAtStart || searchSource !== 'server' || query !== searchQuery.trim() || !serverSearchResults.includes(result) || message?.accountId !== account || !message.id) return
       const canonicalId = message.threadId || message.id
-      migrateCheckedServerThread(result.threadId, canonicalId)
-      serverSearchResults = serverSearchResults.map(item => item === result ? { ...item, threadId: canonicalId, _queueCanonical: true } : item)
-      selectedThreadId = canonicalId
+      serverSearchResults = serverSearchResults.map(item => item === result ? { ...item, _canonicalConversationId: canonicalId, _queueCanonical: true } : item)
+      selectedThreadId = result.threadId
       onConversationSelect?.(canonicalId, folder, account)
     } catch (error) {
       if (generation !== serverResultFetchGeneration || selectedThreadId !== selectionAtStart) return
@@ -1865,10 +1861,9 @@
         // Update the server result to be local
         const idx = serverSearchResults.findIndex(result => serverSearchResultIdentity(result) === identity)
         if (idx >= 0) {
-          migrateCheckedServerThread(serverSearchResults[idx].threadId, msg.threadId || msg.id)
           serverSearchResults[idx] = {
             ...serverSearchResults[idx],
-            threadId: msg.threadId || msg.id,
+            _canonicalConversationId: msg.threadId || msg.id,
             messageIds: [msg.id],
             snippet: msg.snippet || '',
             _isLocal: true,
@@ -2319,7 +2314,8 @@
 
   // Get the currently selected thread ID (exposed for parent access)
   export function getSelectedThreadId(): string | null {
-    return selectedThreadId
+    const conversation = activeList.find(item => item.threadId === selectedThreadId) as any
+    return conversation?._canonicalConversationId || (conversation?._queueCanonical === false ? null : selectedThreadId)
   }
 
   // Get message IDs for the keyboard-focused thread (for delete without checking)
@@ -3278,6 +3274,7 @@
               selectedIsRead={!selectedHasUnread}
               isNonLocal={result._isLocal === false}
               queueActionsEnabled={result._queueCanonical === true}
+              backendConversationId={result._canonicalConversationId || ''}
               searchFolderName={result.folderName}
               searchFolderType={result.folderType}
               onOpenInTab={onOpenInTab}

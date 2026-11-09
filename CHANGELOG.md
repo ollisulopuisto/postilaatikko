@@ -2,7 +2,9 @@
 
 ## [Unreleased]
 
-## Postilaatikko 2026.11.09.14
+## Postilaatikko 2026.11.09.15
+
+- Keep server row UI identity mailbox-qualified after resolution too. Canonical conversation IDs are separate backend targets, so identical RFC thread IDs across accounts cannot change another row's checked state.
 
 - Give unfetched server rows mailbox-qualified provisional IDs, so same-UID results in different accounts or folders remain independently checked while resolving.
 
