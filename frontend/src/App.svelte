@@ -2,6 +2,8 @@
   import Icon from '@iconify/svelte'
   import PendingSendToast from './lib/components/common/PendingSendToast.svelte'
   import MailWindowApp from './MailWindowApp.svelte'
+  import MessageHistoryBar from './lib/components/list/MessageHistoryBar.svelte'
+  import { emptyMessageHistory, visitMessage, stepMessageHistory } from './lib/navigation/messageHistory'
   import type { MailScope } from './lib/windows/mailWindow'
   import { findReaderWorkspaceTab, type MailWorkspaceTab } from './lib/windows/mailWorkspaceTabs'
   import type { NavigationEntry } from './lib/sidebar/cards'
@@ -64,6 +66,8 @@
   import { dispatchExtensionShortcut } from '$lib/stores/extensionShortcuts.svelte'
   import { shortcutsOverlay, openShortcutsOverlay } from '$lib/stores/shortcutsOverlay.svelte'
   import { executeCommand, openCommandPalette, registerCommand } from '$lib/stores/commandPalette.svelte'
+  import { withShortcut } from '$lib/keyboard/format'
+  import { sharedPaneWidths, dragListWidth } from '$lib/sidebar/folderPane'
   import { getListAction, runListAction as runActionOnTarget } from '$lib/actions/listActions'
   import { resolveListTarget } from '$lib/actions/target'
   import type { ActionTarget, ListTarget, MessageActionExecutor, RunOptions } from '$lib/actions/types'
@@ -88,6 +92,8 @@
   let messageListRef: MessageList | null = null
   let viewerRef: ConversationViewer | null = null
   let messageListContainerRef: HTMLElement | null = null
+  // The folder pane's aside: its left edge is the shared column's left edge in every mode.
+  let contextColumnRef: HTMLElement | null = null
   let effectiveTitleBarMode = $state('native')
 
   // React to theme mode changes from settings store
@@ -101,6 +107,9 @@
   let selectedFolderId = $state<string | null>(null)
   let selectedFolderName = $state('Inbox')
   let selectedFolderType = $state<string | null>(null)
+  // Wide windows keep the folder tree and message list in one shared column:
+  // one opens while the other folds to a strip.
+  const sharedColumn = $derived(getLayoutMode() === 'full')
   let contextPaneMode = $state<'folders' | 'messages'>('messages')
   let contextPaneAutoHide = $state(false)
   let contextPaneRevealed = $state(true)
@@ -134,6 +143,52 @@
       } : {}),
       searchQuery: messageListRef?.getSearchQuery() || '',
     }
+  }
+
+  let messageHistory = $state(emptyMessageHistory())
+  let restoringMessageHistory = false
+  function recordMessageVisit() {
+    if (restoringMessageHistory) return
+    messageHistory = visitMessage(messageHistory, {
+      scope: currentMailScope(), workspaceId: activeMailWorkspace, selectionSource, triageStatus,
+    })
+  }
+  async function navigateMessageHistory(direction: -1 | 1) {
+    if (restoringMessageHistory) return
+    const next = stepMessageHistory(messageHistory, direction)
+    if (next === messageHistory) return
+    messageHistory = next
+    const visit = next.entries[next.index]
+    const scope = visit.scope
+    restoringMessageHistory = true
+    try {
+      const workspace = mailWorkspaceTabs.find(tab => tab.id === visit.workspaceId)
+      switchMailWorkspace(workspace ? workspace.id : 'primary')
+      selectedAccountId = scope.accountId
+      selectedFolderId = scope.folderId
+      selectedFolderName = scope.folderName
+      selectedFolderType = scope.folderType
+      selectedThreadId = scope.threadId || null
+      selectedConversationAccountId = scope.threadAccountId || scope.accountId
+      selectedConversationFolderId = scope.threadFolderId || scope.folderId
+      selectionSource = visit.selectionSource
+      triageStatus = visit.triageStatus
+      contextPaneMode = 'messages'
+      hideSidebar()
+      showViewer()
+      if (workspace) {
+        updateWorkspaceScope(workspace.id, { ...scope })
+        mailWindowTabInstances[workspace.id]?.restoreMessageVisit(scope)
+      }
+      await tick()
+      if (!workspace) {
+        messageListRef?.setQuickFilter(visit.triageStatus === 'all' ? '' : visit.triageStatus)
+        messageListRef?.setSearchQuery(scope.searchQuery || '')
+        saveUIState({ selectedAccountId, selectedFolderId, selectedFolderName, selectedFolderType,
+          selectedThreadId, selectedConversationAccountId, selectedConversationFolderId })
+      }
+      setFocusedPane('viewer')
+    } finally { restoringMessageHistory = false }
   }
 
   function workspaceLabel(scope: MailScope, reader: boolean): string {
@@ -207,6 +262,7 @@
         selectedConversationFolderId = primaryMailScope.threadFolderId || null
       }
       contextPaneMode = primaryContextPaneMode
+      recordMessageVisit()
       setFocusedPane('messageList')
       return
     }
@@ -220,6 +276,7 @@
       selectedConversationAccountId = tab.scope.threadAccountId || tab.scope.accountId
       selectedConversationFolderId = tab.scope.threadFolderId || tab.scope.folderId
       contextPaneMode = 'messages'
+      recordMessageVisit()
       setFocusedPane('viewer')
       return
     }
@@ -229,6 +286,27 @@
   function showFolderBrowser() {
     contextPaneMode = 'folders'
     setFocusedPane('sidebar')
+  }
+
+  function closeFolderBrowser() {
+    // One exit for the tree: the close button, Escape, Cmd-D, the narrow Back button and the scrim.
+    contextPaneMode = 'messages'
+    if (getLayoutMode() === 'narrow') hideSidebar()
+    setFocusedPane('messageList')
+    // The tree's search field is about to disappear; keep keyboard focus in the list pane.
+    void tick().then(() => messageListContainerRef?.focus())
+  }
+
+  function toggleFolderBrowser() {
+    // Same swap as the panel icon beside the folder title: folder tree <-> message list.
+    if (getActiveExtension() !== 'mail') setActiveExtension('mail')
+    if (contextPaneMode === 'folders') {
+      closeFolderBrowser()
+      return
+    }
+    revealContextPane()
+    if (getLayoutMode() === 'narrow') showSidebar()
+    showFolderBrowser()
   }
 
   function revealContextPane() {
@@ -282,6 +360,7 @@
 
   function updateWorkspaceScope(id: string, scope: MailScope) {
     mailWorkspaceTabs = mailWorkspaceTabs.map(tab => tab.id === id ? { ...tab, scope } : tab)
+    if (activeMailWorkspace === id) recordMessageVisit()
   }
 
   function returnToPrimaryContextForFolderNavigation() {
@@ -772,6 +851,7 @@
       selectedThreadId = data.threadId
       selectedConversationAccountId = data.accountId
       selectedConversationFolderId = data.folderId
+      recordMessageVisit()
 
       // Highlight the thread in the message list (with small delay to ensure list has loaded)
       setTimeout(() => {
@@ -971,6 +1051,8 @@
       }
     }
 
+    recordMessageVisit()
+
     // Listen for system theme changes from backend (XDG Settings Portal)
     EventsOn('theme:system-preference', (newTheme: string) => {
       handleSystemThemeEvent(newTheme)
@@ -1011,6 +1093,7 @@
       getPaneNav('messageList')?.focusSearch?.()
       setFocusedPane('messageList')
     })
+    registerCommand('app.folders', () => toggleFolderBrowser())
     registerCommand('app.syncAll', () => {
       sidebarRef?.toggleSync()
     })
@@ -1191,6 +1274,7 @@
       })
     }
     showViewer()
+    recordMessageVisit()
 
     // Persist state
     saveUIState({
@@ -1376,11 +1460,8 @@
       // subtracting the configured sidebar width. The configured value is
       // different from the rendered 56px width when the sidebar is collapsed,
       // which caused the divider to jump on the first mouse movement.
-      const listLeft = messageListContainerRef?.getBoundingClientRect().left ?? 0
-      listWidth = Math.max(
-        paneConstraints.list.min,
-        Math.min(paneConstraints.list.max, e.clientX - listLeft)
-      )
+      const columnLeft = (sharedColumn ? contextColumnRef : messageListContainerRef)?.getBoundingClientRect().left ?? 0
+      listWidth = dragListWidth(e.clientX, columnLeft, paneConstraints.list.min, paneConstraints.list.max)
     }
   }
 
@@ -1439,6 +1520,11 @@
           closeWorkspaceTab(activeMailWorkspace)
           return
         }
+        if (e.key.toLowerCase() === 'd' && !e.shiftKey) {
+          e.preventDefault()
+          toggleFolderBrowser()
+          return
+        }
       }
       return
     }
@@ -1481,7 +1567,9 @@
     if (pendingSends.length > 0) {
       const ps = pendingSends[0]
       if (e.key === 'Escape' && !ps.dispatching) {
+        // One owner for this Escape: the Composer's window listener must not also run handleClose.
         e.preventDefault()
+        e.stopImmediatePropagation()
         void pendingCancel(ps)
         return
       }
@@ -1617,6 +1705,13 @@
 
       // MAIL-DOMAIN Ctrl/Cmd cases (guarded above).
       switch (e.key.toLowerCase()) {
+        case 'd':
+          // Ctrl/Cmd+D swaps the folder tree and the message list. Shift+D is
+          // the composer's detach shortcut and is handled in the composer.
+          if (e.shiftKey) return
+          e.preventDefault()
+          void executeCommand('app.folders')
+          return
         case 'n':
           // Ctrl/Cmd+N — new mail composer. Mail-domain only: when an
           // extension rail is active (e.g., calendar), that extension's
@@ -2483,7 +2578,7 @@
 
   <!-- Main Content -->
   <div class="flex flex-1 min-h-0 overflow-hidden relative">
-    <ExtensionRail onRevealContext={revealContextPane} onHideContext={scheduleContextPaneHide} />
+    <ExtensionRail onRevealContext={revealContextPane} onHideContext={scheduleContextPaneHide} foldersOpen={contextPaneMode === 'folders' && getActiveExtension() === 'mail'} />
 
     {#if getActiveExtension() === 'scheduled'}
       <ScheduledPane />
@@ -2503,16 +2598,27 @@
          the main thread on the second mount. display:contents keeps the flex
          children as direct flex items so the layout doesn't shift. -->
     <div style:display={getActiveExtension() === 'mail' ? 'contents' : 'none'}>
+    <div class="flex min-h-0 min-w-0 flex-col" style:width={getLayoutMode() === 'full' ? `${listWidth}px` : undefined} class:flex-1={isResponsive()} style:display={contextPaneVisible ? 'flex' : 'none'} onmouseenter={revealContextPane} onmouseleave={scheduleContextPaneHide} role="presentation">
+      <MessageHistoryBar canBack={messageHistory.index > 0} canForward={messageHistory.index >= 0 && messageHistory.index < messageHistory.entries.length - 1} onBack={() => void navigateMessageHistory(-1)} onForward={() => void navigateMessageHistory(1)} />
+      <div class="flex flex-1 min-h-0 min-w-0">
     <!-- Sidebar (Folder List) -->
     <aside
+      bind:this={contextColumnRef}
       class="spark-sidebar-host flex-col {getLayoutMode() === 'narrow' ? `responsive-sidebar-overlay w-72 border-r border-border bg-background ${getResponsiveView() === 'sidebar' ? 'responsive-sidebar-visible' : ''}` : 'flex-shrink-0 border-r border-border bg-muted/30'}"
-      style="{getLayoutMode() === 'full' ? `width: ${listWidth}px` : ''}"
-      style:display={contextPaneVisible && contextPaneMode === 'folders' ? 'flex' : 'none'}
+      class:pane-folded={sharedColumn && contextPaneMode !== 'folders'}
+      style="{sharedColumn ? `width: ${sharedPaneWidths(listWidth, contextPaneMode).folders}px` : getLayoutMode() === 'full' ? `width: ${listWidth}px` : ''}"
+      style:display={contextPaneVisible && (sharedColumn || contextPaneMode === 'folders') ? 'flex' : 'none'}
       onmouseenter={revealContextPane}
       onmouseleave={scheduleContextPaneHide}
       role="presentation"
       onclick={() => handlePaneClick('sidebar')}
     >
+      {#if sharedColumn && contextPaneMode !== 'folders'}
+        <button type="button" class="pane-fold-button" title={withShortcut($_('shortcuts.action.folders'), 'app.folders')} aria-label={$_('shortcuts.action.folders')} aria-expanded="false" onclick={(e) => { e.stopPropagation(); toggleFolderBrowser() }}>
+          <Icon icon="mdi:folder-multiple-outline" width="18" />
+          <span>{$_('responsive.folders')}</span>
+        </button>
+      {/if}
       <div class="flex min-h-10 shrink-0 items-center gap-1 overflow-hidden border-b border-border px-2 py-1" aria-label={$_('messageList.quickFilters')}>
         <div class="flex shrink-0 items-center gap-1" role="group" aria-label={$_('messageList.quickFilters')}>
           <button type="button" class="flex size-8 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageStatus === 'all' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.all')} title={$_('triage.all')} aria-pressed={triageStatus === 'all'} onclick={() => selectTriageFilter('')}><Icon icon="mdi:inbox-multiple-outline" width="16" /></button>
@@ -2538,7 +2644,10 @@
         isFocused={activeMailWorkspace === 'primary' && getFocusedPane() === 'sidebar'}
         isFlashing={isPaneFlashing('sidebar')}
         showBackButton={getLayoutMode() === 'narrow'}
-        onBack={hideSidebar}
+        onBack={closeFolderBrowser}
+        treeMode={contextPaneMode === 'folders'}
+        onCloseTree={closeFolderBrowser}
+        escapeOwnedElsewhere={pendingSends.length > 0 || showComposer}
         collapsed={false}
         showCollapseControl={false}
       />
@@ -2551,7 +2660,7 @@
         role="button"
         tabindex="-1"
         class="responsive-scrim {getResponsiveView() === 'sidebar' ? 'responsive-scrim-visible' : ''}"
-        onclick={hideSidebar}
+        onclick={closeFolderBrowser}
         aria-label={$_('aria.closeSidebar')}
       ></div>
     {/if}
@@ -2561,8 +2670,9 @@
     <section
       bind:this={messageListContainerRef}
       class="spark-mail-list-pane min-h-0 flex flex-col overflow-hidden {isResponsive() ? 'flex-1 min-w-0 border-r border-border bg-background' : 'flex-shrink-0 border-r border-border bg-background'}"
-      style="{getLayoutMode() === 'full' ? `width: ${listWidth}px` : ''}"
-      style:display={contextPaneVisible && contextPaneMode === 'messages' ? 'flex' : 'none'}
+      class:pane-folded={sharedColumn && contextPaneMode === 'folders'}
+      style="{sharedColumn ? `width: ${sharedPaneWidths(listWidth, contextPaneMode).messages}px` : getLayoutMode() === 'full' ? `width: ${listWidth}px` : ''}"
+      style:display={contextPaneVisible && (sharedColumn || contextPaneMode === 'messages') ? 'flex' : 'none'}
       onmouseenter={revealContextPane}
       onmouseleave={scheduleContextPaneHide}
       role="presentation"
@@ -2570,6 +2680,12 @@
       tabindex="-1"
       onclick={() => handlePaneClick('messageList')}
     >
+      {#if sharedColumn && contextPaneMode === 'folders'}
+        <button type="button" class="pane-fold-button" title={$_('responsive.messages')} aria-label={$_('responsive.messages')} aria-expanded="false" onclick={(e) => { e.stopPropagation(); toggleFolderBrowser() }}>
+          <Icon icon="mdi:email-outline" width="18" />
+          <span>{$_('responsive.messages')}</span>
+        </button>
+      {/if}
       <div class="flex min-h-10 shrink-0 items-center gap-1 overflow-hidden border-b border-border px-2 py-1" aria-label={$_('messageList.quickFilters')}>
         <div class="flex shrink-0 items-center gap-1" role="group" aria-label={$_('messageList.quickFilters')}>
           <button type="button" class="flex size-8 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageStatus === 'all' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.all')} title={$_('triage.all')} aria-pressed={triageStatus === 'all'} onclick={() => selectTriageFilter('')}><Icon icon="mdi:inbox-multiple-outline" width="16" /></button>
@@ -2586,6 +2702,7 @@
           folderId={selectedFolderId}
           folderName={selectedFolderName}
           folderType={selectedFolderType || 'inbox'}
+          readerSelection={selectedThreadId ? { threadId: selectedThreadId, accountId: selectedConversationAccountId || selectedAccountId || '', folderId: selectedConversationFolderId || selectedFolderId || '' } : null}
           onConversationSelect={handleConversationSelect}
           onOpenInTab={openListThreadInTab}
           onReply={handleReply}
@@ -2600,6 +2717,9 @@
         />
       </div>
     </section>
+
+      </div>
+    </div>
 
     <!-- List Resize Handle -->
     {#if getLayoutMode() === 'full'}

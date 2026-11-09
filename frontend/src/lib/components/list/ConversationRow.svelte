@@ -549,6 +549,7 @@
 >
   <div
     data-conversation-row
+    data-mail-row-key={JSON.stringify([conversation.accountId || accountId || '', conversation.threadId])}
     draggable={getLayoutMode() !== 'narrow'}
     class="group relative w-full flex items-start overflow-hidden touch-pan-y {densityClasses.row[density]} text-left border-b border-border transition-colors duration-300 cursor-pointer outline-none {activeAnimationKind ? `row-anim-${activeAnimationKind}` : ''} {selected
       ? 'bg-primary/20'

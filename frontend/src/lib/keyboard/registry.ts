@@ -132,6 +132,7 @@ export const CORE_GROUPS: ShortcutGroupDef[] = [
 export const CORE_COMMANDS = [
   { id: 'app.compose', category: 'commandPalette.categories.mail', shortcutId: 'app.compose' },
   { id: 'app.search', category: 'commandPalette.categories.mail', shortcutId: 'app.search' },
+  { id: 'app.folders', category: 'commandPalette.categories.mail', shortcutId: 'app.folders' },
   { id: 'app.syncAll', category: 'commandPalette.categories.mail', shortcutId: 'app.syncAll' },
   { id: 'app.syncFolder', category: 'commandPalette.categories.mail', shortcutId: 'app.syncFolder' },
   { id: 'view.mail', category: 'commandPalette.categories.view', titleKey: 'commandPalette.categories.mail', icon: 'mdi:email-outline', dynamicTitle: 'activeView' },
@@ -182,6 +183,7 @@ export const CORE_SHORTCUTS: ShortcutDef[] = [
   { id: 'app.preferences', label: 'shortcuts.action.preferences', group: 'general', combos: ['Meta+,'], macOnly: true, inline: app('Comma') },
   { id: 'app.compose', icon: 'mdi:pencil-plus-outline', label: 'shortcuts.action.compose', group: 'general', combos: ['c', 'Mod+n'], panes: MAIL, inline: app('c', 'n') },
   { id: 'app.search', icon: 'mdi:magnify', label: 'shortcuts.action.search', group: 'general', combos: ['/', 'Mod+s'], inline: app('/', 's') },
+  { id: 'app.folders', icon: 'mdi:folder-multiple-outline', label: 'shortcuts.action.folders', group: 'general', combos: ['Mod+d'], panes: MAIL, inline: app('d') },
   { id: 'app.undo', icon: 'mdi:undo', label: 'shortcuts.action.undo', group: 'general', combos: ['z', 'Mod+z'], panes: MAIL, inline: app('z') },
   { id: 'app.syncAll', icon: 'mdi:refresh', label: 'shortcuts.action.syncAll', group: 'general', combos: ['Mod+Shift+a'], panes: MAIL, inline: app('a') },
   { id: 'app.syncFolder', icon: 'mdi:refresh', label: 'shortcuts.action.syncFolder', group: 'general', combos: ['Mod+Shift+s'], panes: MAIL, inline: app('s') },
@@ -248,7 +250,7 @@ export const CORE_SHORTCUTS: ShortcutDef[] = [
   // Composer (only while the composer is open)
   { id: 'composer.send', icon: 'mdi:send', label: 'shortcuts.action.send', group: 'composer', combos: ['Mod+Enter'], panes: MAIL, inline: composer('Enter') },
   { id: 'composer.attach', icon: 'mdi:paperclip', label: 'shortcuts.action.attach', group: 'composer', combos: ['Alt+a'], panes: MAIL, inline: composer('a') },
-  { id: 'composer.detach', label: 'shortcuts.action.detach', group: 'composer', combos: ['Mod+d'], panes: MAIL, inline: composer('d') },
+  { id: 'composer.detach', label: 'shortcuts.action.detach', group: 'composer', combos: ['Mod+Shift+d'], panes: MAIL, inline: composer('d', 'D') },
   { id: 'composer.toolbar', label: 'shortcuts.action.toolbar', group: 'composer', combos: ['Alt+t'], panes: MAIL, inline: composer('t') },
   { id: 'composer.pgp', label: 'shortcuts.action.pgp', group: 'composer', combos: ['Alt+p'], panes: MAIL, inline: composer('p', 's', 'S', 'e', 'E') },
   { id: 'composer.smime', label: 'shortcuts.action.smime', group: 'composer', combos: ['Alt+s'], panes: MAIL, inline: composer('s') },
