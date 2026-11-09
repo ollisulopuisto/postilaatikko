@@ -556,7 +556,6 @@
     <ContextMenuItem onSelect={handleArchive}>
       <Icon icon="mdi:archive-outline" class="mr-2 h-4 w-4" />
       {$_('contextMenu.archive')}
-      <ShortcutHint id="mail.archive" />
     </ContextMenuItem>
     <ContextMenuItem onSelect={handleArchiveAndMarkRead}>
       <Icon icon="mdi:archive-check-outline" class="mr-2 h-4 w-4" />

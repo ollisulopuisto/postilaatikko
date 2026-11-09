@@ -18,7 +18,7 @@ On macOS, `⌘` works wherever `Ctrl` is listed below, unless macOS reserves the
 | Shortcut | Action |
 |----------|--------|
 | `?` | Show the keyboard shortcuts overlay (not in text fields or while composing) |
-| `Ctrl+P` / `Ctrl+Shift+P` (macOS: `⌘P` / `⌘⇧P`) | Open the command palette (Alfred-style quick launcher). Undo, star, mark read/unread and the theme switch keep it open so you can repeat them; your last 8 palette commands are listed first. `Ctrl+K` stays Archive, so it does not open the palette; the sidebar button also opens it |
+| `Ctrl+K` / `Ctrl+P` / `Ctrl+Shift+P` (macOS: `⌘K` / `⌘P` / `⌘⇧P`) | Open the command palette (Alfred-style quick launcher). Undo, star, mark read/unread and the theme switch keep it open so you can repeat them; your last 8 palette commands are listed first. the sidebar button also opens it |
 | `⌘+,` (macOS) | Open Preferences |
 | `Ctrl+Q` | Quit application |
 | `Ctrl+N` | Compose new message |
@@ -60,7 +60,6 @@ All `Alt` pane and folder navigation is disabled while focus mode is on.
 | `Ctrl+U` | Mark as read (keyboard-focused or checked messages) |
 | `Ctrl+Shift+U` | Mark as unread (keyboard-focused or checked messages) |
 | `e` | Archive and mark as read (keyboard-focused or checked messages) |
-| `Ctrl+K` | Archive without changing read status (keyboard-focused or checked messages) |
 | `l` | Add/remove from Read Later |
 | `Shift+L` | Add/remove from Reply Later |
 | `Ctrl+J` | Mark as spam (keyboard-focused or checked messages) |

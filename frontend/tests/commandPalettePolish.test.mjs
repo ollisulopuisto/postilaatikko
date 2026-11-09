@@ -1,4 +1,4 @@
-// Command palette: Cmd/Ctrl+K opens it, repeatable commands keep it open, and
+// Command palette: Cmd/Ctrl+K opens it (and archives nothing), repeatable commands keep it open, and
 // the lesser-used mail commands are listed. Source-level checks, no DOM.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -15,11 +15,18 @@ function commandLine(id) {
   return line
 }
 
-test('Cmd/Ctrl+K stays Archive; the palette keeps Cmd/Ctrl+P', () => {
-  assert.doesNotMatch(shortcuts, /COMMAND_PALETTE[^\n]*\n[^\n]*'k'/)
-  assert.match(shortcuts, /COMMAND_PALETTE[\s\S]{0,120}e\.key === 'p'/)
-  assert.match(registry, /id: 'app\.commandPalette'[^\n]*combos: \['Mod\+p', 'Mod\+Shift\+p'\]/)
-  assert.match(registry, /id: 'mail\.archive'[^\n]*combos: \['Mod\+k'\]/)
+test('Cmd/Ctrl+K opens the palette and archives nothing; E archives and marks read', () => {
+  assert.match(shortcuts, /COMMAND_PALETTE[\s\S]{0,200}e\.key === 'k'/)
+  assert.match(shortcuts, /COMMAND_PALETTE[\s\S]{0,200}e\.key === 'p'/)
+  assert.match(registry, /id: 'app\.commandPalette'[^\n]*combos: \['Mod\+k', 'Mod\+p', 'Mod\+Shift\+p'\]/)
+  assert.doesNotMatch(registry, /id: 'mail\.archive',[^\n]*combos/)
+  assert.match(registry, /id: 'mail\.archiveAndMarkRead'[^\n]*combos: \['e'\]/)
+  // No Mod+k combo anywhere but the palette.
+  const modK = registry.split('\n').filter(l => /combos:[^\]]*'Mod\+k'/.test(l))
+  assert.equal(modK.length, 1)
+  assert.match(modK[0], /app\.commandPalette/)
+  const app = readFileSync(new URL('../src/App.svelte', import.meta.url), 'utf8')
+  assert.doesNotMatch(app, /case 'k':\s*\n\s*e\.preventDefault\(\)\s*\n\s*void executeCommand\('mail\.archive'\)/)
 })
 
 test('repeatable commands keep the palette open', () => {

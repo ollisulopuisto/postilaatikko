@@ -2083,10 +2083,10 @@
         {/if}
         <button
           class="viewer-toolbar-action p-2 rounded-md hover:bg-muted transition-all duration-150 hover:-translate-y-0.5 hover:scale-105 hover:shadow-sm active:translate-y-0 active:scale-95"
-          data-tooltip={withShortcut($_('viewer.archive'), 'mail.archive')}
-          aria-label={$_('viewer.archive')}
-          aria-keyshortcuts={ariaKeyshortcuts('mail.archive')}
-          onclick={handleArchive}
+          data-tooltip={withShortcut($_('shortcuts.action.archiveAndMarkRead'), 'mail.archiveAndMarkRead')}
+          aria-label={$_('shortcuts.action.archiveAndMarkRead')}
+          aria-keyshortcuts={ariaKeyshortcuts('mail.archiveAndMarkRead')}
+          onclick={archiveAndMarkRead}
           disabled={moveMutationInFlight}
         >
           <Icon icon="mdi:archive-outline" class="w-5 h-5 text-muted-foreground" />

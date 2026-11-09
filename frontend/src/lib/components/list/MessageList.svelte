@@ -2747,7 +2747,7 @@
       { id: 'mail.moveTo', label: $_('contextMenu.moveTo'), icon: 'mdi:folder-move-outline', shortcut: 'mail.moveTo' },
     ]
     if (folderType !== 'trash') {
-      actions.push({ id: 'mail.archive', label: $_('viewer.archive'), icon: 'mdi:archive-outline', shortcut: 'mail.archive' })
+      actions.push({ id: 'mail.archiveAndMarkRead', label: $_('shortcuts.action.archiveAndMarkRead'), icon: 'mdi:archive-check-outline', shortcut: 'mail.archiveAndMarkRead' })
       actions.push({
         id: 'mail.spam',
         label: $_(folderType === 'spam' ? 'contextMenu.markAsNotSpam' : 'contextMenu.markAsSpam'),

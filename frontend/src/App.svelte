@@ -1804,10 +1804,6 @@
           e.preventDefault()
           void executeCommand(e.shiftKey ? 'mail.markUnread' : 'mail.markRead')
           return
-        case 'k':
-          e.preventDefault()
-          void executeCommand('mail.archive')
-          return
         case 'j':
           e.preventDefault()
           void executeCommand('mail.spam')
