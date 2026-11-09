@@ -164,6 +164,9 @@ func TestServer_SecurityHeaders(t *testing.T) {
 	if got := resp.Header.Get("X-Frame-Options"); got != "DENY" {
 		t.Errorf("expected X-Frame-Options: DENY, got %q", got)
 	}
+	if got := resp.Header.Get("Content-Security-Policy"); got != "default-src 'none'; frame-ancestors 'none'" {
+		t.Errorf("expected Content-Security-Policy: default-src 'none'; frame-ancestors 'none', got %q", got)
+	}
 	if got := resp.Header.Get("Cache-Control"); got != "no-store" {
 		t.Errorf("expected Cache-Control: no-store, got %q", got)
 	}
@@ -181,6 +184,9 @@ func TestServer_SecurityHeaders(t *testing.T) {
 	}
 	if got := respErr.Header.Get("X-Frame-Options"); got != "DENY" {
 		t.Errorf("expected X-Frame-Options on error: DENY, got %q", got)
+	}
+	if got := respErr.Header.Get("Content-Security-Policy"); got != "default-src 'none'; frame-ancestors 'none'" {
+		t.Errorf("expected Content-Security-Policy on error: default-src 'none'; frame-ancestors 'none', got %q", got)
 	}
 	if got := respErr.Header.Get("Cache-Control"); got != "no-store" {
 		t.Errorf("expected Cache-Control on error: no-store, got %q", got)
