@@ -78,3 +78,14 @@ test('archive and mark read remembers unread ids and restores them from every un
     assert.match(src, /rememberUnreadForUndo\(result\.operationId, unreadIds\)/, f)
   }
 })
+
+test('unread snapshots are bounded and the list supplies them without the backend', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const events = await readFile(new URL('../src/lib/components/list/undoMutationEvents.ts', import.meta.url), 'utf8')
+  assert.match(events, /MAX_UNREAD_SNAPSHOTS = 100/)
+  assert.match(events, /unreadBeforeArchive\.size > MAX_UNREAD_SNAPSHOTS/)
+  const list = await readFile(new URL('../src/lib/components/list/MessageList.svelte', import.meta.url), 'utf8')
+  assert.match(list, /export function getUnreadSnapshot\(/)
+  const app = await readFile(new URL('../src/App.svelte', import.meta.url), 'utf8')
+  assert.match(app, /messageListRef\?\.getUnreadSnapshot\(messageIds\)/)
+})
