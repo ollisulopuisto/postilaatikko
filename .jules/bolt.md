@@ -27,3 +27,7 @@
 ## 2026-11-08 - Pre-compiled attachment keyword regexes in composerUtils
 **Learning:** `textMentionsAttachment` in `frontend/src/lib/components/composer/composerUtils.ts` constructed and compiled 12 dynamic regular expressions (`new RegExp(\`\\b${escaped}\\b\`)`) on every invocation, allocating and compiling RegExp instances whenever the composer checks whether body or subject text mentions attachments. Pre-compiling `ATTACHMENT_PATTERNS` at module scope removes redundant regex engine compilations, delivering an observed ~7.1x speedup (312ms -> 44ms per 5,000 iterations).
 **Action:** When evaluating static keyword lists with word-boundary or character class regexes, pre-compile the RegExp pattern array at module scope rather than compiling inside the loop.
+
+## 2026-11-09 - Static SVG placeholder and bounded height synchronizer in EmailBody
+**Learning:** Inline cid image loading placeholders in `EmailBody.svelte` used a continuous SMIL rotation animation (`<animateTransform>`). Inside WebKit/Wails sandboxed iframes, this continuous SVG animation forces the WebContent process to constantly re-composite every frame, leading to excessive (>100%) CPU usage during email display. Additionally, unbounded `sendHeight()` calls triggered redundant iframe style updates and layout cycles.
+**Action:** Replace animated SVG placeholders in message renderers with static vector artwork and guard iframe height resize callbacks using change checks (`Math.abs(height - lastSentHeight) >= 1`) and `requestAnimationFrame`.
