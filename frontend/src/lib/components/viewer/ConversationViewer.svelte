@@ -29,6 +29,7 @@
   import { backend as backendModels } from '../../../../wailsjs/go/models'
   import { setFocusedPane, isInputElement, isComposerOpen } from '$lib/stores/keyboard.svelte'
   import { ConfirmDialog } from '$lib/components/ui/confirm-dialog'
+  import LaterQueueButton from '$lib/components/common/LaterQueueButton.svelte'
   import MessageContextMenu from '$lib/components/common/MessageContextMenu.svelte'
   import FolderPickerDialog from '$lib/components/common/FolderPickerDialog.svelte'
   import { withShortcut, ariaKeyshortcuts } from '$lib/keyboard/format'
@@ -2130,6 +2131,8 @@
       </div>
 
       <div class="flex flex-wrap items-center gap-2">
+        <LaterQueueButton accountId={conversation.messages?.[0]?.accountId || accountId || ''} conversationId={threadId || ''} kind="readLater" />
+        <LaterQueueButton accountId={conversation.messages?.[0]?.accountId || accountId || ''} conversationId={threadId || ''} kind="replyLater" />
         <ReaderModeToggle mode={readerMode} onChange={switchReaderMode} />
         {#if readerMode === 'traditional' && conversation.messages && conversation.messages.length > 1}
           <button
@@ -2211,7 +2214,8 @@
               <!-- Wrap each message in its own context menu -->
               <MessageContextMenu
                 messageIds={(msg as any).matched === false ? [] : [msg.id]}
-                accountId={accountId || ''}
+                accountId={msg.accountId || accountId || ''}
+                conversationId={msg.threadId || threadId || ''}
                 currentFolderId={folderId || ''}
                 folderType={folderType || 'inbox'}
                 isStarred={msg.isStarred}
@@ -2251,6 +2255,8 @@
                   >
                 {#if readerMode === 'conversation'}
                   <div class="bubble-heading flex items-center gap-2 px-4 pt-2 pb-1 text-xs text-muted-foreground">
+                    <LaterQueueButton accountId={msg.accountId || accountId || ''} conversationId={msg.threadId || threadId || ''} kind="readLater" variant="row" />
+                    <LaterQueueButton accountId={msg.accountId || accountId || ''} conversationId={msg.threadId || threadId || ''} kind="replyLater" variant="row" />
                     <button type="button" class="flex min-w-0 flex-1 items-center justify-between gap-3 text-left" aria-expanded={expandedHeaders.has(msg.id)} title={$_('viewer.messageDetails')} onkeydown={(event) => event.stopPropagation()} onclick={() => toggleHeader(msg.id)}>
                       <span class="truncate font-medium text-foreground">{bubble?.showSender ? (msg.fromName || msg.fromEmail) : ''}</span>
                       <span class="whitespace-nowrap">{formatDate(msg.date)} <span aria-hidden="true">⌄</span></span>
@@ -2381,6 +2387,10 @@
                     {/if}
                   </div>
 
+                  <div class="flex shrink-0 items-center gap-1" role="group" aria-label={$_('shortcuts.group.messageActions')}>
+                    <LaterQueueButton accountId={msg.accountId || accountId || ''} conversationId={msg.threadId || threadId || ''} kind="readLater" />
+                    <LaterQueueButton accountId={msg.accountId || accountId || ''} conversationId={msg.threadId || threadId || ''} kind="replyLater" />
+                  </div>
                   <!-- Date, edit button (drafts), and expand icon -->
                   <div class="flex flex-col items-end gap-1 flex-shrink-0">
                     <div class="flex items-center gap-2">
@@ -2577,6 +2587,7 @@
                         {:else}
                           <ConversationMessage
                             bind:this={emailBodyRefs[msg.id]}
+                            conversationId={msg.threadId || threadId || ''}
                             messageId={msg.id}
                             accountId={msg.accountId}
                             extractable={canExtract(msg)}

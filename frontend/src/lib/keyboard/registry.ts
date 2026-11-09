@@ -132,6 +132,7 @@ export const CORE_GROUPS: ShortcutGroupDef[] = [
 export const CORE_COMMANDS = [
   { id: 'app.compose', category: 'commandPalette.categories.mail', shortcutId: 'app.compose' },
   { id: 'app.search', category: 'commandPalette.categories.mail', shortcutId: 'app.search' },
+  { id: 'app.folders', category: 'commandPalette.categories.mail', shortcutId: 'app.folders' },
   { id: 'app.syncAll', category: 'commandPalette.categories.mail', shortcutId: 'app.syncAll' },
   { id: 'app.syncFolder', category: 'commandPalette.categories.mail', shortcutId: 'app.syncFolder' },
   { id: 'view.mail', category: 'commandPalette.categories.view', titleKey: 'commandPalette.categories.mail', icon: 'mdi:email-outline', dynamicTitle: 'activeView' },
@@ -182,6 +183,7 @@ export const CORE_SHORTCUTS: ShortcutDef[] = [
   { id: 'app.preferences', label: 'shortcuts.action.preferences', group: 'general', combos: ['Meta+,'], macOnly: true, inline: app('Comma') },
   { id: 'app.compose', icon: 'mdi:pencil-plus-outline', label: 'shortcuts.action.compose', group: 'general', combos: ['c', 'Mod+n'], panes: MAIL, inline: app('c', 'n') },
   { id: 'app.search', icon: 'mdi:magnify', label: 'shortcuts.action.search', group: 'general', combos: ['/', 'Mod+s'], inline: app('/', 's') },
+  { id: 'app.folders', icon: 'mdi:folder-multiple-outline', label: 'shortcuts.action.folders', group: 'general', combos: ['Mod+d'], panes: MAIL, inline: app('d') },
   { id: 'app.undo', icon: 'mdi:undo', label: 'shortcuts.action.undo', group: 'general', combos: ['z', 'Mod+z'], panes: MAIL, inline: app('z') },
   { id: 'app.syncAll', icon: 'mdi:refresh', label: 'shortcuts.action.syncAll', group: 'general', combos: ['Mod+Shift+a'], panes: MAIL, inline: app('a') },
   { id: 'app.syncFolder', icon: 'mdi:refresh', label: 'shortcuts.action.syncFolder', group: 'general', combos: ['Mod+Shift+s'], panes: MAIL, inline: app('s') },
@@ -189,6 +191,9 @@ export const CORE_SHORTCUTS: ShortcutDef[] = [
   { id: 'app.prevRail', label: 'shortcuts.action.prevRail', group: 'general', combos: ['Ctrl+`'], inline: app('`') },
   { id: 'app.closeTab', label: 'shortcuts.action.closeTab', group: 'general', combos: ['Mod+w'], panes: MAIL, inline: app('w') },
   { id: 'app.quit', label: 'shortcuts.action.quit', group: 'general', combos: ['Mod+q'], inline: app('q') },
+
+  { id: 'nav.historyBack', label: 'messageHistory.back', group: 'navigation', combos: ['Meta+ArrowLeft'], panes: MAIL, macOnly: true, predicates: [KEY.HISTORY_BACK] },
+  { id: 'nav.historyForward', label: 'messageHistory.forward', group: 'navigation', combos: ['Meta+ArrowRight'], panes: MAIL, macOnly: true, predicates: [KEY.HISTORY_FORWARD] },
 
   // Pane and folder navigation (Alt chords work from any pane)
   { id: 'nav.paneNext', label: 'shortcuts.action.paneNext', group: 'navigation', combos: ['Alt+ArrowRight', 'Alt+l'], predicates: [KEY.PANE_FOCUS_NEXT] },
@@ -225,7 +230,7 @@ export const CORE_SHORTCUTS: ShortcutDef[] = [
   { id: 'mail.archiveAndMarkRead', icon: 'mdi:archive-check-outline', label: 'shortcuts.action.archiveAndMarkRead', group: 'messageActions', combos: ['e'], panes: MAIL, inline: app('e') },
   { id: 'mail.archive', icon: 'mdi:archive-outline', label: 'shortcuts.action.archive', group: 'messageActions', combos: ['Mod+k'], panes: MAIL, inline: app('k') },
   { id: 'mail.readLater', icon: 'mdi:book-clock-outline', label: 'shortcuts.action.readLater', group: 'messageActions', combos: ['l'], panes: MAIL, inline: app('l') },
-  { id: 'mail.replyLater', icon: 'mdi:reply', label: 'shortcuts.action.replyLater', group: 'messageActions', combos: ['Shift+l'], panes: MAIL, inline: app('L') },
+  { id: 'mail.replyLater', icon: 'mdi:clock-outline', label: 'shortcuts.action.replyLater', group: 'messageActions', combos: ['Shift+l'], panes: MAIL, inline: app('L') },
   { id: 'mail.spam', icon: 'mdi:alert-octagon-outline', label: 'shortcuts.action.spam', group: 'messageActions', combos: ['!', 'Mod+j'], panes: MAIL, inline: app('!', 'j') },
   { id: 'mail.trash', icon: 'mdi:delete-outline', label: 'shortcuts.action.trash', group: 'messageActions', combos: ['#', 'Delete', 'Backspace', 'd'], panes: MAIL, inline: app('#', 'Delete', 'Backspace', 'd') },
   { id: 'mail.deletePermanently', icon: 'mdi:delete-forever', label: 'shortcuts.action.deletePermanently', group: 'messageActions', combos: ['Shift+Delete', 'Shift+Backspace'], panes: MAIL, inline: app('Delete', 'Backspace') },
@@ -248,7 +253,7 @@ export const CORE_SHORTCUTS: ShortcutDef[] = [
   // Composer (only while the composer is open)
   { id: 'composer.send', icon: 'mdi:send', label: 'shortcuts.action.send', group: 'composer', combos: ['Mod+Enter'], panes: MAIL, inline: composer('Enter') },
   { id: 'composer.attach', icon: 'mdi:paperclip', label: 'shortcuts.action.attach', group: 'composer', combos: ['Alt+a'], panes: MAIL, inline: composer('a') },
-  { id: 'composer.detach', label: 'shortcuts.action.detach', group: 'composer', combos: ['Mod+d'], panes: MAIL, inline: composer('d') },
+  { id: 'composer.detach', label: 'shortcuts.action.detach', group: 'composer', combos: ['Mod+Shift+d'], panes: MAIL, inline: composer('d', 'D') },
   { id: 'composer.toolbar', label: 'shortcuts.action.toolbar', group: 'composer', combos: ['Alt+t'], panes: MAIL, inline: composer('t') },
   { id: 'composer.pgp', label: 'shortcuts.action.pgp', group: 'composer', combos: ['Alt+p'], panes: MAIL, inline: composer('p', 's', 'S', 'e', 'E') },
   { id: 'composer.smime', label: 'shortcuts.action.smime', group: 'composer', combos: ['Alt+s'], panes: MAIL, inline: composer('s') },
