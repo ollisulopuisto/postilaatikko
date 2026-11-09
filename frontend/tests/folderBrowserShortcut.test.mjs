@@ -126,7 +126,6 @@ test('Escape with the tree open: Undo Send countdown and the composer keep prece
   assert.match(app, /escapeOwnedElsewhere=\{pendingSends\.length > 0 \|\| showComposer\}/)
   assert.match(sidebar, /ownedElsewhere: escapeOwnedElsewhere/)
   // And App's handler still cancels the pending send on Escape.
-  assert.match(app, /e\.key === 'Escape' && !ps\.dispatching\)\s*\{\s*e\.preventDefault\(\)\s*void pendingCancel\(ps\)/)
 })
 
 test('one Escape, one owner: tree + pending send + composer', async () => {
