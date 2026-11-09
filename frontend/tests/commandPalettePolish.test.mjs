@@ -60,3 +60,21 @@ test('after a keep-open command the selection follows it by id', () => {
   const palette = readFileSync(new URL('../src/lib/components/command/CommandPalette.svelte', import.meta.url), 'utf8')
   assert.match(palette, /selectedIndex = Math\.max\(0, filteredCommands\.findIndex\(item => item\.id === cmd\.id\)\)/)
 })
+
+test('Enter on an unmatched query goes through runCommand, so Search lands in recents', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const src = await readFile(new URL('../src/lib/components/command/CommandPalette.svelte', import.meta.url), 'utf8')
+  assert.match(src, /runCommand\(searchFallbackItem\(\)\)/)
+  assert.doesNotMatch(src, /\/\/ Fallback: trigger search[\s\S]{0,80}executeCommand\('app\.search'\)\n/)
+})
+
+test('archive and mark read remembers unread ids and restores them from every undo path', async () => {
+  const { readFile } = await import('node:fs/promises')
+  const events = await readFile(new URL('../src/lib/components/list/undoMutationEvents.ts', import.meta.url), 'utf8')
+  assert.match(events, /rememberUnreadForUndo/)
+  assert.match(events, /restoreUnread\?\.\(unread\)/)
+  for (const f of ['src/App.svelte', 'src/lib/components/viewer/ConversationViewer.svelte']) {
+    const src = await readFile(new URL('../' + f, import.meta.url), 'utf8')
+    assert.match(src, /rememberUnreadForUndo\(result\.operationId, unreadIds\)/, f)
+  }
+})

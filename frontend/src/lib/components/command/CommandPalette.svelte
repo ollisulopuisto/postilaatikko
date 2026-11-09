@@ -151,9 +151,19 @@
       if (filteredCommands.length > 0 && selectedIndex < filteredCommands.length) {
         runCommand(filteredCommands[selectedIndex])
       } else if (query.trim()) {
-        // Fallback: trigger search with the query
-        executeCommand('app.search')
+        // Fallback: same runner as the "Search messages for" button, so it is recorded in recents.
+        runCommand(searchFallbackItem())
       }
+    }
+  }
+
+  function searchFallbackItem(): PaletteItem {
+    return {
+      id: 'app.search',
+      title: `${$_('shortcuts.action.search')}: "${query.trim()}"`,
+      category: $_('commandPalette.categories.mail'),
+      icon: 'mdi:magnify',
+      action: () => executeCommand('app.search'),
     }
   }
 
@@ -241,13 +251,7 @@
               <button
                 type="button"
                 class="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-                onclick={() => runCommand({
-                  id: 'app.search',
-                  title: `${$_('shortcuts.action.search')}: "${query.trim()}"`,
-                  category: $_('commandPalette.categories.mail'),
-                  icon: 'mdi:magnify',
-                  action: () => executeCommand('app.search'),
-                })}
+                onclick={() => runCommand(searchFallbackItem())}
               >
                 <Icon icon="mdi:magnify" class="w-3.5 h-3.5" />
                 <span>Search messages for "{query.trim()}"</span>

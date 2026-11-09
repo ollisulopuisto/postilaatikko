@@ -20,6 +20,7 @@
   import TitleBar from './lib/components/common/TitleBar.svelte'
   import Sidebar from './lib/components/sidebar/Sidebar.svelte'
   import GlobalSearch from './lib/components/common/GlobalSearch.svelte'
+
   let showGlobalSearch = $state(false)
   let showUndoHistory = $state(false)
   import ScheduledPane from './lib/components/scheduled/ScheduledPane.svelte'
@@ -74,16 +75,18 @@
   import { resolveListTarget } from '$lib/actions/target'
   import type { ActionTarget, ListTarget, MessageActionExecutor, RunOptions } from '$lib/actions/types'
   import { initLayout, getLayoutMode, getResponsiveView, showViewer, hideViewer, showSidebar, hideSidebar, isResponsive } from '$lib/stores/layout.svelte'
-  import { publishUndoOperationCompleted, publishUndoOperationCreated } from '$lib/components/list/undoMutationEvents'
+  import { publishUndoOperationCompleted, publishUndoOperationCreated, rememberUnreadForUndo, setUnreadRestorer } from '$lib/components/list/undoMutationEvents'
   import { runMessageMutation } from '$lib/components/list/mutationInFlight'
   import { messageAnimations } from '$lib/stores/messageAnimations.svelte'
   // @ts-ignore - wailsjs path
-  import { PrepareComposerReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, ClearDraftHistory, SendMessageWithDraftGuard, CancelPendingSend, CompletePendingSend, ListPendingSends, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ResolveMailActionTarget, UndoOperation, UndoLatestWithResult, SyncMailboxActionEvents, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, RequestQuitApp, CancelQuitAppRequest, OpenComposerWindow, OpenMailWindow, OpenReaderWindow, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
+  import { PrepareComposerReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, ClearDraftHistory, SendMessageWithDraftGuard, CancelPendingSend, CompletePendingSend, ListPendingSends, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ResolveMailActionTarget, GetMessage, UndoOperation, UndoLatestWithResult, SyncMailboxActionEvents, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, RequestQuitApp, CancelQuitAppRequest, OpenComposerWindow, OpenMailWindow, OpenReaderWindow, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
   // @ts-ignore - wailsjs path
   import { smtp, folder, certificate, operations } from '../wailsjs/go/models'
   // @ts-ignore - wailsjs runtime
   import { WindowShow, EventsOn } from '../wailsjs/runtime/runtime'
   import { _ } from '$lib/i18n'
+
+  setUnreadRestorer(ids => MarkAsUnread(ids))
 
   // Component refs for keyboard navigation. Plain `let` (not $state) is
   // intentional: svelte-check warns "Changing its value will not correctly
@@ -2253,10 +2256,14 @@
     messageAnimations.startRemoval(messageIds, 'archive')
     let archived = false
     try {
+      // Remember which messages were unread so Undo can put that back.
+      const flags = await Promise.all(messageIds.map(id => GetMessage(id).then(m => (m && !m.isRead ? id : null)).catch(() => null)))
+      const unreadIds = flags.filter((id): id is string => id !== null)
       await runMessageMutation(messageIds, async () => {
         const result = await ArchiveWithUndo(messageIds)
         if (result.coalesced) return
         archived = true
+        rememberUnreadForUndo(result.operationId, unreadIds)
         try {
           await MarkAsRead(messageIds)
         } catch (err) {
