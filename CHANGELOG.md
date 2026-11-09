@@ -2,7 +2,9 @@
 
 ## [Unreleased]
 
-## Postilaatikko 2026.11.09.10
+## Postilaatikko 2026.11.09.11
+
+- Discard late server-message opens when the selection has changed, including keyboard selection. Keyboard opening uses the same canonical-resolution path as clicking.
 
 - Resolve fetched server results by account and folder identity as well as UID, preventing same-UID rows in different mailboxes from being replaced. Validate the fetched message account before enabling queue actions.
 

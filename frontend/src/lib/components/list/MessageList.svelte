@@ -1795,6 +1795,8 @@
       return
     }
 
+    // Every reader selection invalidates asynchronous opening of an older row.
+    serverResultFetchGeneration += 1
     // Normal click - select for viewing, clear checks
     checkedThreadIds = new Set()
     pinInboxGroupForConversation(threadId)
@@ -1820,24 +1822,29 @@
   async function resolveLocalServerConversation(result: any, folder: string, account: string) {
     const generation = ++serverResultFetchGeneration
     const query = searchQuery.trim()
+    const selectionAtStart = selectedThreadId
     try {
       const message = await GetMessage(result.messageIds?.[0] || '')
-      if (generation !== serverResultFetchGeneration || searchSource !== 'server' || query !== searchQuery.trim() || !serverSearchResults.includes(result) || message?.accountId !== account || !message.id) return
+      if (generation !== serverResultFetchGeneration || selectedThreadId !== selectionAtStart || searchSource !== 'server' || query !== searchQuery.trim() || !serverSearchResults.includes(result) || message?.accountId !== account || !message.id) return
       const canonicalId = message.threadId || message.id
       serverSearchResults = serverSearchResults.map(item => item === result ? { ...item, threadId: canonicalId, _queueCanonical: true } : item)
       selectedThreadId = canonicalId
       onConversationSelect?.(canonicalId, folder, account)
-    } catch (error) { toasts.error(String(error)) }
+    } catch (error) {
+      if (generation !== serverResultFetchGeneration || selectedThreadId !== selectionAtStart) return
+      toasts.error(String(error))
+    }
   }
 
   // Fetch a non-local server result, save locally, update the result, then select
   async function fetchAndSelectServerResult(conversation: any, realFolderId: string, realAccountId: string) {
     const generation = ++serverResultFetchGeneration
     const query = searchQuery.trim()
+    const selectionAtStart = selectedThreadId
     const identity = serverSearchResultIdentity(conversation)
     try {
       const msg = await FetchServerMessage(realAccountId, realFolderId, conversation._uid)
-      if (generation !== serverResultFetchGeneration || searchSource !== 'server' || query !== searchQuery.trim() || !serverSearchResults.some(result => serverSearchResultIdentity(result) === identity)) {
+      if (generation !== serverResultFetchGeneration || selectedThreadId !== selectionAtStart || searchSource !== 'server' || query !== searchQuery.trim() || !serverSearchResults.some(result => serverSearchResultIdentity(result) === identity)) {
         return
       }
       if (msg?.accountId === realAccountId && msg.id) {
@@ -1859,7 +1866,7 @@
         onConversationSelect?.(msg.threadId || msg.id, realFolderId, realAccountId)
       }
     } catch (err) {
-      if (generation !== serverResultFetchGeneration || searchSource !== 'server' || query !== searchQuery.trim()) {
+      if (generation !== serverResultFetchGeneration || selectedThreadId !== selectionAtStart || searchSource !== 'server' || query !== searchQuery.trim()) {
         return
       }
       if (isMissingServerSearchResult(err)) {
@@ -2256,10 +2263,7 @@
 
     const index = getSelectedIndex()
     if (index >= 0) {
-      const conv = activeList[index] as any
-      const realFolderId = (isUnifiedView || isSearchMode) && conv.folderId ? conv.folderId : folderId!
-      const realAccountId = (isUnifiedView || isSearchMode) && conv.accountId ? conv.accountId : accountId!
-      onConversationSelect?.(selectedThreadId, realFolderId, realAccountId)
+      selectConversation(selectedThreadId, index)
     }
   }
 

@@ -140,3 +140,32 @@ test('fetching a result with a shared mailbox UID updates only its account-quali
   await wrong.run(b,'inbox-B','B')
   assert.deepEqual(wrong.rows(),[a,b])
 })
+
+test('late local and fetched server opens cannot replace a newer click or keyboard selection', async () => {
+  const ts=(await import('typescript')).default
+  const source=list.slice(list.indexOf('  async function resolveLocalServerConversation'),list.indexOf('  function isMissingServerSearchResult'))
+  const code=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText
+  const factory=new Function('serverSearchResults','GetMessage','FetchServerMessage','onConversationSelect','serverSearchResultIdentity',`
+    let serverResultFetchGeneration=0, searchQuery='query', searchSource='server', selectedThreadId='rowA';
+    const toasts={error:()=>{throw new Error('stale error surfaced')}};
+    ${code}
+    return {local:resolveLocalServerConversation,remote:fetchAndSelectServerResult,select:id=>selectedThreadId=id,selected:()=>selectedThreadId,rows:()=>serverSearchResults};`)
+  for(const mode of ['local','remote']) for(const outcome of ['success','failure']) {
+    const a={threadId:'rowA',accountId:'A',folderId:'inbox',_uid:42,messageIds:['messageA'],_queueCanonical:false}
+    let complete,fail
+    const pending=new Promise((resolve,reject)=>{complete=resolve;fail=reject})
+    const opened=[]
+    const state=factory([a],()=>pending,()=>pending,(...args)=>opened.push(args),r=>`${r.accountId}:${r.folderId}:${r._uid}`)
+    const request=state[mode](a,'inbox','A')
+    // The shared selection state is changed by mouse, j/k, first/last and notifications.
+    state.select('rowB')
+    if(outcome==='success') complete({id:'messageA',threadId:'threadA',accountId:'A'})
+    else fail(new Error('stale lookup failed'))
+    await request
+    assert.deepEqual(opened,[],`${mode}/${outcome}`)
+    assert.equal(state.selected(),'rowB')
+    assert.deepEqual(state.rows(),[a])
+  }
+  const keyboard=list.slice(list.indexOf('  export function openSelected()'),list.indexOf('  // Select a specific thread by ID'))
+  assert.match(keyboard,/selectConversation\(selectedThreadId, index\)/)
+})
