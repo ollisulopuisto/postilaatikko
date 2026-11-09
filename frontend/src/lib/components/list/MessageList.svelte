@@ -3121,8 +3121,9 @@
     <p class="px-3 pb-1 text-[10px] text-muted-foreground" role="status">{$_('search.virtualFolderCacheUpdated', { values: { time: virtualCacheRefreshedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) } })}</p>
   {/if}
   {#if isVirtualFolderView && virtualCursor && !loading && !isSearchMode && !virtualIssues}<button type="button" class="px-3 py-2 text-sm text-primary" onclick={loadNextPage}>{$_('search.loadMore')}</button>{/if}
+  <div class="relative flex flex-col flex-1 min-h-0">
   {#if newAboveKeys.size > 0 && !isSearchMode}
-    <div class="absolute left-1/2 -translate-x-1/2 top-40 z-20">
+    <div class="absolute left-1/2 -translate-x-1/2 top-2 z-20">
       <button type="button" class="rounded-full bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-md focus-visible:ring-2 focus-visible:ring-primary" onclick={showNewestMail}>
         ↑ {$_('messageList.newAbove', { values: { count: newAboveKeys.size } })}
       </button>
@@ -3450,6 +3451,7 @@
       {/if}
     {/if}
     </div>
+  </div>
   </div>
 </div>
 
