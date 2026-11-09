@@ -66,6 +66,12 @@ export const LIST_SELECT_ALL = (e: KeyboardEvent): boolean =>
 export const LIST_DELETE = (e: KeyboardEvent): boolean =>
   (e.key === 'Delete' || e.key === 'Backspace') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey
 
+// Message history is Cmd-only. Text fields retain native line-start/end keys.
+export const HISTORY_BACK = (e: KeyboardEvent): boolean =>
+  e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && e.key === 'ArrowLeft'
+export const HISTORY_FORWARD = (e: KeyboardEvent): boolean =>
+  e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && e.key === 'ArrowRight'
+
 // Pane focus cycling — Alt+H/L / Alt+Left/Right
 export const PANE_FOCUS_NEXT = (e: KeyboardEvent): boolean =>
   altOnly(e) && (e.key === 'l' || e.key === 'ArrowRight')
@@ -126,6 +132,8 @@ export const LIST_TOGGLE_READ = (e: KeyboardEvent): boolean =>
 
 // Convenience: namespace export for predicates that the kit imports as a group.
 export const KEY = {
+  HISTORY_BACK,
+  HISTORY_FORWARD,
   LIST_NEXT,
   LIST_PREV,
   LIST_NEXT_CHECK,

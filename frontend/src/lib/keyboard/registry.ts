@@ -192,6 +192,9 @@ export const CORE_SHORTCUTS: ShortcutDef[] = [
   { id: 'app.closeTab', label: 'shortcuts.action.closeTab', group: 'general', combos: ['Mod+w'], panes: MAIL, inline: app('w') },
   { id: 'app.quit', label: 'shortcuts.action.quit', group: 'general', combos: ['Mod+q'], inline: app('q') },
 
+  { id: 'nav.historyBack', label: 'messageHistory.back', group: 'navigation', combos: ['Meta+ArrowLeft'], panes: MAIL, macOnly: true, predicates: [KEY.HISTORY_BACK] },
+  { id: 'nav.historyForward', label: 'messageHistory.forward', group: 'navigation', combos: ['Meta+ArrowRight'], panes: MAIL, macOnly: true, predicates: [KEY.HISTORY_FORWARD] },
+
   // Pane and folder navigation (Alt chords work from any pane)
   { id: 'nav.paneNext', label: 'shortcuts.action.paneNext', group: 'navigation', combos: ['Alt+ArrowRight', 'Alt+l'], predicates: [KEY.PANE_FOCUS_NEXT] },
   { id: 'nav.panePrev', label: 'shortcuts.action.panePrev', group: 'navigation', combos: ['Alt+ArrowLeft', 'Alt+h'], predicates: [KEY.PANE_FOCUS_PREV] },
