@@ -3,6 +3,51 @@
 ## [Unreleased]
 
 - Stop continuous CPU use while an email is open in the reader: the inline-image loading placeholder is now static (no animated SVG) and iframe height updates are skipped when unchanged.
+## Postilaatikko 2026.11.09.16
+
+- Preserve the opened search UID when several rows share a conversation. Reader restoration matches the account and folder, and keyboard focus changes do not reapply an older reader selection.
+
+- Keep server row UI identity mailbox-qualified after resolution too. Canonical conversation IDs are separate backend targets, so identical RFC thread IDs across accounts cannot change another row's checked state.
+
+- Give unfetched server rows mailbox-qualified provisional IDs, so same-UID results in different accounts or folders remain independently checked while resolving.
+
+- Carry checked server rows forward when their provisional IDs resolve to canonical conversations. Keyboard opening also pins Inbox card position like clicking.
+
+- Preserve checked rows when opening the focused message with Enter, while using the same server-resolution and stale-request guards as clicking.
+
+- Discard late server-message opens when the selection has changed, including keyboard selection. Keyboard opening uses the same canonical-resolution path as clicking.
+
+- Resolve fetched server results by account and folder identity as well as UID, preventing same-UID rows in different mailboxes from being replaced. Validate the fetched message account before enabling queue actions.
+
+- Use only checked rows from the active search source for queue readiness and targets, so hidden cached results cannot block valid local selections.
+
+- Preserve ordinary mailbox action targets while blocking mixed resolved/unresolved queue selections. Local server results with no thread ID use the stored message ID as their canonical conversation.
+
+- Keep queue actions disabled on unresolved IMAP search IDs until opening the result resolves its indexed conversation. A failed item in a multi-selection queue update no longer skips the remaining items.
+
+- Add Read later and Reply later to the reader toolbar, message-row quick actions, per-message reader context menus, snoozed and multi-selected row menus, and HTML-body copy/link menus. Actions keep account-qualified conversation targets, queue state, shortcut hints and targeted Undo.
+
+## Postilaatikko 2026.11.09.5
+
+- Use Cmd-Left and Cmd-Right to go Back and Forward through visited messages. Search fields, recipient fields and text editors keep their normal line-start/end keys. No bracket shortcuts; mailbox Undo and composer history are unchanged.
+
+## Postilaatikko 2026.11.09.4
+
+- Make Undo Send quieter: show a thin draining bar along the toast edge instead of a numeric countdown. Undo still cancels the pending send and restores its draft; Send now and the existing send delay are unchanged.
+
+## Postilaatikko 2026.11.09.3
+
+- Go Back and Forward through messages you opened, using the new buttons above the shared folder/message column. History remembers the account, folder, search, and email-tab context for this session; opening another message after Back starts a new forward path. Navigation does not undo or redo mailbox actions or composer edits.
+
+## Postilaatikko 2026.11.09.2
+
+- Keep your place in the message list when new mail arrives: the visible row stays at the same screen position while mail sorts above it. An "N new above" button jumps to the newest mail without changing the message open in the reader. No docked message row.
+
+## Postilaatikko 2026.11.09.1
+
+- Press Cmd/Ctrl+D, or click the new Folders button at the bottom of the left rail, to open the full folder tree. In wide windows the tree and the message list share one column: the open one takes the space and the other folds to a thin strip you can click. Picking a folder, Escape, or Cmd/Ctrl+D again returns to the message list. In narrow windows they swap in the same pane. Open the composer in its own window with Cmd/Ctrl+Shift+D; Cmd/Ctrl+D no longer detaches it.
+- The open message now moves to its correct chronological spot when the list refreshes, instead of staying pinned above newer mail. It stays selected and in view.
+
 - Deduplicate thread messages sharing the same RFC Message-ID in conversation views, eliminating redundant multi-label copies (e.g. Gmail Inbox vs All Mail). Preserve downloaded bodies, reply targets and reaction chips on the retained copy; fetch only displayed bodies and keep connected-reader counts consistent.
 - Show local sender avatars beside collapsed conversation bubble tails when viewer circles are enabled, without external favicon requests; keep HTML message widths readable.
 

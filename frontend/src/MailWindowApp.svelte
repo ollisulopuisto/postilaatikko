@@ -196,6 +196,11 @@
     onScopeChange?.({ ...windowState.scope, threadId: undefined, threadAccountId: undefined, threadFolderId: undefined, searchQuery: list?.getSearchQuery() || '' })
     setFocusedPane('messageList')
   }
+  export function restoreMessageVisit(scope: MailScope) {
+    windowState = createMailWindowState(scope)
+    pendingSearchQuery = scope.searchQuery || ''
+    list?.setSearchQuery(pendingSearchQuery)
+  }
   export function prepareForSuspend() {
     viewer?.prepareForSuspend()
   }

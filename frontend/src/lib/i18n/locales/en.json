@@ -1,4 +1,5 @@
 {
+  "messageHistory": {"label": "Visited messages", "back": "Back to previous message", "forward": "Forward to next message"},
   "onlineCount": {
     "counting": "Counting online conversations…",
     "complete": "{total} conversations · {unread} unread",
@@ -204,6 +205,7 @@
     "failed": "Could not snooze conversation"
   },
   "messageList": {
+    "newAbove": "{count} new above",
     "refreshVirtualFolder": "Refresh virtual folder",
     "searchMessages": "Search messages...",
     "noMessages": "No messages in this folder",
@@ -483,7 +485,7 @@
     "historyBranches": "Branch tips",
     "historyEmpty": "No edits yet",
     "historyEdit": "Edit",
-    "sendQueued": "Sending in 30 seconds - click the countdown to cancel",
+    "sendQueued": "Message queued - use Undo to cancel",
     "failedToSaveDraft": "Failed to save draft before sending",
     "attachmentsNotRestored": "{count} attachment(s) could not be restored"
   },
@@ -1343,7 +1345,8 @@
   },
   "responsive": {
     "back": "Back",
-    "folders": "Folders"
+    "folders": "Folders",
+    "messages": "Messages"
   },
   "images": {
     "addresses": "Addresses",
@@ -1401,6 +1404,7 @@
       "compose": "New message",
       "search": "Search",
       "undo": "Undo last action",
+      "folders": "Show folder tree or message list",
       "syncAll": "Sync all accounts (again to cancel)",
       "syncFolder": "Sync current folder (again to cancel)",
       "nextRail": "Next view on the rail",
@@ -1572,6 +1576,9 @@
     }
   },
   "pendingSend": {
+    "queued": "Message queued",
+    "sending": "Sending…",
+    "undo": "Undo",
     "countdown": "Sending in {seconds}s",
     "sendNow": "Send now",
     "cancel": "Cancel",
