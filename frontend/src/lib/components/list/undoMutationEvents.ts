@@ -1,5 +1,3 @@
-import { MarkAsUnread } from '../../../../wailsjs/go/app/App'
-
 export const UNDO_OPERATION_CREATED_EVENT = 'eterno-mail:undo-operation-created'
 export const UNDO_OPERATION_COMPLETED_EVENT = 'eterno-mail:undo-operation-completed'
 
@@ -21,6 +19,12 @@ export function publishUndoOperationCreated(operationId: string, messageIds: str
 // remembered here and marked unread again when that operation is undone, from
 // any undo path (toast, Cmd/Ctrl+Z, undo history).
 const unreadBeforeArchive = new Map<string, string[]>()
+let restoreUnread: ((messageIds: string[]) => Promise<unknown>) | null = null
+
+/** The host registers how to mark messages unread (keeps this module free of backend imports). */
+export function setUnreadRestorer(fn: (messageIds: string[]) => Promise<unknown>) {
+  restoreUnread = fn
+}
 
 export function rememberUnreadForUndo(operationId: string, unreadMessageIds: string[]) {
   if (!operationId || unreadMessageIds.length === 0) return
@@ -32,7 +36,7 @@ export function publishUndoOperationCompleted(operationId: string) {
   const unread = unreadBeforeArchive.get(operationId)
   if (unread) {
     unreadBeforeArchive.delete(operationId)
-    void MarkAsUnread(unread).catch(err => console.error('Restoring unread after undo failed:', err))
+    void restoreUnread?.(unread)?.catch(err => console.error('Restoring unread after undo failed:', err))
   }
   window.dispatchEvent(new CustomEvent<string>(UNDO_OPERATION_COMPLETED_EVENT, {
     detail: operationId,

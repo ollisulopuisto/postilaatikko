@@ -18,6 +18,7 @@
   import TitleBar from './lib/components/common/TitleBar.svelte'
   import Sidebar from './lib/components/sidebar/Sidebar.svelte'
   import GlobalSearch from './lib/components/common/GlobalSearch.svelte'
+
   let showGlobalSearch = $state(false)
   let showUndoHistory = $state(false)
   import ScheduledPane from './lib/components/scheduled/ScheduledPane.svelte'
@@ -72,7 +73,7 @@
   import { resolveListTarget } from '$lib/actions/target'
   import type { ActionTarget, ListTarget, MessageActionExecutor, RunOptions } from '$lib/actions/types'
   import { initLayout, getLayoutMode, getResponsiveView, showViewer, hideViewer, showSidebar, hideSidebar, isResponsive } from '$lib/stores/layout.svelte'
-  import { publishUndoOperationCompleted, publishUndoOperationCreated, rememberUnreadForUndo } from '$lib/components/list/undoMutationEvents'
+  import { publishUndoOperationCompleted, publishUndoOperationCreated, rememberUnreadForUndo, setUnreadRestorer } from '$lib/components/list/undoMutationEvents'
   import { runMessageMutation } from '$lib/components/list/mutationInFlight'
   import { messageAnimations } from '$lib/stores/messageAnimations.svelte'
   // @ts-ignore - wailsjs path
@@ -82,6 +83,8 @@
   // @ts-ignore - wailsjs runtime
   import { WindowShow, EventsOn } from '../wailsjs/runtime/runtime'
   import { _ } from '$lib/i18n'
+
+  setUnreadRestorer(ids => MarkAsUnread(ids))
 
   // Component refs for keyboard navigation. Plain `let` (not $state) is
   // intentional: svelte-check warns "Changing its value will not correctly

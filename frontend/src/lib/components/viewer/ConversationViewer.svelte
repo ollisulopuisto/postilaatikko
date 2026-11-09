@@ -40,10 +40,12 @@
   import { contactPhotos } from '$lib/stores/contactPhotos.svelte'
   import { PendingReadOnLeave } from './pendingReadOnLeave'
   import { preserveThreadMessageScope } from './threadScope'
-  import { publishUndoOperationCompleted, publishUndoOperationCreated, rememberUnreadForUndo } from '../list/undoMutationEvents'
+  import { publishUndoOperationCompleted, publishUndoOperationCreated, rememberUnreadForUndo, setUnreadRestorer } from '../list/undoMutationEvents'
   import { runMessageMutation } from '../list/mutationInFlight'
   import { messageAnimations } from '$lib/stores/messageAnimations.svelte'
   import { getThreadSnapshot, setThreadSnapshot } from './threadSnapshotCache'
+
+  setUnreadRestorer(ids => MarkAsUnread(ids))
 
   interface Props {
     threadId?: string | null
@@ -73,6 +75,7 @@
     onToggleThreadFocus?: () => void
     onToggleMessageFocus?: (messageId: string) => void
   }
+
 
   let {
     threadId = null,

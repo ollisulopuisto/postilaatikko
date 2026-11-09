@@ -72,7 +72,7 @@ test('archive and mark read remembers unread ids and restores them from every un
   const { readFile } = await import('node:fs/promises')
   const events = await readFile(new URL('../src/lib/components/list/undoMutationEvents.ts', import.meta.url), 'utf8')
   assert.match(events, /rememberUnreadForUndo/)
-  assert.match(events, /MarkAsUnread\(unread\)/)
+  assert.match(events, /restoreUnread\?\.\(unread\)/)
   for (const f of ['src/App.svelte', 'src/lib/components/viewer/ConversationViewer.svelte']) {
     const src = await readFile(new URL('../' + f, import.meta.url), 'utf8')
     assert.match(src, /rememberUnreadForUndo\(result\.operationId, unreadIds\)/, f)
