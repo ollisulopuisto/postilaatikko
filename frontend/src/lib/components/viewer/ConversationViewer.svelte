@@ -4,7 +4,7 @@
   // @ts-ignore - wailsjs bindings
   import { GetReaderIdentityEmails, GetConversation, GetReadReceiptResponsePolicy, SendReadReceipt, IgnoreReadReceipt, GetMessageSource, ProcessSMIMEMessage, ProcessPGPMessage, FetchMessageBodyForAccount } from '../../../../wailsjs/go/app/App'
   // @ts-ignore - wailsjs bindings
-  import { MoveToInboxWithUndo, GetAccounts, MoveToFolderWithUndo, CopyToFolder, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, RemoveFromInboxWithUndo, TrashWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, DeletePermanently, ResolveMailActionTarget, UndoOperation } from '../../../../wailsjs/go/app/App'
+  import { MoveToInboxWithUndo, GetAccounts, MoveToFolderWithUndo, CopyToFolder, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, ArchiveAndMarkReadWithUndo, RemoveFromInboxWithUndo, TrashWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, DeletePermanently, ResolveMailActionTarget, UndoOperation } from '../../../../wailsjs/go/app/App'
   // @ts-ignore - wailsjs path
   import { EventsOn } from '../../../../wailsjs/runtime/runtime'
   // @ts-ignore - wailsjs path
@@ -29,6 +29,7 @@
   import { backend as backendModels } from '../../../../wailsjs/go/models'
   import { setFocusedPane, isInputElement, isComposerOpen } from '$lib/stores/keyboard.svelte'
   import { ConfirmDialog } from '$lib/components/ui/confirm-dialog'
+  import LaterQueueButton from '$lib/components/common/LaterQueueButton.svelte'
   import MessageContextMenu from '$lib/components/common/MessageContextMenu.svelte'
   import FolderPickerDialog from '$lib/components/common/FolderPickerDialog.svelte'
   import { withShortcut, ariaKeyshortcuts } from '$lib/keyboard/format'
@@ -39,10 +40,12 @@
   import { contactPhotos } from '$lib/stores/contactPhotos.svelte'
   import { PendingReadOnLeave } from './pendingReadOnLeave'
   import { preserveThreadMessageScope } from './threadScope'
-  import { publishUndoOperationCompleted, publishUndoOperationCreated } from '../list/undoMutationEvents'
+  import { publishUndoOperationCompleted, publishUndoOperationCreated, rememberUnreadForUndo, setUnreadRestorer } from '../list/undoMutationEvents'
   import { runMessageMutation } from '../list/mutationInFlight'
   import { messageAnimations } from '$lib/stores/messageAnimations.svelte'
   import { getThreadSnapshot, setThreadSnapshot } from './threadSnapshotCache'
+
+  setUnreadRestorer(ids => MarkAsUnread(ids))
 
   interface Props {
     threadId?: string | null
@@ -72,6 +75,7 @@
     onToggleThreadFocus?: () => void
     onToggleMessageFocus?: (messageId: string) => void
   }
+
 
   let {
     threadId = null,
@@ -1302,20 +1306,19 @@
     let archived = false
     try {
       messageIds = await resolveDisplayedMessageTarget(messageIds)
+      const unreadIds = (conversation?.messages ?? []).filter(m => !m.isRead && messageIds.includes(m.id)).map(m => m.id)
       messageAnimations.startRemoval(messageIds, 'archive')
       await runMessageMutation(messageIds, async () => {
         moveMutationInFlight = true
         try {
-          const result = await ArchiveWithUndo(messageIds)
+          const result = await ArchiveAndMarkReadWithUndo(messageIds)
           if (result.coalesced) return
           archived = true
-          try {
-            await MarkAsRead(messageIds)
-          } catch (err) {
-            publishUndoOperationCreated(result.operationId, messageIds, 'archive')
-            showArchiveUndoToast(result.operationId)
-            onActionComplete?.(true)
-            throw err
+          if (!result.atomic) {
+            // Legacy two-step path: Undo only moves messages back, so the
+            // unread snapshot restores their read state. The atomic backend
+            // action restores read state itself.
+            rememberUnreadForUndo(result.operationId, unreadIds)
           }
           publishUndoOperationCreated(result.operationId, messageIds, 'archive')
           showArchiveUndoToast(result.operationId)
@@ -2082,10 +2085,10 @@
         {/if}
         <button
           class="viewer-toolbar-action p-2 rounded-md hover:bg-muted transition-all duration-150 hover:-translate-y-0.5 hover:scale-105 hover:shadow-sm active:translate-y-0 active:scale-95"
-          data-tooltip={withShortcut($_('viewer.archive'), 'mail.archive')}
-          aria-label={$_('viewer.archive')}
-          aria-keyshortcuts={ariaKeyshortcuts('mail.archive')}
-          onclick={handleArchive}
+          data-tooltip={withShortcut($_('shortcuts.action.archiveAndMarkRead'), 'mail.archiveAndMarkRead')}
+          aria-label={$_('shortcuts.action.archiveAndMarkRead')}
+          aria-keyshortcuts={ariaKeyshortcuts('mail.archiveAndMarkRead')}
+          onclick={archiveAndMarkRead}
           disabled={moveMutationInFlight}
         >
           <Icon icon="mdi:archive-outline" class="w-5 h-5 text-muted-foreground" />
@@ -2130,6 +2133,8 @@
       </div>
 
       <div class="flex flex-wrap items-center gap-2">
+        <LaterQueueButton accountId={conversation.messages?.[0]?.accountId || accountId || ''} conversationId={threadId || ''} kind="readLater" />
+        <LaterQueueButton accountId={conversation.messages?.[0]?.accountId || accountId || ''} conversationId={threadId || ''} kind="replyLater" />
         <ReaderModeToggle mode={readerMode} onChange={switchReaderMode} />
         {#if readerMode === 'traditional' && conversation.messages && conversation.messages.length > 1}
           <button
@@ -2211,7 +2216,8 @@
               <!-- Wrap each message in its own context menu -->
               <MessageContextMenu
                 messageIds={(msg as any).matched === false ? [] : [msg.id]}
-                accountId={accountId || ''}
+                accountId={msg.accountId || accountId || ''}
+                conversationId={msg.threadId || threadId || ''}
                 currentFolderId={folderId || ''}
                 folderType={folderType || 'inbox'}
                 isStarred={msg.isStarred}
@@ -2251,6 +2257,8 @@
                   >
                 {#if readerMode === 'conversation'}
                   <div class="bubble-heading flex items-center gap-2 px-4 pt-2 pb-1 text-xs text-muted-foreground">
+                    <LaterQueueButton accountId={msg.accountId || accountId || ''} conversationId={msg.threadId || threadId || ''} kind="readLater" variant="row" />
+                    <LaterQueueButton accountId={msg.accountId || accountId || ''} conversationId={msg.threadId || threadId || ''} kind="replyLater" variant="row" />
                     <button type="button" class="flex min-w-0 flex-1 items-center justify-between gap-3 text-left" aria-expanded={expandedHeaders.has(msg.id)} title={$_('viewer.messageDetails')} onkeydown={(event) => event.stopPropagation()} onclick={() => toggleHeader(msg.id)}>
                       <span class="truncate font-medium text-foreground">{bubble?.showSender ? (msg.fromName || msg.fromEmail) : ''}</span>
                       <span class="whitespace-nowrap">{formatDate(msg.date)} <span aria-hidden="true">⌄</span></span>
@@ -2381,6 +2389,10 @@
                     {/if}
                   </div>
 
+                  <div class="flex shrink-0 items-center gap-1" role="group" aria-label={$_('shortcuts.group.messageActions')}>
+                    <LaterQueueButton accountId={msg.accountId || accountId || ''} conversationId={msg.threadId || threadId || ''} kind="readLater" />
+                    <LaterQueueButton accountId={msg.accountId || accountId || ''} conversationId={msg.threadId || threadId || ''} kind="replyLater" />
+                  </div>
                   <!-- Date, edit button (drafts), and expand icon -->
                   <div class="flex flex-col items-end gap-1 flex-shrink-0">
                     <div class="flex items-center gap-2">
@@ -2577,6 +2589,7 @@
                         {:else}
                           <ConversationMessage
                             bind:this={emailBodyRefs[msg.id]}
+                            conversationId={msg.threadId || threadId || ''}
                             messageId={msg.id}
                             accountId={msg.accountId}
                             extractable={canExtract(msg)}

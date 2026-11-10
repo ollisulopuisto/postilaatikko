@@ -9,11 +9,13 @@
     closeCommandPalette,
     executeCommand,
     isCommandAvailable,
+    getRecentCommands,
+    recordRecentCommand,
   } from '$lib/stores/commandPalette.svelte'
   import { formatShortcut, isMacPlatform } from '$lib/keyboard/format'
   import { getActiveExtension } from '$lib/stores/uiState.svelte'
   import { getIsDarkActive } from '$lib/stores/theme.svelte'
-  import { CORE_COMMANDS, getShortcut, type CommandDefinition, type CoreCommandId } from '$lib/keyboard/registry'
+  import { CORE_COMMANDS, getCommand, getShortcut, type CommandDefinition, type CoreCommandId } from '$lib/keyboard/registry'
 
   const mac = isMacPlatform()
 
@@ -80,7 +82,14 @@
     const open = commandPalette.open
     const q = query.trim().toLowerCase()
     const available = open ? allCommands.filter((cmd) => isCommandAvailable(cmd.id)) : allCommands
-    if (!q) return available
+    if (!q) {
+      // Empty query: the last commands you ran come first, then the rest.
+      const recent = open ? getRecentCommands() : []
+      const first = recent
+        .map(id => available.find(cmd => cmd.id === id))
+        .filter((cmd): cmd is PaletteItem => !!cmd)
+      return [...first, ...available.filter(cmd => !first.includes(cmd))]
+    }
     return available.filter((cmd) => {
       const matchTitle = cmd.title.toLowerCase().includes(q)
       const matchCat = cmd.category.toLowerCase().includes(q)
@@ -142,15 +151,33 @@
       if (filteredCommands.length > 0 && selectedIndex < filteredCommands.length) {
         runCommand(filteredCommands[selectedIndex])
       } else if (query.trim()) {
-        // Fallback: trigger search with the query
-        executeCommand('app.search')
+        // Fallback: same runner as the "Search messages for" button, so it is recorded in recents.
+        runCommand(searchFallbackItem())
       }
     }
   }
 
+  function searchFallbackItem(): PaletteItem {
+    return {
+      id: 'app.search',
+      title: `${$_('shortcuts.action.search')}: "${query.trim()}"`,
+      category: $_('commandPalette.categories.mail'),
+      icon: 'mdi:magnify',
+      action: () => executeCommand('app.search'),
+    }
+  }
+
   function runCommand(cmd: PaletteItem) {
-    closeCommandPalette()
+    // Repeatable commands (undo, star, theme) leave the palette open.
+    const keepOpen = !!getCommand(cmd.id)?.keepOpen
+    if (!keepOpen) closeCommandPalette()
+    recordRecentCommand(cmd.id)
     cmd.action()
+    if (keepOpen) {
+      // The list may have re-ordered (recents). Follow the command by id, so
+      // the next Enter repeats it instead of running whatever moved into its slot.
+      selectedIndex = Math.max(0, filteredCommands.findIndex(item => item.id === cmd.id))
+    }
   }
 
   function handleBackdropClick(e: MouseEvent) {
@@ -224,13 +251,7 @@
               <button
                 type="button"
                 class="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-                onclick={() => runCommand({
-                  id: 'app.search',
-                  title: `${$_('shortcuts.action.search')}: "${query.trim()}"`,
-                  category: $_('commandPalette.categories.mail'),
-                  icon: 'mdi:magnify',
-                  action: () => executeCommand('app.search'),
-                })}
+                onclick={() => runCommand(searchFallbackItem())}
               >
                 <Icon icon="mdi:magnify" class="w-3.5 h-3.5" />
                 <span>Search messages for "{query.trim()}"</span>

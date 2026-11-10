@@ -1,11 +1,16 @@
 <script lang="ts">
   import Icon from '@iconify/svelte'
+  import PendingSendToast from './lib/components/common/PendingSendToast.svelte'
   import MailWindowApp from './MailWindowApp.svelte'
+  import MessageHistoryBar from './lib/components/list/MessageHistoryBar.svelte'
+  import { emptyMessageHistory, visitMessage, stepMessageHistory } from './lib/navigation/messageHistory'
   import type { MailScope } from './lib/windows/mailWindow'
   import { findReaderWorkspaceTab, type MailWorkspaceTab } from './lib/windows/mailWorkspaceTabs'
   import type { NavigationEntry } from './lib/sidebar/cards'
   // Load offline icon data before anything else
-  import { LAYOUT_SYMBOL, PERMANENT_DELETE } from '$lib/keyboard/shortcuts'
+  import { LAYOUT_SYMBOL } from '$lib/keyboard/shortcuts'
+  import { resolveShortcut } from '$lib/keyboard/dispatch'
+  import type { CommandId } from '$lib/keyboard/registry'
   import './lib/iconify-offline'
   import { clearCache as clearInlineAttachmentCache } from './lib/stores/inlineAttachmentCache'
   import { readLaterQueue } from './lib/stores/readLater.svelte'
@@ -15,6 +20,7 @@
   import TitleBar from './lib/components/common/TitleBar.svelte'
   import Sidebar from './lib/components/sidebar/Sidebar.svelte'
   import GlobalSearch from './lib/components/common/GlobalSearch.svelte'
+
   let showGlobalSearch = $state(false)
   let showUndoHistory = $state(false)
   import ScheduledPane from './lib/components/scheduled/ScheduledPane.svelte'
@@ -63,20 +69,24 @@
   import { dispatchExtensionShortcut } from '$lib/stores/extensionShortcuts.svelte'
   import { shortcutsOverlay, openShortcutsOverlay } from '$lib/stores/shortcutsOverlay.svelte'
   import { executeCommand, openCommandPalette, registerCommand } from '$lib/stores/commandPalette.svelte'
+  import { isMacPlatform, withShortcut } from '$lib/keyboard/format'
+  import { sharedPaneWidths, dragListWidth } from '$lib/sidebar/folderPane'
   import { getListAction, runListAction as runActionOnTarget } from '$lib/actions/listActions'
   import { resolveListTarget } from '$lib/actions/target'
   import type { ActionTarget, ListTarget, MessageActionExecutor, RunOptions } from '$lib/actions/types'
   import { initLayout, getLayoutMode, getResponsiveView, showViewer, hideViewer, showSidebar, hideSidebar, isResponsive } from '$lib/stores/layout.svelte'
-  import { publishUndoOperationCompleted, publishUndoOperationCreated } from '$lib/components/list/undoMutationEvents'
+  import { publishUndoOperationCompleted, publishUndoOperationCreated, rememberUnreadForUndo, setUnreadRestorer } from '$lib/components/list/undoMutationEvents'
   import { runMessageMutation } from '$lib/components/list/mutationInFlight'
   import { messageAnimations } from '$lib/stores/messageAnimations.svelte'
   // @ts-ignore - wailsjs path
-  import { PrepareComposerReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, ClearDraftHistory, SendMessageWithDraftGuard, CancelPendingSend, CompletePendingSend, ListPendingSends, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ResolveMailActionTarget, UndoOperation, UndoLatestWithResult, SyncMailboxActionEvents, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, RequestQuitApp, CancelQuitAppRequest, OpenComposerWindow, OpenMailWindow, OpenReaderWindow, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
+  import { PrepareComposerReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, ClearDraftHistory, SendMessageWithDraftGuard, CancelPendingSend, CompletePendingSend, ListPendingSends, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, ArchiveAndMarkReadWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ResolveMailActionTarget, GetMessage, UndoOperation, UndoLatestWithResult, SyncMailboxActionEvents, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, RequestQuitApp, CancelQuitAppRequest, OpenComposerWindow, OpenMailWindow, OpenReaderWindow, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
   // @ts-ignore - wailsjs path
   import { smtp, folder, certificate, operations } from '../wailsjs/go/models'
   // @ts-ignore - wailsjs runtime
   import { WindowShow, EventsOn } from '../wailsjs/runtime/runtime'
   import { _ } from '$lib/i18n'
+
+  setUnreadRestorer(ids => MarkAsUnread(ids))
 
   // Component refs for keyboard navigation. Plain `let` (not $state) is
   // intentional: svelte-check warns "Changing its value will not correctly
@@ -87,6 +97,8 @@
   let messageListRef: MessageList | null = null
   let viewerRef: ConversationViewer | null = null
   let messageListContainerRef: HTMLElement | null = null
+  // The folder pane's aside: its left edge is the shared column's left edge in every mode.
+  let contextColumnRef: HTMLElement | null = null
   let effectiveTitleBarMode = $state('native')
 
   // React to theme mode changes from settings store
@@ -100,6 +112,9 @@
   let selectedFolderId = $state<string | null>(null)
   let selectedFolderName = $state('Inbox')
   let selectedFolderType = $state<string | null>(null)
+  // Wide windows keep the folder tree and message list in one shared column:
+  // one opens while the other folds to a strip.
+  const sharedColumn = $derived(getLayoutMode() === 'full')
   let contextPaneMode = $state<'folders' | 'messages'>('messages')
   let contextPaneAutoHide = $state(false)
   let contextPaneRevealed = $state(true)
@@ -133,6 +148,52 @@
       } : {}),
       searchQuery: messageListRef?.getSearchQuery() || '',
     }
+  }
+
+  let messageHistory = $state(emptyMessageHistory())
+  let restoringMessageHistory = false
+  function recordMessageVisit() {
+    if (restoringMessageHistory) return
+    messageHistory = visitMessage(messageHistory, {
+      scope: currentMailScope(), workspaceId: activeMailWorkspace, selectionSource, triageStatus,
+    })
+  }
+  async function navigateMessageHistory(direction: -1 | 1) {
+    if (restoringMessageHistory) return
+    const next = stepMessageHistory(messageHistory, direction)
+    if (next === messageHistory) return
+    messageHistory = next
+    const visit = next.entries[next.index]
+    const scope = visit.scope
+    restoringMessageHistory = true
+    try {
+      const workspace = mailWorkspaceTabs.find(tab => tab.id === visit.workspaceId)
+      switchMailWorkspace(workspace ? workspace.id : 'primary')
+      selectedAccountId = scope.accountId
+      selectedFolderId = scope.folderId
+      selectedFolderName = scope.folderName
+      selectedFolderType = scope.folderType
+      selectedThreadId = scope.threadId || null
+      selectedConversationAccountId = scope.threadAccountId || scope.accountId
+      selectedConversationFolderId = scope.threadFolderId || scope.folderId
+      selectionSource = visit.selectionSource
+      triageStatus = visit.triageStatus
+      contextPaneMode = 'messages'
+      hideSidebar()
+      showViewer()
+      if (workspace) {
+        updateWorkspaceScope(workspace.id, { ...scope })
+        mailWindowTabInstances[workspace.id]?.restoreMessageVisit(scope)
+      }
+      await tick()
+      if (!workspace) {
+        messageListRef?.setQuickFilter(visit.triageStatus === 'all' ? '' : visit.triageStatus)
+        messageListRef?.setSearchQuery(scope.searchQuery || '')
+        saveUIState({ selectedAccountId, selectedFolderId, selectedFolderName, selectedFolderType,
+          selectedThreadId, selectedConversationAccountId, selectedConversationFolderId })
+      }
+      setFocusedPane('viewer')
+    } finally { restoringMessageHistory = false }
   }
 
   function workspaceLabel(scope: MailScope, reader: boolean): string {
@@ -206,6 +267,7 @@
         selectedConversationFolderId = primaryMailScope.threadFolderId || null
       }
       contextPaneMode = primaryContextPaneMode
+      recordMessageVisit()
       setFocusedPane('messageList')
       return
     }
@@ -219,6 +281,7 @@
       selectedConversationAccountId = tab.scope.threadAccountId || tab.scope.accountId
       selectedConversationFolderId = tab.scope.threadFolderId || tab.scope.folderId
       contextPaneMode = 'messages'
+      recordMessageVisit()
       setFocusedPane('viewer')
       return
     }
@@ -228,6 +291,27 @@
   function showFolderBrowser() {
     contextPaneMode = 'folders'
     setFocusedPane('sidebar')
+  }
+
+  function closeFolderBrowser() {
+    // One exit for the tree: the close button, Escape, Cmd-D, the narrow Back button and the scrim.
+    contextPaneMode = 'messages'
+    if (getLayoutMode() === 'narrow') hideSidebar()
+    setFocusedPane('messageList')
+    // The tree's search field is about to disappear; keep keyboard focus in the list pane.
+    void tick().then(() => messageListContainerRef?.focus())
+  }
+
+  function toggleFolderBrowser() {
+    // Same swap as the panel icon beside the folder title: folder tree <-> message list.
+    if (getActiveExtension() !== 'mail') setActiveExtension('mail')
+    if (contextPaneMode === 'folders') {
+      closeFolderBrowser()
+      return
+    }
+    revealContextPane()
+    if (getLayoutMode() === 'narrow') showSidebar()
+    showFolderBrowser()
   }
 
   function revealContextPane() {
@@ -281,6 +365,7 @@
 
   function updateWorkspaceScope(id: string, scope: MailScope) {
     mailWorkspaceTabs = mailWorkspaceTabs.map(tab => tab.id === id ? { ...tab, scope } : tab)
+    if (activeMailWorkspace === id) recordMessageVisit()
   }
 
   function returnToPrimaryContextForFolderNavigation() {
@@ -708,10 +793,6 @@
     }
   }
 
-  function pendingRemaining(ps: PendingSendItem): number {
-    return Math.max(0, Math.ceil((new Date(ps.dispatchAt).getTime() - pendingNow) / 1000))
-  }
-
   function syncMailboxActionEvents() {
     void SyncMailboxActionEvents().catch(() => {})
   }
@@ -775,6 +856,7 @@
       selectedThreadId = data.threadId
       selectedConversationAccountId = data.accountId
       selectedConversationFolderId = data.folderId
+      recordMessageVisit()
 
       // Highlight the thread in the message list (with small delay to ensure list has loaded)
       setTimeout(() => {
@@ -974,6 +1056,8 @@
       }
     }
 
+    recordMessageVisit()
+
     // Listen for system theme changes from backend (XDG Settings Portal)
     EventsOn('theme:system-preference', (newTheme: string) => {
       handleSystemThemeEvent(newTheme)
@@ -1014,6 +1098,7 @@
       getPaneNav('messageList')?.focusSearch?.()
       setFocusedPane('messageList')
     })
+    registerCommand('app.folders', () => toggleFolderBrowser())
     registerCommand('app.syncAll', () => {
       sidebarRef?.toggleSync()
     })
@@ -1194,6 +1279,7 @@
       })
     }
     showViewer()
+    recordMessageVisit()
 
     // Persist state
     saveUIState({
@@ -1379,11 +1465,8 @@
       // subtracting the configured sidebar width. The configured value is
       // different from the rendered 56px width when the sidebar is collapsed,
       // which caused the divider to jump on the first mouse movement.
-      const listLeft = messageListContainerRef?.getBoundingClientRect().left ?? 0
-      listWidth = Math.max(
-        paneConstraints.list.min,
-        Math.min(paneConstraints.list.max, e.clientX - listLeft)
-      )
+      const columnLeft = (sharedColumn ? contextColumnRef : messageListContainerRef)?.getBoundingClientRect().left ?? 0
+      listWidth = dragListWidth(e.clientX, columnLeft, paneConstraints.list.min, paneConstraints.list.max)
     }
   }
 
@@ -1422,7 +1505,102 @@
   }
 
   // Global keyboard shortcut handler
+  // Handlers for commands whose keys come from the registry (CORE_SHORTCUTS).
+  // The key lives only in registry.ts; resolveShortcut() maps the event to an
+  // id and the matching handler runs here. Add a command by adding a registry
+  // entry and a handler, never a `case 'x':`.
+  function replyTo(kind: 'reply' | 'reply-all' | 'forward') {
+    if (selectedThreadId === null) return
+    const viewerAction = kind === 'reply' ? 'reply' : kind === 'reply-all' ? 'replyAll' : 'forward'
+    if (getFocusedPane() === 'viewer' && viewerRef?.hasFocusedMessage()) {
+      viewerRef[viewerAction]()
+      return
+    }
+    const msgId = getLastMessageId()
+    if (msgId) handleReply(kind, msgId, viewerRef?.isImagesLoaded(msgId) || false)
+  }
+  function viewerOr(viewerCall: (() => void) | undefined, commandId: CommandId) {
+    if (getFocusedPane() === 'viewer' && selectedThreadId && viewerCall) {
+      viewerCall()
+      return
+    }
+    void executeCommand(commandId)
+  }
+  const KEY_HANDLERS: Record<string, (e: KeyboardEvent) => void> = {
+    'app.folders': () => void executeCommand('app.folders'),
+    'app.compose': () => void executeCommand('app.compose'),
+    'app.search': () => void executeCommand('app.search'),
+    'app.undo': () => void executeCommand('app.undo'),
+    'app.syncAll': () => void executeCommand('app.syncAll'),
+    'app.syncFolder': () => messageListRef?.toggleFolderSync(),
+    'mail.reply': () => replyTo('reply'),
+    'mail.replyAll': () => replyTo('reply-all'),
+    'mail.forward': () => replyTo('forward'),
+    'mail.archiveAndMarkRead': () => viewerOr(() => viewerRef?.archiveAndMarkRead(), 'mail.archiveAndMarkRead'),
+    'mail.readLater': () => void executeCommand('mail.readLater'),
+    'mail.replyLater': () => void executeCommand('mail.replyLater'),
+    'mail.moveTo': () => {
+      if (getActiveExtension() !== 'mail') return
+      // Reader-only tabs own their viewer shortcut handler.
+      if (activeMailWorkspace !== 'primary') return
+      if (getFocusedPane() === 'viewer' && selectedThreadId) viewerRef?.toggleFolderPicker('move')
+      else messageListRef?.toggleMoveToDialog()
+    },
+    'mail.spam': () => viewerOr(() => viewerRef?.spam(), 'mail.spam'),
+    'mail.toggleRead': () => void executeCommand('mail.toggleRead'),
+    'mail.markRead': () => viewerOr(() => viewerRef?.markRead(), 'mail.markRead'),
+    'mail.markUnread': () => viewerOr(() => viewerRef?.markUnread(), 'mail.markUnread'),
+    'mail.star': () => viewerOr(() => viewerRef?.toggleStar(), 'mail.star'),
+    'mail.trash': () => {
+      if (getFocusedPane() === 'viewer' && viewerRef?.hasFocusedMessage()) viewerRef.trash()
+      else void executeCommand('mail.trash')
+    },
+    'mail.deletePermanently': () => {
+      if (getFocusedPane() === 'viewer' && viewerRef?.hasFocusedMessage()) viewerRef.deletePermanently()
+      else void executeCommand('mail.deletePermanently')
+    },
+    'list.escape': () => {
+      // Back from the open conversation to the list.
+      if (selectedThreadId === null) return
+      selectedThreadId = null
+      selectedConversationFolderId = null
+      selectedConversationAccountId = null
+      setFocusedPane('messageList')
+    },
+    'list.selectAll': () => messageListRef?.selectAll(),
+    'viewer.selectText': () => viewerRef?.selectAllText(),
+    'viewer.threadFocus': () => { if (selectedThreadId !== null) toggleThreadFocus() },
+    'viewer.loadImages': () => viewerRef?.loadImages(),
+    'viewer.alwaysLoadImages': () => viewerRef?.openAlwaysLoadDropdown(),
+  }
+  function runRegistryShortcut(e: KeyboardEvent): boolean {
+    const def = resolveShortcut(e, getFocusedPane(), Object.keys(KEY_HANDLERS))
+    if (!def) return false
+    // Select-all keeps the native behaviour inside text fields.
+    if ((def.id === 'list.selectAll' || def.id === 'viewer.selectText') && isInputElement(e.target)) return false
+    // Reply/forward without an open conversation do nothing and keep the key.
+    const needsThread = ['mail.reply', 'mail.replyAll', 'mail.forward', 'viewer.threadFocus']
+    if (needsThread.includes(def.id) && selectedThreadId === null) return false
+    if (def.id === 'list.escape' && selectedThreadId === null) return false
+    e.preventDefault()
+    KEY_HANDLERS[def.id](e)
+    return true
+  }
+
   function handleGlobalKeyDown(e: KeyboardEvent) {
+    // Handle history before the secondary-reader-tab early return, but never
+    // steal macOS line-start/end from search, recipient fields or an editor.
+    if (KEY.HISTORY_BACK(e) || KEY.HISTORY_FORWARD(e)) {
+      // Cmd-only shortcut: the registry marks it macOnly, so gate the dispatch
+      // the same way (Super-arrows elsewhere must not move history).
+      if (!isMacPlatform()) return
+      if (e.defaultPrevented || e.isComposing || getActiveExtension() !== 'mail' || showComposer ||
+        isInputElement(e.target) || isInputElement(e.composedPath()[0]) || isInputElement(document.activeElement) ||
+        document.querySelector('[role="menu"]') || isDialogGuardActive()) return
+      e.preventDefault()
+      void navigateMessageHistory(KEY.HISTORY_BACK(e) ? -1 : 1)
+      return
+    }
     // Secondary workspaces only own tab-level shortcuts. Keep other mail
     // actions on the primary workspace, while allowing workspace navigation
     // and the standard close-tab shortcut from every secondary tab.
@@ -1442,6 +1620,11 @@
           closeWorkspaceTab(activeMailWorkspace)
           return
         }
+        if (e.key.toLowerCase() === 'd' && !e.shiftKey) {
+          e.preventDefault()
+          toggleFolderBrowser()
+          return
+        }
       }
       return
     }
@@ -1452,7 +1635,6 @@
     }
     const inInput = isInputElement(e.target)
     const focusedPane = getFocusedPane()
-    const hasConversation = selectedThreadId !== null
 
     // Don't intercept keyboard events when a context menu or dropdown is open
     // (bits-ui portals mount [role="menu"] only while open)
@@ -1484,7 +1666,9 @@
     if (pendingSends.length > 0) {
       const ps = pendingSends[0]
       if (e.key === 'Escape' && !ps.dispatching) {
+        // One owner for this Escape: the Composer's window listener must not also run handleClose.
         e.preventDefault()
+        e.stopImmediatePropagation()
         void pendingCancel(ps)
         return
       }
@@ -1618,96 +1802,8 @@
       // reply to the hidden mail thread while the user is browsing contacts).
       if (!isMailActive()) return
 
-      // MAIL-DOMAIN Ctrl/Cmd cases (guarded above).
-      switch (e.key.toLowerCase()) {
-        case 'n':
-          // Ctrl/Cmd+N — new mail composer. Mail-domain only: when an
-          // extension rail is active (e.g., calendar), that extension's
-          // shortcut registry handles Ctrl+N before we reach the global
-          // switch, opening its own "new X" dialog.
-          e.preventDefault()
-          void executeCommand('app.compose')
-          return
-        case 'r': {
-          if (!hasConversation) return
-          e.preventDefault()
-          if (focusedPane === 'viewer' && viewerRef?.hasFocusedMessage()) {
-            if (e.shiftKey) {
-              viewerRef.replyAll()
-              return
-            }
-            viewerRef.reply()
-            return
-          }
-          const msgId = getLastMessageId()
-          if (!msgId) return
-          handleReply(e.shiftKey ? 'reply-all' : 'reply', msgId, viewerRef?.isImagesLoaded(msgId) || false)
-          return
-        }
-        case 'f': {
-          if (!hasConversation) return
-          e.preventDefault()
-          if (focusedPane === 'viewer' && viewerRef?.hasFocusedMessage()) {
-            viewerRef.forward()
-            return
-          }
-          const msgId = getLastMessageId()
-          if (msgId) handleReply('forward', msgId, viewerRef?.isImagesLoaded(msgId) || false)
-          return
-        }
-        case 's':
-          // Ctrl+S (no shift) is handled globally above. Only Ctrl+Shift+S
-          // (sync current folder) is mail-domain and lives here.
-          if (!e.shiftKey) return
-          e.preventDefault()
-          messageListRef?.toggleFolderSync()
-          return
-        case 'a':
-          // Preserve the browser's native Select All inside text fields.
-          // The application-level Ctrl/Cmd+A shortcut is only for mail panes.
-          if (!e.shiftKey && inInput) return
-
-          if (e.shiftKey) {
-            // Ctrl-Shift-A: Toggle sync all accounts (start sync or cancel if already running)
-            e.preventDefault()
-            void executeCommand('app.syncAll')
-            return
-          }
-          // Ctrl-A: Select all text in viewer, or select all messages in list
-          e.preventDefault()
-          if (focusedPane === 'viewer') {
-            viewerRef?.selectAllText()
-            return
-          }
-          messageListRef?.selectAll()
-          return
-        case 'z':
-          e.preventDefault()
-          void executeCommand('app.undo')
-          return
-        case 'l':
-          e.preventDefault()
-          if (e.shiftKey) {
-            // Ctrl-Shift-L: Open "Always Load" dropdown
-            viewerRef?.openAlwaysLoadDropdown()
-          } else {
-            // Ctrl-L: Load images for this message
-            viewerRef?.loadImages()
-          }
-          return
-        case 'u':
-          e.preventDefault()
-          void executeCommand(e.shiftKey ? 'mail.markUnread' : 'mail.markRead')
-          return
-        case 'k':
-          e.preventDefault()
-          void executeCommand('mail.archive')
-          return
-        case 'j':
-          e.preventDefault()
-          void executeCommand('mail.spam')
-          return
-      }
+      // MAIL-DOMAIN Ctrl/Cmd commands come from the registry (see KEY_HANDLERS).
+      runRegistryShortcut(e)
       return
     }
 
@@ -2007,150 +2103,8 @@
       return
     }
 
-    // Single-key shortcuts (Gmail standard shortcuts)
-    switch (e.key) {
-      case 'c':
-        e.preventDefault()
-        void executeCommand('app.compose')
-        return
-      case 'e':
-        e.preventDefault()
-        if (focusedPane === 'viewer' && selectedThreadId) {
-          viewerRef?.archiveAndMarkRead()
-          return
-        }
-        void executeCommand('mail.archiveAndMarkRead')
-        return
-      case 'l':
-        e.preventDefault()
-        void executeCommand('mail.readLater')
-        return
-      case 'L':
-        e.preventDefault()
-        void executeCommand('mail.replyLater')
-        return
-      case 'v':
-        if (!isMailActive()) return
-        // Reader-only tabs own their viewer shortcut handler. Let that
-        // embedded viewer open the picker instead of routing to the hidden
-        // primary conversation viewer.
-        if (activeMailWorkspace !== 'primary') return
-        e.preventDefault()
-        if (focusedPane === 'viewer' && selectedThreadId) {
-          viewerRef?.toggleFolderPicker('move')
-          return
-        }
-        messageListRef?.toggleMoveToDialog()
-        return
-      case 'r': {
-        if (!hasConversation) return
-        e.preventDefault()
-        if (focusedPane === 'viewer' && viewerRef?.hasFocusedMessage()) {
-          viewerRef.reply()
-          return
-        }
-        const msgId = getLastMessageId()
-        if (msgId) handleReply('reply', msgId, viewerRef?.isImagesLoaded(msgId) || false)
-        return
-      }
-      case 'a': {
-        if (!hasConversation) return
-        e.preventDefault()
-        if (focusedPane === 'viewer' && viewerRef?.hasFocusedMessage()) {
-          viewerRef.replyAll()
-          return
-        }
-        const msgId = getLastMessageId()
-        if (msgId) handleReply('reply-all', msgId, viewerRef?.isImagesLoaded(msgId) || false)
-        return
-      }
-      case 'f': {
-        if (!hasConversation) return
-        e.preventDefault()
-        if (focusedPane === 'viewer' && viewerRef?.hasFocusedMessage()) {
-          viewerRef.forward()
-          return
-        }
-        const msgId = getLastMessageId()
-        if (msgId) handleReply('forward', msgId, viewerRef?.isImagesLoaded(msgId) || false)
-        return
-      }
-      case '/':
-        e.preventDefault()
-        void executeCommand('app.search')
-        return
-      case '!':
-        e.preventDefault()
-        if (focusedPane === 'viewer' && selectedThreadId) {
-          viewerRef?.spam()
-          return
-        }
-        void executeCommand('mail.spam')
-        return
-      case 'z':
-        e.preventDefault()
-        void executeCommand('app.undo')
-        return
-      case 'm':
-        if (!KEY.LIST_TOGGLE_READ(e)) return
-        void executeCommand('mail.toggleRead')
-        return
-      case 'I':
-        e.preventDefault()
-        if (focusedPane === 'viewer' && selectedThreadId) {
-          viewerRef?.markRead()
-          return
-        }
-        void executeCommand('mail.markRead')
-        return
-      case 'U':
-        e.preventDefault()
-        if (focusedPane === 'viewer' && selectedThreadId) {
-          viewerRef?.markUnread()
-          return
-        }
-        void executeCommand('mail.markUnread')
-        return
-      case 'u':
-        if (selectedThreadId) {
-          e.preventDefault()
-          selectedThreadId = null
-          selectedConversationFolderId = null
-          selectedConversationAccountId = null
-          setFocusedPane('messageList')
-        }
-        return
-      case 's':
-        if (focusedPane === 'viewer' && selectedThreadId) {
-          e.preventDefault()
-          viewerRef?.toggleStar()
-          return
-        }
-        void executeCommand('mail.star')
-        return
-      case 'F': {
-        // Shift+F: toggle focus mode
-        if (!hasConversation) return
-        e.preventDefault()
-        toggleThreadFocus()
-        return
-      }
-      case '#':
-      case 'd': // alias of Delete: move focused/checked message(s) to Trash
-      case 'Backspace':
-      case 'Delete': {
-        if (focusedPane === 'viewer' && viewerRef?.hasFocusedMessage()) {
-          if (PERMANENT_DELETE(e)) {
-            viewerRef.deletePermanently()
-            return
-          }
-          viewerRef.trash()
-          return
-        }
-        void executeCommand(PERMANENT_DELETE(e) ? 'mail.deletePermanently' : 'mail.trash')
-        return
-      }
-    }
+    // Single-key shortcuts (Gmail standard shortcuts) come from the registry.
+    runRegistryShortcut(e)
   }
 
   // Get the last message ID from the current conversation (for reply/forward)
@@ -2299,19 +2253,21 @@
 
   async function handleBulkArchiveAndMarkRead(messageIds: string[]) {
     messageAnimations.startRemoval(messageIds, 'archive')
-    let archived = false
     try {
+      // Snapshot the unread ids before the mutation, for the legacy two-step
+      // path whose Undo only moves messages back. The atomic backend action
+      // restores read state itself and does not need this.
+      let unreadIds = messageListRef?.getUnreadSnapshot(messageIds)
+      if (!unreadIds) {
+        // Mixed rows, or rows not loaded: ask the backend per message (local store only).
+        const flags = await Promise.all(messageIds.map(id => GetMessage(id).then(m => (m && !m.isRead ? id : null)).catch(() => null)))
+        unreadIds = flags.filter((id): id is string => id !== null)
+      }
       await runMessageMutation(messageIds, async () => {
-        const result = await ArchiveWithUndo(messageIds)
+        const result = await ArchiveAndMarkReadWithUndo(messageIds)
         if (result.coalesced) return
-        archived = true
-        try {
-          await MarkAsRead(messageIds)
-        } catch (err) {
-          showTargetedUndoToast($_('toast.archived'), result.operationId, messageIds, 'archive')
-          messageListRef?.clearChecked()
-          messageListRef?.handleActionComplete(true)
-          throw err
+        if (!result.atomic) {
+          rememberUnreadForUndo(result.operationId, unreadIds)
         }
         showTargetedUndoToast($_('toast.archived'), result.operationId, messageIds, 'archive')
         messageListRef?.clearChecked()
@@ -2320,7 +2276,7 @@
     } catch (err) {
       messageAnimations.finishRemoval(messageIds)
       console.error('Archive and mark read failed:', err)
-      addToast({ type: 'error', message: $_(archived ? 'toast.failedToUpdateReadStatus' : 'toast.failedToArchive') })
+      addToast({ type: 'error', message: $_('toast.failedToArchive') })
     } finally {
       messageAnimations.settleRemoval(messageIds)
     }
@@ -2486,7 +2442,7 @@
 
   <!-- Main Content -->
   <div class="flex flex-1 min-h-0 overflow-hidden relative">
-    <ExtensionRail onRevealContext={revealContextPane} onHideContext={scheduleContextPaneHide} />
+    <ExtensionRail onRevealContext={revealContextPane} onHideContext={scheduleContextPaneHide} foldersOpen={contextPaneMode === 'folders' && getActiveExtension() === 'mail'} />
 
     {#if getActiveExtension() === 'scheduled'}
       <ScheduledPane />
@@ -2506,16 +2462,27 @@
          the main thread on the second mount. display:contents keeps the flex
          children as direct flex items so the layout doesn't shift. -->
     <div style:display={getActiveExtension() === 'mail' ? 'contents' : 'none'}>
+    <div class="flex min-h-0 min-w-0 flex-col" style:width={getLayoutMode() === 'full' ? `${listWidth}px` : undefined} class:flex-1={isResponsive()} style:display={contextPaneVisible ? 'flex' : 'none'} onmouseenter={revealContextPane} onmouseleave={scheduleContextPaneHide} role="presentation">
+      <MessageHistoryBar canBack={messageHistory.index > 0} canForward={messageHistory.index >= 0 && messageHistory.index < messageHistory.entries.length - 1} onBack={() => void navigateMessageHistory(-1)} onForward={() => void navigateMessageHistory(1)} />
+      <div class="flex flex-1 min-h-0 min-w-0">
     <!-- Sidebar (Folder List) -->
     <aside
+      bind:this={contextColumnRef}
       class="spark-sidebar-host flex-col {getLayoutMode() === 'narrow' ? `responsive-sidebar-overlay w-72 border-r border-border bg-background ${getResponsiveView() === 'sidebar' ? 'responsive-sidebar-visible' : ''}` : 'flex-shrink-0 border-r border-border bg-muted/30'}"
-      style="{getLayoutMode() === 'full' ? `width: ${listWidth}px` : ''}"
-      style:display={contextPaneVisible && contextPaneMode === 'folders' ? 'flex' : 'none'}
+      class:pane-folded={sharedColumn && contextPaneMode !== 'folders'}
+      style="{sharedColumn ? `width: ${sharedPaneWidths(listWidth, contextPaneMode).folders}px` : getLayoutMode() === 'full' ? `width: ${listWidth}px` : ''}"
+      style:display={contextPaneVisible && (sharedColumn || contextPaneMode === 'folders') ? 'flex' : 'none'}
       onmouseenter={revealContextPane}
       onmouseleave={scheduleContextPaneHide}
       role="presentation"
       onclick={() => handlePaneClick('sidebar')}
     >
+      {#if sharedColumn && contextPaneMode !== 'folders'}
+        <button type="button" class="pane-fold-button" title={withShortcut($_('shortcuts.action.folders'), 'app.folders')} aria-label={$_('shortcuts.action.folders')} aria-expanded="false" onclick={(e) => { e.stopPropagation(); toggleFolderBrowser() }}>
+          <Icon icon="mdi:folder-multiple-outline" width="18" />
+          <span>{$_('responsive.folders')}</span>
+        </button>
+      {/if}
       <div class="flex min-h-10 shrink-0 items-center gap-1 overflow-hidden border-b border-border px-2 py-1" aria-label={$_('messageList.quickFilters')}>
         <div class="flex shrink-0 items-center gap-1" role="group" aria-label={$_('messageList.quickFilters')}>
           <button type="button" class="flex size-8 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageStatus === 'all' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.all')} title={$_('triage.all')} aria-pressed={triageStatus === 'all'} onclick={() => selectTriageFilter('')}><Icon icon="mdi:inbox-multiple-outline" width="16" /></button>
@@ -2541,7 +2508,10 @@
         isFocused={activeMailWorkspace === 'primary' && getFocusedPane() === 'sidebar'}
         isFlashing={isPaneFlashing('sidebar')}
         showBackButton={getLayoutMode() === 'narrow'}
-        onBack={hideSidebar}
+        onBack={closeFolderBrowser}
+        treeMode={contextPaneMode === 'folders'}
+        onCloseTree={closeFolderBrowser}
+        escapeOwnedElsewhere={pendingSends.length > 0 || showComposer}
         collapsed={false}
         showCollapseControl={false}
       />
@@ -2554,7 +2524,7 @@
         role="button"
         tabindex="-1"
         class="responsive-scrim {getResponsiveView() === 'sidebar' ? 'responsive-scrim-visible' : ''}"
-        onclick={hideSidebar}
+        onclick={closeFolderBrowser}
         aria-label={$_('aria.closeSidebar')}
       ></div>
     {/if}
@@ -2564,8 +2534,9 @@
     <section
       bind:this={messageListContainerRef}
       class="spark-mail-list-pane min-h-0 flex flex-col overflow-hidden {isResponsive() ? 'flex-1 min-w-0 border-r border-border bg-background' : 'flex-shrink-0 border-r border-border bg-background'}"
-      style="{getLayoutMode() === 'full' ? `width: ${listWidth}px` : ''}"
-      style:display={contextPaneVisible && contextPaneMode === 'messages' ? 'flex' : 'none'}
+      class:pane-folded={sharedColumn && contextPaneMode === 'folders'}
+      style="{sharedColumn ? `width: ${sharedPaneWidths(listWidth, contextPaneMode).messages}px` : getLayoutMode() === 'full' ? `width: ${listWidth}px` : ''}"
+      style:display={contextPaneVisible && (sharedColumn || contextPaneMode === 'messages') ? 'flex' : 'none'}
       onmouseenter={revealContextPane}
       onmouseleave={scheduleContextPaneHide}
       role="presentation"
@@ -2573,6 +2544,12 @@
       tabindex="-1"
       onclick={() => handlePaneClick('messageList')}
     >
+      {#if sharedColumn && contextPaneMode === 'folders'}
+        <button type="button" class="pane-fold-button" title={$_('responsive.messages')} aria-label={$_('responsive.messages')} aria-expanded="false" onclick={(e) => { e.stopPropagation(); toggleFolderBrowser() }}>
+          <Icon icon="mdi:email-outline" width="18" />
+          <span>{$_('responsive.messages')}</span>
+        </button>
+      {/if}
       <div class="flex min-h-10 shrink-0 items-center gap-1 overflow-hidden border-b border-border px-2 py-1" aria-label={$_('messageList.quickFilters')}>
         <div class="flex shrink-0 items-center gap-1" role="group" aria-label={$_('messageList.quickFilters')}>
           <button type="button" class="flex size-8 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageStatus === 'all' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.all')} title={$_('triage.all')} aria-pressed={triageStatus === 'all'} onclick={() => selectTriageFilter('')}><Icon icon="mdi:inbox-multiple-outline" width="16" /></button>
@@ -2589,6 +2566,7 @@
           folderId={selectedFolderId}
           folderName={selectedFolderName}
           folderType={selectedFolderType || 'inbox'}
+          readerSelection={selectedThreadId ? { threadId: selectedThreadId, accountId: selectedConversationAccountId || selectedAccountId || '', folderId: selectedConversationFolderId || selectedFolderId || '' } : null}
           onConversationSelect={handleConversationSelect}
           onOpenInTab={openListThreadInTab}
           onReply={handleReply}
@@ -2603,6 +2581,9 @@
         />
       </div>
     </section>
+
+      </div>
+    </div>
 
     <!-- List Resize Handle -->
     {#if getLayoutMode() === 'full'}
@@ -2713,23 +2694,13 @@
 
 <!-- Command palette (Cmd+P / Ctrl+P, Alfred style quick launcher). -->
 {#if pendingSends.length > 0}
-  <div class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-full border border-border bg-popover px-4 py-2 shadow-lg" role="status" aria-live="polite">
-    <Icon icon="mdi:send-clock-outline" class="w-4 h-4 text-muted-foreground" />
-    <span class="text-sm">{$_('pendingSend.countdown', { values: { seconds: pendingRemaining(pendingSends[0]) } })}</span>
-    <div class="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
-      <div class="h-full bg-primary transition-all" style="width: {Math.min(100, (pendingRemaining(pendingSends[0]) / 30) * 100)}%"></div>
-    </div>
-    <button
-      class="rounded-full bg-primary px-3 py-1 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-      disabled={pendingSends[0].dispatching}
-      onclick={() => void pendingDispatch(pendingSends[0])}
-    >{$_('pendingSend.sendNow')}</button>
-    <button
-      class="rounded-full px-2.5 py-1 text-sm font-medium hover:bg-muted disabled:opacity-50"
-      disabled={pendingSends[0].dispatching}
-      onclick={() => void pendingCancel(pendingSends[0])}
-    >{$_('pendingSend.cancel')}</button>
-  </div>
+  <PendingSendToast
+    dispatchAt={pendingSends[0].dispatchAt}
+    now={pendingNow}
+    dispatching={!!pendingSends[0].dispatching}
+    onSendNow={() => void pendingDispatch(pendingSends[0])}
+    onUndo={() => void pendingCancel(pendingSends[0])}
+  />
 {/if}
 
 <CommandPalette />

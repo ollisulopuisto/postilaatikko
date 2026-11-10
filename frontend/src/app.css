@@ -2009,3 +2009,35 @@ mark {
 .spark-sidebar-rebuilt.spark-sidebar-collapsed .sidebar-bottom-row .flex-1 {
   display: none;
 }
+
+/* Variant A: the folder tree fills the shared column instead of floating beside it. */
+.sidebar-all-folders-panel.sidebar-all-folders-inline {
+  inset: 0;
+  width: 100%;
+  border-left: 0;
+  box-shadow: none;
+}
+
+.pane-folded > :not(.pane-fold-button) {
+  display: none !important;
+}
+
+.pane-fold-button {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding-top: 0.7rem;
+  background: hsl(var(--muted) / 0.4);
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+}
+
+.pane-fold-button:hover { color: hsl(var(--foreground)); background: hsl(var(--muted) / 0.7); }
+
+.pane-fold-button span {
+  writing-mode: vertical-rl;
+  font-size: 0.75rem;
+}

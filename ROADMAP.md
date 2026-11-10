@@ -22,6 +22,20 @@ The first deployment is user-operated: normally localhost, with optional self-ho
 
 For Gmail, `users.watch` notifications require a Cloud Pub/Sub receiver and periodic watch renewal; maintain a bounded polling fallback. An in-app send should add the accepted message to its conversation immediately rather than waiting for the hosted sync cycle. See [the always-on service plan](docs/plans/2026-11-06-always-on-mail-service.md).
 
+### Compose as a bubble (2026-11-09)
+
+The composer becomes a bubble docked at the bottom of the conversation view. Owner decisions across three sketch rounds; the consolidated build spec is [docs/plans/2026-11-09-compose-bubble-build-spec.md](docs/plans/2026-11-09-compose-bubble-build-spec.md).
+
+- Default composer is Variant A: a docked bar holding text only; To/Cc, subject, identity and attachments live outside the bubble. Replying to a specific bubble anchors the draft under that bubble, indented (Variant C's anchoring).
+- Brand-new mail opens a blank conversation view (Cmd+N or the rail +): a header strip holds To and Subject, the first keystroke autosaves the draft, and sending turns the view into the thread in place.
+- Attachments are drag-and-drop anywhere onto the conversation, landing as chips in the bar, plus a visible + button.
+- Forward is an action on the bubble's ... menu, never a composer mode; it spawns the blank conversation view with the original as a quote card switchable to a real .eml attachment. Subject lives in the header strip only. Decided 2026-11-09: forwarded part and note are two bubbles, note first (top-posted), joined visually as in Solmu's quote cards (see the spec); a traditional composer stays available next to the bubble composer.
+- Send Later is a dedicated visible clock-icon button (Gmail-style) next to Send, and Opt+Cmd+Enter focuses its time list (arrows, Enter), with quick picks; a scheduled draft shows as a dashed bubble in the timeline, editable until it fires. One queue shared with the Undo Send delay and the planned send-later relay.
+- Undo Send keeps the status toast and also shows the sending state on the bubble (draining line plus Undo chip); Esc, Cmd+Z, the chip or the toast cancel and restore the draft.
+- Keys: Enter inserts a newline, Cmd+Enter sends (starting the Undo Send countdown), Opt+Cmd+Enter opens Send Later. No send-without-delay bypass key in the editor; Cmd+Shift+Enter only releases an already-pending send.
+
+**Visible-action rule (whole app):** every action must have a visible button or a menu item; a keyboard shortcut is an accelerator, never the only way. This covers Send, Send Later, Forward, Undo, attachments and scheduling, and applies to future UI work too.
+
 ### Accepted UI and agent-access direction (2026-10-26)
 
 Detailed implementation plan: [D-002 — conversation, navigation and agent API](docs/plans/2026-10-26-conversation-navigation-agent-api.md). Its 41 small `UX-*` tasks, dependencies, owner slots and recommended model/effort are in [TASKS.md](TASKS.md#d-002-conversation-navigation-and-agent-api-queue). These are planned changes; a candidate branch or successful build does not mean they are integrated or released.

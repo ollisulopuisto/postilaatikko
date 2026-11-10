@@ -50,6 +50,10 @@ export function ArchiveWithUndo(arg1) {
   return window['go']['app']['App']['ArchiveWithUndo'](arg1);
 }
 
+export function ArchiveAndMarkReadWithUndo(arg1) {
+  return window['go']['app']['App']['ArchiveAndMarkReadWithUndo'](arg1);
+}
+
 export function BroadcastThemeChange(arg1) {
   return window['go']['app']['App']['BroadcastThemeChange'](arg1);
 }
