@@ -142,9 +142,30 @@ func generateSnippet(body string, maxLen int) string {
 	return text
 }
 
+// equalFoldASCII compares a slice s[nameStart:nameEnd] against lowercase target
+// ignoring ASCII case, without heap allocations.
+func equalFoldASCII(s string, nameStart, nameEnd int, target string) bool {
+	if (nameEnd - nameStart) != len(target) {
+		return false
+	}
+	for i := 0; i < len(target); i++ {
+		c := s[nameStart+i]
+		if c >= 'A' && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		if c != target[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // stripHTMLTags removes HTML tags (and the contents of <script>, <style> and
 // <noscript> elements) and decodes HTML entities so the result is safe to use
 // as a plain-text message preview snippet.
+// Optimization: zero-allocation tag inspection scans index bounds directly
+// and matches block tags with in-place ASCII case folding, avoiding substring
+// and strings.ToLower allocations per tag.
 func stripHTMLTags(s string) string {
 	var result strings.Builder
 	// Reserve the full input length as an upper bound so the builder grows at
@@ -157,7 +178,8 @@ func stripHTMLTags(s string) string {
 	for i < len(s) {
 		if skipBlock != "" {
 			if i+1 < len(s) && s[i] == '<' {
-				if name, end := readTagName(s, i+1); strings.EqualFold(name, "/"+skipBlock) {
+				ns, ne, end := readTagIndices(s, i+1)
+				if ne > ns && s[ns] == '/' && equalFoldASCII(s, ns+1, ne, skipBlock) {
 					skipBlock = ""
 					i = end
 					continue
@@ -167,17 +189,20 @@ func stripHTMLTags(s string) string {
 			continue
 		}
 		if s[i] == '<' {
-			name, end := readTagName(s, i+1)
-			lower := strings.ToLower(name)
-			if strings.HasPrefix(lower, "/") {
-				// Closing tag: only ends a skipped block.
-				if skipBlock != "" && strings.EqualFold(strings.TrimPrefix(lower, "/"), skipBlock) {
+			ns, ne, end := readTagIndices(s, i+1)
+			if ne > ns && s[ns] == '/' {
+				// Closing tag: only ends a skipped block (handled above).
+				if skipBlock != "" && equalFoldASCII(s, ns+1, ne, skipBlock) {
 					skipBlock = ""
 				}
-			} else if lower == "script" || lower == "style" || lower == "noscript" {
-				skipBlock = lower
+			} else if equalFoldASCII(s, ns, ne, "script") {
+				skipBlock = "script"
+			} else if equalFoldASCII(s, ns, ne, "style") {
+				skipBlock = "style"
+			} else if equalFoldASCII(s, ns, ne, "noscript") {
+				skipBlock = "noscript"
 			}
-			// Void tags and normal elements are fully consumed by readTagName,
+			// Void tags and normal elements are fully consumed by readTagIndices,
 			// so nothing is written for them.
 			i = end
 			continue
@@ -194,12 +219,12 @@ func stripHTMLTags(s string) string {
 	return html.UnescapeString(result.String())
 }
 
-// readTagName reads an HTML tag starting at s[start] (the character after '<').
-// It returns the tag name (including a leading '/' for closing tags) and the
-// index of the first character after the closing '>', or len(s) when the tag
-// is not terminated. Quoted attribute values are respected so a '>' inside an
-// attribute does not terminate the tag early.
-func readTagName(s string, start int) (string, int) {
+// readTagIndices reads an HTML tag starting at s[start] (the character after '<').
+// It returns tag name slice indices [nameStart, nameEnd) and the index of the
+// first character after the closing '>', or len(s) when the tag is not terminated.
+// Quoted attribute values are respected so a '>' inside an attribute does not
+// terminate the tag early.
+func readTagIndices(s string, start int) (int, int, int) {
 	i := start
 	for i < len(s) && (s[i] == ' ' || s[i] == '\t' || s[i] == '\n' || s[i] == '\r') {
 		i++
@@ -212,7 +237,7 @@ func readTagName(s string, start int) (string, int) {
 		}
 		i++
 	}
-	name := s[nameStart:i]
+	nameEnd := i
 
 	inQuote := byte(0)
 	for i < len(s) {
@@ -230,11 +255,11 @@ func readTagName(s string, start int) (string, int) {
 			continue
 		}
 		if c == '>' {
-			return name, i + 1
+			return nameStart, nameEnd, i + 1
 		}
 		i++
 	}
-	return name, len(s)
+	return nameStart, nameEnd, len(s)
 }
 
 // isVoidTag reports whether name is an HTML void (self-closing) element that
