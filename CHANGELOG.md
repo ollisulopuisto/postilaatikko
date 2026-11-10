@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- Pressing / focuses search in Contacts and Calendar again, without allowing mail shortcuts to act on hidden messages.
+- Pressing / focuses search in Contacts again, without allowing mail shortcuts to act on hidden messages. Calendar has no general search control, so / is left alone there.
 
 - Add high-contrast focus rings and outline styling to sidebar favorite star buttons and conversation row action buttons for accessible keyboard navigation.
 - Bare Gmail-style letter shortcuts (d trash, e archive+read, s star, ...) now fire only while the mail rail is active; pressing them in Calendar or Contacts no longer acts on the hidden mail list. Global single keys like `?` (shortcuts help) keep working on every pane.

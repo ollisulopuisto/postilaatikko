@@ -31,13 +31,13 @@ test("global '?' shortcuts help is handled before the guard and stays on every p
 
 const tailStart = app.indexOf('    // Single-key shortcuts (Gmail standard shortcuts)')
 const tailEnd = app.indexOf('    runRegistryShortcut(e)', tailStart) + '    runRegistryShortcut(e)'.length
-const dispatchTail = new Function('e', 'focusedPane', 'resolveShortcut', 'executeCommand', 'isMailActive', 'runRegistryShortcut', app.slice(tailStart, tailEnd))
+const dispatchTail = new Function('e', 'focusedPane', 'resolveShortcut', 'executeCommand', 'isMailActive', 'runRegistryShortcut', 'getPaneNav', app.slice(tailStart, tailEnd))
 
-for (const pane of ['contacts', 'calendar']) {
+for (const pane of ['contacts']) {
   test(`/ focuses ${pane} search without opening the hidden mail list`, () => {
     const commands = []
     const e = { key: '/', preventDefault() { this.prevented = true } }
-    dispatchTail(e, 'messageList', event => event.key === '/' ? { id: 'app.search' } : undefined, id => commands.push(id), () => false, () => assert.fail('must not dispatch a mail mutation'))
+    dispatchTail(e, 'messageList', event => event.key === '/' ? { id: 'app.search' } : undefined, id => commands.push(id), () => false, () => assert.fail('must not dispatch a mail mutation'), () => ({focusSearch(){}}))
     assert.deepEqual(commands, ['app.search'])
     assert.equal(e.prevented, true)
   })
@@ -46,4 +46,10 @@ test('extension panes still block bare mail mutations after allowing app.search'
   for (const key of ['d', 'e', 's', 'h']) {
     dispatchTail({ key }, 'messageList', () => undefined, () => assert.fail('not a search key'), () => false, () => assert.fail('hidden mail action must not run'))
   }
+})
+
+test('Calendar without a search target neither consumes slash nor changes focus', () => {
+  const e={key:'/',preventDefault(){this.prevented=true}}
+  dispatchTail(e, 'sidebar', () => ({id:'app.search'}), () => assert.fail('no search control'), () => false, () => assert.fail('no hidden mail action'), () => ({}))
+  assert.equal(e.prevented,undefined)
 })
