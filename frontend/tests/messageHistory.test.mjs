@@ -57,5 +57,6 @@ test('App restores scope and selection without calling mailbox or composer undo;
   assert.match(handler, /workspace \? workspace.id : 'primary'/)
   assert.match(handler, /setSearchQuery\(scope.searchQuery/)
   assert.match(handler, /setQuickFilter\(visit.triageStatus/)
-  assert.match(app, /<MessageHistoryBar[^\n]*\n[^\n]*\n\s*<!-- Sidebar/)
+  // One bar: the arrows sit inline at the start of the viewer pane's tab row, not in a row of their own above the list.
+  assert.match(app, /<MessageHistoryBar[^\n]*\n\s*<div class="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" role="tablist"/)
 })
