@@ -1,6 +1,7 @@
 <script lang="ts">
-  let { onRevealContext = () => {}, onHideContext = () => {}, foldersOpen = false }: { onRevealContext?: () => void; onHideContext?: () => void; foldersOpen?: boolean } = $props()
+  let { onRevealContext = () => {}, onHideContext = () => {}, foldersOpen = false, windowControls = false, onCloseWindow }: { onRevealContext?: () => void; onHideContext?: () => void; foldersOpen?: boolean; windowControls?: boolean; onCloseWindow?: () => void } = $props()
   import RailButton from './RailButton.svelte'
+  import WindowControls from '$lib/components/common/WindowControls.svelte'
   import { getRailTabs } from '$lib/stores/extensionRegistry.svelte'
   import { getActiveExtension, setActiveExtension } from '$lib/stores/uiState.svelte'
   import { navigationCards as nav } from '$lib/stores/navigationCards.svelte'
@@ -52,7 +53,13 @@
   }
 </script>
 <svelte:window onkeydown={keydown} />
-<nav class="flex flex-col items-stretch w-12 flex-shrink-0 bg-muted/30 border-r border-border pt-2" aria-label={$_('navigation.quickAccess')} onmouseenter={onRevealContext} onmouseleave={onHideContext}>
+<nav class="flex flex-col items-stretch {windowControls ? 'w-[3.75rem]' : 'w-12 pt-2'} flex-shrink-0 bg-muted/30 border-r border-border" aria-label={$_('navigation.quickAccess')} onmouseenter={onRevealContext} onmouseleave={onHideContext}>
+  {#if windowControls}
+    <!-- One bar: the traffic lights live in the top-left corner of the rail, with a drag region around them. -->
+    <div class="flex h-10 shrink-0 items-center px-3 select-none" style="--wails-draggable: drag">
+      <WindowControls onClose={onCloseWindow} />
+    </div>
+  {/if}
   <RailButton icon="mdi:email" label="Mail" active={getActiveExtension() === 'mail'} onclick={() => setActiveExtension('mail')} />
   <RailButton icon="mdi:folder-multiple-outline" label={withShortcut($_('shortcuts.action.folders'), 'app.folders')} active={foldersOpen} onclick={() => void executeCommand('app.folders')} />
   {#each nav.quick as entry, index (entry.id)}
