@@ -33,6 +33,7 @@
   // @ts-ignore - wailsjs bindings
   import { GetMessage, RefreshViewHeaders, SearchMail, CancelMailSearch, MoveToInboxWithUndo, GetConversations, GetConversationCount, SyncFolder, ForceSyncFolder, CancelFolderSync, SetMessageListSortOrder, GetUnifiedFolderConversations, GetUnifiedFolderCount, SearchConversations, SearchUnifiedFolder, GetSearchCount, GetSearchCountUnifiedFolder, SyncUnifiedFolder, SyncVirtualFolder, EmptyUnifiedTrash, GetFTSIndexStatus, IsFTSIndexing, TrashWithUndo, DeletePermanently, EmptyTrash, UndoOperation, IMAPSearchFolder, IMAPSearchUnifiedInbox, FetchServerMessage, GetVirtualFolderConversations, GetVirtualFolderCount, GetVirtualFolderCachedView, PrefetchMessageBodies } from '../../../../wailsjs/go/app/App'
   import { toasts } from '$lib/stores/toast'
+  import { snoozeDialog } from '$lib/stores/snoozeDialog.svelte'
   import { withShortcut, ariaKeyshortcuts } from '$lib/keyboard/format'
   import ShortcutHint from '$lib/components/shortcuts/ShortcutHint.svelte'
   import { _ } from '$lib/i18n'
@@ -2522,6 +2523,11 @@
     return getFocusedRowRef()?.isFolderPickerOpen() ?? false
   }
 
+  /** Opens the Snooze dialog for the checked conversations, else the focused one. Returns false when nothing is targetable. */
+  export function snoozeSelection(): boolean {
+    return snoozeDialog.show(selectedQueueRefs)
+  }
+
   export function toggleMoveToDialog() {
     getMoveTargetRowRef()?.toggleFolderPicker('move')
   }
@@ -2692,6 +2698,10 @@
       void toggleSelectedLaterQueue(actionId === 'mail.readLater' ? 'readLater' : 'replyLater')
       return
     }
+    if (actionId === 'mail.snooze') {
+      snoozeSelection()
+      return
+    }
     if (actionId === 'mail.moveToInbox') {
       void handleMoveToInbox()
       return
@@ -2759,6 +2769,13 @@
         icon: 'mdi:book-clock-outline',
         shortcut: 'mail.readLater',
         disabled: !selectedQueueReady,
+      },
+      {
+        id: 'mail.snooze',
+        label: $_('snooze.title'),
+        icon: 'mdi:clock-time-four-outline',
+        shortcut: 'mail.snooze',
+        disabled: selectedQueueRefs.length === 0 || folderType === 'snoozed' || !selectedQueueReady,
       },
       {
         id: 'mail.star',

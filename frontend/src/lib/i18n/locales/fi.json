@@ -194,12 +194,28 @@
     "failed": "Lue myöhemmin -jonon päivitys epäonnistui"
   },
   "snooze": {
-    "action": "Lykkää paikallisesti…",
-    "title": "Lykkää Postilaatikossa",
-    "description": "Piilota keskustelu viestilistoista ja tuo se takaisin valitun päivien määrän jälkeen.",
-    "days": "Päiviä",
+    "title": "Lykkää",
+    "description": "Piilota keskustelu listoista valitsemaasi aikaan asti. Se pysyy postilaatikossasi eikä muutu palvelimella.",
+    "presets": "Lykkää kunnes",
+    "custom": "Valitse päivä ja kellonaika",
     "confirm": "Lykkää",
-    "done": "Keskustelu lykätty",
+    "action": "Lykkää…",
+    "doneUntil": "Lykätty: {when}",
+    "doneUntilMany": "{count} keskustelua lykätty: {when}",
+    "returned": "Lykätty keskustelu palasi postilaatikkoon",
+    "returnedMany": "{count} lykättyä keskustelua palasi",
+    "preset": {
+      "laterToday": "Myöhemmin tänään",
+      "thisEvening": "Tänä iltana",
+      "tomorrow": "Huomenna aamulla",
+      "weekend": "Viikonloppuna",
+      "nextWeek": "Ensi viikolla"
+    },
+    "error": {
+      "invalid": "Anna kelvollinen päivä ja kellonaika.",
+      "past": "Valitse aika vähintään minuutin päästä.",
+      "toofar": "Valitse aika kymmenen vuoden sisältä."
+    },
     "unsnooze": "Palauta nyt",
     "restored": "Keskustelu palautettu",
     "failed": "Keskustelun lykkääminen epäonnistui"
@@ -1398,6 +1414,7 @@
       "lists": "Luettelot"
     },
     "action": {
+      "snooze": "Lykkää keskustelu",
       "commandPalette": "Komentovalikko",
       "showShortcuts": "Näytä pikanäppäimet",
       "preferences": "Avaa asetukset",

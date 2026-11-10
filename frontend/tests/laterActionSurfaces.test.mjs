@@ -53,7 +53,7 @@ test('unresolved IMAP result queue actions are disabled and excluded from bulk t
 test('one failed selected conversation does not skip later targets or lose successful Undo receipts', async () => {
   const ts = (await import('typescript')).default
   const start = menu.indexOf('  async function toggleLater(')
-  const end = menu.indexOf('  async function confirmSnooze()', start)
+  const end = menu.indexOf('  async function handleUnsnooze()', start)
   const source = menu.slice(start, end) + '\nexport { toggleLater }'
   const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } })
   const calls = [], notices = []
