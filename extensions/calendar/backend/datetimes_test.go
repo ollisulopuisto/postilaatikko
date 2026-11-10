@@ -151,6 +151,67 @@ func TestDetectDateTimes(t *testing.T) {
 			wantRaw: "June 5, 2026",
 		},
 		{
+			name:    "finnish dotted date is all-day",
+			text:    "Kokous on 12.11.2026.",
+			want:    []DateTimeMention{{StartUnix: utcMidnight(2026, time.November, 12), EndUnix: utcMidnight(2026, time.November, 13), IsAllDay: true}},
+			wantRaw: "12.11.2026",
+		},
+		{
+			name:    "finnish dotted date with klo time",
+			text:    "Tapaaminen 3.2.2027 klo 14.30 toimistolla.",
+			want:    []DateTimeMention{{StartUnix: at(2027, time.February, 3, 14, 30), EndUnix: at(2027, time.February, 3, 15, 30)}},
+			wantRaw: "3.2.2027 klo 14.30",
+		},
+		{
+			name:    "finnish klo range with colon and dot",
+			text:    "Palaveri 12.11.2026 klo 9:00-10.30.",
+			want:    []DateTimeMention{{StartUnix: at(2026, time.November, 12, 9, 0), EndUnix: at(2026, time.November, 12, 10, 30)}},
+			wantRaw: "klo 9:00-10.30",
+		},
+		{
+			name:    "finnish month name with klo hour",
+			text:    "Nähdään 12. marraskuuta 2026 klo 14.",
+			want:    []DateTimeMention{{StartUnix: at(2026, time.November, 12, 14, 0), EndUnix: at(2026, time.November, 12, 15, 0)}},
+			wantRaw: "12. marraskuuta 2026 klo 14",
+		},
+		{
+			name:    "finnish month name with umlaut is all-day",
+			text:    "Määräaika 5 kesäkuuta 2027.",
+			want:    []DateTimeMention{{StartUnix: utcMidnight(2027, time.June, 5), EndUnix: utcMidnight(2027, time.June, 6), IsAllDay: true}},
+			wantRaw: "5 kesäkuuta 2027",
+		},
+		{
+			name: "a price after a dotted date is not a time",
+			text: "Lasku 5.6.2026 12.50 euroa.",
+			want: []DateTimeMention{{StartUnix: utcMidnight(2026, time.June, 5), EndUnix: utcMidnight(2026, time.June, 6), IsAllDay: true}},
+		},
+		{
+			name: "fragments of longer dotted numbers are skipped",
+			text: "Version 1.12.10.2026 build.",
+			want: nil,
+		},
+		{
+			name: "a bare number after an english date is not a time",
+			text: "Party June 5, 2026 14 people are coming.",
+			want: []DateTimeMention{{StartUnix: utcMidnight(2026, time.June, 5), EndUnix: utcMidnight(2026, time.June, 6), IsAllDay: true}},
+		},
+		{
+			name:    "an hour with at still works",
+			text:    "Party June 5, 2026 at 3 pm and 4 at night.",
+			want:    []DateTimeMention{{StartUnix: at(2026, time.June, 5, 15, 0), EndUnix: at(2026, time.June, 5, 16, 0)}},
+			wantRaw: "June 5, 2026 at 3 pm",
+		},
+		{
+			name: "finnish impossible date and time are skipped",
+			text: "Pe 31.2.2026 ja 5.6.2026 klo 25.00.",
+			want: nil,
+		},
+		{
+			name: "finnish named zone invalidates the mention",
+			text: "Puhelu 5.6.2026 klo 14 PST.",
+			want: nil,
+		},
+		{
 			name: "empty text yields nothing",
 			text: "",
 			want: nil,

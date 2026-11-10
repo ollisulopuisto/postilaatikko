@@ -55,6 +55,11 @@ var (
 	reMonthDayYear = regexp.MustCompile(`(?i)\b(` + monthPattern + `)\.?\s+([0-9]{1,2})(?:st|nd|rd|th)?,?\s+([0-9]{4})\b`)
 	// "5 June 2026".
 	reDayMonthYear = regexp.MustCompile(`(?i)\b([0-9]{1,2})(?:st|nd|rd|th)?\s+(` + monthPattern + `)\.?,?\s+([0-9]{4})\b`)
+	// Finnish/European dotted "12.11.2026" or "12. 11. 2026". Day first: a
+	// dotted numeric date with a four-digit year is not read the US way.
+	reDottedDate = regexp.MustCompile(`\b([0-9]{1,2})\.\s?([0-9]{1,2})\.\s?([0-9]{4})\b`)
+	// Finnish "12. marraskuuta 2026" / "12 marraskuuta 2026".
+	reFiDayMonthYear = regexp.MustCompile(`(?i)\b([0-9]{1,2})\.?\s*((?:tammi|helmi|maalis|huhti|touko|kesä|heinä|elo|syys|loka|marras|joulu)kuuta?)\s+([0-9]{4})\b`)
 	// ISO "2026-06-05" with an optional " 14:00" or "T14:00:00+02:00" tail.
 	reISODate = regexp.MustCompile(`\b([0-9]{4})-([0-9]{2})-([0-9]{2})(?:[T ]([0-9]{1,2}):([0-9]{2})(?::([0-9]{2}))?(Z|[+-][0-9]{2}:?[0-9]{2})?)?\b`)
 )
@@ -62,6 +67,11 @@ var (
 // timeSpecRe parses a time (and optional end/range + fixed zone designator)
 // at the start of the remaining text after a date match.
 var timeSpecRe = regexp.MustCompile(`(?i)^\s*(?:,\s*|\bat\s+)?([0-9]{1,2})(?::([0-9]{2}))?(?::([0-9]{2}))?(?:\s*([ap])\.?(?:\s?m\.?)?)?(?:\s*(?:-|–|to\s+)([0-9]{1,2})(?::([0-9]{2}))?(?:\s*([ap])\.?(?:\s?m\.?)?)?)?(?:\s*(Z|UTC|GMT|[+-][0-9]{2}:?[0-9]{2}))?\b`)
+
+// fiTimeRe parses a Finnish "klo 14", "klo 14.30" or "kello 14:30-15.30" time
+// at the start of the remaining text. The dot form is accepted only behind
+// klo/kello, so "5.6.2026 12.50 EUR" is not read as 12:50.
+var fiTimeRe = regexp.MustCompile(`(?i)^\s*(?:,\s*)?(?:klo|kello)\.?\s*([0-9]{1,2})(?:[.:]([0-9]{2}))?(?:\s*(?:-|–|—)\s*([0-9]{1,2})(?:[.:]([0-9]{2}))?)?\b`)
 
 // namedZoneRe matches ambiguous civil zone abbreviations that invalidate a
 // mention when they directly follow the recognized time: PST maps to
@@ -77,6 +87,22 @@ type dateHit struct {
 	inlineHour, inlineMinute, inlineSecond int
 	hasInlineTime                          bool
 	inlineZone                             string
+}
+
+func isDigit(b byte) bool { return b >= '0' && b <= '9' }
+
+var fiMonthNames = map[string]time.Month{
+	"tammikuu": time.January, "helmikuu": time.February, "maaliskuu": time.March,
+	"huhtikuu": time.April, "toukokuu": time.May, "kesäkuu": time.June,
+	"heinäkuu": time.July, "elokuu": time.August, "syyskuu": time.September,
+	"lokakuu": time.October, "marraskuu": time.November, "joulukuu": time.December,
+}
+
+// fiMonth maps a Finnish month in nominative or partitive form to its month
+// (0 when unknown).
+func fiMonth(word string) time.Month {
+	w := strings.ToLower(word)
+	return fiMonthNames[strings.TrimSuffix(w, "ta")]
 }
 
 // atoi converts a digit string to an int, returning 0 on malformed input;
@@ -114,6 +140,26 @@ func DetectDateTimes(text string) []DateTimeMention {
 	for _, loc := range reDayMonthYear.FindAllStringSubmatchIndex(text, -1) {
 		s := subexpOf(loc)
 		hits = append(hits, dateHit{year: atoi(s[3]), month: int(monthNames[strings.ToLower(s[2])]), day: atoi(s[1]), matchEnd: loc[1], rawLen: loc[1] - loc[0]})
+	}
+	for _, loc := range reDottedDate.FindAllStringSubmatchIndex(text, -1) {
+		// Skip fragments of longer dotted numbers such as "1.12.10.2026" or
+		// version-like "2.10.11.2026".
+		if loc[0] > 0 && (isDigit(text[loc[0]-1]) || text[loc[0]-1] == '.') {
+			continue
+		}
+		if loc[1]+1 < len(text) && text[loc[1]] == '.' && isDigit(text[loc[1]+1]) {
+			continue
+		}
+		s := subexpOf(loc)
+		hits = append(hits, dateHit{year: atoi(s[3]), month: atoi(s[2]), day: atoi(s[1]), matchEnd: loc[1], rawLen: loc[1] - loc[0]})
+	}
+	for _, loc := range reFiDayMonthYear.FindAllStringSubmatchIndex(text, -1) {
+		s := subexpOf(loc)
+		month := fiMonth(s[2])
+		if month == 0 {
+			continue
+		}
+		hits = append(hits, dateHit{year: atoi(s[3]), month: int(month), day: atoi(s[1]), matchEnd: loc[1], rawLen: loc[1] - loc[0]})
 	}
 	for _, loc := range reISODate.FindAllStringSubmatchIndex(text, -1) {
 		s := subexpOf(loc)
@@ -175,6 +221,9 @@ func buildMention(hit dateHit, dateRaw, rest string) (DateTimeMention, bool) {
 		}, true
 	}
 
+	if fi := fiTimeRe.FindStringSubmatch(rest[:min(maxTimeLookahead, len(rest))]); fi != nil {
+		return buildFiMention(hit, dateRaw, fi, rest, loc)
+	}
 	spec := timeSpecRe.FindStringSubmatch(rest[:min(maxTimeLookahead, len(rest))])
 	if spec == nil {
 		// Date only → all-day, anchored at the day's midnight in the
@@ -182,6 +231,12 @@ func buildMention(hit dateHit, dateRaw, rest string) (DateTimeMention, bool) {
 		start := time.Date(hit.year, time.Month(hit.month), hit.day, 0, 0, 0, 0, loc)
 		end := start.AddDate(0, 0, 1)
 		return DateTimeMention{StartUnix: start.Unix(), EndUnix: end.Unix(), IsAllDay: true, RawText: dateRaw}, true
+	}
+	// A bare number after a date ("June 5, 2026 14 people", "5 June 2026 12")
+	// is not a time. Accept it only with minutes, a meridiem or an "at".
+	if spec[2] == "" && spec[4] == "" && spec[7] == "" && !strings.HasPrefix(strings.ToLower(strings.TrimSpace(spec[0])), "at") {
+		start := time.Date(hit.year, time.Month(hit.month), hit.day, 0, 0, 0, 0, loc)
+		return DateTimeMention{StartUnix: start.Unix(), EndUnix: start.AddDate(0, 0, 1).Unix(), IsAllDay: true, RawText: dateRaw}, true
 	}
 	if spec[8] != "" && isAmbiguousZone(spec[8]) {
 		return DateTimeMention{}, false
@@ -229,6 +284,34 @@ func buildMention(hit dateHit, dateRaw, rest string) (DateTimeMention, bool) {
 		EndUnix:   endUnix,
 		RawText:   raw,
 	}, true
+}
+
+// buildFiMention resolves a date followed by a Finnish "klo" time (24-hour
+// clock, optional end). Times carry no zone designator, so they anchor in the
+// display timezone; an ambiguous zone abbreviation right after invalidates.
+func buildFiMention(hit dateHit, dateRaw string, spec []string, rest string, loc *time.Location) (DateTimeMention, bool) {
+	timeText := fiTimeRe.FindString(rest[:min(maxTimeLookahead, len(rest))])
+	if namedZoneFollows(rest[len(timeText):]) {
+		return DateTimeMention{}, false
+	}
+	hour, minute, _, ok := resolveClock(atoi(spec[1]), atoi(spec[2]), 0, "")
+	if !ok {
+		return DateTimeMention{}, false
+	}
+	start := anchorInstant(hit.year, time.Month(hit.month), hit.day, hour, minute, 0, "", loc)
+	endUnix := start.Add(defaultDuration).Unix()
+	if spec[3] != "" {
+		eHour, eMinute, _, eOk := resolveClock(atoi(spec[3]), atoi(spec[4]), 0, "")
+		if !eOk {
+			return DateTimeMention{}, false
+		}
+		end := anchorInstant(hit.year, time.Month(hit.month), hit.day, eHour, eMinute, 0, "", loc)
+		if !end.After(start) {
+			return DateTimeMention{}, false
+		}
+		endUnix = end.Unix()
+	}
+	return DateTimeMention{StartUnix: start.Unix(), EndUnix: endUnix, RawText: dateRaw + timeText}, true
 }
 
 // resolveClock converts 24-hour clock values plus an optional am/pm marker
