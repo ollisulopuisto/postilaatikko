@@ -2,7 +2,10 @@
 
 ## [Unreleased]
 
+- Bare mail letter shortcuts preserve the produced case: Caps Lock no longer turns uppercase D/E into Trash/Archive. Modifier chords remain case-insensitive.
+
 - Command palette (Cmd/Ctrl+K, Cmd/Ctrl+P): undo, star, mark read, mark unread and the theme switch keep it open so you can repeat them. It lists the last 8 commands you ran from it first, and now includes Toggle read, Read later, Reply later, Move to and Copy to. The sidebar button still opens it. Ctrl/Cmd+K no longer archives: archive is `e`, which archives and marks as read. The viewer toolbar, selection bar and context menu do the same, and plain Archive (keeping read status) stays in the context menu.
+- Keyboard shortcuts: the mail commands bound to Gmail-style keys and Ctrl/Cmd keys (reply, forward, archive, spam, star, read, trash, undo, sync, images and more) are now matched from the shortcut registry by one dispatcher instead of hand-written key cases in App.svelte. No key changes.
 - Archive and mark read (E, toolbar button, selection bar) now puts the messages back as unread when you undo it. The palette's Enter-on-no-match search is also remembered in recents. The unread state is kept for as long as the operation can be undone (not by count), and search result rows stay in step with read changes so a search row you already read is not put back as unread.
 - Keyboard shortcut audit: a test now fails on any duplicate binding in one context; every cross-group reuse is listed with its reason.
 - Stop continuous CPU use while an email is open in the reader: the inline-image loading placeholder is now static (no animated SVG) and iframe height updates are skipped when unchanged.

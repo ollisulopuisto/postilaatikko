@@ -8,7 +8,9 @@
   import { findReaderWorkspaceTab, type MailWorkspaceTab } from './lib/windows/mailWorkspaceTabs'
   import type { NavigationEntry } from './lib/sidebar/cards'
   // Load offline icon data before anything else
-  import { LAYOUT_SYMBOL, PERMANENT_DELETE } from '$lib/keyboard/shortcuts'
+  import { LAYOUT_SYMBOL } from '$lib/keyboard/shortcuts'
+  import { resolveShortcut } from '$lib/keyboard/dispatch'
+  import type { CommandId } from '$lib/keyboard/registry'
   import './lib/iconify-offline'
   import { clearCache as clearInlineAttachmentCache } from './lib/stores/inlineAttachmentCache'
   import { readLaterQueue } from './lib/stores/readLater.svelte'
@@ -1503,6 +1505,88 @@
   }
 
   // Global keyboard shortcut handler
+  // Handlers for commands whose keys come from the registry (CORE_SHORTCUTS).
+  // The key lives only in registry.ts; resolveShortcut() maps the event to an
+  // id and the matching handler runs here. Add a command by adding a registry
+  // entry and a handler, never a `case 'x':`.
+  function replyTo(kind: 'reply' | 'reply-all' | 'forward') {
+    if (selectedThreadId === null) return
+    const viewerAction = kind === 'reply' ? 'reply' : kind === 'reply-all' ? 'replyAll' : 'forward'
+    if (getFocusedPane() === 'viewer' && viewerRef?.hasFocusedMessage()) {
+      viewerRef[viewerAction]()
+      return
+    }
+    const msgId = getLastMessageId()
+    if (msgId) handleReply(kind, msgId, viewerRef?.isImagesLoaded(msgId) || false)
+  }
+  function viewerOr(viewerCall: (() => void) | undefined, commandId: CommandId) {
+    if (getFocusedPane() === 'viewer' && selectedThreadId && viewerCall) {
+      viewerCall()
+      return
+    }
+    void executeCommand(commandId)
+  }
+  const KEY_HANDLERS: Record<string, (e: KeyboardEvent) => void> = {
+    'app.folders': () => void executeCommand('app.folders'),
+    'app.compose': () => void executeCommand('app.compose'),
+    'app.search': () => void executeCommand('app.search'),
+    'app.undo': () => void executeCommand('app.undo'),
+    'app.syncAll': () => void executeCommand('app.syncAll'),
+    'app.syncFolder': () => messageListRef?.toggleFolderSync(),
+    'mail.reply': () => replyTo('reply'),
+    'mail.replyAll': () => replyTo('reply-all'),
+    'mail.forward': () => replyTo('forward'),
+    'mail.archiveAndMarkRead': () => viewerOr(() => viewerRef?.archiveAndMarkRead(), 'mail.archiveAndMarkRead'),
+    'mail.readLater': () => void executeCommand('mail.readLater'),
+    'mail.replyLater': () => void executeCommand('mail.replyLater'),
+    'mail.moveTo': () => {
+      if (getActiveExtension() !== 'mail') return
+      // Reader-only tabs own their viewer shortcut handler.
+      if (activeMailWorkspace !== 'primary') return
+      if (getFocusedPane() === 'viewer' && selectedThreadId) viewerRef?.toggleFolderPicker('move')
+      else messageListRef?.toggleMoveToDialog()
+    },
+    'mail.spam': () => viewerOr(() => viewerRef?.spam(), 'mail.spam'),
+    'mail.toggleRead': () => void executeCommand('mail.toggleRead'),
+    'mail.markRead': () => viewerOr(() => viewerRef?.markRead(), 'mail.markRead'),
+    'mail.markUnread': () => viewerOr(() => viewerRef?.markUnread(), 'mail.markUnread'),
+    'mail.star': () => viewerOr(() => viewerRef?.toggleStar(), 'mail.star'),
+    'mail.trash': () => {
+      if (getFocusedPane() === 'viewer' && viewerRef?.hasFocusedMessage()) viewerRef.trash()
+      else void executeCommand('mail.trash')
+    },
+    'mail.deletePermanently': () => {
+      if (getFocusedPane() === 'viewer' && viewerRef?.hasFocusedMessage()) viewerRef.deletePermanently()
+      else void executeCommand('mail.deletePermanently')
+    },
+    'list.escape': () => {
+      // Back from the open conversation to the list.
+      if (selectedThreadId === null) return
+      selectedThreadId = null
+      selectedConversationFolderId = null
+      selectedConversationAccountId = null
+      setFocusedPane('messageList')
+    },
+    'list.selectAll': () => messageListRef?.selectAll(),
+    'viewer.selectText': () => viewerRef?.selectAllText(),
+    'viewer.threadFocus': () => { if (selectedThreadId !== null) toggleThreadFocus() },
+    'viewer.loadImages': () => viewerRef?.loadImages(),
+    'viewer.alwaysLoadImages': () => viewerRef?.openAlwaysLoadDropdown(),
+  }
+  function runRegistryShortcut(e: KeyboardEvent): boolean {
+    const def = resolveShortcut(e, getFocusedPane(), Object.keys(KEY_HANDLERS))
+    if (!def) return false
+    // Select-all keeps the native behaviour inside text fields.
+    if ((def.id === 'list.selectAll' || def.id === 'viewer.selectText') && isInputElement(e.target)) return false
+    // Reply/forward without an open conversation do nothing and keep the key.
+    const needsThread = ['mail.reply', 'mail.replyAll', 'mail.forward', 'viewer.threadFocus']
+    if (needsThread.includes(def.id) && selectedThreadId === null) return false
+    if (def.id === 'list.escape' && selectedThreadId === null) return false
+    e.preventDefault()
+    KEY_HANDLERS[def.id](e)
+    return true
+  }
+
   function handleGlobalKeyDown(e: KeyboardEvent) {
     // Handle history before the secondary-reader-tab early return, but never
     // steal macOS line-start/end from search, recipient fields or an editor.
@@ -1551,7 +1635,6 @@
     }
     const inInput = isInputElement(e.target)
     const focusedPane = getFocusedPane()
-    const hasConversation = selectedThreadId !== null
 
     // Don't intercept keyboard events when a context menu or dropdown is open
     // (bits-ui portals mount [role="menu"] only while open)
@@ -1719,99 +1802,8 @@
       // reply to the hidden mail thread while the user is browsing contacts).
       if (!isMailActive()) return
 
-      // MAIL-DOMAIN Ctrl/Cmd cases (guarded above).
-      switch (e.key.toLowerCase()) {
-        case 'd':
-          // Ctrl/Cmd+D swaps the folder tree and the message list. Shift+D is
-          // the composer's detach shortcut and is handled in the composer.
-          if (e.shiftKey) return
-          e.preventDefault()
-          void executeCommand('app.folders')
-          return
-        case 'n':
-          // Ctrl/Cmd+N — new mail composer. Mail-domain only: when an
-          // extension rail is active (e.g., calendar), that extension's
-          // shortcut registry handles Ctrl+N before we reach the global
-          // switch, opening its own "new X" dialog.
-          e.preventDefault()
-          void executeCommand('app.compose')
-          return
-        case 'r': {
-          if (!hasConversation) return
-          e.preventDefault()
-          if (focusedPane === 'viewer' && viewerRef?.hasFocusedMessage()) {
-            if (e.shiftKey) {
-              viewerRef.replyAll()
-              return
-            }
-            viewerRef.reply()
-            return
-          }
-          const msgId = getLastMessageId()
-          if (!msgId) return
-          handleReply(e.shiftKey ? 'reply-all' : 'reply', msgId, viewerRef?.isImagesLoaded(msgId) || false)
-          return
-        }
-        case 'f': {
-          if (!hasConversation) return
-          e.preventDefault()
-          if (focusedPane === 'viewer' && viewerRef?.hasFocusedMessage()) {
-            viewerRef.forward()
-            return
-          }
-          const msgId = getLastMessageId()
-          if (msgId) handleReply('forward', msgId, viewerRef?.isImagesLoaded(msgId) || false)
-          return
-        }
-        case 's':
-          // Ctrl+S (no shift) is handled globally above. Only Ctrl+Shift+S
-          // (sync current folder) is mail-domain and lives here.
-          if (!e.shiftKey) return
-          e.preventDefault()
-          messageListRef?.toggleFolderSync()
-          return
-        case 'a':
-          // Preserve the browser's native Select All inside text fields.
-          // The application-level Ctrl/Cmd+A shortcut is only for mail panes.
-          if (!e.shiftKey && inInput) return
-
-          if (e.shiftKey) {
-            // Ctrl-Shift-A: Toggle sync all accounts (start sync or cancel if already running)
-            e.preventDefault()
-            void executeCommand('app.syncAll')
-            return
-          }
-          // Ctrl-A: Select all text in viewer, or select all messages in list
-          e.preventDefault()
-          if (focusedPane === 'viewer') {
-            viewerRef?.selectAllText()
-            return
-          }
-          messageListRef?.selectAll()
-          return
-        case 'z':
-          e.preventDefault()
-          void executeCommand('app.undo')
-          return
-        case 'l':
-          e.preventDefault()
-          if (e.shiftKey) {
-            // Ctrl-Shift-L: Open "Always Load" dropdown
-            viewerRef?.openAlwaysLoadDropdown()
-          } else {
-            // Ctrl-L: Load images for this message
-            viewerRef?.loadImages()
-          }
-          return
-        case 'u':
-          e.preventDefault()
-          void executeCommand(e.shiftKey ? 'mail.markUnread' : 'mail.markRead')
-          return
-        case 'j':
-          e.preventDefault()
-          void executeCommand('mail.spam')
-          return
-      }
+      // MAIL-DOMAIN Ctrl/Cmd commands come from the registry (see KEY_HANDLERS).
+      runRegistryShortcut(e)
       return
     }
 
@@ -2111,150 +2103,8 @@
       return
     }
 
-    // Single-key shortcuts (Gmail standard shortcuts)
-    switch (e.key) {
-      case 'c':
-        e.preventDefault()
-        void executeCommand('app.compose')
-        return
-      case 'e':
-        e.preventDefault()
-        if (focusedPane === 'viewer' && selectedThreadId) {
-          viewerRef?.archiveAndMarkRead()
-          return
-        }
-        void executeCommand('mail.archiveAndMarkRead')
-        return
-      case 'l':
-        e.preventDefault()
-        void executeCommand('mail.readLater')
-        return
-      case 'L':
-        e.preventDefault()
-        void executeCommand('mail.replyLater')
-        return
-      case 'v':
-        if (!isMailActive()) return
-        // Reader-only tabs own their viewer shortcut handler. Let that
-        // embedded viewer open the picker instead of routing to the hidden
-        // primary conversation viewer.
-        if (activeMailWorkspace !== 'primary') return
-        e.preventDefault()
-        if (focusedPane === 'viewer' && selectedThreadId) {
-          viewerRef?.toggleFolderPicker('move')
-          return
-        }
-        messageListRef?.toggleMoveToDialog()
-        return
-      case 'r': {
-        if (!hasConversation) return
-        e.preventDefault()
-        if (focusedPane === 'viewer' && viewerRef?.hasFocusedMessage()) {
-          viewerRef.reply()
-          return
-        }
-        const msgId = getLastMessageId()
-        if (msgId) handleReply('reply', msgId, viewerRef?.isImagesLoaded(msgId) || false)
-        return
-      }
-      case 'a': {
-        if (!hasConversation) return
-        e.preventDefault()
-        if (focusedPane === 'viewer' && viewerRef?.hasFocusedMessage()) {
-          viewerRef.replyAll()
-          return
-        }
-        const msgId = getLastMessageId()
-        if (msgId) handleReply('reply-all', msgId, viewerRef?.isImagesLoaded(msgId) || false)
-        return
-      }
-      case 'f': {
-        if (!hasConversation) return
-        e.preventDefault()
-        if (focusedPane === 'viewer' && viewerRef?.hasFocusedMessage()) {
-          viewerRef.forward()
-          return
-        }
-        const msgId = getLastMessageId()
-        if (msgId) handleReply('forward', msgId, viewerRef?.isImagesLoaded(msgId) || false)
-        return
-      }
-      case '/':
-        e.preventDefault()
-        void executeCommand('app.search')
-        return
-      case '!':
-        e.preventDefault()
-        if (focusedPane === 'viewer' && selectedThreadId) {
-          viewerRef?.spam()
-          return
-        }
-        void executeCommand('mail.spam')
-        return
-      case 'z':
-        e.preventDefault()
-        void executeCommand('app.undo')
-        return
-      case 'm':
-        if (!KEY.LIST_TOGGLE_READ(e)) return
-        void executeCommand('mail.toggleRead')
-        return
-      case 'I':
-        e.preventDefault()
-        if (focusedPane === 'viewer' && selectedThreadId) {
-          viewerRef?.markRead()
-          return
-        }
-        void executeCommand('mail.markRead')
-        return
-      case 'U':
-        e.preventDefault()
-        if (focusedPane === 'viewer' && selectedThreadId) {
-          viewerRef?.markUnread()
-          return
-        }
-        void executeCommand('mail.markUnread')
-        return
-      case 'u':
-        if (selectedThreadId) {
-          e.preventDefault()
-          selectedThreadId = null
-          selectedConversationFolderId = null
-          selectedConversationAccountId = null
-          setFocusedPane('messageList')
-        }
-        return
-      case 's':
-        if (focusedPane === 'viewer' && selectedThreadId) {
-          e.preventDefault()
-          viewerRef?.toggleStar()
-          return
-        }
-        void executeCommand('mail.star')
-        return
-      case 'F': {
-        // Shift+F: toggle focus mode
-        if (!hasConversation) return
-        e.preventDefault()
-        toggleThreadFocus()
-        return
-      }
-      case '#':
-      case 'd': // alias of Delete: move focused/checked message(s) to Trash
-      case 'Backspace':
-      case 'Delete': {
-        if (focusedPane === 'viewer' && viewerRef?.hasFocusedMessage()) {
-          if (PERMANENT_DELETE(e)) {
-            viewerRef.deletePermanently()
-            return
-          }
-          viewerRef.trash()
-          return
-        }
-        void executeCommand(PERMANENT_DELETE(e) ? 'mail.deletePermanently' : 'mail.trash')
-        return
-      }
-    }
+    // Single-key shortcuts (Gmail standard shortcuts) come from the registry.
+    runRegistryShortcut(e)
   }
 
   // Get the last message ID from the current conversation (for reply/forward)

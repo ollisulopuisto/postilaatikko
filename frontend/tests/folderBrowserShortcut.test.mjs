@@ -30,7 +30,8 @@ test('Mod+D toggles the folder tree and composer detach moved to Mod+Shift+D', (
   assert.match(registry, /\{ id: 'app\.folders', category: [^\n]*shortcutId: 'app\.folders' \}/)
   assert.match(composer, /\(e\.key === 'D' \|\| e\.key === 'd'\) && e\.shiftKey && \(e\.ctrlKey \|\| e\.metaKey\)/)
   assert.doesNotMatch(composer, /e\.key === 'd' && \(e\.ctrlKey \|\| e\.metaKey\)/)
-  assert.match(app, /case 'd':[\s\S]*?if \(e\.shiftKey\) return[\s\S]*?executeCommand\('app\.folders'\)/)
+  assert.match(app, /'app\.folders': \(\) => void executeCommand\('app\.folders'\)/)
+  assert.match(registry, /id: 'app\.folders'[^\n]*dispatch: true/)
   assert.match(app, /registerCommand\('app\.folders', \(\) => toggleFolderBrowser\(\)\)/)
 })
 

@@ -344,3 +344,7 @@ Mirrors mail's "Folder Navigation" shortcuts. These fire regardless of which con
 ## Collision rules
 
 `frontend/tests/shortcutCollisions.test.mjs` fails when two actions share a key in one context (rail pane plus registry group). Reuse across focus groups (sidebar, list, viewer, composer) must be listed there with the reason. Cmd/Ctrl+K is the palette only; E is archive and mark read.
+
+## One list, three surfaces
+
+Each command is defined once in `registry.ts`. Its key is matched by `resolveShortcut()` (`keyboard/dispatch.ts`) and the host runs the handler for that id (`KEY_HANDLERS` in `App.svelte`). Do not add a `case 'x':` for a command. Rules: every command needs a menu entry (`menu`, tested in `commandMenuCoverage`), a button is optional, a key is optional and shown in the menu. Commands still read by the old inline code are tagged `inline`; the rest of the migration moves them to `dispatch`.
