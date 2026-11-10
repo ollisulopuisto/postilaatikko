@@ -2336,14 +2336,14 @@
 
   // Get the currently selected thread ID (exposed for parent access)
   export function getSelectedThreadId(): string | null {
-    const conversation = activeList.find(item => item.threadId === selectedThreadId) as any
-    return conversation?._canonicalConversationId || (conversation?._queueCanonical === false ? null : selectedThreadId)
+    const conversation = findFocusedRow(activeList, focusedRowIdentity, selectedThreadId, accountId || '', folderId || '') as any
+    return conversation?._canonicalConversationId || (conversation?._queueCanonical === false ? null : conversation?.threadId || null)
   }
 
   // Get message IDs for the keyboard-focused thread (for delete without checking)
   export function getSelectedMessageIds(): string[] {
     if (!selectedThreadId) return []
-    const conv = activeList.find(c => c.threadId === selectedThreadId) as any
+    const conv = findFocusedRow(activeList, focusedRowIdentity, selectedThreadId, accountId || '', folderId || '') as any
     if (!conv) return []
     return conv.messageIds || conv.messages?.map((m: any) => m.id) || []
   }
@@ -2372,7 +2372,7 @@
 
   export function getSelectedMessageRefs(): { accountId: string; messageId: string }[] {
     if (!selectedThreadId) return []
-    const conversation = activeList.find((item) => item.threadId === selectedThreadId) as any
+    const conversation = findFocusedRow(activeList, focusedRowIdentity, selectedThreadId, accountId || '', folderId || '') as any
     return conversation ? refsForConversation(conversation) : []
   }
 
@@ -2383,7 +2383,7 @@
   // Get account and folder info for the keyboard-focused thread (for unified inbox)
   export function getSelectedConversationInfo(): { accountId: string; folderId: string } | null {
     if (!selectedThreadId) return null
-    const conv = activeList.find(c => c.threadId === selectedThreadId) as any
+    const conv = findFocusedRow(activeList, focusedRowIdentity, selectedThreadId, accountId || '', folderId || '') as any
     if (!conv) return null
 
     const realAccountId = (isUnifiedView || isSearchMode) && conv.accountId ? conv.accountId : accountId
@@ -2396,14 +2396,14 @@
   // Check if the keyboard-focused thread is starred
   export function isSelectedStarred(): boolean {
     if (!selectedThreadId) return false
-    const conv = activeList.find(c => c.threadId === selectedThreadId) as any
+    const conv = findFocusedRow(activeList, focusedRowIdentity, selectedThreadId, accountId || '', folderId || '') as any
     return conv?.isStarred ?? false
   }
 
   // True when the keyboard-focused conversation has unread messages
   export function isSelectedUnread(): boolean {
     if (!selectedThreadId) return false
-    const conv = activeList.find(c => c.threadId === selectedThreadId)
+    const conv = findFocusedRow(activeList, focusedRowIdentity, selectedThreadId, accountId || '', folderId || '')
     return (conv?.unreadCount ?? 0) > 0
   }
 
@@ -2502,7 +2502,7 @@
   // Open context menu for the currently selected conversation row
   export function openContextMenu() {
     if (!selectedThreadId || !listContainerRef) return
-    const index = activeList.findIndex(c => c.threadId === selectedThreadId)
+    const index = getSelectedIndex()
     if (index < 0) return
     const rows = listContainerRef.querySelectorAll('[data-conversation-row]')
     const row = rows[index] as HTMLElement | undefined

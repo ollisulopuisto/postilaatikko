@@ -61,3 +61,46 @@ test('the actual snooze command follows list focus to the second duplicate, not 
   list.snooze()
   assert.deepEqual(list.shown, [[{ accountId: 'B', conversationId: 'shared' }]])
 })
+
+const script = listSource.slice(listSource.indexOf('>', listSource.lastIndexOf('<script', listSource.indexOf('function focusConversation'))) + 1, listSource.indexOf('</script>', listSource.indexOf('function focusConversation')))
+const parsed = ts.createSourceFile('list.ts', script, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+const actions = ['getSelectedThreadId', 'getSelectedMessageIds', 'getSelectedMessageRefs', 'getSelectedConversationInfo', 'isSelectedStarred', 'isSelectedUnread', 'getSelectedIndex', 'selectNext']
+const methods = parsed.statements.filter(n => ts.isFunctionDeclaration(n) && actions.includes(n.name?.text)).map(n => n.getText(parsed).replace(/^export /, '')).join('\n')
+const actionCode = ts.transpileModule(source.replaceAll('export ', '') + setter + methods, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText
+const makeActionList = new Function('activeList', `
+  const accountId='unified',folderId='inbox',isUnifiedView=true,isSearchMode=false,activeCount=activeList.length;
+  const document={activeElement:null},scrollToIndex=()=>{}; let loadMoreButtonRef=null;
+  const refsForConversation=c=>c.messageIds.map(messageId=>({accountId:c.accountId,messageId}));
+  let selectedThreadId=null,focusedRowIdentity=null;
+  ${actionCode}
+  return {focus:focusConversation,${actions.join(',')}};
+`)
+const actionRows = [
+  { ...rows[0], messageIds: ['a-message'], _canonicalConversationId:'a-canonical', isStarred:false, unreadCount:0 },
+  { ...rows[1], messageIds: ['b-message'], _canonicalConversationId:'b-canonical', isStarred:true, unreadCount:2 },
+]
+
+test('keyboard j followed by an action targets the highlighted second account, with matching state', () => {
+  const list = makeActionList(actionRows)
+  list.focus(actionRows[0]); list.selectNext()
+  assert.equal(list.getSelectedIndex(),1)
+  // App's archive/read/trash context takes these refs, not a bare thread ID.
+  assert.deepEqual(list.getSelectedMessageRefs(), [{accountId:'B',messageId:'b-message'}])
+  assert.deepEqual(list.getSelectedMessageIds(), ['b-message'])
+  assert.equal(list.getSelectedThreadId(),'b-canonical')
+  assert.deepEqual(list.getSelectedConversationInfo(),{accountId:'B',folderId:'inbox-B'})
+  assert.equal(list.isSelectedStarred(),true)
+  assert.equal(list.isSelectedUnread(),true)
+})
+
+test('stale focused account never falls back to the other account for a mailbox mutation', () => {
+  const remaining = [...actionRows]
+  const list = makeActionList(remaining)
+  list.focus(actionRows[1]); remaining.pop()
+  assert.deepEqual(list.getSelectedMessageRefs(),[])
+  assert.deepEqual(list.getSelectedMessageIds(),[])
+  assert.equal(list.getSelectedThreadId(),null)
+  assert.equal(list.getSelectedConversationInfo(),null)
+  assert.equal(list.isSelectedStarred(),false)
+  assert.equal(list.isSelectedUnread(),false)
+})

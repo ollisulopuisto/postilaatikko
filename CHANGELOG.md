@@ -16,6 +16,8 @@
 
 ## Postilaatikko 2026.11.10.3
 
+- Keyboard-focused mail actions and read/star state now follow the account-qualified row in unified lists, even when two accounts share a thread ID. A stale focus does not target another account.
+
 - Snooze: pick when a conversation comes back. Presets (later today, this evening, tomorrow morning, this weekend, next week) or a custom date and time replace the old whole-days box. Press H, use the Snooze button in the reader toolbar or the selection bar, the message menu or the command palette. Works on several selected conversations at once, and Undo takes the whole batch back. A toast tells you when snoozed conversations return. Snoozing stays local: nothing changes on the mail server.
 
 ## Postilaatikko 2026.11.10.2
