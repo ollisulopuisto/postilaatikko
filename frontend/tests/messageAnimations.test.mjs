@@ -155,8 +155,10 @@ test('archive-and-read animates and mutates only resolved matched targets', asyn
       await mutation()
     },
     ArchiveWithUndo: async ids => { calls.push(['archive', ids]); return { operationId: 'op' } },
+    ArchiveAndMarkReadWithUndo: async ids => { calls.push(['archiveRead', ids]); return { operationId: 'op', atomic: true } },
     MarkAsRead: async ids => { calls.push(['read', ids]) },
     publishUndoOperationCreated: () => {},
+    rememberUnreadForUndo: () => {},
     showArchiveUndoToast: () => {},
     onActionComplete: () => {},
     toasts: { error: message => assert.fail(message) },
@@ -170,8 +172,7 @@ test('archive-and-read animates and mutates only resolved matched targets', asyn
   assert.deepEqual(calls, [
     ['resolve', ['matched', 'unmatched']],
     ['mutate', ['matched']],
-    ['archive', ['matched']],
-    ['read', ['matched']],
+    ['archiveRead', ['matched']],
   ])
   await new Promise(resolve => setTimeout(resolve, 250))
   assert.equal(messageAnimations.isAnyAnimating(), false)

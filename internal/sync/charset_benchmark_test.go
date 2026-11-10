@@ -23,3 +23,22 @@ func BenchmarkExtractCharsetFromHTML(b *testing.B) {
 		_ = extractCharsetFromHTML(body)
 	}
 }
+
+// BenchmarkExtractCharsetFromHTML_NoMeta measures the common case where an HTML
+// email does not declare a meta charset tag (e.g. charset is declared in MIME headers).
+// The fast zero-allocation pre-check skips regex matching entirely.
+func BenchmarkExtractCharsetFromHTML_NoMeta(b *testing.B) {
+	body := []byte(
+		`<!DOCTYPE html><html><head><title>Example</title></head><body>` +
+			`<p>This is a realistic multi-kilobyte HTML email body without meta charset tags. ` +
+			`It contains enough content to exceed the 1024-byte search window, ` +
+			`so the function scans the trimmed prefix on every call.</p>` +
+			`</body></html>`,
+	)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = extractCharsetFromHTML(body)
+	}
+}

@@ -25,6 +25,7 @@ type ActionKind string
 
 const (
 	ActionArchive          ActionKind = "archive"
+	ActionArchiveMarkRead  ActionKind = "archive_read"
 	ActionMarkRead         ActionKind = "mark_read"
 	ActionMarkUnread       ActionKind = "mark_unread"
 	ActionStar             ActionKind = "star"
@@ -296,6 +297,16 @@ func (h *ActionsHandler) handleAction(w http.ResponseWriter, r *http.Request) {
 		}
 		opErr = err
 
+	case ActionArchiveMarkRead:
+		id, err := h.ops.ArchiveMessages(messageIDs)
+		if id != "" {
+			operationID = id
+		}
+		opErr = err
+		if opErr == nil {
+			opErr = h.ops.MarkAsRead(messageIDs)
+		}
+
 	case ActionMarkRead:
 		opErr = h.ops.MarkAsRead(messageIDs)
 
@@ -372,7 +383,7 @@ func (h *ActionsHandler) handleDurableAction(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	switch req.Action {
-	case ActionArchive, ActionMarkRead, ActionMarkUnread, ActionStar, ActionUnstar, ActionTrash, ActionMove, ActionMoveToInbox, ActionMoveToSpam:
+	case ActionArchive, ActionArchiveMarkRead, ActionMarkRead, ActionMarkUnread, ActionStar, ActionUnstar, ActionTrash, ActionMove, ActionMoveToInbox, ActionMoveToSpam:
 	default:
 		h.writeError(w, r, http.StatusBadRequest, CodeInvalidRequest, fmt.Sprintf("Unknown action %q", req.Action), false)
 		return
@@ -596,7 +607,7 @@ func (h *ActionsHandler) handleGroupedDurableAction(w http.ResponseWriter, r *ht
 		UndoAvailable: confirmed > 0 && hasSnapshotter,
 	}
 	response.Groups = make([]ActionGroupOutcome, 0, len(groups))
-	moveAction := req.Action == ActionArchive || req.Action == ActionTrash || req.Action == ActionMove || req.Action == ActionMoveToInbox || req.Action == ActionMoveToSpam
+	moveAction := req.Action == ActionArchive || req.Action == ActionArchiveMarkRead || req.Action == ActionTrash || req.Action == ActionMove || req.Action == ActionMoveToInbox || req.Action == ActionMoveToSpam
 	if moveAction {
 		response.Affected = append([]AffectedMessageRef(nil), affectedBefore...)
 	}
@@ -728,6 +739,15 @@ func (h *ActionsHandler) performAction(req ActionRequest, messageIDs []string, o
 			*operationID = id
 		}
 		return err
+	case ActionArchiveMarkRead:
+		id, err := h.ops.ArchiveMessages(messageIDs)
+		if id != "" {
+			*operationID = id
+		}
+		if err != nil {
+			return err
+		}
+		return h.ops.MarkAsRead(messageIDs)
 	case ActionMarkRead:
 		return h.ops.MarkAsRead(messageIDs)
 	case ActionMarkUnread:

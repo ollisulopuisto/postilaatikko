@@ -16,10 +16,11 @@
 <script lang="ts">
   import { refreshVirtualView, isExpectedSearchCancellation } from './virtualFolderRefresh'
   import { pinnedGroupForSelection, retainPinnedConversationPosition, type PinnedInboxGroup } from './activeInboxGroup'
+  import { mailRowKey, captureScrollAnchor, anchoredScrollTop, newRowsBeforeAnchor, extendAnchorWindow } from './scrollAnchor'
   import { retainReadSelection } from '$lib/sidebar/virtualView'
   import { app as searchModels } from '../../../../wailsjs/go/models'
 
-  import { onMount, onDestroy } from 'svelte'
+  import { onMount, onDestroy, tick, untrack } from 'svelte'
   import OnlineViewCount from './OnlineViewCount.svelte'
   import Icon from '@iconify/svelte'
   import ConversationRow from './ConversationRow.svelte'
@@ -30,7 +31,7 @@
   import { cn } from '$lib/utils'
   import { Button } from '$lib/components/ui/button'
   // @ts-ignore - wailsjs bindings
-  import { RefreshViewHeaders, SearchMail, CancelMailSearch, MoveToInboxWithUndo, GetConversations, GetConversationCount, SyncFolder, ForceSyncFolder, CancelFolderSync, SetMessageListSortOrder, GetUnifiedFolderConversations, GetUnifiedFolderCount, SearchConversations, SearchUnifiedFolder, GetSearchCount, GetSearchCountUnifiedFolder, SyncUnifiedFolder, SyncVirtualFolder, EmptyUnifiedTrash, GetFTSIndexStatus, IsFTSIndexing, TrashWithUndo, DeletePermanently, EmptyTrash, UndoOperation, IMAPSearchFolder, IMAPSearchUnifiedInbox, FetchServerMessage, GetVirtualFolderConversations, GetVirtualFolderCount, GetVirtualFolderCachedView, PrefetchMessageBodies } from '../../../../wailsjs/go/app/App'
+  import { GetMessage, RefreshViewHeaders, SearchMail, CancelMailSearch, MoveToInboxWithUndo, GetConversations, GetConversationCount, SyncFolder, ForceSyncFolder, CancelFolderSync, SetMessageListSortOrder, GetUnifiedFolderConversations, GetUnifiedFolderCount, SearchConversations, SearchUnifiedFolder, GetSearchCount, GetSearchCountUnifiedFolder, SyncUnifiedFolder, SyncVirtualFolder, EmptyUnifiedTrash, GetFTSIndexStatus, IsFTSIndexing, TrashWithUndo, DeletePermanently, EmptyTrash, UndoOperation, IMAPSearchFolder, IMAPSearchUnifiedInbox, FetchServerMessage, GetVirtualFolderConversations, GetVirtualFolderCount, GetVirtualFolderCachedView, PrefetchMessageBodies } from '../../../../wailsjs/go/app/App'
   import { toasts } from '$lib/stores/toast'
   import { withShortcut, ariaKeyshortcuts } from '$lib/keyboard/format'
   import ShortcutHint from '$lib/components/shortcuts/ShortcutHint.svelte'
@@ -51,6 +52,7 @@
   import { getLayoutMode, hideViewer } from '$lib/stores/layout.svelte'
   import { isDialogGuardActive, onDialogGuardChange } from '$lib/stores/dialogGuard'
   import { captureAutoSelectNext, findAutoSelectNext, flattenVisibleInboxGroups } from './autoSelectNext'
+  import { applyReadDelta } from './readCounts'
   import { removeServerSearchResults, restoreSearchResults, serverSearchResultIdentity, ServerSearchRequestState, updateServerSearchCounts } from './serverSearchResults'
   import { publishUndoOperationCompleted, publishUndoOperationCreated, UNDO_OPERATION_COMPLETED_EVENT, UNDO_OPERATION_CREATED_EVENT, type UndoOperationCreatedDetail } from './undoMutationEvents'
   import { runMessageMutation } from './mutationInFlight'
@@ -62,6 +64,7 @@
     folderId?: string | null
     folderName?: string
     folderType?: string
+    readerSelection?: { threadId: string; accountId: string; folderId: string } | null
     onConversationSelect?: (threadId: string, folderId: string, accountId: string) => void
     onOpenInTab?: (accountId: string, folderId: string, threadId: string, folderType: string, subject: string) => void
     onReply?: (mode: 'reply' | 'reply-all' | 'forward', messageId: string) => void
@@ -82,6 +85,7 @@
     folderId = null,
     folderName = 'Inbox',
     folderType = 'inbox',
+    readerSelection = null,
     onConversationSelect,
     onOpenInTab,
     onReply,
@@ -118,6 +122,22 @@
   // slightly later, especially for unified folders.
   let manualSyncing = $state(false)
   let selectedThreadId = $state<string | null>(null)
+  // Reader/history restoration must also move the list's keyboard-action target.
+  // Reapply after a folder load, which otherwise selects its first row.
+  function serverRowForReaderSelection(rows: any[], selection: { accountId: string; folderId: string; threadId: string }, currentRowId: string | null) {
+    const matches = (row: any) => row.accountId === selection.accountId && row.folderId === selection.folderId && row._canonicalConversationId === selection.threadId
+    return rows.find(row => row.threadId === currentRowId && matches(row)) || rows.find(matches)
+  }
+
+  $effect(() => {
+    const selection = readerSelection
+    if (!loading && selection) {
+      // Focus-only moves must not reapply the old reader selection. Keep the
+      // opened UID when multiple messages share one canonical conversation.
+      const serverRow = serverRowForReaderSelection(serverSearchResults, selection, untrack(() => selectedThreadId))
+      selectedThreadId = serverRow && showSearch && searchSource === 'server' ? serverRow.threadId : selection.threadId
+    }
+  })
   let lastLoadedFolderId = $state<string | null>(null) // Track folder changes
   let loadGeneration = $state(0) // Invalidates stale async results when folder changes mid-load (#200)
   let countRequestSequence = 0
@@ -592,16 +612,9 @@
       // (#348) — same pattern as handleActionComplete. Without this, a sync
       // collapses "Load more" pagination back to the first page and jumps
       // the view to the top.
-      const scrollTop = listContainerRef?.scrollTop ?? 0
       const totalLoaded = Math.max(conversations.length, PAGE_SIZE)
       offset = 0
-      loadConversations(totalLoaded).then(() => {
-        if (listContainerRef) {
-          requestAnimationFrame(() => {
-            listContainerRef!.scrollTop = scrollTop
-          })
-        }
-      })
+      void loadConversations(totalLoaded)
     }, 300)
   }
 
@@ -702,7 +715,7 @@
     // `messages:starredChanged` event and don't affect unread counts here.
     EventsOn('messages:readChanged', (data: { messageIds: string[], isRead: boolean }) => {
       // Update conversations locally instead of reloading from DB
-      let anyUpdated = false
+      let anyUpdated: boolean
       const selected = conversations.find(conversation => conversation.threadId === selectedThreadId)
       const selectedMessageIds = selected?.messageIds || []
       if (
@@ -716,14 +729,13 @@
         // is selected, while the underlying read status can update normally.
         pinInboxGroupForConversation(selected.threadId)
       }
-      for (const c of conversations) {
-        const affectedCount = (c.messageIds || []).filter(id => data.messageIds.includes(id)).length
-        if (affectedCount > 0) {
-          anyUpdated = true
-          const delta = data.isRead ? -affectedCount : affectedCount
-          c.unreadCount = Math.max(0, (c.unreadCount || 0) + delta)
-        }
-      }
+      // Search rows are separate cached arrays with their own unread counts. Keep them in
+      // step, or the unread snapshot taken for archive-and-mark-read (and the unread dots)
+      // would use a count that is already out of date.
+      const touched = new Set<object>()
+      anyUpdated = applyReadDelta(conversations, data.messageIds, data.isRead, touched)
+      if (applyReadDelta(searchResults, data.messageIds, data.isRead, touched)) searchResults = searchResults
+      if (applyReadDelta(serverSearchResults, data.messageIds, data.isRead, touched)) serverSearchResults = serverSearchResults
       if (anyUpdated) {
         conversations = conversations
         if (isVirtualFolderView) scheduleReload()
@@ -943,6 +955,8 @@
     checkFTSIndexStatus()
   })
 
+  const isSearchMode = $derived(showSearch && searchQuery.trim().length > 0)
+
   // Compute selected message IDs from all checked conversations (for multi-select context menu)
   // Check normal, local-search and server-search result caches.
   // Use Set to deduplicate in case same conversation appears in both arrays
@@ -967,20 +981,30 @@
   const selectedMessageRefs = $derived(
     [...new Map(
       [...conversations, ...searchResults, ...serverSearchResults]
-        .filter((conversation) => checkedThreadIds.has(conversation.threadId))
+        .filter((conversation: any) => checkedThreadIds.has(conversation.threadId))
         .flatMap((conversation: any) => refsForConversation(conversation))
         .map((ref) => [`${ref.accountId}:${ref.messageId}`, ref] as const)
     ).values()]
   )
 
+  // Queue decisions must use the active source, not hidden search caches that
+  // can carry the same message ID with a different canonical-resolution state.
+  const selectedQueueRows = $derived(
+    (isSearchMode ? (serverSearchMode ? serverSearchResults : searchResults) : conversations)
+      .filter((conversation: any) => checkedThreadIds.has(conversation.threadId))
+  )
+  const selectedQueueReady = $derived(!selectedQueueRows.some(
+    (conversation: any) => conversation._queueCanonical === false
+  ))
+
   const selectedQueueRefs = $derived(
     [...new Map(
-      [...conversations, ...searchResults, ...serverSearchResults]
-        .filter((conversation) => checkedThreadIds.has(conversation.threadId))
+      selectedQueueRows
+        .filter((conversation: any) => conversation._queueCanonical !== false)
         .map((conversation: any) => {
           const owningAccountId = conversation.accountId || accountId || ''
           return owningAccountId && owningAccountId !== 'unified' && owningAccountId !== 'virtual'
-            ? [`${owningAccountId}:${conversation.threadId}`, { accountId: owningAccountId, conversationId: conversation.threadId }] as const
+            ? [`${owningAccountId}:${conversation._canonicalConversationId || conversation.threadId}`, { accountId: owningAccountId, conversationId: conversation._canonicalConversationId || conversation.threadId }] as const
             : null
         })
         .filter((ref) => ref !== null)
@@ -1119,7 +1143,16 @@
         if (generation !== loadGeneration || isSearchMode) return
         virtualCursor = response.cursor || ''
         virtualIssues = (response.issues || []).map(item => `${item.accountName}: ${item.message}`).join(' · ')
-        const items = response.conversations || []
+        let items = response.conversations || []
+        if (currentOffset === 0 && lastLoadedFolderId === folderId && virtualCursor) {
+          items = await extendAnchorWindow(items, viewportAnchorKey(), row => mailRowKey(row, accountId), async () => {
+            if (!virtualCursor || generation !== loadGeneration || isSearchMode) return []
+            const page = await SearchMail(new searchModels.MailSearchRequest({sessionId: virtualSearchSession, query: '', accountIds: [], virtualFolderId: folderId!, filter: filterMode, cursor: virtualCursor, limit: 100}))
+            virtualCursor = page.cursor || ''
+            return page.conversations || []
+          })
+          if (generation !== loadGeneration || isSearchMode) return
+        }
         // Keep already visible mail during provider failures; errors are not an
         // empty mailbox. Accounts that returned successfully still contribute.
         const failedAccounts = new Set((response.issues || []).map(item => item.accountId))
@@ -1128,7 +1161,7 @@
           for (const prior of conversations) if (failedAccounts.has(prior.accountId || '') && !keys.has(`${prior.accountId}:${prior.threadId}`)) items.push(prior)
         }
         const view = virtualFoldersStore.folders.find(item => item.id === folderId)
-        conversations = currentOffset === 0 ? retainReadSelection(conversations, items, selectedThreadId, (view?.readStatus === 'unread' || filterMode === 'unread') && lastLoadedFolderId === folderId) : [...new Map([...conversations, ...items].map(c => [`${c.accountId}:${c.threadId}`, c])).values()]
+        await replaceConversationRows(currentOffset === 0 ? retainReadSelection(conversations, items, selectedThreadId, (view?.readStatus === 'unread' || filterMode === 'unread') && lastLoadedFolderId === folderId) : [...new Map([...conversations, ...items].map(c => [`${c.accountId}:${c.threadId}`, c])).values()], currentOffset === 0)
         listError = conversations.length === 0 && virtualIssues ? virtualIssues : null
         totalCount = conversations.length + (virtualCursor ? 1 : 0)
         if (currentOffset === 0 && (!selectedThreadId || !conversations.some(c => c.threadId === selectedThreadId))) selectedThreadId = conversations[0]?.threadId || null
@@ -1156,7 +1189,7 @@
           totalCount = count
         }
       })
-      const convList = await withLoadTimeout(
+      let convList = await withLoadTimeout(
         isVirtualFolderView
           ? GetVirtualFolderConversations(folderId!, currentOffset, limit, getMessageListSortOrder())
           : isUnifiedView
@@ -1177,13 +1210,28 @@
         return
       }
 
+      if (lastLoadedFolderId === folderId && convList?.length) {
+        let nextOffset = convList.length
+        convList = await extendAnchorWindow(convList, viewportAnchorKey(), row => mailRowKey(row, accountId), async () => {
+          if (generation !== loadGeneration || isSearchMode) return []
+          const rows = await withLoadTimeout(
+            isUnifiedView
+              ? GetUnifiedFolderConversations(folderId!, nextOffset, PAGE_SIZE, getMessageListSortOrder(), filterMode)
+              : GetConversations(accountId!, folderId!, nextOffset, PAGE_SIZE, getMessageListSortOrder(), filterMode),
+            'scroll anchor headers',
+          )
+          nextOffset += rows?.length ?? 0
+          return rows || []
+        })
+        if (generation !== loadGeneration || isSearchMode) return
+      }
       const previousConversations = conversations
-      conversations = retainReadSelection(
+      await replaceConversationRows(retainReadSelection(
         previousConversations,
         convList || [],
         selectedThreadId,
         (filterMode === 'unread' || (isVirtualFolderView && virtualFoldersStore.folders.find(item => item.id === folderId)?.readStatus === 'unread')) && lastLoadedFolderId === folderId,
-      )
+      ), true)
       totalCount = conversations.length
       listRendered = true
       if (resolvedCount !== null) totalCount = resolvedCount
@@ -1288,7 +1336,6 @@
     listError = null
 
     try {
-      const scrollTop = listContainerRef?.scrollTop ?? 0
       const totalLoaded = Math.max(conversations.length, PAGE_SIZE)
 
       if (isUnifiedView) {
@@ -1300,11 +1347,7 @@
       offset = 0
       await loadConversations(totalLoaded)
 
-      if (listContainerRef) {
-        requestAnimationFrame(() => {
-          listContainerRef!.scrollTop = scrollTop
-        })
-      }
+
     } catch (err) {
       console.error('Failed to sync folder:', err)
       listError = $_('viewer.failedToLoadMessages')
@@ -1630,7 +1673,9 @@
   // Map IMAPSearchResult to ConversationRow-compatible shape
   function adaptServerResult(r: any): any {
     return {
-      threadId: r.messageId || `server-uid-${r.uid}`,
+      // Stable UI identity never becomes a bare canonical ID: those can match across accounts.
+      threadId: `server-${serverSearchResultIdentity({ accountId: r.accountId, folderId: r.folderId, _uid: r.uid, threadId: r.messageId || '' })}`,
+      _canonicalConversationId: '',
       subject: r.subject,
       snippet: r.isLocal ? r.snippet : '',
       messageCount: 1,
@@ -1643,6 +1688,7 @@
       accountId: r.accountId,
       folderId: r.folderId,
       _isLocal: r.isLocal,
+      _queueCanonical: false,
       _uid: r.uid,
     }
   }
@@ -1660,7 +1706,6 @@
   }
 
   // Check if we're in search mode with results
-  const isSearchMode = $derived(showSearch && searchQuery.trim().length > 0)
   const unavailableReplyLaterRefs = $derived(
     isUnifiedView && folderId === 'replyLater' && !isSearchMode && replyLaterQueue.ready
       ? replyLaterQueue.refs.filter(ref => ref.indexed === false)
@@ -1764,11 +1809,18 @@
 
     // Normal click - select for viewing, clear checks
     checkedThreadIds = new Set()
-    pinInboxGroupForConversation(threadId)
     selectedThreadId = threadId
 
+    openConversation(activeList[index] as any)
+  }
+
+  // Opening is shared by mouse and keyboard. Only mouse selection resets checks.
+  function openConversation(conversation: any) {
+    if (!conversation) return
+    serverResultFetchGeneration += 1
+    const threadId = conversation.threadId
+    pinInboxGroupForConversation(threadId)
     // For unified view or search, use real folderId and accountId from conversation data
-    const conversation = activeList[index] as any
     const realFolderId = (isUnifiedView || isVirtualFolderView || isSearchMode) && conversation.folderId ? conversation.folderId : folderId!
     const realAccountId = (isUnifiedView || isVirtualFolderView || isSearchMode) && conversation.accountId ? conversation.accountId : accountId!
 
@@ -1777,29 +1829,52 @@
       fetchAndSelectServerResult(conversation, realFolderId, realAccountId)
       return
     }
-    onConversationSelect?.(threadId, realFolderId, realAccountId)
+    if (searchSource === 'server' && conversation._queueCanonical === false && conversation._isLocal) {
+      void resolveLocalServerConversation(conversation, realFolderId, realAccountId)
+      return
+    }
+    onConversationSelect?.(conversation._canonicalConversationId || threadId, realFolderId, realAccountId)
+  }
+
+  async function resolveLocalServerConversation(result: any, folder: string, account: string) {
+    const generation = ++serverResultFetchGeneration
+    const query = searchQuery.trim()
+    const selectionAtStart = selectedThreadId
+    try {
+      const message = await GetMessage(result.messageIds?.[0] || '')
+      if (generation !== serverResultFetchGeneration || selectedThreadId !== selectionAtStart || searchSource !== 'server' || query !== searchQuery.trim() || !serverSearchResults.includes(result) || message?.accountId !== account || !message.id) return
+      const canonicalId = message.threadId || message.id
+      serverSearchResults = serverSearchResults.map(item => item === result ? { ...item, _canonicalConversationId: canonicalId, _queueCanonical: true } : item)
+      selectedThreadId = result.threadId
+      onConversationSelect?.(canonicalId, folder, account)
+    } catch (error) {
+      if (generation !== serverResultFetchGeneration || selectedThreadId !== selectionAtStart) return
+      toasts.error(String(error))
+    }
   }
 
   // Fetch a non-local server result, save locally, update the result, then select
   async function fetchAndSelectServerResult(conversation: any, realFolderId: string, realAccountId: string) {
     const generation = ++serverResultFetchGeneration
     const query = searchQuery.trim()
+    const selectionAtStart = selectedThreadId
     const identity = serverSearchResultIdentity(conversation)
     try {
       const msg = await FetchServerMessage(realAccountId, realFolderId, conversation._uid)
-      if (generation !== serverResultFetchGeneration || searchSource !== 'server' || query !== searchQuery.trim() || !serverSearchResults.some(result => serverSearchResultIdentity(result) === identity)) {
+      if (generation !== serverResultFetchGeneration || selectedThreadId !== selectionAtStart || searchSource !== 'server' || query !== searchQuery.trim() || !serverSearchResults.some(result => serverSearchResultIdentity(result) === identity)) {
         return
       }
-      if (msg) {
+      if (msg?.accountId === realAccountId && msg.id) {
         // Update the server result to be local
-        const idx = serverSearchResults.findIndex(r => r._uid === conversation._uid)
+        const idx = serverSearchResults.findIndex(result => serverSearchResultIdentity(result) === identity)
         if (idx >= 0) {
           serverSearchResults[idx] = {
             ...serverSearchResults[idx],
-            threadId: msg.threadId || msg.id,
+            _canonicalConversationId: msg.threadId || msg.id,
             messageIds: [msg.id],
             snippet: msg.snippet || '',
             _isLocal: true,
+            _queueCanonical: !!(msg.threadId || msg.id),
             _uid: conversation._uid,
           }
           serverSearchResults = serverSearchResults
@@ -1808,7 +1883,7 @@
         onConversationSelect?.(msg.threadId || msg.id, realFolderId, realAccountId)
       }
     } catch (err) {
-      if (generation !== serverResultFetchGeneration || searchSource !== 'server' || query !== searchQuery.trim()) {
+      if (generation !== serverResultFetchGeneration || selectedThreadId !== selectionAtStart || searchSource !== 'server' || query !== searchQuery.trim()) {
         return
       }
       if (isMissingServerSearchResult(err)) {
@@ -2056,6 +2131,56 @@
   // Reference to the list container for scrolling
   let listContainerRef = $state<HTMLDivElement | null>(null)
 
+
+  let newAboveKeys = $state<Set<string>>(new Set())
+  let newAboveView = ''
+  const currentListView = () => `${accountId}:${folderId}:${filterMode}:${isSearchMode}`
+  $effect(() => {
+    const view = `${accountId}:${folderId}:${filterMode}:${isSearchMode}`
+    if (view !== newAboveView) { newAboveKeys = new Set(); newAboveView = view }
+  })
+
+  function viewportAnchorKey(): string | null {
+    if (!listContainerRef) return null
+    const top = listContainerRef.getBoundingClientRect().top
+    return [...listContainerRef.querySelectorAll<HTMLElement>('[data-mail-row-key]')].find(row => row.getBoundingClientRect().bottom > top)?.dataset.mailRowKey ?? null
+  }
+
+  async function replaceConversationRows(next: message.Conversation[], refresh: boolean) {
+    const container = listContainerRef
+    const view = currentListView()
+    const rows = container ? [...container.querySelectorAll<HTMLElement>('[data-mail-row-key]')] : []
+    const viewportTop = container?.getBoundingClientRect().top ?? 0
+    const anchor = refresh && lastLoadedFolderId === folderId && !isSearchMode && container
+      ? captureScrollAnchor(rows.map(row => ({ key: row.dataset.mailRowKey!, top: row.getBoundingClientRect().top, bottom: row.getBoundingClientRect().bottom })), viewportTop, container.scrollTop)
+      : null
+    const previousKeys = conversations.map(row => mailRowKey(row, accountId))
+    conversations = next
+    if (!anchor || !container) return
+    await tick()
+    if (view !== currentListView() || container !== listContainerRef) return
+    const currentRows = [...container.querySelectorAll<HTMLElement>('[data-mail-row-key]')]
+    const row = currentRows.find(row => row.dataset.mailRowKey === anchor.key)
+    if (!row) return // Deleted/moved anchor: do not jump to an unrelated message.
+    const target = anchoredScrollTop(anchor, row.getBoundingClientRect().top, container.getBoundingClientRect().top, container.scrollTop)
+    if (target === null) return
+    container.scrollTop = target
+    const nextKeys = next.map(row => mailRowKey(row, accountId))
+    const validKeys = new Set(nextKeys)
+    newAboveKeys = new Set([...newAboveKeys].filter(key => validKeys.has(key)))
+    if (container.scrollTop > 1) {
+      for (const key of newRowsBeforeAnchor(previousKeys, nextKeys, anchor.key)) newAboveKeys.add(key)
+      newAboveKeys = new Set(newAboveKeys)
+    }
+  }
+
+  function showNewestMail() {
+    // Navigation only: never change the selected/open message or mark anything read.
+    listContainerRef?.scrollTo({ top: 0, behavior: 'instant' })
+    newAboveKeys = new Set()
+    listContainerRef?.focus({ preventScroll: true })
+  }
+
   function loadNextPage() {
     if (loading || conversations.length >= totalCount) return
     // Continue at the actual end of the loaded window. This also avoids
@@ -2066,6 +2191,12 @@
 
   function handleListScroll(event: Event) {
     const container = event.currentTarget as HTMLDivElement
+    if (container.scrollTop <= 1) newAboveKeys = new Set()
+    else if (newAboveKeys.size) {
+      const top = container.getBoundingClientRect().top
+      const above = new Set([...container.querySelectorAll<HTMLElement>('[data-mail-row-key]')].filter(row => row.getBoundingClientRect().bottom <= top).map(row => row.dataset.mailRowKey!))
+      newAboveKeys = new Set([...newAboveKeys].filter(key => above.has(key)))
+    }
     // Start loading shortly before the user reaches the end so scrolling is
     // continuous rather than stopping at a manual "Load more" control.
     if (container.scrollHeight - container.scrollTop - container.clientHeight < 180) {
@@ -2149,10 +2280,7 @@
 
     const index = getSelectedIndex()
     if (index >= 0) {
-      const conv = activeList[index] as any
-      const realFolderId = (isUnifiedView || isSearchMode) && conv.folderId ? conv.folderId : folderId!
-      const realAccountId = (isUnifiedView || isSearchMode) && conv.accountId ? conv.accountId : accountId!
-      onConversationSelect?.(selectedThreadId, realFolderId, realAccountId)
+      openConversation(activeList[index] as any)
     }
   }
 
@@ -2193,7 +2321,8 @@
 
   // Get the currently selected thread ID (exposed for parent access)
   export function getSelectedThreadId(): string | null {
-    return selectedThreadId
+    const conversation = activeList.find(item => item.threadId === selectedThreadId) as any
+    return conversation?._canonicalConversationId || (conversation?._queueCanonical === false ? null : selectedThreadId)
   }
 
   // Get message IDs for the keyboard-focused thread (for delete without checking)
@@ -2202,6 +2331,28 @@
     const conv = activeList.find(c => c.threadId === selectedThreadId) as any
     if (!conv) return []
     return conv.messageIds || conv.messages?.map((m: any) => m.id) || []
+  }
+
+  // Which of these messages are unread, from the rows already loaded (works without a
+  // local store). Returns undefined when a row is mixed read/unread, since the row only
+  // carries a count: the caller then asks the backend per message.
+  export function getUnreadSnapshot(ids: string[]): string[] | undefined {
+    const wanted = new Set(ids)
+    const unread: string[] = []
+    const covered = new Set<string>()
+    for (const conv of activeList as any[]) {
+      const msgIds: string[] = conv.messageIds || conv.messages?.map((m: any) => m.id) || []
+      if (msgIds.length === 0 || !msgIds.every(id => wanted.has(id))) continue
+      const count = conv.unreadCount || 0
+      if (count === 0) {
+        msgIds.forEach(id => covered.add(id))
+      } else if (count >= msgIds.length) {
+        msgIds.forEach(id => { covered.add(id); unread.push(id) })
+      } else {
+        return undefined
+      }
+    }
+    return ids.every(id => covered.has(id)) ? unread : undefined
   }
 
   export function getSelectedMessageRefs(): { accountId: string; messageId: string }[] {
@@ -2553,7 +2704,7 @@
   }
 
   async function toggleSelectedLaterQueue(kind: 'readLater' | 'replyLater') {
-    if (laterQueueMutationInFlight || selectedQueueRefs.length === 0) return
+    if (!selectedQueueReady || laterQueueMutationInFlight || selectedQueueRefs.length === 0) return
     laterQueueMutationInFlight = true
     try {
       const queue = kind === 'readLater' ? readLaterQueue : replyLaterQueue
@@ -2598,14 +2749,16 @@
       {
         id: 'mail.replyLater',
         label: $_(selectedAllReplyLater ? 'replyLater.remove' : 'replyLater.add'),
-        icon: 'mdi:reply',
+        icon: 'mdi:clock-outline',
         shortcut: 'mail.replyLater',
+        disabled: !selectedQueueReady,
       },
       {
         id: 'mail.readLater',
         label: $_(selectedAllReadLater ? 'readLater.remove' : 'readLater.add'),
         icon: 'mdi:book-clock-outline',
         shortcut: 'mail.readLater',
+        disabled: !selectedQueueReady,
       },
       {
         id: 'mail.star',
@@ -2616,7 +2769,7 @@
       { id: 'mail.moveTo', label: $_('contextMenu.moveTo'), icon: 'mdi:folder-move-outline', shortcut: 'mail.moveTo' },
     ]
     if (folderType !== 'trash') {
-      actions.push({ id: 'mail.archive', label: $_('viewer.archive'), icon: 'mdi:archive-outline', shortcut: 'mail.archive' })
+      actions.push({ id: 'mail.archiveAndMarkRead', label: $_('shortcuts.action.archiveAndMarkRead'), icon: 'mdi:archive-check-outline', shortcut: 'mail.archiveAndMarkRead' })
       actions.push({
         id: 'mail.spam',
         label: $_(folderType === 'spam' ? 'contextMenu.markAsNotSpam' : 'contextMenu.markAsSpam'),
@@ -2652,7 +2805,7 @@
       {#if showFolderToggle}
         <button
           class="p-1.5 -ml-1 rounded-md hover:bg-muted transition-colors"
-          title={$_('responsive.folders')}
+          title={withShortcut($_('responsive.folders'), 'app.folders')}
           aria-label={$_('aria.toggleSidebar')}
           onclick={onToggleSidebar}
         >
@@ -3052,8 +3205,16 @@
     <p class="px-3 pb-1 text-[10px] text-muted-foreground" role="status">{$_('search.virtualFolderCacheUpdated', { values: { time: virtualCacheRefreshedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) } })}</p>
   {/if}
   {#if isVirtualFolderView && virtualCursor && !loading && !isSearchMode && !virtualIssues}<button type="button" class="px-3 py-2 text-sm text-primary" onclick={loadNextPage}>{$_('search.loadMore')}</button>{/if}
+  <div class="relative flex flex-col flex-1 min-h-0">
+  {#if newAboveKeys.size > 0 && !isSearchMode}
+    <div class="absolute left-1/2 -translate-x-1/2 top-2 z-20">
+      <button type="button" class="rounded-full bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-md focus-visible:ring-2 focus-visible:ring-primary" onclick={showNewestMail}>
+        ↑ {$_('messageList.newAbove', { values: { count: newAboveKeys.size } })}
+      </button>
+    </div>
+  {/if}
   <!-- Conversation List -->
-  <div bind:this={listContainerRef} class="message-list-scroll flex-1 min-h-0 overflow-y-auto scrollbar-thin" onscroll={handleListScroll}>
+  <div bind:this={listContainerRef} tabindex="-1" style="overflow-anchor: none" class="message-list-scroll flex-1 min-h-0 overflow-y-auto scrollbar-thin" onscroll={handleListScroll}>
     <div
       class={cn(
         'message-list-card',
@@ -3136,9 +3297,13 @@
               folderId={resultFolderId}
               {folderType}
               {selectedMessageIds}
+              {selectedQueueRefs}
+              {selectedQueueReady}
               selectedIsStarred={!selectedHasUnstarred}
               selectedIsRead={!selectedHasUnread}
               isNonLocal={result._isLocal === false}
+              queueActionsEnabled={result._queueCanonical === true}
+              backendConversationId={result._canonicalConversationId || ''}
               searchFolderName={result.folderName}
               searchFolderType={result.folderType}
               onOpenInTab={onOpenInTab}
@@ -3207,6 +3372,8 @@
             folderId={isUnifiedView || isVirtualFolderView ? resultFolderId : folderId!}
             folderType={isVirtualFolderView ? result.folderType || 'folder' : folderType}
             {selectedMessageIds}
+            {selectedQueueRefs}
+            {selectedQueueReady}
             selectedIsStarred={!selectedHasUnstarred}
             selectedIsRead={!selectedHasUnread}
             highlightedSubject={result.highlightedSubject}
@@ -3312,6 +3479,8 @@
                   folderType={isVirtualFolderView ? folderTypesByID[convFolderId] || 'folder' : folderType}
                   onOpenInTab={onOpenInTab}
                   {selectedMessageIds}
+                  {selectedQueueRefs}
+                  {selectedQueueReady}
                   selectedIsStarred={!selectedHasUnstarred}
                   selectedIsRead={!selectedHasUnread}
                   onSelect={(e) => selectConversation(conv.threadId, conversationIndex, e)}
@@ -3356,6 +3525,8 @@
           folderType={isVirtualFolderView ? folderTypesByID[convFolderId] || 'folder' : folderType}
           onOpenInTab={onOpenInTab}
           {selectedMessageIds}
+          {selectedQueueRefs}
+          {selectedQueueReady}
           selectedIsStarred={!selectedHasUnstarred}
           selectedIsRead={!selectedHasUnread}
           onSelect={(e) => selectConversation(conv.threadId, index, e)}
@@ -3374,6 +3545,7 @@
       {/if}
     {/if}
     </div>
+  </div>
   </div>
 </div>
 

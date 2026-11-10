@@ -86,6 +86,10 @@ func (a *App) ResolveMailActionTarget(target operations.Target) ([]string, error
 type UndoableActionResult struct {
 	OperationID string `json:"operationId"`
 	Coalesced   bool   `json:"coalesced"`
+	// Atomic is true when one backend operation performed the whole action, so
+	// its Undo reverses every part of it. A false value means the action was
+	// composed from separate backend calls whose Undo covers only the move.
+	Atomic bool `json:"atomic"`
 }
 
 // TrashUndoResult preserves the legacy Trash outcome while identifying its undo operation.
@@ -1553,6 +1557,37 @@ func (a *App) ArchiveWithUndo(messageIDs []string) (UndoableActionResult, error)
 
 func (a *App) archiveWithUndo(messageIDs []string, operationID string) (string, error) {
 	return a.archiveWithUndoUsingService(messageIDs, operationID, true)
+}
+
+// ArchiveAndMarkReadWithUndo archives messages and marks them read as one
+// atomic mailbox-service action whose Undo reverses both together. Without a
+// mailbox service it falls back to the legacy archive-then-mark-read pair,
+// whose Undo only moves the messages back; Atomic reports which path ran.
+func (a *App) ArchiveAndMarkReadWithUndo(messageIDs []string) (UndoableActionResult, error) {
+	if a.mailboxService != nil {
+		response, handled, err := a.mutateResolvedAction(a.actionContext(), messageIDs, v1.ActionArchiveMarkRead, "")
+		if handled {
+			if err != nil {
+				return UndoableActionResult{}, err
+			}
+			if response == nil || response.Receipt.OperationID == "" {
+				return UndoableActionResult{}, errors.New("mailbox service returned no action receipt")
+			}
+			a.publishRemoteMove(messageIDs, "")
+			return UndoableActionResult{OperationID: response.Receipt.OperationID, Atomic: true}, nil
+		}
+	}
+	_, operationID, coalesced, err := a.runMoveMutation(messageIDs, "archive", func() (bool, string, error) {
+		operationID, archiveErr := a.archiveWithUndo(messageIDs, "")
+		return false, operationID, archiveErr
+	})
+	if err != nil || coalesced {
+		return UndoableActionResult{OperationID: operationID, Coalesced: coalesced}, err
+	}
+	if err := a.MarkAsRead(messageIDs); err != nil {
+		return UndoableActionResult{OperationID: operationID}, err
+	}
+	return UndoableActionResult{OperationID: operationID}, nil
 }
 
 func (a *App) archiveWithUndoUsingService(messageIDs []string, operationID string, useService bool) (string, error) {
