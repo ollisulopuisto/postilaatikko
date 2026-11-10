@@ -2270,6 +2270,7 @@
           rememberUnreadForUndo(result.operationId, unreadIds)
         }
         showTargetedUndoToast($_('toast.archived'), result.operationId, messageIds, 'archive')
+        if (result.readFailed) addToast({ type: 'error', message: $_('toast.failedToUpdateReadStatus') })
         messageListRef?.clearChecked()
         messageListRef?.handleActionComplete(true)
       })

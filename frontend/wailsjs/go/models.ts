@@ -1216,6 +1216,7 @@ export namespace app {
 	    operationId: string;
 	    coalesced: boolean;
 	    atomic: boolean;
+	    readFailed?: boolean;
 
 	    static createFrom(source: any = {}) {
 	        return new UndoableActionResult(source);
@@ -1226,6 +1227,7 @@ export namespace app {
 	        this.operationId = source["operationId"];
 	        this.coalesced = source["coalesced"];
 	        this.atomic = source["atomic"];
+	        this.readFailed = source["readFailed"];
 	    }
 	}
 	export class VirtualFolderCachedView {

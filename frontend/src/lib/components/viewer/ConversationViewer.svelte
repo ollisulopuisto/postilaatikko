@@ -1322,6 +1322,7 @@
           }
           publishUndoOperationCreated(result.operationId, messageIds, 'archive')
           showArchiveUndoToast(result.operationId)
+          if (result.readFailed) toasts.error($_('toast.failedToUpdateReadStatus'))
           onActionComplete?.(true)
         } finally {
           moveMutationInFlight = false

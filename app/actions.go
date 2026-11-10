@@ -90,6 +90,9 @@ type UndoableActionResult struct {
 	// its Undo reverses every part of it. A false value means the action was
 	// composed from separate backend calls whose Undo covers only the move.
 	Atomic bool `json:"atomic"`
+	// ReadFailed is set on the legacy two-step path when the archive succeeded
+	// but marking read failed; OperationID then still holds the archive Undo.
+	ReadFailed bool `json:"readFailed,omitempty"`
 }
 
 // TrashUndoResult preserves the legacy Trash outcome while identifying its undo operation.
@@ -1573,8 +1576,14 @@ func (a *App) ArchiveAndMarkReadWithUndo(messageIDs []string) (UndoableActionRes
 			if response == nil || response.Receipt.OperationID == "" {
 				return UndoableActionResult{}, errors.New("mailbox service returned no action receipt")
 			}
+			if response.Partial || response.Receipt.State != v1.OperationSent {
+				// Only confirmed groups carry Undo; never announce an atomic
+				// success the Undo cannot cover. Reconciliation events for the
+				// confirmed groups were already published from the receipt.
+				return UndoableActionResult{}, errors.New("archive and mark read did not complete for every account; check Undo history for the confirmed part")
+			}
 			a.publishRemoteMove(messageIDs, "")
-			return UndoableActionResult{OperationID: response.Receipt.OperationID, Atomic: true}, nil
+			return UndoableActionResult{OperationID: response.Receipt.OperationID, Atomic: response.UndoAvailable}, nil
 		}
 	}
 	_, operationID, coalesced, err := a.runMoveMutation(messageIDs, "archive", func() (bool, string, error) {
@@ -1585,7 +1594,9 @@ func (a *App) ArchiveAndMarkReadWithUndo(messageIDs []string) (UndoableActionRes
 		return UndoableActionResult{OperationID: operationID, Coalesced: coalesced}, err
 	}
 	if err := a.MarkAsRead(messageIDs); err != nil {
-		return UndoableActionResult{OperationID: operationID}, err
+		// The archive is already undoable; surface the receipt so callers can
+		// still offer that Undo while reporting the read failure.
+		return UndoableActionResult{OperationID: operationID, ReadFailed: true}, nil
 	}
 	return UndoableActionResult{OperationID: operationID}, nil
 }
