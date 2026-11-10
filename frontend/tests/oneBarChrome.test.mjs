@@ -45,3 +45,20 @@ test('the zoom button and the strip share one maximised state, so the label neve
   assert.match(controls, /onclick=\{\(\) => void toggleMaximise\(\)\}/)
   assert.doesNotMatch(controls, /\$state\(false\)[^\n]*\n[^\n]*isMaximized|let isMaximized/)
 })
+
+test('settleMaximised keeps reading until a delayed native toggle shows the new state', async () => {
+  const { default: ts } = await import('typescript')
+  const source = await read('../src/lib/windowState.svelte.ts')
+  const start = source.indexOf('export async function settleMaximised')
+  const end = source.indexOf('export async function toggleMaximise')
+  const js = ts.transpileModule(source.slice(start, end), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText
+  const { settleMaximised } = await import(`data:text/javascript;base64,${Buffer.from(js).toString('base64')}`)
+  const noWait = async () => {}
+  // The native window reports the old state twice before the zoom finishes.
+  const reads = [false, false, true]
+  let calls = 0
+  assert.equal(await settleMaximised(async () => reads[Math.min(calls++, 2)], false, noWait), true)
+  assert.equal(calls, 3)
+  // A toggle that never changes the state gives up with the last real value.
+  assert.equal(await settleMaximised(async () => false, false, noWait, 3), false)
+})

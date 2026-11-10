@@ -1,7 +1,7 @@
 <script lang="ts">
   import { _ } from '$lib/i18n'
   import { WindowMinimise, Quit } from '../../../../wailsjs/runtime/runtime'
-  import { windowState, toggleMaximise } from '$lib/windowState.svelte'
+  import { windowState, toggleMaximise, syncMaximised } from '$lib/windowState.svelte'
 
   interface Props {
     onClose?: () => void
@@ -11,6 +11,14 @@
   let { onClose, class: extraClass = '' }: Props = $props()
 
   let isHovering = $state(false)
+
+  // Resizes the app did not start (OS zoom, snapping) also change the label.
+  $effect(() => {
+    void syncMaximised()
+    const onResize = () => void syncMaximised()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  })
 
   async function minimize() {
     await WindowMinimise()
