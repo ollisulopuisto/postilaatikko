@@ -6,6 +6,14 @@ const base = '../src/lib/components/'
 const viewer = await read(base+'viewer/ConversationViewer.svelte')
 const row = await read(base+'list/ConversationRow.svelte')
 const list = await read(base+'list/MessageList.svelte')
+// Extracted component functions call this new shared focus setter. Supply its
+// real implementation (including the account-qualified key) to the harness.
+const focusTs = (await import('typescript')).default
+const keySource = await read(base+'list/focusedRow.ts')
+const focusSource = list.slice(list.indexOf('  function focusConversation('), list.indexOf('  // Reader/history restoration'))
+const focusSupport = 'let focusedRowIdentity=null; const accountId="unified",folderId="inbox";' +
+  focusTs.transpileModule(keySource.replaceAll('export ', '') + focusSource, {compilerOptions: {target: focusTs.ScriptTarget.ES2022}}).outputText
+
 const menu = await read(base+'common/MessageContextMenu.svelte')
 const button = await read(base+'common/LaterQueueButton.svelte')
 test('reader toolbar, per-message header and row quick actions include both queues', () => {
@@ -53,7 +61,7 @@ test('unresolved IMAP result queue actions are disabled and excluded from bulk t
 test('one failed selected conversation does not skip later targets or lose successful Undo receipts', async () => {
   const ts = (await import('typescript')).default
   const start = menu.indexOf('  async function toggleLater(')
-  const end = menu.indexOf('  async function confirmSnooze()', start)
+  const end = menu.indexOf('  async function handleUnsnooze()', start)
   const source = menu.slice(start, end) + '\nexport { toggleLater }'
   const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } })
   const calls = [], notices = []
@@ -122,6 +130,7 @@ test('fetching a result with a shared mailbox UID updates only its account-quali
   const code=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText
   const factory=new Function('serverSearchResults','FetchServerMessage','onConversationSelect','serverSearchResultIdentity',`
     let checkedThreadIds=new Set(); let serverResultFetchGeneration=0, searchQuery='query', searchSource='server', selectedThreadId='', serverSearchError=''; const migrateCheckedServerThread=()=>{};
+    ${focusSupport}
     ${code}
     return {run:fetchAndSelectServerResult,rows:()=>serverSearchResults};`)
   const a={accountId:'A',folderId:'inbox-A',threadId:'uid-A',_uid:42,_isLocal:false,_queueCanonical:false}
@@ -202,6 +211,7 @@ test('canonical server resolution carries checked IDs forward and opening pins i
     let checkedThreadIds=new Set(['provisional','other']); const toasts={error:()=>{}};
     const GetMessage=async()=>({accountId:'one',id:'message',threadId:'canonical'}),FetchServerMessage=GetMessage;
     const onConversationSelect=()=>{},serverSearchResultIdentity=r=>r.accountId+':'+r._uid;
+    ${focusSupport}
     ${code}
     return {local:resolveLocalServerConversation,remote:fetchAndSelectServerResult,checks:()=>[...checkedThreadIds],rows:()=>serverSearchResults};`)
   for(const kind of ['local','remote']) {
@@ -226,6 +236,7 @@ test('same-UID server rows keep independent checked keys through canonical resol
   const factory=new Function('serverSearchResultIdentity',`
     let serverResultFetchGeneration=0,searchQuery='q',searchSource='server',selectedThreadId='',serverSearchResults=[],checkedThreadIds=new Set();
     const FetchServerMessage=async(account)=>({accountId:account,id:'msg-'+account,threadId:'thread-'+account}),onConversationSelect=()=>{};
+    ${focusSupport}
     ${code}
     return {adapt:adaptServerResult,open:fetchAndSelectServerResult,setup:rows=>{serverSearchResults=rows;checkedThreadIds=new Set(rows.map(r=>r.threadId));selectedThreadId=rows[0].threadId},checks:()=>checkedThreadIds,rows:()=>serverSearchResults};`)
   const state=factory(serverSearchResultIdentity)
@@ -254,6 +265,7 @@ test('same canonical RFC thread in two accounts never checks or queues the unsel
   const factory=new Function('serverSearchResultIdentity',`
     let serverResultFetchGeneration=0,searchQuery='q',searchSource='server',selectedThreadId='',serverSearchResults=[],checkedThreadIds=new Set();
     const FetchServerMessage=async(account)=>({accountId:account,id:'msg-'+account,threadId:'root@example.org'}),GetMessage=async()=>({accountId:'A',id:'msg-A',threadId:'root@example.org'}),onConversationSelect=()=>{},toasts={error:()=>{}};
+    ${focusSupport}
     ${code}
     return {adapt:adaptServerResult,local:resolveLocalServerConversation,remote:fetchAndSelectServerResult,
       setup:rows=>{serverSearchResults=rows;checkedThreadIds=new Set([rows[0].threadId]);selectedThreadId=rows[0].threadId},

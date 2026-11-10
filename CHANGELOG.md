@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Pressing / focuses search in Contacts again, without allowing mail shortcuts to act on hidden messages. Calendar has no general search control, so / is left alone there.
+
 - Add high-contrast focus rings and outline styling to sidebar favorite star buttons and conversation row action buttons for accessible keyboard navigation.
 - Bare Gmail-style letter shortcuts (d trash, e archive+read, s star, ...) now fire only while the mail rail is active; pressing them in Calendar or Contacts no longer acts on the hidden mail list. Global single keys like `?` (shortcuts help) keep working on every pane.
 - Archive and mark read (E, toolbar button, selection bar, secondary window) is now one atomic mailbox action: the helper archives and marks read in a single operation, and Undo reverses both together, moving the messages back and restoring their previous read state. If the read update fails after the move, the helper reverses the move and restores the original unread state itself; the secondary mail window captures the same unread snapshot (asking the backend when a row is mixed or unloaded) and actually restores it on Undo; a partially completed action is reported as a failure instead of a success with an incomplete Undo; and the legacy fallback still offers the archive Undo when only the read step fails. The frontend's unread-snapshot workaround only remains for that fallback.
@@ -17,6 +19,11 @@
 ## Postilaatikko 2026.11.10.4
 
 - Add to Calendar now recognises Finnish dates: dotted dates such as 12.11.2026, month names such as 12. marraskuuta 2026, and times written "klo 14", "klo 14.30" or "klo 9:00-10.30". A bare number after a date (for example "June 5, 2026 14 people", or a price after a dotted date) is no longer read as an hour; use "at 3 pm", minutes or am/pm. Dates still need a four-digit year, and slash dates such as 12/05/2026 are still skipped because they are ambiguous. Finnish times may carry a zone (klo 14 UTC, klo 14 +02:00), and English hour ranges such as 2-3 pm are recognised; a time followed by an ambiguous zone name such as PST is skipped.
+## Postilaatikko 2026.11.10.3
+
+- Keyboard-focused mail actions and read/star state now follow the account-qualified row in unified lists, even when two accounts share a thread ID. A stale focus does not target another account.
+
+- Snooze: pick when a conversation comes back. Presets (later today, this evening, tomorrow morning, this weekend, next week) or a custom date and time replace the old whole-days box. Press H, use the Snooze button in the reader toolbar or the selection bar, the message menu or the command palette. Works on several selected conversations at once, and Undo takes the whole batch back. A toast tells you when snoozed conversations return. Snoozing stays local: nothing changes on the mail server.
 
 ## Postilaatikko 2026.11.10.2
 
