@@ -160,6 +160,17 @@ func equalFoldASCII(s string, nameStart, nameEnd int, target string) bool {
 	return true
 }
 
+// equalFoldClosingTag keeps the ASCII fast path while preserving the former
+// Unicode EqualFold behavior for non-ASCII closing tag names.
+func equalFoldClosingTag(s string, nameStart, nameEnd int, target string) bool {
+	for i := nameStart; i < nameEnd; i++ {
+		if s[i] >= 0x80 {
+			return strings.EqualFold(s[nameStart:nameEnd], target)
+		}
+	}
+	return equalFoldASCII(s, nameStart, nameEnd, target)
+}
+
 // stripHTMLTags removes HTML tags (and the contents of <script>, <style> and
 // <noscript> elements) and decodes HTML entities so the result is safe to use
 // as a plain-text message preview snippet.
@@ -178,8 +189,8 @@ func stripHTMLTags(s string) string {
 	for i < len(s) {
 		if skipBlock != "" {
 			if i+1 < len(s) && s[i] == '<' {
-				ns, ne, end := readTagIndices(s, i+1)
-				if ne > ns && s[ns] == '/' && equalFoldASCII(s, ns+1, ne, skipBlock) {
+				nameStart, nameEnd, end := readTagIndices(s, i+1)
+				if nameEnd > nameStart && s[nameStart] == '/' && equalFoldClosingTag(s, nameStart+1, nameEnd, skipBlock) {
 					skipBlock = ""
 					i = end
 					continue
@@ -189,17 +200,15 @@ func stripHTMLTags(s string) string {
 			continue
 		}
 		if s[i] == '<' {
-			ns, ne, end := readTagIndices(s, i+1)
-			if ne > ns && s[ns] == '/' {
-				// Closing tag: only ends a skipped block (handled above).
-				if skipBlock != "" && equalFoldASCII(s, ns+1, ne, skipBlock) {
-					skipBlock = ""
-				}
-			} else if equalFoldASCII(s, ns, ne, "script") {
+			nameStart, nameEnd, end := readTagIndices(s, i+1)
+			switch {
+			case nameEnd > nameStart && s[nameStart] == '/':
+				// Other closing tags have no visible text; block closes were handled above.
+			case equalFoldASCII(s, nameStart, nameEnd, "script"):
 				skipBlock = "script"
-			} else if equalFoldASCII(s, ns, ne, "style") {
+			case equalFoldASCII(s, nameStart, nameEnd, "style"):
 				skipBlock = "style"
-			} else if equalFoldASCII(s, ns, ne, "noscript") {
+			case equalFoldASCII(s, nameStart, nameEnd, "noscript"):
 				skipBlock = "noscript"
 			}
 			// Void tags and normal elements are fully consumed by readTagIndices,

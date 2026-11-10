@@ -145,3 +145,11 @@ func TestStripHTMLTags_RemovesComments(t *testing.T) {
 		t.Errorf("snippet should keep real text, got %q", result)
 	}
 }
+
+func TestStripHTMLTagsUnicodeFoldClosingBlock(t *testing.T) {
+	for _, input := range []string{"<style>hidden</ſtyle>Visible", "<script>hidden</ſcript>Visible", "<noscript>hidden</noſcript>Visible"} {
+		if got := stripHTMLTags(input); got != "Visible" {
+			t.Errorf("%q => %q, want Visible", input, got)
+		}
+	}
+}
