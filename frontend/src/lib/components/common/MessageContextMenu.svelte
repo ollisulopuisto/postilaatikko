@@ -24,7 +24,6 @@
     CopyToFolder,
     ResolveMailActionTarget,
     UndoOperation,
-    SnoozeConversationWithUndo,
     UnsnoozeConversationWithUndo,
   } from '../../../../wailsjs/go/app/App'
   // @ts-ignore - wailsjs path
@@ -32,14 +31,13 @@
   import { toasts } from '$lib/stores/toast'
   import { ConfirmDialog } from '$lib/components/ui/confirm-dialog'
   import FolderPickerDialog from './FolderPickerDialog.svelte'
+  import SnoozeDialog from './SnoozeDialog.svelte'
   import type { Snippet } from 'svelte'
   import { _ } from '$lib/i18n'
   import { dialogGuardOpen, dialogGuardClose } from '$lib/stores/dialogGuard'
   import { runMessageMutation } from '$lib/components/list/mutationInFlight'
   import ShortcutHint from '$lib/components/shortcuts/ShortcutHint.svelte'
   import { publishUndoOperationCompleted, publishUndoOperationCreated } from '$lib/components/list/undoMutationEvents'
-  import * as Dialog from '$lib/components/ui/dialog'
-  import { Button } from '$lib/components/ui/button'
 
   interface Props {
     laterActionsEnabled?: boolean
@@ -86,7 +84,7 @@
   let accountsLoaded = $state(false)
   let accountsLoading = $state(false)
   let showSnoozeDialog = $state(false)
-  let snoozeDays = $state('1')
+  const snoozeTargets = $derived(conversationId ? [{ accountId, conversationId }] : [])
 
   // Permanent delete confirmation
   let showDeleteConfirm = $state(false)
@@ -210,24 +208,6 @@
       }
       if (failures > 0) toasts.error($_(`${kind}.failed`))
     } catch (err) { toasts.error(`${$_(`${kind}.failed`)}: ${String(err)}`) }
-  }
-
-  async function confirmSnooze() {
-    if (!conversationId) return
-    const days = Number(snoozeDays)
-    if (!Number.isFinite(days) || days < 1 || days > 3650) return
-    const wakeAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString()
-    try {
-      const result = await SnoozeConversationWithUndo(accountId, conversationId, wakeAt)
-      showSnoozeDialog = false
-      if (result.changed) {
-        toasts.success($_('snooze.done'), result.operationId ? [{
-          label: $_('common.undo'),
-          onClick: () => { void UndoOperation(result.operationId).catch(() => toasts.error($_('toast.undoFailed'))) },
-        }] : undefined)
-      }
-      onActionComplete?.(true)
-    } catch (err) { toasts.error(`${$_('snooze.failed')}: ${String(err)}`) }
   }
 
   async function handleUnsnooze() {
@@ -538,7 +518,7 @@
           {$_('snooze.unsnooze')}
         </ContextMenuItem>
       {:else}
-        <ContextMenuItem onSelect={() => { snoozeDays = '1'; showSnoozeDialog = true }}>
+        <ContextMenuItem onSelect={() => { showSnoozeDialog = true }}>
           <Icon icon="mdi:clock-time-four-outline" class="mr-2 h-4 w-4" />
           {$_('snooze.action')}
         </ContextMenuItem>
@@ -611,22 +591,7 @@
   </ContextMenuContent>
 </ContextMenuPrimitive.Root>
 
-<Dialog.Root bind:open={showSnoozeDialog}>
-  <Dialog.Content class="max-w-sm">
-    <Dialog.Header>
-      <Dialog.Title>{$_('snooze.title')}</Dialog.Title>
-      <Dialog.Description>{$_('snooze.description')}</Dialog.Description>
-    </Dialog.Header>
-    <label class="grid gap-2 text-sm" for="snooze-days">
-      {$_('snooze.days')}
-      <input id="snooze-days" type="number" min="1" max="3650" step="1" bind:value={snoozeDays} class="rounded-md border border-input bg-background px-3 py-2" />
-    </label>
-    <Dialog.Footer>
-      <Button variant="outline" onclick={() => showSnoozeDialog = false}>{$_('common.cancel')}</Button>
-      <Button onclick={confirmSnooze}>{$_('snooze.confirm')}</Button>
-    </Dialog.Footer>
-  </Dialog.Content>
-</Dialog.Root>
+<SnoozeDialog bind:open={showSnoozeDialog} targets={snoozeTargets} onDone={() => onActionComplete?.(true)} />
 
 <!-- Permanent Delete Confirmation Dialog -->
 <ConfirmDialog

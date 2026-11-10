@@ -194,12 +194,28 @@
     "failed": "Could not update Read Later"
   },
   "snooze": {
-    "action": "Snooze locally…",
-    "title": "Snooze in Postilaatikko",
-    "description": "Hide this conversation from your mail lists and bring it back after the selected number of days.",
-    "days": "Days",
+    "title": "Snooze",
+    "description": "Hide this conversation from your lists until the time you pick. It stays in your mailbox and does not change on the server.",
+    "presets": "Snooze until",
+    "custom": "Pick a date and time",
     "confirm": "Snooze",
-    "done": "Conversation snoozed",
+    "action": "Snooze…",
+    "doneUntil": "Snoozed until {when}",
+    "doneUntilMany": "{count} conversations snoozed until {when}",
+    "returned": "A snoozed conversation is back in your inbox",
+    "returnedMany": "{count} snoozed conversations are back",
+    "preset": {
+      "laterToday": "Later today",
+      "thisEvening": "This evening",
+      "tomorrow": "Tomorrow morning",
+      "weekend": "This weekend",
+      "nextWeek": "Next week"
+    },
+    "error": {
+      "invalid": "Enter a valid date and time.",
+      "past": "Pick a time at least a minute from now.",
+      "toofar": "Pick a time within ten years."
+    },
     "unsnooze": "Bring back now",
     "restored": "Conversation brought back",
     "failed": "Could not snooze conversation"
@@ -1398,6 +1414,7 @@
       "lists": "Lists"
     },
     "action": {
+      "snooze": "Snooze conversation",
       "commandPalette": "Command palette",
       "showShortcuts": "Show keyboard shortcuts",
       "preferences": "Open settings",

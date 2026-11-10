@@ -6,7 +6,7 @@
   // Keyed "accountId:folderId" ("unified:inbox" for the unified view).
   const sessionListState = new Map<
     string,
-    { loadedCount: number; scrollTop: number; selectedThreadId: string | null; conversations: unknown[]; totalCount: number }
+    { loadedCount: number; scrollTop: number; selectedThreadId: string | null; focusedRowIdentity: string | null; conversations: unknown[]; totalCount: number }
   >()
   const MAX_CACHED_FOLDER_LISTS = 8
   const MAX_CACHED_FOLDER_ROWS = 50
@@ -16,6 +16,7 @@
 <script lang="ts">
   import { refreshVirtualView, isExpectedSearchCancellation } from './virtualFolderRefresh'
   import { pinnedGroupForSelection, retainPinnedConversationPosition, type PinnedInboxGroup } from './activeInboxGroup'
+  import { focusedRowKey, findFocusedRow } from './focusedRow'
   import { mailRowKey, captureScrollAnchor, anchoredScrollTop, newRowsBeforeAnchor, extendAnchorWindow } from './scrollAnchor'
   import { retainReadSelection } from '$lib/sidebar/virtualView'
   import { app as searchModels } from '../../../../wailsjs/go/models'
@@ -33,6 +34,7 @@
   // @ts-ignore - wailsjs bindings
   import { GetMessage, RefreshViewHeaders, SearchMail, CancelMailSearch, MoveToInboxWithUndo, GetConversations, GetConversationCount, SyncFolder, ForceSyncFolder, CancelFolderSync, SetMessageListSortOrder, GetUnifiedFolderConversations, GetUnifiedFolderCount, SearchConversations, SearchUnifiedFolder, GetSearchCount, GetSearchCountUnifiedFolder, SyncUnifiedFolder, SyncVirtualFolder, EmptyUnifiedTrash, GetFTSIndexStatus, IsFTSIndexing, TrashWithUndo, DeletePermanently, EmptyTrash, UndoOperation, IMAPSearchFolder, IMAPSearchUnifiedInbox, FetchServerMessage, GetVirtualFolderConversations, GetVirtualFolderCount, GetVirtualFolderCachedView, PrefetchMessageBodies } from '../../../../wailsjs/go/app/App'
   import { toasts } from '$lib/stores/toast'
+  import { snoozeDialog } from '$lib/stores/snoozeDialog.svelte'
   import { withShortcut, ariaKeyshortcuts } from '$lib/keyboard/format'
   import ShortcutHint from '$lib/components/shortcuts/ShortcutHint.svelte'
   import { _ } from '$lib/i18n'
@@ -122,6 +124,12 @@
   // slightly later, especially for unified folders.
   let manualSyncing = $state(false)
   let selectedThreadId = $state<string | null>(null)
+  let focusedRowIdentity = $state<string | null>(null)
+
+  function focusConversation(row: any | undefined) {
+    selectedThreadId = row?.threadId || null
+    focusedRowIdentity = row ? focusedRowKey(row, accountId || '', folderId || '') : null
+  }
   // Reader/history restoration must also move the list's keyboard-action target.
   // Reapply after a folder load, which otherwise selects its first row.
   function serverRowForReaderSelection(rows: any[], selection: { accountId: string; folderId: string; threadId: string }, currentRowId: string | null) {
@@ -135,7 +143,12 @@
       // Focus-only moves must not reapply the old reader selection. Keep the
       // opened UID when multiple messages share one canonical conversation.
       const serverRow = serverRowForReaderSelection(serverSearchResults, selection, untrack(() => selectedThreadId))
-      selectedThreadId = serverRow && showSearch && searchSource === 'server' ? serverRow.threadId : selection.threadId
+      const rows = showSearch ? (searchSource === 'server' ? serverSearchResults : searchResults) : conversations
+      const readerRow = serverRow && showSearch && searchSource === 'server' ? serverRow : rows.find((row: any) =>
+        (row._canonicalConversationId || row.threadId) === selection.threadId &&
+        (row.accountId || accountId) === selection.accountId &&
+        (row.folderId || folderId) === selection.folderId)
+      if (readerRow) focusConversation(readerRow)
     }
   })
   let lastLoadedFolderId = $state<string | null>(null) // Track folder changes
@@ -856,6 +869,7 @@
       loadedCount: conversations.length,
       scrollTop: listContainerRef?.scrollTop ?? 0,
       selectedThreadId,
+      focusedRowIdentity,
       conversations: conversations.slice(0, MAX_CACHED_FOLDER_ROWS),
       totalCount,
     })
@@ -916,14 +930,12 @@
       sessionListState.set(`${currentAccount}:${currentFolder}`, remembered)
       conversations = remembered.conversations as message.Conversation[]
       totalCount = remembered.totalCount
-      selectedThreadId = remembered.selectedThreadId && conversations.some((item) => item.threadId === remembered.selectedThreadId)
-        ? remembered.selectedThreadId
-        : null
+      focusConversation(findFocusedRow(conversations, remembered.focusedRowIdentity, remembered.selectedThreadId, accountId || '', folderId || ''))
     }
     if (!remembered) {
       conversations = []
       totalCount = 0
-      selectedThreadId = null
+      focusConversation(undefined)
     }
     listError = null
     virtualCacheRefreshedAt = null
@@ -944,7 +956,7 @@
         remembered.selectedThreadId &&
         conversations.some((c) => c.threadId === remembered.selectedThreadId)
       ) {
-        selectedThreadId = remembered.selectedThreadId
+        focusConversation(findFocusedRow(conversations, remembered.focusedRowIdentity, remembered.selectedThreadId, accountId || '', folderId || ''))
       }
       if (remembered.scrollTop > 0 && listContainerRef) {
         requestAnimationFrame(() => {
@@ -1135,7 +1147,7 @@
             if (conversations.length === 0 && (view.conversations?.length ?? 0) > 0) {
               conversations = view.conversations
               totalCount = conversations.length
-              if (!selectedThreadId) selectedThreadId = conversations[0]?.threadId || null
+              if (!selectedThreadId) focusConversation(conversations[0])
             }
           }).catch((cacheError: unknown) => console.warn('Virtual folder cache view failed:', cacheError))
         }
@@ -1164,7 +1176,7 @@
         await replaceConversationRows(currentOffset === 0 ? retainReadSelection(conversations, items, selectedThreadId, (view?.readStatus === 'unread' || filterMode === 'unread') && lastLoadedFolderId === folderId) : [...new Map([...conversations, ...items].map(c => [`${c.accountId}:${c.threadId}`, c])).values()], currentOffset === 0)
         listError = conversations.length === 0 && virtualIssues ? virtualIssues : null
         totalCount = conversations.length + (virtualCursor ? 1 : 0)
-        if (currentOffset === 0 && (!selectedThreadId || !conversations.some(c => c.threadId === selectedThreadId))) selectedThreadId = conversations[0]?.threadId || null
+        if (currentOffset === 0 && (!selectedThreadId || !conversations.some(c => c.threadId === selectedThreadId))) focusConversation(conversations[0])
         lastLoadedFolderId = folderId
         return
       }
@@ -1259,12 +1271,12 @@
 
       // Auto-select first message on folder navigation or initial load
       if (conversations.length === 0) {
-        selectedThreadId = null
+        focusConversation(undefined)
         return
       }
 
       if (folderChanged || !selectedThreadId) {
-        selectedThreadId = conversations[0].threadId
+        focusConversation(conversations[0])
       }
       for (const conv of conversations.slice(0, 5)) {
         prefetchConversationBodies(conv)
@@ -1488,7 +1500,7 @@
       // A list action chooses its own successor. Ordinary local searches
       // retain the existing keyboard-navigation anchor behavior.
       if (!preserveSelection && searchResults.length > 0) {
-        selectedThreadId = searchResults[0].threadId
+        focusConversation(searchResults[0])
       }
     } catch (err) {
       if (generation !== localSearchGeneration || query !== searchQuery.trim() || searchSource !== 'local') {
@@ -1657,7 +1669,7 @@
       serverSearchCount = items.length
       serverSearchTotalCount = Math.max(items.length, (response?.totalCount ?? receivedItems.length) - suppressed)
       if (!preserveSelection && !serverSearchSelectionLocked && items.length > 0) {
-        selectedThreadId = items[0].threadId
+        focusConversation(items[0])
       }
     } catch (err) {
       if (!serverSearchRequestState.accepts(requestGeneration, query) || searchSource !== 'server') {
@@ -1809,7 +1821,7 @@
 
     // Normal click - select for viewing, clear checks
     checkedThreadIds = new Set()
-    selectedThreadId = threadId
+    focusConversation(activeList[index])
 
     openConversation(activeList[index] as any)
   }
@@ -1845,7 +1857,7 @@
       if (generation !== serverResultFetchGeneration || selectedThreadId !== selectionAtStart || searchSource !== 'server' || query !== searchQuery.trim() || !serverSearchResults.includes(result) || message?.accountId !== account || !message.id) return
       const canonicalId = message.threadId || message.id
       serverSearchResults = serverSearchResults.map(item => item === result ? { ...item, _canonicalConversationId: canonicalId, _queueCanonical: true } : item)
-      selectedThreadId = result.threadId
+      focusConversation(result)
       onConversationSelect?.(canonicalId, folder, account)
     } catch (error) {
       if (generation !== serverResultFetchGeneration || selectedThreadId !== selectionAtStart) return
@@ -1878,7 +1890,7 @@
             _uid: conversation._uid,
           }
           serverSearchResults = serverSearchResults
-          selectedThreadId = serverSearchResults[idx].threadId
+          focusConversation(serverSearchResults[idx])
         }
         onConversationSelect?.(msg.threadId || msg.id, realFolderId, realAccountId)
       }
@@ -2045,7 +2057,7 @@
         const isNarrow = getLayoutMode() === 'narrow'
         // The previous thread was removed. Keep the list anchor and viewer
         // in agreement when there is no eligible visible successor.
-        selectedThreadId = null
+        focusConversation(undefined)
         if (isNarrow) {
           hideViewer()
         }
@@ -2071,7 +2083,7 @@
     }
     if (!autoSelectNext) return
     const isNarrow = getLayoutMode() === 'narrow'
-    selectedThreadId = null
+    focusConversation(undefined)
     if (isNarrow) hideViewer()
     const conversation = selection && findAutoSelectNext(activeList, selection)
     if (!conversation) return
@@ -2080,7 +2092,7 @@
   }
 
   function selectAutoSelectedConversation(conversation: any, index: number, isNarrow: boolean) {
-    selectedThreadId = conversation.threadId
+    focusConversation(conversation)
     scrollToIndex(index)
     if (!isNarrow) selectConversation(conversation.threadId, index)
   }
@@ -2210,7 +2222,8 @@
   // Get current selected index
   function getSelectedIndex(): number {
     if (!selectedThreadId) return -1
-    return activeList.findIndex(c => c.threadId === selectedThreadId)
+    const row = findFocusedRow(activeList, focusedRowIdentity, selectedThreadId, accountId || '', folderId || '')
+    return row ? activeList.indexOf(row) : -1
   }
 
   // Select previous message (exposed for keyboard navigation)
@@ -2223,7 +2236,7 @@
 
     const conv = activeList[newIndex]
     if (conv) {
-      selectedThreadId = conv.threadId
+      focusConversation(conv)
       scrollToIndex(newIndex)
       // Blur any focused element so Enter key triggers openSelected() instead of the button
       ;(document.activeElement as HTMLElement)?.blur?.()
@@ -2247,7 +2260,7 @@
 
     const conv = activeList[newIndex]
     if (conv) {
-      selectedThreadId = conv.threadId
+      focusConversation(conv)
       scrollToIndex(newIndex)
       // Blur any focused element so Enter key triggers openSelected() instead of the button
       ;(document.activeElement as HTMLElement)?.blur?.()
@@ -2257,7 +2270,7 @@
   // Select + scroll to the first message (g)
   export function selectFirst() {
     if (activeList.length === 0) return
-    selectedThreadId = activeList[0].threadId
+    focusConversation(activeList[0])
     scrollToIndex(0)
     // Blur any focused element so Enter key triggers openSelected() instead of the button
     ;(document.activeElement as HTMLElement)?.blur?.()
@@ -2268,7 +2281,7 @@
   export function selectLast() {
     if (activeList.length === 0) return
     const last = activeList.length - 1
-    selectedThreadId = activeList[last].threadId
+    focusConversation(activeList[last])
     scrollToIndex(last)
     // Blur any focused element so Enter key triggers openSelected() instead of the button
     ;(document.activeElement as HTMLElement)?.blur?.()
@@ -2286,8 +2299,10 @@
 
   // Select a specific thread by ID (exposed for notification clicks)
   export function selectThread(threadId: string) {
-    selectedThreadId = threadId
-    const index = activeList.findIndex(c => c.threadId === threadId)
+    const matches = activeList.filter(c => c.threadId === threadId)
+    // A thread-only notification cannot disambiguate a unified account.
+    focusConversation(matches.length === 1 ? matches[0] : undefined)
+    const index = getSelectedIndex()
     if (index >= 0) {
       scrollToIndex(index)
     }
@@ -2321,14 +2336,14 @@
 
   // Get the currently selected thread ID (exposed for parent access)
   export function getSelectedThreadId(): string | null {
-    const conversation = activeList.find(item => item.threadId === selectedThreadId) as any
-    return conversation?._canonicalConversationId || (conversation?._queueCanonical === false ? null : selectedThreadId)
+    const conversation = findFocusedRow(activeList, focusedRowIdentity, selectedThreadId, accountId || '', folderId || '') as any
+    return conversation?._canonicalConversationId || (conversation?._queueCanonical === false ? null : conversation?.threadId || null)
   }
 
   // Get message IDs for the keyboard-focused thread (for delete without checking)
   export function getSelectedMessageIds(): string[] {
     if (!selectedThreadId) return []
-    const conv = activeList.find(c => c.threadId === selectedThreadId) as any
+    const conv = findFocusedRow(activeList, focusedRowIdentity, selectedThreadId, accountId || '', folderId || '') as any
     if (!conv) return []
     return conv.messageIds || conv.messages?.map((m: any) => m.id) || []
   }
@@ -2357,7 +2372,7 @@
 
   export function getSelectedMessageRefs(): { accountId: string; messageId: string }[] {
     if (!selectedThreadId) return []
-    const conversation = activeList.find((item) => item.threadId === selectedThreadId) as any
+    const conversation = findFocusedRow(activeList, focusedRowIdentity, selectedThreadId, accountId || '', folderId || '') as any
     return conversation ? refsForConversation(conversation) : []
   }
 
@@ -2368,7 +2383,7 @@
   // Get account and folder info for the keyboard-focused thread (for unified inbox)
   export function getSelectedConversationInfo(): { accountId: string; folderId: string } | null {
     if (!selectedThreadId) return null
-    const conv = activeList.find(c => c.threadId === selectedThreadId) as any
+    const conv = findFocusedRow(activeList, focusedRowIdentity, selectedThreadId, accountId || '', folderId || '') as any
     if (!conv) return null
 
     const realAccountId = (isUnifiedView || isSearchMode) && conv.accountId ? conv.accountId : accountId
@@ -2381,14 +2396,14 @@
   // Check if the keyboard-focused thread is starred
   export function isSelectedStarred(): boolean {
     if (!selectedThreadId) return false
-    const conv = activeList.find(c => c.threadId === selectedThreadId) as any
+    const conv = findFocusedRow(activeList, focusedRowIdentity, selectedThreadId, accountId || '', folderId || '') as any
     return conv?.isStarred ?? false
   }
 
   // True when the keyboard-focused conversation has unread messages
   export function isSelectedUnread(): boolean {
     if (!selectedThreadId) return false
-    const conv = activeList.find(c => c.threadId === selectedThreadId)
+    const conv = findFocusedRow(activeList, focusedRowIdentity, selectedThreadId, accountId || '', folderId || '')
     return (conv?.unreadCount ?? 0) > 0
   }
 
@@ -2419,7 +2434,7 @@
     checkedThreadIds = newChecked
 
     // Move focus (but don't open in viewer)
-    selectedThreadId = conv.threadId
+    focusConversation(conv)
     scrollToIndex(newIndex)
     // Blur any focused element so Enter key triggers openSelected() instead of the button
     ;(document.activeElement as HTMLElement)?.blur?.()
@@ -2443,7 +2458,7 @@
     checkedThreadIds = newChecked
 
     // Move focus (but don't open in viewer)
-    selectedThreadId = conv.threadId
+    focusConversation(conv)
     scrollToIndex(newIndex)
     // Blur any focused element so Enter key triggers openSelected() instead of the button
     ;(document.activeElement as HTMLElement)?.blur?.()
@@ -2487,7 +2502,7 @@
   // Open context menu for the currently selected conversation row
   export function openContextMenu() {
     if (!selectedThreadId || !listContainerRef) return
-    const index = activeList.findIndex(c => c.threadId === selectedThreadId)
+    const index = getSelectedIndex()
     if (index < 0) return
     const rows = listContainerRef.querySelectorAll('[data-conversation-row]')
     const row = rows[index] as HTMLElement | undefined
@@ -2520,6 +2535,25 @@
 
   export function isFolderPickerOpen(): boolean {
     return getFocusedRowRef()?.isFolderPickerOpen() ?? false
+  }
+
+  /** Opens the Snooze dialog for the checked conversations, else the focused one. Returns false when nothing is targetable. */
+  export function snoozeSelection(): boolean {
+    // Checked rows own the action. A mixed selection with an unresolved server
+    // result does nothing rather than snoozing a partial subset, and never
+    // falls through to the reader's conversation.
+    if (checkedThreadIds.size > 0) {
+      if (selectedQueueReady) snoozeDialog.show(selectedQueueRefs)
+      return true
+    }
+    const activeRows: any[] = isSearchMode ? (serverSearchMode ? serverSearchResults : searchResults) : conversations
+    const focused = findFocusedRow(activeRows, focusedRowIdentity, selectedThreadId, accountId || '', folderId || '')
+    if (!focused) return true
+    // Same guard as queue actions: an unresolved row has no canonical conversation yet.
+    if (focused._queueCanonical === false) return true
+    const owningAccountId = focused.accountId || accountId || ''
+    snoozeDialog.show([{ accountId: owningAccountId, conversationId: focused._canonicalConversationId || focused.threadId }])
+    return true
   }
 
   export function toggleMoveToDialog() {
@@ -2692,6 +2726,10 @@
       void toggleSelectedLaterQueue(actionId === 'mail.readLater' ? 'readLater' : 'replyLater')
       return
     }
+    if (actionId === 'mail.snooze') {
+      snoozeSelection()
+      return
+    }
     if (actionId === 'mail.moveToInbox') {
       void handleMoveToInbox()
       return
@@ -2759,6 +2797,13 @@
         icon: 'mdi:book-clock-outline',
         shortcut: 'mail.readLater',
         disabled: !selectedQueueReady,
+      },
+      {
+        id: 'mail.snooze',
+        label: $_('snooze.title'),
+        icon: 'mdi:clock-time-four-outline',
+        shortcut: 'mail.snooze',
+        disabled: selectedQueueRefs.length === 0 || folderType === 'snoozed' || !selectedQueueReady,
       },
       {
         id: 'mail.star',
@@ -3291,7 +3336,7 @@
               bind:this={rowRefs[result.threadId]}
               conversation={result}
               density={getMessageListDensity()}
-              selected={selectedThreadId === result.threadId}
+              selected={focusedRowIdentity === focusedRowKey(result, accountId || '', folderId || '')}
               checked={checkedThreadIds.has(result.threadId)}
               accountId={resultAccountId}
               folderId={resultFolderId}
@@ -3366,7 +3411,7 @@
             bind:this={rowRefs[result.threadId]}
             conversation={result}
             density={getMessageListDensity()}
-            selected={selectedThreadId === result.threadId}
+            selected={focusedRowIdentity === focusedRowKey(result, accountId || '', folderId || '')}
             checked={checkedThreadIds.has(result.threadId)}
             accountId={isUnifiedView || isVirtualFolderView ? resultAccountId : accountId!}
             folderId={isUnifiedView || isVirtualFolderView ? resultFolderId : folderId!}
@@ -3472,7 +3517,7 @@
                   bind:this={rowRefs[conv.threadId]}
                   conversation={conv}
                   density={getMessageListDensity()}
-                  selected={selectedThreadId === conv.threadId}
+                  selected={focusedRowIdentity === focusedRowKey(conv, accountId || '', folderId || '')}
                   checked={checkedThreadIds.has(conv.threadId)}
                   accountId={isUnifiedView || isVirtualFolderView ? convAccountId : accountId!}
                   folderId={isUnifiedView || isVirtualFolderView ? convFolderId : folderId!}
@@ -3518,7 +3563,7 @@
           bind:this={rowRefs[conv.threadId]}
           conversation={conv}
           density={getMessageListDensity()}
-          selected={selectedThreadId === conv.threadId}
+          selected={focusedRowIdentity === focusedRowKey(conv, accountId || '', folderId || '')}
           checked={checkedThreadIds.has(conv.threadId)}
           accountId={isUnifiedView || isVirtualFolderView ? convAccountId : accountId!}
           folderId={isUnifiedView || isVirtualFolderView ? convFolderId : folderId!}
