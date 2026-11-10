@@ -516,5 +516,5 @@ func helperHandler(store *scheduledsend.Store, syncEnabled bool) http.Handler {
 		})
 	})
 	mux.Handle("/v1/commands", store.Handler())
-	return mux
+	return scheduledsend.ProtectBrowserRequests(mux)
 }
