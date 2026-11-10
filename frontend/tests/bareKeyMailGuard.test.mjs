@@ -14,7 +14,7 @@ const app = await readFile(new URL('../src/App.svelte', import.meta.url), 'utf8'
 const registry = await readFile(new URL('../src/lib/keyboard/registry.ts', import.meta.url), 'utf8')
 
 test('bare-key registry tail requires the mail rail to be active', () => {
-  const tail = app.match(/Single-key shortcuts[\s\S]{0,400}?runRegistryShortcut\(e\)/)
+  const tail = app.match(/Single-key shortcuts[\s\S]*?runRegistryShortcut\(e\)/)
   assert.ok(tail, 'bare-key registry tail exists')
   assert.match(tail[0], /if \(!isMailActive\(\)\) return/, 'bare-key tail is guarded by isMailActive()')
 })
@@ -27,4 +27,23 @@ test("bare 'd' stays bound to mail.trash — the guard, not the binding, protect
 test("global '?' shortcuts help is handled before the guard and stays on every pane", () => {
   assert.match(app, /KEY\.SHORTCUTS_HELP\(e\)/, "'?' help has its own early handler")
   assert.match(registry, /id: 'app\.shortcuts'[^\n]*combos: \['\?'\]/, "'?' remains the help combo")
+})
+
+const tailStart = app.indexOf('    // Single-key shortcuts (Gmail standard shortcuts)')
+const tailEnd = app.indexOf('    runRegistryShortcut(e)', tailStart) + '    runRegistryShortcut(e)'.length
+const dispatchTail = new Function('e', 'focusedPane', 'resolveShortcut', 'executeCommand', 'isMailActive', 'runRegistryShortcut', app.slice(tailStart, tailEnd))
+
+for (const pane of ['contacts', 'calendar']) {
+  test(`/ focuses ${pane} search without opening the hidden mail list`, () => {
+    const commands = []
+    const e = { key: '/', preventDefault() { this.prevented = true } }
+    dispatchTail(e, 'messageList', event => event.key === '/' ? { id: 'app.search' } : undefined, id => commands.push(id), () => false, () => assert.fail('must not dispatch a mail mutation'))
+    assert.deepEqual(commands, ['app.search'])
+    assert.equal(e.prevented, true)
+  })
+}
+test('extension panes still block bare mail mutations after allowing app.search', () => {
+  for (const key of ['d', 'e', 's', 'h']) {
+    dispatchTail({ key }, 'messageList', () => undefined, () => assert.fail('not a search key'), () => false, () => assert.fail('hidden mail action must not run'))
+  }
 })

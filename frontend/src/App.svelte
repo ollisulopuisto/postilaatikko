@@ -2107,6 +2107,13 @@
     // must not trash a hidden mail message (same guard as the modified-key
     // registry path above). Global single keys ('?' help) are handled
     // earlier and stay available on every pane.
+    // Search is an app command, not a mail mutation. Resolve its registered
+    // shortcut before the mail-only guard so / targets Contacts/Calendar too.
+    if (resolveShortcut(e, focusedPane, ['app.search'])?.id === 'app.search') {
+      e.preventDefault()
+      void executeCommand('app.search')
+      return
+    }
     if (!isMailActive()) return
     runRegistryShortcut(e)
   }
