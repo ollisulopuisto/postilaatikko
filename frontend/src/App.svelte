@@ -2104,6 +2104,11 @@
     }
 
     // Single-key shortcuts (Gmail standard shortcuts) come from the registry.
+    // They are mail actions: with an extension active, a bare key like 'd'
+    // must not trash a hidden mail message (same guard as the modified-key
+    // registry path above). Global single keys ('?' help) are handled
+    // earlier and stay available on every pane.
+    if (!isMailActive()) return
     runRegistryShortcut(e)
   }
 
@@ -2270,6 +2275,7 @@
           rememberUnreadForUndo(result.operationId, unreadIds)
         }
         showTargetedUndoToast($_('toast.archived'), result.operationId, messageIds, 'archive')
+        if (result.readFailed) addToast({ type: 'error', message: $_('toast.failedToUpdateReadStatus') })
         messageListRef?.clearChecked()
         messageListRef?.handleActionComplete(true)
       })

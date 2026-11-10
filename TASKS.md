@@ -24,7 +24,7 @@ The user asked to keep IMAP after the app began feeling faster. Do not start Gma
 
 | Task | Effort | Scope / acceptance | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
-| ARCHIVE-READ-ATOMIC-001 | Medium | One atomic archive-and-mark-read action in the helper API (`archive_read`) whose Undo reverses both together (move back + restore prior read state); frontend E/viewer call it; Go tests for handler, snapshot and grouping; frontend test updated. | Instinct / `feat/archive-read-action` / worktree `/tmp/pl` / commit see PR | Review; Go tests and 925 frontend tests pass locally; app/ needs CI (no GTK here). No merge. |
+| ARCHIVE-READ-ATOMIC-001 | Medium | One atomic archive-and-mark-read action in the helper API (`archive_read`) whose Undo reverses both together (move back + restore prior read state); frontend E/viewer call it; Go tests for handler, snapshot and grouping; frontend test updated. | Instinct / `feat/archive-read-action` + `fix/archive-read-failure-paths` / worktree `/tmp/pl-archive-read` / commit see PR | Review; Go tests and 925 frontend tests pass locally; app/ needs CI (no GTK here). No merge. |
 | PALETTE-POLISH-001 | Easy | Command palette per unsung.aresluna.org/an-unexpected-command-palette: Cmd/Ctrl+K opens it (the old Ctrl+K archive binding is gone; E archives and marks read), keep-open for repeatable commands, Recent group, lesser-used mail commands listed. | Instinct / `agent/palette-polish` / worktree `/tmp/pl` / commit see PR | Review; new node test passes locally, no app build or native run (no frontend deps installed). No merge. |
 | KEYMAP-CAPS-001 | Easy | Preserve produced case for bare mail letters, with Caps Lock regressions. | Instinct / `agent/keymap-registry` / worktree `/tmp/pl` / commit `cfb6d5b` | Review; 925 tests pass, lint and svelte-check pass. |
 | COMPOSE-BUBBLE-SPEC-002 | Easy | Docs only: record the owner's round-3 answers in the compose build spec and ROADMAP (clock-icon Send Later, Opt+Cmd+Enter focuses the time list, split forward bubbles top-posted, traditional composer mode, Solmu-style visual join). No code. | Instinct / `agent/compose-spec-round3` / worktree `/tmp/pl` / commit `357817e` | Review; spec and roadmap text only. #204 was already merged, so this follows it. No merge. |
@@ -390,6 +390,7 @@ Suggested model/effort is a dispatch recommendation, not an existing claim or mo
 | ID | Status | Owner / branch / worktree | Scope |
 | --- | --- | --- | --- |
 | COUNT-REUSE | Review (local only) | Instinct / agent/approved-post-followup / post-work | Shared exact Gmail online-count scans/results, isolated subscribers, criteria/account keys, mutation invalidation and explicit refresh bypass. Separate from P-047; no merge/release/native claim. |
+| BAREKEY-GUARD | Review (PR pending) | Instinct / fix/bare-key-mail-guard / /tmp/pl-barekey-guard | Bare single-key registry shortcuts guarded by isMailActive() so extension panes (Calendar/Contacts) no longer trigger hidden mail actions (fixes Devin finding: bare 'd' trashed mail while Contacts active). 3 tests in frontend/tests/bareKeyMailGuard.test.mjs (fail-before verified); shortcutRegistry/shortcutDispatch/folderBrowserShortcut/messageHistoryShortcuts 29/29 pass. |
 
 ## Instinct release route (2026-11-08)
 
