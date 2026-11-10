@@ -29,7 +29,7 @@
 </script>
 
 <button
-  type="button" class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 {inQueue ? 'text-primary' : 'opacity-0 group-hover:opacity-100'}"
+  type="button" class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {inQueue ? 'text-primary' : 'opacity-0 group-hover:opacity-100'}"
   title={label} aria-label={label} aria-pressed={inQueue} aria-busy={busy}
   disabled={busy || !replyLaterQueue.ready || !accountId || !conversationId}
   onclick={toggle} onkeydown={event => event.stopPropagation()}

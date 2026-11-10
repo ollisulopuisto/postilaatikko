@@ -80,7 +80,7 @@
                   {#if badgeCount(entry) !== undefined && badgeCount(entry)! > 0}<span class="ml-auto shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground" title={entry.unreadCount ? `${entry.unreadCount} unread / ${entry.totalCount || 0} messages` : `${badgeCount(entry)} messages`}>{badgeCount(entry)}</span>{/if}
                 </button>
                 {#if !editing}
-                  <button type="button" class="absolute {entry.kind === 'virtual' ? 'right-8' : 'right-1'} top-1/2 z-10 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded bg-background/80 hover:bg-muted focus-visible:opacity-100 transition-opacity {isQuick(id) ? 'text-amber-500' : 'text-muted-foreground/60 opacity-0 group-hover:opacity-100'}"
+                  <button type="button" class="absolute {entry.kind === 'virtual' ? 'right-8' : 'right-1'} top-1/2 z-10 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded bg-background/80 hover:bg-muted focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-opacity {isQuick(id) ? 'text-amber-500' : 'text-muted-foreground/60 opacity-0 group-hover:opacity-100'}"
                     aria-label={$_('navigation.favorite')} aria-pressed={isQuick(id)} title={$_('navigation.favorite')}
                     disabled={!isQuick(id) && quickFull()}
                     onclick={() => nav.toggleQuick(id)}>
