@@ -2533,8 +2533,16 @@
       return true
     }
     const activeRows: any[] = isSearchMode ? (serverSearchMode ? serverSearchResults : searchResults) : conversations
-    const focused = selectedThreadId ? activeRows.find((conversation: any) => conversation.threadId === selectedThreadId) : undefined
-    if (!focused) return false
+    const sameThread = selectedThreadId ? activeRows.filter((conversation: any) => conversation.threadId === selectedThreadId) : []
+    // Unified lists keep one row per account even when thread IDs match, so
+    // the reader's account picks the row. An ambiguous match does nothing
+    // rather than snoozing another account's conversation.
+    const owner = (conversation: any) => conversation.accountId || accountId || ''
+    const focused = sameThread.length <= 1
+      ? sameThread[0]
+      : sameThread.find((conversation: any) => !!readerSelection && owner(conversation) === readerSelection.accountId)
+    if (sameThread.length === 0) return false
+    if (!focused) return true
     // Same guard as queue actions: an unresolved row has no canonical conversation yet.
     if (focused._queueCanonical === false) return true
     const owningAccountId = focused.accountId || accountId || ''
