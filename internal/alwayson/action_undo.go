@@ -44,7 +44,7 @@ func (o *mailboxActionOperations) CaptureActionUndo(ctx context.Context, req v1.
 		}
 		expectedRead, expectedStarred := msg.IsRead, msg.IsStarred
 		switch req.Action {
-		case v1.ActionMarkRead, v1.ActionArchiveMarkRead:
+		case v1.ActionMarkRead:
 			expectedRead = true
 		case v1.ActionMarkUnread:
 			expectedRead = false
@@ -73,7 +73,7 @@ func (o *mailboxActionOperations) actionExpectedLocation(req v1.ActionRequest, m
 		return "", "", errors.New("undo target is unavailable")
 	}
 	switch req.Action {
-	case v1.ActionArchive, v1.ActionArchiveMarkRead:
+	case v1.ActionArchive:
 		target := folder.TypeArchive
 		_, gmailAccount, err := o.gmailClient(msg.AccountID)
 		if err != nil {
@@ -179,7 +179,7 @@ func (o *mailboxActionOperations) UndoAction(ctx context.Context, action v1.Acti
 	}
 
 	switch action {
-	case v1.ActionArchive, v1.ActionArchiveMarkRead, v1.ActionTrash, v1.ActionMove, v1.ActionMoveToInbox, v1.ActionMoveToSpam:
+	case v1.ActionArchive, v1.ActionTrash, v1.ActionMove, v1.ActionMoveToInbox, v1.ActionMoveToSpam:
 		byFolder := make(map[string][]*message.Message)
 		folderAccounts := make(map[string]string)
 		for _, msg := range current {

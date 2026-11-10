@@ -12,20 +12,14 @@ test('a selected message stays under the cursor after becoming read', () => {
   assert.deepEqual(retainReadSelection([a, b, c], [a, c], 'b', false), [a, c])
 })
 
-test('the active row moves to its sorted spot when a refresh resorts it', () => {
+test('the active row keeps its index when a same-folder refresh resorts it', () => {
   const first = { threadId: 'first', unreadCount: 1 }
   const activeBefore = { threadId: 'active', unreadCount: 0 }
   const last = { threadId: 'last', unreadCount: 1 }
   const activeAfter = { threadId: 'active', unreadCount: 0 }
 
-  // New mail arrives above it: the open message drops below the newer rows, not pinned above them.
-  const fresh = { threadId: 'fresh', unreadCount: 1 }
-  assert.deepEqual(
-    retainReadSelection([activeBefore, first, last], [fresh, first, activeAfter, last], 'active', false),
-    [fresh, first, activeAfter, last],
-  )
   assert.deepEqual(
     retainReadSelection([first, activeBefore, last], [activeAfter, first, last], 'active', false),
-    [activeAfter, first, last],
+    [first, activeAfter, last],
   )
 })

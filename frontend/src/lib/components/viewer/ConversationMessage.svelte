@@ -14,7 +14,6 @@
   import type { ReaderMode } from './readerMode'
 
   interface Props {
-    conversationId?: string
     messageId: string
     accountId: string
     /** What EmailBody would show for this message today (decrypted when it is). */
@@ -32,7 +31,6 @@
   }
 
   let {
-    conversationId = '',
     messageId,
     accountId,
     bodyHtml = '',
@@ -103,7 +101,6 @@
 
 {#snippet original()}
   <EmailBody
-    {conversationId}
     bind:this={bodyRefs['original']}
     {messageId}
     {accountId}
@@ -151,7 +148,6 @@
     {#each plan.blocks as block (block.id)}
       {#if !block.collapsed}
         <EmailBody
-          {conversationId}
           bind:this={bodyRefs[block.id]}
           messageId={messageId}
           {accountId}

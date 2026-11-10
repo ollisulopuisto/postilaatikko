@@ -1,5 +1,4 @@
 <script lang="ts">
-  import LaterQueueButton from '../common/LaterQueueButton.svelte'
   import Icon from '@iconify/svelte'
   import { normalizeConversationHtml } from './conversationHtml'
   import { ClipboardSetText } from '../../../../wailsjs/runtime/runtime'
@@ -15,7 +14,6 @@
   import { getAlwaysLoadImages, getThemeMode, setAlwaysLoadImages } from '$lib/stores/settings.svelte'
 
   interface Props {
-    conversationId?: string
     messageId: string
     accountId?: string
     bodyHtml?: string
@@ -28,7 +26,7 @@
     darken?: boolean
   }
 
-  let { conversationId = '', messageId, accountId = '', bodyHtml = '', bodyText = '', fromEmail = '', onCompose, onImagesLoaded, encryptedInlineAttachments, darken = false, compact = false }: Props = $props()
+  let { messageId, accountId = '', bodyHtml = '', bodyText = '', fromEmail = '', onCompose, onImagesLoaded, encryptedInlineAttachments, darken = false, compact = false }: Props = $props()
 
   // State for remote image handling
   let imagesBlocked = $state(true)
@@ -64,10 +62,8 @@
     return darken ? getChromeBgHsl() : 'white'
   })
 
-  // Loading placeholder SVG - static placeholder without SMIL animateTransform
-  // Continuous SMIL animations (<animateTransform>) inside iframes cause WebKit / Wails
-  // to constantly re-render and consume excessive (>100%) CPU cycles.
-  const loadingPlaceholder = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='80' viewBox='0 0 120 80'%3E%3Crect fill='%23f3f4f6' width='120' height='80' rx='4'/%3E%3Cg transform='translate(60,35)'%3E%3Ccircle cx='0' cy='0' r='10' fill='none' stroke='%239ca3af' stroke-width='2' stroke-dasharray='16 8'/%3E%3C/g%3E%3Ctext x='60' y='62' text-anchor='middle' fill='%239ca3af' font-size='9' font-family='sans-serif'%3ELoading...%3C/text%3E%3C/svg%3E`
+  // Loading placeholder SVG
+  const loadingPlaceholder = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='80' viewBox='0 0 120 80'%3E%3Crect fill='%23f3f4f6' width='120' height='80' rx='4'/%3E%3Cg transform='translate(60,40)'%3E%3Ccircle cx='0' cy='0' r='12' fill='none' stroke='%239ca3af' stroke-width='2' stroke-dasharray='20 10'%3E%3CanimateTransform attributeName='transform' type='rotate' from='0' to='360' dur='1s' repeatCount='indefinite'/%3E%3C/circle%3E%3C/g%3E%3Ctext x='60' y='65' text-anchor='middle' fill='%239ca3af' font-size='9' font-family='sans-serif'%3ELoading...%3C/text%3E%3C/svg%3E`
 
   // Regex pattern for CSS url() with remote http(s) URLs.
   // Handles all quote styles: raw ' or ", decimal &#39;/&#34;, hex &#x27;/&#x22;, named &apos;/&quot;
@@ -226,19 +222,9 @@
 `
 
     const iframeScript = `
-      var lastSentHeight = 0;
-      var heightRafId = 0;
-
       function sendHeight() {
-        if (heightRafId) cancelAnimationFrame(heightRafId);
-        heightRafId = requestAnimationFrame(function() {
-          heightRafId = 0;
-          var height = document.body ? document.body.scrollHeight : 0;
-          if (height > 0 && Math.abs(height - lastSentHeight) >= 1) {
-            lastSentHeight = height;
-            window.parent.postMessage({ type: 'iframe-height', height: height }, '*');
-          }
-        });
+        var height = document.body.scrollHeight;
+        window.parent.postMessage({ type: 'iframe-height', height: height }, '*');
       }
       
       function attachImageHandlers() {
@@ -548,10 +534,7 @@ ${processedHtml}
     if (event.source !== iframeElement?.contentWindow) return
 
     if (event.data?.type === 'iframe-height' && iframeElement) {
-      const targetHeight = `${event.data.height + (compact ? 4 : 20)}px`
-      if (iframeElement.style.height !== targetHeight) {
-        iframeElement.style.height = targetHeight
-      }
+      iframeElement.style.height = `${event.data.height + (compact ? 4 : 20)}px`
     } else if (event.data?.type === 'iframe-ready') {
       iframeReady = true
     } else if (event.data?.type === 'open-link') {
@@ -953,10 +936,6 @@ ${processedHtml}
       style="left: {ctxMenuX}px; top: {ctxMenuY}px;"
       role="menu"
     >
-      {#if conversationId && accountId}
-        <LaterQueueButton {accountId} {conversationId} kind="readLater" variant="menu" onComplete={() => ctxMenuVisible = false} />
-        <LaterQueueButton {accountId} {conversationId} kind="replyLater" variant="menu" onComplete={() => ctxMenuVisible = false} />
-      {/if}
       {#if ctxMenuText}
         <button
           class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"

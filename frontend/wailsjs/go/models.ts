@@ -1215,7 +1215,6 @@ export namespace app {
 	export class UndoableActionResult {
 	    operationId: string;
 	    coalesced: boolean;
-	    atomic: boolean;
 
 	    static createFrom(source: any = {}) {
 	        return new UndoableActionResult(source);
@@ -1225,7 +1224,6 @@ export namespace app {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.operationId = source["operationId"];
 	        this.coalesced = source["coalesced"];
-	        this.atomic = source["atomic"];
 	    }
 	}
 	export class VirtualFolderCachedView {

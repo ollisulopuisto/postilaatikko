@@ -2003,7 +2003,7 @@
       e.preventDefault()
       handleSend()
     }
-    if ((e.key === 'D' || e.key === 'd') && e.shiftKey && (e.ctrlKey || e.metaKey)) {
+    if (e.key === 'd' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault()
       handlePopOut()
     }
@@ -2051,8 +2051,6 @@
       return
     }
     if (e.key === 'Escape') {
-      // Another owner (e.g. Undo Send cancel in App) already took this Escape.
-      if (e.defaultPrevented) return
       handleClose()
     }
   }

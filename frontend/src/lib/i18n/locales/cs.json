@@ -251,7 +251,7 @@
     "historyBranches": "Branch tips",
     "historyEmpty": "No edits yet",
     "historyEdit": "Edit",
-    "sendQueued": "Message queued - use Undo to cancel",
+    "sendQueued": "Sending in 30 seconds - click the countdown to cancel",
     "failedToSaveDraft": "Failed to save draft before sending",
     "attachmentsNotRestored": "{count} attachment(s) could not be restored"
   },

@@ -66,12 +66,6 @@ export const LIST_SELECT_ALL = (e: KeyboardEvent): boolean =>
 export const LIST_DELETE = (e: KeyboardEvent): boolean =>
   (e.key === 'Delete' || e.key === 'Backspace') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey
 
-// Message history is Cmd-only. Text fields retain native line-start/end keys.
-export const HISTORY_BACK = (e: KeyboardEvent): boolean =>
-  e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && e.key === 'ArrowLeft'
-export const HISTORY_FORWARD = (e: KeyboardEvent): boolean =>
-  e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && e.key === 'ArrowRight'
-
 // Pane focus cycling — Alt+H/L / Alt+Left/Right
 export const PANE_FOCUS_NEXT = (e: KeyboardEvent): boolean =>
   altOnly(e) && (e.key === 'l' || e.key === 'ArrowRight')
@@ -121,10 +115,9 @@ export function PERMANENT_DELETE(e: KeyboardEvent): boolean {
 export const SHORTCUTS_HELP = (e: KeyboardEvent): boolean =>
   e.key === '?' && LAYOUT_SYMBOL(e)
 
-// Cmd+K / Ctrl+K, Cmd+P / Ctrl+P or Cmd+Shift+P / Ctrl+Shift+P — open the command palette.
-// Archive is plain `e` (archive and mark as read); no Ctrl/Cmd chord archives.
+// Cmd+P / Ctrl+P or Cmd+Shift+P / Ctrl+Shift+P — open the command palette.
 export const COMMAND_PALETTE = (e: KeyboardEvent): boolean =>
-  ctrlOrMeta(e) && !e.altKey && (e.key === 'k' || e.key === 'K' || e.key === 'p' || e.key === 'P')
+  ctrlOrMeta(e) && (e.key === 'p' || e.key === 'P')
 
 // `m` — toggle read/unread of the message target. Modifiers are excluded so
 // Alt+M (move to folder) and the Ctrl/Cmd shortcuts keep their own meaning.
@@ -133,8 +126,6 @@ export const LIST_TOGGLE_READ = (e: KeyboardEvent): boolean =>
 
 // Convenience: namespace export for predicates that the kit imports as a group.
 export const KEY = {
-  HISTORY_BACK,
-  HISTORY_FORWARD,
   LIST_NEXT,
   LIST_PREV,
   LIST_NEXT_CHECK,

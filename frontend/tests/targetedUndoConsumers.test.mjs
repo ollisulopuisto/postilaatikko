@@ -141,8 +141,7 @@ test('App specific Archive/Spam toasts use returned tokens while Ctrl+Z remains 
   const globalUndo = extractFunction(appSource, 'handleGlobalUndo')
   assert.match(globalUndo, /UndoLatestWithResult\(\)/)
   assert.doesNotMatch(globalUndo, /UndoOperation\(/)
-  assert.match(appSource, /'app\.undo': \(\) => void executeCommand\('app\.undo'\)/)
-  assert.match(appSource, /registerCommand\('app\.undo'[\s\S]*?handleGlobalUndo\(\)/)
+  assert.match(appSource, /case 'z':[\s\S]*?handleGlobalUndo\(\)/)
 })
 
 test('App-owned message mutations share one guard through the list action executor', () => {
