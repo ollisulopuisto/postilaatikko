@@ -34,6 +34,14 @@ test('history arrows and the new window button live in the viewer pane tab row',
 })
 
 test('double-clicking the drag strip still toggles maximise, and the buttons do not drag', () => {
-  assert.match(rail, /--wails-draggable: drag"[^>]*ondblclick=\{\(\) => void WindowToggleMaximise\(\)\}/)
-  assert.match(rail, /import \{ WindowToggleMaximise \}/)
+  assert.match(rail, /--wails-draggable: drag"[^>]*ondblclick=\{\(\) => void toggleMaximise\(\)\}/)
+  assert.match(rail, /import \{ toggleMaximise \}/)
+})
+
+test('the zoom button and the strip share one maximised state, so the label never goes stale', async () => {
+  const state = await read('../src/lib/windowState.svelte.ts')
+  assert.match(state, /WindowIsMaximised\(\)/)
+  assert.match(controls, /windowState\.maximised \? \$_\('window\.restore'\)/)
+  assert.match(controls, /onclick=\{\(\) => void toggleMaximise\(\)\}/)
+  assert.doesNotMatch(controls, /\$state\(false\)[^\n]*\n[^\n]*isMaximized|let isMaximized/)
 })

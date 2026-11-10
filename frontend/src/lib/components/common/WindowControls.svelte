@@ -1,6 +1,7 @@
 <script lang="ts">
   import { _ } from '$lib/i18n'
-  import { WindowMinimise, WindowToggleMaximise, Quit } from '../../../../wailsjs/runtime/runtime'
+  import { WindowMinimise, Quit } from '../../../../wailsjs/runtime/runtime'
+  import { windowState, toggleMaximise } from '$lib/windowState.svelte'
 
   interface Props {
     onClose?: () => void
@@ -9,16 +10,10 @@
 
   let { onClose, class: extraClass = '' }: Props = $props()
 
-  let isMaximized = $state(false)
   let isHovering = $state(false)
 
   async function minimize() {
     await WindowMinimise()
-  }
-
-  async function toggleMaximize() {
-    await WindowToggleMaximise()
-    isMaximized = !isMaximized
   }
 
   function close() {
@@ -62,9 +57,9 @@
   </button>
   <button
     class="w-3 h-3 rounded-full flex items-center justify-center transition-all bg-[#28C840] hover:brightness-90 active:brightness-75"
-    onclick={toggleMaximize}
-    title={isMaximized ? $_('window.restore') : $_('window.maximize')}
-    aria-label={isMaximized ? $_('aria.restoreWindow') : $_('aria.maximizeWindow')}
+    onclick={() => void toggleMaximise()}
+    title={windowState.maximised ? $_('window.restore') : $_('window.maximize')}
+    aria-label={windowState.maximised ? $_('aria.restoreWindow') : $_('aria.maximizeWindow')}
   >
     {#if isHovering}
       <span class="text-[10px] font-bold text-black/60 leading-none">+</span>

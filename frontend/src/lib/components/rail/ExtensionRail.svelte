@@ -2,7 +2,7 @@
   let { onRevealContext = () => {}, onHideContext = () => {}, foldersOpen = false, windowControls = false, onCloseWindow }: { onRevealContext?: () => void; onHideContext?: () => void; foldersOpen?: boolean; windowControls?: boolean; onCloseWindow?: () => void } = $props()
   import RailButton from './RailButton.svelte'
   import WindowControls from '$lib/components/common/WindowControls.svelte'
-  import { WindowToggleMaximise } from '../../../../wailsjs/runtime/runtime'
+  import { toggleMaximise } from '$lib/windowState.svelte'
   import { getRailTabs } from '$lib/stores/extensionRegistry.svelte'
   import { getActiveExtension, setActiveExtension } from '$lib/stores/uiState.svelte'
   import { navigationCards as nav } from '$lib/stores/navigationCards.svelte'
@@ -58,7 +58,7 @@
   {#if windowControls}
     <!-- One bar: the traffic lights live in the top-left corner of the rail, with a drag region around them. -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="flex h-10 shrink-0 items-center px-3 select-none" style="--wails-draggable: drag" ondblclick={() => void WindowToggleMaximise()}>
+    <div class="flex h-10 shrink-0 items-center px-3 select-none" style="--wails-draggable: drag" ondblclick={() => void toggleMaximise()}>
       <WindowControls onClose={onCloseWindow} />
     </div>
   {/if}
