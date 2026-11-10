@@ -32,3 +32,8 @@ test('history arrows and the new window button live in the viewer pane tab row',
   assert.match(row, /mailWindow\.newWindow/)
   assert.equal((app.match(/<MessageHistoryBar/g) || []).length, 1)
 })
+
+test('double-clicking the drag strip still toggles maximise, and the buttons do not drag', () => {
+  assert.match(rail, /--wails-draggable: drag"[^>]*ondblclick=\{\(\) => void WindowToggleMaximise\(\)\}/)
+  assert.match(rail, /import \{ WindowToggleMaximise \}/)
+})
