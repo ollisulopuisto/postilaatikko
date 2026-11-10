@@ -389,6 +389,7 @@ Suggested model/effort is a dispatch recommendation, not an existing claim or mo
 | ID | Status | Owner / branch / worktree | Scope |
 | --- | --- | --- | --- |
 | COUNT-REUSE | Review (local only) | Instinct / agent/approved-post-followup / post-work | Shared exact Gmail online-count scans/results, isolated subscribers, criteria/account keys, mutation invalidation and explicit refresh bypass. Separate from P-047; no merge/release/native claim. |
+| BAREKEY-GUARD | Review (PR pending) | Instinct / fix/bare-key-mail-guard / /tmp/pl-barekey-guard | Bare single-key registry shortcuts guarded by isMailActive() so extension panes (Calendar/Contacts) no longer trigger hidden mail actions (fixes Devin finding: bare 'd' trashed mail while Contacts active). 3 tests in frontend/tests/bareKeyMailGuard.test.mjs (fail-before verified); shortcutRegistry/shortcutDispatch/folderBrowserShortcut/messageHistoryShortcuts 29/29 pass. |
 
 ## Instinct release route (2026-11-08)
 
