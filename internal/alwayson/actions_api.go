@@ -19,9 +19,11 @@ import (
 )
 
 type mailboxActionOperations struct {
-	runtime          *SyncRuntime
-	gmailClientFunc  func(accountID string) (*gmail.Client, bool, error)
-	setIMAPFlagsFunc func(accountID, folderID string, messages []*message.Message, kind string, enabled bool) error
+	runtime              *SyncRuntime
+	gmailClientFunc      func(accountID string) (*gmail.Client, bool, error)
+	setIMAPFlagsFunc     func(accountID, folderID string, messages []*message.Message, kind string, enabled bool) error
+	moveToFolderFunc     func(messages []*message.Message, destination *folder.Folder) error
+	persistFlagGroupFunc func(messages []*message.Message, kind string, enabled bool) error
 }
 
 func (o *mailboxActionOperations) PlanActionGroups(ctx context.Context, req v1.ActionRequest, ids []string) ([]v1.ActionProviderGroup, error) {
@@ -124,10 +126,22 @@ func (o *mailboxActionOperations) ExecuteActionGroup(ctx context.Context, req v1
 		_, err := o.ArchiveMessages(group.MessageIDs)
 		return err
 	case v1.ActionArchiveMarkRead:
+		original, err := o.loadActionMessages(group.MessageIDs)
+		if err != nil {
+			return err
+		}
 		if _, err := o.ArchiveMessages(group.MessageIDs); err != nil {
 			return err
 		}
-		return o.MarkAsRead(group.MessageIDs)
+		if err := o.MarkAsRead(group.MessageIDs); err != nil {
+			// The move already happened at the provider, the read leg can fail
+			// after changing some provider flags, and a group that is not
+			// confirmed keeps no Undo snapshot. Compensate both legs before
+			// reporting the failure; any compensation error is surfaced with
+			// the failure so the state is repairable instead of silent.
+			return errors.Join(err, o.restoreGroupState(group, original))
+		}
+		return nil
 	case v1.ActionMarkRead:
 		return o.MarkAsRead(group.MessageIDs)
 	case v1.ActionMarkUnread:
@@ -397,6 +411,9 @@ func (o *mailboxActionOperations) setFlags(ids []string, kind string, enabled bo
 }
 
 func (o *mailboxActionOperations) persistFlagGroup(messages []*message.Message, kind string, enabled bool) error {
+	if o.persistFlagGroupFunc != nil {
+		return o.persistFlagGroupFunc(messages, kind, enabled)
+	}
 	ids := make([]string, 0, len(messages))
 	for _, msg := range messages {
 		ids = append(ids, msg.ID)
@@ -453,7 +470,53 @@ func (o *mailboxActionOperations) setIMAPFlags(accountID, folderID string, messa
 	return conn.Client().RemoveMessageFlags(uids, []goimap.Flag{flag})
 }
 
+// restoreGroupState reverses a partially applied archive-and-mark-read: the
+// messages move back to their source folder, and every message that was unread
+// before the action is marked unread again at the provider and locally. The
+// read leg can fail after changing provider flags (provider update succeeds,
+// local persistence fails), so folder-only compensation would carry an
+// unintended read state back into Inbox. The original slice must be captured
+// before the action runs.
+func (o *mailboxActionOperations) restoreGroupState(group v1.ActionProviderGroup, original []*message.Message) error {
+	var errs []error
+	if err := o.restoreGroupFolder(group); err != nil {
+		errs = append(errs, fmt.Errorf("restore archived messages to folder %s: %w", group.SourceFolderID, err))
+	}
+	unreadIDs := make([]string, 0, len(original))
+	for _, msg := range original {
+		if !msg.IsRead {
+			unreadIDs = append(unreadIDs, msg.ID)
+		}
+	}
+	if len(unreadIDs) > 0 {
+		if err := o.setFlags(unreadIDs, "read", false); err != nil {
+			errs = append(errs, fmt.Errorf("restore original unread state: %w", err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// restoreGroupFolder moves a provider group's messages back to their source
+// folder when a later leg of a compound action failed after the move.
+func (o *mailboxActionOperations) restoreGroupFolder(group v1.ActionProviderGroup) error {
+	messages, err := o.loadActionMessages(group.MessageIDs)
+	if err != nil {
+		return err
+	}
+	source, err := o.runtime.folders.Get(group.SourceFolderID)
+	if err != nil {
+		return err
+	}
+	if source == nil || source.AccountID != group.AccountID {
+		return fmt.Errorf("source folder %s is unavailable for move compensation", group.SourceFolderID)
+	}
+	return o.moveToFolder(messages, source)
+}
+
 func (o *mailboxActionOperations) moveToFolder(messages []*message.Message, destination *folder.Folder) error {
+	if o.moveToFolderFunc != nil {
+		return o.moveToFolderFunc(messages, destination)
+	}
 	if len(messages) == 0 {
 		return nil
 	}

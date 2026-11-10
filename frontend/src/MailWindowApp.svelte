@@ -15,11 +15,16 @@
   import { toasts } from './lib/stores/toast'
   import { readLaterQueue } from './lib/stores/readLater.svelte'
   import { replyLaterQueue } from './lib/stores/replyLater.svelte'
-  import { publishUndoOperationCreated, publishUndoOperationCompleted } from './lib/components/list/undoMutationEvents'
+  import { publishUndoOperationCreated, publishUndoOperationCompleted, rememberUnreadForUndo, setUnreadRestorer } from './lib/components/list/undoMutationEvents'
   import { runMessageMutation } from './lib/components/list/mutationInFlight'
   import type { virtualfolder } from '../wailsjs/go/models'
-  import { GetAccounts, GetFolders, GetFolderTree, GetMessage, OpenMailWindow, OpenComposerWindow, MarkAsRead, MarkAsUnread, Star, Unstar, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ArchiveWithUndo, UndoOperation } from '../wailsjs/go/app/App'
+  import { GetAccounts, GetFolders, GetFolderTree, GetMessage, OpenMailWindow, OpenComposerWindow, MarkAsRead, MarkAsUnread, Star, Unstar, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ArchiveWithUndo, ArchiveAndMarkReadWithUndo, UndoOperation } from '../wailsjs/go/app/App'
   import { EventsEmit, WindowSetTitle } from '../wailsjs/runtime/runtime'
+
+  // Standalone windows host neither App.svelte nor always a viewer, so the
+  // module-level unread restorer may be unset here; without it a legacy
+  // two-step Undo would move messages back but never restore unread state.
+  setUnreadRestorer(ids => MarkAsUnread(ids))
 
   let { config, embedded = false, readerTab = false, deferMarkAsReadUntilLeave = false, onCloseTab, active = true, onScopeChange, onNewTab, onOpenInTab }: { config: MailScope; embedded?: boolean; readerTab?: boolean; deferMarkAsReadUntilLeave?: boolean; onCloseTab?: () => void; active?: boolean; onScopeChange?: (scope: MailScope) => void; onNewTab?: () => void; onOpenInTab?: (scope: MailScope) => void } = $props()
   // A process per window gives each component/store its own search, checked
@@ -136,10 +141,23 @@
   }
   async function archiveAndMarkRead(ids: string[]) {
     if (!ids.length) return
+    // Snapshot unread ids before the mutation for the legacy two-step
+    // fallback; the atomic backend action restores read state itself.
+    let unreadIds = list?.getUnreadSnapshot(ids)
+    if (!unreadIds) {
+      // Mixed read/unread rows or rows not loaded: ask the backend per
+      // message, the same fallback App.svelte uses, so no unread id is lost.
+      const flags = await Promise.all(ids.map(id => GetMessage(id).then(m => (m && !m.isRead ? id : null)).catch(() => null)))
+      unreadIds = flags.filter((id): id is string => id !== null)
+    }
     await run(() => runMessageMutation(ids, async () => {
-      const result = await ArchiveWithUndo(ids)
+      const result = await ArchiveAndMarkReadWithUndo(ids)
       if (result.coalesced) return
-      await MarkAsRead(ids)
+      if (!result.atomic) {
+        // Legacy two-step fallback: its Undo only moves messages back, so the
+        // unread ids must be restored from the snapshot taken before.
+        rememberUnreadForUndo(result.operationId, unreadIds)
+      }
       const operation = result.operationId
       publishUndoOperationCreated(operation, ids, 'archive')
       toasts.success($_('toast.archived'), [{ label: $_('common.undo'), onClick: () => run(async () => {
@@ -147,6 +165,7 @@
         publishUndoOperationCompleted(operation)
         refresh()
       }) }])
+      if (result.readFailed) toasts.error($_('toast.failedToUpdateReadStatus'))
       list?.clearChecked()
       list?.handleActionComplete(true)
     }))
