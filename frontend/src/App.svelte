@@ -2475,9 +2475,11 @@
     <aside
       bind:this={contextColumnRef}
       class="spark-sidebar-host flex-col {getLayoutMode() === 'narrow' ? `responsive-sidebar-overlay w-72 border-r border-border bg-background ${getResponsiveView() === 'sidebar' ? 'responsive-sidebar-visible' : ''}` : 'flex-shrink-0 border-r border-border bg-muted/30'}"
+      class:pane-shared={sharedColumn}
+      class:pane-resizing={isResizingList}
       class:pane-folded={sharedColumn && contextPaneMode !== 'folders'}
       style="{sharedColumn ? `width: ${sharedPaneWidths(listWidth, contextPaneMode).folders}px` : getLayoutMode() === 'full' ? `width: ${listWidth}px` : ''}"
-      style:display={contextPaneVisible && (sharedColumn || contextPaneMode === 'folders') ? 'flex' : 'none'}
+      style:display={contextPaneVisible && (sharedColumn || contextPaneMode === 'folders' || getLayoutMode() === 'narrow') ? 'flex' : 'none'}
       onmouseenter={revealContextPane}
       onmouseleave={scheduleContextPaneHide}
       role="presentation"
@@ -2540,9 +2542,13 @@
     <section
       bind:this={messageListContainerRef}
       class="spark-mail-list-pane min-h-0 flex flex-col overflow-hidden {isResponsive() ? 'flex-1 min-w-0 border-r border-border bg-background' : 'flex-shrink-0 border-r border-border bg-background'}"
+      class:pane-shared={sharedColumn}
+      class:pane-resizing={isResizingList}
+      aria-hidden={getLayoutMode() === 'narrow' && getResponsiveView() === 'sidebar' ? 'true' : undefined}
+      inert={getLayoutMode() === 'narrow' && getResponsiveView() === 'sidebar' ? true : undefined}
       class:pane-folded={sharedColumn && contextPaneMode === 'folders'}
       style="{sharedColumn ? `width: ${sharedPaneWidths(listWidth, contextPaneMode).messages}px` : getLayoutMode() === 'full' ? `width: ${listWidth}px` : ''}"
-      style:display={contextPaneVisible && (sharedColumn || contextPaneMode === 'messages') ? 'flex' : 'none'}
+      style:display={contextPaneVisible && (sharedColumn || contextPaneMode === 'messages' || getLayoutMode() === 'narrow') ? 'flex' : 'none'}
       onmouseenter={revealContextPane}
       onmouseleave={scheduleContextPaneHide}
       role="presentation"

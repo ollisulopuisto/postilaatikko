@@ -391,6 +391,7 @@ Suggested model/effort is a dispatch recommendation, not an existing claim or mo
 | --- | --- | --- | --- |
 | COUNT-REUSE | Review (local only) | Instinct / agent/approved-post-followup / post-work | Shared exact Gmail online-count scans/results, isolated subscribers, criteria/account keys, mutation invalidation and explicit refresh bypass. Separate from P-047; no merge/release/native claim. |
 | BAREKEY-GUARD | Review (PR pending) | Instinct / fix/bare-key-mail-guard / /tmp/pl-barekey-guard | Bare single-key registry shortcuts guarded by isMailActive() so extension panes (Calendar/Contacts) no longer trigger hidden mail actions (fixes Devin finding: bare 'd' trashed mail while Contacts active). 3 tests in frontend/tests/bareKeyMailGuard.test.mjs (fail-before verified); shortcutRegistry/shortcutDispatch/folderBrowserShortcut/messageHistoryShortcuts 29/29 pass. |
+| TOGGLE-ANIM | Review (PR pending) | Instinct / ux/animate-folders-messages-toggle / /tmp/pl-toggle-anim | Animate the Kansiot/Viestit switch: narrow folder overlay stays mounted and slides via transform+visibility (was display:none snap); wide sharedColumn fold/unfold slides width (pane-shared), suppressed during divider drags (pane-resizing) and under prefers-reduced-motion. Covered list gets aria-hidden+inert. VERSION 2026.11.10.1 + changelog section for What's New. |
 
 ## Instinct release route (2026-11-08)
 

@@ -1548,11 +1548,27 @@ mark {
   bottom: 0;
   z-index: 30;
   transform: translateX(-100%);
-  transition: transform 0.25s ease-out;
+  visibility: hidden;
+  transition: transform 0.25s ease-out, visibility 0s linear 0.25s;
 }
 
 .responsive-sidebar-visible {
   transform: translateX(0);
+  visibility: visible;
+  transition: transform 0.25s ease-out, visibility 0s;
+}
+
+/* Wide windows share one column between Kansiot and Viestit: fold/unfold
+   slides the width instead of snapping. Content of the folded pane stays
+   display:none (see .pane-folded); the column motion carries the change. */
+.pane-shared {
+  overflow: hidden;
+  transition: width 0.25s ease-out;
+}
+
+/* Divider drags must track the pointer exactly, so no width lag there. */
+.pane-resizing {
+  transition: none;
 }
 
 .responsive-viewer-overlay {
@@ -1579,6 +1595,18 @@ mark {
 .responsive-scrim-visible {
   background: rgba(0, 0, 0, 0.4);
   pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .responsive-sidebar-overlay,
+  .responsive-sidebar-visible,
+  .responsive-viewer-overlay,
+  .responsive-viewer-visible,
+  .responsive-scrim,
+  .pane-shared,
+  .pane-resizing {
+    transition: none;
+  }
 }
 
 /* Spellcheck: misspelled-word underline in the composer body (ProseMirror
