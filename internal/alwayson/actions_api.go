@@ -49,7 +49,7 @@ func (o *mailboxActionOperations) PlanActionGroups(ctx context.Context, req v1.A
 			return nil, err
 		}
 		switch req.Action {
-		case v1.ActionArchive, v1.ActionTrash, v1.ActionMove, v1.ActionMoveToInbox, v1.ActionMoveToSpam:
+		case v1.ActionArchive, v1.ActionArchiveMarkRead, v1.ActionTrash, v1.ActionMove, v1.ActionMoveToInbox, v1.ActionMoveToSpam:
 		default:
 			destinationAccountID, destinationFolderID = "", ""
 		}
@@ -123,6 +123,11 @@ func (o *mailboxActionOperations) ExecuteActionGroup(ctx context.Context, req v1
 	case v1.ActionArchive:
 		_, err := o.ArchiveMessages(group.MessageIDs)
 		return err
+	case v1.ActionArchiveMarkRead:
+		if _, err := o.ArchiveMessages(group.MessageIDs); err != nil {
+			return err
+		}
+		return o.MarkAsRead(group.MessageIDs)
 	case v1.ActionMarkRead:
 		return o.MarkAsRead(group.MessageIDs)
 	case v1.ActionMarkUnread:

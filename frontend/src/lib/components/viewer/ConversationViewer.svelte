@@ -4,7 +4,7 @@
   // @ts-ignore - wailsjs bindings
   import { GetReaderIdentityEmails, GetConversation, GetReadReceiptResponsePolicy, SendReadReceipt, IgnoreReadReceipt, GetMessageSource, ProcessSMIMEMessage, ProcessPGPMessage, FetchMessageBodyForAccount } from '../../../../wailsjs/go/app/App'
   // @ts-ignore - wailsjs bindings
-  import { MoveToInboxWithUndo, GetAccounts, MoveToFolderWithUndo, CopyToFolder, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, RemoveFromInboxWithUndo, TrashWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, DeletePermanently, ResolveMailActionTarget, UndoOperation } from '../../../../wailsjs/go/app/App'
+  import { MoveToInboxWithUndo, GetAccounts, MoveToFolderWithUndo, CopyToFolder, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, ArchiveAndMarkReadWithUndo, RemoveFromInboxWithUndo, TrashWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, DeletePermanently, ResolveMailActionTarget, UndoOperation } from '../../../../wailsjs/go/app/App'
   // @ts-ignore - wailsjs path
   import { EventsOn } from '../../../../wailsjs/runtime/runtime'
   // @ts-ignore - wailsjs path
@@ -1311,17 +1311,14 @@
       await runMessageMutation(messageIds, async () => {
         moveMutationInFlight = true
         try {
-          const result = await ArchiveWithUndo(messageIds)
+          const result = await ArchiveAndMarkReadWithUndo(messageIds)
           if (result.coalesced) return
           archived = true
-          rememberUnreadForUndo(result.operationId, unreadIds)
-          try {
-            await MarkAsRead(messageIds)
-          } catch (err) {
-            publishUndoOperationCreated(result.operationId, messageIds, 'archive')
-            showArchiveUndoToast(result.operationId)
-            onActionComplete?.(true)
-            throw err
+          if (!result.atomic) {
+            // Legacy two-step path: Undo only moves messages back, so the
+            // unread snapshot restores their read state. The atomic backend
+            // action restores read state itself.
+            rememberUnreadForUndo(result.operationId, unreadIds)
           }
           publishUndoOperationCreated(result.operationId, messageIds, 'archive')
           showArchiveUndoToast(result.operationId)

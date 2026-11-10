@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Archive and mark read (E, toolbar button, selection bar) is now one atomic mailbox action: the helper archives and marks read in a single operation, and Undo reverses both together, moving the messages back and restoring their previous read state. The frontend's unread-snapshot workaround only remains for the legacy no-service fallback.
 - Bare mail letter shortcuts preserve the produced case: Caps Lock no longer turns uppercase D/E into Trash/Archive. Modifier chords remain case-insensitive.
 
 - Command palette (Cmd/Ctrl+K, Cmd/Ctrl+P): undo, star, mark read, mark unread and the theme switch keep it open so you can repeat them. It lists the last 8 commands you ran from it first, and now includes Toggle read, Read later, Reply later, Move to and Copy to. The sidebar button still opens it. Ctrl/Cmd+K no longer archives: archive is `e`, which archives and marks as read. The viewer toolbar, selection bar and context menu do the same, and plain Archive (keeping read status) stays in the context menu.

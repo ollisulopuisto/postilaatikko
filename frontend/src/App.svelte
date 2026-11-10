@@ -79,7 +79,7 @@
   import { runMessageMutation } from '$lib/components/list/mutationInFlight'
   import { messageAnimations } from '$lib/stores/messageAnimations.svelte'
   // @ts-ignore - wailsjs path
-  import { PrepareComposerReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, ClearDraftHistory, SendMessageWithDraftGuard, CancelPendingSend, CompletePendingSend, ListPendingSends, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ResolveMailActionTarget, GetMessage, UndoOperation, UndoLatestWithResult, SyncMailboxActionEvents, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, RequestQuitApp, CancelQuitAppRequest, OpenComposerWindow, OpenMailWindow, OpenReaderWindow, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
+  import { PrepareComposerReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, ClearDraftHistory, SendMessageWithDraftGuard, CancelPendingSend, CompletePendingSend, ListPendingSends, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, ArchiveAndMarkReadWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ResolveMailActionTarget, GetMessage, UndoOperation, UndoLatestWithResult, SyncMailboxActionEvents, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, RequestQuitApp, CancelQuitAppRequest, OpenComposerWindow, OpenMailWindow, OpenReaderWindow, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
   // @ts-ignore - wailsjs path
   import { smtp, folder, certificate, operations } from '../wailsjs/go/models'
   // @ts-ignore - wailsjs runtime
@@ -2253,9 +2253,10 @@
 
   async function handleBulkArchiveAndMarkRead(messageIds: string[]) {
     messageAnimations.startRemoval(messageIds, 'archive')
-    let archived = false
     try {
-      // Remember which messages were unread so Undo can put that back.
+      // Snapshot the unread ids before the mutation, for the legacy two-step
+      // path whose Undo only moves messages back. The atomic backend action
+      // restores read state itself and does not need this.
       let unreadIds = messageListRef?.getUnreadSnapshot(messageIds)
       if (!unreadIds) {
         // Mixed rows, or rows not loaded: ask the backend per message (local store only).
@@ -2263,17 +2264,10 @@
         unreadIds = flags.filter((id): id is string => id !== null)
       }
       await runMessageMutation(messageIds, async () => {
-        const result = await ArchiveWithUndo(messageIds)
+        const result = await ArchiveAndMarkReadWithUndo(messageIds)
         if (result.coalesced) return
-        archived = true
-        rememberUnreadForUndo(result.operationId, unreadIds)
-        try {
-          await MarkAsRead(messageIds)
-        } catch (err) {
-          showTargetedUndoToast($_('toast.archived'), result.operationId, messageIds, 'archive')
-          messageListRef?.clearChecked()
-          messageListRef?.handleActionComplete(true)
-          throw err
+        if (!result.atomic) {
+          rememberUnreadForUndo(result.operationId, unreadIds)
         }
         showTargetedUndoToast($_('toast.archived'), result.operationId, messageIds, 'archive')
         messageListRef?.clearChecked()
@@ -2282,7 +2276,7 @@
     } catch (err) {
       messageAnimations.finishRemoval(messageIds)
       console.error('Archive and mark read failed:', err)
-      addToast({ type: 'error', message: $_(archived ? 'toast.failedToUpdateReadStatus' : 'toast.failedToArchive') })
+      addToast({ type: 'error', message: $_('toast.failedToArchive') })
     } finally {
       messageAnimations.settleRemoval(messageIds)
     }
