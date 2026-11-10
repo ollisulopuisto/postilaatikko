@@ -2525,7 +2525,21 @@
 
   /** Opens the Snooze dialog for the checked conversations, else the focused one. Returns false when nothing is targetable. */
   export function snoozeSelection(): boolean {
-    return snoozeDialog.show(selectedQueueRefs)
+    // Checked rows own the action. A mixed selection with an unresolved server
+    // result does nothing rather than snoozing a partial subset, and never
+    // falls through to the reader's conversation.
+    if (checkedThreadIds.size > 0) {
+      if (selectedQueueReady) snoozeDialog.show(selectedQueueRefs)
+      return true
+    }
+    const activeRows: any[] = isSearchMode ? (serverSearchMode ? serverSearchResults : searchResults) : conversations
+    const focused = selectedThreadId ? activeRows.find((conversation: any) => conversation.threadId === selectedThreadId) : undefined
+    if (!focused) return false
+    // Same guard as queue actions: an unresolved row has no canonical conversation yet.
+    if (focused._queueCanonical === false) return true
+    const owningAccountId = focused.accountId || accountId || ''
+    snoozeDialog.show([{ accountId: owningAccountId, conversationId: focused._canonicalConversationId || focused.threadId }])
+    return true
   }
 
   export function toggleMoveToDialog() {
