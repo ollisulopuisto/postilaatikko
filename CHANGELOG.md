@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Send Later helper health and router error responses use the same browser-Origin rejection and security headers as encrypted command responses.
 - Pressing / focuses search in Contacts again, without allowing mail shortcuts to act on hidden messages. Calendar has no general search control, so / is left alone there.
 
 - Add high-contrast focus rings and outline styling to sidebar favorite star buttons and conversation row action buttons for accessible keyboard navigation.

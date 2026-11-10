@@ -38,9 +38,7 @@ func (e *RemoteError) Error() string { return "Send Later helper: " + e.Code }
 // Wrap it in a server with body/header/read/write limits; use TLS off-loopback.
 func (s *Store) Handler() http.Handler {
 	concurrent := make(chan struct{}, 2)
-	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("X-Content-Type-Options", "nosniff")
+	return ProtectBrowserRequests(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/v1/commands" {
 			http.NotFound(w, request)
 			return
@@ -87,7 +85,28 @@ func (s *Store) Handler() http.Handler {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(sealed)
+	}))
+}
+
+// ProtectBrowserRequests applies the same boundary to command, health, error
+// and router-generated responses. Place it outside the outermost helper mux.
+func ProtectBrowserRequests(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		applySecurityHeaders(w)
+		if _, present := request.Header["Origin"]; present {
+			http.Error(w, "forbidden: browser requests not permitted", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, request)
 	})
+}
+
+func applySecurityHeaders(w http.ResponseWriter) {
+	h := w.Header()
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("X-Frame-Options", "DENY")
+	h.Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+	h.Set("Cache-Control", "no-store")
 }
 
 func requestHash(encoded []byte) string {

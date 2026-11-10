@@ -39,3 +39,8 @@
 **Vulnerability:** Mailto URL validators checked raw string prefixes for `-` (`strings.HasPrefix(target, "-")`), allowing percent-encoded dashes (`%2D-help` or `%2dflag`) to bypass prefix checks before being decoded by downstream OS URL handlers (e.g. `xdg-open` / `xdg-email`).
 **Learning:** Argument injection defenses against CLI flags in URL openers must inspect the decoded/unescaped representation in addition to the raw form, because downstream launchers decode URL percent-encoding prior to command construction.
 **Prevention:** Always unescape URL components (`url.PathUnescape` / `decodeURIComponent`) before verifying that target identifiers do not begin with a dash (`-`).
+
+## 2026-11-10 - Helper Endpoint Security Headers and Browser Origin Protection
+**Vulnerability:** Scheduled send helper endpoints (`/v1/commands` and `/healthz`) handled encrypted scheduling operations and status without complete defense-in-depth security headers (`X-Frame-Options`, `Content-Security-Policy`), and did not reject browser `Origin` headers before parsing.
+**Learning:** Background daemon and helper HTTP handlers exposed on loopback or network interfaces must enforce strict browser `Origin` rejection and comprehensive security headers to prevent framing, MIME sniffing, and unsolicited cross-origin browser interactions.
+**Prevention:** Apply a consistent security header profile (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`, `Cache-Control: no-store`) and reject non-empty `Origin` headers on non-browser daemon APIs.
