@@ -19,10 +19,11 @@ import (
 )
 
 type mailboxActionOperations struct {
-	runtime          *SyncRuntime
-	gmailClientFunc  func(accountID string) (*gmail.Client, bool, error)
-	setIMAPFlagsFunc func(accountID, folderID string, messages []*message.Message, kind string, enabled bool) error
-	moveToFolderFunc func(messages []*message.Message, destination *folder.Folder) error
+	runtime              *SyncRuntime
+	gmailClientFunc      func(accountID string) (*gmail.Client, bool, error)
+	setIMAPFlagsFunc     func(accountID, folderID string, messages []*message.Message, kind string, enabled bool) error
+	moveToFolderFunc     func(messages []*message.Message, destination *folder.Folder) error
+	persistFlagGroupFunc func(messages []*message.Message, kind string, enabled bool) error
 }
 
 func (o *mailboxActionOperations) PlanActionGroups(ctx context.Context, req v1.ActionRequest, ids []string) ([]v1.ActionProviderGroup, error) {
@@ -125,18 +126,20 @@ func (o *mailboxActionOperations) ExecuteActionGroup(ctx context.Context, req v1
 		_, err := o.ArchiveMessages(group.MessageIDs)
 		return err
 	case v1.ActionArchiveMarkRead:
+		original, err := o.loadActionMessages(group.MessageIDs)
+		if err != nil {
+			return err
+		}
 		if _, err := o.ArchiveMessages(group.MessageIDs); err != nil {
 			return err
 		}
 		if err := o.MarkAsRead(group.MessageIDs); err != nil {
-			// The move already happened at the provider, and a group that is
-			// not confirmed keeps no Undo snapshot. Compensate the move before
-			// reporting the failure so the messages never end up archived
-			// without a way back.
-			if restoreErr := o.restoreGroupFolder(group); restoreErr != nil {
-				return errors.Join(err, fmt.Errorf("restore archived messages to folder %s: %w", group.SourceFolderID, restoreErr))
-			}
-			return err
+			// The move already happened at the provider, the read leg can fail
+			// after changing some provider flags, and a group that is not
+			// confirmed keeps no Undo snapshot. Compensate both legs before
+			// reporting the failure; any compensation error is surfaced with
+			// the failure so the state is repairable instead of silent.
+			return errors.Join(err, o.restoreGroupState(group, original))
 		}
 		return nil
 	case v1.ActionMarkRead:
@@ -408,6 +411,9 @@ func (o *mailboxActionOperations) setFlags(ids []string, kind string, enabled bo
 }
 
 func (o *mailboxActionOperations) persistFlagGroup(messages []*message.Message, kind string, enabled bool) error {
+	if o.persistFlagGroupFunc != nil {
+		return o.persistFlagGroupFunc(messages, kind, enabled)
+	}
 	ids := make([]string, 0, len(messages))
 	for _, msg := range messages {
 		ids = append(ids, msg.ID)
@@ -462,6 +468,32 @@ func (o *mailboxActionOperations) setIMAPFlags(accountID, folderID string, messa
 		return conn.Client().AddMessageFlags(uids, []goimap.Flag{flag})
 	}
 	return conn.Client().RemoveMessageFlags(uids, []goimap.Flag{flag})
+}
+
+// restoreGroupState reverses a partially applied archive-and-mark-read: the
+// messages move back to their source folder, and every message that was unread
+// before the action is marked unread again at the provider and locally. The
+// read leg can fail after changing provider flags (provider update succeeds,
+// local persistence fails), so folder-only compensation would carry an
+// unintended read state back into Inbox. The original slice must be captured
+// before the action runs.
+func (o *mailboxActionOperations) restoreGroupState(group v1.ActionProviderGroup, original []*message.Message) error {
+	var errs []error
+	if err := o.restoreGroupFolder(group); err != nil {
+		errs = append(errs, fmt.Errorf("restore archived messages to folder %s: %w", group.SourceFolderID, err))
+	}
+	unreadIDs := make([]string, 0, len(original))
+	for _, msg := range original {
+		if !msg.IsRead {
+			unreadIDs = append(unreadIDs, msg.ID)
+		}
+	}
+	if len(unreadIDs) > 0 {
+		if err := o.setFlags(unreadIDs, "read", false); err != nil {
+			errs = append(errs, fmt.Errorf("restore original unread state: %w", err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // restoreGroupFolder moves a provider group's messages back to their source
