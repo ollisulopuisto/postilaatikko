@@ -39,8 +39,12 @@ func (e *RemoteError) Error() string { return "Send Later helper: " + e.Code }
 func (s *Store) Handler() http.Handler {
 	concurrent := make(chan struct{}, 2)
 	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
-		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("X-Content-Type-Options", "nosniff")
+		// Defense-in-depth security headers and Origin protection
+		applySecurityHeaders(w)
+		if origin := request.Header.Get("Origin"); origin != "" {
+			http.Error(w, "forbidden: browser requests not permitted", http.StatusForbidden)
+			return
+		}
 		if request.URL.Path != "/v1/commands" {
 			http.NotFound(w, request)
 			return
@@ -88,6 +92,14 @@ func (s *Store) Handler() http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(sealed)
 	})
+}
+
+func applySecurityHeaders(w http.ResponseWriter) {
+	h := w.Header()
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("X-Frame-Options", "DENY")
+	h.Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+	h.Set("Cache-Control", "no-store")
 }
 
 func requestHash(encoded []byte) string {
