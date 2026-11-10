@@ -29,6 +29,7 @@
   import { backend as backendModels } from '../../../../wailsjs/go/models'
   import { setFocusedPane, isInputElement, isComposerOpen } from '$lib/stores/keyboard.svelte'
   import { ConfirmDialog } from '$lib/components/ui/confirm-dialog'
+  import SnoozeButton from '$lib/components/common/SnoozeButton.svelte'
   import LaterQueueButton from '$lib/components/common/LaterQueueButton.svelte'
   import MessageContextMenu from '$lib/components/common/MessageContextMenu.svelte'
   import FolderPickerDialog from '$lib/components/common/FolderPickerDialog.svelte'
@@ -2136,6 +2137,7 @@
       <div class="flex flex-wrap items-center gap-2">
         <LaterQueueButton accountId={conversation.messages?.[0]?.accountId || accountId || ''} conversationId={threadId || ''} kind="readLater" />
         <LaterQueueButton accountId={conversation.messages?.[0]?.accountId || accountId || ''} conversationId={threadId || ''} kind="replyLater" />
+        {#if folderType !== 'snoozed'}<SnoozeButton accountId={conversation.messages?.[0]?.accountId || accountId || ''} conversationId={threadId || ''} />{/if}
         <ReaderModeToggle mode={readerMode} onChange={switchReaderMode} />
         {#if readerMode === 'traditional' && conversation.messages && conversation.messages.length > 1}
           <button

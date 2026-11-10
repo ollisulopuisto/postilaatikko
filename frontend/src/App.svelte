@@ -14,6 +14,8 @@
   import './lib/iconify-offline'
   import { clearCache as clearInlineAttachmentCache } from './lib/stores/inlineAttachmentCache'
   import { readLaterQueue } from './lib/stores/readLater.svelte'
+  import { snoozeDialog } from './lib/stores/snoozeDialog.svelte'
+  import SnoozeDialog from './lib/components/common/SnoozeDialog.svelte'
   import { replyLaterQueue } from './lib/stores/replyLater.svelte'
 
   import { onDestroy, onMount, tick, untrack } from 'svelte'
@@ -809,6 +811,10 @@
     window.addEventListener('focus', syncMailboxActionEvents)
     contextPaneAutoHide = localStorage.getItem(CONTEXT_PANE_AUTO_HIDE_KEY) === 'true'
     contextPaneRevealed = !contextPaneAutoHide
+    EventsOn('snooze:expired', (event: { count?: number } | undefined) => {
+      const count = Math.max(1, Number(event?.count) || 1)
+      addToast({ type: 'info', message: $_(count === 1 ? 'snooze.returned' : 'snooze.returnedMany', { values: { count } }) })
+    })
     EventsOn('undo:history-open', () => {
       setActiveExtension('mail')
       showUndoHistory = true
@@ -1142,6 +1148,7 @@
     registerCommand('mail.toggleRead', () => runListAction('mail.toggleRead'), () => listActionAvailable('mail.toggleRead'))
     registerCommand('mail.readLater', () => toggleLaterQueue('readLater'), () => selectedThreadId !== null)
     registerCommand('mail.replyLater', () => toggleLaterQueue('replyLater'), () => selectedThreadId !== null)
+    registerCommand('mail.snooze', () => { if (getFocusedPane() === 'viewer') openSnoozeDialog(); else messageListRef?.snoozeSelection() }, () => selectedThreadId !== null || !!messageListRef)
     registerCommand('mail.moveTo', () => {
       if (getFocusedPane() === 'viewer' && selectedThreadId) viewerRef?.toggleFolderPicker('move')
       else messageListRef?.toggleMoveToDialog()
@@ -1540,6 +1547,7 @@
     'mail.archiveAndMarkRead': () => viewerOr(() => viewerRef?.archiveAndMarkRead(), 'mail.archiveAndMarkRead'),
     'mail.readLater': () => void executeCommand('mail.readLater'),
     'mail.replyLater': () => void executeCommand('mail.replyLater'),
+    'mail.snooze': () => void executeCommand('mail.snooze'),
     'mail.moveTo': () => {
       if (getActiveExtension() !== 'mail') return
       // Reader-only tabs own their viewer shortcut handler.
@@ -2296,6 +2304,13 @@
     }
   }
 
+  function openSnoozeDialog() {
+    const accountId = selectedConversationAccountId || selectedAccountId
+    const conversationId = selectedThreadId
+    if (!accountId || !conversationId) return
+    snoozeDialog.show([{ accountId, conversationId }])
+  }
+
   async function toggleLaterQueue(kind: 'readLater' | 'replyLater') {
     const accountId = selectedConversationAccountId || selectedAccountId
     const conversationId = selectedThreadId
@@ -2692,6 +2707,7 @@
 <UpdateAvailableNotice hidden={showTermsDialog || showOAuthMissingDialog || showWhatsNewDialog || showCertDialog || showFlatpakFsDialog} />
 
 <!-- Toast notifications -->
+<SnoozeDialog bind:open={snoozeDialog.open} targets={snoozeDialog.targets} />
 <ToastContainer />
 
 <!-- Spellcheck right-click suggestion menu (composer) -->

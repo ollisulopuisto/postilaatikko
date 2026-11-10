@@ -4,6 +4,8 @@
   import MessageList from './lib/components/list/MessageList.svelte'
   import ConversationViewer from './lib/components/viewer/ConversationViewer.svelte'
   import ToastContainer from './lib/components/ui/toast/ToastContainer.svelte'
+  import SnoozeDialog from './lib/components/common/SnoozeDialog.svelte'
+  import { snoozeDialog } from './lib/stores/snoozeDialog.svelte'
   import VirtualFolderDialog from './lib/components/sidebar/VirtualFolderDialog.svelte'
   import { _ } from './lib/i18n'
   import { accountStore } from './lib/stores/accounts.svelte'
@@ -355,6 +357,8 @@
   </div>
 </div>
 <ToastContainer />
+<!-- The primary window's App hosts the shared dialog; a detached window has to host its own. -->
+{#if !embedded}<SnoozeDialog bind:open={snoozeDialog.open} targets={snoozeDialog.targets} onDone={() => list?.handleActionComplete(true)} />{/if}
 <VirtualFolderDialog bind:open={showVirtualFolderDialog} virtualFolder={null} accounts={accountStore.accounts}
   initialSearchQuery={pendingSearchQuery} initialFolderId={pendingSearchFolderId}
   onRefreshFolders={loadNavigation}

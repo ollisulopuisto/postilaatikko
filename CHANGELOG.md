@@ -15,6 +15,13 @@
 - Keyboard shortcut audit: a test now fails on any duplicate binding in one context; every cross-group reuse is listed with its reason.
 - Stop continuous CPU use while an email is open in the reader: the inline-image loading placeholder is now static (no animated SVG) and iframe height updates are skipped when unchanged.
 - Skip meta-charset regex scans on HTML parts without a `<meta` and `charset` token, keeping long-s (`charſet`) spellings on the regex path.
+
+## Postilaatikko 2026.11.10.3
+
+- Keyboard-focused mail actions and read/star state now follow the account-qualified row in unified lists, even when two accounts share a thread ID. A stale focus does not target another account.
+
+- Snooze: pick when a conversation comes back. Presets (later today, this evening, tomorrow morning, this weekend, next week) or a custom date and time replace the old whole-days box. Press H, use the Snooze button in the reader toolbar or the selection bar, the message menu or the command palette. Works on several selected conversations at once, and Undo takes the whole batch back. A toast tells you when snoozed conversations return. Snoozing stays local: nothing changes on the mail server.
+
 ## Postilaatikko 2026.11.10.2
 
 - One bar: the window now has a single top bar. The separate title bar and the back/forward row above the message list are gone, which gives back about 80 pt of height. The close, minimise and zoom buttons sit at the top left in the usual Mac order, above the rail. The back and forward arrows moved into the reading pane's top row, next to the "New window" button. Native title bar mode is unchanged.
