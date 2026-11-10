@@ -3,6 +3,7 @@ package alwayson
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -14,7 +15,7 @@ import (
 	"github.com/hkdb/aerion/internal/message"
 )
 
-func setupArchiveReadUndoRuntime(t *testing.T) (*mailboxActionOperations, *message.Store) {
+func setupArchiveReadUndoRuntime(t *testing.T) (*mailboxActionOperations, *message.Store, *database.DB) {
 	t.Helper()
 	db, err := database.Open(filepath.Join(t.TempDir(), "archive-read-undo.db"))
 	if err != nil {
@@ -45,11 +46,78 @@ func setupArchiveReadUndoRuntime(t *testing.T) (*mailboxActionOperations, *messa
 			return nil, false, nil
 		},
 	}
-	return operations, messages
+	return operations, messages, db
+}
+
+// moveToFolderInDB simulates a provider move by updating the local store, the
+// same way a confirmed provider move would be mirrored locally.
+func moveToFolderInDB(db *database.DB) func([]*message.Message, *folder.Folder) error {
+	return func(messages []*message.Message, destination *folder.Folder) error {
+		for _, msg := range messages {
+			if _, err := db.Exec(`UPDATE messages SET folder_id = ? WHERE id = ?`, destination.ID, msg.ID); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+}
+
+func archiveReadGroup() v1.ActionProviderGroup {
+	return v1.ActionProviderGroup{
+		ID:                   "group-1",
+		AccountID:            "a",
+		SourceFolderID:       "fin",
+		DestinationAccountID: "a",
+		DestinationFolderID:  "far",
+		MessageIDs:           []string{"m1"},
+	}
+}
+
+func TestExecuteActionGroupArchiveMarkReadCompensatesMoveOnFlagFailure(t *testing.T) {
+	operations, messages, db := setupArchiveReadUndoRuntime(t)
+	operations.moveToFolderFunc = moveToFolderInDB(db)
+	operations.setIMAPFlagsFunc = func(accountID, folderID string, _ []*message.Message, kind string, enabled bool) error {
+		return errors.New("provider rejected the flag update")
+	}
+	err := operations.ExecuteActionGroup(context.Background(), v1.ActionRequest{Action: v1.ActionArchiveMarkRead}, archiveReadGroup())
+	if err == nil {
+		t.Fatal("ExecuteActionGroup succeeded although the flag update failed")
+	}
+	restored, err := messages.GetByIDs([]string{"m1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restored[0].FolderID != "fin" {
+		t.Errorf("message folder after compensation = %q, want fin (the move must be reversed)", restored[0].FolderID)
+	}
+	if restored[0].IsRead {
+		t.Errorf("message must stay unread when the read update failed")
+	}
+}
+
+func TestExecuteActionGroupArchiveMarkReadConfirmsOnlyAfterBothEffects(t *testing.T) {
+	operations, messages, db := setupArchiveReadUndoRuntime(t)
+	operations.moveToFolderFunc = moveToFolderInDB(db)
+	operations.setIMAPFlagsFunc = func(accountID, folderID string, _ []*message.Message, kind string, enabled bool) error {
+		return nil
+	}
+	if err := operations.ExecuteActionGroup(context.Background(), v1.ActionRequest{Action: v1.ActionArchiveMarkRead}, archiveReadGroup()); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := messages.GetByIDs([]string{"m1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated[0].FolderID != "far" {
+		t.Errorf("message folder = %q, want far", updated[0].FolderID)
+	}
+	if !updated[0].IsRead {
+		t.Errorf("message must be read after a confirmed archive_read")
+	}
 }
 
 func TestCaptureActionUndoArchiveMarkReadExpectsArchivedAndRead(t *testing.T) {
-	operations, _ := setupArchiveReadUndoRuntime(t)
+	operations, _, _ := setupArchiveReadUndoRuntime(t)
 	payload, err := operations.CaptureActionUndo(context.Background(), v1.ActionRequest{Action: v1.ActionArchiveMarkRead}, []string{"m1"})
 	if err != nil {
 		t.Fatal(err)
@@ -80,7 +148,7 @@ func TestCaptureActionUndoArchiveMarkReadExpectsArchivedAndRead(t *testing.T) {
 }
 
 func TestPlanActionGroupsArchiveMarkReadTargetsArchive(t *testing.T) {
-	operations, _ := setupArchiveReadUndoRuntime(t)
+	operations, _, _ := setupArchiveReadUndoRuntime(t)
 	groups, err := operations.PlanActionGroups(context.Background(), v1.ActionRequest{Action: v1.ActionArchiveMarkRead}, []string{"m1"})
 	if err != nil {
 		t.Fatal(err)
@@ -98,7 +166,7 @@ func TestPlanActionGroupsArchiveMarkReadTargetsArchive(t *testing.T) {
 }
 
 func TestUndoActionArchiveMarkReadRejectsChangedReadState(t *testing.T) {
-	operations, messages := setupArchiveReadUndoRuntime(t)
+	operations, messages, _ := setupArchiveReadUndoRuntime(t)
 	payload, err := operations.CaptureActionUndo(context.Background(), v1.ActionRequest{Action: v1.ActionArchiveMarkRead}, []string{"m1"})
 	if err != nil {
 		t.Fatal(err)

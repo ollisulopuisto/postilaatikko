@@ -15,10 +15,10 @@
   import { toasts } from './lib/stores/toast'
   import { readLaterQueue } from './lib/stores/readLater.svelte'
   import { replyLaterQueue } from './lib/stores/replyLater.svelte'
-  import { publishUndoOperationCreated, publishUndoOperationCompleted } from './lib/components/list/undoMutationEvents'
+  import { publishUndoOperationCreated, publishUndoOperationCompleted, rememberUnreadForUndo } from './lib/components/list/undoMutationEvents'
   import { runMessageMutation } from './lib/components/list/mutationInFlight'
   import type { virtualfolder } from '../wailsjs/go/models'
-  import { GetAccounts, GetFolders, GetFolderTree, GetMessage, OpenMailWindow, OpenComposerWindow, MarkAsRead, MarkAsUnread, Star, Unstar, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ArchiveWithUndo, UndoOperation } from '../wailsjs/go/app/App'
+  import { GetAccounts, GetFolders, GetFolderTree, GetMessage, OpenMailWindow, OpenComposerWindow, MarkAsRead, MarkAsUnread, Star, Unstar, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ArchiveWithUndo, ArchiveAndMarkReadWithUndo, UndoOperation } from '../wailsjs/go/app/App'
   import { EventsEmit, WindowSetTitle } from '../wailsjs/runtime/runtime'
 
   let { config, embedded = false, readerTab = false, deferMarkAsReadUntilLeave = false, onCloseTab, active = true, onScopeChange, onNewTab, onOpenInTab }: { config: MailScope; embedded?: boolean; readerTab?: boolean; deferMarkAsReadUntilLeave?: boolean; onCloseTab?: () => void; active?: boolean; onScopeChange?: (scope: MailScope) => void; onNewTab?: () => void; onOpenInTab?: (scope: MailScope) => void } = $props()
@@ -136,10 +136,17 @@
   }
   async function archiveAndMarkRead(ids: string[]) {
     if (!ids.length) return
+    // Snapshot unread ids before the mutation for the legacy two-step
+    // fallback; the atomic backend action restores read state itself.
+    const unreadIds = list?.getUnreadSnapshot(ids) ?? []
     await run(() => runMessageMutation(ids, async () => {
-      const result = await ArchiveWithUndo(ids)
+      const result = await ArchiveAndMarkReadWithUndo(ids)
       if (result.coalesced) return
-      await MarkAsRead(ids)
+      if (!result.atomic) {
+        // Legacy two-step fallback: its Undo only moves messages back, so the
+        // unread ids must be restored from the snapshot taken before.
+        rememberUnreadForUndo(result.operationId, unreadIds)
+      }
       const operation = result.operationId
       publishUndoOperationCreated(operation, ids, 'archive')
       toasts.success($_('toast.archived'), [{ label: $_('common.undo'), onClick: () => run(async () => {
@@ -147,6 +154,7 @@
         publishUndoOperationCompleted(operation)
         refresh()
       }) }])
+      if (result.readFailed) toasts.error($_('toast.failedToUpdateReadStatus'))
       list?.clearChecked()
       list?.handleActionComplete(true)
     }))

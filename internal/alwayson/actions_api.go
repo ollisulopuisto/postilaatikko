@@ -22,6 +22,7 @@ type mailboxActionOperations struct {
 	runtime          *SyncRuntime
 	gmailClientFunc  func(accountID string) (*gmail.Client, bool, error)
 	setIMAPFlagsFunc func(accountID, folderID string, messages []*message.Message, kind string, enabled bool) error
+	moveToFolderFunc func(messages []*message.Message, destination *folder.Folder) error
 }
 
 func (o *mailboxActionOperations) PlanActionGroups(ctx context.Context, req v1.ActionRequest, ids []string) ([]v1.ActionProviderGroup, error) {
@@ -127,7 +128,17 @@ func (o *mailboxActionOperations) ExecuteActionGroup(ctx context.Context, req v1
 		if _, err := o.ArchiveMessages(group.MessageIDs); err != nil {
 			return err
 		}
-		return o.MarkAsRead(group.MessageIDs)
+		if err := o.MarkAsRead(group.MessageIDs); err != nil {
+			// The move already happened at the provider, and a group that is
+			// not confirmed keeps no Undo snapshot. Compensate the move before
+			// reporting the failure so the messages never end up archived
+			// without a way back.
+			if restoreErr := o.restoreGroupFolder(group); restoreErr != nil {
+				return errors.Join(err, fmt.Errorf("restore archived messages to folder %s: %w", group.SourceFolderID, restoreErr))
+			}
+			return err
+		}
+		return nil
 	case v1.ActionMarkRead:
 		return o.MarkAsRead(group.MessageIDs)
 	case v1.ActionMarkUnread:
@@ -453,7 +464,27 @@ func (o *mailboxActionOperations) setIMAPFlags(accountID, folderID string, messa
 	return conn.Client().RemoveMessageFlags(uids, []goimap.Flag{flag})
 }
 
+// restoreGroupFolder moves a provider group's messages back to their source
+// folder when a later leg of a compound action failed after the move.
+func (o *mailboxActionOperations) restoreGroupFolder(group v1.ActionProviderGroup) error {
+	messages, err := o.loadActionMessages(group.MessageIDs)
+	if err != nil {
+		return err
+	}
+	source, err := o.runtime.folders.Get(group.SourceFolderID)
+	if err != nil {
+		return err
+	}
+	if source == nil || source.AccountID != group.AccountID {
+		return fmt.Errorf("source folder %s is unavailable for move compensation", group.SourceFolderID)
+	}
+	return o.moveToFolder(messages, source)
+}
+
 func (o *mailboxActionOperations) moveToFolder(messages []*message.Message, destination *folder.Folder) error {
+	if o.moveToFolderFunc != nil {
+		return o.moveToFolderFunc(messages, destination)
+	}
 	if len(messages) == 0 {
 		return nil
 	}
