@@ -1146,7 +1146,7 @@
     registerCommand('mail.toggleRead', () => runListAction('mail.toggleRead'), () => listActionAvailable('mail.toggleRead'))
     registerCommand('mail.readLater', () => toggleLaterQueue('readLater'), () => selectedThreadId !== null)
     registerCommand('mail.replyLater', () => toggleLaterQueue('replyLater'), () => selectedThreadId !== null)
-    registerCommand('mail.snooze', () => { if (!messageListRef?.snoozeSelection()) openSnoozeDialog() }, () => selectedThreadId !== null || !!messageListRef)
+    registerCommand('mail.snooze', () => { if (getFocusedPane() === 'viewer') openSnoozeDialog(); else messageListRef?.snoozeSelection() }, () => selectedThreadId !== null || !!messageListRef)
     registerCommand('mail.moveTo', () => {
       if (getFocusedPane() === 'viewer' && selectedThreadId) viewerRef?.toggleFolderPicker('move')
       else messageListRef?.toggleMoveToDialog()
