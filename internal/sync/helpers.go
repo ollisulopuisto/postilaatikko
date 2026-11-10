@@ -190,8 +190,8 @@ func stripHTMLTags(s string) string {
 	for i < len(s) {
 		if skipBlock != "" {
 			if i+1 < len(s) && s[i] == '<' {
-				ns, ne, end := readTagIndices(s, i+1)
-				if ne > ns && s[ns] == '/' && equalFoldTagName(s, ns+1, ne, skipBlock) {
+				nameStart, nameEnd, end := readTagIndices(s, i+1)
+				if nameEnd > nameStart && s[nameStart] == '/' && equalFoldTagName(s, nameStart+1, nameEnd, skipBlock) {
 					skipBlock = ""
 					i = end
 					continue
@@ -201,19 +201,19 @@ func stripHTMLTags(s string) string {
 			continue
 		}
 		if s[i] == '<' {
-			ns, ne, end := readTagIndices(s, i+1)
-			if ne > ns && s[ns] == '/' {
+			nameStart, nameEnd, end := readTagIndices(s, i+1)
+			if nameEnd > nameStart && s[nameStart] == '/' {
 				// Closing tag: only ends a skipped block.
-				if skipBlock != "" && equalFoldTagName(s, ns+1, ne, skipBlock) {
+				if skipBlock != "" && equalFoldTagName(s, nameStart+1, nameEnd, skipBlock) {
 					skipBlock = ""
 				}
 			} else {
 				switch {
-				case equalFoldTagName(s, ns, ne, "script"):
+				case equalFoldTagName(s, nameStart, nameEnd, "script"):
 					skipBlock = "script"
-				case equalFoldTagName(s, ns, ne, "style"):
+				case equalFoldTagName(s, nameStart, nameEnd, "style"):
 					skipBlock = "style"
-				case equalFoldTagName(s, ns, ne, "noscript"):
+				case equalFoldTagName(s, nameStart, nameEnd, "noscript"):
 					skipBlock = "noscript"
 				}
 			}
