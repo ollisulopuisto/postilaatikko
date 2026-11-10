@@ -142,33 +142,34 @@ func generateSnippet(body string, maxLen int) string {
 	return text
 }
 
-// equalFoldASCII compares a slice s[nameStart:nameEnd] against lowercase target
-// ignoring ASCII case, without heap allocations.
-func equalFoldASCII(s string, nameStart, nameEnd int, target string) bool {
-	if (nameEnd - nameStart) != len(target) {
-		return false
-	}
-	for i := 0; i < len(target); i++ {
-		c := s[nameStart+i]
-		if c >= 'A' && c <= 'Z' {
-			c += 'a' - 'A'
+// equalFoldTagName compares a slice s[nameStart:nameEnd] against lowercase target.
+// It uses an in-place ASCII fast path without heap allocations, and falls back to
+// strings.EqualFold for non-ASCII runes (e.g. Unicode long-s U+017F folding to 's').
+func equalFoldTagName(s string, nameStart, nameEnd int, target string) bool {
+	slice := s[nameStart:nameEnd]
+	if len(slice) == len(target) {
+		match := true
+		for i := 0; i < len(target); i++ {
+			c := slice[i]
+			if c >= 'A' && c <= 'Z' {
+				c += 'a' - 'A'
+			}
+			if c != target[i] {
+				match = false
+				break
+			}
 		}
-		if c != target[i] {
-			return false
-		}
-	}
-	return true
-}
-
-// equalFoldClosingTag keeps the ASCII fast path while preserving the former
-// Unicode EqualFold behavior for non-ASCII closing tag names.
-func equalFoldClosingTag(s string, nameStart, nameEnd int, target string) bool {
-	for i := nameStart; i < nameEnd; i++ {
-		if s[i] >= 0x80 {
-			return strings.EqualFold(s[nameStart:nameEnd], target)
+		if match {
+			return true
 		}
 	}
-	return equalFoldASCII(s, nameStart, nameEnd, target)
+	// Fall back to strings.EqualFold if the slice contains non-ASCII bytes
+	for i := 0; i < len(slice); i++ {
+		if slice[i] >= 0x80 {
+			return strings.EqualFold(slice, target)
+		}
+	}
+	return false
 }
 
 // stripHTMLTags removes HTML tags (and the contents of <script>, <style> and
@@ -189,8 +190,8 @@ func stripHTMLTags(s string) string {
 	for i < len(s) {
 		if skipBlock != "" {
 			if i+1 < len(s) && s[i] == '<' {
-				nameStart, nameEnd, end := readTagIndices(s, i+1)
-				if nameEnd > nameStart && s[nameStart] == '/' && equalFoldClosingTag(s, nameStart+1, nameEnd, skipBlock) {
+				ns, ne, end := readTagIndices(s, i+1)
+				if ne > ns && s[ns] == '/' && equalFoldTagName(s, ns+1, ne, skipBlock) {
 					skipBlock = ""
 					i = end
 					continue
@@ -200,16 +201,21 @@ func stripHTMLTags(s string) string {
 			continue
 		}
 		if s[i] == '<' {
-			nameStart, nameEnd, end := readTagIndices(s, i+1)
-			switch {
-			case nameEnd > nameStart && s[nameStart] == '/':
-				// Other closing tags have no visible text; block closes were handled above.
-			case equalFoldASCII(s, nameStart, nameEnd, "script"):
-				skipBlock = "script"
-			case equalFoldASCII(s, nameStart, nameEnd, "style"):
-				skipBlock = "style"
-			case equalFoldASCII(s, nameStart, nameEnd, "noscript"):
-				skipBlock = "noscript"
+			ns, ne, end := readTagIndices(s, i+1)
+			if ne > ns && s[ns] == '/' {
+				// Closing tag: only ends a skipped block.
+				if skipBlock != "" && equalFoldTagName(s, ns+1, ne, skipBlock) {
+					skipBlock = ""
+				}
+			} else {
+				switch {
+				case equalFoldTagName(s, ns, ne, "script"):
+					skipBlock = "script"
+				case equalFoldTagName(s, ns, ne, "style"):
+					skipBlock = "style"
+				case equalFoldTagName(s, ns, ne, "noscript"):
+					skipBlock = "noscript"
+				}
 			}
 			// Void tags and normal elements are fully consumed by readTagIndices,
 			// so nothing is written for them.

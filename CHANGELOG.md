@@ -2,8 +2,6 @@
 
 ## [Unreleased]
 
-- HTML previews retain visible text after Unicode-fold-equivalent closing tags such as long-s style/script closes.
-
 - Add high-contrast focus rings and outline styling to sidebar favorite star buttons and conversation row action buttons for accessible keyboard navigation.
 - Bare Gmail-style letter shortcuts (d trash, e archive+read, s star, ...) now fire only while the mail rail is active; pressing them in Calendar or Contacts no longer acts on the hidden mail list. Global single keys like `?` (shortcuts help) keep working on every pane.
 - Archive and mark read (E, toolbar button, selection bar, secondary window) is now one atomic mailbox action: the helper archives and marks read in a single operation, and Undo reverses both together, moving the messages back and restoring their previous read state. If the read update fails after the move, the helper reverses the move and restores the original unread state itself; the secondary mail window captures the same unread snapshot (asking the backend when a row is mixed or unloaded) and actually restores it on Undo; a partially completed action is reported as a failure instead of a success with an incomplete Undo; and the legacy fallback still offers the archive Undo when only the read step fails. The frontend's unread-snapshot workaround only remains for that fallback.

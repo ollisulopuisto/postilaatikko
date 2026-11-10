@@ -104,6 +104,9 @@ func TestStripHTMLTags_CaseInsensitiveBlockTags(t *testing.T) {
 		{"<SCRIPT>var x = 1;</SCRIPT>Hello", "Hello"},
 		{"<STYLE>body { color: red; }</STYLE>World", "World"},
 		{"<NOSCRIPT>Enable JS</NOSCRIPT>Visible", "Visible"},
+		{"<\u017fcript>var x = 1;</\u017fcript>Hello", "Hello"},
+		{"<\u017ftyle>body { color: red; }</\u017ftyle>World", "World"},
+		{"<no\u017fcript>Enable JS</no\u017fcript>Visible", "Visible"},
 		{"<div class=\"test\">Content</div>", "Content"},
 		{"<a href=\"http://example.com?a=1&amp;b=2\">Link</a>", "Link"},
 		{"Unterminated <tag with text", "Unterminated "},
@@ -143,13 +146,5 @@ func TestStripHTMLTags_RemovesComments(t *testing.T) {
 	}
 	if !strings.Contains(result, "Real text") {
 		t.Errorf("snippet should keep real text, got %q", result)
-	}
-}
-
-func TestStripHTMLTagsUnicodeFoldClosingBlock(t *testing.T) {
-	for _, input := range []string{"<style>hidden</ſtyle>Visible", "<script>hidden</ſcript>Visible", "<noscript>hidden</noſcript>Visible"} {
-		if got := stripHTMLTags(input); got != "Visible" {
-			t.Errorf("%q => %q, want Visible", input, got)
-		}
 	}
 }
