@@ -15,7 +15,7 @@
 - Skip meta-charset regex scans on HTML parts without a `<meta` and `charset` token, keeping long-s (`charſet`) spellings on the regex path.
 ## Postilaatikko 2026.11.10.4
 
-- Add to Calendar now recognises Finnish dates: dotted dates such as 12.11.2026, month names such as 12. marraskuuta 2026, and times written "klo 14", "klo 14.30" or "klo 9:00-10.30". A bare number after a date (for example "June 5, 2026 14 people", or a price after a dotted date) is no longer read as an hour; use "at 3 pm", minutes or am/pm. Dates still need a four-digit year, and slash dates such as 12/05/2026 are still skipped because they are ambiguous.
+- Add to Calendar now recognises Finnish dates: dotted dates such as 12.11.2026, month names such as 12. marraskuuta 2026, and times written "klo 14", "klo 14.30" or "klo 9:00-10.30". A bare number after a date (for example "June 5, 2026 14 people", or a price after a dotted date) is no longer read as an hour; use "at 3 pm", minutes or am/pm. Dates still need a four-digit year, and slash dates such as 12/05/2026 are still skipped because they are ambiguous. Finnish times may carry a zone (klo 14 UTC, klo 14 +02:00), and English hour ranges such as 2-3 pm are recognised; a time followed by an ambiguous zone name such as PST is skipped.
 
 ## Postilaatikko 2026.11.10.1
 

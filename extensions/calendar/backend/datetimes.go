@@ -345,7 +345,7 @@ func anchorInstant(year int, month time.Month, day, hour, minute, second int, zo
 	if zone == "" {
 		return time.Date(year, month, day, hour, minute, second, 0, loc)
 	}
-	if zone == "Z" || strings.EqualFold(zone, "UTC") || strings.EqualFold(zone, "GMT") {
+	if strings.EqualFold(zone, "Z") || strings.EqualFold(zone, "UTC") || strings.EqualFold(zone, "GMT") {
 		return time.Date(year, month, day, hour, minute, second, 0, time.UTC)
 	}
 	return time.Date(year, month, day, hour, minute, second, 0, time.FixedZone(zone, parseOffsetSeconds(zone)))
@@ -360,6 +360,9 @@ func parseOffsetSeconds(zone string) int {
 		body = strings.TrimPrefix(zone, "-")
 	}
 	body = strings.ReplaceAll(body, ":", "")
+	if len(body) < 4 {
+		return 0
+	}
 	h, _ := strconv.Atoi(body[:2])
 	m, _ := strconv.Atoi(body[2:])
 	return sign * (h*3600 + m*60)

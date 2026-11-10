@@ -291,6 +291,23 @@ func TestDetectDateTimesAnchorsAllDayInDisplayTimezone(t *testing.T) {
 	}
 }
 
+// A lowercase zone letter is matched case-insensitively by the time pattern;
+// it must anchor as UTC instead of reaching the offset parser (which used to
+// panic on it).
+func TestDetectDateTimesLowercaseZoneDoesNotPanic(t *testing.T) {
+	SetConfiguredTimezone("Europe/Helsinki")
+	t.Cleanup(func() { SetConfiguredTimezone("") })
+
+	got := DetectDateTimes("Tapaaminen 5.6.2026 klo 14 z.")
+	want := time.Date(2026, time.June, 5, 14, 0, 0, 0, time.UTC).Unix()
+	if len(got) != 1 || got[0].StartUnix != want {
+		t.Fatalf("lowercase zone: got %+v, want StartUnix %d", got, want)
+	}
+	if parseOffsetSeconds("z") != 0 {
+		t.Fatal("a malformed offset must read as zero, not panic")
+	}
+}
+
 // TestCalendarBridgeDetectDateTimesDisabled verifies the disabled-extension
 // gate: a bridge without a settings store reports no mentions and no error.
 func TestCalendarBridgeDetectDateTimesDisabled(t *testing.T) {
