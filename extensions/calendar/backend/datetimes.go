@@ -59,7 +59,7 @@ var (
 	// dotted numeric date with a four-digit year is not read the US way.
 	reDottedDate = regexp.MustCompile(`\b([0-9]{1,2})\.\s?([0-9]{1,2})\.\s?([0-9]{4})\b`)
 	// Finnish "12. marraskuuta 2026" / "12 marraskuuta 2026".
-	reFiDayMonthYear = regexp.MustCompile(`(?i)\b([0-9]{1,2})\.?\s*((?:tammi|helmi|maalis|huhti|touko|kesä|heinä|elo|syys|loka|marras|joulu)kuuta?)\s+([0-9]{4})\b`)
+	reFiDayMonthYear = regexp.MustCompile(`(?i)\b([0-9]{1,2})\.?\s*((?:tammi|helmi|maalis|huhti|touko|kesä|heinä|elo|syys|loka|marras|joulu)kuu(?:ta)?)\s+([0-9]{4})\b`)
 	// ISO "2026-06-05" with an optional " 14:00" or "T14:00:00+02:00" tail.
 	reISODate = regexp.MustCompile(`\b([0-9]{4})-([0-9]{2})-([0-9]{2})(?:[T ]([0-9]{1,2}):([0-9]{2})(?::([0-9]{2}))?(Z|[+-][0-9]{2}:?[0-9]{2})?)?\b`)
 )
@@ -71,7 +71,7 @@ var timeSpecRe = regexp.MustCompile(`(?i)^\s*(?:,\s*|\bat\s+)?([0-9]{1,2})(?::([
 // fiTimeRe parses a Finnish "klo 14", "klo 14.30" or "kello 14:30-15.30" time
 // at the start of the remaining text. The dot form is accepted only behind
 // klo/kello, so "5.6.2026 12.50 EUR" is not read as 12:50.
-var fiTimeRe = regexp.MustCompile(`(?i)^\s*(?:,\s*)?(?:klo|kello)\.?\s*([0-9]{1,2})(?:[.:]([0-9]{2}))?(?:\s*(?:-|–|—)\s*([0-9]{1,2})(?:[.:]([0-9]{2}))?)?\b`)
+var fiTimeRe = regexp.MustCompile(`(?i)^\s*(?:,\s*)?(?:klo|kello)\.?\s*([0-9]{1,2})(?:[.:]([0-9]{2}))?(?:\s*(?:-|–|—)\s*([0-9]{1,2})(?:[.:]([0-9]{2}))?)?(?:\s*(Z|UTC|GMT|[+-][0-9]{2}:?[0-9]{2}))?\b`)
 
 // namedZoneRe matches ambiguous civil zone abbreviations that invalidate a
 // mention when they directly follow the recognized time: PST maps to
@@ -234,7 +234,7 @@ func buildMention(hit dateHit, dateRaw, rest string) (DateTimeMention, bool) {
 	}
 	// A bare number after a date ("June 5, 2026 14 people", "5 June 2026 12")
 	// is not a time. Accept it only with minutes, a meridiem or an "at".
-	if spec[2] == "" && spec[4] == "" && spec[7] == "" && !strings.HasPrefix(strings.ToLower(strings.TrimSpace(spec[0])), "at") {
+	if spec[2] == "" && spec[4] == "" && spec[5] == "" && spec[7] == "" && spec[8] == "" && !strings.HasPrefix(strings.ToLower(strings.TrimSpace(spec[0])), "at") {
 		start := time.Date(hit.year, time.Month(hit.month), hit.day, 0, 0, 0, 0, loc)
 		return DateTimeMention{StartUnix: start.Unix(), EndUnix: start.AddDate(0, 0, 1).Unix(), IsAllDay: true, RawText: dateRaw}, true
 	}
@@ -287,25 +287,29 @@ func buildMention(hit dateHit, dateRaw, rest string) (DateTimeMention, bool) {
 }
 
 // buildFiMention resolves a date followed by a Finnish "klo" time (24-hour
-// clock, optional end). Times carry no zone designator, so they anchor in the
+// clock, optional end and UTC/offset zone). Without a zone they anchor in the
 // display timezone; an ambiguous zone abbreviation right after invalidates.
 func buildFiMention(hit dateHit, dateRaw string, spec []string, rest string, loc *time.Location) (DateTimeMention, bool) {
 	timeText := fiTimeRe.FindString(rest[:min(maxTimeLookahead, len(rest))])
 	if namedZoneFollows(rest[len(timeText):]) {
 		return DateTimeMention{}, false
 	}
+	zone := spec[5]
+	if zone != "" && isAmbiguousZone(zone) {
+		return DateTimeMention{}, false
+	}
 	hour, minute, _, ok := resolveClock(atoi(spec[1]), atoi(spec[2]), 0, "")
 	if !ok {
 		return DateTimeMention{}, false
 	}
-	start := anchorInstant(hit.year, time.Month(hit.month), hit.day, hour, minute, 0, "", loc)
+	start := anchorInstant(hit.year, time.Month(hit.month), hit.day, hour, minute, 0, zone, loc)
 	endUnix := start.Add(defaultDuration).Unix()
 	if spec[3] != "" {
 		eHour, eMinute, _, eOk := resolveClock(atoi(spec[3]), atoi(spec[4]), 0, "")
 		if !eOk {
 			return DateTimeMention{}, false
 		}
-		end := anchorInstant(hit.year, time.Month(hit.month), hit.day, eHour, eMinute, 0, "", loc)
+		end := anchorInstant(hit.year, time.Month(hit.month), hit.day, eHour, eMinute, 0, zone, loc)
 		if !end.After(start) {
 			return DateTimeMention{}, false
 		}

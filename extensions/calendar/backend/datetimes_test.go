@@ -212,6 +212,36 @@ func TestDetectDateTimes(t *testing.T) {
 			want: nil,
 		},
 		{
+			name:    "finnish nominative month name is recognised",
+			text:    "Kokous 12. marraskuu 2026 klo 10.",
+			want:    []DateTimeMention{{StartUnix: at(2026, time.November, 12, 10, 0), EndUnix: at(2026, time.November, 12, 11, 0)}},
+			wantRaw: "12. marraskuu 2026",
+		},
+		{
+			name:    "bare hour range after an english date is a timed event",
+			text:    "Party June 5, 2026 14-15.",
+			want:    []DateTimeMention{{StartUnix: at(2026, time.June, 5, 14, 0), EndUnix: at(2026, time.June, 5, 15, 0)}},
+			wantRaw: "June 5, 2026 14-15",
+		},
+		{
+			name:    "bare hour with an explicit zone keeps its zone",
+			text:    "Call June 5, 2026 14 UTC.",
+			want:    []DateTimeMention{{StartUnix: at(2026, time.June, 5, 14, 0), EndUnix: at(2026, time.June, 5, 15, 0)}},
+			wantRaw: "14 UTC",
+		},
+		{
+			name:    "finnish klo time with UTC keeps its zone",
+			text:    "Puhelu 5.6.2026 klo 14 UTC.",
+			want:    []DateTimeMention{{StartUnix: at(2026, time.June, 5, 14, 0), EndUnix: at(2026, time.June, 5, 15, 0)}},
+			wantRaw: "klo 14 UTC",
+		},
+		{
+			name:    "finnish klo time with an offset anchors the instant",
+			text:    "Puhelu 5.6.2026 klo 14.30 +0300.",
+			want:    []DateTimeMention{{StartUnix: at(2026, time.June, 5, 11, 30), EndUnix: at(2026, time.June, 5, 12, 30)}},
+			wantRaw: "klo 14.30 +0300",
+		},
+		{
 			name: "empty text yields nothing",
 			text: "",
 			want: nil,
