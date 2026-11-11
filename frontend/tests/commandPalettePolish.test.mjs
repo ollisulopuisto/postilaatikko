@@ -20,7 +20,7 @@ test('Cmd/Ctrl+K opens the palette and archives nothing; E archives and marks re
   assert.match(shortcuts, /COMMAND_PALETTE[\s\S]{0,200}e\.key === 'p'/)
   assert.match(registry, /id: 'app\.commandPalette'[^\n]*combos: \['Mod\+k', 'Mod\+p', 'Mod\+Shift\+p'\]/)
   assert.doesNotMatch(registry, /id: 'mail\.archive',[^\n]*combos/)
-  assert.match(registry, /id: 'mail\.archiveAndMarkRead'[^\n]*combos: \['e'\]/)
+  assert.match(registry, /id: 'mail\.archiveAndMarkRead'[^\n]*combos: \['e', 'Mod\+e'\]/)
   // No Mod+k combo anywhere but the palette.
   const modK = registry.split('\n').filter(l => /combos:[^\]]*'Mod\+k'/.test(l))
   assert.equal(modK.length, 1)

@@ -37,12 +37,22 @@ export function matchCombo(e: KeyboardEvent, combo: string): boolean {
   // Shift is implied by punctuation such as ! # ? and, on some layouts, /.
   if (isWordKey(key) && e.shiftKey !== wantShift) return false
   const expected = NAMED[key] ?? key
-  if (expected.length !== 1 || !/[a-z]/i.test(expected)) return e.key === expected
-  // Letters: a bare binding matches the produced case exactly, so Caps Lock (uppercase
-  // without shiftKey) never fires a lowercase mail key, and Shift+Caps (lowercase) never
-  // fires a Shift binding. Modifier chords keep the old handler's case-insensitive match.
-  if (wantMod || wantCtrl || wantMeta || wantAlt) return e.key.toLowerCase() === expected.toLowerCase()
-  return wantShift ? e.key === expected.toUpperCase() : e.key === expected
+  if (expected.length !== 1 || !/[a-z0-9]/i.test(expected)) return e.key === expected
+  // Letters and digits: a bare binding matches the produced case exactly, so Caps Lock
+  // (uppercase without shiftKey) never fires a lowercase mail key, and Shift+Caps
+  // (lowercase) never fires a Shift binding. Modifier chords keep the old handler's
+  // case-insensitive match, with one exception: macOS Option turns letters and digits
+  // into symbols (Option+L -> '\u00ac', Option+1 -> '\u00a1'), so an Alt chord falls
+  // back to the physical key code. Synthetic events leave e.code empty and miss here.
+  if (wantMod || wantCtrl || wantMeta || wantAlt) {
+    if (e.key.toLowerCase() === expected.toLowerCase()) return true
+    if (wantAlt) {
+      const code = /^Key([A-Za-z])$/.exec(e.code)?.[1] ?? /^Digit([0-9])$/.exec(e.code)?.[1]
+      return code !== undefined && code.toLowerCase() === expected.toLowerCase()
+    }
+    return false
+  }
+  return wantShift && /[a-z]/i.test(expected) ? e.key === expected.toUpperCase() : e.key === expected
 }
 
 export type FocusPane = 'sidebar' | 'messageList' | 'viewer'
