@@ -54,6 +54,20 @@ test('navigation applies an explicit thread from the incoming scope', () => {
   assert.equal(back.thread?.threadId, 'other-thread')
 })
 
+test('back after a list-click retarget restores the previous message in the tab', () => {
+  // Olli: a list click replaces the current reader tab's message; Back must
+  // return to the previous one. App.navigateMessageHistory pushes the historic
+  // scope through updateWorkspaceScope and restoreMessageVisit, so the state
+  // chain is: open Spotify, retarget to the clicked thread, rebuild from the
+  // historic scope, and the tab shows Spotify again.
+  const inbox = { accountId: 'a', folderId: 'inbox', folderName: 'Inbox', folderType: 'inbox' }
+  const opened = createMailWindowState({ ...inbox, threadId: 'spotify' })
+  const retargeted = navigateMailWindow(opened, { ...inbox, threadId: 'other' })
+  assert.equal(retargeted.thread?.threadId, 'other')
+  const restored = createMailWindowState({ ...inbox, threadId: 'spotify' })
+  assert.deepEqual(restored.thread, { threadId: 'spotify', folderId: 'inbox', accountId: 'a' })
+})
+
 test('navigation without a threadId still restores the remembered selection', () => {
   const inbox = { accountId: 'a', folderId: 'inbox', folderName: 'Inbox', folderType: 'inbox' }
   const open = selectMailWindowConversation(createMailWindowState(inbox), 'thread', 'inbox', 'a')
