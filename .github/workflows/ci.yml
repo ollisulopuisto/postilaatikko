@@ -30,6 +30,8 @@ jobs:
         run: ./scripts/version.sh check
       - name: Test CI change selection
         run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v
+      - name: DMG window contract tests
+        run: python3 packaging/dmg/test_layout.py
       - name: Select affected checks
         id: scope
         env:
