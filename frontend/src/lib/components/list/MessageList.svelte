@@ -17,6 +17,7 @@
   import { refreshVirtualView, isExpectedSearchCancellation } from './virtualFolderRefresh'
   import { pinnedGroupForSelection, retainPinnedConversationPosition, type PinnedInboxGroup } from './activeInboxGroup'
   import { focusedRowKey, findFocusedRow } from './focusedRow'
+  import { selectionAfterFolderSwitch, selectionSurvivesRefresh } from './selectionReconcile'
   import { mailRowKey, captureScrollAnchor, anchoredScrollTop, newRowsBeforeAnchor, extendAnchorWindow } from './scrollAnchor'
   import { retainReadSelection } from '$lib/sidebar/virtualView'
   import { app as searchModels } from '../../../../wailsjs/go/models'
@@ -131,7 +132,7 @@
     focusedRowIdentity = row ? focusedRowKey(row, accountId || '', folderId || '') : null
   }
   // Reader/history restoration must also move the list's keyboard-action target.
-  // Reapply after a folder load, which otherwise selects its first row.
+  // Reapply after a folder load, which itself leaves nothing selected.
   function serverRowForReaderSelection(rows: any[], selection: { accountId: string; folderId: string; threadId: string }, currentRowId: string | null) {
     const matches = (row: any) => row.accountId === selection.accountId && row.folderId === selection.folderId && row._canonicalConversationId === selection.threadId
     return rows.find(row => row.threadId === currentRowId && matches(row)) || rows.find(matches)
@@ -930,7 +931,7 @@
       sessionListState.set(`${currentAccount}:${currentFolder}`, remembered)
       conversations = remembered.conversations as message.Conversation[]
       totalCount = remembered.totalCount
-      focusConversation(findFocusedRow(conversations, remembered.focusedRowIdentity, remembered.selectedThreadId, accountId || '', folderId || ''))
+      focusConversation(selectionAfterFolderSwitch(conversations, remembered, accountId || '', folderId || ''))
     }
     if (!remembered) {
       conversations = []
@@ -951,13 +952,11 @@
       }
       // Restore the selection (keyboard-nav anchor) so j/k continue from
       // where the user left off instead of the auto-selected first row —
-      // only if the thread still exists in the reloaded window.
-      if (
-        remembered.selectedThreadId &&
-        conversations.some((c) => c.threadId === remembered.selectedThreadId)
-      ) {
-        focusConversation(findFocusedRow(conversations, remembered.focusedRowIdentity, remembered.selectedThreadId, accountId || '', folderId || ''))
-      }
+      // only if the thread still exists in the reloaded window. A
+      // remembered row that vanished is cleared, never left phantom.
+      const restored = selectionAfterFolderSwitch(conversations, remembered, accountId || '', folderId || '')
+      if (restored) focusConversation(restored)
+      if (!restored && remembered.selectedThreadId) focusConversation(undefined)
       if (remembered.scrollTop > 0 && listContainerRef) {
         requestAnimationFrame(() => {
           listContainerRef!.scrollTop = remembered.scrollTop
@@ -1147,7 +1146,6 @@
             if (conversations.length === 0 && (view.conversations?.length ?? 0) > 0) {
               conversations = view.conversations
               totalCount = conversations.length
-              if (!selectedThreadId) focusConversation(conversations[0])
             }
           }).catch((cacheError: unknown) => console.warn('Virtual folder cache view failed:', cacheError))
         }
@@ -1176,7 +1174,6 @@
         await replaceConversationRows(currentOffset === 0 ? retainReadSelection(conversations, items, selectedThreadId, (view?.readStatus === 'unread' || filterMode === 'unread') && lastLoadedFolderId === folderId) : [...new Map([...conversations, ...items].map(c => [`${c.accountId}:${c.threadId}`, c])).values()], currentOffset === 0)
         listError = conversations.length === 0 && virtualIssues ? virtualIssues : null
         totalCount = conversations.length + (virtualCursor ? 1 : 0)
-        if (currentOffset === 0 && (!selectedThreadId || !conversations.some(c => c.threadId === selectedThreadId))) focusConversation(conversations[0])
         lastLoadedFolderId = folderId
         return
       }
@@ -1265,18 +1262,16 @@
         pendingFlagChanges = []
       }
 
-      // Check if we switched to a different folder
-      const folderChanged = lastLoadedFolderId !== folderId
       lastLoadedFolderId = folderId
 
-      // Auto-select first message on folder navigation or initial load
+      // Folder navigation starts with no selection: the reading pane keeps
+      // its empty state and no row is highlighted until the user picks a
+      // conversation (Down starts at the first row). Returning to a folder
+      // visited this session restores its remembered selection after this
+      // load resolves; reader/history restore reapplies its own selection.
       if (conversations.length === 0) {
         focusConversation(undefined)
         return
-      }
-
-      if (folderChanged || !selectedThreadId) {
-        focusConversation(conversations[0])
       }
       for (const conv of conversations.slice(0, 5)) {
         prefetchConversationBodies(conv)
@@ -2168,6 +2163,13 @@
       : null
     const previousKeys = conversations.map(row => mailRowKey(row, accountId))
     conversations = next
+    // A same-folder refresh can drop the selected conversation (snoozed or
+    // moved from another client): clear the phantom so Space can't open a
+    // bulk action on a row that no longer exists. Never auto-select a
+    // replacement here — folder loads own the selection policy.
+    if (refresh && lastLoadedFolderId === folderId && selectedThreadId && !selectionSurvivesRefresh(conversations, focusedRowIdentity, selectedThreadId, accountId || '', folderId || '')) {
+      focusConversation(undefined)
+    }
     if (!anchor || !container) return
     await tick()
     if (view !== currentListView() || container !== listContainerRef) return
