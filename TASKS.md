@@ -80,7 +80,7 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 
 ## In progress in separate worktrees
 
-CI-APT-DNS-003: Review. Instinct / `agent/ci-apt-sourcelist` / `/tmp/pl-ci-sourcelist`. Correct APT sourcelist option after #236 merge, with apt effective-target regression.
+CI-APT-DNS-003: Review. Instinct / `agent/ci-apt-sourcelist` / `/tmp/pl-ci-sourcelist`. Correct APT sourcelist option after #236 merge, with apt effective-target regression. Implementation `17e7271`; seven scoped regressions pass locally, including actual apt --print-uris target selection. Full PR CI green on `4ea291a` (backend Test2m11s, frontend2m35s, all analysis). Real outage fallback activation is not yet independently confirmed from logs.
 
 CI-APT-DNS-002: Review. Instinct / `agent/ci-apt-scoped-dns` / `/tmp/pl-ci-dns-hosts`. Port Solmu #301: fixed Ubuntu host queries through 1.1.1.1 and a private hosts mount only for apt children; same runner, signed packages and required checks.
 
