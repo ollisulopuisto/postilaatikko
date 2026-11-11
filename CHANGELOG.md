@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 - The four quick-filter buttons at the top of the column (all, unread, read later, reply later) now filter the folder list while the Kaikki kansiot panel is open: only folders with matching mail stay, with their parent folders kept dimmed for context. The filter clears when the panel closes. Read later and reply later counts come from the backend, so folders holding queued mail are found even when the queue lives outside the synced folders.
+- Switching folders no longer selects the top message: nothing is highlighted and the reading pane stays empty until you pick a conversation. Arrow keys still start at the first message, and returning to a folder you already visited restores the message you had selected.
 - Custom title bar: the green zoom button is no longer clipped in half; the quick-access rail now leaves room for all three traffic lights.
 - Folder clicks no longer stall: the legacy/native Gmail duplicate-suppression clause now uses the Message-ID index instead of scanning the whole folder once per message. Opening a large folder (for example a Gmail archive) went from hitting the 4 s/8 s store deadlines to roughly a tenth of a second.
 - Conversation view no longer flattens designed HTML email: headings, button fills, card backgrounds and link colors render as authored, like Gmail, instead of everything shrinking to plain body text with outline buttons. The bubble background still shows through around the message.

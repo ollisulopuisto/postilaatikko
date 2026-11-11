@@ -23,7 +23,6 @@ test('snooze uses an account-qualified row key, and the reader only owns the vie
   const source = await read('../src/lib/components/list/MessageList.svelte')
   const body = source.slice(source.indexOf('export function snoozeSelection'), source.indexOf('export function toggleMoveToDialog'))
   assert.match(body, /findFocusedRow\(activeRows, focusedRowIdentity, selectedThreadId/)
-  assert.match(source, /focusConversation\(conversations\[0\]\)/)
   assert.match(source, /focusConversation\(activeList\[0\]\)/)
   const app = await read('../src/App.svelte')
   const command = app.split("registerCommand('mail.snooze',")[1].split('registerCommand(')[0]

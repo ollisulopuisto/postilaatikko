@@ -131,7 +131,7 @@
     focusedRowIdentity = row ? focusedRowKey(row, accountId || '', folderId || '') : null
   }
   // Reader/history restoration must also move the list's keyboard-action target.
-  // Reapply after a folder load, which otherwise selects its first row.
+  // Reapply after a folder load, which itself leaves nothing selected.
   function serverRowForReaderSelection(rows: any[], selection: { accountId: string; folderId: string; threadId: string }, currentRowId: string | null) {
     const matches = (row: any) => row.accountId === selection.accountId && row.folderId === selection.folderId && row._canonicalConversationId === selection.threadId
     return rows.find(row => row.threadId === currentRowId && matches(row)) || rows.find(matches)
@@ -1147,7 +1147,6 @@
             if (conversations.length === 0 && (view.conversations?.length ?? 0) > 0) {
               conversations = view.conversations
               totalCount = conversations.length
-              if (!selectedThreadId) focusConversation(conversations[0])
             }
           }).catch((cacheError: unknown) => console.warn('Virtual folder cache view failed:', cacheError))
         }
@@ -1176,7 +1175,6 @@
         await replaceConversationRows(currentOffset === 0 ? retainReadSelection(conversations, items, selectedThreadId, (view?.readStatus === 'unread' || filterMode === 'unread') && lastLoadedFolderId === folderId) : [...new Map([...conversations, ...items].map(c => [`${c.accountId}:${c.threadId}`, c])).values()], currentOffset === 0)
         listError = conversations.length === 0 && virtualIssues ? virtualIssues : null
         totalCount = conversations.length + (virtualCursor ? 1 : 0)
-        if (currentOffset === 0 && (!selectedThreadId || !conversations.some(c => c.threadId === selectedThreadId))) focusConversation(conversations[0])
         lastLoadedFolderId = folderId
         return
       }
@@ -1265,18 +1263,16 @@
         pendingFlagChanges = []
       }
 
-      // Check if we switched to a different folder
-      const folderChanged = lastLoadedFolderId !== folderId
       lastLoadedFolderId = folderId
 
-      // Auto-select first message on folder navigation or initial load
+      // Folder navigation starts with no selection: the reading pane keeps
+      // its empty state and no row is highlighted until the user picks a
+      // conversation (Down starts at the first row). Returning to a folder
+      // visited this session restores its remembered selection after this
+      // load resolves; reader/history restore reapplies its own selection.
       if (conversations.length === 0) {
         focusConversation(undefined)
         return
-      }
-
-      if (folderChanged || !selectedThreadId) {
-        focusConversation(conversations[0])
       }
       for (const conv of conversations.slice(0, 5)) {
         prefetchConversationBodies(conv)
