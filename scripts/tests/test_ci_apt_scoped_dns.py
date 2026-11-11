@@ -11,34 +11,20 @@ spec.loader.exec_module(module)
 
 
 class AptFallbackTests(unittest.TestCase):
-    def test_sources_only_change_mirror_not_suite_or_signature(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = pathlib.Path(directory)
-            source = root / 'etc/apt/sources.list.d/ubuntu.sources'
-            source.parent.mkdir(parents=True)
-            source.write_text('Types: deb\nURIs: mirror+file:/etc/apt/apt-mirrors.txt\nSuites: noble noble-updates\nComponents: main universe\nSigned-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n')
-            mirror = root / 'etc/apt/apt-mirrors.txt'
-            mirror.write_text('http://azure.archive.ubuntu.com/ubuntu\n')
-            untouched = source.with_name('vendor.list')
-            untouched.write_text('deb https://vendor.example/stable main\n')
-            self.assertEqual(module.use_official_mirrors(root), 2)
-            self.assertIn('URIs: https://archive.ubuntu.com/ubuntu', source.read_text())
-            self.assertIn('Suites: noble noble-updates', source.read_text())
-            self.assertIn('Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg', source.read_text())
-            self.assertEqual(untouched.read_text(), 'deb https://vendor.example/stable main\n')
-
-    def test_direct_official_http_sources_upgrade_to_https(self):
+    def test_fallback_sources_are_temporary_ubuntu_only(self):
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
             source = root / 'etc/apt/sources.list'
             source.parent.mkdir(parents=True)
-            source.write_text('deb http://azure.archive.ubuntu.com/ubuntu noble main\n'
-                              'deb http://archive.ubuntu.com/ubuntu noble-updates main\n'
-                              'deb http://security.ubuntu.com/ubuntu noble-security main\n')
-            module.use_official_mirrors(root)
-            self.assertNotIn('http://', source.read_text())
-            self.assertIn('https://archive.ubuntu.com/ubuntu noble main', source.read_text())
-            self.assertIn('https://security.ubuntu.com/ubuntu noble-security main', source.read_text())
+            original = 'deb https://vendor.example stable main\n'
+            source.write_text(original)
+            with module.official_sources(root) as path:
+                text = path.read_text()
+                self.assertIn('https://archive.ubuntu.com/ubuntu jammy', text)
+                self.assertIn('https://security.ubuntu.com/ubuntu jammy-security', text)
+                self.assertNotIn('vendor.example', text)
+                self.assertEqual(source.read_text(), original)
+            self.assertFalse(path.exists())
 
     def test_install_failure_retries_update_then_same_packages(self):
         calls = []
@@ -50,7 +36,9 @@ class AptFallbackTests(unittest.TestCase):
             module.install(['libwayland-dev', 'clang'], pathlib.Path(directory), run,
                            lambda root: contextlib.nullcontext(root / 'scoped-hosts'))
         self.assertEqual(len(calls), 4)
-        self.assertEqual(calls[1][0], calls[3][0][calls[3][0].index('apt-get'):])
+        self.assertEqual(calls[1][0][-2:], calls[3][0][-2:])
+        self.assertIn('Dir::Etc::sourceparts=-', calls[3][0])
+        self.assertTrue(any(x.startswith('Dir::Etc::sources.list=') for x in calls[3][0]))
         self.assertEqual(calls[3][0][0], 'unshare')
         self.assertIn('APT::Update::Error-Mode=any', calls[0][0])
         self.assertTrue(all(kwargs['check'] and kwargs['timeout'] <= 180 for _, kwargs in calls))
@@ -66,11 +54,11 @@ class AptFallbackTests(unittest.TestCase):
                 calls.append(command)
                 return 'alias.example.\n91.189.92.24\n91.189.92.24\n'
             with module.ubuntu_hosts(root, query) as hosts:
-                self.assertEqual(hosts.read_text().count('91.189.92.24'), 3)
+                self.assertEqual(hosts.read_text().count('91.189.92.24'), 2)
                 self.assertEqual((root / 'etc/hosts').read_text(), original)
                 self.assertEqual(hosts.stat().st_mode & 0o777, 0o644)
             self.assertFalse(hosts.exists())
-            self.assertEqual(len(calls), 3)
+            self.assertEqual(len(calls), 2)
             self.assertTrue(all(command[-1] == '@1.1.1.1' for command in calls))
 
     def test_empty_or_private_dns_fails_closed(self):
