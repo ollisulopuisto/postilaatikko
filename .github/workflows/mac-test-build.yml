@@ -68,6 +68,7 @@ jobs:
           ln -s /Applications build/dmg-staging/Applications
           hdiutil create -volname 'Postilaatikko Test' -srcfolder build/dmg-staging \
             -ov -format UDZO -o "build/bin/Postilaatikko-${VERSION}-test-${TARGET_ARCH}.dmg"
+          python3 packaging/dmg/restyle.py "build/bin/Postilaatikko-${VERSION}-test-${TARGET_ARCH}.dmg" "Postilaatikko.app" packaging/dmg/welcome-postilaatikko.png
           hdiutil verify "build/bin/Postilaatikko-${VERSION}-test-${TARGET_ARCH}.dmg"
       - uses: actions/upload-artifact@v7
         with:
