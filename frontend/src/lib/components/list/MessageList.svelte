@@ -68,7 +68,7 @@
     folderName?: string
     folderType?: string
     readerSelection?: { threadId: string; accountId: string; folderId: string } | null
-    onConversationSelect?: (threadId: string, folderId: string, accountId: string) => void
+    onConversationSelect?: (threadId: string, folderId: string, accountId: string, subject?: string) => void
     onOpenInTab?: (accountId: string, folderId: string, threadId: string, folderType: string, subject: string) => void
     onReply?: (mode: 'reply' | 'reply-all' | 'forward', messageId: string) => void
     onRowActionComplete?: (autoSelectNext: boolean) => void
@@ -149,7 +149,14 @@
         (row._canonicalConversationId || row.threadId) === selection.threadId &&
         (row.accountId || accountId) === selection.accountId &&
         (row.folderId || folderId) === selection.folderId)
-      if (readerRow) focusConversation(readerRow)
+      if (readerRow) {
+        focusConversation(readerRow)
+        // History/back restoration lands here: bring the restored row into
+        // view too, or the list focus moves to a message off-screen.
+        const rowKey = JSON.stringify([readerRow.accountId || accountId || '', readerRow._canonicalConversationId || readerRow.threadId])
+        const el = listContainerRef?.querySelectorAll('[data-mail-row-key]')
+        el?.forEach(node => { if (node.getAttribute('data-mail-row-key') === rowKey) (node as HTMLElement).scrollIntoView({ block: 'nearest', behavior: 'smooth' }) })
+      }
     }
   })
   let lastLoadedFolderId = $state<string | null>(null) // Track folder changes
@@ -1840,7 +1847,7 @@
       void resolveLocalServerConversation(conversation, realFolderId, realAccountId)
       return
     }
-    onConversationSelect?.(conversation._canonicalConversationId || threadId, realFolderId, realAccountId)
+    onConversationSelect?.(conversation._canonicalConversationId || threadId, realFolderId, realAccountId, conversation.subject)
   }
 
   async function resolveLocalServerConversation(result: any, folder: string, account: string) {
@@ -1853,7 +1860,7 @@
       const canonicalId = message.threadId || message.id
       serverSearchResults = serverSearchResults.map(item => item === result ? { ...item, _canonicalConversationId: canonicalId, _queueCanonical: true } : item)
       focusConversation(result)
-      onConversationSelect?.(canonicalId, folder, account)
+      onConversationSelect?.(canonicalId, folder, account, result.subject)
     } catch (error) {
       if (generation !== serverResultFetchGeneration || selectedThreadId !== selectionAtStart) return
       toasts.error(String(error))
@@ -1887,7 +1894,7 @@
           serverSearchResults = serverSearchResults
           focusConversation(serverSearchResults[idx])
         }
-        onConversationSelect?.(msg.threadId || msg.id, realFolderId, realAccountId)
+        onConversationSelect?.(msg.threadId || msg.id, realFolderId, realAccountId, msg.subject)
       }
     } catch (err) {
       if (generation !== serverResultFetchGeneration || selectedThreadId !== selectionAtStart || searchSource !== 'server' || query !== searchQuery.trim()) {
