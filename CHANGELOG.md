@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- CI retries failed Ubuntu package installation against official Ubuntu mirrors with bounded timeouts, keeping all backend checks required.
+
 - Select all in a plain-text message context menu now selects the whole message, while HTML messages keep their iframe selection.
 - Cloudflare link checks refuse IPv4-mapped private targets and IPv6 translation/tunnel ranges to prevent requests reaching local services.
 
