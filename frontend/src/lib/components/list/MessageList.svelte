@@ -17,6 +17,7 @@
   import { refreshVirtualView, isExpectedSearchCancellation } from './virtualFolderRefresh'
   import { pinnedGroupForSelection, retainPinnedConversationPosition, type PinnedInboxGroup } from './activeInboxGroup'
   import { focusedRowKey, findFocusedRow } from './focusedRow'
+  import { selectionAfterFolderSwitch, selectionSurvivesRefresh } from './selectionReconcile'
   import { mailRowKey, captureScrollAnchor, anchoredScrollTop, newRowsBeforeAnchor, extendAnchorWindow } from './scrollAnchor'
   import { retainReadSelection } from '$lib/sidebar/virtualView'
   import { app as searchModels } from '../../../../wailsjs/go/models'
@@ -930,7 +931,7 @@
       sessionListState.set(`${currentAccount}:${currentFolder}`, remembered)
       conversations = remembered.conversations as message.Conversation[]
       totalCount = remembered.totalCount
-      focusConversation(findFocusedRow(conversations, remembered.focusedRowIdentity, remembered.selectedThreadId, accountId || '', folderId || ''))
+      focusConversation(selectionAfterFolderSwitch(conversations, remembered, accountId || '', folderId || ''))
     }
     if (!remembered) {
       conversations = []
@@ -951,13 +952,11 @@
       }
       // Restore the selection (keyboard-nav anchor) so j/k continue from
       // where the user left off instead of the auto-selected first row —
-      // only if the thread still exists in the reloaded window.
-      if (
-        remembered.selectedThreadId &&
-        conversations.some((c) => c.threadId === remembered.selectedThreadId)
-      ) {
-        focusConversation(findFocusedRow(conversations, remembered.focusedRowIdentity, remembered.selectedThreadId, accountId || '', folderId || ''))
-      }
+      // only if the thread still exists in the reloaded window. A
+      // remembered row that vanished is cleared, never left phantom.
+      const restored = selectionAfterFolderSwitch(conversations, remembered, accountId || '', folderId || '')
+      if (restored) focusConversation(restored)
+      else if (remembered.selectedThreadId) focusConversation(undefined)
       if (remembered.scrollTop > 0 && listContainerRef) {
         requestAnimationFrame(() => {
           listContainerRef!.scrollTop = remembered.scrollTop
@@ -2164,6 +2163,13 @@
       : null
     const previousKeys = conversations.map(row => mailRowKey(row, accountId))
     conversations = next
+    // A same-folder refresh can drop the selected conversation (snoozed or
+    // moved from another client): clear the phantom so Space can't open a
+    // bulk action on a row that no longer exists. Never auto-select a
+    // replacement here — folder loads own the selection policy.
+    if (refresh && lastLoadedFolderId === folderId && selectedThreadId && !selectionSurvivesRefresh(conversations, focusedRowIdentity, selectedThreadId, accountId || '', folderId || '')) {
+      focusConversation(undefined)
+    }
     if (!anchor || !container) return
     await tick()
     if (view !== currentListView() || container !== listContainerRef) return
