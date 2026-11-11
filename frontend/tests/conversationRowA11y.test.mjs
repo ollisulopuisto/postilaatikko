@@ -37,3 +37,27 @@ test('ConversationRow quick action buttons have high-contrast focus rings', () =
     assert.match(styleMatch[0], /box-shadow|ring/, 'focus-visible defines a focus ring indicator')
   }
 })
+
+test('ConversationRow keyboard activation stays with the focused control', () => {
+  // Devin review: keydown from the selection checkbox or a quick action must
+  // not bubble into the row handler that opens the conversation.
+  const handler = conversationRow.match(/onkeydown=\{\(e\)[\s\S]*?\n {4}\}\}/)
+  assert.ok(handler, 'row has a keydown handler')
+  assert.match(handler[0], /e\.target !== e\.currentTarget/, 'row opens mail only when the row itself received the key')
+})
+
+test('ConversationRow focused checkbox is visible in both hiding modes', () => {
+  // Devin review: the zero-width (default) and opacity-0 (always-show)
+  // wrappers must reveal while the checkbox inside them has keyboard focus.
+  assert.match(conversationRow, /focus-within:w-4 focus-within:mr-0/, 'default wrapper reveals on focus-within')
+  assert.match(conversationRow, /focus-within:w-7 focus-within:mr-0/, 'all densities reveal on focus-within')
+  assert.match(conversationRow, /checkboxAlways: 'opacity-0 focus-within:opacity-100'/, 'always-show wrapper turns opaque on focus-within')
+})
+
+test('ConversationRow checkbox label describes bulk selection', () => {
+  // Devin review: the label must not promise opening the conversation.
+  const match = conversationRow.match(/<button[\s\S]*?onclick=\{handleCheckboxClick\}[\s\S]*?>/)
+  assert.ok(match, 'Selection checkbox button exists in ConversationRow')
+  assert.match(match[0], /messageList\.checkConversation/, 'checkbox label names bulk selection')
+  assert.doesNotMatch(match[0], /viewer\.selectConversation/, 'checkbox label no longer promises reading')
+})
