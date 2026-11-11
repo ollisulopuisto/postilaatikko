@@ -29,3 +29,27 @@ func TestHelperHealthRejectsOtherMethods(t *testing.T) {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusMethodNotAllowed)
 	}
 }
+
+func TestHelperBrowserProtectionCoversAllRoutes(t *testing.T) {
+	for _, origin := range []string{"https://untrusted.invalid", "null", ""} {
+		for _, route := range []string{"/healthz", "/v1/commands", "/missing", "/healthz/"} {
+			for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodOptions} {
+				request := httptest.NewRequest(method, route, nil)
+				request.Header.Set("Origin", origin)
+				response := httptest.NewRecorder()
+				helperHandler(nil, false).ServeHTTP(response, request)
+				if response.Code != http.StatusForbidden {
+					t.Errorf("%s %s status=%d", method, route, response.Code)
+				}
+				for name, expected := range map[string]string{
+					"X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY",
+					"Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'", "Cache-Control": "no-store",
+				} {
+					if got := response.Header().Get(name); got != expected {
+						t.Errorf("%s %s %s=%q", method, route, name, got)
+					}
+				}
+			}
+		}
+	}
+}

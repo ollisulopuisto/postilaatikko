@@ -21,6 +21,8 @@
     onFolderSelect?: (f: folder.Folder) => void
     onToggleCollapse?: (folderId: string) => void
     onMessagesMoved?: () => void
+    /** Folders kept only as ancestors of filter matches; rendered dimmed. */
+    contextIds?: Set<string>
   }
 
   let {
@@ -32,6 +34,7 @@
     onFolderSelect,
     onToggleCollapse,
     onMessagesMoved,
+    contextIds,
   }: Props = $props()
 
   // Folder type to icon mapping
@@ -55,10 +58,12 @@
   }
 
   let starred = $derived(tree.folder ? isFolderFavorite(accountId, tree.folder.id) : false)
+  let contextOnly = $derived(!!tree.folder && !!contextIds?.has(tree.folder.id))
   let hasChildren = $derived(tree.children && tree.children.length > 0)
   let isCollapsed = $derived(
     hasChildren
-      ? collapsedFolders[tree.folder!.id] !== false  // collapsed unless explicitly set to false
+      // Context-only ancestors expand so filter matches nested inside show.
+      ? contextOnly ? false : collapsedFolders[tree.folder!.id] !== false  // collapsed unless explicitly set to false
       : false
   )
 
@@ -201,7 +206,7 @@
 
       <button
         type="button"
-        class="flex-1 min-w-0 min-h-9 flex items-center gap-2 px-1 py-1.5 text-sm text-left"
+        class="flex-1 min-w-0 min-h-9 flex items-center gap-2 px-1 py-1.5 text-sm text-left {contextOnly ? 'text-muted-foreground' : ''}"
         title={tree.folder.type === 'inbox' ? $_('sidebar.inbox') : tree.folder.name}
         onclick={() => {
           onFolderSelect?.(tree.folder!)
@@ -252,6 +257,7 @@
           {selectedFolderId}
           {selectionSource}
           {collapsedFolders}
+          {contextIds}
           {onFolderSelect}
           {onToggleCollapse}
           {onMessagesMoved}

@@ -450,6 +450,7 @@ export function GetReadLaterCount():Promise<number>;
 
 export function GetReadLaterQueue():Promise<Array<triage.Ref>>;
 
+export function GetQueueFolderCounts():Promise<app.QueueFolderCounts>;
 export function GetReadReceiptResponsePolicy():Promise<string>;
 
 export function GetReaderIdentityEmails():Promise<Array<string>>;

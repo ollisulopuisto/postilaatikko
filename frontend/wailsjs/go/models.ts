@@ -994,6 +994,20 @@ export namespace app {
 	        this.operationId = source["operationId"];
 	    }
 	}
+	export class QueueFolderCounts {
+	    readLater: Record<string, Record<string, number>>;
+	    replyLater: Record<string, Record<string, number>>;
+	
+	    static createFrom(source: any = {}) {
+	        return new QueueFolderCounts(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.readLater = source["readLater"] || {};
+	        this.replyLater = source["replyLater"] || {};
+	    }
+	}
 	export class TriageChangeResult {
 	    changed: boolean;
 	    operationId: string;

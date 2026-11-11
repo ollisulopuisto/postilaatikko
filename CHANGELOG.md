@@ -3,6 +3,16 @@
 ## [Unreleased]
 
 - Add checkbox semantics, contextual dynamic accessible name, focus-visible styling to conversation row checkbox, and focus-within disclosure plus focus rings to quick action buttons.
+- The four quick-filter buttons at the top of the column (all, unread, read later, reply later) now filter the folder list while the Kaikki kansiot panel is open: only folders with matching mail stay, with their parent folders kept dimmed for context. The filter clears when the panel closes. Read later and reply later counts come from the backend, so folders holding queued mail are found even when the queue lives outside the synced folders.
+- Switching folders no longer selects the top message: nothing is highlighted and the reading pane stays empty until you pick a conversation. Arrow keys still start at the first message, and returning to a folder you already visited restores the message you had selected.
+- A background refresh that removes the selected conversation (snoozed or moved elsewhere) now clears the selection instead of leaving a phantom that Space could turn into a bulk action on nothing.
+- Custom title bar: the green zoom button is no longer clipped in half; the quick-access rail now leaves room for all three traffic lights.
+- Folder clicks no longer stall: the legacy/native Gmail duplicate-suppression clause now uses the Message-ID index instead of scanning the whole folder once per message. Opening a large folder (for example a Gmail archive) went from hitting the 4 s/8 s store deadlines to roughly a tenth of a second.
+- Conversation view no longer flattens designed HTML email: headings, button fills, card backgrounds and link colors render as authored, like Gmail, instead of everything shrinking to plain body text with outline buttons. The bubble background still shows through around the message.
+
+- Send Later helper health and router error responses use the same browser-Origin rejection and security headers as encrypted command responses.
+- Pressing / focuses search in Contacts again, without allowing mail shortcuts to act on hidden messages. Calendar has no general search control, so / is left alone there.
+
 - Add high-contrast focus rings and outline styling to sidebar favorite star buttons and conversation row action buttons for accessible keyboard navigation.
 - Bare Gmail-style letter shortcuts (d trash, e archive+read, s star, ...) now fire only while the mail rail is active; pressing them in Calendar or Contacts no longer acts on the hidden mail list. Global single keys like `?` (shortcuts help) keep working on every pane.
 - Archive and mark read (E, toolbar button, selection bar, secondary window) is now one atomic mailbox action: the helper archives and marks read in a single operation, and Undo reverses both together, moving the messages back and restoring their previous read state. If the read update fails after the move, the helper reverses the move and restores the original unread state itself; the secondary mail window captures the same unread snapshot (asking the backend when a row is mixed or unloaded) and actually restores it on Undo; a partially completed action is reported as a failure instead of a success with an incomplete Undo; and the legacy fallback still offers the archive Undo when only the read step fails. The frontend's unread-snapshot workaround only remains for that fallback.
@@ -14,6 +24,20 @@
 - Keyboard shortcut audit: a test now fails on any duplicate binding in one context; every cross-group reuse is listed with its reason.
 - Stop continuous CPU use while an email is open in the reader: the inline-image loading placeholder is now static (no animated SVG) and iframe height updates are skipped when unchanged.
 - Skip meta-charset regex scans on HTML parts without a `<meta` and `charset` token, keeping long-s (`charſet`) spellings on the regex path.
+
+## Postilaatikko 2026.11.10.4
+
+- Add to Calendar now recognises Finnish dates: dotted dates such as 12.11.2026, month names such as 12. marraskuuta 2026, and times written "klo 14", "klo 14.30" or "klo 9:00-10.30". A bare number after a date (for example "June 5, 2026 14 people", or a price after a dotted date) is no longer read as an hour; use "at 3 pm", minutes or am/pm. Dates still need a four-digit year, and slash dates such as 12/05/2026 are still skipped because they are ambiguous. Finnish times may carry a zone (klo 14 UTC, klo 14 +02:00), and English hour ranges such as 2-3 pm are recognised; a time followed by an ambiguous zone name such as PST is skipped.
+## Postilaatikko 2026.11.10.3
+
+- Keyboard-focused mail actions and read/star state now follow the account-qualified row in unified lists, even when two accounts share a thread ID. A stale focus does not target another account.
+
+- Snooze: pick when a conversation comes back. Presets (later today, this evening, tomorrow morning, this weekend, next week) or a custom date and time replace the old whole-days box. Press H, use the Snooze button in the reader toolbar or the selection bar, the message menu or the command palette. Works on several selected conversations at once, and Undo takes the whole batch back. A toast tells you when snoozed conversations return. Snoozing stays local: nothing changes on the mail server.
+
+## Postilaatikko 2026.11.10.2
+
+- One bar: the window now has a single top bar. The separate title bar and the back/forward row above the message list are gone, which gives back about 80 pt of height. The close, minimise and zoom buttons sit at the top left in the usual Mac order, above the rail. The back and forward arrows moved into the reading pane's top row, next to the "New window" button. Native title bar mode is unchanged.
+
 ## Postilaatikko 2026.11.10.1
 
 - The Kansiot/Viestit switch is now animated: in narrow windows the folder overlay actually slides in and out over the message list (previously it appeared and vanished instantly despite the transition), and in wide windows the shared column slides between folders and messages instead of snapping. The covered message list is removed from the accessibility tree while the overlay is up. All of it is skipped when Reduce Motion is on, and divider drags still track the pointer exactly.

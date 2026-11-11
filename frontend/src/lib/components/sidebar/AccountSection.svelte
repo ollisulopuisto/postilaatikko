@@ -24,6 +24,8 @@
     collapsedFolders?: Record<string, boolean>
     onToggleFolderCollapse?: (folderId: string) => void
     onMessagesMoved?: () => void
+    /** Folders kept only as ancestors of filter matches; rendered dimmed. */
+    contextIds?: Set<string>
   }
 
   let {
@@ -43,6 +45,7 @@
     onDelete,
     onSync,
     collapsedFolders = {},
+    contextIds,
     onToggleFolderCollapse,
     onMessagesMoved,
   }: Props = $props()
@@ -190,6 +193,7 @@
             {selectedFolderId}
             {selectionSource}
             {collapsedFolders}
+            {contextIds}
             {onMessagesMoved}
             onFolderSelect={(f) => selectFolder(f)}
             onToggleCollapse={(folderId) => onToggleFolderCollapse?.(folderId)}

@@ -21,6 +21,16 @@ func BenchmarkGenerateSnippet(b *testing.B) {
 	}
 }
 
+func BenchmarkStripHTMLTags(b *testing.B) {
+	// Realistic email HTML body with multiple styled sections, scripts, and entities.
+	sample := `<html><head><style>body { font-family: Arial; color: #333; } p { margin: 10px 0; }</style><script>function track() { return 1; }</script></head><body><div class="header"><h1>Welcome to our Newsletter!</h1><p>Hi John, here is your weekly summary.</p></div><div class="content"><p>Item 1: <b>Important update</b> about your account.</p><p>Item 2: Check out our <a href="https://example.com">latest features</a>.</p></div><div class="footer"><noscript>Please enable JS</noscript><p>Sent with love by Postilaatikko.</p></div></body></html>`
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = stripHTMLTags(sample)
+	}
+}
+
 func TestGenerateSnippet(t *testing.T) {
 	longText := "This is a long text that should be truncated when it exceeds the maximum length specified by the caller of the generateSnippet function."
 	maxLen := 30
@@ -83,6 +93,29 @@ func TestStripHTMLTags_RemovesScriptContent(t *testing.T) {
 	}
 	if !strings.Contains(result, "Real text") {
 		t.Errorf("snippet should keep real text, got %q", result)
+	}
+}
+
+func TestStripHTMLTags_CaseInsensitiveBlockTags(t *testing.T) {
+	cases := []struct {
+		input    string
+		expected string
+	}{
+		{"<SCRIPT>var x = 1;</SCRIPT>Hello", "Hello"},
+		{"<STYLE>body { color: red; }</STYLE>World", "World"},
+		{"<NOSCRIPT>Enable JS</NOSCRIPT>Visible", "Visible"},
+		{"<\u017fcript>var x = 1;</\u017fcript>Hello", "Hello"},
+		{"<\u017ftyle>body { color: red; }</\u017ftyle>World", "World"},
+		{"<no\u017fcript>Enable JS</no\u017fcript>Visible", "Visible"},
+		{"<div class=\"test\">Content</div>", "Content"},
+		{"<a href=\"http://example.com?a=1&amp;b=2\">Link</a>", "Link"},
+		{"Unterminated <tag with text", "Unterminated "},
+	}
+	for _, tc := range cases {
+		got := stripHTMLTags(tc.input)
+		if got != tc.expected {
+			t.Errorf("stripHTMLTags(%q) = %q, want %q", tc.input, got, tc.expected)
+		}
 	}
 }
 

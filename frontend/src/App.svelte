@@ -14,10 +14,11 @@
   import './lib/iconify-offline'
   import { clearCache as clearInlineAttachmentCache } from './lib/stores/inlineAttachmentCache'
   import { readLaterQueue } from './lib/stores/readLater.svelte'
+  import { snoozeDialog } from './lib/stores/snoozeDialog.svelte'
+  import SnoozeDialog from './lib/components/common/SnoozeDialog.svelte'
   import { replyLaterQueue } from './lib/stores/replyLater.svelte'
 
   import { onDestroy, onMount, tick, untrack } from 'svelte'
-  import TitleBar from './lib/components/common/TitleBar.svelte'
   import Sidebar from './lib/components/sidebar/Sidebar.svelte'
   import GlobalSearch from './lib/components/common/GlobalSearch.svelte'
 
@@ -122,6 +123,9 @@
   const CONTEXT_PANE_AUTO_HIDE_KEY = 'postilaatikko:context-pane-auto-hide'
   const contextPaneVisible = $derived(!contextPaneAutoHide || contextPaneRevealed)
   let triageStatus = $state<'all' | 'unread' | 'readLater' | 'replyLater'>('all')
+  // Quick-filter applied to the folder list while the Kaikki kansiot panel is
+  // open; the same four buttons then prune folders instead of messages.
+  let folderListFilter = $state<'' | 'unread' | 'readLater' | 'replyLater'>('')
   const maxMailWorkspaceTabs = 8
   let mailWorkspaceTabs = $state<MailWorkspaceTab[]>([])
   let mailWindowTabInstances: Record<string, MailWindowApp | null> = {}
@@ -341,6 +345,26 @@
     triageStatus = mode === 'unread' ? 'unread' : mode === 'readLater' ? 'readLater' : mode === 'replyLater' ? 'replyLater' : 'all'
     messageListRef?.setQuickFilter(mode)
   }
+
+  // While the folder panel is open, the quick-filter buttons prune the folder
+  // list; otherwise they filter the message list as before.
+  function triageButtonActive(status: 'all' | 'unread' | 'readLater' | 'replyLater'): boolean {
+    if (contextPaneMode === 'folders') return folderListFilter === (status === 'all' ? '' : status)
+    return triageStatus === status
+  }
+
+  function triageButtonClick(mode: '' | 'unread' | 'readLater' | 'replyLater') {
+    if (contextPaneMode === 'folders') {
+      folderListFilter = mode
+      return
+    }
+    selectTriageFilter(mode)
+  }
+
+  // Leaving the folder panel resets its filter so the next open starts clean.
+  $effect(() => {
+    if (contextPaneMode !== 'folders' && folderListFilter) folderListFilter = ''
+  })
 
   function closeWorkspaceTab(id: string) {
     const index = mailWorkspaceTabs.findIndex(tab => tab.id === id)
@@ -810,6 +834,10 @@
     window.addEventListener('focus', syncMailboxActionEvents)
     contextPaneAutoHide = localStorage.getItem(CONTEXT_PANE_AUTO_HIDE_KEY) === 'true'
     contextPaneRevealed = !contextPaneAutoHide
+    EventsOn('snooze:expired', (event: { count?: number } | undefined) => {
+      const count = Math.max(1, Number(event?.count) || 1)
+      addToast({ type: 'info', message: $_(count === 1 ? 'snooze.returned' : 'snooze.returnedMany', { values: { count } }) })
+    })
     EventsOn('undo:history-open', () => {
       setActiveExtension('mail')
       showUndoHistory = true
@@ -1095,7 +1123,9 @@
     registerCommand('app.compose', () => handleCompose())
     registerCommand('app.search', () => {
       if (getActiveExtension() === 'mail') { showGlobalSearch = true; return }
-      getPaneNav('messageList')?.focusSearch?.()
+      const search = getPaneNav('messageList')?.focusSearch
+      if (!search) return
+      search()
       setFocusedPane('messageList')
     })
     registerCommand('app.folders', () => toggleFolderBrowser())
@@ -1141,6 +1171,7 @@
     registerCommand('mail.toggleRead', () => runListAction('mail.toggleRead'), () => listActionAvailable('mail.toggleRead'))
     registerCommand('mail.readLater', () => toggleLaterQueue('readLater'), () => selectedThreadId !== null)
     registerCommand('mail.replyLater', () => toggleLaterQueue('replyLater'), () => selectedThreadId !== null)
+    registerCommand('mail.snooze', () => { if (getFocusedPane() === 'viewer') openSnoozeDialog(); else messageListRef?.snoozeSelection() }, () => selectedThreadId !== null || !!messageListRef)
     registerCommand('mail.moveTo', () => {
       if (getFocusedPane() === 'viewer' && selectedThreadId) viewerRef?.toggleFolderPicker('move')
       else messageListRef?.toggleMoveToDialog()
@@ -1539,6 +1570,7 @@
     'mail.archiveAndMarkRead': () => viewerOr(() => viewerRef?.archiveAndMarkRead(), 'mail.archiveAndMarkRead'),
     'mail.readLater': () => void executeCommand('mail.readLater'),
     'mail.replyLater': () => void executeCommand('mail.replyLater'),
+    'mail.snooze': () => void executeCommand('mail.snooze'),
     'mail.moveTo': () => {
       if (getActiveExtension() !== 'mail') return
       // Reader-only tabs own their viewer shortcut handler.
@@ -2108,6 +2140,13 @@
     // must not trash a hidden mail message (same guard as the modified-key
     // registry path above). Global single keys ('?' help) are handled
     // earlier and stay available on every pane.
+    // Search is an app command, not a mail mutation. Resolve its registered
+    // shortcut before the mail-only guard when the active pane has search.
+    if (resolveShortcut(e, focusedPane, ['app.search'])?.id === 'app.search' && (isMailActive() || getPaneNav('messageList')?.focusSearch)) {
+      e.preventDefault()
+      void executeCommand('app.search')
+      return
+    }
     if (!isMailActive()) return
     runRegistryShortcut(e)
   }
@@ -2288,6 +2327,13 @@
     }
   }
 
+  function openSnoozeDialog() {
+    const accountId = selectedConversationAccountId || selectedAccountId
+    const conversationId = selectedThreadId
+    if (!accountId || !conversationId) return
+    snoozeDialog.show([{ accountId, conversationId }])
+  }
+
   async function toggleLaterQueue(kind: 'readLater' | 'replyLater') {
     const accountId = selectedConversationAccountId || selectedAccountId
     const conversationId = selectedThreadId
@@ -2441,14 +2487,9 @@
 <svelte:window onmousemove={handleMouseMove} onmouseup={handleMouseUp} onkeydown={handleGlobalKeyDown} onkeyup={handleGlobalKeyUp} />
 
 <div class="flex flex-col h-full w-full overflow-hidden bg-background">
-  <!-- Custom Title Bar -->
-  {#if getShowTitleBar() && !getNativeTitleBar() && effectiveTitleBarMode === 'custom'}
-    <TitleBar onClose={handleClose} />
-  {/if}
-
   <!-- Main Content -->
   <div class="flex flex-1 min-h-0 overflow-hidden relative">
-    <ExtensionRail onRevealContext={revealContextPane} onHideContext={scheduleContextPaneHide} foldersOpen={contextPaneMode === 'folders' && getActiveExtension() === 'mail'} />
+    <ExtensionRail windowControls={getShowTitleBar() && !getNativeTitleBar() && effectiveTitleBarMode === 'custom'} onCloseWindow={handleClose} onRevealContext={revealContextPane} onHideContext={scheduleContextPaneHide} foldersOpen={contextPaneMode === 'folders' && getActiveExtension() === 'mail'} />
 
     {#if getActiveExtension() === 'scheduled'}
       <ScheduledPane />
@@ -2469,7 +2510,6 @@
          children as direct flex items so the layout doesn't shift. -->
     <div style:display={getActiveExtension() === 'mail' ? 'contents' : 'none'}>
     <div class="flex min-h-0 min-w-0 flex-col" style:width={getLayoutMode() === 'full' ? `${listWidth}px` : undefined} class:flex-1={isResponsive()} style:display={contextPaneVisible ? 'flex' : 'none'} onmouseenter={revealContextPane} onmouseleave={scheduleContextPaneHide} role="presentation">
-      <MessageHistoryBar canBack={messageHistory.index > 0} canForward={messageHistory.index >= 0 && messageHistory.index < messageHistory.entries.length - 1} onBack={() => void navigateMessageHistory(-1)} onForward={() => void navigateMessageHistory(1)} />
       <div class="flex flex-1 min-h-0 min-w-0">
     <!-- Sidebar (Folder List) -->
     <aside
@@ -2493,10 +2533,10 @@
       {/if}
       <div class="flex min-h-10 shrink-0 items-center gap-1 overflow-hidden border-b border-border px-2 py-1" aria-label={$_('messageList.quickFilters')}>
         <div class="flex shrink-0 items-center gap-1" role="group" aria-label={$_('messageList.quickFilters')}>
-          <button type="button" class="flex size-8 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageStatus === 'all' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.all')} title={$_('triage.all')} aria-pressed={triageStatus === 'all'} onclick={() => selectTriageFilter('')}><Icon icon="mdi:inbox-multiple-outline" width="16" /></button>
-          <button type="button" class="flex size-8 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageStatus === 'unread' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.unread')} title={$_('triage.unread')} aria-pressed={triageStatus === 'unread'} onclick={() => selectTriageFilter('unread')}><Icon icon="mdi:email-outline" width="16" /></button>
-          <button type="button" class="flex size-8 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageStatus === 'readLater' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.readLater')} title={$_('triage.readLater')} aria-pressed={triageStatus === 'readLater'} onclick={() => selectTriageFilter('readLater')}><Icon icon="mdi:book-clock-outline" width="16" /></button>
-          <button type="button" class="flex size-8 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageStatus === 'replyLater' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.replyLater')} title={$_('triage.replyLater')} aria-pressed={triageStatus === 'replyLater'} onclick={() => selectTriageFilter('replyLater')}><Icon icon="mdi:reply" width="16" /></button>
+          <button type="button" class="flex size-8 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageButtonActive('all') ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.all')} title={$_('triage.all')} aria-pressed={triageButtonActive('all')} onclick={() => triageButtonClick('')}><Icon icon="mdi:inbox-multiple-outline" width="16" /></button>
+          <button type="button" class="flex size-8 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageButtonActive('unread') ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.unread')} title={$_('triage.unread')} aria-pressed={triageButtonActive('unread')} onclick={() => triageButtonClick('unread')}><Icon icon="mdi:email-outline" width="16" /></button>
+          <button type="button" class="flex size-8 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageButtonActive('readLater') ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.readLater')} title={$_('triage.readLater')} aria-pressed={triageButtonActive('readLater')} onclick={() => triageButtonClick('readLater')}><Icon icon="mdi:book-clock-outline" width="16" /></button>
+          <button type="button" class="flex size-8 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageButtonActive('replyLater') ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.replyLater')} title={$_('triage.replyLater')} aria-pressed={triageButtonActive('replyLater')} onclick={() => triageButtonClick('replyLater')}><Icon icon="mdi:reply" width="16" /></button>
         </div>
         <button type="button" class="ml-auto flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-pressed={contextPaneAutoHide} title={contextPaneAutoHide ? $_('triage.keepContextVisible') : $_('triage.autoHideContext')} aria-label={contextPaneAutoHide ? $_('triage.keepContextVisible') : $_('triage.autoHideContext')} onclick={toggleContextPaneAutoHide}><Icon icon={contextPaneAutoHide ? 'mdi:pin-outline' : 'mdi:pin-off-outline'} width="16" /></button>
       </div>
@@ -2519,6 +2559,7 @@
         onBack={closeFolderBrowser}
         treeMode={contextPaneMode === 'folders'}
         onCloseTree={closeFolderBrowser}
+        listFilter={contextPaneMode === 'folders' ? folderListFilter : ''}
         escapeOwnedElsewhere={pendingSends.length > 0 || showComposer}
         collapsed={false}
         showCollapseControl={false}
@@ -2617,6 +2658,7 @@
       onclick={() => handlePaneClick('viewer')}
     >
       <div class="flex min-h-10 shrink-0 items-center gap-1 overflow-hidden border-b border-border px-2 py-1">
+        <MessageHistoryBar canBack={messageHistory.index > 0} canForward={messageHistory.index >= 0 && messageHistory.index < messageHistory.entries.length - 1} onBack={() => void navigateMessageHistory(-1)} onForward={() => void navigateMessageHistory(1)} />
         <div class="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto" role="tablist" aria-label={$_('mailWindow.workspaces')}>
           {#each mailWorkspaceTabs.filter(tab => tab.kind === 'reader') as tab (tab.id)}
             <div class="flex shrink-0 items-center rounded {activeMailWorkspace === tab.id ? 'bg-muted' : 'hover:bg-muted/60'}">
@@ -2689,6 +2731,7 @@
 <UpdateAvailableNotice hidden={showTermsDialog || showOAuthMissingDialog || showWhatsNewDialog || showCertDialog || showFlatpakFsDialog} />
 
 <!-- Toast notifications -->
+<SnoozeDialog bind:open={snoozeDialog.open} targets={snoozeDialog.targets} />
 <ToastContainer />
 
 <!-- Spellcheck right-click suggestion menu (composer) -->

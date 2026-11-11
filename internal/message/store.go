@@ -182,10 +182,17 @@ func (s *Store) ListByFolder(folderID string, offset, limit int) ([]*MessageHead
 // preferNativeGmailCopy hides only an unmapped legacy copy when the same
 // account and folder also contain a Gmail API copy with the same Message-ID.
 // Both cache rows remain intact, including any downloaded body or attachments.
+//
+// INDEXED BY is load-bearing, not a hint: the Message-ID match keys are
+// trim/concat expressions, so the planner otherwise picks the folder index and
+// scans every message of the folder once per outer row. On a 50k-message
+// folder that made a single folder click exceed both store deadlines (4s
+// count, 8s list); with the Message-ID index the same subquery is three index
+// probes (folder_click_regression_test.go).
 const preferNativeGmailCopy = ` AND (m.message_id IS NULL OR m.message_id = ''
  OR EXISTS (SELECT 1 FROM gmail_message_refs self WHERE self.message_id=m.id)
  OR NOT EXISTS (
-  SELECT 1 FROM messages native JOIN gmail_message_refs ref ON ref.message_id=native.id
+  SELECT 1 FROM messages native INDEXED BY idx_messages_message_id JOIN gmail_message_refs ref ON ref.message_id=native.id
   WHERE native.account_id=m.account_id AND native.folder_id=m.folder_id AND native.id<>m.id
   AND native.message_id IN (m.message_id, trim(m.message_id,'<>'), '<' || trim(m.message_id,'<>') || '>')
  ))`

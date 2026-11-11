@@ -1885,4 +1885,10 @@ var migrations = []Migration{
 	{Version: 77, SQL: `
 		ALTER TABLE mail_action_events ADD COLUMN undo_available INTEGER NOT NULL DEFAULT 0 CHECK(undo_available IN (0,1));
 	`},
+	{Version: 78, SQL: `
+		-- Guarantee the Message-ID index for every upgraded database: the
+		-- legacy/native Gmail dedupe clause uses it via INDEXED BY, and an
+		-- upgraded database that missed it in the initial schema would error.
+		CREATE INDEX IF NOT EXISTS idx_messages_message_id ON messages(message_id);
+	`},
 }
