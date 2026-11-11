@@ -5,9 +5,9 @@
   import * as Tabs from '$lib/components/ui/tabs'
   import { Button } from '$lib/components/ui/button'
   // @ts-ignore - wailsjs path
-  import { GetReadReceiptResponsePolicy, SetReadReceiptResponsePolicy, GetMessageListDensity, SetMessageListDensity, GetThemeMode, SetThemeMode, GetShowTitleBar, SetShowTitleBar, GetRunBackground, SetRunBackground, GetStartHidden, SetStartHidden, GetAutostart, SetAutostart, GetLanguage, SetLanguage, GetComposerMode, SetComposerMode, GetMailtoMode, SetMailtoMode, GetComposerFormat, SetComposerFormat, GetNativeTitleBar, SetNativeTitleBar, GetAlwaysLoadImages, SetAlwaysLoadImages, GetDarkMailContent, SetDarkMailContent, GetDarkComposerBody, SetDarkComposerBody, GetAccentBarUnread, SetAccentBarUnread, GetShowMessageListCircles, SetShowMessageListCircles, GetShowMessageListProfilePics, SetShowMessageListProfilePics, GetAlwaysShowMessageCheckbox, SetAlwaysShowMessageCheckbox, GetShowViewerCircles, SetShowViewerCircles, GetSpellcheckEnabled, SetSpellcheckEnabled, GetSpellcheckLanguages, SetSpellcheckLanguages, GetWindowDecorationStatus, RequestQuitApp, GetMarkAsReadDelay, SetMarkAsReadDelay } from '../../../../wailsjs/go/app/App.js'
+  import { GetReadReceiptResponsePolicy, SetReadReceiptResponsePolicy, GetMessageListDensity, SetMessageListDensity, GetThemeMode, SetThemeMode, GetShowTitleBar, SetShowTitleBar, GetRunBackground, SetRunBackground, GetStartHidden, SetStartHidden, GetAutostart, SetAutostart, GetLanguage, SetLanguage, GetComposerMode, SetComposerMode, GetMailtoMode, SetMailtoMode, GetComposerFormat, SetComposerFormat, GetNativeTitleBar, SetNativeTitleBar, GetAlwaysLoadImages, SetAlwaysLoadImages, GetStripTrackingParams, SetStripTrackingParams, GetDarkMailContent, SetDarkMailContent, GetDarkComposerBody, SetDarkComposerBody, GetAccentBarUnread, SetAccentBarUnread, GetShowMessageListCircles, SetShowMessageListCircles, GetShowMessageListProfilePics, SetShowMessageListProfilePics, GetAlwaysShowMessageCheckbox, SetAlwaysShowMessageCheckbox, GetShowViewerCircles, SetShowViewerCircles, GetSpellcheckEnabled, SetSpellcheckEnabled, GetSpellcheckLanguages, SetSpellcheckLanguages, GetWindowDecorationStatus, RequestQuitApp, GetMarkAsReadDelay, SetMarkAsReadDelay } from '../../../../wailsjs/go/app/App.js'
   import { addToast } from '$lib/stores/toast'
-  import { setMessageListDensity as updateDensityStore, setThemeMode as updateThemeStore, setShowTitleBar as updateShowTitleBarStore, setRunBackground as updateRunBackgroundStore, setStartHidden as updateStartHiddenStore, setAutostart as updateAutostartStore, setLanguage as updateLanguageStore, setComposerMode as updateComposerModeStore, setMailtoMode as updateMailtoModeStore, setComposerFormat as updateComposerFormatStore, setNativeTitleBar as updateNativeTitleBarStore, setAlwaysLoadImages as updateAlwaysLoadImagesStore, setDarkMailContent as updateDarkMailContentStore, setDarkComposerBody as updateDarkComposerBodyStore, setAccentBarUnread as updateAccentBarUnreadStore, setShowMessageListCircles as updateShowMessageListCirclesStore, setShowMessageListProfilePics as updateShowMessageListProfilePicsStore, setAlwaysShowMessageCheckbox as updateAlwaysShowMessageCheckboxStore, setShowViewerCircles as updateShowViewerCirclesStore, setSpellcheckEnabled as updateSpellcheckEnabledStore, setSpellcheckLanguages as updateSpellcheckLanguagesStore, updateMarkAsReadDelayStore, type MessageListDensity, type ThemeMode, type ComposerMode, type ComposerFormat } from '$lib/stores/settings.svelte'
+  import { setMessageListDensity as updateDensityStore, setThemeMode as updateThemeStore, setShowTitleBar as updateShowTitleBarStore, setRunBackground as updateRunBackgroundStore, setStartHidden as updateStartHiddenStore, setAutostart as updateAutostartStore, setLanguage as updateLanguageStore, setComposerMode as updateComposerModeStore, setMailtoMode as updateMailtoModeStore, setComposerFormat as updateComposerFormatStore, setNativeTitleBar as updateNativeTitleBarStore, setAlwaysLoadImages as updateAlwaysLoadImagesStore, setStripTrackingParams as updateStripTrackingParamsStore, setDarkMailContent as updateDarkMailContentStore, setDarkComposerBody as updateDarkComposerBodyStore, setAccentBarUnread as updateAccentBarUnreadStore, setShowMessageListCircles as updateShowMessageListCirclesStore, setShowMessageListProfilePics as updateShowMessageListProfilePicsStore, setAlwaysShowMessageCheckbox as updateAlwaysShowMessageCheckboxStore, setShowViewerCircles as updateShowViewerCirclesStore, setSpellcheckEnabled as updateSpellcheckEnabledStore, setSpellcheckLanguages as updateSpellcheckLanguagesStore, updateMarkAsReadDelayStore, type MessageListDensity, type ThemeMode, type ComposerMode, type ComposerFormat } from '$lib/stores/settings.svelte'
   import { syncSpellcheckLanguagesIfActive, defaultSpellcheckLanguages } from '$lib/spellcheck/settings'
   import { applyThemeFromMode } from '$lib/stores/theme.svelte'
   import { dialogGuardOpen, dialogGuardClose } from '$lib/stores/dialogGuard'
@@ -51,6 +51,7 @@
   let nativeTitleBar = $state<boolean>(false)
   let nativeFallbackRequired = $state<boolean>(false)
   let alwaysLoadImages = $state<boolean>(false)
+  let stripTrackingParams = $state<boolean>(true)
   let darkMailContent = $state<boolean>(false)
   let darkComposerBody = $state<boolean>(false)
   let accentBarUnread = $state<boolean>(false)
@@ -103,7 +104,7 @@
     loading = true
     hasSaved = false
     try {
-      const [policy, density, theme, titleBar, runBg, startHid, autoSt, lang, comp, mail, compFmt, nativeTB, alwaysImages, darkMail, darkComposer, accentBar, listCircles, listProfilePics, alwaysCheckbox, viewerCircles, scEnabled, scLangs, decorationStatus, readDelay] = await Promise.all([
+      const [policy, density, theme, titleBar, runBg, startHid, autoSt, lang, comp, mail, compFmt, nativeTB, alwaysImages, stripTracking, darkMail, darkComposer, accentBar, listCircles, listProfilePics, alwaysCheckbox, viewerCircles, scEnabled, scLangs, decorationStatus, readDelay] = await Promise.all([
         GetReadReceiptResponsePolicy(),
         GetMessageListDensity(),
         GetThemeMode(),
@@ -117,6 +118,7 @@
         GetComposerFormat(),
         GetNativeTitleBar(),
         GetAlwaysLoadImages(),
+        GetStripTrackingParams(),
         GetDarkMailContent(),
         GetDarkComposerBody(),
         GetAccentBarUnread(),
@@ -147,6 +149,7 @@
       nativeTitleBar = nativeTB ?? false
       nativeFallbackRequired = decorationStatus.native_fallback_required ?? false
       alwaysLoadImages = alwaysImages ?? false
+      stripTrackingParams = stripTracking ?? true
       darkMailContent = darkMail ?? false
       darkComposerBody = darkComposer ?? false
       accentBarUnread = accentBar ?? false
@@ -184,6 +187,7 @@
       await SetSpellcheckLanguages(spellcheckLanguages)
       await SetNativeTitleBar(nativeTitleBar)
       await SetAlwaysLoadImages(alwaysLoadImages)
+      await SetStripTrackingParams(stripTrackingParams)
       await SetDarkMailContent(darkMailContent)
       await SetDarkComposerBody(darkComposerBody)
       await SetAccentBarUnread(accentBarUnread)
@@ -210,6 +214,7 @@
       syncSpellcheckLanguagesIfActive() // live-apply to an open composer; stays lazy otherwise
       updateNativeTitleBarStore(nativeTitleBar)
       updateAlwaysLoadImagesStore(alwaysLoadImages)
+      updateStripTrackingParamsStore(stripTrackingParams)
       updateDarkMailContentStore(darkMailContent)
       updateDarkComposerBodyStore(darkComposerBody)
       updateAccentBarUnreadStore(accentBarUnread)
@@ -340,6 +345,7 @@
               bind:showViewerCircles
               bind:darkMailContent
               bind:darkComposerBody
+              bind:stripTrackingParams
               bind:markAsReadDelay
             />
           </Tabs.Content>
