@@ -56,6 +56,4 @@ end run
 end run
 """
     script_path.write_text(close)
-    subprocess.run(
-        ["/usr/bin/osascript", str(script_path), str(mount)], check=True
-    )
+    subprocess.run(["/usr/bin/osascript", str(script_path), str(mount)], check=True)
