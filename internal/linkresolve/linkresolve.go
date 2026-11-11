@@ -120,6 +120,19 @@ func ResolveDoH(ctx context.Context, dohURL, host string) ([]netip.Addr, error) 
 // private, link-local, multicast, CGNAT or otherwise non-public space. This
 // is the SSRF guard for the DoH answer.
 func IsBlockedIP(ip netip.Addr) bool {
+	ip = ip.Unmap()
+	// Reject transition mechanisms conservatively: their embedded IPv4
+	// target may be private even when the outer IPv6 address is global.
+	for _, prefix := range []netip.Prefix{
+		netip.MustParsePrefix("64:ff9b::/96"),
+		netip.MustParsePrefix("64:ff9b:1::/48"),
+		netip.MustParsePrefix("2002::/16"),
+		netip.MustParsePrefix("2001::/32"),
+	} {
+		if prefix.Contains(ip) {
+			return true
+		}
+	}
 	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
 		ip.IsLinkLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified() {
 		return true
@@ -164,6 +177,7 @@ func (r *Resolver) Follow(ctx context.Context, rawURL string) (*Result, error) {
 	}
 
 	transport := &http.Transport{
+		IdleConnTimeout: 10 * time.Second,
 		DialContext: func(dialCtx context.Context, network, addr string) (net.Conn, error) {
 			host, port, err := net.SplitHostPort(addr)
 			if err != nil {

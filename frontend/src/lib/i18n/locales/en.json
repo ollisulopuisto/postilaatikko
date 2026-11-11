@@ -382,6 +382,7 @@
     "downloadingContent": "Downloading message content...",
     "copy": "Copy",
     "openViaCloudflareDNS": "Open via Cloudflare DNS\u2026",
+    "linkChainBrowserDNSNote": "Opening the destination uses your browser and its normal DNS. If that host is also blocked, opening may still fail; you can copy the URL instead.",
     "linkChainTitle": "Where this link really goes",
     "linkChainNote": "Checking this link contacts the tracking service, same as opening it.",
     "resolvingLink": "Resolving the link via Cloudflare DNS\u2026",

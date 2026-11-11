@@ -1072,7 +1072,7 @@ ${processedHtml}
     <Dialog.Content class="max-w-lg max-h-[80vh] overflow-y-auto">
       <Dialog.Header>
         <Dialog.Title>{$_('viewer.linkChainTitle')}</Dialog.Title>
-        <Dialog.Description>{$_('viewer.linkChainNote')}</Dialog.Description>
+        <Dialog.Description>{$_('viewer.linkChainNote')} {$_('viewer.linkChainBrowserDNSNote')}</Dialog.Description>
       </Dialog.Header>
       {#if chainLoading}
         <p class="text-sm text-muted-foreground">{$_('viewer.resolvingLink')}</p>

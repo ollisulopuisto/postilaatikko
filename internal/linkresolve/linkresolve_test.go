@@ -120,6 +120,7 @@ func TestIsBlockedIP(t *testing.T) {
 		// IPv4-mapped forms must not smuggle private targets past the guard.
 		"::ffff:127.0.0.1", "::ffff:10.0.0.5", "::ffff:192.168.1.1",
 		"::ffff:169.254.169.254", "::ffff:100.64.0.1",
+		"64:ff9b::7f00:1", "64:ff9b:1::a00:1", "2002:7f00:1::", "2001::1",
 	}
 	for _, s := range blocked {
 		if !IsBlockedIP(netip.MustParseAddr(s)) {

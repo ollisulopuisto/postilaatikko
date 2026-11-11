@@ -382,6 +382,7 @@
     "downloadingContent": "Ladataan viestin sisältöä...",
     "copy": "Kopioi",
     "openViaCloudflareDNS": "Avaa Cloudflare DNS:n kautta\u2026",
+    "linkChainBrowserDNSNote": "Kohde avataan selaimessa sen tavallisella DNS:llä. Jos myös kohteen verkkotunnus on estetty, avaaminen voi epäonnistua. Voit silti kopioida osoitteen.",
     "linkChainTitle": "Minne t\u00e4m\u00e4 linkki oikeasti johtaa",
     "linkChainNote": "Linkin tarkistus ottaa yhteyden seurantapalveluun, aivan kuten linkin avaaminen.",
     "resolvingLink": "Selvitet\u00e4\u00e4n linkki\u00e4 Cloudflare DNS:n kautta\u2026",
