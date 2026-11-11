@@ -28,11 +28,14 @@ export function altOnly(e: KeyboardEvent): boolean {
 // and mail's Sidebar AND kit's SourceSidebar.
 export const LIST_NEXT = (e: KeyboardEvent): boolean =>
   ((e.key === 'j' || e.key === 'ArrowDown') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) ||
-  (ctrlOrMeta(e) && e.shiftKey && !e.altKey && e.key === ']')
+  // Mod+Shift+] — the produced character varies by layout (Shift+] is '}' on
+  // US keyboards), and on some layouts ']' itself needs AltGr/Option, so Alt
+  // is deliberately not excluded from the chord.
+  (ctrlOrMeta(e) && e.shiftKey && (e.key === ']' || e.key === '}'))
 
 export const LIST_PREV = (e: KeyboardEvent): boolean =>
   ((e.key === 'k' || e.key === 'ArrowUp') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) ||
-  (ctrlOrMeta(e) && e.shiftKey && !e.altKey && e.key === '[')
+  (ctrlOrMeta(e) && e.shiftKey && (e.key === '[' || e.key === '{'))
 
 // Shift+J / Shift+K / Shift+Down / Shift+Up — select with checkbox toggle.
 // Note: 'J' (capital) is what shift+j produces; ArrowDown stays the same key

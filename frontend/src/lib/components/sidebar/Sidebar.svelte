@@ -622,16 +622,19 @@
 
   // Focus the previous/next account header (Cmd/Ctrl+Alt+ArrowLeft/Right).
   // With no header focused, next focuses the first account and prev the last.
+  // The account list comes from the rendered sections: the folder nav list
+  // only contains folders, never account headers.
   export function focusAdjacentAccount(delta: number) {
-    const accounts = buildFolderNavList().filter(item => item.type === 'account-header')
+    const accounts = filteredAccountTrees.map(({ item }) => item.account)
     if (accounts.length === 0) return
-    const currentIndex = accounts.findIndex(item => item.accountId === focusedAccountId)
+    const currentIndex = accounts.findIndex(account => account.id === focusedAccountId)
     const nextIndex = currentIndex === -1
       ? (delta > 0 ? 0 : accounts.length - 1)
       : (currentIndex + delta + accounts.length) % accounts.length
     const next = accounts[nextIndex]
-    focusedAccountId = next.accountId ?? null
-    scrollItemIntoView(next)
+    focusedAccountId = next.id
+    scrollContainer?.querySelector(`[data-sidebar-item="account-header"][data-account-id="${next.id}"]`)
+      ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }
 
   // Check if an account header is focused

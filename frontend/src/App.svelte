@@ -1840,6 +1840,26 @@
       // reply to the hidden mail thread while the user is browsing contacts).
       if (!isMailActive()) return
 
+      // Mod+Shift+] / Mod+Shift+[ — move the focused pane's selection, the
+      // modified twin of the bare-key navigation block further down. These are
+      // predicate-driven (not registry dispatch) so kit lists and the primary
+      // window share one definition.
+      if (KEY.LIST_PREV(e) || KEY.LIST_NEXT(e)) {
+        e.preventDefault()
+        const prev = KEY.LIST_PREV(e)
+        if (focusedPane === 'sidebar') {
+          if (prev) sidebarRef?.selectPreviousFolder()
+          else sidebarRef?.selectNextFolder()
+        } else if (focusedPane === 'messageList') {
+          if (prev) messageListRef?.selectPrevious()
+          else messageListRef?.selectNext()
+        } else if (focusedPane === 'viewer') {
+          if (prev) viewerRef?.scrollUp()
+          else viewerRef?.scrollDown()
+        }
+        return
+      }
+
       // MAIL-DOMAIN Ctrl/Cmd commands come from the registry (see KEY_HANDLERS).
       runRegistryShortcut(e)
       return
