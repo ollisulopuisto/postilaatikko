@@ -73,6 +73,16 @@ func (s *Store) ListReadLater() ([]Ref, error) {
 	return refs, rows.Err()
 }
 
+// ReadLaterFolderCounts returns, per account, how many Read Later
+// conversations have locally indexed messages in each folder. Queue entries
+// whose messages are not synced yet contribute nothing. The conversation ID
+// mirrors the message store's COALESCE(thread_id, id) identity: provider
+// thread IDs match messages.thread_id, local single-message IDs match
+// messages.id.
+func (s *Store) ReadLaterFolderCounts() (map[string]map[string]int, error) {
+	return folderCountsForQueue(s.db, "read_later_queue")
+}
+
 func (s *Store) CountReadLater() (int, error) {
 	var count int
 	err := s.db.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM read_later_queue`).Scan(&count)
@@ -153,4 +163,39 @@ func (s *Store) CountSnoozed() (int, error) {
 	var count int
 	err := s.db.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM snoozed_conversations WHERE julianday(wake_at)>julianday(?)`, time.Now().UTC().Format(time.RFC3339Nano)).Scan(&count)
 	return count, err
+}
+
+// folderCountsForQueue counts queued conversations per folder for the given
+// queue table (read_later_queue or reply_later_queue, both shaped
+// account_id+conversation_id). Result keys: account ID, then folder ID.
+func folderCountsForQueue(db *database.DB, queueTable string) (map[string]map[string]int, error) {
+	rows, err := db.QueryContext(context.Background(), `
+		SELECT account_id, folder_id, COUNT(DISTINCT conv) FROM (
+			SELECT m.account_id AS account_id, m.folder_id AS folder_id, m.thread_id AS conv
+			FROM `+queueTable+` q
+			JOIN messages m ON m.account_id = q.account_id AND m.thread_id = q.conversation_id
+			WHERE m.thread_id IS NOT NULL
+			UNION ALL
+			SELECT m.account_id, m.folder_id, m.id
+			FROM `+queueTable+` q
+			JOIN messages m ON m.account_id = q.account_id AND m.id = q.conversation_id AND m.thread_id IS NULL
+		)
+		GROUP BY account_id, folder_id`)
+	if err != nil {
+		return nil, fmt.Errorf("count queued conversations per folder: %w", err)
+	}
+	defer rows.Close()
+	counts := map[string]map[string]int{}
+	for rows.Next() {
+		var accountID, folderID string
+		var count int
+		if err := rows.Scan(&accountID, &folderID, &count); err != nil {
+			return nil, err
+		}
+		if counts[accountID] == nil {
+			counts[accountID] = map[string]int{}
+		}
+		counts[accountID][folderID] = count
+	}
+	return counts, rows.Err()
 }

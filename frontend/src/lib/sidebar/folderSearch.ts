@@ -24,7 +24,7 @@ export function filterFolders<T extends SearchableFolder>(items: T[], query: str
 }
 
 export interface FolderSearchNode {
-  folder?: { id: string; name: string; path: string; type: string } | null
+  folder?: { id: string; name: string; path: string; type: string; unreadCount?: number } | null
   children?: FolderSearchNode[]
 }
 export interface FolderChoice extends SearchableFolder {
@@ -34,6 +34,7 @@ export interface FolderChoice extends SearchableFolder {
   name: string
   path: string
   type: string
+  unreadCount?: number
 }
 
 /** Flatten cached trees so search reaches folders inside collapsed branches. */
@@ -42,7 +43,7 @@ export function folderChoices(accountId: string, accountName: string, accountEma
   const visit = (nodes: FolderSearchNode[]) => {
     for (const node of nodes) {
       const item = node.folder
-      if (item) result.push({ id: item.id, accountId, accountName, accountEmail, name: item.name, path: item.path, type: item.type, label: `${accountName} ${accountEmail} ${item.path} ${item.name}` })
+      if (item) result.push({ id: item.id, accountId, accountName, accountEmail, name: item.name, path: item.path, type: item.type, unreadCount: item.unreadCount, label: `${accountName} ${accountEmail} ${item.path} ${item.name}` })
       if (node.children?.length) visit(node.children)
     }
   }

@@ -444,3 +444,8 @@ README review follow-up: qualify checksum instructions because tagged releases d
 - Held for the owner: quote versus new-text order (composer placement and sent-result top/bottom-posting, replies vs forwards); variants and recommendation on the round-3 sketches page.
 - Verification: documentation-only diff (new plan doc plus ROADMAP.md and TASKS.md entries). Implementation splits into PR-sized tasks here when claimed.
 
+
+## Folder-list quick filters (2026-11-11)
+
+- FOLDER-LIST-FILTER-001: Review. Owner: Instinct; branch `agent/folder-list-filters`; worktree `/tmp/pl-folder-filters`. While the Kaikki kansiot panel is open, the four quick-filter buttons at the top of the column (all / unread / read later / reply later) filter the folder list instead of the message list; the list-pane row is unchanged. Unread uses live per-folder unread counts; read later / reply later use new per-folder queue membership counts from a new `GetQueueFolderCounts` backend endpoint (queue rows carry only account+conversation refs). Ancestors of matching folders stay visible, dimmed. Filter resets when the panel closes.
+- Verification: new Go tests for both count queries; new frontend tests for the prune/match logic and wiring; full frontend suite 979/979; svelte-check 0 errors (two pre-existing warnings); ESLint clean on touched files. GTK-linked app build and the Mac UI itself are unverified locally.

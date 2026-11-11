@@ -123,6 +123,9 @@
   const CONTEXT_PANE_AUTO_HIDE_KEY = 'postilaatikko:context-pane-auto-hide'
   const contextPaneVisible = $derived(!contextPaneAutoHide || contextPaneRevealed)
   let triageStatus = $state<'all' | 'unread' | 'readLater' | 'replyLater'>('all')
+  // Quick-filter applied to the folder list while the Kaikki kansiot panel is
+  // open; the same four buttons then prune folders instead of messages.
+  let folderListFilter = $state<'' | 'unread' | 'readLater' | 'replyLater'>('')
   const maxMailWorkspaceTabs = 8
   let mailWorkspaceTabs = $state<MailWorkspaceTab[]>([])
   let mailWindowTabInstances: Record<string, MailWindowApp | null> = {}
@@ -342,6 +345,26 @@
     triageStatus = mode === 'unread' ? 'unread' : mode === 'readLater' ? 'readLater' : mode === 'replyLater' ? 'replyLater' : 'all'
     messageListRef?.setQuickFilter(mode)
   }
+
+  // While the folder panel is open, the quick-filter buttons prune the folder
+  // list; otherwise they filter the message list as before.
+  function triageButtonActive(status: 'all' | 'unread' | 'readLater' | 'replyLater'): boolean {
+    if (contextPaneMode === 'folders') return folderListFilter === (status === 'all' ? '' : status)
+    return triageStatus === status
+  }
+
+  function triageButtonClick(mode: '' | 'unread' | 'readLater' | 'replyLater') {
+    if (contextPaneMode === 'folders') {
+      folderListFilter = mode
+      return
+    }
+    selectTriageFilter(mode)
+  }
+
+  // Leaving the folder panel resets its filter so the next open starts clean.
+  $effect(() => {
+    if (contextPaneMode !== 'folders' && folderListFilter) folderListFilter = ''
+  })
 
   function closeWorkspaceTab(id: string) {
     const index = mailWorkspaceTabs.findIndex(tab => tab.id === id)
@@ -2510,10 +2533,10 @@
       {/if}
       <div class="flex min-h-10 shrink-0 items-center gap-1 overflow-hidden border-b border-border px-2 py-1" aria-label={$_('messageList.quickFilters')}>
         <div class="flex shrink-0 items-center gap-1" role="group" aria-label={$_('messageList.quickFilters')}>
-          <button type="button" class="flex size-8 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageStatus === 'all' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.all')} title={$_('triage.all')} aria-pressed={triageStatus === 'all'} onclick={() => selectTriageFilter('')}><Icon icon="mdi:inbox-multiple-outline" width="16" /></button>
-          <button type="button" class="flex size-8 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageStatus === 'unread' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.unread')} title={$_('triage.unread')} aria-pressed={triageStatus === 'unread'} onclick={() => selectTriageFilter('unread')}><Icon icon="mdi:email-outline" width="16" /></button>
-          <button type="button" class="flex size-8 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageStatus === 'readLater' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.readLater')} title={$_('triage.readLater')} aria-pressed={triageStatus === 'readLater'} onclick={() => selectTriageFilter('readLater')}><Icon icon="mdi:book-clock-outline" width="16" /></button>
-          <button type="button" class="flex size-8 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageStatus === 'replyLater' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.replyLater')} title={$_('triage.replyLater')} aria-pressed={triageStatus === 'replyLater'} onclick={() => selectTriageFilter('replyLater')}><Icon icon="mdi:reply" width="16" /></button>
+          <button type="button" class="flex size-8 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageButtonActive('all') ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.all')} title={$_('triage.all')} aria-pressed={triageButtonActive('all')} onclick={() => triageButtonClick('')}><Icon icon="mdi:inbox-multiple-outline" width="16" /></button>
+          <button type="button" class="flex size-8 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageButtonActive('unread') ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.unread')} title={$_('triage.unread')} aria-pressed={triageButtonActive('unread')} onclick={() => triageButtonClick('unread')}><Icon icon="mdi:email-outline" width="16" /></button>
+          <button type="button" class="flex size-8 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageButtonActive('readLater') ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.readLater')} title={$_('triage.readLater')} aria-pressed={triageButtonActive('readLater')} onclick={() => triageButtonClick('readLater')}><Icon icon="mdi:book-clock-outline" width="16" /></button>
+          <button type="button" class="flex size-8 shrink-0 items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageButtonActive('replyLater') ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.replyLater')} title={$_('triage.replyLater')} aria-pressed={triageButtonActive('replyLater')} onclick={() => triageButtonClick('replyLater')}><Icon icon="mdi:reply" width="16" /></button>
         </div>
         <button type="button" class="ml-auto flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-pressed={contextPaneAutoHide} title={contextPaneAutoHide ? $_('triage.keepContextVisible') : $_('triage.autoHideContext')} aria-label={contextPaneAutoHide ? $_('triage.keepContextVisible') : $_('triage.autoHideContext')} onclick={toggleContextPaneAutoHide}><Icon icon={contextPaneAutoHide ? 'mdi:pin-outline' : 'mdi:pin-off-outline'} width="16" /></button>
       </div>
@@ -2536,6 +2559,7 @@
         onBack={closeFolderBrowser}
         treeMode={contextPaneMode === 'folders'}
         onCloseTree={closeFolderBrowser}
+        listFilter={contextPaneMode === 'folders' ? folderListFilter : ''}
         escapeOwnedElsewhere={pendingSends.length > 0 || showComposer}
         collapsed={false}
         showCollapseControl={false}

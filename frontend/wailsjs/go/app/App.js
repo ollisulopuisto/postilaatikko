@@ -850,6 +850,9 @@ export function GetReadLaterQueue() {
   return window['go']['app']['App']['GetReadLaterQueue']();
 }
 
+export function GetQueueFolderCounts() {
+  return window['go']['app']['App']['GetQueueFolderCounts']();
+}
 export function GetReadReceiptResponsePolicy() {
   return window['go']['app']['App']['GetReadReceiptResponsePolicy']();
 }
