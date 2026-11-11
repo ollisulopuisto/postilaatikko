@@ -1079,7 +1079,7 @@ ${processedHtml}
   {/if}
   <!-- Cloudflare DNS redirect-chain dialog (ui/dialog gives focus trapping, Escape to close, and focus restoration) -->
   <Dialog.Root bind:open={chainDialogVisible}>
-    <Dialog.Content class="max-w-lg max-h-[80vh] overflow-y-auto">
+    <Dialog.Content class="relative max-w-lg max-h-[80vh] overflow-y-auto">
       <Dialog.Header>
         <Dialog.Title>{$_('viewer.linkChainTitle')}</Dialog.Title>
         <Dialog.Description>{$_('viewer.linkChainNote')} {$_('viewer.linkChainBrowserDNSNote')}</Dialog.Description>
