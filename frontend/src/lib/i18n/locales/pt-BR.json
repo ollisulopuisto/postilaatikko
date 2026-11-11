@@ -108,6 +108,7 @@
     "filterAttachments": "Com anexos",
     "noFilteredMessages": "Nenhuma mensagem corresponde ao filtro atual",
     "selectedActions": "Ações para mensagens selecionadas",
+    "checkConversation": "Selecionar conversa para ações em massa",
     "selectedCount": "{count} selecionada(s)"
   },
   "inbox": {
