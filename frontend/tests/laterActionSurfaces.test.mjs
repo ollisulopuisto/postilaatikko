@@ -97,7 +97,7 @@ test('local server result resolution uses message-id fallback without bypassing 
   assert.match(handler,/generation !== serverResultFetchGeneration/)
   assert.match(handler,/message\?\.accountId !== account/)
   assert.match(handler,/!message.id/)
-  assert.match(handler,/onConversationSelect\?\.\(canonicalId, folder, account\)/)
+  assert.match(handler,/onConversationSelect\?\.\(canonicalId, folder, account, result\.subject\)/)
 })
 
 test('queue readiness and targets use the active source rather than hidden unresolved cache rows', async () => {
@@ -145,7 +145,7 @@ test('fetching a result with a shared mailbox UID updates only its account-quali
   assert.equal(state.rows()[1]._canonicalConversationId,'thread-B')
   assert.equal(state.rows()[1].threadId,'uid-B')
   assert.equal(state.rows()[1]._queueCanonical,true)
-  assert.deepEqual(selected,[['thread-B','inbox-B','B']])
+  assert.deepEqual(selected,[['thread-B','inbox-B','B',undefined]])
   const wrong=factory([a,b],async()=>({id:'message-A',threadId:'thread-A',accountId:'A'}),()=>assert.fail('must not open mismatched account'),serverSearchResultIdentity)
   await wrong.run(b,'inbox-B','B')
   assert.deepEqual(wrong.rows(),[a,b])

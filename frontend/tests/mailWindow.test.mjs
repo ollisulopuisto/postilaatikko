@@ -91,10 +91,53 @@ test('back into a tab also brings the restored list row into view', () => {
 test('the tab keeps watching config when only the thread changes', () => {
   // The MailWindowApp config effect used to compare only accountId+folderId
   // and return early, so a list click targeting the same folder never reached
-  // the open reader tab. It must compare the thread too.
+  // the open reader tab. The applied-config identity must include the thread.
   return readFile(new URL('../src/MailWindowApp.svelte', import.meta.url), 'utf8').then(app => {
-    const guard = app.split('\n').find(line => line.includes('scopeKey(config)') && line.includes('return'))
-    assert.ok(guard, 'config effect guard found')
-    assert.match(guard, /threadId/, 'the early-return gate considers the thread, not only the folder')
+    const keyLine = app.split('\n').find(line => line.includes('const key =') && line.includes('scopeKey(config)'))
+    assert.ok(keyLine, 'config identity key found')
+    assert.match(keyLine, /config\.threadId/, 'the identity key considers the thread, not only the folder')
+  })
+})
+
+test('a local selection never re-enters the config effect', () => {
+  // Devin: in a standalone window (fixed config, no onScopeChange) a local
+  // selection made windowState differ from config, the effect re-navigated,
+  // produced a fresh state every pass and looped. The effect must compare
+  // against a stored last-applied key and read windowState untracked.
+  return readFile(new URL('../src/MailWindowApp.svelte', import.meta.url), 'utf8').then(app => {
+    assert.match(app, /lastConfigKey/, 'the last applied config identity is stored')
+    assert.match(app, /if \(key === lastConfigKey\) return/, 'an unchanged config identity returns early')
+    assert.match(app, /untrack\(\(\) => navigateMailWindow\(windowState, config\)\)/, 'reading windowState inside the effect is untracked')
+  })
+})
+
+test('a threadless config for the current folder does not resurrect a closed conversation', () => {
+  // A local close pushes the same folder with no threadId; navigating would
+  // restore the remembered selection and reopen the closed conversation.
+  return readFile(new URL('../src/MailWindowApp.svelte', import.meta.url), 'utf8').then(app => {
+    const effect = app.slice(app.indexOf('lastConfigKey'), app.indexOf('function select('))
+    assert.match(effect, /!config\.threadId && scopeKey\(config\) === scopeKey\(windowState\.scope\)/, 'threadless same-folder config is not navigation')
+  })
+})
+
+test('an external retarget keeps a reader tab on the viewer pane', () => {
+  // Devin: reader tabs render no list; focusing messageList after a retarget
+  // kills the reply/delete shortcuts until the viewer is clicked.
+  return readFile(new URL('../src/MailWindowApp.svelte', import.meta.url), 'utf8').then(app => {
+    const effect = app.slice(app.indexOf('lastConfigKey'), app.indexOf('function select('))
+    assert.match(effect, /setFocusedPane\(readerTab \? 'viewer' : 'messageList'\)/, 'reader tabs keep viewer focus')
+  })
+})
+
+test('a list click carries the subject into the retargeted tab', () => {
+  // Devin: the tab kept the previous message's threadSubject, so its label
+  // named the old message after a retarget.
+  return Promise.all([
+    readFile(new URL('../src/App.svelte', import.meta.url), 'utf8'),
+    readFile(new URL('../src/lib/components/list/MessageList.svelte', import.meta.url), 'utf8'),
+  ]).then(([app, list]) => {
+    const handler = app.slice(app.indexOf('function handleConversationSelect'))
+    assert.match(handler.slice(0, handler.indexOf('\n  }')), /threadSubject/, 'the retarget scope carries the subject')
+    assert.match(list, /onConversationSelect\?\.\(conversation\._canonicalConversationId \|\| threadId, realFolderId, realAccountId, conversation\.subject\)/, 'the row click passes its subject')
   })
 })
