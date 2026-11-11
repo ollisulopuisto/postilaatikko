@@ -289,9 +289,11 @@ deprecated mailbox-service mode and retire with it. [inferred]
   already synced or its provider credentials; the user must also revoke that
   device's access at the provider (password change / OAuth grant removal). A
   live stolen unlocked device exposed what it read (T5).
-- Lost last device: mail is not lost - it is still at the provider, and a new
-  device syncs it again. What is lost without the recovery phrase is the UMK
-  and anything still waiting in transfer envelopes. No administrative
+- Lost last device: mail that still exists at the provider is not lost - a
+  new device syncs it again. Sync cannot restore what the provider no longer
+  holds: provider-deleted mail and local-only drafts that never left the old
+  device are gone with it. What is lost without the recovery phrase is the
+  UMK and anything still waiting in transfer envelopes. No administrative
   backdoor, by design. Tell users this in plain words.
 
 ## 13. Backup and recovery
