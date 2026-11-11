@@ -16,7 +16,28 @@ test('main window has no custom title bar row; the composer keeps its own', () =
 test('traffic lights sit in the rail only in custom title bar mode, same condition as the old bar', () => {
   assert.match(app, /<ExtensionRail windowControls=\{getShowTitleBar\(\) && !getNativeTitleBar\(\) && effectiveTitleBarMode === 'custom'\} onCloseWindow=\{handleClose\}/)
   assert.match(rail, /\{#if windowControls\}[\s\S]*<WindowControls onClose=\{onCloseWindow\} \/>/)
-  assert.match(rail, /windowControls \? 'w-\[3\.75rem\]' : 'w-12 pt-2'/)
+  assert.match(rail, /windowControls \? 'w-20' : 'w-12 pt-2'/)
+})
+
+// The rail must leave room for all three traffic lights; a too-narrow rail
+// clipped the green zoom button in half against the next column.
+const tailwindUnit = cls => {
+  const bracket = cls.match(/-\[([\d.]+)rem\]$/)
+  if (bracket) return parseFloat(bracket[1]) * 16
+  const scale = cls.match(/-(\d+)$/)
+  if (scale) return parseInt(scale[1], 10) * 4
+  throw new Error(`unrecognised Tailwind size class: ${cls}`)
+}
+
+test('custom title bar rail fits the three traffic lights without clipping', () => {
+  const railClass = rail.match(/windowControls \? '([^']+)'/)[1]
+  const stripClass = rail.match(/<div class="([^"]*\bh-10\b[^"]*)"[^>]*--wails-draggable: drag/)[1]
+  const padClass = stripClass.split(/\s+/).find(cls => cls.startsWith('px-'))
+  const buttonClass = controls.match(/\bw-\d+\b(?=\s+h-\d+\s+rounded-full)/)[0]
+  const gapClass = controls.match(/\bgap-\d+\b/)[0]
+  const available = tailwindUnit(railClass) - 2 * tailwindUnit(padClass)
+  const needed = 3 * tailwindUnit(buttonClass) + 2 * tailwindUnit(gapClass)
+  assert.ok(available >= needed, `rail content width ${available}px cannot fit the traffic lights (${needed}px)`)
 })
 
 test('traffic lights are in the standard Mac order and opt out of dragging', () => {

@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Custom title bar: the green zoom button is no longer clipped in half; the quick-access rail now leaves room for all three traffic lights.
 - Conversation view no longer flattens designed HTML email: headings, button fills, card backgrounds and link colors render as authored, like Gmail, instead of everything shrinking to plain body text with outline buttons. The bubble background still shows through around the message.
 
 - Send Later helper health and router error responses use the same browser-Origin rejection and security headers as encrypted command responses.
