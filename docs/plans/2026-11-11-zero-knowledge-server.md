@@ -384,7 +384,8 @@ measured velocity.
    Interim choice (2026-11-11): helper delivery on the single-user Studio in
    Send Later-only mode is accepted now; the hosted service must revisit this
    before multi-tenant launch.
-3. **Native clients only** - no web client - accepting the distribution cost.
+3. Decided 2026-11-11: **native clients only, no web client** (an
+   operator-served web app would defeat operator-proofing; section 2, item 3).
 4. Decided 2026-11-11: **the server does not hold the mailbox**; mailbox-service
    mode goes opt-in now, deprecated later (section 20).
 4. Recovery: offline phrase, escrow, or both.
