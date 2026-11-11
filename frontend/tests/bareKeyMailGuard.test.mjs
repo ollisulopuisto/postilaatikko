@@ -26,7 +26,7 @@ test("bare 'd' stays bound to mail.trash — the guard, not the binding, protect
 
 test("global '?' shortcuts help is handled before the guard and stays on every pane", () => {
   assert.match(app, /KEY\.SHORTCUTS_HELP\(e\)/, "'?' help has its own early handler")
-  assert.match(registry, /id: 'app\.shortcuts'[^\n]*combos: \['\?'\]/, "'?' remains the help combo")
+  assert.match(registry, /id: 'app\.shortcuts'[^\n]*combos: \['\?', 'Mod\+\/'\]/, "'?' and Cmd/Ctrl+/ are the help combos")
 })
 
 const tailStart = app.indexOf('    // Single-key shortcuts (Gmail standard shortcuts)')

@@ -1604,6 +1604,12 @@
     'viewer.threadFocus': () => { if (selectedThreadId !== null) toggleThreadFocus() },
     'viewer.loadImages': () => viewerRef?.loadImages(),
     'viewer.alwaysLoadImages': () => viewerRef?.openAlwaysLoadDropdown(),
+    'nav.accountPrev': () => sidebarRef?.focusAdjacentAccount(-1),
+    'nav.accountNext': () => sidebarRef?.focusAdjacentAccount(1),
+    'list.filterAll': () => messageListRef?.applyQuickFilter(''),
+    'list.filterUnread': () => messageListRef?.applyQuickFilter('unread'),
+    'list.filterReplyLater': () => messageListRef?.applyQuickFilter('replyLater'),
+    'list.filterReadLater': () => messageListRef?.applyQuickFilter('readLater'),
   }
   function runRegistryShortcut(e: KeyboardEvent): boolean {
     const def = resolveShortcut(e, getFocusedPane(), Object.keys(KEY_HANDLERS))

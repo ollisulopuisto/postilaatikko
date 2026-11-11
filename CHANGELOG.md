@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Shared Postilaatikko/Solmu keyboard layer (approved keymap): search also on Cmd/Ctrl+F, forward on Cmd/Ctrl+L, Read later on Cmd/Ctrl+U, Reply later on Cmd/Ctrl+I, archive and mark read on Cmd/Ctrl+E, next/previous message on Cmd/Ctrl+Shift+]/[, the shortcuts overlay also opens with Cmd/Ctrl+/, previous/next account on Cmd/Ctrl+Alt+Left/Right, and the message-list quick filters on Cmd/Ctrl+Alt+1-4 (all, unread, reply later, read later). Load remote images moves to Cmd/Ctrl+Alt+L (always-load to Cmd/Ctrl+Shift+Alt+L) so Cmd/Ctrl+L can forward, and mark-as-read drops Cmd/Ctrl+U (Shift+I stays) so Cmd/Ctrl+U can queue for later. Every existing Gmail-style bare key keeps working, and Option-mangled keys on macOS now fall back to the physical key, so the new Option chords fire on any keyboard layout.
+
 - The four quick-filter buttons at the top of the column (all, unread, read later, reply later) now filter the folder list while the Kaikki kansiot panel is open: only folders with matching mail stay, with their parent folders kept dimmed for context. The filter clears when the panel closes. Read later and reply later counts come from the backend, so folders holding queued mail are found even when the queue lives outside the synced folders.
 - Custom title bar: the green zoom button is no longer clipped in half; the quick-access rail now leaves room for all three traffic lights.
 - Folder clicks no longer stall: the legacy/native Gmail duplicate-suppression clause now uses the Message-ID index instead of scanning the whole folder once per message. Opening a large folder (for example a Gmail archive) went from hitting the 4 s/8 s store deadlines to roughly a tenth of a second.

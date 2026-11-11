@@ -27,10 +27,12 @@ export function altOnly(e: KeyboardEvent): boolean {
 // List/pane navigation — shared between mail's MessageList AND kit's ListPane,
 // and mail's Sidebar AND kit's SourceSidebar.
 export const LIST_NEXT = (e: KeyboardEvent): boolean =>
-  (e.key === 'j' || e.key === 'ArrowDown') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey
+  ((e.key === 'j' || e.key === 'ArrowDown') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) ||
+  (ctrlOrMeta(e) && e.shiftKey && !e.altKey && e.key === ']')
 
 export const LIST_PREV = (e: KeyboardEvent): boolean =>
-  (e.key === 'k' || e.key === 'ArrowUp') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey
+  ((e.key === 'k' || e.key === 'ArrowUp') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) ||
+  (ctrlOrMeta(e) && e.shiftKey && !e.altKey && e.key === '[')
 
 // Shift+J / Shift+K / Shift+Down / Shift+Up — select with checkbox toggle.
 // Note: 'J' (capital) is what shift+j produces; ArrowDown stays the same key
@@ -119,7 +121,10 @@ export function PERMANENT_DELETE(e: KeyboardEvent): boolean {
 // Shift on most layouts (Shift+/ on US, Shift++ on Finnish), and e.key already
 // reflects the layout.
 export const SHORTCUTS_HELP = (e: KeyboardEvent): boolean =>
-  e.key === '?' && LAYOUT_SYMBOL(e)
+  (e.key === '?' && LAYOUT_SYMBOL(e)) ||
+  // Cmd/Ctrl+/ — the common "show shortcuts" chord. Shift is not excluded:
+  // '/' needs Shift on several layouts (Shift+7 on Finnish).
+  (ctrlOrMeta(e) && !e.altKey && e.key === '/')
 
 // Cmd+K / Ctrl+K, Cmd+P / Ctrl+P or Cmd+Shift+P / Ctrl+Shift+P — open the command palette.
 // Archive is plain `e` (archive and mark as read); no Ctrl/Cmd chord archives.
