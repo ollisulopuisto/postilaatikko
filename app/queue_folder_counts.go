@@ -3,10 +3,9 @@ package app
 import "fmt"
 
 // QueueFolderCounts reports, per account and folder, how many conversations in
-// the app-local triage queues (Read Later, Reply Later) have locally indexed
-// messages there. The folder panel uses this to filter the folder tree by
-// queue membership. Queue entries whose messages are not synced locally yet
-// contribute nothing.
+// the Read Later and Reply Later queues have locally indexed messages there.
+// The folder panel uses this to filter the folder tree by queue membership.
+// Queue entries whose messages are not synced locally yet contribute nothing.
 type QueueFolderCounts struct {
 	// ReadLater maps account ID -> folder ID -> queued conversation count.
 	ReadLater map[string]map[string]int `json:"readLater"`
@@ -14,19 +13,38 @@ type QueueFolderCounts struct {
 	ReplyLater map[string]map[string]int `json:"replyLater"`
 }
 
-// GetQueueFolderCounts returns per-folder membership counts for the app-local
-// Read Later and Reply Later queues.
+// GetQueueFolderCounts returns per-folder membership counts for the Read
+// Later and Reply Later queues. Queue membership comes from the same
+// service-aware getters as the queue views, so a remote mailbox service's
+// entries count too; only the folder resolution is local, through the message
+// index.
 func (a *App) GetQueueFolderCounts() (*QueueFolderCounts, error) {
-	if a.triageStore == nil || a.replyLaterStore == nil {
-		return nil, fmt.Errorf("triage queues are not ready")
+	if a.messageStore == nil {
+		return nil, fmt.Errorf("message store is not ready")
 	}
-	readLater, err := a.triageStore.ReadLaterFolderCounts()
+	readLaterRefs, err := a.GetReadLaterQueue()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list Read Later queue: %w", err)
 	}
-	replyLater, err := a.replyLaterStore.FolderCounts()
+	replyLaterRefs, err := a.GetReplyLaterQueue()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list Reply Later queue: %w", err)
+	}
+	readLaterByAccount := map[string][]string{}
+	for _, ref := range readLaterRefs {
+		readLaterByAccount[ref.AccountID] = append(readLaterByAccount[ref.AccountID], ref.ConversationID)
+	}
+	replyLaterByAccount := map[string][]string{}
+	for _, ref := range replyLaterRefs {
+		replyLaterByAccount[ref.AccountID] = append(replyLaterByAccount[ref.AccountID], ref.ConversationID)
+	}
+	readLater, err := a.messageStore.FolderCountsForConversations(readLaterByAccount)
+	if err != nil {
+		return nil, fmt.Errorf("count Read Later folders: %w", err)
+	}
+	replyLater, err := a.messageStore.FolderCountsForConversations(replyLaterByAccount)
+	if err != nil {
+		return nil, fmt.Errorf("count Reply Later folders: %w", err)
 	}
 	return &QueueFolderCounts{ReadLater: readLater, ReplyLater: replyLater}, nil
 }

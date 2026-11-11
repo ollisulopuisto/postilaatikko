@@ -104,11 +104,22 @@ test('the sidebar header buttons drive the folder-list filter while the list-pan
 test('the folder panel prunes with the active filter and loads queue counts on demand', async () => {
   const sidebar = await read('../src/lib/components/sidebar/Sidebar.svelte')
   assert.match(sidebar, /pruneFolderTree/)
-  assert.match(sidebar, /folderQueueCounts/)
+  assert.match(sidebar, /folderQueueCounts\.acquire/)
   const store = await read('../src/lib/stores/folderQueueCounts.svelte.ts')
   assert.match(store, /GetQueueFolderCounts/)
   assert.match(store, /readLater:changed/)
   assert.match(store, /replyLater:changed/)
+  // Queued mail that moves folders or is deleted must refresh the counts.
+  assert.match(store, /messages:moved/)
+  assert.match(store, /messages:deleted/)
+  // Closed filters never rescan: reloads need an active acquire() holder.
+  assert.match(store, /if \(activeConsumers > 0\)/)
+})
+
+test('ancestors of nested matches stay expanded while the filter is active', async () => {
+  const item = await read('../src/lib/components/sidebar/FolderTreeItem.svelte')
+  const collapsed = item.slice(item.indexOf('let isCollapsed'), item.indexOf('let isCollapsed') + 260)
+  assert.match(collapsed, /contextOnly \? false/)
 })
 
 test('the queue-counts endpoint is wired end to end', async () => {

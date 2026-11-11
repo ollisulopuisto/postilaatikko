@@ -1,4 +1,4 @@
-package replylater
+package message
 
 import (
 	"fmt"
@@ -8,13 +8,13 @@ import (
 	"github.com/hkdb/aerion/internal/database"
 )
 
-// FolderCounts powers the folder-panel filter: the tree needs to know which
-// folders contain Reply Later conversations. Seed messages across folders and
-// require per-folder counts keyed by account and folder, covering provider
-// thread IDs, local single-message IDs, multi-folder threads, and queue
-// entries whose messages are not synced yet.
-func TestFolderCounts(t *testing.T) {
-	db, err := database.Open(filepath.Join(t.TempDir(), "reply-later-counts.db"))
+// FolderCountsForConversations powers the folder panel's Read Later / Reply
+// Later filters: queue refs carry only account+conversation IDs, so folder
+// membership is resolved through the message index. Conversation identity
+// mirrors COALESCE(thread_id, id): provider thread IDs match
+// messages.thread_id, local single-message IDs match messages.id.
+func TestFolderCountsForConversations(t *testing.T) {
+	db, err := database.Open(filepath.Join(t.TempDir(), "folder-counts.db"))
 	if err != nil {
 		t.Fatalf("database.Open: %v", err)
 	}
@@ -53,20 +53,11 @@ func TestFolderCounts(t *testing.T) {
 	insert("msg1", "fld2", nil)
 
 	store := NewStore(db)
-	for _, ref := range []Ref{
-		{AccountID: "acc", ConversationID: "thr1"},
-		{AccountID: "acc", ConversationID: "thr2"},
-		{AccountID: "acc", ConversationID: "msg1"},
-		{AccountID: "acc", ConversationID: "not-synced"},
-	} {
-		if _, err := store.Add(ref); err != nil {
-			t.Fatalf("add %v: %v", ref, err)
-		}
-	}
-
-	counts, err := store.FolderCounts()
+	counts, err := store.FolderCountsForConversations(map[string][]string{
+		"acc": {"thr1", "thr2", "msg1", "not-synced"},
+	})
 	if err != nil {
-		t.Fatalf("FolderCounts: %v", err)
+		t.Fatalf("FolderCountsForConversations: %v", err)
 	}
 	acc := counts["acc"]
 	if acc == nil {
@@ -82,13 +73,16 @@ func TestFolderCounts(t *testing.T) {
 	if got := acc["fld3"]; got != 1 {
 		t.Errorf("Sent count = %d, want 1", got)
 	}
-	// The unsynced queue entry must not appear anywhere.
-	for folderID, n := range acc {
-		if n <= 0 {
-			t.Errorf("non-positive count for %s: %d", folderID, n)
-		}
-	}
 	if len(acc) != 3 {
-		t.Errorf("folders with counts = %d, want 3 (%v)", len(acc), acc)
+		t.Errorf("folder count keys = %v, want 3 folders", acc)
+	}
+
+	// Unknown accounts and empty input produce no rows.
+	other, err := store.FolderCountsForConversations(map[string][]string{"nope": {"thr1"}, "empty": {}})
+	if err != nil {
+		t.Fatalf("FolderCountsForConversations unknown account: %v", err)
+	}
+	if len(other) != 0 {
+		t.Errorf("unknown account counts = %v, want empty", other)
 	}
 }

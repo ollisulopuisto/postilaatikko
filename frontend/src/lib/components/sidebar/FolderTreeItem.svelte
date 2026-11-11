@@ -62,7 +62,8 @@
   let hasChildren = $derived(tree.children && tree.children.length > 0)
   let isCollapsed = $derived(
     hasChildren
-      ? collapsedFolders[tree.folder!.id] !== false  // collapsed unless explicitly set to false
+      // Context-only ancestors expand so filter matches nested inside show.
+      ? contextOnly ? false : collapsedFolders[tree.folder!.id] !== false  // collapsed unless explicitly set to false
       : false
   )
 

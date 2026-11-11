@@ -197,9 +197,11 @@
   }))
   // Text search ANDs with the quick filter: a flat search hit must match both.
   const matchingFolders = $derived(filterFolders(allFolderChoices, allFoldersQuery).filter(choice => folderMatches(choice, choice.accountId, listFilter, queueCounts)))
+  // Hold queue counts only while a queue folder filter is showing.
   $effect(() => {
-    if (!(showAllFolders || treeMode) || !listFilter || listFilter === 'unread') return
-    void folderQueueCounts.load()
+    if (!(showAllFolders || treeMode)) return
+    if (listFilter !== 'readLater' && listFilter !== 'replyLater') return
+    return folderQueueCounts.acquire()
   })
   $effect(() => {
     if (!showAllFolders && !treeMode) { allFoldersQuery = ''; return }
