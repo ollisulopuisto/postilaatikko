@@ -122,5 +122,5 @@ test('same-folder refreshes reconcile the selection against the returned rows', 
 
 test('a remembered selection that fails reconciliation is cleared, never left phantom', () => {
   const effect = list.slice(list.lastIndexOf('loadConversations(restoreCount)'))
-  assert.match(effect, /else if \(remembered\.selectedThreadId\) focusConversation\(undefined\)/)
+  assert.match(effect, /if \(!restored && remembered\.selectedThreadId\) focusConversation\(undefined\)/)
 })

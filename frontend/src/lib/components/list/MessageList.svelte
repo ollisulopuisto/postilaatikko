@@ -956,7 +956,7 @@
       // remembered row that vanished is cleared, never left phantom.
       const restored = selectionAfterFolderSwitch(conversations, remembered, accountId || '', folderId || '')
       if (restored) focusConversation(restored)
-      else if (remembered.selectedThreadId) focusConversation(undefined)
+      if (!restored && remembered.selectedThreadId) focusConversation(undefined)
       if (remembered.scrollTop > 0 && listContainerRef) {
         requestAnimationFrame(() => {
           listContainerRef!.scrollTop = remembered.scrollTop
