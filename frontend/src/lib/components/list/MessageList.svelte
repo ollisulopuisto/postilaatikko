@@ -2106,6 +2106,12 @@
   }
 
   // Set filter mode and reload
+  // Apply a quick filter from the keyboard (Mod+Alt+1..4): pressing the active
+  // filter's key again toggles it off, and the All key always clears.
+  export function applyQuickFilter(mode: string) {
+    setFilter(mode === '' || filterMode === mode ? '' : mode)
+  }
+
   function setFilter(mode: string) {
     filterMode = mode
     loadGeneration++

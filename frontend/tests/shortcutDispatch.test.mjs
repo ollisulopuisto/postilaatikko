@@ -100,6 +100,21 @@ test('layout symbols typed with Option or AltGr still dispatch', () => {
   assert.equal(resolveShortcut(ev('#', { shiftKey: true }), 'messageList', layoutIds)?.id, 'mail.trash')
 })
 
+test('macOS Option-mangled letter and digit keys fall back to the physical code', () => {
+  // macOS Option turns letters and digits into symbols (Option+L -> '¬',
+  // Option+1 -> '¡'), so an Alt chord cannot match on e.key alone.
+  assert.ok(matchCombo(ev('\u00ac', { metaKey: true, altKey: true, code: 'KeyL' }), 'Mod+Alt+l'))
+  assert.ok(matchCombo(ev('\u00a1', { metaKey: true, altKey: true, code: 'Digit1' }), 'Mod+Alt+1'))
+  assert.ok(matchCombo(ev('\u00ac', { ctrlKey: true, altKey: true, code: 'KeyL' }), 'Mod+Alt+l'))
+  // The wrong physical key still misses.
+  assert.ok(!matchCombo(ev('\u00ac', { metaKey: true, altKey: true, code: 'KeyK' }), 'Mod+Alt+l'))
+  // Synthetic events without a code behave as before.
+  assert.ok(matchCombo(ev('l', { metaKey: true, altKey: true }), 'Mod+Alt+l'))
+  assert.ok(!matchCombo(ev('x', { metaKey: true, altKey: true }), 'Mod+Alt+l'))
+  // A chord without Alt never consults the code.
+  assert.ok(!matchCombo(ev('\u00ac', { metaKey: true, code: 'KeyL' }), 'Mod+l'))
+})
+
 test('an ordinary Ctrl+Alt chord on a symbol key is not a layout symbol', () => {
   assert.equal(resolveShortcut(ev('#', { ctrlKey: true, altKey: true }), 'messageList', layoutIds), undefined)
   assert.equal(resolveShortcut(ev('#', { metaKey: true }), 'messageList', layoutIds), undefined)
@@ -108,8 +123,8 @@ test('an ordinary Ctrl+Alt chord on a symbol key is not a layout symbol', () => 
 test('focus mode and image loading work from the list and sidebar, select-all stays viewer-only', () => {
   for (const pane of ['sidebar', 'messageList', 'viewer']) {
     assert.equal(resolveShortcut(ev('F', { shiftKey: true }), pane, layoutIds)?.id, 'viewer.threadFocus', pane)
-    assert.equal(resolveShortcut(ev('l', { ctrlKey: true }), pane, layoutIds)?.id, 'viewer.loadImages', pane)
-    assert.equal(resolveShortcut(ev('L', { ctrlKey: true, shiftKey: true }), pane, layoutIds)?.id, 'viewer.alwaysLoadImages', pane)
+    assert.equal(resolveShortcut(ev('l', { ctrlKey: true, altKey: true }), pane, layoutIds)?.id, 'viewer.loadImages', pane)
+    assert.equal(resolveShortcut(ev('L', { ctrlKey: true, altKey: true, shiftKey: true }), pane, layoutIds)?.id, 'viewer.alwaysLoadImages', pane)
   }
   assert.equal(resolveShortcut(ev('a', { ctrlKey: true }), 'messageList', layoutIds), undefined)
   assert.equal(resolveShortcut(ev('a', { ctrlKey: true }), 'viewer', layoutIds)?.id, 'viewer.selectText')

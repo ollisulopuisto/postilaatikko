@@ -8,7 +8,7 @@
   import { folderChoices, filterFolders } from '$lib/sidebar/folderSearch'
   import { pruneFolderTree, folderMatches, type FolderListFilter } from '$lib/sidebar/folderListFilter'
   import { folderQueueCounts } from '$lib/stores/folderQueueCounts.svelte'
-  import { onMount } from 'svelte'
+  import { onMount, tick } from 'svelte'
   import AccountSection from './AccountSection.svelte'
   import AccountDialog from '$lib/components/settings/AccountDialog.svelte'
   import DeleteAccountDialog from '$lib/components/settings/DeleteAccountDialog.svelte'
@@ -618,6 +618,36 @@
     if (focusedAccountId) {
       toggleAccountExpanded(focusedAccountId)
     }
+  }
+
+  // Focus the previous/next account header (Cmd/Ctrl+Alt+ArrowLeft/Right).
+  // With no header focused, next focuses the first account and prev the last.
+  // The account list comes from the rendered sections: the folder nav list
+  // only contains folders, never account headers.
+  export function focusAdjacentAccount(delta: number) {
+    // Account headers render only inside the all-folders panel, so open it
+    // before moving focus. Without this, Enter toggles an account the user
+    // cannot see and the message list looks broken (Devin round 3).
+    if (collapsed) onToggleCollapsed?.()
+    if (!showAllFolders && !treeMode) showAllFolders = true
+    // Mirror the template: a folder quick filter hides empty-tree accounts.
+    const accounts = filteredAccountTrees
+      .filter(({ trees }) => !listFilter || trees.length > 0)
+      .map(({ item }) => item.account)
+    if (accounts.length === 0) return
+    const currentIndex = accounts.findIndex(account => account.id === focusedAccountId)
+    const nextIndex = currentIndex === -1
+      ? (delta > 0 ? 0 : accounts.length - 1)
+      : (currentIndex + delta + accounts.length) % accounts.length
+    const next = accounts[nextIndex]
+    focusedAccountId = next.id
+    // The panel may have just opened; wait a tick for the header to render.
+    // Headers live in the panel, not in the nav list's scroll container.
+    void tick().then(() => {
+      scrollContainer?.closest('.spark-sidebar')
+        ?.querySelector(`[data-sidebar-item="account-header"][data-account-id="${next.id}"]`)
+        ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    })
   }
 
   // Check if an account header is focused
