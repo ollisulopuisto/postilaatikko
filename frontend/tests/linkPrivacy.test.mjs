@@ -61,3 +61,26 @@ test('strips redirect-style trackers', () => {
   assert.equal(r.url, 'https://example.com/')
   assert.equal(r.removed.length, 6)
 })
+
+test('preserves kept parameters byte-for-byte (signed links)', () => {
+  const r = stripTrackingParams('https://example.com/confirm?token=a%2fb&signature=SIGNED&utm_source=email')
+  assert.equal(r.url, 'https://example.com/confirm?token=a%2fb&signature=SIGNED')
+  assert.equal(r.stripped, true)
+})
+
+test('does not re-encode %20 into + in kept values', () => {
+  const r = stripTrackingParams('https://example.com/?q=a%20b&utm_source=x')
+  assert.equal(r.url, 'https://example.com/?q=a%20b')
+})
+
+test('strips unlisted utm_* variants by prefix', () => {
+  const r = stripTrackingParams('https://example.com/?utm_reader_id=abc&id=1')
+  assert.equal(r.url, 'https://example.com/?id=1')
+  assert.equal(r.stripped, true)
+  assert.deepEqual(r.removed, ['utm_reader_id'])
+})
+
+test('keeps segments without = and preserves separators', () => {
+  const r = stripTrackingParams('https://example.com/?flag&utm_source=x&b=2')
+  assert.equal(r.url, 'https://example.com/?flag&b=2')
+})

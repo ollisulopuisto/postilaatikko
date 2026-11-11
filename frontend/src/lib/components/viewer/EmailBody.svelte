@@ -955,6 +955,19 @@ ${processedHtml}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="whitespace-pre-wrap font-sans text-sm text-foreground rounded-md {compact ? '' : 'bg-muted/30 p-4'}"
       onkeydown={(e) => { if (e.key === 'Enter') { const link = (e.target as HTMLElement).closest('a'); if (link?.href) { e.preventDefault(); handleLinkClick(link.href) } } }}
+      oncontextmenu={(e) => {
+        // Same unified menu as the iframe path: without this the native menu
+        // bypasses copyLinkToClipboard and leaks the tracked URL.
+        const link = (e.target as HTMLElement).closest('a')
+        const selection = window.getSelection()?.toString() || ''
+        if (!link?.href && !selection) return
+        e.preventDefault()
+        ctxMenuText = selection
+        ctxMenuUrl = link?.href || ''
+        ctxMenuX = e.clientX
+        ctxMenuY = e.clientY
+        ctxMenuVisible = true
+      }}
       onauxclick={(e) => {
         const link = (e.target as HTMLElement).closest('a')
         if (!link?.href) return
