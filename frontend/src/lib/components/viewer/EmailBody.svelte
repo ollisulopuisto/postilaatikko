@@ -9,6 +9,7 @@
   import { isImageAllowedSync, refreshImageAllowlist } from '$lib/stores/imageAllowlist.svelte'
   import { setFocusedPane, focusPreviousPane, focusNextPane } from '$lib/stores/keyboard.svelte'
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu'
+  import * as Dialog from '$lib/components/ui/dialog'
   import { _ } from '$lib/i18n'
   import { toasts } from '$lib/stores/toast'
   import { getAlwaysLoadImages, getThemeMode, setAlwaysLoadImages } from '$lib/stores/settings.svelte'
@@ -976,6 +977,19 @@ ${processedHtml}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="whitespace-pre-wrap font-sans text-sm text-foreground rounded-md {compact ? '' : 'bg-muted/30 p-4'}"
       onkeydown={(e) => { if (e.key === 'Enter') { const link = (e.target as HTMLElement).closest('a'); if (link?.href) { e.preventDefault(); handleLinkClick(link.href) } } }}
+      oncontextmenu={(e) => {
+        // Same unified menu as the iframe path: without this the native menu
+        // replaces ours and the link actions never appear for plain text.
+        const link = (e.target as HTMLElement).closest('a')
+        const selection = window.getSelection()?.toString() || ''
+        if (!link?.href && !selection) return
+        e.preventDefault()
+        ctxMenuText = selection
+        ctxMenuUrl = link?.href || ''
+        ctxMenuX = e.clientX
+        ctxMenuY = e.clientY
+        ctxMenuVisible = true
+      }}
       onauxclick={(e) => {
         const link = (e.target as HTMLElement).closest('a')
         if (!link?.href) return
@@ -1053,48 +1067,48 @@ ${processedHtml}
       </button>
     </div>
   {/if}
-  <!-- Cloudflare DNS redirect-chain dialog -->
-  {#if chainDialogVisible}
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-label={$_('viewer.linkChainTitle')}>
-      <div class="bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 p-4 max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
-        <h3 class="text-sm font-semibold mb-2">{$_('viewer.linkChainTitle')}</h3>
-        <p class="text-xs text-muted-foreground mb-3">{$_('viewer.linkChainNote')}</p>
-        {#if chainLoading}
-          <p class="text-sm text-muted-foreground">{$_('viewer.resolvingLink')}</p>
-        {:else}
-          {#if chainHops.length > 0}
-            <ul class="mb-3 space-y-1">
-              {#each chainHops as hop, i (hop.url)}
-                <li class="text-xs break-all flex gap-2">
-                  <span class="text-muted-foreground shrink-0">{i + 1}. [{hop.statusCode}]</span>
-                  <span class={hop.url === chainFinal ? 'font-medium' : ''}>{hop.url}</span>
-                </li>
-              {/each}
-            </ul>
-          {/if}
-          {#if chainError}
-            <p class="text-xs text-red-600 dark:text-red-400 mb-3 break-all">{chainError}</p>
-          {/if}
-          <div class="flex flex-wrap gap-2 justify-end">
-            {#if chainFinal && chainFinal !== chainOriginal}
-              <button class="px-3 py-1.5 text-sm rounded bg-primary text-primary-foreground hover:opacity-90" onclick={() => openChainURL(chainFinal)}>
-                {$_('viewer.openFinalURL')}
-              </button>
-              <button class="px-3 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => copyChainURL(chainFinal)}>
-                {$_('viewer.copyFinalURL')}
-              </button>
-            {/if}
-            <button class="px-3 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => openChainURL(chainOriginal)}>
-              {$_('viewer.openOriginalLink')}
-            </button>
-            <button class="px-3 py-1.5 text-sm rounded hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => chainDialogVisible = false}>
-              {$_('common.cancel')}
-            </button>
-          </div>
+  <!-- Cloudflare DNS redirect-chain dialog (ui/dialog gives focus trapping, Escape to close, and focus restoration) -->
+  <Dialog.Root bind:open={chainDialogVisible}>
+    <Dialog.Content class="max-w-lg max-h-[80vh] overflow-y-auto">
+      <Dialog.Header>
+        <Dialog.Title>{$_('viewer.linkChainTitle')}</Dialog.Title>
+        <Dialog.Description>{$_('viewer.linkChainNote')}</Dialog.Description>
+      </Dialog.Header>
+      {#if chainLoading}
+        <p class="text-sm text-muted-foreground">{$_('viewer.resolvingLink')}</p>
+      {:else}
+        {#if chainHops.length > 0}
+          <ul class="mb-3 space-y-1">
+            {#each chainHops as hop, i (hop.url)}
+              <li class="text-xs break-all flex gap-2">
+                <span class="text-muted-foreground shrink-0">{i + 1}. [{hop.statusCode}]</span>
+                <span class={hop.url === chainFinal ? 'font-medium' : ''}>{hop.url}</span>
+              </li>
+            {/each}
+          </ul>
         {/if}
-      </div>
-    </div>
-  {/if}
+        {#if chainError}
+          <p class="text-xs text-red-600 dark:text-red-400 mb-3 break-all">{chainError}</p>
+        {/if}
+        <Dialog.Footer>
+          {#if chainFinal && chainFinal !== chainOriginal}
+            <button class="px-3 py-1.5 text-sm rounded bg-primary text-primary-foreground hover:opacity-90" onclick={() => openChainURL(chainFinal)}>
+              {$_('viewer.openFinalURL')}
+            </button>
+            <button class="px-3 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => copyChainURL(chainFinal)}>
+              {$_('viewer.copyFinalURL')}
+            </button>
+          {/if}
+          <button class="px-3 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => openChainURL(chainOriginal)}>
+            {$_('viewer.openOriginalLink')}
+          </button>
+          <button class="px-3 py-1.5 text-sm rounded hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => chainDialogVisible = false}>
+            {$_('common.cancel')}
+          </button>
+        </Dialog.Footer>
+      {/if}
+    </Dialog.Content>
+  </Dialog.Root>
 </div>
 
 <!-- Click outside to close context menu -->

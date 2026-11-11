@@ -192,6 +192,9 @@ func (r *Resolver) Follow(ctx context.Context, rawURL string) (*Result, error) {
 			return nil, lastErr
 		},
 	}
+	// Each Follow builds its own transport; release its idle connections and
+	// their read goroutines when the walk ends.
+	defer transport.CloseIdleConnections()
 	client := &http.Client{
 		Transport: transport,
 		// Manual redirect handling: no cookie jar, record every hop.
