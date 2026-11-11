@@ -22,6 +22,14 @@ export function createMailWindowState(scope: MailScope): MailWindowState {
   return { scope: { ...scope }, thread, selections: thread ? { [scopeKey(scope)]: thread } : {} }
 }
 export function navigateMailWindow(state: MailWindowState, scope: MailScope): MailWindowState {
+  // An explicit thread in the incoming scope is a selection, not just a
+  // folder change: the primary list retargets an open reader tab this way.
+  // Apply it and remember it for the folder; without it the remembered
+  // folder selection wins and the clicked message never opens.
+  if (scope.threadId) {
+    const thread = { threadId: scope.threadId, folderId: scope.threadFolderId || scope.folderId, accountId: scope.threadAccountId || scope.accountId }
+    return { ...state, scope: { ...scope }, thread, selections: { ...state.selections, [scopeKey(scope)]: thread } }
+  }
   return { ...state, scope: { ...scope }, thread: state.selections[scopeKey(scope)] ?? null }
 }
 export function selectMailWindowConversation(state: MailWindowState, threadId: string, folderId: string, accountId: string): MailWindowState {

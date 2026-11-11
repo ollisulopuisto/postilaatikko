@@ -91,11 +91,25 @@
     readerOnly = false
     setFocusedPane('messageList')
   }
+  // The last applied config identity, so a local selection in a standalone
+  // window (fixed config, no onScopeChange) is never mistaken for external
+  // navigation: re-navigating there rebuilds the state every pass and the
+  // effect loops. A list click retargets an open reader tab by pushing the
+  // same folder with a different threadId, so the identity includes the
+  // thread.
+  let lastConfigKey = $state('')
   $effect(() => {
-    if (scopeKey(config) === scopeKey(windowState.scope)) return
-    windowState = navigateMailWindow(windowState, config)
+    const key = `${scopeKey(config)}|${config.threadId ?? ''}`
+    if (key === lastConfigKey) return
+    lastConfigKey = key
+    // A threadless config for the current folder is a local close, not
+    // navigation: restoring the remembered selection would reopen the
+    // conversation the user just closed.
+    if (!config.threadId && scopeKey(config) === scopeKey(windowState.scope)) return
+    windowState = untrack(() => navigateMailWindow(windowState, config))
     readerOnly = false
-    setFocusedPane('messageList')
+    // Reader tabs render no list; focusing it kills the viewer's shortcuts.
+    setFocusedPane(readerTab ? 'viewer' : 'messageList')
   })
   function select(threadId: string, folderId: string, accountId: string) {
     windowState = selectMailWindowConversation(windowState, threadId, folderId, accountId)

@@ -55,6 +55,12 @@ test('App restores scope and selection without calling mailbox or composer undo;
   assert.match(handler, /restoringMessageHistory = true/)
   assert.match(handler, /finally \{ restoringMessageHistory = false \}/)
   assert.match(handler, /workspace \? workspace.id : 'primary'/)
+  // Back into a tab visit retargets that tab: the historic scope (with its
+  // threadId) is pushed through updateWorkspaceScope and the tab instance is
+  // rebuilt from it, so Back after a list-click retarget returns to the
+  // previous message in the same tab.
+  assert.match(handler, /updateWorkspaceScope\(workspace\.id, \{ \.\.\.scope \}\)/)
+  assert.match(handler, /restoreMessageVisit\(scope\)/)
   assert.match(handler, /setSearchQuery\(scope.searchQuery/)
   assert.match(handler, /setQuickFilter\(visit.triageStatus/)
   // One bar: the arrows sit inline at the start of the viewer pane's tab row, not in a row of their own above the list.

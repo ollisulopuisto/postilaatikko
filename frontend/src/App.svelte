@@ -1296,7 +1296,7 @@
   }
 
   // Handle conversation selection from list
-  function handleConversationSelect(threadId: string, folderId: string, accountId: string) {
+  function handleConversationSelect(threadId: string, folderId: string, accountId: string, subject?: string) {
     selectedThreadId = threadId
     selectedConversationFolderId = folderId
     selectedConversationAccountId = accountId
@@ -1307,6 +1307,8 @@
         threadId,
         threadAccountId: accountId,
         threadFolderId: folderId,
+        // Without the new subject the tab label keeps naming the old message.
+        threadSubject: subject || undefined,
       })
     }
     showViewer()
