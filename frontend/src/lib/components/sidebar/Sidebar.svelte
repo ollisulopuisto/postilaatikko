@@ -6,6 +6,8 @@
   import { navigationCards } from '$lib/stores/navigationCards.svelte'
   import type { NavigationEntry } from '$lib/sidebar/cards'
   import { folderChoices, filterFolders } from '$lib/sidebar/folderSearch'
+  import { pruneFolderTree, folderMatches, type FolderListFilter } from '$lib/sidebar/folderListFilter'
+  import { folderQueueCounts } from '$lib/stores/folderQueueCounts.svelte'
   import { onMount } from 'svelte'
   import AccountSection from './AccountSection.svelte'
   import AccountDialog from '$lib/components/settings/AccountDialog.svelte'
@@ -147,6 +149,8 @@
     /** Show the full folder tree filling this pane instead of the slide-over. */
     treeMode?: boolean
     onCloseTree?: () => void
+    /** Quick-filter applied to the folder list while the folder panel is open. */
+    listFilter?: FolderListFilter
     /** True while an undo-send countdown or the composer owns Escape. */
     escapeOwnedElsewhere?: boolean
   }
@@ -172,6 +176,7 @@
     navigationEnabled = true,
     treeMode = false,
     onCloseTree,
+    listFilter = '',
     escapeOwnedElsewhere = false,
   }: Props = $props()
 
@@ -183,7 +188,21 @@
   let allFoldersQuery = $state('')
   let allFoldersSearchInput = $state<HTMLInputElement | null>(null)
   const allFolderChoices = $derived(accountStore.accounts.flatMap(item => folderChoices(item.account.id, item.account.name, item.account.email, item.folders)))
-  const matchingFolders = $derived(filterFolders(allFolderChoices, allFoldersQuery))
+  const queueCounts = $derived(folderQueueCounts.counts)
+  // Folder-list quick filter: prune each account's tree, keeping ancestors of
+  // matching folders as context. Accounts left with no matches hide.
+  const filteredAccountTrees = $derived(accountStore.accounts.map(item => {
+    const { trees, contextIds } = pruneFolderTree(item.folders, item.account.id, listFilter, queueCounts)
+    return { item, trees, contextIds }
+  }))
+  // Text search ANDs with the quick filter: a flat search hit must match both.
+  const matchingFolders = $derived(filterFolders(allFolderChoices, allFoldersQuery).filter(choice => folderMatches(choice, choice.accountId, listFilter, queueCounts)))
+  // Hold queue counts only while a queue folder filter is showing.
+  $effect(() => {
+    if (!(showAllFolders || treeMode)) return
+    if (listFilter !== 'readLater' && listFilter !== 'replyLater') return
+    return folderQueueCounts.acquire()
+  })
   $effect(() => {
     if (!showAllFolders && !treeMode) { allFoldersQuery = ''; return }
     if (!allFoldersSearchInput) return
@@ -768,10 +787,12 @@
           {/each}
           {#if matchingFolders.length > 200}<p class="px-4 text-xs text-muted-foreground">{$_('search.refineFolders')}</p>{/if}
         {:else}
-        {#each accountStore.accounts as accWithFolders (accWithFolders.account.id)}
+        {#each filteredAccountTrees as { item: accWithFolders, trees, contextIds } (accWithFolders.account.id)}
+          {#if !listFilter || trees.length > 0}
           <AccountSection
             account={accWithFolders.account}
-            folders={accWithFolders.folders}
+            folders={trees}
+            {contextIds}
             loading={accWithFolders.loading}
             syncing={accWithFolders.syncing}
             error={accWithFolders.error}
@@ -792,6 +813,7 @@
             onDelete={() => openDeleteAccount(accWithFolders.account)}
             onSync={() => accountStore.syncAccount(accWithFolders.account.id)}
           />
+          {/if}
         {/each}
         {/if}
         <button type="button" class="sidebar-all-folders-add" onclick={openAddAccount}>
