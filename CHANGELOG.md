@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Correct the CI fallback source-list option so apt actually selects the temporary official Ubuntu mirrors.
+
 - CI can recover from the Azure resolver outage using fresh Cloudflare DNS answers for fixed Ubuntu mirrors inside apt-only mount namespaces; global hosts and resolver files are unchanged.
 
 - CI retries failed Ubuntu package installation against official Ubuntu mirrors with bounded timeouts, keeping all backend checks required.
