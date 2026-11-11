@@ -610,12 +610,12 @@
 
     <!-- Quick actions replace the avatar on hover without opening the row. -->
     <div
-      class="absolute inset-y-0 left-0 z-20 flex flex-col items-center justify-center gap-0.5 bg-transparent opacity-0 pointer-events-none transition-opacity duration-150 group-hover:opacity-100 group-hover:pointer-events-auto {densityClasses.quickActions[density]}"
+      class="absolute inset-y-0 left-0 z-20 flex flex-col items-center justify-center gap-0.5 bg-transparent opacity-0 pointer-events-none transition-opacity duration-150 group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 focus-within:opacity-100 group-focus-within:pointer-events-auto focus-within:pointer-events-auto {densityClasses.quickActions[density]}"
       aria-label={$_('common.done')}
     >
       <button
         type="button"
-        class="quick-row-action"
+        class="quick-row-action focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         title={$_('common.done')}
         aria-label={$_('common.done')}
         onclick={handleDoneClick}
@@ -626,7 +626,7 @@
       </button>
       <button
         type="button"
-        class="quick-row-action"
+        class="quick-row-action focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         title={$_(ownIsRead ? 'contextMenu.markAsUnread' : 'contextMenu.markAsRead')}
         aria-label={$_(ownIsRead ? 'contextMenu.markAsUnread' : 'contextMenu.markAsRead')}
         onclick={handleQuickToggleRead}
@@ -635,7 +635,7 @@
       </button>
       <button
         type="button"
-        class="quick-row-action hover:text-destructive"
+        class="quick-row-action hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         title={$_('common.delete')}
         aria-label={$_('common.delete')}
         onclick={handleQuickDelete}
@@ -655,9 +655,13 @@
         : `overflow-hidden transition-all duration-200 ${checked ? densityClasses.checkbox[density] : densityClasses.checkboxHidden[density]}`}"
     >
       <button
+        type="button"
+        role="checkbox"
+        aria-checked={checked}
+        aria-label={conversation.subject ? `${$_('viewer.selectConversation')}: ${conversation.subject}` : $_('viewer.selectConversation')}
         class="{densityClasses.checkboxInner[density]} rounded border {checked
           ? 'bg-primary border-primary'
-          : 'border-muted-foreground hover:border-primary'} flex items-center justify-center transition-colors duration-200"
+          : 'border-muted-foreground hover:border-primary'} flex items-center justify-center transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         onclick={handleCheckboxClick}
       >
         {#if checked}
