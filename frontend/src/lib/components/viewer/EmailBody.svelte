@@ -1,7 +1,6 @@
 <script lang="ts">
   import LaterQueueButton from '../common/LaterQueueButton.svelte'
   import Icon from '@iconify/svelte'
-  import { normalizeConversationHtml } from './conversationHtml'
   import { ClipboardSetText } from '../../../../wailsjs/runtime/runtime'
   import { GetInlineAttachmentsForAccount, AddImageAllowlist, OpenURL, SetAlwaysLoadImages } from '../../../../wailsjs/go/app/App'
   import { linkifyText, isAllowedEmailURL } from '../../utils/emailLinks'
@@ -197,7 +196,11 @@
   }
 
   function buildIframeContent(html: string, applyDarken: boolean): string {
-    const processedHtml = compact ? normalizeConversationHtml(processHtml(html, imagesBlocked)) : processHtml(html, imagesBlocked)
+    // Conversation (bubble) mode renders the same faithful HTML as
+    // Traditional: bluemonday has already sanitized it and the iframe is
+    // sandboxed. Stripping authored styles here flattened HTML email layouts
+    // (heading sizes, button fills, card backgrounds).
+    const processedHtml = processHtml(html, imagesBlocked)
     // Link icons use the same favicon provider already used by sender
     // avatars. They are intentionally allowed even when marketing images in
     // the email stay blocked; the provider only receives the link's domain.
@@ -495,10 +498,17 @@
     blockquote:not([style]) { margin: 0.5em 0; padding-left: 1em; border-left: 3px solid #e5e7eb; color: #6b7280; }
     pre:not([style]) { background: #f3f4f6; padding: 0.5em; border-radius: 4px; overflow-x: auto; }
     /* Conversation bubbles use app colors without a separate white page. */
-    ${compact ? `html { color-scheme: normal; } html, body { background: transparent !important; color: hsl(${getComputedStyle(document.documentElement).getPropertyValue('--foreground').trim() || '0 0% 15%'}) !important; margin: 0 !important; padding: 0 !important; } body { font-family: system-ui, sans-serif !important; }
-      body * { color: inherit !important; background-color: transparent !important; background-image: none !important; -webkit-text-fill-color: currentColor !important; font-family: inherit !important; font-size: inherit !important; }
-      body a, body a * { color: ${getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() ? 'hsl(' + getComputedStyle(document.documentElement).getPropertyValue('--primary').trim() + ')' : '#2563eb'} !important; }
-      body pre, body code, body pre *, body code * { font-family: ui-monospace, monospace !important; }` : ''}
+    ${compact ? `html { color-scheme: normal; }
+      /* Render on a white canvas like Gmail and Traditional mode: many HTML
+         emails paint white inner cards but leave heading/body text unstyled,
+         expecting the default near-black on white. A transparent canvas with
+         a light inherited foreground makes that text invisible, so give the
+         document a white base and dark default text instead. Nothing here is
+         !important on color/background: the email's own styles always win. */
+      html, body { margin: 0 !important; padding: 0 !important; }
+      html { background: #ffffff; }
+      body { background: #ffffff; font-family: system-ui, sans-serif; color: #1f2328; }
+      body pre, body code { font-family: ui-monospace, monospace; }` : ''}
     /* Remove table/td defaults that conflict with email layouts */
   </sty` + `le>
 </head>
