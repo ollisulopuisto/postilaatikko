@@ -33,6 +33,7 @@
   // State for remote image handling
   let imagesBlocked = $state(true)
   let iframeElement = $state<HTMLIFrameElement | null>(null)
+  let plainTextElement = $state<HTMLDivElement | null>(null)
   let iframeReady = $state(false)
 
   // Inline attachment state
@@ -916,7 +917,15 @@ ${processedHtml}
 
   // Select all text in iframe
   function selectAllInIframe() {
-    iframeElement?.contentWindow?.postMessage({ type: 'select-all' }, '*')
+    if (bodyHtml) {
+      iframeElement?.contentWindow?.postMessage({ type: 'select-all' }, '*')
+    } else if (plainTextElement) {
+      const range = document.createRange()
+      range.selectNodeContents(plainTextElement)
+      const selection = window.getSelection()
+      selection?.removeAllRanges()
+      selection?.addRange(range)
+    }
     ctxMenuVisible = false
   }
 </script>
@@ -977,6 +986,7 @@ ${processedHtml}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="whitespace-pre-wrap font-sans text-sm text-foreground rounded-md {compact ? '' : 'bg-muted/30 p-4'}"
       onkeydown={(e) => { if (e.key === 'Enter') { const link = (e.target as HTMLElement).closest('a'); if (link?.href) { e.preventDefault(); handleLinkClick(link.href) } } }}
+      bind:this={plainTextElement}
       oncontextmenu={(e) => {
         // Same unified menu as the iframe path: without this the native menu
         // replaces ours and the link actions never appear for plain text.
