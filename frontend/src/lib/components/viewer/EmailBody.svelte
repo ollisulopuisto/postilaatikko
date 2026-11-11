@@ -909,7 +909,7 @@ ${processedHtml}
   let chainError = $state('')
   let chainOriginal = $state('')
 
-  async function openViaCloudflareDNS() {
+  async function openViaCloudflareDNS(original = false) {
     if (!ctxMenuUrl) return
     chainOriginal = ctxMenuUrl
     ctxMenuVisible = false
@@ -919,7 +919,7 @@ ${processedHtml}
     chainFinal = ''
     chainError = ''
     try {
-      const result = await ResolveLinkViaCloudflareDNS(cleanLinkUrl(chainOriginal))
+      const result = await ResolveLinkViaCloudflareDNS(original ? chainOriginal : cleanLinkUrl(chainOriginal))
       chainHops = result.hops ?? []
       chainFinal = result.finalURL ?? ''
       chainError = result.error ?? ''
@@ -930,14 +930,14 @@ ${processedHtml}
     }
   }
 
-  function openChainURL(url: string) {
-    safeOpenURL(url)
+  function openChainURL(url: string, original = false) {
+    safeOpenURL(original ? url : cleanLinkUrl(url))
     chainDialogVisible = false
   }
 
   async function copyChainURL(url: string) {
     try {
-      await navigator.clipboard.writeText(url)
+      await navigator.clipboard.writeText(cleanLinkUrl(url))
       chainDialogVisible = false
     } catch (err) {
       console.error('[EmailBody] Failed to copy link:', err)
@@ -1119,11 +1119,20 @@ ${processedHtml}
         {#if /^https?:\/\//i.test(ctxMenuUrl)}
           <button
             class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-            onclick={openViaCloudflareDNS}
+            onclick={() => openViaCloudflareDNS()}
           >
             <Icon icon="mdi:dns" class="w-4 h-4" />
             {$_('viewer.openViaCloudflareDNS')}
           </button>
+          {#if ctxUrlStripped}
+            <button
+              class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+              onclick={() => openViaCloudflareDNS(true)}
+            >
+              <Icon icon="mdi:dns" class="w-4 h-4" />
+              {$_('viewer.resolveOriginalViaCloudflareDNS')}
+            </button>
+          {/if}
         {/if}
       {/if}
       <button
@@ -1167,7 +1176,7 @@ ${processedHtml}
               {$_('viewer.copyFinalURL')}
             </button>
           {/if}
-          <button class="px-3 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => openChainURL(chainOriginal)}>
+          <button class="px-3 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => openChainURL(chainOriginal, true)}>
             {$_('viewer.openOriginalLink')}
           </button>
           <button class="px-3 py-1.5 text-sm rounded hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => chainDialogVisible = false}>

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Redirect destinations are cleaned when opened or copied; the link menu also allows resolving the original link via Cloudflare when a redirect requires tracking parameters.
+
 - CI retries failed Ubuntu package installation against official Ubuntu mirrors with bounded timeouts, keeping all backend checks required.
 
 - Select all in a plain-text message context menu now selects the whole message, while HTML messages keep their iframe selection.

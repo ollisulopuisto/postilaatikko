@@ -391,6 +391,7 @@
     "openFinalURL": "Avaa lopullinen osoite",
     "copyFinalURL": "Kopioi lopullinen osoite",
     "openOriginalLink": "Avaa alkuper\u00e4inen linkki",
+    "resolveOriginalViaCloudflareDNS": "Selvitä alkuperäinen linkki Cloudflare DNS:n kautta",
     "copyLink": "Kopioi linkki",
     "selectAll": "Valitse kaikki",
     "remoteImagesBlocked": "Etäkuvat on estetty yksityisyytesi suojaamiseksi.",

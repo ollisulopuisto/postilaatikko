@@ -391,6 +391,7 @@
     "openFinalURL": "Open final URL",
     "copyFinalURL": "Copy final URL",
     "openOriginalLink": "Open original link",
+    "resolveOriginalViaCloudflareDNS": "Resolve original link via Cloudflare DNS",
     "copyLink": "Copy Link",
     "selectAll": "Select All",
     "remoteImagesBlocked": "Remote images are blocked for privacy.",
