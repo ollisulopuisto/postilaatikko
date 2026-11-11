@@ -38,3 +38,36 @@ test('window navigation, account-qualified selection and widths are independent'
   assert.deepEqual(restored.thread, { threadId: 'thread', folderId: 'inbox', accountId: 'a' })
   assert.equal(selectMailWindowConversation(second, 'thread', 'inbox', 'b').thread.accountId, 'b')
 })
+
+test('navigation applies an explicit thread from the incoming scope', () => {
+  // Olli: with a message open in a reader tab, clicking another message in
+  // the primary list must open it in the tab. App.svelte retargets the tab by
+  // pushing a scope whose account/folder match but whose threadId differs, so
+  // an explicit threadId has to beat the remembered folder selection.
+  const inbox = { accountId: 'a', folderId: 'inbox', folderName: 'Inbox', folderType: 'inbox' }
+  const open = selectMailWindowConversation(createMailWindowState(inbox), 'spotify-thread', 'inbox', 'a')
+  const retargeted = navigateMailWindow(open, { ...inbox, threadId: 'other-thread' })
+  assert.deepEqual(retargeted.thread, { threadId: 'other-thread', folderId: 'inbox', accountId: 'a' })
+  // The explicit thread becomes the folder's remembered selection
+  const away = navigateMailWindow(retargeted, { ...inbox, folderId: 'sent', folderName: 'Sent', folderType: 'sent' })
+  const back = navigateMailWindow(away, inbox)
+  assert.equal(back.thread?.threadId, 'other-thread')
+})
+
+test('navigation without a threadId still restores the remembered selection', () => {
+  const inbox = { accountId: 'a', folderId: 'inbox', folderName: 'Inbox', folderType: 'inbox' }
+  const open = selectMailWindowConversation(createMailWindowState(inbox), 'thread', 'inbox', 'a')
+  const same = navigateMailWindow(open, inbox)
+  assert.deepEqual(same.thread, { threadId: 'thread', folderId: 'inbox', accountId: 'a' })
+})
+
+test('the tab keeps watching config when only the thread changes', () => {
+  // The MailWindowApp config effect used to compare only accountId+folderId
+  // and return early, so a list click targeting the same folder never reached
+  // the open reader tab. It must compare the thread too.
+  return readFile(new URL('../src/MailWindowApp.svelte', import.meta.url), 'utf8').then(app => {
+    const guard = app.split('\n').find(line => line.includes('scopeKey(config)') && line.includes('return'))
+    assert.ok(guard, 'config effect guard found')
+    assert.match(guard, /threadId/, 'the early-return gate considers the thread, not only the folder')
+  })
+})

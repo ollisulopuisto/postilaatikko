@@ -92,7 +92,9 @@
     setFocusedPane('messageList')
   }
   $effect(() => {
-    if (scopeKey(config) === scopeKey(windowState.scope)) return
+    // A list click retargets an open reader tab by pushing the same folder
+    // with a different threadId, so the gate must compare the thread too.
+    if (scopeKey(config) === scopeKey(windowState.scope) && (config.threadId ?? null) === (windowState.thread?.threadId ?? null)) return
     windowState = navigateMailWindow(windowState, config)
     readerOnly = false
     setFocusedPane('messageList')

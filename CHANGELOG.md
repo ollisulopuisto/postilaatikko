@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Clicking a message in the message list now opens it in the open reader tab: the click retargets the tab, but the tab only watched for folder changes, so it kept showing the old message.
 - Add checkbox semantics, contextual dynamic accessible name, focus-visible styling to conversation row checkbox, and focus-within disclosure plus focus rings to quick action buttons.
 - The four quick-filter buttons at the top of the column (all, unread, read later, reply later) now filter the folder list while the Kaikki kansiot panel is open: only folders with matching mail stay, with their parent folders kept dimmed for context. The filter clears when the panel closes. Read later and reply later counts come from the backend, so folders holding queued mail are found even when the queue lives outside the synced folders.
 - Switching folders no longer selects the top message: nothing is highlighted and the reading pane stays empty until you pick a conversation. Arrow keys still start at the first message, and returning to a folder you already visited restores the message you had selected.
