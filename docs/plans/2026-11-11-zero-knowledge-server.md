@@ -292,9 +292,15 @@ deprecated mailbox-service mode and retire with it. [inferred]
 - Lost last device: mail that still exists at the provider is not lost - a
   new device syncs it again. Sync cannot restore what the provider no longer
   holds: provider-deleted mail and local-only drafts that never left the old
-  device are gone with it. What is lost without the recovery phrase is the
-  UMK and anything still waiting in transfer envelopes. No administrative
-  backdoor, by design. Tell users this in plain words.
+  device are gone with it, with one narrow exception. Recent mail a device
+  selected into a transfer envelope sits at the server until that envelope's
+  TTL expires, and the recovery phrase does permit its retrieval before
+  then: the phrase restores the UMK and each envelope's content key is
+  wrapped to the UMK (section 7), so a recovered UMK decrypts any envelope
+  still pending. Once an envelope's TTL lapses it is pruned and gone, phrase
+  or not. What is lost without the recovery phrase is the UMK and anything
+  still waiting in transfer envelopes. No administrative backdoor, by
+  design. Tell users this in plain words.
 
 ## 13. Backup and recovery
 
