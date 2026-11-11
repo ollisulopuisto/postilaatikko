@@ -383,6 +383,7 @@
     "copy": "Kopioi",
     "openOriginalLink": "Avaa alkuperäinen linkki",
     "copyOriginalLink": "Kopioi alkuperäinen linkki",
+    "openLink": "Avaa linkki",
     "copyLink": "Kopioi linkki",
     "selectAll": "Valitse kaikki",
     "remoteImagesBlocked": "Etäkuvat on estetty yksityisyytesi suojaamiseksi.",

@@ -33,6 +33,7 @@
   // State for remote image handling
   let imagesBlocked = $state(true)
   let iframeElement = $state<HTMLIFrameElement | null>(null)
+  let plainTextElement = $state<HTMLDivElement | null>(null)
   let iframeReady = $state(false)
 
   // Inline attachment state
@@ -897,6 +898,25 @@ ${processedHtml}
     iframeElement?.contentWindow?.postMessage({ type: 'select-all' }, '*')
     ctxMenuVisible = false
   }
+
+  // Select all text in the plain-text view (which has no iframe)
+  function selectAllInPlainText() {
+    if (plainTextElement) {
+      const range = document.createRange()
+      range.selectNodeContents(plainTextElement)
+      const selection = window.getSelection()
+      selection?.removeAllRanges()
+      selection?.addRange(range)
+    }
+    ctxMenuVisible = false
+  }
+
+  // Open the context-menu link (tracking parameters stripped per setting)
+  function openLink() {
+    if (!ctxMenuUrl) return
+    safeOpenURL(cleanLinkUrl(ctxMenuUrl))
+    ctxMenuVisible = false
+  }
 </script>
 
 <div class="email-body relative">
@@ -954,6 +974,7 @@ ${processedHtml}
   {:else if bodyText}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="whitespace-pre-wrap font-sans text-sm text-foreground rounded-md {compact ? '' : 'bg-muted/30 p-4'}"
+      bind:this={plainTextElement}
       onkeydown={(e) => { if (e.key === 'Enter') { const link = (e.target as HTMLElement).closest('a'); if (link?.href) { e.preventDefault(); handleLinkClick(link.href) } } }}
       oncontextmenu={(e) => {
         // Same unified menu as the iframe path: without this the native menu
@@ -1021,6 +1042,13 @@ ${processedHtml}
       {#if ctxMenuUrl}
         <button
           class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+          onclick={openLink}
+        >
+          <Icon icon="mdi:open-in-new" class="w-4 h-4" />
+          {$_('viewer.openLink')}
+        </button>
+        <button
+          class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
           onclick={copyLinkToClipboard}
         >
           <Icon icon="mdi:link-variant" class="w-4 h-4" />
@@ -1031,7 +1059,7 @@ ${processedHtml}
             class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
             onclick={openOriginalLink}
           >
-            <Icon icon="mdi:open-in-new" class="w-4 h-4" />
+            <Icon icon="mdi:link-off" class="w-4 h-4" />
             {$_('viewer.openOriginalLink')}
           </button>
           <button
@@ -1045,7 +1073,7 @@ ${processedHtml}
       {/if}
       <button
         class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-        onclick={selectAllInIframe}
+        onclick={bodyHtml ? selectAllInIframe : selectAllInPlainText}
       >
         <Icon icon="mdi:select-all" class="w-4 h-4" />
         {$_('viewer.selectAll')}

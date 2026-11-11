@@ -383,6 +383,7 @@
     "copy": "Copy",
     "openOriginalLink": "Open Original Link",
     "copyOriginalLink": "Copy Original Link",
+    "openLink": "Open Link",
     "copyLink": "Copy Link",
     "selectAll": "Select All",
     "remoteImagesBlocked": "Remote images are blocked for privacy.",
