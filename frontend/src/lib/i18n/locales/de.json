@@ -89,6 +89,7 @@
     "filterAttachments": "Hat Anhänge",
     "noFilteredMessages": "Keine Nachrichten entsprechen dem aktuellen Filter",
     "selectedActions": "Aktionen für ausgewählte Nachrichten",
+    "checkConversation": "Unterhaltung für Massenaktionen auswählen",
     "selectedCount": "{count} ausgewählt"
   },
   "viewer": {

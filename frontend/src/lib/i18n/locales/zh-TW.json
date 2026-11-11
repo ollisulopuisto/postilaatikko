@@ -61,6 +61,7 @@
     "noFoldersSynced": "尚未同步任何資料夾"
   },
   "messageList": {
+    "checkConversation": "選擇要批次操作的對話",
     "searchMessages": "搜尋郵件...",
     "noMessages": "此資料夾中沒有郵件",
     "selectFolder": "選擇資料夾以檢視郵件",
