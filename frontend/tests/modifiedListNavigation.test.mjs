@@ -2,7 +2,8 @@
 // (Mod+Alt+ArrowLeft/Right) — the shared-keymap chords. Covers three Devin
 // review findings: shifted brackets produce }/{ on US layouts, the primary
 // window's Ctrl/Cmd block must route the chords, and focusAdjacentAccount must
-// read the rendered account list.
+// read the rendered account list, and the account chords must open the
+// all-folders panel first so the focused header is visible (Devin round 3).
 import { test, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
@@ -68,5 +69,27 @@ test('focusAdjacentAccount reads the rendered account list', () => {
     const fn = sidebar.slice(sidebar.indexOf('export function focusAdjacentAccount'))
     const body = fn.slice(0, fn.indexOf('\n  }'))
     assert.match(body, /filteredAccountTrees/, 'account list comes from the rendered sections, not the folder-only nav list')
+  })
+})
+
+test('focusAdjacentAccount opens the all-folders panel before focusing a header', () => {
+  return readFile(path.join(frontendDir, 'src/lib/components/sidebar/Sidebar.svelte'), 'utf8').then(sidebar => {
+    const fn = sidebar.slice(sidebar.indexOf('export function focusAdjacentAccount'))
+    const body = fn.slice(0, fn.indexOf('\n  }'))
+    assert.match(body, /showAllFolders = true/, 'a closed panel is opened so the focused header is visible')
+    assert.match(body, /if \(collapsed\) onToggleCollapsed\?\.\(\)/, 'the compact rail expands first, like the More button')
+    assert.ok(
+      body.indexOf('showAllFolders = true') < body.indexOf('filteredAccountTrees'),
+      'the panel opens before the account list is walked'
+    )
+  })
+})
+
+test('focusAdjacentAccount scrolls the header inside the panel, not the nav list', () => {
+  return readFile(path.join(frontendDir, 'src/lib/components/sidebar/Sidebar.svelte'), 'utf8').then(sidebar => {
+    const fn = sidebar.slice(sidebar.indexOf('export function focusAdjacentAccount'))
+    const body = fn.slice(0, fn.indexOf('\n  }'))
+    assert.match(body, /tick\(\)/, 'waits a tick so a just-opened panel has rendered the header')
+    assert.match(body, /closest\('\.spark-sidebar'\)/, 'queries the sidebar root: account headers live in the panel, outside the nav scroll container')
   })
 })
