@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 - Redirect destinations are cleaned when opened or copied; the link menu also allows resolving the original link via Cloudflare when a redirect requires tracking parameters.
+- CI can recover from the Azure resolver outage using fresh Cloudflare DNS answers for fixed Ubuntu mirrors inside apt-only mount namespaces; global hosts and resolver files are unchanged.
 
 - CI retries failed Ubuntu package installation against official Ubuntu mirrors with bounded timeouts, keeping all backend checks required.
 
