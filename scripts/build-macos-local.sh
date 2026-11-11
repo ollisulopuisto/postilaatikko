@@ -153,6 +153,7 @@ hdiutil create \
   -ov \
   -format UDZO \
   "$dmg_path"
+python3 "$(dirname "$0")/../packaging/dmg/restyle.py" "$dmg_path" Postilaatikko.app "$(dirname "$0")/../packaging/dmg/welcome-postilaatikko.png"
 hdiutil verify "$dmg_path"
 
 printf '\nBuild ready:\n  %s\n  %s\n' "$app_path" "$dmg_path"
