@@ -384,6 +384,7 @@ func (a *App) readerMethods() map[string]any {
 		"ProcessPGPMessage":             a.ProcessPGPMessage,
 		"ProcessSMIMEMessage":           a.ProcessSMIMEMessage,
 		"RemoveFromInboxWithUndo":       a.RemoveFromInboxWithUndo,
+		"ResolveLinkViaCloudflareDNS":   a.ResolveLinkViaCloudflareDNS,
 		"SaveAllAttachments":            a.SaveAllAttachments,
 		"SaveAllEncryptedAttachments":   a.SaveAllEncryptedAttachments,
 		"SaveAttachmentAs":              a.SaveAttachmentAs,

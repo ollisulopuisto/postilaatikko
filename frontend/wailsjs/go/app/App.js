@@ -1321,6 +1321,10 @@ export function OpenURL(arg1) {
   return window['go']['app']['App']['OpenURL'](arg1);
 }
 
+export function ResolveLinkViaCloudflareDNS(arg1) {
+  return window['go']['app']['App']['ResolveLinkViaCloudflareDNS'](arg1);
+}
+
 export function PickAttachmentFiles() {
   return window['go']['app']['App']['PickAttachmentFiles']();
 }
