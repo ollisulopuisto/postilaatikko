@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Conversation view no longer flattens designed HTML email: headings, button fills, card backgrounds and link colors render as authored, like Gmail, instead of everything shrinking to plain body text with outline buttons. The bubble background still shows through around the message.
+
 - Send Later helper health and router error responses use the same browser-Origin rejection and security headers as encrypted command responses.
 - Pressing / focuses search in Contacts again, without allowing mail shortcuts to act on hidden messages. Calendar has no general search control, so / is left alone there.
 
