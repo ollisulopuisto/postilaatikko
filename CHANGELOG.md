@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Custom title bar: the green zoom button is no longer clipped in half; the quick-access rail now leaves room for all three traffic lights.
+
 - Send Later helper health and router error responses use the same browser-Origin rejection and security headers as encrypted command responses.
 - Pressing / focuses search in Contacts again, without allowing mail shortcuts to act on hidden messages. Calendar has no general search control, so / is left alone there.
 
