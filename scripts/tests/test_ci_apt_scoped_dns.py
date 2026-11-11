@@ -26,6 +26,15 @@ class AptFallbackTests(unittest.TestCase):
                 self.assertEqual(source.read_text(), original)
             self.assertFalse(path.exists())
 
+    def test_apt_effective_sources_use_temporary_file(self):
+        with module.official_sources(pathlib.Path('/')) as path:
+            result = subprocess.run(['apt-get', '--print-uris', '-o',
+                'Dir::Etc::sourcelist=' + str(path), '-o',
+                'Dir::Etc::sourceparts=-', 'update'], capture_output=True, text=True, check=True)
+            self.assertIn('https://archive.ubuntu.com/ubuntu', result.stdout)
+            self.assertIn('https://security.ubuntu.com/ubuntu', result.stdout)
+            self.assertNotIn('azure.archive', result.stdout)
+
     def test_install_failure_retries_update_then_same_packages(self):
         calls = []
         def run(command, **kwargs):
@@ -38,7 +47,7 @@ class AptFallbackTests(unittest.TestCase):
         self.assertEqual(len(calls), 4)
         self.assertEqual(calls[1][0][-2:], calls[3][0][-2:])
         self.assertIn('Dir::Etc::sourceparts=-', calls[3][0])
-        self.assertTrue(any(x.startswith('Dir::Etc::sources.list=') for x in calls[3][0]))
+        self.assertTrue(any(x.startswith('Dir::Etc::sourcelist=') for x in calls[3][0]))
         self.assertEqual(calls[3][0][0], 'unshare')
         self.assertIn('APT::Update::Error-Mode=any', calls[0][0])
         self.assertTrue(all(kwargs['check'] and kwargs['timeout'] <= 180 for _, kwargs in calls))

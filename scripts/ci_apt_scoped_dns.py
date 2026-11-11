@@ -74,7 +74,7 @@ def install(packages, root=pathlib.Path('/'), run=subprocess.run, hosts_factory=
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
         print('apt failed; retrying official HTTPS mirrors with apt-only DNS answers', flush=True)
     with official_sources(root) as sources, hosts_factory(root) as hosts:
-        attempt(hosts, ['-o', 'Dir::Etc::sources.list=' + str(sources),
+        attempt(hosts, ['-o', 'Dir::Etc::sourcelist=' + str(sources),
                         '-o', 'Dir::Etc::sourceparts=-'])
 
 
