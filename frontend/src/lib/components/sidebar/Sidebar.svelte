@@ -625,7 +625,10 @@
   // The account list comes from the rendered sections: the folder nav list
   // only contains folders, never account headers.
   export function focusAdjacentAccount(delta: number) {
-    const accounts = filteredAccountTrees.map(({ item }) => item.account)
+    // Mirror the template: a folder quick filter hides empty-tree accounts.
+    const accounts = filteredAccountTrees
+      .filter(({ trees }) => !listFilter || trees.length > 0)
+      .map(({ item }) => item.account)
     if (accounts.length === 0) return
     const currentIndex = accounts.findIndex(account => account.id === focusedAccountId)
     const nextIndex = currentIndex === -1

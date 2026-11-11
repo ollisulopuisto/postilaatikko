@@ -25,6 +25,9 @@ test('LIST_NEXT and LIST_PREV accept the shifted bracket characters of US layout
   // The unshifted produced character works too (layouts where ] needs no Shift)
   assert.ok(KEY.LIST_NEXT(ev(']', { ctrlKey: true, shiftKey: true })))
   assert.ok(KEY.LIST_PREV(ev('[', { metaKey: true, shiftKey: true })))
+  // Layouts that need AltGr/Option for the bracket still fire the chord
+  assert.ok(KEY.LIST_NEXT(ev(']', { metaKey: true, shiftKey: true, altKey: true })))
+  assert.ok(KEY.LIST_PREV(ev('[', { ctrlKey: true, shiftKey: true, altKey: true })))
   // No modifier, or the wrong one, must not fire
   assert.ok(!KEY.LIST_NEXT(ev(']', { shiftKey: true })))
   assert.ok(!KEY.LIST_NEXT(ev('}')))
@@ -39,6 +42,24 @@ test('the primary window routes the modified list chords inside its Ctrl/Cmd blo
     const block = app.slice(start, end)
     assert.match(block, /KEY\.LIST_NEXT\(e\)/, 'Ctrl/Cmd block handles Mod+Shift+] before registry dispatch')
     assert.match(block, /KEY\.LIST_PREV\(e\)/, 'Ctrl/Cmd block handles Mod+Shift+[ before registry dispatch')
+  })
+})
+
+test('the account chords move pane focus to the sidebar', () => {
+  return readFile(path.join(frontendDir, 'src/App.svelte'), 'utf8').then(app => {
+    const prev = app.match(/'nav\.accountPrev': [^\n]+/)
+    const next = app.match(/'nav\.accountNext': [^\n]+/)
+    assert.ok(prev && next, 'account chord handlers exist')
+    assert.match(prev[0], /setFocusedPane\('sidebar'\)/, 'prev chord focuses the sidebar pane')
+    assert.match(next[0], /setFocusedPane\('sidebar'\)/, 'next chord focuses the sidebar pane')
+  })
+})
+
+test('focusAdjacentAccount skips accounts hidden by the folder quick filter', () => {
+  return readFile(path.join(frontendDir, 'src/lib/components/sidebar/Sidebar.svelte'), 'utf8').then(sidebar => {
+    const fn = sidebar.slice(sidebar.indexOf('export function focusAdjacentAccount'))
+    const body = fn.slice(0, fn.indexOf('\n  }'))
+    assert.match(body, /!listFilter \|\| trees\.length > 0/, 'hidden accounts are skipped, matching the template')
   })
 })
 

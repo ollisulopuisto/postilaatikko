@@ -1604,8 +1604,10 @@
     'viewer.threadFocus': () => { if (selectedThreadId !== null) toggleThreadFocus() },
     'viewer.loadImages': () => viewerRef?.loadImages(),
     'viewer.alwaysLoadImages': () => viewerRef?.openAlwaysLoadDropdown(),
-    'nav.accountPrev': () => sidebarRef?.focusAdjacentAccount(-1),
-    'nav.accountNext': () => sidebarRef?.focusAdjacentAccount(1),
+    // Pane focus follows: without it Enter would still act on the old pane
+    // instead of the focused account header.
+    'nav.accountPrev': () => { sidebarRef?.focusAdjacentAccount(-1); setFocusedPane('sidebar') },
+    'nav.accountNext': () => { sidebarRef?.focusAdjacentAccount(1); setFocusedPane('sidebar') },
     'list.filterAll': () => messageListRef?.applyQuickFilter(''),
     'list.filterUnread': () => messageListRef?.applyQuickFilter('unread'),
     'list.filterReplyLater': () => messageListRef?.applyQuickFilter('replyLater'),
