@@ -15,6 +15,7 @@
   import { getAlwaysLoadImages, getThemeMode, setAlwaysLoadImages, getStripTrackingParams } from '$lib/stores/settings.svelte'
 
   import { stripTrackingParams } from '$lib/utils/linkPrivacy'
+  import { linkForAction, openResolvedLink, copyResolvedLink } from '$lib/utils/linkPrivacyActions'
 
   interface Props {
     conversationId?: string
@@ -919,7 +920,7 @@ ${processedHtml}
     chainFinal = ''
     chainError = ''
     try {
-      const result = await ResolveLinkViaCloudflareDNS(original ? chainOriginal : cleanLinkUrl(chainOriginal))
+      const result = await ResolveLinkViaCloudflareDNS(linkForAction(chainOriginal, original, cleanLinkUrl))
       chainHops = result.hops ?? []
       chainFinal = result.finalURL ?? ''
       chainError = result.error ?? ''
@@ -931,13 +932,13 @@ ${processedHtml}
   }
 
   function openChainURL(url: string, original = false) {
-    safeOpenURL(original ? url : cleanLinkUrl(url))
+    openResolvedLink(url, original, cleanLinkUrl, safeOpenURL)
     chainDialogVisible = false
   }
 
   async function copyChainURL(url: string) {
     try {
-      await navigator.clipboard.writeText(cleanLinkUrl(url))
+      await copyResolvedLink(url, cleanLinkUrl, value => navigator.clipboard.writeText(value))
       chainDialogVisible = false
     } catch (err) {
       console.error('[EmailBody] Failed to copy link:', err)
