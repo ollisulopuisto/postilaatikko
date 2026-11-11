@@ -90,6 +90,8 @@ func (s *Store) Handler() http.Handler {
 
 // ProtectBrowserRequests applies the same boundary to command, health, error
 // and router-generated responses. Place it outside the outermost helper mux.
+// It enforces defense-in-depth security headers, rejects browser Origin headers,
+// and validates Host headers to prevent DNS rebinding attacks.
 func ProtectBrowserRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		applySecurityHeaders(w)
@@ -97,8 +99,25 @@ func ProtectBrowserRequests(next http.Handler) http.Handler {
 			http.Error(w, "forbidden: browser requests not permitted", http.StatusForbidden)
 			return
 		}
+		if !isLoopbackHost(request.Host) {
+			http.Error(w, "bad request: invalid host header", http.StatusBadRequest)
+			return
+		}
 		next.ServeHTTP(w, request)
 	})
+}
+
+func isLoopbackHost(host string) bool {
+	host = strings.TrimSpace(host)
+	if parsed, _, err := net.SplitHostPort(host); err == nil {
+		host = parsed
+	}
+	host = strings.Trim(host, "[]")
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func applySecurityHeaders(w http.ResponseWriter) {
