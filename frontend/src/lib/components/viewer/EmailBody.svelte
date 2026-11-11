@@ -2,7 +2,7 @@
   import LaterQueueButton from '../common/LaterQueueButton.svelte'
   import Icon from '@iconify/svelte'
   import { ClipboardSetText } from '../../../../wailsjs/runtime/runtime'
-  import { GetInlineAttachmentsForAccount, AddImageAllowlist, OpenURL, SetAlwaysLoadImages } from '../../../../wailsjs/go/app/App'
+  import { GetInlineAttachmentsForAccount, AddImageAllowlist, OpenURL, SetAlwaysLoadImages, ResolveLinkViaCloudflareDNS } from '../../../../wailsjs/go/app/App'
   import { linkifyText, isAllowedEmailURL } from '../../utils/emailLinks'
   import { hasBlockedRemoteImages, restoreBlockedImages } from '../../utils/blockedImages'
   import { getCached, setCache, getCacheGeneration } from '../../stores/inlineAttachmentCache'
@@ -863,6 +863,56 @@ ${processedHtml}
     }
   }
 
+  // "Open via Cloudflare DNS": resolve the link's host through Cloudflare DoH
+  // (bypassing local DNS-based ad blocking) and follow the redirect chain
+  // without cookies so the real destination can be shown before opening.
+  // Explicit per-link action only; the lookup contacts the tracking service.
+  interface ChainHop {
+    url: string
+    statusCode: number
+  }
+  let chainDialogVisible = $state(false)
+  let chainLoading = $state(false)
+  let chainHops = $state<ChainHop[]>([])
+  let chainFinal = $state('')
+  let chainError = $state('')
+  let chainOriginal = $state('')
+
+  async function openViaCloudflareDNS() {
+    if (!ctxMenuUrl) return
+    chainOriginal = ctxMenuUrl
+    ctxMenuVisible = false
+    chainDialogVisible = true
+    chainLoading = true
+    chainHops = []
+    chainFinal = ''
+    chainError = ''
+    try {
+      const result = await ResolveLinkViaCloudflareDNS(chainOriginal)
+      chainHops = result.hops ?? []
+      chainFinal = result.finalURL ?? ''
+      chainError = result.error ?? ''
+    } catch (err) {
+      chainError = String(err)
+    } finally {
+      chainLoading = false
+    }
+  }
+
+  function openChainURL(url: string) {
+    safeOpenURL(url)
+    chainDialogVisible = false
+  }
+
+  async function copyChainURL(url: string) {
+    try {
+      await navigator.clipboard.writeText(url)
+      chainDialogVisible = false
+    } catch (err) {
+      console.error('[EmailBody] Failed to copy link:', err)
+    }
+  }
+
   // Select all text in iframe
   function selectAllInIframe() {
     iframeElement?.contentWindow?.postMessage({ type: 'select-all' }, '*')
@@ -984,6 +1034,15 @@ ${processedHtml}
           <Icon icon="mdi:link-variant" class="w-4 h-4" />
           {$_('viewer.copyLink')}
         </button>
+        {#if /^https?:\/\//i.test(ctxMenuUrl)}
+          <button
+            class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+            onclick={openViaCloudflareDNS}
+          >
+            <Icon icon="mdi:dns" class="w-4 h-4" />
+            {$_('viewer.openViaCloudflareDNS')}
+          </button>
+        {/if}
       {/if}
       <button
         class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
@@ -992,6 +1051,48 @@ ${processedHtml}
         <Icon icon="mdi:select-all" class="w-4 h-4" />
         {$_('viewer.selectAll')}
       </button>
+    </div>
+  {/if}
+  <!-- Cloudflare DNS redirect-chain dialog -->
+  {#if chainDialogVisible}
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-label={$_('viewer.linkChainTitle')}>
+      <div class="bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 p-4 max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
+        <h3 class="text-sm font-semibold mb-2">{$_('viewer.linkChainTitle')}</h3>
+        <p class="text-xs text-muted-foreground mb-3">{$_('viewer.linkChainNote')}</p>
+        {#if chainLoading}
+          <p class="text-sm text-muted-foreground">{$_('viewer.resolvingLink')}</p>
+        {:else}
+          {#if chainHops.length > 0}
+            <ul class="mb-3 space-y-1">
+              {#each chainHops as hop, i (hop.url)}
+                <li class="text-xs break-all flex gap-2">
+                  <span class="text-muted-foreground shrink-0">{i + 1}. [{hop.statusCode}]</span>
+                  <span class={hop.url === chainFinal ? 'font-medium' : ''}>{hop.url}</span>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+          {#if chainError}
+            <p class="text-xs text-red-600 dark:text-red-400 mb-3 break-all">{chainError}</p>
+          {/if}
+          <div class="flex flex-wrap gap-2 justify-end">
+            {#if chainFinal && chainFinal !== chainOriginal}
+              <button class="px-3 py-1.5 text-sm rounded bg-primary text-primary-foreground hover:opacity-90" onclick={() => openChainURL(chainFinal)}>
+                {$_('viewer.openFinalURL')}
+              </button>
+              <button class="px-3 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => copyChainURL(chainFinal)}>
+                {$_('viewer.copyFinalURL')}
+              </button>
+            {/if}
+            <button class="px-3 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => openChainURL(chainOriginal)}>
+              {$_('viewer.openOriginalLink')}
+            </button>
+            <button class="px-3 py-1.5 text-sm rounded hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => chainDialogVisible = false}>
+              {$_('common.cancel')}
+            </button>
+          </div>
+        {/if}
+      </div>
     </div>
   {/if}
 </div>
