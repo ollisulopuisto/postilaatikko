@@ -54,7 +54,7 @@
   }
 </script>
 <svelte:window onkeydown={keydown} />
-<nav class="flex flex-col items-stretch {windowControls ? 'w-[3.75rem]' : 'w-12 pt-2'} flex-shrink-0 bg-muted/30 border-r border-border" aria-label={$_('navigation.quickAccess')} onmouseenter={onRevealContext} onmouseleave={onHideContext}>
+<nav class="flex flex-col items-stretch {windowControls ? 'w-20' : 'w-12 pt-2'} flex-shrink-0 bg-muted/30 border-r border-border" aria-label={$_('navigation.quickAccess')} onmouseenter={onRevealContext} onmouseleave={onHideContext}>
   {#if windowControls}
     <!-- One bar: the traffic lights live in the top-left corner of the rail, with a drag region around them. -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
