@@ -149,7 +149,14 @@
         (row._canonicalConversationId || row.threadId) === selection.threadId &&
         (row.accountId || accountId) === selection.accountId &&
         (row.folderId || folderId) === selection.folderId)
-      if (readerRow) focusConversation(readerRow)
+      if (readerRow) {
+        focusConversation(readerRow)
+        // History/back restoration lands here: bring the restored row into
+        // view too, or the list focus moves to a message off-screen.
+        const rowKey = JSON.stringify([readerRow.accountId || accountId || '', readerRow._canonicalConversationId || readerRow.threadId])
+        const el = listContainerRef?.querySelectorAll('[data-mail-row-key]')
+        el?.forEach(node => { if (node.getAttribute('data-mail-row-key') === rowKey) (node as HTMLElement).scrollIntoView({ block: 'nearest', behavior: 'smooth' }) })
+      }
     }
   })
   let lastLoadedFolderId = $state<string | null>(null) // Track folder changes

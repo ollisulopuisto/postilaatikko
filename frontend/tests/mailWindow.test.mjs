@@ -75,6 +75,19 @@ test('navigation without a threadId still restores the remembered selection', ()
   assert.deepEqual(same.thread, { threadId: 'thread', folderId: 'inbox', accountId: 'a' })
 })
 
+test('back into a tab also brings the restored list row into view', () => {
+  // Olli: Back must change focus in the message list, not only the tab. The
+  // readerSelection effect moves the selection and keyboard target; it must
+  // also scroll the restored row into view or the focus lands off-screen.
+  return readFile(new URL('../src/lib/components/list/MessageList.svelte', import.meta.url), 'utf8').then(list => {
+    const start = list.indexOf('const selection = readerSelection')
+    assert.ok(start !== -1, 'readerSelection effect found')
+    const effect = list.slice(start, start + 1400)
+    assert.match(effect, /focusConversation\(readerRow\)/, 'the restored message becomes the list selection and keyboard target')
+    assert.match(effect, /scrollIntoView/, 'the restored row is scrolled into view')
+  })
+})
+
 test('the tab keeps watching config when only the thread changes', () => {
   // The MailWindowApp config effect used to compare only accountId+folderId
   // and return early, so a list click targeting the same folder never reached

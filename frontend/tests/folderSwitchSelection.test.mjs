@@ -33,7 +33,7 @@ test('returning to a visited folder still restores its remembered selection', ()
 })
 
 test('reader/history restore keeps reapplying its own selection after loads', () => {
-  assert.match(list, /if \(readerRow\) focusConversation\(readerRow\)/)
+  assert.match(list, /if \(readerRow\) \{\s*focusConversation\(readerRow\)/)
 })
 
 test('keyboard navigation starts at the first row when nothing is selected', () => {
