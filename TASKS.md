@@ -80,6 +80,8 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 
 ## In progress in separate worktrees
 
+CI-APT-DNS-003: Review. Instinct / `agent/ci-apt-sourcelist` / `/tmp/pl-ci-sourcelist`. Correct APT sourcelist option after #236 merge, with apt effective-target regression.
+
 CI-APT-DNS-002: Review. Instinct / `agent/ci-apt-scoped-dns` / `/tmp/pl-ci-dns-hosts`. Port Solmu #301: fixed Ubuntu host queries through 1.1.1.1 and a private hosts mount only for apt children; same runner, signed packages and required checks.
 
 CI-APT-001: Review. Instinct / `agent/ci-apt-fallback` / `/tmp/pl-ci-dns`. Bound apt mirror failures and retry against official Ubuntu sources without changing runners or checks. Regression tests cover fallback and both sources failing.
