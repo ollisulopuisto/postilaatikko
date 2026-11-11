@@ -23,6 +23,13 @@ test('compact iframe CSS keeps email typography and element colors', () => {
   assert.doesNotMatch(compactBlock, /body \* \{/)
   assert.doesNotMatch(compactBlock, /font-size: inherit !important/)
   assert.doesNotMatch(compactBlock, /background-color: transparent !important/)
-  // The bubble surface still shows through around the email itself.
-  assert.match(compactBlock, /html, body \{ background: transparent !important/)
+  // The document gets a white canvas with dark default text, like Gmail and
+  // Traditional mode. A transparent canvas plus a light inherited foreground
+  // left unstyled headings invisible inside emails that paint white cards.
+  assert.doesNotMatch(compactBlock, /background: transparent !important/)
+  assert.match(compactBlock, /html \{ background: #ffffff; \}/)
+  assert.match(compactBlock, /body \{ background: #ffffff;/)
+  assert.match(compactBlock, /color: #1f2328/)
+  // Nothing !important on color/background: the email's own styles win.
+  assert.doesNotMatch(compactBlock, /color: [^;]* !important/)
 })

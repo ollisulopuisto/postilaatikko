@@ -499,12 +499,15 @@
     pre:not([style]) { background: #f3f4f6; padding: 0.5em; border-radius: 4px; overflow-x: auto; }
     /* Conversation bubbles use app colors without a separate white page. */
     ${compact ? `html { color-scheme: normal; }
-      /* Let the bubble surface show through around the email, but keep the
-         email's own typography and element colors intact (Gmail-like
-         fidelity). No !important on body text styles: emails that style their
-         own body keep their look; unstyled plain mail still blends in. */
-      html, body { background: transparent !important; margin: 0 !important; padding: 0 !important; }
-      body { font-family: system-ui, sans-serif; color: hsl(${getComputedStyle(document.documentElement).getPropertyValue('--foreground').trim() || '0 0% 15%'}); }
+      /* Render on a white canvas like Gmail and Traditional mode: many HTML
+         emails paint white inner cards but leave heading/body text unstyled,
+         expecting the default near-black on white. A transparent canvas with
+         a light inherited foreground makes that text invisible, so give the
+         document a white base and dark default text instead. Nothing here is
+         !important on color/background: the email's own styles always win. */
+      html, body { margin: 0 !important; padding: 0 !important; }
+      html { background: #ffffff; }
+      body { background: #ffffff; font-family: system-ui, sans-serif; color: #1f2328; }
       body pre, body code { font-family: ui-monospace, monospace; }` : ''}
     /* Remove table/td defaults that conflict with email layouts */
   </sty` + `le>
