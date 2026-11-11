@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Design document for a zero-knowledge Postilaatikko service (`docs/plans/2026-11-11-zero-knowledge-server.md`): a hosted multi-tenant architecture where the operator cannot read mail content, with an explicit threat model, client-side key hierarchy, hybrid post-quantum transport, encrypted-search options with their leakage, multi-device enrolment and recovery, GDPR/provider-OAuth/abuse/assurance requirements, and a phased implementation plan. Documentation only; no behavior changes.
+
 - Clicking a message in the message list now opens it in the open reader tab: the click retargets the tab, but the tab only watched for folder changes, so it kept showing the old message.
 - Shared Postilaatikko/Solmu keyboard layer (approved keymap): search also on Cmd/Ctrl+F, forward on Cmd/Ctrl+L, Read later on Cmd/Ctrl+U, Reply later on Cmd/Ctrl+I, archive and mark read on Cmd/Ctrl+E, next/previous message on Cmd/Ctrl+Shift+]/[, the shortcuts overlay also opens with Cmd/Ctrl+/, previous/next account on Cmd/Ctrl+Alt+Left/Right, and the message-list quick filters on Cmd/Ctrl+Alt+1-4 (all, unread, reply later, read later). Load remote images moves to Cmd/Ctrl+Alt+L (always-load to Cmd/Ctrl+Shift+Alt+L) so Cmd/Ctrl+L can forward, and mark-as-read drops Cmd/Ctrl+U (Shift+I stays) so Cmd/Ctrl+U can queue for later. Every existing Gmail-style bare key keeps working, and Option-mangled keys on macOS now fall back to the physical key, so the new Option chords fire on any keyboard layout.
 - Add checkbox semantics, contextual dynamic accessible name, focus-visible styling to conversation row checkbox, and focus-within disclosure plus focus rings to quick action buttons.
