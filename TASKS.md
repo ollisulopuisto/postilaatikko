@@ -80,6 +80,8 @@ These tasks started in the primary checkout before `AGENTS.md` established workt
 
 ## In progress in separate worktrees
 
+CI-APT-001: Review. Instinct / `agent/ci-apt-fallback` / `/tmp/pl-ci-dns`. Bound apt mirror failures and retry against official Ubuntu sources without changing runners or checks. Regression tests cover fallback and both sources failing.
+
 | Task | Effort | Scope | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
 | HOSTED-SERVER-001 | Large | Build one always-on service/core for bounded account sync, persisted cross-account filters and safe moves, and scheduled delivery. The desktop and localhost/user-operated Mac Studio or VPS clients use the same operation layer; Postilaatikko Cloud is deferred. The independently supervised headless service must remain running when the desktop quits. Keep UI responsive with bounded header queries, presentation caching, targeted updates, and body-on-demand reads. Define service/database ownership, account-data trust, device authentication, Gmail notification/poll fallback, local-data compatibility, and safe delivery recovery. | Codex / `codex/HOSTED-SERVER-001` / `/private/tmp/postilaatikko-hosted-server-001` | In progress; PR #144 merged as `bc2d3d0`, PR #150 as `13d83a8`, PR #152 as `c934f62`, and durable automatic filter jobs merged in PR #153 (`de1810a`; main merge `a6553da`). Pending jobs resume after restart, while interrupted or failed moves become `outcome_unknown` and are not retried automatically. |
