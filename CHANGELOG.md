@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- CI retries failed Ubuntu package installation against official Ubuntu mirrors with bounded timeouts, keeping all backend checks required.
+
+- Select all in a plain-text message context menu now selects the whole message, while HTML messages keep their iframe selection.
+- Cloudflare link checks refuse IPv4-mapped private targets and IPv6 translation/tunnel ranges to prevent requests reaching local services.
+
+- Right-clicking a link offers "Open via Cloudflare DNS": the app resolves the link's host through Cloudflare DNS-over-HTTPS (1.1.1.1), bypassing DNS-level ad blockers, and follows the redirect chain without cookies to show where the link really goes before you open it. The dialog shows every hop with buttons to open or copy the final URL or open the original link. Explicit per-link action only - checking the link contacts the tracking service, same as opening it.
+
 - The macOS disk image opens a dark welcome window with light icon wells and a drag-to-Applications guide.
 - Link privacy: opening or copying a link from a message now strips known tracking parameters (utm_*, fbclid, gclid and similar) before the URL leaves the app. The stored message and the displayed link are never changed. On by default; a new General settings toggle turns it off, and the link context menu offers opening or copying the original URL when a link was cleaned, for the rare site that breaks without its parameters.
 - Clicking a message in the message list now opens it in the open reader tab: the click retargets the tab, but the tab only watched for folder changes, so it kept showing the old message.

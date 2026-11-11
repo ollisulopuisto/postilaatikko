@@ -2,16 +2,18 @@
   import LaterQueueButton from '../common/LaterQueueButton.svelte'
   import Icon from '@iconify/svelte'
   import { ClipboardSetText } from '../../../../wailsjs/runtime/runtime'
-  import { GetInlineAttachmentsForAccount, AddImageAllowlist, OpenURL, SetAlwaysLoadImages } from '../../../../wailsjs/go/app/App'
+  import { GetInlineAttachmentsForAccount, AddImageAllowlist, OpenURL, SetAlwaysLoadImages, ResolveLinkViaCloudflareDNS } from '../../../../wailsjs/go/app/App'
   import { linkifyText, isAllowedEmailURL } from '../../utils/emailLinks'
   import { hasBlockedRemoteImages, restoreBlockedImages } from '../../utils/blockedImages'
   import { getCached, setCache, getCacheGeneration } from '../../stores/inlineAttachmentCache'
   import { isImageAllowedSync, refreshImageAllowlist } from '$lib/stores/imageAllowlist.svelte'
   import { setFocusedPane, focusPreviousPane, focusNextPane } from '$lib/stores/keyboard.svelte'
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu'
+  import * as Dialog from '$lib/components/ui/dialog'
   import { _ } from '$lib/i18n'
   import { toasts } from '$lib/stores/toast'
   import { getAlwaysLoadImages, getThemeMode, setAlwaysLoadImages, getStripTrackingParams } from '$lib/stores/settings.svelte'
+
   import { stripTrackingParams } from '$lib/utils/linkPrivacy'
 
   interface Props {
@@ -52,9 +54,8 @@
   let ctxMenuUrl = $state('')
   let ctxMenuX = $state(0)
   let ctxMenuY = $state(0)
-  // True when the context-menu link would be cleaned by link privacy, so the
-  // menu offers the per-link bypass (open/copy original).
-  let ctxUrlStripped = $derived(ctxMenuUrl !== null && getStripTrackingParams() && stripTrackingParams(ctxMenuUrl).stripped)
+
+  let ctxUrlStripped = $derived(getStripTrackingParams() && stripTrackingParams(ctxMenuUrl).stripped)
 
   // Derived state
   let hasRemoteImages = $derived(checkForRemoteImages(bodyHtml) || hasBlockedRemoteImages(bodyHtml))
@@ -863,7 +864,7 @@ ${processedHtml}
     }
   }
 
-  // Copy link to clipboard (tracking parameters stripped per setting)
+  // Copy link to clipboard
   async function copyLinkToClipboard() {
     if (!ctxMenuUrl) return
     try {
@@ -893,15 +894,61 @@ ${processedHtml}
     }
   }
 
-  // Select all text in iframe
-  function selectAllInIframe() {
-    iframeElement?.contentWindow?.postMessage({ type: 'select-all' }, '*')
+  // "Open via Cloudflare DNS": resolve the link's host through Cloudflare DoH
+  // (bypassing local DNS-based ad blocking) and follow the redirect chain
+  // without cookies so the real destination can be shown before opening.
+  // Explicit per-link action only; the lookup contacts the tracking service.
+  interface ChainHop {
+    url: string
+    statusCode: number
+  }
+  let chainDialogVisible = $state(false)
+  let chainLoading = $state(false)
+  let chainHops = $state<ChainHop[]>([])
+  let chainFinal = $state('')
+  let chainError = $state('')
+  let chainOriginal = $state('')
+
+  async function openViaCloudflareDNS() {
+    if (!ctxMenuUrl) return
+    chainOriginal = ctxMenuUrl
     ctxMenuVisible = false
+    chainDialogVisible = true
+    chainLoading = true
+    chainHops = []
+    chainFinal = ''
+    chainError = ''
+    try {
+      const result = await ResolveLinkViaCloudflareDNS(cleanLinkUrl(chainOriginal))
+      chainHops = result.hops ?? []
+      chainFinal = result.finalURL ?? ''
+      chainError = result.error ?? ''
+    } catch (err) {
+      chainError = String(err)
+    } finally {
+      chainLoading = false
+    }
   }
 
-  // Select all text in the plain-text view (which has no iframe)
-  function selectAllInPlainText() {
-    if (plainTextElement) {
+  function openChainURL(url: string) {
+    safeOpenURL(url)
+    chainDialogVisible = false
+  }
+
+  async function copyChainURL(url: string) {
+    try {
+      await navigator.clipboard.writeText(url)
+      chainDialogVisible = false
+    } catch (err) {
+      console.error('[EmailBody] Failed to copy link:', err)
+    }
+  }
+
+  // Select all text in iframe
+  function selectAllInIframe() {
+    if (bodyHtml) {
+      iframeElement?.contentWindow?.postMessage({ type: 'select-all' }, '*')
+    } else if (plainTextElement) {
       const range = document.createRange()
       range.selectNodeContents(plainTextElement)
       const selection = window.getSelection()
@@ -910,7 +957,6 @@ ${processedHtml}
     }
     ctxMenuVisible = false
   }
-
   // Open the context-menu link (tracking parameters stripped per setting)
   function openLink() {
     if (!ctxMenuUrl) return
@@ -974,11 +1020,11 @@ ${processedHtml}
   {:else if bodyText}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="whitespace-pre-wrap font-sans text-sm text-foreground rounded-md {compact ? '' : 'bg-muted/30 p-4'}"
-      bind:this={plainTextElement}
       onkeydown={(e) => { if (e.key === 'Enter') { const link = (e.target as HTMLElement).closest('a'); if (link?.href) { e.preventDefault(); handleLinkClick(link.href) } } }}
+      bind:this={plainTextElement}
       oncontextmenu={(e) => {
         // Same unified menu as the iframe path: without this the native menu
-        // bypasses copyLinkToClipboard and leaks the tracked URL.
+        // replaces ours and the link actions never appear for plain text.
         const link = (e.target as HTMLElement).closest('a')
         const selection = window.getSelection()?.toString() || ''
         if (!link?.href && !selection) return
@@ -1070,16 +1116,67 @@ ${processedHtml}
             {$_('viewer.copyOriginalLink')}
           </button>
         {/if}
+        {#if /^https?:\/\//i.test(ctxMenuUrl)}
+          <button
+            class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+            onclick={openViaCloudflareDNS}
+          >
+            <Icon icon="mdi:dns" class="w-4 h-4" />
+            {$_('viewer.openViaCloudflareDNS')}
+          </button>
+        {/if}
       {/if}
       <button
         class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-        onclick={bodyHtml ? selectAllInIframe : selectAllInPlainText}
+        onclick={selectAllInIframe}
       >
         <Icon icon="mdi:select-all" class="w-4 h-4" />
         {$_('viewer.selectAll')}
       </button>
     </div>
   {/if}
+  <!-- Cloudflare DNS redirect-chain dialog (ui/dialog gives focus trapping, Escape to close, and focus restoration) -->
+  <Dialog.Root bind:open={chainDialogVisible}>
+    <Dialog.Content class="relative max-w-lg max-h-[80vh] overflow-y-auto">
+      <Dialog.Header>
+        <Dialog.Title>{$_('viewer.linkChainTitle')}</Dialog.Title>
+        <Dialog.Description>{$_('viewer.linkChainNote')} {$_('viewer.linkChainBrowserDNSNote')}</Dialog.Description>
+      </Dialog.Header>
+      {#if chainLoading}
+        <p class="text-sm text-muted-foreground">{$_('viewer.resolvingLink')}</p>
+      {:else}
+        {#if chainHops.length > 0}
+          <ul class="mb-3 space-y-1">
+            {#each chainHops as hop, i (hop.url)}
+              <li class="text-xs break-all flex gap-2">
+                <span class="text-muted-foreground shrink-0">{i + 1}. [{hop.statusCode}]</span>
+                <span class={hop.url === chainFinal ? 'font-medium' : ''}>{hop.url}</span>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+        {#if chainError}
+          <p class="text-xs text-red-600 dark:text-red-400 mb-3 break-all">{chainError}</p>
+        {/if}
+        <Dialog.Footer>
+          {#if chainFinal && chainFinal !== chainOriginal}
+            <button class="px-3 py-1.5 text-sm rounded bg-primary text-primary-foreground hover:opacity-90" onclick={() => openChainURL(chainFinal)}>
+              {$_('viewer.openFinalURL')}
+            </button>
+            <button class="px-3 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => copyChainURL(chainFinal)}>
+              {$_('viewer.copyFinalURL')}
+            </button>
+          {/if}
+          <button class="px-3 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => openChainURL(chainOriginal)}>
+            {$_('viewer.openOriginalLink')}
+          </button>
+          <button class="px-3 py-1.5 text-sm rounded hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => chainDialogVisible = false}>
+            {$_('common.cancel')}
+          </button>
+        </Dialog.Footer>
+      {/if}
+    </Dialog.Content>
+  </Dialog.Root>
 </div>
 
 <!-- Click outside to close context menu -->
