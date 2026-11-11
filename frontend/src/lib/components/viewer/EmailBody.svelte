@@ -11,7 +11,8 @@
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu'
   import { _ } from '$lib/i18n'
   import { toasts } from '$lib/stores/toast'
-  import { getAlwaysLoadImages, getThemeMode, setAlwaysLoadImages } from '$lib/stores/settings.svelte'
+  import { getAlwaysLoadImages, getThemeMode, setAlwaysLoadImages, getStripTrackingParams } from '$lib/stores/settings.svelte'
+  import { stripTrackingParams } from '$lib/utils/linkPrivacy'
 
   interface Props {
     conversationId?: string
@@ -50,6 +51,9 @@
   let ctxMenuUrl = $state('')
   let ctxMenuX = $state(0)
   let ctxMenuY = $state(0)
+  // True when the context-menu link would be cleaned by link privacy, so the
+  // menu offers the per-link bypass (open/copy original).
+  let ctxUrlStripped = $derived(ctxMenuUrl !== null && getStripTrackingParams() && stripTrackingParams(ctxMenuUrl).stripped)
 
   // Derived state
   let hasRemoteImages = $derived(checkForRemoteImages(bodyHtml) || hasBlockedRemoteImages(bodyHtml))
@@ -519,6 +523,12 @@ ${processedHtml}
 </html>`
   }
 
+  // Strip known tracking parameters at use time (link privacy setting).
+  // The stored message and displayed URL are never mutated.
+  function cleanLinkUrl(url: string): string {
+    return getStripTrackingParams() ? stripTrackingParams(url).url : url
+  }
+
   // Handle a clicked link URL — routes mailto: to composer, others to system browser.
   // Used by both the iframe message handler and the plain text div click handler.
   function handleLinkClick(url: string) {
@@ -529,7 +539,7 @@ ${processedHtml}
         return
       }
     }
-    safeOpenURL(url)
+    safeOpenURL(cleanLinkUrl(url))
   }
 
   // Helper function to safely open URLs
@@ -852,14 +862,33 @@ ${processedHtml}
     }
   }
 
-  // Copy link to clipboard
+  // Copy link to clipboard (tracking parameters stripped per setting)
   async function copyLinkToClipboard() {
+    if (!ctxMenuUrl) return
+    try {
+      await navigator.clipboard.writeText(cleanLinkUrl(ctxMenuUrl))
+      ctxMenuVisible = false
+    } catch (err) {
+      console.error('[EmailBody] Failed to copy link:', err)
+    }
+  }
+
+  // Open the original (unstripped) link — per-link bypass for the rare site
+  // that needs its tracking parameters.
+  function openOriginalLink() {
+    if (!ctxMenuUrl) return
+    safeOpenURL(ctxMenuUrl)
+    ctxMenuVisible = false
+  }
+
+  // Copy the original (unstripped) link to clipboard
+  async function copyOriginalLinkToClipboard() {
     if (!ctxMenuUrl) return
     try {
       await navigator.clipboard.writeText(ctxMenuUrl)
       ctxMenuVisible = false
     } catch (err) {
-      console.error('[EmailBody] Failed to copy link:', err)
+      console.error('[EmailBody] Failed to copy original link:', err)
     }
   }
 
@@ -984,6 +1013,22 @@ ${processedHtml}
           <Icon icon="mdi:link-variant" class="w-4 h-4" />
           {$_('viewer.copyLink')}
         </button>
+        {#if ctxUrlStripped}
+          <button
+            class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+            onclick={openOriginalLink}
+          >
+            <Icon icon="mdi:open-in-new" class="w-4 h-4" />
+            {$_('viewer.openOriginalLink')}
+          </button>
+          <button
+            class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+            onclick={copyOriginalLinkToClipboard}
+          >
+            <Icon icon="mdi:link-variant-off" class="w-4 h-4" />
+            {$_('viewer.copyOriginalLink')}
+          </button>
+        {/if}
       {/if}
       <button
         class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"

@@ -31,6 +31,7 @@ const (
 	KeyComposerFormat             = "composer_format"
 	KeyNativeTitleBar             = "native_titlebar"
 	KeyAlwaysLoadImages           = "always_load_images"
+	KeyStripTrackingParams        = "strip_tracking_params" // strip known tracking parameters from links on open/copy (default on)
 	KeyDarkMailContent            = "dark_mail_content"
 	KeyDarkComposerBody           = "dark_composer_body"
 	KeyAccentBarUnread            = "accent_bar_unread"
@@ -752,6 +753,27 @@ func (s *Store) SetNativeTitleBar(enabled bool) error {
 		value = "true"
 	}
 	return s.Set(KeyNativeTitleBar, value)
+}
+
+// GetStripTrackingParams returns whether known tracking parameters are
+// stripped from links when they are opened or copied. On by default: only an
+// explicit "false" disables it.
+func (s *Store) GetStripTrackingParams() (bool, error) {
+	value, err := s.Get(KeyStripTrackingParams)
+	if err != nil {
+		return false, err
+	}
+	return value != "false", nil
+}
+
+// SetStripTrackingParams sets whether known tracking parameters are stripped
+// from links when they are opened or copied.
+func (s *Store) SetStripTrackingParams(enabled bool) error {
+	value := "false"
+	if enabled {
+		value = "true"
+	}
+	return s.Set(KeyStripTrackingParams, value)
 }
 
 // GetAlwaysLoadImages returns whether remote images should always be loaded

@@ -289,6 +289,8 @@ export function GetAllAccountIdentities():Promise<Array<app.AccountIdentityGroup
 
 export function GetAlwaysLoadImages():Promise<boolean>;
 
+export function GetStripTrackingParams():Promise<boolean>;
+
 export function GetAlwaysShowMessageCheckbox():Promise<boolean>;
 
 export function GetAppInfo():Promise<app.AppInfo>;
@@ -812,6 +814,8 @@ export function SetAccountEnabled(arg1:string,arg2:boolean):Promise<void>;
 export function SetAddressbookEnabled(arg1:string,arg2:boolean):Promise<void>;
 
 export function SetAlwaysLoadImages(arg1:boolean):Promise<void>;
+
+export function SetStripTrackingParams(arg1:boolean):Promise<void>;
 
 export function SetAlwaysShowMessageCheckbox(arg1:boolean):Promise<void>;
 
