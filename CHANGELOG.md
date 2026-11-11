@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- CI can recover from the Azure resolver outage using fresh Cloudflare DNS answers for fixed Ubuntu mirrors inside apt-only mount namespaces; global hosts and resolver files are unchanged.
+
 - CI retries failed Ubuntu package installation against official Ubuntu mirrors with bounded timeouts, keeping all backend checks required.
 
 - Select all in a plain-text message context menu now selects the whole message, while HTML messages keep their iframe selection.
