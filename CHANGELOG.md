@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 - Custom title bar: the green zoom button is no longer clipped in half; the quick-access rail now leaves room for all three traffic lights.
+- Folder clicks no longer stall: the legacy/native Gmail duplicate-suppression clause now uses the Message-ID index instead of scanning the whole folder once per message. Opening a large folder (for example a Gmail archive) went from hitting the 4 s/8 s store deadlines to roughly a tenth of a second.
 - Conversation view no longer flattens designed HTML email: headings, button fills, card backgrounds and link colors render as authored, like Gmail, instead of everything shrinking to plain body text with outline buttons. The bubble background still shows through around the message.
 
 - Send Later helper health and router error responses use the same browser-Origin rejection and security headers as encrypted command responses.
