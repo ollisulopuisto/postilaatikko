@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Select all in a plain-text message context menu now selects the whole message, while HTML messages keep their iframe selection.
+- Cloudflare link checks refuse IPv4-mapped private targets and IPv6 translation/tunnel ranges to prevent requests reaching local services.
+
 - Right-clicking a link offers "Open via Cloudflare DNS": the app resolves the link's host through Cloudflare DNS-over-HTTPS (1.1.1.1), bypassing DNS-level ad blockers, and follows the redirect chain without cookies to show where the link really goes before you open it. The dialog shows every hop with buttons to open or copy the final URL or open the original link. Explicit per-link action only - checking the link contacts the tracking service, same as opening it.
 
 - The macOS disk image opens a dark welcome window with light icon wells and a drag-to-Applications guide.
