@@ -61,6 +61,7 @@
     "noFoldersSynced": "Brak zsynchronizowanych folderów"
   },
   "messageList": {
+    "checkConversation": "Wybierz konwersację do działań zbiorczych",
     "searchMessages": "Szukaj wiadomości...",
     "noMessages": "Brak wiadomości w tym folderze",
     "selectFolder": "Wybierz folder aby zobaczyć wiadomości",

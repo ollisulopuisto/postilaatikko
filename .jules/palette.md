@@ -2,6 +2,10 @@
 
 Critical UX and Accessibility learnings only.
 
+## 2026-11-10 - Checkbox Semantics and Focus-Within Disclosure on Conversation Rows
+**Learning:** In conversation list items (`ConversationRow.svelte`), custom selection buttons without explicit `role="checkbox"` and `aria-checked` fail to announce their selection state to screen reader users, while relying on parent hover (`group-hover:opacity-100 group-hover:pointer-events-auto`) on quick-action buttons traps keyboard navigation behind invisible or unresponsive elements.
+**Action:** Always provide `role="checkbox"`, `aria-checked`, and contextual `aria-label` on custom row selection toggles, and pair hover-revealed action containers with `group-focus-within:opacity-100 focus-within:opacity-100 group-focus-within:pointer-events-auto focus-within:pointer-events-auto` along with standard `focus-visible:ring-2` focus rings on each button.
+
 ## 2026-11-09 - Focus Rings on Hover-Revealed Favorite and Row Action Buttons
 **Learning:** While `focus-visible:opacity-100` makes hover-revealed or dimmed buttons (`opacity-0 group-hover:opacity-100`) visible when keyboard focus reaches them, omitting explicit focus ring tokens (`focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`) leaves them with either low-contrast default browser outlines or subtle bounds that blend into dark card backgrounds.
 **Action:** Pair every `focus-visible:opacity-100` reveal on icon buttons with `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring` to provide an unambiguous, high-contrast focus indicator in both light and dark themes.

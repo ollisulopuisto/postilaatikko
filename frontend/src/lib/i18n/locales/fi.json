@@ -254,6 +254,7 @@
     "filterAttachments": "Sisältää liitteitä",
     "noFilteredMessages": "Yksikään viesti ei vastaa nykyistä suodatinta",
     "selectedActions": "Valittujen viestien toiminnot",
+    "checkConversation": "Valitse keskustelu massatoimintoihin",
     "selectedCount": "{count} valittu"
   },
   "inbox": {

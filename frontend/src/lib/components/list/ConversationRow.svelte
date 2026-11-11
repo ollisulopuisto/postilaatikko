@@ -197,16 +197,18 @@
     // Hidden state: zero width, with a negative right margin cancelling the
     // row gap. The quick-action rail is absolute, so hovering must not expand
     // this column and push the message content sideways.
+    // Focused checkboxes must be visible: keyboard focus (focus-within)
+    // temporarily reveals the column so the focus ring has somewhere to show.
     checkboxHidden: {
-      micro: 'w-0 h-4 -mr-2',
-      compact: 'w-0 h-5 -mr-3',
-      standard: 'w-0 h-6 -mr-4',
-      large: 'w-0 h-7 -mr-5',
+      micro: 'w-0 h-4 -mr-2 focus-within:w-4 focus-within:mr-0',
+      compact: 'w-0 h-5 -mr-3 focus-within:w-5 focus-within:mr-0',
+      standard: 'w-0 h-6 -mr-4 focus-within:w-6 focus-within:mr-0',
+      large: 'w-0 h-7 -mr-5 focus-within:w-7 focus-within:mr-0',
     },
     // The checkbox column remains reserved when this preference is enabled,
     // but it must not fade in on hover: the quick-action rail owns that
     // interaction and revealing both made the row appear to slide sideways.
-    checkboxAlways: 'opacity-0',
+    checkboxAlways: 'opacity-0 focus-within:opacity-100',
     checkboxInner: {
       micro: 'w-3 h-3',
       compact: 'w-4 h-4',
@@ -578,7 +580,14 @@
       try { await OpenReaderWindow(accountId, folderId, backendConversationId, folderType) }
       catch (error) { toasts.error(String(error)) }
     }}
-    onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect() }}}
+    onkeydown={(e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return
+      // Inner controls (selection checkbox, quick actions) keep their native
+      // Enter/Space activation; only keys on the row itself open the mail.
+      if (e.target !== e.currentTarget) return
+      e.preventDefault()
+      onSelect()
+    }}
     ondragstart={handleDragStart}
     ontouchstart={handleTouchStart}
     ontouchmove={handleTouchMove}
@@ -610,12 +619,12 @@
 
     <!-- Quick actions replace the avatar on hover without opening the row. -->
     <div
-      class="absolute inset-y-0 left-0 z-20 flex flex-col items-center justify-center gap-0.5 bg-transparent opacity-0 pointer-events-none transition-opacity duration-150 group-hover:opacity-100 group-hover:pointer-events-auto {densityClasses.quickActions[density]}"
+      class="absolute inset-y-0 left-0 z-20 flex flex-col items-center justify-center gap-0.5 bg-transparent opacity-0 pointer-events-none transition-opacity duration-150 group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 focus-within:opacity-100 group-focus-within:pointer-events-auto focus-within:pointer-events-auto {densityClasses.quickActions[density]}"
       aria-label={$_('common.done')}
     >
       <button
         type="button"
-        class="quick-row-action"
+        class="quick-row-action focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         title={$_('common.done')}
         aria-label={$_('common.done')}
         onclick={handleDoneClick}
@@ -626,7 +635,7 @@
       </button>
       <button
         type="button"
-        class="quick-row-action"
+        class="quick-row-action focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         title={$_(ownIsRead ? 'contextMenu.markAsUnread' : 'contextMenu.markAsRead')}
         aria-label={$_(ownIsRead ? 'contextMenu.markAsUnread' : 'contextMenu.markAsRead')}
         onclick={handleQuickToggleRead}
@@ -635,7 +644,7 @@
       </button>
       <button
         type="button"
-        class="quick-row-action hover:text-destructive"
+        class="quick-row-action hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         title={$_('common.delete')}
         aria-label={$_('common.delete')}
         onclick={handleQuickDelete}
@@ -655,9 +664,13 @@
         : `overflow-hidden transition-all duration-200 ${checked ? densityClasses.checkbox[density] : densityClasses.checkboxHidden[density]}`}"
     >
       <button
+        type="button"
+        role="checkbox"
+        aria-checked={checked}
+        aria-label={conversation.subject ? `${$_('messageList.checkConversation')}: ${conversation.subject}` : $_('messageList.checkConversation')}
         class="{densityClasses.checkboxInner[density]} rounded border {checked
           ? 'bg-primary border-primary'
-          : 'border-muted-foreground hover:border-primary'} flex items-center justify-center transition-colors duration-200"
+          : 'border-muted-foreground hover:border-primary'} flex items-center justify-center transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         onclick={handleCheckboxClick}
       >
         {#if checked}

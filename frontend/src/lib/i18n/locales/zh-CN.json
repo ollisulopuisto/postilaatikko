@@ -61,6 +61,7 @@
     "noFoldersSynced": "尚未同步任何文件夹"
   },
   "messageList": {
+    "checkConversation": "选择要批量操作的会话",
     "searchMessages": "搜索邮件...",
     "noMessages": "此文件夹中没有邮件",
     "selectFolder": "选择文件夹以查看邮件",

@@ -89,6 +89,7 @@
     "filterAttachments": "Con allegati",
     "noFilteredMessages": "Nessun messaggio corrisponde al filtro corrente",
     "selectedActions": "Azioni per i messaggi selezionati",
+    "checkConversation": "Seleziona conversazione per azioni multiple",
     "selectedCount": "{count} selezionati"
   },
   "viewer": {

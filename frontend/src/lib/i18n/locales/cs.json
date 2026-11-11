@@ -61,6 +61,7 @@
     "noFoldersSynced": "Žádné synchronizované složky"
   },
   "messageList": {
+    "checkConversation": "Vybrat konverzaci pro hromadné akce",
     "searchMessages": "Hledat zprávy...",
     "noMessages": "V této složce nejsou žádné zprávy",
     "selectFolder": "Vyberte složku pro zobrazení zpráv",

@@ -61,6 +61,7 @@
     "noFoldersSynced": "Aucun dossier synchronisé"
   },
   "messageList": {
+    "checkConversation": "Sélectionner la conversation pour les actions groupées",
     "searchMessages": "Rechercher des messages...",
     "noMessages": "Aucun message dans ce dossier",
     "selectFolder": "Sélectionnez un dossier pour voir les messages",

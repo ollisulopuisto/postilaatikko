@@ -61,6 +61,7 @@
     "noFoldersSynced": "Chưa có thư mục nào được đồng bộ"
   },
   "messageList": {
+    "checkConversation": "Chọn cuộc hội thoại cho thao tác hàng loạt",
     "searchMessages": "Tìm kiếm thư...",
     "noMessages": "Không có thư trong thư mục này",
     "selectFolder": "Chọn thư mục để xem thư",

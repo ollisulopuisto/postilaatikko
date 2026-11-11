@@ -61,6 +61,7 @@
     "noFoldersSynced": "Ingen mapper synkronisert"
   },
   "messageList": {
+    "checkConversation": "Velg samtale for massehandlinger",
     "searchMessages": "Søk i meldinger…",
     "noMessages": "Ingen meldinger i denne mappen",
     "selectFolder": "Velg en mappe for å se meldinger",

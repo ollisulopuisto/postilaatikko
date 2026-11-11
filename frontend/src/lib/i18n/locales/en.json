@@ -254,6 +254,7 @@
     "filterAttachments": "Has attachments",
     "noFilteredMessages": "No messages match the current filter",
     "selectedActions": "Actions for selected messages",
+    "checkConversation": "Select conversation for bulk actions",
     "selectedCount": "{count} selected"
   },
   "inbox": {
