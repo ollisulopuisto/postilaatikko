@@ -681,6 +681,8 @@ export function OpenReaderWindow(arg1:string,arg2:string,arg3:string,arg4:string
 
 export function OpenURL(arg1:string):Promise<void>;
 
+export function ResolveLinkViaCloudflareDNS(arg1:string):Promise<app.LinkChainResult>;
+
 export function PickAttachmentFiles():Promise<Array<app.ComposerAttachment>>;
 
 export function PickPGPKeyFile():Promise<string>;
