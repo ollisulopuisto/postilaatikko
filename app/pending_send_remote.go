@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -147,10 +148,19 @@ func (a *App) DispatchRemotePendingSend(id string) (bool, error) {
 // Missing or in-flight receipts remain unknown and keep their draft protected.
 func (a *App) reconcileRemotePendingOutcomes(store *pendingremote.Store) {
 	ids, err := store.Uncertain()
+	if err != nil || len(ids) == 0 {
+		return
+	}
+	ctx, cancel := context.WithTimeout(a.accountContext(), 3*time.Second)
+	defer cancel()
+	client, err := a.composerServiceClient(ctx, v1.CapabilityMailSend)
 	if err != nil {
 		return
 	}
 	for _, id := range ids {
+		if ctx.Err() != nil {
+			return
+		}
 		item, err := store.Connection(id)
 		if err != nil {
 			continue
@@ -163,7 +173,7 @@ func (a *App) reconcileRemotePendingOutcomes(store *pendingremote.Store) {
 			continue
 		}
 		clear(envelope.Request.RFC822)
-		lookup, err := a.GetComposerSendReceipt(id)
+		lookup, err := client.GetSendReceipt(ctx, id)
 		if err != nil || lookup == nil || !lookup.Found || lookup.Response == nil {
 			continue
 		}
