@@ -625,6 +625,40 @@ export namespace app {
 	        this.since = source["since"];
 	    }
 	}
+	export class LinkChainResult {
+	    hops: linkresolve.Hop[];
+	    finalURL: string;
+	    error?: string;
+
+	    static createFrom(source: any = {}) {
+	        return new LinkChainResult(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hops = this.convertValues(source["hops"], linkresolve.Hop);
+	        this.finalURL = source["finalURL"];
+	        this.error = source["error"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class LinkedAccountInfo {
 	    accountId: string;
 	    email: string;
@@ -2561,6 +2595,25 @@ export namespace imap {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 
+	    }
+	}
+
+}
+
+export namespace linkresolve {
+
+	export class Hop {
+	    url: string;
+	    statusCode: number;
+
+	    static createFrom(source: any = {}) {
+	        return new Hop(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.url = source["url"];
+	        this.statusCode = source["statusCode"];
 	    }
 	}
 

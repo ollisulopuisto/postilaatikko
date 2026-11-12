@@ -289,6 +289,8 @@ export function GetAllAccountIdentities():Promise<Array<app.AccountIdentityGroup
 
 export function GetAlwaysLoadImages():Promise<boolean>;
 
+export function GetStripTrackingParams():Promise<boolean>;
+
 export function GetAlwaysShowMessageCheckbox():Promise<boolean>;
 
 export function GetAppInfo():Promise<app.AppInfo>;
@@ -681,6 +683,8 @@ export function OpenReaderWindow(arg1:string,arg2:string,arg3:string,arg4:string
 
 export function OpenURL(arg1:string):Promise<void>;
 
+export function ResolveLinkViaCloudflareDNS(arg1:string):Promise<app.LinkChainResult>;
+
 export function PickAttachmentFiles():Promise<Array<app.ComposerAttachment>>;
 
 export function PickPGPKeyFile():Promise<string>;
@@ -812,6 +816,8 @@ export function SetAccountEnabled(arg1:string,arg2:boolean):Promise<void>;
 export function SetAddressbookEnabled(arg1:string,arg2:boolean):Promise<void>;
 
 export function SetAlwaysLoadImages(arg1:boolean):Promise<void>;
+
+export function SetStripTrackingParams(arg1:boolean):Promise<void>;
 
 export function SetAlwaysShowMessageCheckbox(arg1:boolean):Promise<void>;
 

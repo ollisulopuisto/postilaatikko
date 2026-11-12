@@ -114,6 +114,7 @@ jobs:
             -ov \
             -format UDZO \
             "build/bin/Postilaatikko-macos-${GOARCH}.dmg"
+          python3 packaging/dmg/restyle.py "build/bin/Postilaatikko-macos-${GOARCH}.dmg" "Postilaatikko.app" packaging/dmg/welcome-postilaatikko.png
           hdiutil verify "build/bin/Postilaatikko-macos-${GOARCH}.dmg"
           rm -rf build/bin/dmg-staging
       - name: Sign and verify DMG
@@ -263,6 +264,7 @@ jobs:
             -ov \
             -format UDZO \
             "$DMG_NAME"
+          python3 ../../packaging/dmg/restyle.py "$DMG_NAME" "Postilaatikko.app" ../../packaging/dmg/welcome-postilaatikko.png
           hdiutil verify "$DMG_NAME"
           rm -rf dmg-staging
           ls -lh "$DMG_NAME"

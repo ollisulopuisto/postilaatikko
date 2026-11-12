@@ -20,6 +20,7 @@
   import { selectionAfterFolderSwitch, selectionSurvivesRefresh } from './selectionReconcile'
   import { mailRowKey, captureScrollAnchor, anchoredScrollTop, newRowsBeforeAnchor, extendAnchorWindow } from './scrollAnchor'
   import { retainReadSelection } from '$lib/sidebar/virtualView'
+  import { dayGroupFor } from '$lib/components/list/dayGroup'
   import { app as searchModels } from '../../../../wailsjs/go/models'
 
   import { onMount, onDestroy, tick, untrack } from 'svelte'
@@ -432,25 +433,6 @@
     return { id: 'people', label: $_('inbox.people'), icon: 'mdi:account-outline' }
   }
 
-  function dayGroupFor(dateValue: Date | string | undefined): { id: string; label: string } {
-    const date = dateValue ? new Date(dateValue) : new Date(0)
-    const today = new Date()
-    const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
-    const startDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
-    const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1).getTime()
-    if (startDate === startToday) return { id: 'today', label: $_('inbox.today') }
-    if (startDate === yesterday) return { id: 'yesterday', label: $_('inbox.yesterday') }
-    const sameYear = date.getFullYear() === today.getFullYear()
-    const month = new Intl.DateTimeFormat(getLanguage() || 'en', { month: 'long' }).format(date)
-    const monthLabel = `${month.charAt(0).toUpperCase()}${month.slice(1)}`
-    return {
-      // Older conversations are grouped by month, not by an unnecessarily
-      // dense daily card. The year is shown only when it differs from today.
-      id: `month-${date.getFullYear()}-${date.getMonth()}`,
-      label: sameYear ? monthLabel : `${monthLabel} ${date.getFullYear()}`,
-    }
-  }
-
   function inboxGroups(): InboxDisplayGroup[] {
     const groups = new Map<string, InboxDisplayGroup>()
     const add = (id: string, label: string, icon: string, category: string, conversation: message.Conversation, recipient?: string) => {
@@ -490,7 +472,7 @@
         const isPriority = (conversation.unreadCount || 0) > 0 || conversation.isStarred
         add(isPriority ? 'priority' : 'other', isPriority ? $_('inbox.priority') : $_('inbox.other'), isPriority ? 'mdi:lightning-bolt-outline' : 'mdi:inbox-outline', isPriority ? 'priority' : 'other', conversation)
       } else {
-        const day = dayGroupFor(conversation.latestDate)
+        const day = dayGroupFor(conversation.latestDate, getLanguage() || 'en', { today: $_('inbox.today'), yesterday: $_('inbox.yesterday') })
         add(day.id, day.label, 'mdi:calendar-blank-outline', 'chronological', conversation)
       }
     }
