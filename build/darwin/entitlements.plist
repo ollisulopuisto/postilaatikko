@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+    <dict>
+        <!-- Hardened Runtime resource access: CNContactStore is blocked before
+             the TCC prompt without this, even unsandboxed. -->
+        <key>com.apple.security.personal-information.addressbook</key>
+        <true/>
+    </dict>
+</plist>
