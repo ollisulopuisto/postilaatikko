@@ -314,13 +314,24 @@ deprecated mailbox-service mode and retire with it. [inferred]
     own last verified version and every existing device whose signing or
     KEM key changed, requiring confirmation. A key change under an existing
     device name is shown as a new device, never silently accepted. A silent update never
-    leads to a wrap.
+    leads to a wrap. The confirmation names the device that signed each new
+    list version; a version signed by a device the user believes revoked is
+    a hard warning, never a routine confirm. When a second enrolled device
+    exists, a list version that adds a device must be confirmed on it as
+    well before any wrap, so one stale client cannot wrap to a fork alone.
   - Devices sign and exchange the chain head they have seen whenever they
     talk (enrolment channel, transfer envelopes), so two successors of the
     same predecessor are detected; a detected fork freezes all wraps until
     the user resolves it on a trusted device.
-  - A longer-term option is an external, append-only transparency log of
-    list heads.
+  - An external, append-only transparency log of list heads closes the
+    residual gap below; whether it is a launch requirement or a follow-up
+    is owner decision 10.
+  Residual risk, stated plainly: a client that never sees the real
+  revocation (the server withholds it) and has no peer contact accepts a
+  fork signed by the revoked device as a legitimate successor. The user
+  confirmation is then the only barrier, which is why its content and the
+  cross-device requirement above are load-bearing. This is the known limit
+  of key transparency without an external log.
   This is the key-transparency problem; implement a published design
   (compare WhatsApp key transparency, Apple Contact Key Verification,
   Keybase sigchains), not a home-grown one. **Expert review flag.**
@@ -547,8 +558,14 @@ measured velocity.
    TASKS.md build on the helper holding mailbox data. Finish them for the
    single-user helper, or freeze them now that the mode is on a deprecation
    path?
+10. **Device-compromise fork scope** (section 12): a stolen device can sign a
+    competing device list for any client that missed the revocation. The
+    countermeasures (per-wrap confirmation, cross-device confirmation, fork
+    freeze) reduce this to a UX barrier; only the transparency log closes
+    it. Decide whether the log is a launch requirement and how far
+    re-keying goes after device compromise.
 
-Open: 1, 2 (for the hosted service), 5-9. Decided: 3, 4.
+Open: 1, 2 (for the hosted service), 5-10. Decided: 3, 4.
 
 ## 23. Expert review flags (collected)
 
