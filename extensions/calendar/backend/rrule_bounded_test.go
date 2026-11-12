@@ -27,3 +27,15 @@ func TestBoundedRecurrenceMatchesOrdinaryDailyExpansion(t *testing.T) {
 		t.Fatalf("daily expansion=%d %v", len(got), err)
 	}
 }
+
+func TestRecurrenceBudgetSharedAcrossEvents(t *testing.T) {
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	ev := Event{RRuleText: "FREQ=DAILY;COUNT=3", ICSBlob: "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:daily\r\nDTSTART:20260101T000000Z\r\nDTEND:20260101T010000Z\r\nRRULE:FREQ=DAILY;COUNT=3\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"}
+	remaining := 5
+	if _, err := expandInRange(context.Background(), ev, nil, start, start.AddDate(0, 0, 4), 10, &remaining); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := expandInRange(context.Background(), ev, nil, start, start.AddDate(0, 0, 4), 10, &remaining); err == nil || len(got) != 0 {
+		t.Fatal("second event bypassed shared budget")
+	}
+}

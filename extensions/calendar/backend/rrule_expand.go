@@ -18,7 +18,7 @@ import (
 //
 // Returns instances sorted by InstanceStartUnix ASC.
 func ExpandInRange(ev Event, overrides []EventOverride, from, to time.Time) ([]EventInstance, error) {
-	return expandInRange(context.Background(), ev, overrides, from, to, 0, 0)
+	return expandInRange(context.Background(), ev, overrides, from, to, 0, nil)
 }
 
 // ExpandInRangeBounded caps returned instances and iterator work for authenticated
@@ -27,9 +27,9 @@ func ExpandInRangeBounded(ctx context.Context, ev Event, overrides []EventOverri
 	if ctx == nil || maxInstances < 1 || maxIterations < 1 {
 		return nil, fmt.Errorf("bounded recurrence requires context and positive limits")
 	}
-	return expandInRange(ctx, ev, overrides, from, to, maxInstances, maxIterations)
+	return expandInRange(ctx, ev, overrides, from, to, maxInstances, &maxIterations)
 }
-func expandInRange(ctx context.Context, ev Event, overrides []EventOverride, from, to time.Time, maxInstances, maxIterations int) ([]EventInstance, error) {
+func expandInRange(ctx context.Context, ev Event, overrides []EventOverride, from, to time.Time, maxInstances int, remainingIterations *int) ([]EventInstance, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -95,17 +95,18 @@ func expandInRange(ctx context.Context, ev Event, overrides []EventOverride, fro
 		return nil, fmt.Errorf("rrule_expand: missing recurrence set")
 	}
 	var occurrences []time.Time
-	if maxIterations == 0 {
+	if remainingIterations == nil {
 		occurrences = set.Between(from, to, true)
 	} else {
 		next := set.Iterator()
-		for n := 0; ; n++ {
+		for {
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			if n >= maxIterations {
+			if *remainingIterations <= 0 {
 				return nil, fmt.Errorf("recurrence expansion work limit exceeded")
 			}
+			*remainingIterations--
 			occurrence, ok := next()
 			if !ok || occurrence.After(to) {
 				break
