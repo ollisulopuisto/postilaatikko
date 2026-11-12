@@ -51,16 +51,17 @@ curl --fail http://127.0.0.1:8028/healthz
 
 `/healthz` reports only whether the Send Later helper process is serving requests; it does not expose account, queue, or message data. The mailbox API requires a bearer token and checks its granted capabilities.
 
-Off-loopback connections require HTTPS with a certificate trusted by the client:
+Off-loopback connections require HTTPS with a certificate trusted by the client, plus an explicit allowlist of the exact Host names the listener answers:
 
 ```sh
 "$POSTILAATIKKO_HELPER" serve --identity studio \
   --listen '0.0.0.0:8028' \
   --tls-cert '/absolute/path/studio-certificate.pem' \
-  --tls-key '/absolute/path/studio-tls-key.pem'
+  --tls-key '/absolute/path/studio-tls-key.pem' \
+  --allowed-host 'studio.example.com'
 ```
 
-The client would use the corresponding reachable HTTPS hostname. Redirects and untrusted TLS certificates are rejected; the pinned helper key is an additional E2EE identity check. Request size, concurrent request count and network timeouts are bounded. The helper caps its logical queue at 10,000 job records and 512 MiB of encrypted envelopes. Existing jobs can still be cancelled at capacity. Revision tombstones are retained to reject delayed replays; there is no automatic history pruning. SQLite WAL and free pages can use additional disk space. A public relay remains a separate deployment with its own quotas, retention policy and rotation requirements.
+Non-loopback `--listen` refuses to start without at least one `--allowed-host`; repeat the flag for each accepted name (exact match, no wildcards). The client would use the corresponding reachable HTTPS hostname, and it must match an allowed host. Redirects and untrusted TLS certificates are rejected; the pinned helper key is an additional E2EE identity check. Request size, concurrent request count and network timeouts are bounded. The helper caps its logical queue at 10,000 job records and 512 MiB of encrypted envelopes. Existing jobs can still be cancelled at capacity. Revision tombstones are retained to reject delayed replays; there is no automatic history pruning. SQLite WAL and free pages can use additional disk space. A public relay remains a separate deployment with its own quotas, retention policy and rotation requirements.
 
 To run the existing bounded, header-first mailbox sync scheduler and automatic filters in the foreground, pass `--sync`:
 
