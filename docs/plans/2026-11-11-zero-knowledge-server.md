@@ -253,9 +253,10 @@ deprecated mailbox-service mode and retire with it. [inferred]
   Keychain). **Owner decision.**
 - Server backups are ciphertext: safe by construction. Keep Send Later
   tombstones **[documented: docs/SEND_LATER.md:116]**.
-- User-verifiable export: clients can always re-download all envelopes and
-  decrypt locally - exit is not hostage to the operator (mitigates T2
-  availability partially). **[inferred]**
+- Exit is not hostage to the operator: the mailbox lives at the provider and
+  on the user's devices, so an operator who deletes or withholds data can
+  cost the user pending scheduled sends and transfer envelopes, never the
+  mailbox (mitigates T2 availability). **[inferred]**
 
 ## 14. Metadata exposure and minimisation
 
