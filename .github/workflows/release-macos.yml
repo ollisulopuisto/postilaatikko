@@ -88,8 +88,15 @@ jobs:
         env:
           APPLE_SIGNING_IDENTITY: "Developer ID Application: Olli Sulopuisto (LWSR8T5392)"
         run: |
-          codesign --force --deep --options runtime --timestamp --sign "$APPLE_SIGNING_IDENTITY" build/bin/postilaatikko.app
+          codesign --force --deep --options runtime --entitlements build/darwin/entitlements.plist --timestamp --sign "$APPLE_SIGNING_IDENTITY" build/bin/postilaatikko.app
           codesign --verify --deep --strict --verbose=2 build/bin/postilaatikko.app
+      - name: Verify packaged entitlements cover usage descriptions
+        run: |
+          set -euo pipefail
+          codesign -d --entitlements - --xml build/bin/postilaatikko.app > "$RUNNER_TEMP/packaged-entitlements.xml"
+          python3 scripts/check_entitlements.py \
+            --info build/bin/postilaatikko.app/Contents/Info.plist \
+            --entitlements "$RUNNER_TEMP/packaged-entitlements.xml"
 
       - name: Notarize and staple app
         env:
