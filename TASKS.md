@@ -496,3 +496,9 @@ README review follow-up: qualify checksum instructions because tagged releases d
 | ID | Effort | Task | Owner | Status |
 | --- | --- | --- | --- | --- |
 | REMOTE-STARTUP-DOCS-001 | Easy | Replace stale remote-only startup limitation with current device/helper ownership and remaining parity limits. | Instinct / `agent/REMOTE-STARTUP-DOCS-001` / `/tmp/pl-remote-docs` | Review; PR #246, implementation `94c16db0`. Source-checked Preflight/startRemoteWorkspace and remote integration guards; `git diff --check` passed. No tests run (documentation only), no native two-machine runtime verified. |
+
+## Remote Calendar integration (2026-11-13)
+
+| ID | Effort | Task | Owner | Status |
+| --- | --- | --- | --- | --- |
+| REMOTE-CALENDAR-INTEGRATION-001 | Large | Stack Calendar typed client, read routing and helper lifecycle on Contacts Core and bounded Calendar foundation. | Instinct / `agent/REMOTE-CALENDAR-INTEGRATION-001` / `/tmp/pl-calendar-integration` | In progress; stacked on Contacts `0b5e51ce` and Calendar #249. Red-first typed-client, metadata-snapshot and sync-lifecycle tests pass; full Calendar/client/v1 package suites and vet pass. No production mounting or parity claim; native/two-machine and race tests not run. |
