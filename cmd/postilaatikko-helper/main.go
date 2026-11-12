@@ -77,7 +77,7 @@ func run(args []string) error {
 	helperKeyText := flags.String("helper-key", "", "public key verified directly with the helper")
 	clientKeyText := flags.String("client-key", "", "client public key verified during local pairing")
 	endpoint := flags.String("endpoint", "http://127.0.0.1:8028", "helper HTTPS URL (HTTP is allowed only on loopback)")
-	listen := flags.String("listen", "127.0.0.1:8028", "helper bind address; non-loopback requires TLS certificate and key")
+	listen := flags.String("listen", "127.0.0.1:8028", "helper bind address; non-loopback requires TLS certificate, key and --allowed-host")
 	cert := flags.String("tls-cert", "", "TLS server certificate")
 	key := flags.String("tls-key", "", "TLS server private-key file")
 	apiListen := flags.String("api-listen", "127.0.0.1:8029", "authenticated mailbox API bind address; non-loopback requires API TLS and Host allowlist")
@@ -103,6 +103,8 @@ func run(args []string) error {
 	flags.Var(&allowed, "allow", "pairing permission account-id=sender@example.com; repeat for each account/sender")
 	var apiAllowedHosts allowFlags
 	flags.Var(&apiAllowedHosts, "api-allowed-host", "exact Host name accepted by the authenticated mailbox API; repeat for each name")
+	var helperAllowedHosts allowFlags
+	flags.Var(&helperAllowedHosts, "allowed-host", "exact Host name accepted by the helper listener (required for non-loopback --listen); repeat for each name")
 	if err := flags.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -316,7 +318,7 @@ func run(args []string) error {
 				return err
 			}
 		}
-		return serve(ctx, store, transport, syncRuntime, *listen, *cert, *key, effectiveSync, apiConfig)
+		return serve(ctx, store, transport, syncRuntime, *listen, *cert, *key, helperAllowedHosts, effectiveSync, apiConfig)
 	case "install-agent":
 		transport, err := scheduledsend.OpenSMTPTransport(*data)
 		if err != nil {
@@ -324,7 +326,7 @@ func run(args []string) error {
 		}
 		transport.Close()
 		apiConfig := apiListenerConfig{address: *apiListen, cert: *apiCert, key: *apiKey, allowedHost: apiAllowedHosts}
-		return installAgent(ctx, *identityName, *data, *queue, *listen, *cert, *key, effectiveSync, apiConfig, pushConfig)
+		return installAgent(ctx, *identityName, *data, *queue, *listen, *cert, *key, helperAllowedHosts, effectiveSync, apiConfig, pushConfig)
 	default:
 		return fmt.Errorf("unknown helper command %q", command)
 	}
@@ -395,7 +397,7 @@ func defaultDataDirectory() (string, error) {
 	}
 }
 
-func validateListener(address, cert, key string) error {
+func validateListener(address, cert, key string, allowedHosts []string) error {
 	host, _, err := net.SplitHostPort(address)
 	if err != nil {
 		return err
@@ -407,6 +409,14 @@ func validateListener(address, cert, key string) error {
 	if (!loopback || cert != "" || key != "") && (cert == "" || key == "") {
 		return errors.New("non-loopback helper listeners require both --tls-cert and --tls-key")
 	}
+	if !loopback && len(allowedHosts) == 0 {
+		return errors.New("non-loopback helper listeners require at least one --allowed-host")
+	}
+	for _, allowedHost := range allowedHosts {
+		if !validAllowedHost(allowedHost) {
+			return fmt.Errorf("invalid --allowed-host entry %q", allowedHost)
+		}
+	}
 	if cert != "" {
 		if _, err := tls.LoadX509KeyPair(cert, key); err != nil {
 			return fmt.Errorf("load helper TLS identity: %w", err)
@@ -415,12 +425,12 @@ func validateListener(address, cert, key string) error {
 	return nil
 }
 
-func serve(ctx context.Context, store *scheduledsend.Store, transport scheduledsend.Transport, syncRuntime *alwayson.SyncRuntime, address, cert, key string, withSync bool, apiConfig apiListenerConfig) (result error) {
+func serve(ctx context.Context, store *scheduledsend.Store, transport scheduledsend.Transport, syncRuntime *alwayson.SyncRuntime, address, cert, key string, allowedHosts []string, withSync bool, apiConfig apiListenerConfig) (result error) {
 	if syncRuntime == nil {
 		return errors.New("mailbox runtime is required to serve the authenticated API")
 	}
 	defer func() { result = errors.Join(result, syncRuntime.Close()) }()
-	if err := validateListener(address, cert, key); err != nil {
+	if err := validateListener(address, cert, key, allowedHosts); err != nil {
 		return err
 	}
 	if err := apiConfig.validate(); err != nil {
@@ -437,7 +447,7 @@ func serve(ctx context.Context, store *scheduledsend.Store, transport scheduleds
 	if err := apiServer.Start(); err != nil {
 		return errors.Join(fmt.Errorf("start authenticated mailbox API: %w", err), listener.Close())
 	}
-	server := &http.Server{Handler: helperHandler(store, withSync), ReadHeaderTimeout: 5 * time.Second,
+	server := &http.Server{Handler: helperHandler(store, withSync, allowedHosts), ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 8192}
 	workerContext, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -485,7 +495,7 @@ func serve(ctx context.Context, store *scheduledsend.Store, transport scheduleds
 // helperHandler exposes only a minimal process-health signal alongside the
 // authenticated encrypted command endpoint. It does not disclose account or
 // queue state.
-func helperHandler(store *scheduledsend.Store, syncEnabled bool) http.Handler {
+func helperHandler(store *scheduledsend.Store, syncEnabled bool, allowedHosts []string) http.Handler {
 	serviceName := "send-later"
 	if syncEnabled {
 		serviceName = "mail-service"
@@ -515,6 +525,6 @@ func helperHandler(store *scheduledsend.Store, syncEnabled bool) http.Handler {
 			MaxSchemaVersion: database.MaxSchemaVersion(),
 		})
 	})
-	mux.Handle("/v1/commands", store.Handler())
-	return scheduledsend.ProtectBrowserRequests(mux)
+	mux.Handle("/v1/commands", store.Handler(allowedHosts...))
+	return scheduledsend.ProtectBrowserRequests(mux, allowedHosts...)
 }
