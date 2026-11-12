@@ -1,97 +1,84 @@
-// Bolt optimization regression: month formatting in MessageList.svelte `dayGroupFor`.
+// Bolt optimization regression: month formatting in the production dayGroupFor
+// (src/lib/components/list/dayGroup.ts), used by MessageList.svelte.
 //
-// OLD (previous source): `new Intl.DateTimeFormat(getLanguage() || 'en', { month: 'long' })`
-// is instantiated on every older conversation row during chronological inbox listing.
+// This test transpiles and imports the real production module - no copied
+// implementation - so behavior and caching regressions fail here directly.
 //
-// NEW: `Intl.DateTimeFormat` instances are cached in a Map keyed by language.
-//
-// This test verifies:
-// 1. old and new implementations produce identical outputs across various dates and locales.
-// 2. new is materially faster than old (>5x performance regression guard).
+// Covers:
+// 1. grouping correctness across dates and locales (pinned TZ=UTC),
+// 2. month-boundary dates across a system time-zone change (Devin finding:
+//    a formatter cached under the old zone formats the label in that zone
+//    while the group id uses the new zone),
+// 3. a >5x performance guard over constructing Intl.DateTimeFormat per call.
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import ts from 'typescript'
+import { readFile } from 'node:fs/promises'
 
-// ---- OLD implementation (instantiating new Intl.DateTimeFormat per call) ----
-function dayGroupForOld(dateValue, lang) {
-  const date = dateValue ? new Date(dateValue) : new Date(0)
-  const today = new Date()
-  const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
-  const startDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
-  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1).getTime()
-  if (startDate === startToday) return { id: 'today', label: 'today' }
-  if (startDate === yesterday) return { id: 'yesterday', label: 'yesterday' }
-  const sameYear = date.getFullYear() === today.getFullYear()
-  const month = new Intl.DateTimeFormat(lang || 'en', { month: 'long' }).format(date)
-  const monthLabel = `${month.charAt(0).toUpperCase()}${month.slice(1)}`
-  return {
-    id: `month-${date.getFullYear()}-${date.getMonth()}`,
-    label: sameYear ? monthLabel : `${monthLabel} ${date.getFullYear()}`,
-  }
-}
+process.env.TZ = 'UTC'
 
-// ---- NEW implementation (cached formatter per language) ----
-const sharedMonthFormatterCache = new Map()
+const source = await readFile(new URL('../src/lib/components/list/dayGroup.ts', import.meta.url), 'utf8')
+const { outputText } = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext } })
+const { dayGroupFor } = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`)
 
-function dayGroupForNew(dateValue, lang, cache = sharedMonthFormatterCache) {
-  const date = dateValue ? new Date(dateValue) : new Date(0)
-  const today = new Date()
-  const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
-  const startDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
-  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1).getTime()
-  if (startDate === startToday) return { id: 'today', label: 'today' }
-  if (startDate === yesterday) return { id: 'yesterday', label: 'yesterday' }
-  const sameYear = date.getFullYear() === today.getFullYear()
-  const l = lang || 'en'
-  let formatter = cache.get(l)
-  if (!formatter) {
-    formatter = new Intl.DateTimeFormat(l, { month: 'long' })
-    cache.set(l, formatter)
-  }
-  const month = formatter.format(date)
-  const monthLabel = `${month.charAt(0).toUpperCase()}${month.slice(1)}`
-  return {
-    id: `month-${date.getFullYear()}-${date.getMonth()}`,
-    label: sameYear ? monthLabel : `${monthLabel} ${date.getFullYear()}`,
-  }
-}
+const labels = { today: 'Today', yesterday: 'Yesterday' }
 
-const testDates = [
-  new Date(),
-  new Date(Date.now() - 86400000), // yesterday
-  new Date(Date.now() - 86400000 * 30), // ~1 month ago
-  new Date('2026-03-15T12:00:00Z'),
-  new Date('2025-11-20T08:30:00Z'),
-  new Date('2024-02-29T14:15:00Z'),
-  '2023-01-01T00:00:00Z',
-  '2022-07-04T12:00:00Z',
-  undefined,
-]
-
-const testLangs = ['en', 'fi', 'de', 'fr', 'pt-BR', 'zh-CN', '']
-
-test('dayGroupFor old and new produce identical output across dates and locales', () => {
-  for (const date of testDates) {
-    for (const lang of testLangs) {
-      const oldRes = dayGroupForOld(date, lang)
-      const newRes = dayGroupForNew(date, lang)
-      assert.deepEqual(newRes, oldRes, `mismatch for date=${date} lang=${lang}`)
-    }
+test('dayGroupFor groups fixed dates by month with year (TZ=UTC)', () => {
+  const cases = [
+    ['2026-03-15T12:00:00Z', 'month-2026-2', 'March'],
+    ['2025-11-20T08:30:00Z', 'month-2025-10', 'November 2025'],
+    ['2024-02-29T14:15:00Z', 'month-2024-1', 'February 2024'],
+    ['2023-01-01T00:00:00Z', 'month-2023-0', 'January 2023'],
+    ['2022-07-04T12:00:00Z', 'month-2022-6', 'July 2022'],
+  ]
+  for (const [date, id, label] of cases) {
+    assert.deepEqual(dayGroupFor(date, 'en', labels), { id, label }, `date=${date}`)
   }
 })
 
-test('dayGroupFor cached formatter caches per locale and reuses instance', () => {
-  const localCache = new Map()
-  assert.equal(localCache.size, 0)
-  dayGroupForNew('2025-01-01T00:00:00Z', 'fi', localCache)
-  assert.equal(localCache.size, 1)
-  dayGroupForNew('2025-02-01T00:00:00Z', 'fi', localCache)
-  assert.equal(localCache.size, 1)
-  dayGroupForNew('2025-03-01T00:00:00Z', 'en', localCache)
-  assert.equal(localCache.size, 2)
+test('dayGroupFor labels today and yesterday', () => {
+  assert.equal(dayGroupFor(new Date(), 'en', labels).id, 'today')
+  assert.equal(dayGroupFor(new Date(), 'en', labels).label, 'Today')
+  assert.equal(dayGroupFor(new Date(Date.now() - 86400000), 'en', labels).id, 'yesterday')
+})
+
+test('dayGroupFor produces consistent groups across locales', () => {
+  for (const lang of ['en', 'fi', 'de', 'fr', 'pt-BR', 'zh-CN', '']) {
+    const result = dayGroupFor('2025-11-20T08:30:00Z', lang, labels)
+    assert.equal(result.id, 'month-2025-10', `lang=${lang}`)
+    assert.ok(result.label.length > 0, `lang=${lang} label must not be empty`)
+  }
+})
+
+test('month headings follow a system time-zone change on a month-boundary date', () => {
+  const previousTZ = process.env.TZ
+  try {
+    // 2025-04-01T00:30:00Z is March 31 17:30 in Los Angeles but April 1 03:30
+    // in Helsinki. A formatter cached under the old zone must not format the
+    // label after the zone changes: id and label must agree on the month.
+    process.env.TZ = 'America/Los_Angeles'
+    const before = dayGroupFor('2025-04-01T00:30:00Z', 'en', labels)
+    assert.equal(before.id, 'month-2025-2')
+    assert.match(before.label, /^March/)
+
+    process.env.TZ = 'Europe/Helsinki'
+    const after = dayGroupFor('2025-04-01T00:30:00Z', 'en', labels)
+    assert.equal(after.id, 'month-2025-3')
+    assert.match(after.label, /^April/, `label "${after.label}" must come from the active zone, not a formatter cached under the previous one`)
+  } finally {
+    process.env.TZ = previousTZ
+  }
 })
 
 // ---- Performance regression guard ----
+function dayGroupForUncached(dateValue, lang) {
+  const date = dateValue ? new Date(dateValue) : new Date(0)
+  const month = new Intl.DateTimeFormat(lang || 'en', { month: 'long' }).format(date)
+  const monthLabel = `${month.charAt(0).toUpperCase()}${month.slice(1)}`
+  return { id: `month-${date.getFullYear()}-${date.getMonth()}`, label: monthLabel }
+}
+
 function bench(fn, iterations) {
   for (let i = 0; i < 50; i++) fn() // warmup
   const start = process.hrtime.bigint()
@@ -108,20 +95,18 @@ const olderDates = [
   '2023-01-01T00:00:00Z',
 ]
 
-test('dayGroupFor cached formatter is materially faster than old (>5x speedup)', () => {
+test('dayGroupFor cached formatter is materially faster than uncached (>5x speedup)', () => {
   const runOld = () => {
     for (const d of olderDates) {
       for (const l of ['fi', 'en']) {
-        dayGroupForOld(d, l)
+        dayGroupForUncached(d, l)
       }
     }
   }
-
-  const localCache = new Map()
   const runNew = () => {
     for (const d of olderDates) {
       for (const l of ['fi', 'en']) {
-        dayGroupForNew(d, l, localCache)
+        dayGroupFor(d, l, labels)
       }
     }
   }
@@ -129,8 +114,8 @@ test('dayGroupFor cached formatter is materially faster than old (>5x speedup)',
   const oldMs = bench(runOld, ITERATIONS)
   const newMs = bench(runNew, ITERATIONS)
 
-  console.log(`dayGroupFor old=${oldMs.toFixed(2)}ms new=${newMs.toFixed(2)}ms over ${ITERATIONS} iterations`)
-  assert.ok(newMs < oldMs, `expected new (${newMs}ms) < old (${oldMs}ms)`)
+  console.log(`dayGroupFor uncached=${oldMs.toFixed(2)}ms cached=${newMs.toFixed(2)}ms over ${ITERATIONS} iterations`)
+  assert.ok(newMs < oldMs, `expected cached (${newMs}ms) < uncached (${oldMs}ms)`)
   const speedup = oldMs / newMs
   assert.ok(speedup > 5, `expected >5x speedup, got ${speedup.toFixed(2)}x`)
 })
