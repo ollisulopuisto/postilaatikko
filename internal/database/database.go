@@ -43,12 +43,39 @@ const (
 // DB wraps the SQL database connection
 type DB struct {
 	*sql.DB
-	path string
-	log  zerolog.Logger
+	path          string
+	busyTimeoutMS int
+	log           zerolog.Logger
+}
+
+// BusyTimeoutMS returns the connection busy_timeout (milliseconds) the
+// database was opened with. Detached best-effort writes temporarily lower it
+// on a pinned connection and restore this value afterwards.
+func (db *DB) BusyTimeoutMS() int {
+	return db.busyTimeoutMS
+}
+
+// Option customizes Open. Production code uses the defaults; options exist so
+// tests can shorten lock waits and reproduce contention quickly.
+type Option func(*openOptions)
+
+type openOptions struct {
+	busyTimeoutMS int
+}
+
+// WithBusyTimeout overrides the SQLite busy_timeout (milliseconds). The
+// default is 30000. Tests use a small value so lock contention surfaces in
+// milliseconds instead of half a minute.
+func WithBusyTimeout(ms int) Option {
+	return func(o *openOptions) { o.busyTimeoutMS = ms }
 }
 
 // Open opens or creates a SQLite database at the given path
-func Open(path string) (*DB, error) {
+func Open(path string, opts ...Option) (*DB, error) {
+	options := openOptions{busyTimeoutMS: 30000}
+	for _, opt := range opts {
+		opt(&options)
+	}
 	if strings.ContainsAny(path, "?&#") {
 		return nil, fmt.Errorf("database path contains reserved URI characters")
 	}
@@ -72,7 +99,7 @@ func Open(path string) (*DB, error) {
 	// returns SQLITE_BUSY_SNAPSHOT (517) immediately, bypassing busy_timeout.
 	// IMMEDIATE obtains the write reservation before transaction reads so the
 	// timeout can serialize competing writers cleanly.
-	dsn := fmt.Sprintf("%s?_pragma=busy_timeout(30000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(ON)&_pragma=cache_size(-64000)&_txlock=immediate", uri.String())
+	dsn := fmt.Sprintf("%s?_pragma=busy_timeout(%d)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(ON)&_pragma=cache_size(-64000)&_txlock=immediate", uri.String(), options.busyTimeoutMS)
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
@@ -98,9 +125,10 @@ func Open(path string) (*DB, error) {
 	}
 
 	return &DB{
-		DB:   db,
-		path: path,
-		log:  logging.WithComponent("database"),
+		DB:            db,
+		path:          path,
+		busyTimeoutMS: options.busyTimeoutMS,
+		log:           logging.WithComponent("database"),
 	}, nil
 }
 
