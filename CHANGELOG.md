@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Share extension-scoped Auth and secret-store adapters between desktop and future headless hosts. Headless interactive consent fails explicitly without a host callback; CardDAV host-secret reads reject malformed source identities. This does not enable remote Contacts or Calendar by itself.
+
 ## Postilaatikko 2026.11.12.1
 
 - The Send Later helper accepts remote HTTPS deployments: non-loopback `--listen` now requires at least one `--allowed-host` naming the exact Host values the listener serves, and the DNS-rebinding Host guard honors them (port-stripped, case-insensitive, no wildcards); loopback-only validation is unchanged, and the installed launchd agent carries the allowed hosts.

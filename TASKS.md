@@ -478,3 +478,9 @@ README review follow-up: qualify checksum instructions because tagged releases d
 - Status: Review. Owner: Instinct. Branch: `design/dmg-welcome-a`. Worktree: `/tmp/posti` (PR #228 checkout). Implementation commit under review: `eb06ec2`; subsequent review fixes are recorded in this branch history and the reviewed head is kept current here when verification changes.
 - Scope: Bilingual (fi+en) dark DMG installer window, direction A: restyled layout via `packaging/dmg/restyle.py`, capture contract in `packaging/dmg/capture.py`, layout tests in `packaging/dmg/test_layout.py`, and packaging README updates. No merge; CI must stay green.
 - Verification: `python3 packaging/dmg/test_layout.py` passes locally; the same suite now runs in CI (workflow step added on this branch). macOS-only capture/rendering paths are unverified locally. Review pending; no merge.
+
+## Shared headless extension host access (2026-11-13)
+
+| ID | Effort | Task | Owner | Status |
+| --- | --- | --- | --- | --- |
+| EXTENSION-HOST-ACCESS-001 | Medium | Extract host-independent extension-scoped Auth and secret-store adapters for remote Contacts and Calendar runtimes. | Instinct / `agent/EXTENSION-HOST-ACCESS-001` / `/tmp/pl-extension-host` | Review; extracted scoped Auth/Secrets and CardDAV read-only host adapter, wired desktop delegates. New adapter and existing broker tests pass, focused app tests pass with test-only CGO-off platform overlay; no native keychain/OAuth/two-machine validation. No HTTP secret-export surface or automatic consent. |
