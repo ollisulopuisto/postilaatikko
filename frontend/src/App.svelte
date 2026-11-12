@@ -745,16 +745,23 @@
     const dispatch = (async (): Promise<boolean> => {
       let message: smtp.ComposeMessage
       let remoteHandled: boolean
+      let localAttempted = false
       try {
         remoteHandled = await DispatchRemotePendingSend(ps.id)
         if (!remoteHandled) {
           message = JSON.parse(ps.payload)
+          localAttempted = true
           await SendMessageWithDraftGuard(ps.accountId, message, ps.draftId)
         }
       } catch (err) {
         // A device-db claim can fail before any delivery attempt. Reload before
         // removing its countdown; terminal/unknown rows are absent from this list.
         await CompletePendingSend(ps.id).catch(() => {})
+        if (localAttempted) {
+          pendingRemove(ps.id)
+          addToast({ type: 'error', message: String(err) })
+          return false
+        }
         try {
           const persisted = await ListPendingSends() as PendingSendItem[]
           if (!persisted.some(item => item.id === ps.id)) pendingRemove(ps.id)

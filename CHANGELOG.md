@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Keep local delivery failures out of the remote Undo Send retry path, preventing automatic resubmission after an uncertain local send.
+
 - Remote Undo Send now releases draft locks after definitive helper rejection and keeps pending mail visible for retry when a device-database claim fails.
 
 - Remote desktops now keep the Undo Send safety window in the device database instead of accessing an unopened mailbox database. Cancel and dispatch arbitrate atomically; the remote helper receives immutable MIME under the queue's stable request ID. Restart never auto-sends, uncertain provider outcomes are not resubmitted, and helper-owned draft cleanup does not delete a later draft edit. Native two-machine delivery remains to be verified.
