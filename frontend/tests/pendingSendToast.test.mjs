@@ -37,3 +37,9 @@ test('remote pending dispatch uses durable queue ID and leaves helper-owned clea
   assert.match(app, /if \(ps.draftId && !remoteHandled\) \{/)
   assert.match(app, /EventsOn\('pending-send:warning'/)
 })
+test('claim failures reload persisted pending rows instead of abandoning queued mail', () => {
+ const failure=app.slice(app.indexOf('} catch (err) {',app.indexOf('function pendingDispatch')), app.indexOf('// SMTP accepted'))
+ assert.match(failure,/await ListPendingSends\(\)/)
+ assert.match(failure,/ps.dispatching = false/)
+ assert.match(failure,/if \(!persisted.some/)
+})

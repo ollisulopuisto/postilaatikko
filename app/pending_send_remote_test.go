@@ -3,11 +3,13 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"github.com/hkdb/aerion/internal/pendingremote"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	automationclient "github.com/hkdb/aerion/internal/automation/client"
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
@@ -148,5 +150,51 @@ func TestRemotePendingCancelAndRestartDoNotSend(t *testing.T) {
 	items, err := a.ListPendingSends()
 	if err != nil || len(items) != 0 {
 		t.Fatalf("pending=%v error=%v", items, err)
+	}
+}
+
+func TestRemotePendingDefinitiveRejectionReleasesDraft(t *testing.T) {
+	for _, code := range []v1.ErrorCode{v1.CodeRevisionConflict, v1.CodeInvalidRequest, v1.CodeNotFound, v1.CodeCapabilityDenied} {
+		t.Run(string(code), func(t *testing.T) {
+			db, err := database.Open(filepath.Join(t.TempDir(), "device.db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			var lookups int
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if strings.HasPrefix(r.URL.Path, "/v1/send/receipts/") {
+					lookups++
+					http.Error(w, "unavailable", 502)
+					return
+				}
+				w.WriteHeader(409)
+				_ = json.NewEncoder(w).Encode(v1.ErrorResponse{Error: v1.ErrorBody{Code: code, Message: "rejected"}})
+			}))
+			defer server.Close()
+			a := &App{ctx: context.Background(), deviceDB: db, remoteServiceMode: true, remoteServiceEndpoint: server.URL, paths: &platform.Paths{Data: t.TempDir()}, runtimeEventEmitter: func(string, ...interface{}) {}, mailboxService: &mailboxServiceConnector{statusFunc: func(context.Context) MailboxServiceStatus {
+				return MailboxServiceStatus{Connected: true, Capabilities: []string{"mail.send", "draft.write"}}
+			}, client: automationclient.New(automationclient.Config{Endpoint: server.URL, Token: "test"})}}
+			store, err := a.remotePendingStore()
+			if err != nil {
+				t.Fatal(err)
+			}
+			envelope, _ := json.Marshal(remotePendingEnvelope{Endpoint: server.URL, Request: v1.SendRequest{AccountID: "a", DraftID: "d"}})
+			item := pendingremote.Item{ID: "rejected", AccountID: "a", DraftID: "d", Payload: "{}", Prepared: envelope, CreatedAt: time.Now(), DispatchAt: time.Now().Add(time.Minute)}
+			if err := store.Queue(item); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := a.DispatchRemotePendingSend(item.ID); err == nil {
+				t.Fatal("rejection reported success")
+			}
+			item.ID = "retry"
+			if err := store.Queue(item); err != nil {
+				t.Fatalf("definitive rejection kept draft locked: %v", err)
+			}
+			if lookups != 0 {
+				t.Fatal("definitive rejection unnecessarily queried unavailable receipt")
+			}
+		})
 	}
 }
