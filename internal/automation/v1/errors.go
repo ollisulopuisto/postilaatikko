@@ -37,6 +37,8 @@ const (
 	CodeRevisionConflict ErrorCode = "revision_conflict"
 	// CodeInternal indicates an unexpected failure without exposing its cause.
 	CodeInternal ErrorCode = "internal_error"
+	// CodeDatabaseBusy indicates transient SQLite lock contention; retry shortly.
+	CodeDatabaseBusy ErrorCode = "database_busy"
 )
 
 // Fault holds a stable public error and an optional private cause. Serialize

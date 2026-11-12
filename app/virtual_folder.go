@@ -1,6 +1,8 @@
 package app
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -218,6 +220,23 @@ func (a *App) listVirtualFolderConversationsLocal(vf *virtualfolder.VirtualFolde
 	return a.messageStore.ListVirtualFolderConversations(folderIDs, offset, limit, sortOrder, virtualFolderMessageCriteria(vf))
 }
 
+// isVirtualFolderCacheBusy reports whether a cached-view failure is transient
+// lock contention: raw SQLite busy text (local stores and older helpers), the
+// cache route's public database_busy code, or the desktop's two-second request
+// budget expiring while the helper waits on the write lock. All three warrant
+// serving the direct local read instead of failing the view.
+func isVirtualFolderCacheBusy(err error) bool {
+	if err == nil {
+		return false
+	}
+	if database.IsBusy(err) || errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	text := err.Error()
+	return strings.Contains(text, string(v1.CodeDatabaseBusy)) ||
+		strings.Contains(text, "context deadline exceeded")
+}
+
 // virtualFolderDirectView answers GetVirtualFolderCachedView without the cache
 // when the cache cannot be loaded or refreshed because of SQLite lock
 // contention. Returns nil, false when the local stores cannot serve the view
@@ -349,7 +368,7 @@ func (a *App) GetVirtualFolderCachedView(virtualFolderID string) (*VirtualFolder
 			if err != nil {
 				// Lock contention is transient: serve the view from the local
 				// direct read instead of failing the whole folder.
-				if database.IsBusy(err) {
+				if isVirtualFolderCacheBusy(err) {
 					if view, ok := a.virtualFolderDirectView(virtualFolderID); ok {
 						log := logging.WithComponent("virtual-folder")
 						log.Warn().Err(err).Str("virtualFolderID", virtualFolderID).Msg("Mailbox service cache busy; serving virtual folder from direct read")
@@ -384,7 +403,7 @@ func (a *App) GetVirtualFolderCachedView(virtualFolderID string) (*VirtualFolder
 		if err := a.RefreshVirtualFolderCache(virtualFolderID); err != nil {
 			// A busy cache is optional state: fall back to the direct read so
 			// the view still loads under writer contention.
-			if database.IsBusy(err) {
+			if isVirtualFolderCacheBusy(err) {
 				if view, ok := a.virtualFolderDirectView(virtualFolderID); ok {
 					log := logging.WithComponent("virtual-folder")
 					log.Warn().Err(err).Str("virtualFolderID", virtualFolderID).Msg("Virtual-folder cache refresh busy; serving direct read")
@@ -394,7 +413,7 @@ func (a *App) GetVirtualFolderCachedView(virtualFolderID string) (*VirtualFolder
 			return nil, err
 		}
 		if refs, refreshedAt, _, err = a.virtualFolderStore.LoadCache(virtualFolderID); err != nil {
-			if database.IsBusy(err) {
+			if isVirtualFolderCacheBusy(err) {
 				if view, ok := a.virtualFolderDirectView(virtualFolderID); ok {
 					return view, nil
 				}
