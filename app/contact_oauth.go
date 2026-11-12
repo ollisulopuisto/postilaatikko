@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/hkdb/aerion/internal/account"
+	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/carddav"
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/oauth2"
@@ -123,8 +124,12 @@ func (a *App) finishContactOAuth(session *pendingContactOAuth) {
 // StartContactsOnlyOAuthFlow starts optional Contacts authorization. Mail has
 // its own OAuth manager, pending response and credential namespace.
 func (a *App) StartContactsOnlyOAuthFlow(provider string) error {
-	if err := a.requireLocalContacts(); err != nil {
-		return err
+	// Remote mode: the interactive OAuth flow runs on the desktop; only
+	// persistence goes through the helper (saveContactAuthorization branches).
+	if !a.remoteContactsActive() {
+		if err := a.requireLocalContacts(); err != nil {
+			return err
+		}
 	}
 	session, err := a.beginContactOAuth(provider, "")
 	if err != nil {
@@ -156,8 +161,12 @@ func (a *App) StartContactsOnlyOAuthFlow(provider string) error {
 
 // CompleteContactSourceOAuthSetup only reads the dedicated Contacts response.
 func (a *App) CompleteContactSourceOAuthSetup(name string, syncInterval int) (*carddav.Source, error) {
-	if err := a.requireLocalContacts(); err != nil {
-		return nil, err
+	// Remote mode: the interactive OAuth flow runs on the desktop; only
+	// persistence goes through the helper (saveContactAuthorization branches).
+	if !a.remoteContactsActive() {
+		if err := a.requireLocalContacts(); err != nil {
+			return nil, err
+		}
 	}
 	a.contactOAuthMu.Lock()
 	defer a.contactOAuthMu.Unlock()
@@ -177,6 +186,9 @@ func (a *App) CompleteContactSourceOAuthSetup(name string, syncInterval int) (*c
 // LinkAccountContactSource treats Mail as an identity hint, never as a token
 // source. The explicit user action opens separate Contacts consent and waits.
 func (a *App) LinkAccountContactSource(accountID, name string, syncInterval int) (*carddav.Source, error) {
+	if a.remoteContactsActive() {
+		return a.linkAccountContactSourceRemote(accountID, name, syncInterval)
+	}
 	if err := a.requireLocalContacts(); err != nil {
 		return nil, err
 	}
@@ -221,6 +233,9 @@ func (a *App) LinkAccountContactSource(accountID, name string, syncInterval int)
 // ReauthorizeContactSource migrates legacy Google sources and repairs expired
 // or revoked Contacts grants without touching Gmail. Cached contacts survive.
 func (a *App) ReauthorizeContactSource(sourceID string) error {
+	if a.remoteContactsActive() {
+		return a.reauthorizeContactSourceRemote(sourceID)
+	}
 	if err := a.requireLocalContacts(); err != nil {
 		return err
 	}
@@ -263,6 +278,24 @@ func (a *App) ReauthorizeContactSource(sourceID string) error {
 }
 
 func (a *App) saveContactAuthorization(session *pendingContactOAuth, sourceID, accountID, name string, interval int) (*carddav.Source, error) {
+	if a.remoteContactsActive() {
+		client, err := a.remoteContactsClient()
+		if err != nil {
+			return nil, err
+		}
+		source, err := client.SaveContactAuthorization(a.ctx, v1.ContactsAuthorizationRequest{
+			SourceID: sourceID, AccountID: accountID, Name: name, SyncInterval: interval,
+			Provider: session.provider.Name, Email: session.email,
+			Tokens: v1.ContactsTokenSet{
+				AccessToken: session.tokens.AccessToken, RefreshToken: session.tokens.RefreshToken,
+				ExpiresIn: session.tokens.ExpiresIn,
+			},
+		}, contactsIdempotencyKey("authorize", session.provider.Name, session.email, sourceID, accountID, name))
+		if err != nil {
+			return nil, remoteContactsError(err, v1.CapabilityContactsManage)
+		}
+		return source, nil
+	}
 	source, err := carddav.SaveAuthorization(a.carddavStore, a.credStore, &a.contactTokenMu, carddav.AuthorizationParams{
 		SourceID: sourceID, AccountID: accountID, Name: name,
 		SyncInterval: interval, Provider: session.provider.Name, Email: session.email,

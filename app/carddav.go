@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/hkdb/aerion/internal/account"
+	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/carddav"
 	"github.com/hkdb/aerion/internal/kit/davutil"
 	"github.com/hkdb/aerion/internal/logging"
@@ -27,6 +28,17 @@ type LinkedAccountInfo struct {
 
 // DiscoverCardDAVAddressbooks discovers available addressbooks from a CardDAV server
 func (a *App) DiscoverCardDAVAddressbooks(url, username, password string) ([]carddav.AddressbookInfo, error) {
+	if a.remoteContactsActive() {
+		client, err := a.remoteContactsClient()
+		if err != nil {
+			return nil, err
+		}
+		books, err := client.DiscoverContactAddressbooks(a.ctx, v1.ContactsDiscoverRequest{URL: url, Username: username, Password: password})
+		if err != nil {
+			return nil, remoteContactsError(err, v1.CapabilityContactsManage)
+		}
+		return books, nil
+	}
 	if err := a.requireLocalContacts(); err != nil {
 		return nil, err
 	}
@@ -35,6 +47,13 @@ func (a *App) DiscoverCardDAVAddressbooks(url, username, password string) ([]car
 
 // TestCardDAVConnection tests connection to a CardDAV server
 func (a *App) TestCardDAVConnection(url, username, password string) error {
+	if a.remoteContactsActive() {
+		client, err := a.remoteContactsClient()
+		if err != nil {
+			return err
+		}
+		return remoteContactsError(client.TestContactConnection(a.ctx, v1.ContactsDiscoverRequest{URL: url, Username: username, Password: password}), v1.CapabilityContactsManage)
+	}
 	if err := a.requireLocalContacts(); err != nil {
 		return err
 	}
@@ -46,6 +65,17 @@ func (a *App) TestCardDAVConnection(url, username, password string) error {
 // whose token also authorizes CardDAV, e.g. Stalwart). The account token getter is
 // already custom-OAuth-aware and refreshing; discovery doubles as the connection test.
 func (a *App) DiscoverCardDAVAddressbooksOAuth(url, accountID string) ([]carddav.AddressbookInfo, error) {
+	if a.remoteContactsActive() {
+		client, err := a.remoteContactsClient()
+		if err != nil {
+			return nil, err
+		}
+		books, err := client.DiscoverContactAddressbooks(a.ctx, v1.ContactsDiscoverRequest{URL: url, AccountID: accountID})
+		if err != nil {
+			return nil, remoteContactsError(err, v1.CapabilityContactsManage)
+		}
+		return books, nil
+	}
 	if err := a.requireLocalContacts(); err != nil {
 		return nil, err
 	}
@@ -59,6 +89,22 @@ func (a *App) DiscoverCardDAVAddressbooksOAuth(url, accountID string) ([]carddav
 
 // GetContactSources returns all configured contact sources
 func (a *App) GetContactSources() ([]*carddav.Source, error) {
+	if a.remoteContactsActive() {
+		client, err := a.remoteContactsClient()
+		if err != nil {
+			return nil, err
+		}
+		sources, err := client.ListContactSources(a.ctx)
+		if err != nil {
+			return nil, remoteContactsError(err, v1.CapabilityContactsRead)
+		}
+		out := make([]*carddav.Source, 0, len(sources))
+		for i := range sources {
+			src := sources[i]
+			out = append(out, &src)
+		}
+		return out, nil
+	}
 	if err := a.requireLocalContacts(); err != nil {
 		return nil, err
 	}
@@ -67,6 +113,18 @@ func (a *App) GetContactSources() ([]*carddav.Source, error) {
 
 // GetContactSource returns a single contact source by ID
 func (a *App) GetContactSource(id string) (*carddav.Source, error) {
+	if a.remoteContactsActive() {
+		sources, err := a.GetContactSources()
+		if err != nil {
+			return nil, err
+		}
+		for _, source := range sources {
+			if source.ID == id {
+				return source, nil
+			}
+		}
+		return nil, nil
+	}
 	if err := a.requireLocalContacts(); err != nil {
 		return nil, err
 	}
@@ -75,6 +133,17 @@ func (a *App) GetContactSource(id string) (*carddav.Source, error) {
 
 // AddContactSource creates a new contact source with addressbooks
 func (a *App) AddContactSource(config carddav.SourceConfig) (*carddav.Source, error) {
+	if a.remoteContactsActive() {
+		client, err := a.remoteContactsClient()
+		if err != nil {
+			return nil, err
+		}
+		source, err := client.MutateContactSource(a.ctx, v1.ContactsSourceMutationRequest{Operation: "create", Config: &config}, contactsIdempotencyKey("source_create", config.Name, string(config.Type), config.URL, config.Username))
+		if err != nil {
+			return nil, remoteContactsError(err, v1.CapabilityContactsManage)
+		}
+		return source, nil
+	}
 	if err := a.requireLocalContacts(); err != nil {
 		return nil, err
 	}
@@ -94,6 +163,14 @@ func (a *App) AddContactSource(config carddav.SourceConfig) (*carddav.Source, er
 
 // UpdateContactSource updates an existing contact source
 func (a *App) UpdateContactSource(id string, config carddav.SourceConfig) error {
+	if a.remoteContactsActive() {
+		client, err := a.remoteContactsClient()
+		if err != nil {
+			return err
+		}
+		_, err = client.MutateContactSource(a.ctx, v1.ContactsSourceMutationRequest{Operation: "update", ID: id, Config: &config}, contactsIdempotencyKey("source_update", id, config.Name, config.URL, config.Username, fmt.Sprint(config.Writable, config.Enabled, config.SyncInterval)))
+		return remoteContactsError(err, v1.CapabilityContactsManage)
+	}
 	if err := a.requireLocalContacts(); err != nil {
 		return err
 	}
@@ -112,6 +189,14 @@ func (a *App) UpdateContactSource(id string, config carddav.SourceConfig) error 
 
 // DeleteContactSource deletes a contact source and all its data
 func (a *App) DeleteContactSource(id string) error {
+	if a.remoteContactsActive() {
+		client, err := a.remoteContactsClient()
+		if err != nil {
+			return err
+		}
+		_, err = client.MutateContactSource(a.ctx, v1.ContactsSourceMutationRequest{Operation: "delete", ID: id}, contactsIdempotencyKey("source_delete", id))
+		return remoteContactsError(err, v1.CapabilityContactsManage)
+	}
 	if err := a.requireLocalContacts(); err != nil {
 		return err
 	}
@@ -129,6 +214,22 @@ func (a *App) DeleteContactSource(id string) error {
 
 // GetSourceAddressbooks returns all addressbooks for a source
 func (a *App) GetSourceAddressbooks(sourceID string) ([]*carddav.Addressbook, error) {
+	if a.remoteContactsActive() {
+		client, err := a.remoteContactsClient()
+		if err != nil {
+			return nil, err
+		}
+		books, err := client.ListContactSourceAddressbooks(a.ctx, sourceID)
+		if err != nil {
+			return nil, remoteContactsError(err, v1.CapabilityContactsRead)
+		}
+		out := make([]*carddav.Addressbook, 0, len(books))
+		for i := range books {
+			b := books[i]
+			out = append(out, &b)
+		}
+		return out, nil
+	}
 	if err := a.requireLocalContacts(); err != nil {
 		return nil, err
 	}
@@ -137,6 +238,14 @@ func (a *App) GetSourceAddressbooks(sourceID string) ([]*carddav.Addressbook, er
 
 // SetAddressbookEnabled enables or disables an addressbook
 func (a *App) SetAddressbookEnabled(addressbookID string, enabled bool) error {
+	if a.remoteContactsActive() {
+		client, err := a.remoteContactsClient()
+		if err != nil {
+			return err
+		}
+		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "set_addressbook_enabled", AddressbookID: addressbookID, Enabled: enabled}, contactsIdempotencyKey("ab_enabled", addressbookID, fmt.Sprint(enabled)))
+		return remoteContactsError(err, v1.CapabilityContactsWrite)
+	}
 	if err := a.requireLocalContacts(); err != nil {
 		return err
 	}
@@ -146,6 +255,14 @@ func (a *App) SetAddressbookEnabled(addressbookID string, enabled bool) error {
 // SetContactSourceWritable flips the writable flag for a source that supports
 // writes. Google Contacts sources are permanently read-only.
 func (a *App) SetContactSourceWritable(sourceID string, writable bool) error {
+	if a.remoteContactsActive() {
+		client, err := a.remoteContactsClient()
+		if err != nil {
+			return err
+		}
+		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "set_writable", ID: sourceID, Writable: writable}, contactsIdempotencyKey("writable", sourceID, fmt.Sprint(writable)))
+		return remoteContactsError(err, v1.CapabilityContactsWrite)
+	}
 	if err := a.requireLocalContacts(); err != nil {
 		return err
 	}
@@ -163,6 +280,14 @@ func (a *App) SetContactSourceWritable(sourceID string, writable bool) error {
 
 // SyncContactSource manually triggers a sync for a source
 func (a *App) SyncContactSource(id string) error {
+	if a.remoteContactsActive() {
+		client, err := a.remoteContactsClient()
+		if err != nil {
+			return err
+		}
+		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "sync", ID: id}, contactsIdempotencyKey("sync", id, fmt.Sprint(time.Now().Unix()/30)))
+		return remoteContactsError(err, v1.CapabilityContactsWrite)
+	}
 	if err := a.requireLocalContacts(); err != nil {
 		return err
 	}
@@ -171,6 +296,14 @@ func (a *App) SyncContactSource(id string) error {
 
 // SyncAllContactSources manually triggers a sync for all sources
 func (a *App) SyncAllContactSources() error {
+	if a.remoteContactsActive() {
+		client, err := a.remoteContactsClient()
+		if err != nil {
+			return err
+		}
+		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "sync_all"}, contactsIdempotencyKey("sync_all", fmt.Sprint(time.Now().Unix()/30)))
+		return remoteContactsError(err, v1.CapabilityContactsWrite)
+	}
 	if err := a.requireLocalContacts(); err != nil {
 		return err
 	}
@@ -184,6 +317,14 @@ func (a *App) SyncAllContactSources() error {
 // where the old parser only stored email + display name. Mirrors
 // App.ForceSyncFolder for mail messages.
 func (a *App) ForceSyncContactSource(sourceID string) error {
+	if a.remoteContactsActive() {
+		client, err := a.remoteContactsClient()
+		if err != nil {
+			return err
+		}
+		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "force_sync", ID: sourceID}, contactsIdempotencyKey("force_sync", sourceID, fmt.Sprint(time.Now().Unix()/30)))
+		return remoteContactsError(err, v1.CapabilityContactsWrite)
+	}
 	if err := a.requireLocalContacts(); err != nil {
 		return err
 	}
@@ -195,6 +336,24 @@ func (a *App) ForceSyncContactSource(sourceID string) error {
 
 // GetContactSourceErrors returns all sources that have errors
 func (a *App) GetContactSourceErrors() ([]*carddav.SourceError, error) {
+	if a.remoteContactsActive() {
+		sources, err := a.GetContactSources()
+		if err != nil {
+			return nil, err
+		}
+		var out []*carddav.SourceError
+		for _, source := range sources {
+			if source.LastError == "" {
+				continue
+			}
+			errAt := time.Now()
+			if source.LastErrorAt != nil {
+				errAt = *source.LastErrorAt
+			}
+			out = append(out, &carddav.SourceError{SourceID: source.ID, SourceName: source.Name, Error: source.LastError, ErrorAt: errAt})
+		}
+		return out, nil
+	}
 	if err := a.requireLocalContacts(); err != nil {
 		return nil, err
 	}
@@ -203,6 +362,21 @@ func (a *App) GetContactSourceErrors() ([]*carddav.SourceError, error) {
 
 // GetContactSourceStats returns statistics for contact sources
 func (a *App) GetContactSourceStats() (map[string]interface{}, error) {
+	if a.remoteContactsActive() {
+		client, err := a.remoteContactsClient()
+		if err != nil {
+			return nil, err
+		}
+		stats, err := client.GetContactStats(a.ctx)
+		if err != nil {
+			return nil, remoteContactsError(err, v1.CapabilityContactsRead)
+		}
+		return map[string]interface{}{
+			"total_sources":       stats.TotalSources,
+			"total_contacts":      stats.TotalContacts,
+			"sources_with_errors": stats.SourcesWithErrors,
+		}, nil
+	}
 	if err := a.requireLocalContacts(); err != nil {
 		return nil, err
 	}
@@ -227,6 +401,21 @@ func (a *App) GetContactSourceStats() (map[string]interface{}, error) {
 
 // GetLinkedAccountsForContactSync returns email accounts that can be linked to contact sources
 func (a *App) GetLinkedAccountsForContactSync() ([]LinkedAccountInfo, error) {
+	if a.remoteContactsActive() {
+		client, err := a.remoteContactsClient()
+		if err != nil {
+			return nil, err
+		}
+		accounts, err := client.ListContactLinkedAccounts(a.ctx, "google")
+		if err != nil {
+			return nil, remoteContactsError(err, v1.CapabilityContactsRead)
+		}
+		out := make([]LinkedAccountInfo, 0, len(accounts))
+		for _, acc := range accounts {
+			out = append(out, LinkedAccountInfo{AccountID: acc.AccountID, Email: acc.Email, Name: acc.Name, Provider: acc.Provider, IsLinked: acc.IsLinked, ContactSourceID: acc.ContactSourceID})
+		}
+		return out, nil
+	}
 	if err := a.requireLocalContacts(); err != nil {
 		return nil, err
 	}
@@ -290,6 +479,21 @@ func (a *App) GetLinkedAccountsForContactSync() ([]LinkedAccountInfo, error) {
 // so these populate the OAuth-account picker in the Add CardDAV Source dialog.
 // Unlike GetLinkedAccountsForContactSync (Google People API), this is the DAV path.
 func (a *App) GetCustomOAuthAccounts() ([]LinkedAccountInfo, error) {
+	if a.remoteContactsActive() {
+		client, err := a.remoteContactsClient()
+		if err != nil {
+			return nil, err
+		}
+		accounts, err := client.ListContactLinkedAccounts(a.ctx, "custom-oauth")
+		if err != nil {
+			return nil, remoteContactsError(err, v1.CapabilityContactsRead)
+		}
+		out := make([]LinkedAccountInfo, 0, len(accounts))
+		for _, acc := range accounts {
+			out = append(out, LinkedAccountInfo{AccountID: acc.AccountID, Email: acc.Email, Name: acc.Name, Provider: acc.Provider, IsLinked: acc.IsLinked, ContactSourceID: acc.ContactSourceID})
+		}
+		return out, nil
+	}
 	if err := a.requireLocalContacts(); err != nil {
 		return nil, err
 	}
