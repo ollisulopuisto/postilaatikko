@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/hkdb/aerion/internal/account"
 	"github.com/hkdb/aerion/internal/carddav"
-	"github.com/hkdb/aerion/internal/credentials"
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/oauth2"
 	"github.com/hkdb/aerion/internal/platform"
@@ -26,17 +24,10 @@ type pendingContactOAuth struct {
 // Legacy standalone sources used shipped credentials and stored "google" /
 // "microsoft". Preserve that client for refresh, but use Contacts configuration.
 // Newly authorized sources store the explicit *-contacts provider.
+// contactRefreshProvider delegates to the shared helper so the desktop and
+// the headless helper resolve contact token providers identically.
 func contactRefreshProvider(name string) (oauth2.ProviderConfig, error) {
-	switch name {
-	case "google":
-		return oauth2.GoogleContactsOnlyProvider(), nil
-	case "microsoft":
-		return oauth2.MicrosoftContactsOnlyProvider(), nil
-	case "google-contacts", "microsoft-contacts":
-		return oauth2.GetProvider(name)
-	default:
-		return oauth2.ProviderConfig{}, fmt.Errorf("unsupported contact OAuth provider: %s", name)
-	}
+	return oauth2.ContactRefreshProvider(name)
 }
 
 func (a *App) prepareContactOAuth(provider, email string) (*pendingContactOAuth, string, error) {
@@ -272,88 +263,15 @@ func (a *App) ReauthorizeContactSource(sourceID string) error {
 }
 
 func (a *App) saveContactAuthorization(session *pendingContactOAuth, sourceID, accountID, name string, interval int) (*carddav.Source, error) {
-	a.contactTokenMu.Lock()
-	defer a.contactTokenMu.Unlock()
-	provider := strings.TrimSuffix(session.provider.Name, "-contacts")
-	// Avoid duplicate sources for the same authorized identity.
-	if sourceID == "" {
-		sources, err := a.carddavStore.ListSources()
-		if err != nil {
-			return nil, err
-		}
-		for _, s := range sources {
-			if string(s.Type) == provider && strings.EqualFold(s.Username, session.email) {
-				return nil, fmt.Errorf("Contacts for %s already exists; reauthorize the existing source", session.email)
-			}
-		}
-	}
-	// Microsoft Contacts retains the standalone Graph model (Outlook Mail
-	// and Graph tokens have different audiences).
-	if provider == "microsoft" {
-		accountID = ""
-	}
-	created := sourceID == ""
-	var source *carddav.Source
-	var err error
-	if created {
-		source, err = a.carddavStore.CreateSource(&carddav.SourceConfig{
-			Name: name, Type: carddav.SourceType(provider), Username: session.email,
-			AccountID: accountID, Enabled: true, SyncInterval: interval,
-		})
-	} else {
-		source, err = a.carddavStore.GetSource(sourceID)
-	}
+	source, err := carddav.SaveAuthorization(a.carddavStore, a.credStore, &a.contactTokenMu, carddav.AuthorizationParams{
+		SourceID: sourceID, AccountID: accountID, Name: name,
+		SyncInterval: interval, Provider: session.provider.Name, Email: session.email,
+		AccessToken: session.tokens.AccessToken, RefreshToken: session.tokens.RefreshToken,
+		ExpiresIn: session.tokens.ExpiresIn, Scopes: session.provider.Scopes,
+	})
 	if err != nil {
 		return nil, err
 	}
-	if source == nil {
-		return nil, fmt.Errorf("contact source no longer exists")
-	}
-	tokens := &credentials.OAuthTokens{
-		Provider: session.provider.Name, AccessToken: session.tokens.AccessToken,
-		RefreshToken: session.tokens.RefreshToken,
-		ExpiresAt:    time.Now().Add(time.Duration(session.tokens.ExpiresIn) * time.Second),
-		Scopes:       session.provider.Scopes,
-	}
-	if tokens.RefreshToken == "" && provider == "microsoft" {
-		if previous, err := a.credStore.GetContactSourceOAuthTokens(source.ID); err == nil && previous.Provider == tokens.Provider {
-			tokens.RefreshToken = previous.RefreshToken
-		}
-	}
-	if tokens.RefreshToken == "" {
-		if created {
-			_ = a.carddavStore.DeleteSource(source.ID)
-		}
-		return nil, fmt.Errorf("Contacts authorization returned no refresh token; sign in again")
-	}
-	if err := a.credStore.SetContactSourceOAuthTokens(source.ID, tokens); err != nil {
-		if created {
-			_ = a.credStore.DeleteContactSourceOAuthTokens(source.ID)
-			_ = a.carddavStore.DeleteSource(source.ID)
-		}
-		return nil, fmt.Errorf("save Contacts credentials: %w", err)
-	}
-	// Reauthorization can change the client/grant behind a legacy source.
-	// Force a full provider sync while retaining the cache until it succeeds.
-	if !created {
-		books, err := a.carddavStore.ListAddressbooks(source.ID)
-		if err != nil {
-			return nil, err
-		}
-		for _, book := range books {
-			if err := a.carddavStore.UpdateAddressbookSyncToken(book.ID, ""); err != nil {
-				return nil, err
-			}
-		}
-	}
-	if err := a.carddavStore.SetOAuthIdentity(source.ID, session.email); err != nil {
-		return nil, err
-	}
-	// A fresh read-only grant does not retain a previous write capability.
-	if err := a.carddavStore.SetSourceWritable(source.ID, false); err != nil {
-		return nil, err
-	}
-	source.Username, source.Writable = session.email, false
 	if a.carddavSyncer != nil {
 		log := logging.WithComponent("app")
 		go func(id string) {

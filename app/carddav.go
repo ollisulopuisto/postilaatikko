@@ -80,27 +80,9 @@ func (a *App) AddContactSource(config carddav.SourceConfig) (*carddav.Source, er
 	}
 	log := logging.WithComponent("app")
 
-	// Create the source
-	source, err := a.carddavStore.CreateSource(&config)
+	source, err := carddav.CreateSourceAdmin(a.carddavStore, a.credStore, config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create source: %w", err)
-	}
-
-	// Store password in credential store (use CardDAV-specific method)
-	if config.Password != "" {
-		if err := a.credStore.SetCardDAVPassword(source.ID, config.Password); err != nil {
-			// Rollback source creation
-			a.carddavStore.DeleteSource(source.ID)
-			return nil, fmt.Errorf("failed to store password: %w", err)
-		}
-	}
-
-	// Create addressbooks based on enabled paths
-	for _, path := range config.EnabledAddressbooks {
-		_, err := a.carddavStore.CreateAddressbook(source.ID, path, addressbookDisplayName(config.AddressbookNames, path), true)
-		if err != nil {
-			log.Warn().Err(err).Str("path", path).Msg("Failed to create addressbook")
-		}
+		return nil, err
 	}
 
 	// Trigger initial sync
@@ -117,75 +99,8 @@ func (a *App) UpdateContactSource(id string, config carddav.SourceConfig) error 
 	}
 	log := logging.WithComponent("app")
 
-	existingSource, err := a.carddavStore.GetSource(id)
-	if err != nil {
+	if err := carddav.UpdateSourceAdmin(a.carddavStore, a.credStore, id, config); err != nil {
 		return err
-	}
-	if existingSource != nil && existingSource.Type != carddav.SourceTypeCardDAV {
-		config.Username = existingSource.Username
-	}
-
-	// Update the source
-	if err := a.carddavStore.UpdateSource(id, &config); err != nil {
-		return fmt.Errorf("failed to update source: %w", err)
-	}
-
-	// Update password if provided (use CardDAV-specific method)
-	if config.Password != "" {
-		if err := a.credStore.SetCardDAVPassword(id, config.Password); err != nil {
-			return fmt.Errorf("failed to update password: %w", err)
-		}
-	}
-
-	// Differential addressbook update: only delete addressbooks whose paths
-	// are no longer in EnabledAddressbooks; only create addressbooks for
-	// paths not already present. Existing addressbooks keep their UUID,
-	// sync_token, last_synced_at, and all the carddav_record_state rows
-	// pointing at them — so a writable-toggle save or a name-only edit
-	// becomes a no-op on the addressbook side.
-	//
-	// The previous behavior tore down ALL addressbooks on every call and
-	// re-created them with new UUIDs. carddav_record_state.addressbook_id
-	// has no FK cascade, so every record row was orphaned (UI went empty;
-	// the next full sync rebuilt the cache from scratch and left the old
-	// rows as dead bloat).
-	if len(config.EnabledAddressbooks) > 0 {
-		existing, listErr := a.carddavStore.ListAddressbooks(id)
-		if listErr != nil {
-			return fmt.Errorf("failed to list current addressbooks: %w", listErr)
-		}
-
-		existingByPath := make(map[string]*carddav.Addressbook, len(existing))
-		for _, ab := range existing {
-			existingByPath[ab.Path] = ab
-		}
-		incomingByPath := make(map[string]bool, len(config.EnabledAddressbooks))
-		for _, path := range config.EnabledAddressbooks {
-			incomingByPath[path] = true
-		}
-
-		// Delete addressbooks the user removed from their selection. Uses
-		// DeleteAddressbookByID (tx-wrapped) so the carddav_record_state
-		// rows + contact_records under that addressbook are cleaned up.
-		for path, ab := range existingByPath {
-			if incomingByPath[path] {
-				continue
-			}
-			if err := a.carddavStore.DeleteAddressbookByID(ab.ID); err != nil {
-				log.Warn().Err(err).Str("path", path).Msg("Failed to delete removed addressbook")
-			}
-		}
-
-		// Create addressbooks for paths the user newly enabled. Existing
-		// paths are skipped — preserving their UUID and downstream cache.
-		for _, path := range config.EnabledAddressbooks {
-			if _, exists := existingByPath[path]; exists {
-				continue
-			}
-			if _, err := a.carddavStore.CreateAddressbook(id, path, addressbookDisplayName(config.AddressbookNames, path), true); err != nil {
-				log.Warn().Err(err).Str("path", path).Msg("Failed to create new addressbook")
-			}
-		}
 	}
 
 	// Trigger resync
@@ -204,23 +119,8 @@ func (a *App) DeleteContactSource(id string) error {
 	defer a.contactTokenMu.Unlock()
 	log := logging.WithComponent("app")
 
-	// Get source first to check type
-	source, _ := a.carddavStore.GetSource(id)
-
-	// Delete from database (cascades to addressbooks and contacts)
-	if err := a.carddavStore.DeleteSource(id); err != nil {
-		return fmt.Errorf("failed to delete source: %w", err)
-	}
-
-	// Delete credentials based on source type
-	if source != nil {
-		switch source.Type {
-		case carddav.SourceTypeCardDAV:
-			a.credStore.DeleteCardDAVPassword(id)
-		case carddav.SourceTypeGoogle, carddav.SourceTypeMicrosoft:
-			// Source credentials are always independent of Mail, including linked Google sources.
-			a.credStore.DeleteContactSourceOAuthTokens(id)
-		}
+	if err := carddav.DeleteSourceAdmin(a.carddavStore, a.credStore, id); err != nil {
+		return err
 	}
 
 	log.Info().Str("id", id).Msg("Contact source deleted")
@@ -287,14 +187,8 @@ func (a *App) ForceSyncContactSource(sourceID string) error {
 	if err := a.requireLocalContacts(); err != nil {
 		return err
 	}
-	abs, err := a.carddavStore.ListAddressbooks(sourceID)
-	if err != nil {
-		return fmt.Errorf("failed to list addressbooks: %w", err)
-	}
-	for _, ab := range abs {
-		if err := a.carddavStore.UpdateAddressbookSyncToken(ab.ID, ""); err != nil {
-			return fmt.Errorf("failed to clear sync token for addressbook %s: %w", ab.ID, err)
-		}
+	if err := carddav.ForceSyncAdmin(a.carddavStore, sourceID); err != nil {
+		return err
 	}
 	return a.carddavSyncer.SyncSource(sourceID)
 }
@@ -439,11 +333,5 @@ func (a *App) GetCustomOAuthAccounts() ([]LinkedAccountInfo, error) {
 // the display name discovery found (passed through SourceConfig, #366),
 // falling back to the path's last segment.
 func addressbookDisplayName(names map[string]string, path string) string {
-	if name := names[path]; name != "" {
-		return name
-	}
-	if parts := strings.Split(strings.Trim(path, "/"), "/"); len(parts) > 0 && parts[len(parts)-1] != "" {
-		return parts[len(parts)-1]
-	}
-	return path
+	return carddav.AddressbookDisplayName(names, path)
 }
