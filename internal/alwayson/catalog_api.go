@@ -302,7 +302,7 @@ func (r *SyncRuntime) RefreshVirtualFolderCache(id string) error {
 	return r.refreshVirtualFolderCache(id)
 }
 
-func (r *SyncRuntime) GetCachedVirtualFolderView(id string) (*v1.CachedVirtualFolderView, error) {
+func (r *SyncRuntime) GetCachedVirtualFolderView(ctx context.Context, id string) (*v1.CachedVirtualFolderView, error) {
 	if r == nil || r.virtualFolders == nil || r.messages == nil {
 		return nil, errors.New("always-on runtime is not open")
 	}
@@ -318,7 +318,7 @@ func (r *SyncRuntime) GetCachedVirtualFolderView(id string) (*v1.CachedVirtualFo
 		return nil, err
 	}
 	if !found {
-		if err := r.refreshVirtualFolderCache(id); err != nil {
+		if err := r.refreshVirtualFolderCacheContext(ctx, id); err != nil {
 			return nil, err
 		}
 		refs, refreshedAt, found, err = r.virtualFolders.LoadCache(id)
@@ -350,28 +350,49 @@ func (r *SyncRuntime) GetVirtualFolderUnreadCounts() (map[string]int, error) {
 }
 
 func (r *SyncRuntime) refreshVirtualFolderCache(id string) error {
+	entries, err := r.virtualFolderCacheEntries(id)
+	if err != nil {
+		return err
+	}
+	return r.virtualFolders.SaveCache(id, entries)
+}
+
+// refreshVirtualFolderCacheContext serves detached cache-route work: no
+// retry loop runs, and the cache write's lock wait is bounded by
+// SaveCacheContext's lowered busy_timeout - the driver ignores context
+// cancellation during the busy wait - so an abandoned refresh frees its
+// pool connection within that bound.
+func (r *SyncRuntime) refreshVirtualFolderCacheContext(ctx context.Context, id string) error {
+	entries, err := r.virtualFolderCacheEntries(id)
+	if err != nil {
+		return err
+	}
+	return r.virtualFolders.SaveCacheContext(ctx, id, entries)
+}
+
+func (r *SyncRuntime) virtualFolderCacheEntries(id string) ([]virtualfolder.CachedConversation, error) {
 	vf, err := r.virtualFolders.Get(id)
 	if err != nil {
-		return fmt.Errorf("load virtual folder for cache refresh: %w", err)
+		return nil, fmt.Errorf("load virtual folder for cache refresh: %w", err)
 	}
 	if vf == nil {
-		return fmt.Errorf("virtual folder not found: %s", id)
+		return nil, fmt.Errorf("virtual folder not found: %s", id)
 	}
 	folderIDs, err := r.virtualFolders.QueryFolderIDs(vf)
 	if err != nil {
-		return fmt.Errorf("resolve virtual folder members: %w", err)
+		return nil, fmt.Errorf("resolve virtual folder members: %w", err)
 	}
 	refs, err := r.messages.ListVirtualFolderConversationIDs(folderIDs, vf.SearchQuery, 200, message.VirtualFolderCriteria{
 		ReadStatus: vf.ReadStatus, ReplyStatus: vf.ReplyStatus, StarStatus: vf.StarStatus, DateWindow: vf.DateWindow,
 	})
 	if err != nil {
-		return fmt.Errorf("query virtual folder cache members: %w", err)
+		return nil, fmt.Errorf("query virtual folder cache members: %w", err)
 	}
 	entries := make([]virtualfolder.CachedConversation, 0, len(refs))
 	for _, ref := range refs {
 		entries = append(entries, virtualfolder.CachedConversation{AccountID: ref.AccountID, ConversationID: ref.ConversationID})
 	}
-	return r.virtualFolders.SaveCache(id, entries)
+	return entries, nil
 }
 
 func (r *SyncRuntime) GetFilterRules() ([]*mailfilter.Rule, error) {

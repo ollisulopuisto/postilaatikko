@@ -1,6 +1,7 @@
 package virtualfolder
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -45,8 +46,8 @@ func (s *Store) ensureTables() error {
 	return nil
 }
 
-// Create inserts a new virtual folder and its folder members
-func (s *Store) Create(vf *VirtualFolder) error {
+// create inserts a new virtual folder and its folder members (retried on SQLITE_BUSY by the public wrapper)
+func (s *Store) create(vf *VirtualFolder) error {
 	if vf == nil {
 		return fmt.Errorf("virtual folder cannot be nil")
 	}
@@ -98,6 +99,73 @@ func (s *Store) Create(vf *VirtualFolder) error {
 	}
 
 	return nil
+}
+
+// Busy-retry policy for virtual-folder writes. Sync churn (per-message
+// upserts, FTS batches) can starve one waiter past the DSN busy_timeout, which
+// used to surface in the UI as "failed to begin transaction: database is
+// locked (5) (SQLITE_BUSY)". A few short retries absorb that transient
+// contention; reads need no retry because WAL readers never block.
+const (
+	busyRetryAttempts  = 5
+	busyRetryBaseDelay = 200 * time.Millisecond
+)
+
+// Create inserts a new virtual folder and its folder members
+func (s *Store) Create(vf *VirtualFolder) error {
+	return database.RetryOnBusy(func() error { return s.create(vf) }, busyRetryAttempts, busyRetryBaseDelay)
+}
+
+// Update modifies an existing virtual folder and its folder members
+func (s *Store) Update(vf *VirtualFolder) error {
+	return database.RetryOnBusy(func() error { return s.update(vf) }, busyRetryAttempts, busyRetryBaseDelay)
+}
+
+// Delete removes a virtual folder and its members from the database
+func (s *Store) Delete(id string) error {
+	return database.RetryOnBusy(func() error { return s.delete(id) }, busyRetryAttempts, busyRetryBaseDelay)
+}
+
+// Reorder updates the display order of virtual folders
+func (s *Store) Reorder(ids []string) error {
+	return database.RetryOnBusy(func() error { return s.reorder(ids) }, busyRetryAttempts, busyRetryBaseDelay)
+}
+
+// SaveCache atomically replaces a virtual folder's cached conversation index
+// and stamps the refresh time.
+func (s *Store) SaveCache(virtualFolderID string, entries []CachedConversation) error {
+	return database.RetryOnBusy(func() error { return s.saveCache(virtualFolderID, entries) }, busyRetryAttempts, busyRetryBaseDelay)
+}
+
+// detachedSaveBusyTimeoutMS bounds how long a detached, best-effort cache
+// write waits on the write lock. The modernc driver does not interrupt a
+// BEGIN IMMEDIATE busy wait when the context expires, so the bound comes
+// from lowering busy_timeout on a pinned connection instead; the connection
+// is restored to the database's configured timeout before returning to the
+// pool.
+const detachedSaveBusyTimeoutMS = 2000
+
+// SaveCacheContext is SaveCache for detached, best-effort cache maintenance:
+// no retry loop, and the lock wait is bounded by the lowered busy_timeout
+// above - cancellation safety rests on that override, not on the context,
+// which the driver ignores during the busy wait. An abandoned refresh
+// therefore frees its pool connection within detachedSaveBusyTimeoutMS.
+func (s *Store) SaveCacheContext(ctx context.Context, virtualFolderID string, entries []CachedConversation) error {
+	if virtualFolderID == "" {
+		return fmt.Errorf("virtual folder ID cannot be empty")
+	}
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to acquire connection: %w", err)
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, fmt.Sprintf("PRAGMA busy_timeout = %d", detachedSaveBusyTimeoutMS)); err != nil {
+		return fmt.Errorf("failed to bound busy timeout: %w", err)
+	}
+	defer func() {
+		_, _ = conn.ExecContext(context.Background(), fmt.Sprintf("PRAGMA busy_timeout = %d", s.db.BusyTimeoutMS()))
+	}()
+	return s.saveCacheTx(ctx, conn, virtualFolderID, entries)
 }
 
 // Get returns a single virtual folder by its ID
@@ -329,7 +397,7 @@ func (s *Store) UnreadCounts() (map[string]int, error) {
 }
 
 // Reorder assigns each virtual folder its position in the supplied ID list.
-func (s *Store) Reorder(ids []string) error {
+func (s *Store) reorder(ids []string) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin virtual folder reorder: %w", err)
@@ -354,8 +422,8 @@ func (s *Store) Reorder(ids []string) error {
 	return nil
 }
 
-// Update modifies an existing virtual folder and its folder members
-func (s *Store) Update(vf *VirtualFolder) error {
+// update modifies an existing virtual folder and its folder members (retried on SQLITE_BUSY by the public wrapper)
+func (s *Store) update(vf *VirtualFolder) error {
 	if vf == nil {
 		return fmt.Errorf("virtual folder cannot be nil")
 	}
@@ -417,8 +485,8 @@ func (s *Store) Update(vf *VirtualFolder) error {
 	return nil
 }
 
-// Delete removes a virtual folder and its members from the database
-func (s *Store) Delete(id string) error {
+// delete removes a virtual folder and its members from the database (retried on SQLITE_BUSY by the public wrapper)
+func (s *Store) delete(id string) error {
 	if id == "" {
 		return fmt.Errorf("virtual folder ID cannot be empty")
 	}
@@ -471,28 +539,41 @@ type CachedConversation struct {
 
 // SaveCache atomically replaces a virtual folder's cached conversation index
 // and stamps the refresh time.
-func (s *Store) SaveCache(virtualFolderID string, entries []CachedConversation) error {
+type txBeginner interface {
+	BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
+}
+
+func (s *Store) saveCache(virtualFolderID string, entries []CachedConversation) error {
 	if virtualFolderID == "" {
 		return fmt.Errorf("virtual folder ID cannot be empty")
 	}
-	tx, err := s.db.Begin()
+	return s.saveCacheTx(context.Background(), s.db.DB, virtualFolderID, entries)
+}
+
+// saveCacheTx runs the cache replacement in one transaction. The context is
+// threaded through Begin and every statement, but note the modernc driver
+// does not interrupt a BEGIN IMMEDIATE busy wait on context expiry: callers
+// that need a bounded lock wait must bound it with busy_timeout, as
+// SaveCacheContext does.
+func (s *Store) saveCacheTx(ctx context.Context, beginner txBeginner, virtualFolderID string, entries []CachedConversation) error {
+	tx, err := beginner.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }() // no-op after a successful Commit
 
-	if _, err = tx.Exec(`DELETE FROM virtual_folder_cache WHERE virtual_folder_id = ?`, virtualFolderID); err != nil {
+	if _, err = tx.ExecContext(ctx, `DELETE FROM virtual_folder_cache WHERE virtual_folder_id = ?`, virtualFolderID); err != nil {
 		return fmt.Errorf("failed to clear virtual folder cache: %w", err)
 	}
 	for position, entry := range entries {
-		if _, err = tx.Exec(`
+		if _, err = tx.ExecContext(ctx, `
 			INSERT INTO virtual_folder_cache (virtual_folder_id, position, account_id, conversation_id)
 			VALUES (?, ?, ?, ?)
 		`, virtualFolderID, position, entry.AccountID, entry.ConversationID); err != nil {
 			return fmt.Errorf("failed to insert virtual folder cache entry %d: %w", position, err)
 		}
 	}
-	if _, err = tx.Exec(`
+	if _, err = tx.ExecContext(ctx, `
 		INSERT INTO virtual_folder_cache_meta (virtual_folder_id, refreshed_at)
 		VALUES (?, ?)
 		ON CONFLICT(virtual_folder_id) DO UPDATE SET refreshed_at = excluded.refreshed_at

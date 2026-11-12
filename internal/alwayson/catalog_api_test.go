@@ -14,7 +14,7 @@ import (
 func TestGetCachedVirtualFolderViewHydratesServerCacheInOrder(t *testing.T) {
 	db, runtime, view := newCachedVirtualFolderTestRuntime(t)
 	defer db.Close()
-	cached, err := runtime.GetCachedVirtualFolderView(view.ID)
+	cached, err := runtime.GetCachedVirtualFolderView(context.Background(), view.ID)
 	if err != nil {
 		t.Fatalf("GetCachedVirtualFolderView: %v", err)
 	}

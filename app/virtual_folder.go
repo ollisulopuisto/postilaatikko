@@ -1,6 +1,8 @@
 package app
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -10,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/hkdb/aerion/internal/account"
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
+	"github.com/hkdb/aerion/internal/database"
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/views"
@@ -186,7 +189,14 @@ func (a *App) GetVirtualFolderConversations(virtualFolderID string, offset, limi
 	if vf == nil {
 		return nil, fmt.Errorf("virtual folder not found: %s", virtualFolderID)
 	}
+	return a.listVirtualFolderConversationsLocal(vf, offset, limit, sortOrder)
+}
 
+// listVirtualFolderConversationsLocal reads a virtual folder's conversations
+// straight from the message store, bypassing the cached index. WAL readers do
+// not block on writers, so this stays available while the write side (cache
+// refresh, sync) is contended.
+func (a *App) listVirtualFolderConversationsLocal(vf *virtualfolder.VirtualFolder, offset, limit int, sortOrder string) ([]*message.Conversation, error) {
 	folderIDs, err := a.virtualFolderStore.QueryFolderIDs(vf)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve virtual folder members: %w", err)
@@ -208,6 +218,51 @@ func (a *App) GetVirtualFolderConversations(virtualFolderID string, offset, limi
 		return conversations, nil
 	}
 	return a.messageStore.ListVirtualFolderConversations(folderIDs, offset, limit, sortOrder, virtualFolderMessageCriteria(vf))
+}
+
+// isVirtualFolderCacheBusy reports whether a cached-view failure is transient
+// and worth a direct local read: raw SQLite busy text (local stores and older
+// helpers), the cache route's public database_busy code, the route's
+// cache_timeout budget expiry, or the desktop's two-second request budget
+// expiring while the helper is still working. cache_timeout is not lock
+// contention - a slow healthy hydration also trips it - but the direct read
+// serves the first paint either way; remote desktops without local stores
+// still surface the original error.
+func isVirtualFolderCacheBusy(err error) bool {
+	if err == nil {
+		return false
+	}
+	if database.IsBusy(err) || errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	text := err.Error()
+	return strings.Contains(text, string(v1.CodeDatabaseBusy)) ||
+		strings.Contains(text, string(v1.CodeCacheTimeout)) ||
+		strings.Contains(text, "context deadline exceeded")
+}
+
+// virtualFolderDirectView answers GetVirtualFolderCachedView without the cache
+// when the cache cannot be loaded or refreshed because of SQLite lock
+// contention. Returns nil, false when the local stores cannot serve the view
+// (for example a remote desktop without a local mailbox database), so the
+// caller can surface the original error instead.
+func (a *App) virtualFolderDirectView(virtualFolderID string) (*VirtualFolderCachedView, bool) {
+	if a.virtualFolderStore == nil || a.messageStore == nil {
+		return nil, false
+	}
+	vf, err := a.virtualFolderStore.Get(virtualFolderID)
+	if err != nil || vf == nil {
+		return nil, false
+	}
+	conversations, err := a.listVirtualFolderConversationsLocal(vf, 0, virtualFolderCacheLimit, "")
+	if err != nil {
+		return nil, false
+	}
+	return &VirtualFolderCachedView{
+		VirtualFolderID: virtualFolderID,
+		Conversations:   conversations,
+		HasCache:        false,
+	}, true
 }
 
 // GetVirtualFolderCount returns the count of conversations matching a virtual folder's criteria.
@@ -315,6 +370,15 @@ func (a *App) GetVirtualFolderCachedView(virtualFolderID string) (*VirtualFolder
 		if status.Connected {
 			cached, err := a.mailboxService.cachedVirtualFolderView(ctx, virtualFolderID)
 			if err != nil {
+				// Lock contention is transient: serve the view from the local
+				// direct read instead of failing the whole folder.
+				if isVirtualFolderCacheBusy(err) {
+					if view, ok := a.virtualFolderDirectView(virtualFolderID); ok {
+						log := logging.WithComponent("virtual-folder")
+						log.Warn().Err(err).Str("virtualFolderID", virtualFolderID).Msg("Mailbox service cache busy; serving virtual folder from direct read")
+						return view, nil
+					}
+				}
 				return nil, fmt.Errorf("load virtual-folder cache from mailbox service: %w", err)
 			}
 			return &VirtualFolderCachedView{
@@ -341,9 +405,23 @@ func (a *App) GetVirtualFolderCachedView(virtualFolderID string) (*VirtualFolder
 	}
 	if !hasCache {
 		if err := a.RefreshVirtualFolderCache(virtualFolderID); err != nil {
+			// A busy cache is optional state: fall back to the direct read so
+			// the view still loads under writer contention.
+			if isVirtualFolderCacheBusy(err) {
+				if view, ok := a.virtualFolderDirectView(virtualFolderID); ok {
+					log := logging.WithComponent("virtual-folder")
+					log.Warn().Err(err).Str("virtualFolderID", virtualFolderID).Msg("Virtual-folder cache refresh busy; serving direct read")
+					return view, nil
+				}
+			}
 			return nil, err
 		}
 		if refs, refreshedAt, _, err = a.virtualFolderStore.LoadCache(virtualFolderID); err != nil {
+			if isVirtualFolderCacheBusy(err) {
+				if view, ok := a.virtualFolderDirectView(virtualFolderID); ok {
+					return view, nil
+				}
+			}
 			return nil, err
 		}
 	}
