@@ -291,13 +291,18 @@ deprecated mailbox-service mode and retire with it. [inferred]
   server supplies outside that list is ignored and reported. **[inferred]**
 - Trust anchors, so every device starts from an authenticated list:
   - First device: creates version 1 with itself and the recovery public
-    keys.
+    keys, and version 1 is signed by the recovery signing key as well as
+    the device. The server knows the recovery public keys but not the
+    phrase, so it cannot forge a genesis.
   - New device: receives the current list from the enrolling device inside
     the SAS-verified enrolment channel, never from the server alone.
   - Recovery after losing every device: the replacement derives the
     recovery keys from the phrase, fetches the chain from the server and
-    accepts its latest version only if that version lists those exact
-    recovery public keys and every link verifies. The recovery signing key
+    accepts it only if version 1 carries a valid signature by the
+    phrase-derived recovery signing key, its latest version still lists
+    those exact recovery public keys, and every link verifies. A
+    self-consistent chain the server built around the public recovery keys
+    fails the genesis check. The recovery signing key
     then signs the next version, adding the replacement device. The phrase
     is the anchor; the server's copy is only transport.
 - Forks: a revoked or stolen device stays a valid signer in any predecessor
@@ -306,7 +311,9 @@ deprecated mailbox-service mode and retire with it. [inferred]
   Countermeasures:
   - Before a device wraps the UMK to anything (enrolment, rotation), it
     fetches the latest chain and shows the user every device added since its
-    own last verified version, requiring confirmation. A silent update never
+    own last verified version and every existing device whose signing or
+    KEM key changed, requiring confirmation. A key change under an existing
+    device name is shown as a new device, never silently accepted. A silent update never
     leads to a wrap.
   - Devices sign and exchange the chain head they have seen whenever they
     talk (enrolment channel, transfer envelopes), so two successors of the
