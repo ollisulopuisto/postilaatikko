@@ -80,7 +80,7 @@
   import { runMessageMutation } from '$lib/components/list/mutationInFlight'
   import { messageAnimations } from '$lib/stores/messageAnimations.svelte'
   // @ts-ignore - wailsjs path
-  import { PrepareComposerReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, ClearDraftHistory, SendMessageWithDraftGuard, CancelPendingSend, CompletePendingSend, ListPendingSends, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, ArchiveAndMarkReadWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ResolveMailActionTarget, GetMessage, UndoOperation, UndoLatestWithResult, SyncMailboxActionEvents, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, RequestQuitApp, CancelQuitAppRequest, OpenComposerWindow, OpenMailWindow, OpenReaderWindow, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
+  import { PrepareComposerReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, ClearDraftHistory, SendMessageWithDraftGuard, DispatchRemotePendingSend, CancelPendingSend, CompletePendingSend, ListPendingSends, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, ArchiveAndMarkReadWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ResolveMailActionTarget, GetMessage, UndoOperation, UndoLatestWithResult, SyncMailboxActionEvents, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, RequestQuitApp, CancelQuitAppRequest, OpenComposerWindow, OpenMailWindow, OpenReaderWindow, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
   // @ts-ignore - wailsjs path
   import { smtp, folder, certificate, operations } from '../wailsjs/go/models'
   // @ts-ignore - wailsjs runtime
@@ -744,11 +744,15 @@
     ps.dispatching = true
     const dispatch = (async (): Promise<boolean> => {
       let message: smtp.ComposeMessage
+      let remoteHandled: boolean
       try {
-        message = JSON.parse(ps.payload)
-        await SendMessageWithDraftGuard(ps.accountId, message, ps.draftId)
+        remoteHandled = await DispatchRemotePendingSend(ps.id)
+        if (!remoteHandled) {
+          message = JSON.parse(ps.payload)
+          await SendMessageWithDraftGuard(ps.accountId, message, ps.draftId)
+        }
       } catch (err) {
-        // SMTP did not accept the message; preserve its draft and stop quit.
+        // Delivery failed or is uncertain; preserve its draft and stop quit.
         await CompletePendingSend(ps.id).catch(() => {})
         pendingRemove(ps.id)
         addToast({ type: 'error', message: String(err) })
@@ -757,7 +761,7 @@
 
       // SMTP accepted the message. Cleanup failures must not retry the send
       // or block quit, since that could deliver a duplicate on the next try.
-      if (ps.draftId) {
+      if (ps.draftId && !remoteHandled) {
         await DeleteDraft(ps.draftId).catch(err => console.error('Failed to delete draft after send:', err))
         // Actual send ends the draft's undo history; cancelling a pending send
         // never reaches here.
@@ -864,6 +868,7 @@
       if (!pendingSends.some(p => p.id === ps.id)) pendingSends = [...pendingSends, ps]
     })
     EventsOn('pending-send:cancelled', (id: string) => pendingRemove(id))
+    EventsOn('pending-send:warning', (message: string) => addToast({ type: 'error', message }))
     EventsOn('notification:clicked', (data: { accountId: string; folderId: string; threadId: string }) => {
       // Find folder info for display
       const folderInfo = findFolderById(data.accountId, data.folderId)

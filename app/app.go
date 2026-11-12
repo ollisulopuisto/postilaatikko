@@ -1036,6 +1036,9 @@ func (a *App) Startup(ctx context.Context) {
 // the helper in remote mode.
 func (a *App) startRemoteWorkspace(ctx context.Context) {
 	log := logging.WithComponent("app")
+	if err := a.ExpirePendingSends(); err != nil {
+		log.Error().Err(err).Msg("Recover remote pending sends")
+	}
 	a.settingsStore = settings.NewStore(a.deviceDB)
 	a.appStateStore = appstate.NewStore(a.deviceDB.DB)
 	a.imageAllowlistStore = settings.NewImageAllowlistStore(a.deviceDB)

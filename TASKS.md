@@ -478,3 +478,10 @@ README review follow-up: qualify checksum instructions because tagged releases d
 - Status: Review. Owner: Instinct. Branch: `design/dmg-welcome-a`. Worktree: `/tmp/posti` (PR #228 checkout). Implementation commit under review: `eb06ec2`; subsequent review fixes are recorded in this branch history and the reviewed head is kept current here when verification changes.
 - Scope: Bilingual (fi+en) dark DMG installer window, direction A: restyled layout via `packaging/dmg/restyle.py`, capture contract in `packaging/dmg/capture.py`, layout tests in `packaging/dmg/test_layout.py`, and packaging README updates. No merge; CI must stay green.
 - Verification: `python3 packaging/dmg/test_layout.py` passes locally; the same suite now runs in CI (workflow step added on this branch). macOS-only capture/rendering paths are unverified locally. Review pending; no merge.
+
+
+## Remote Undo Send parity (2026-11-13)
+
+| ID | Effort | Task | Owner | Status |
+| --- | --- | --- | --- | --- |
+| REMOTE-UNDO-SEND-001 | Large | Make the remote desktop Undo Send window device-owned, bounded and safe without a local mailbox DB; submit immutable MIME to the helper with durable request identity. | Instinct / `agent/REMOTE-UNDO-SEND-001` | In review. Red-first nil-mailbox panic reproduced; queue and remote dispatch tests pass with a test-only CGO-off platform overlay. Native two-machine runtime, real provider ambiguity and keychain/login remain unverified. Cross-device Send Later arbitration remains a separate gate. |

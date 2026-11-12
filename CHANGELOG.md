@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Remote desktops now keep the Undo Send safety window in the device database instead of accessing an unopened mailbox database. Cancel and dispatch arbitrate atomically; the remote helper receives immutable MIME under the queue's stable request ID. Restart never auto-sends, uncertain provider outcomes are not resubmitted, and helper-owned draft cleanup does not delete a later draft edit. Native two-machine delivery remains to be verified.
+
 ## Postilaatikko 2026.11.12.1
 
 - The Send Later helper accepts remote HTTPS deployments: non-loopback `--listen` now requires at least one `--allowed-host` naming the exact Host values the listener serves, and the DNS-rebinding Host guard honors them (port-stripped, case-insensitive, no wildcards); loopback-only validation is unchanged, and the installed launchd agent carries the allowed hosts.
