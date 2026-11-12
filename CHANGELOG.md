@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Inbox month headings now follow a system time-zone change: the cached month formatter is keyed by the active time zone, so a message near a month boundary no longer keeps the previous zone's month name after travel or a zone change.
 - Clicking a message in the message list now opens it in the open reader tab: the click retargets the tab, but the tab only watched for folder changes, so it kept showing the old message.
 - Shared Postilaatikko/Solmu keyboard layer (approved keymap): search also on Cmd/Ctrl+F, forward on Cmd/Ctrl+L, Read later on Cmd/Ctrl+U, Reply later on Cmd/Ctrl+I, archive and mark read on Cmd/Ctrl+E, next/previous message on Cmd/Ctrl+Shift+]/[, the shortcuts overlay also opens with Cmd/Ctrl+/, previous/next account on Cmd/Ctrl+Alt+Left/Right, and the message-list quick filters on Cmd/Ctrl+Alt+1-4 (all, unread, reply later, read later). Load remote images moves to Cmd/Ctrl+Alt+L (always-load to Cmd/Ctrl+Shift+Alt+L) so Cmd/Ctrl+L can forward, and mark-as-read drops Cmd/Ctrl+U (Shift+I stays) so Cmd/Ctrl+U can queue for later. Every existing Gmail-style bare key keeps working, and Option-mangled keys on macOS now fall back to the physical key, so the new Option chords fire on any keyboard layout.
 - Add checkbox semantics, contextual dynamic accessible name, focus-visible styling to conversation row checkbox, and focus-within disclosure plus focus rings to quick action buttons.

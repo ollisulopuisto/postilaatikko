@@ -25,12 +25,17 @@ const { dayGroupFor } = await import(`data:text/javascript;base64,${Buffer.from(
 const labels = { today: 'Today', yesterday: 'Yesterday' }
 
 test('dayGroupFor groups fixed dates by month with year (TZ=UTC)', () => {
+  // The year suffix appears only when the date's year differs from today's,
+  // so derive the expectation from the current year instead of hardcoding it:
+  // from 2027 on, March 2026 is labelled "March 2026", not "March".
+  const thisYear = new Date().getFullYear()
+  const expectLabel = (month, year) => (year === thisYear ? month : `${month} ${year}`)
   const cases = [
-    ['2026-03-15T12:00:00Z', 'month-2026-2', 'March'],
-    ['2025-11-20T08:30:00Z', 'month-2025-10', 'November 2025'],
-    ['2024-02-29T14:15:00Z', 'month-2024-1', 'February 2024'],
-    ['2023-01-01T00:00:00Z', 'month-2023-0', 'January 2023'],
-    ['2022-07-04T12:00:00Z', 'month-2022-6', 'July 2022'],
+    ['2026-03-15T12:00:00Z', 'month-2026-2', expectLabel('March', 2026)],
+    ['2025-11-20T08:30:00Z', 'month-2025-10', expectLabel('November', 2025)],
+    ['2024-02-29T14:15:00Z', 'month-2024-1', expectLabel('February', 2024)],
+    ['2023-01-01T00:00:00Z', 'month-2023-0', expectLabel('January', 2023)],
+    ['2022-07-04T12:00:00Z', 'month-2022-6', expectLabel('July', 2022)],
   ]
   for (const [date, id, label] of cases) {
     assert.deepEqual(dayGroupFor(date, 'en', labels), { id, label }, `date=${date}`)
