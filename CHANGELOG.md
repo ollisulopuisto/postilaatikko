@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 - Virtual folders no longer fail with "database is locked (SQLITE_BUSY)" while sync is writing: virtual-folder writes retry transient lock contention, the cached-view endpoint answers with a bounded deadline and a distinct retryable busy code, and the view falls back to reading conversations directly when the cached index cannot refresh or the cache request times out.
+- Design document for a zero-knowledge Postilaatikko service (`docs/plans/2026-11-11-zero-knowledge-server.md`): a hosted multi-tenant architecture where the operator cannot read mail content, with an explicit threat model, client-side key hierarchy, hybrid post-quantum transport, encrypted-search options with their leakage, multi-device enrolment and recovery, GDPR/provider-OAuth/abuse/assurance requirements, and a phased implementation plan. Documentation only; no behavior changes.
+- Inbox month headings now follow a system time-zone change: the cached month formatter is keyed by the active time zone, so a message near a month boundary no longer keeps the previous zone's month name after travel or a zone change.
 - Redirect destinations are cleaned when opened or copied; the link menu also allows resolving the original link via Cloudflare when a redirect requires tracking parameters.
 - Correct the CI fallback source-list option so apt actually selects the temporary official Ubuntu mirrors.
 

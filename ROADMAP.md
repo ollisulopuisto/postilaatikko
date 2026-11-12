@@ -14,7 +14,24 @@ The goal is a strong personal email client for one person using multiple account
 
 Keep IMAP support. The app now feels faster, so the earlier CPU/memory concern is not a reason to remove a working provider path. Pause IMAP retirement, provider migration, and Gmail-only setup changes. Continue measured performance work only when it helps diagnose a reproduced issue. Gmail-native features such as server search, labels, history refresh, and filters can continue incrementally for Gmail accounts, with IMAP retained for supported accounts and fallback paths. Revisit provider retirement only after new evidence and an explicit product decision. The Gmail-only transition queue in TASKS.md is deferred, not active.
 
-### Always-on mail service (2026-11-06)
+### Always-on mail service (2026-11-06, updated 2026-11-11)
+
+Update 2026-11-11: the single-user, user-operated trusted service below still
+stands (first deployment: Send Later-only on the owner's Mac Studio,
+`--no-sync`). The *hosted, multi-tenant* direction is replaced by the
+zero-knowledge design in
+[docs/plans/2026-11-11-zero-knowledge-server.md](docs/plans/2026-11-11-zero-knowledge-server.md):
+if a hosted service is built, the server must not hold the mailbox - mail and
+provider credentials stay on client devices, the server keeps only the Send
+Later helper role plus optional TTL'd device-transfer envelopes. Whether a
+hosted helper may deliver scheduled mail itself (it would then hold sending
+credentials) is an open owner decision in that document. The
+mailbox-service mode (a helper holding mailbox data for remote desktops) is
+therefore on a deprecation path: opt-in first, retired when usage reaches
+zero. Do not start new work that expands server-held mail storage; whether
+the already open `HOSTED-SERVER-*` tasks are finished or frozen is an open
+owner decision (section 22 of the design). The paragraphs below describe the
+single-user trusted helper only.
 
 Build one always-on service/core that owns mailbox change detection, persisted cross-account filtering and safe moves, and scheduled delivery while the desktop UI is closed. The desktop and remote clients should call the same service operations; localhost and user-operated Mac Studio/VPS deployments are configurations of one implementation, not forks. Reuse the current sync, filter/move, and scheduled-send logic where their lifecycle and storage contracts fit. Keep routine sync header/flag-only and body fetch explicit. Make the client feel immediate with bounded header-page queries, a presentation cache, targeted change events, and body fetch only when needed; service ownership should remove background work from the UI without adding full-folder reloads.
 
