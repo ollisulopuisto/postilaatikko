@@ -330,10 +330,8 @@ func (a *App) clearContactOAuth() {
 }
 
 func (a *App) CancelContactSourceOAuthFlow() {
-	if a.remoteServiceMode {
-		wailsRuntime.EventsEmit(a.ctx, "contact-source-oauth:cancelled", nil)
-		return
-	}
+	// The interactive flow always runs on the desktop, including remote
+	// mode, so the desktop-local OAuth state always gets cleared.
 	a.clearContactOAuth()
 	wailsRuntime.EventsEmit(a.ctx, "contact-source-oauth:cancelled", nil)
 }

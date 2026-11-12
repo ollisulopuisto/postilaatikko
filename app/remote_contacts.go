@@ -53,16 +53,7 @@ func remoteContactsError(err error, capability v1.Capability) error {
 	if err == nil {
 		return nil
 	}
-	code := ""
-	var fault *v1.Fault
-	if errors.As(err, &fault) {
-		code = string(fault.Code)
-	} else if msg := err.Error(); strings.HasPrefix(msg, "api error (") {
-		if rest := strings.TrimPrefix(msg, "api error ("); strings.Contains(rest, "):") {
-			code = rest[:strings.Index(rest, "):")]
-		}
-	}
-	switch v1.ErrorCode(code) {
+	switch v1.ErrorCode(remoteContactsFaultCode(err)) {
 	case v1.CodeCapabilityDenied:
 		return fmt.Errorf("the remote helper grant does not allow %s: reconnect the mailbox service with contacts capabilities (Settings → Mailbox service)", capability)
 	case v1.CodeConflict, v1.CodeRevisionConflict:
@@ -105,12 +96,34 @@ func (a *App) contactsExtensionEnabled() bool {
 	return err == nil && enabled
 }
 
+// remoteContactsFaultCode extracts the stable error code from a client
+// error, whether it arrived as a structured v1.Fault (after #247) or as the
+// flattened "api error (code): message" form.
+func remoteContactsFaultCode(err error) string {
+	if err == nil {
+		return ""
+	}
+	var fault *v1.Fault
+	if errors.As(err, &fault) {
+		return string(fault.Code)
+	}
+	if msg := err.Error(); strings.HasPrefix(msg, "api error (") {
+		if rest := strings.TrimPrefix(msg, "api error ("); strings.Contains(rest, "):") {
+			return rest[:strings.Index(rest, "):")]
+		}
+	}
+	return ""
+}
+
 // isRemoteContactsConflict reports whether the helper answered a contact
 // mutation with a conflict the local bridge would have turned into a
 // contacts:conflict event.
 func isRemoteContactsConflict(err error) bool {
-	var conflictErr *contactConflictError
-	return errors.As(err, &conflictErr)
+	switch v1.ErrorCode(remoteContactsFaultCode(err)) {
+	case v1.CodeConflict, v1.CodeRevisionConflict:
+		return true
+	}
+	return false
 }
 
 // emitRemoteContactsConflict mirrors ContactsBridge.emitConflict: the user's

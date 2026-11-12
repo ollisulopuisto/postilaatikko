@@ -676,6 +676,15 @@ func (o *contactsOperations) SaveSourceAuthorization(req v1.ContactsAuthorizatio
 		ExpiresIn: req.Tokens.ExpiresIn, Scopes: provider.Scopes,
 	})
 	if err != nil {
+		// Keep the user-actionable messages; everything else stays generic.
+		switch msg := err.Error(); {
+		case strings.Contains(msg, "already exists; reauthorize"):
+			return nil, &v1.Fault{Code: v1.CodeConflict, Message: msg}
+		case strings.Contains(msg, "no longer exists"):
+			return nil, v1.ErrContactNotFound
+		case strings.Contains(msg, "no refresh token"):
+			return nil, &v1.Fault{Code: v1.CodeInvalidRequest, Message: msg}
+		}
 		return nil, err
 	}
 	go func(id string) {
