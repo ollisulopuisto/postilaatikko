@@ -281,6 +281,16 @@ deprecated mailbox-service mode and retire with it. [inferred]
   authentication string out-of-band, wraps the UMK to the new device's hybrid
   KEM public key, uploads the wrapped blob. **Expert review flag** on the
   ceremony (compare published Signal/1Password models). **[inferred]**
+- Device list: the set of enrolled devices (each device's signing and KEM
+  public keys, plus the recovery public key from section 13) is a
+  versioned list signed by an already-enrolled device at every change -
+  enrolment, revocation, recovery. Every device keeps the last list it
+  verified and accepts a new version only if it is signed by a device on
+  that list and its version is higher. The server stores and relays the
+  list but cannot add, replace or roll back a key in it. A client never
+  wraps the UMK, or anything else, to a public key that is not in its own
+  verified list; a key the server supplies outside that list is ignored and
+  reported. **[inferred]**
 - Revoke: delete the device's wrapped-UMK blob, revoke its token (documented
   `api-client revoke` machinery as the pattern), and rotate the UMK so new
   transfer envelopes are unreadable to the revoked device. Pending envelopes
@@ -297,11 +307,13 @@ deprecated mailbox-service mode and retire with it. [inferred]
   revocation only when the user chooses to.
 - Rotation order, so no step can strand a pending envelope (an interrupted
   rotation resumes from the first unfinished step; every step is idempotent):
-  1. Generate the new UMK and, before anything else, upload it wrapped to
-     every surviving device's KEM public key and to the recovery key
-     (section 13). Device public keys are on the server, so offline devices
-     need nothing from the revoking device: they fetch their new wrap when
-     they next connect.
+  1. Sign and upload the new device-list version without the revoked
+     device. Generate the new UMK and, before anything else, upload it
+     wrapped to every surviving device's KEM public key and to the recovery
+     key (section 13), taking those keys only from the revoking device's own
+     verified device list, never from the server's answer. Offline devices
+     need nothing from the revoking device: they verify the new list and
+     fetch their new wrap when they next connect.
   2. Only after the server confirms step 1, upload the new CEK wraps for
      pending envelopes *alongside* the old ones.
   3. Only after the server confirms step 2, delete the old wraps and the
@@ -333,8 +345,11 @@ deprecated mailbox-service mode and retire with it. [inferred]
   written down / password-manager escrow; optional second escrow (e.g. iCloud
   Keychain). **Owner decision.**
 - The phrase is not the UMK. It deterministically derives a recovery KEM
-  keypair (hybrid, like device keys); the server stores only its public key,
-  and the current UMK is always wrapped to it like to another device. UMK
+  keypair (hybrid, like device keys) and a recovery signing keypair. Both
+  public keys are on the signed device list (section 12); the server stores
+  only those public keys, and the current UMK is always wrapped to the
+  recovery KEM key like to another device. The recovery signing key lets a
+  user who lost every device sign the next device-list version. UMK
   rotation (section 12) re-wraps to the recovery public key without the
   phrase being present, so the phrase the user wrote down stays valid across
   rotations. **[inferred]**
@@ -505,8 +520,8 @@ Open: 1, 2 (for the hosted service), 5-9. Decided: 3, 4.
 
 - Envelope format v1 (section 8).
 - Hybrid KEM combiner, Send Later and device wrap (sections 7, 10).
-- Enrolment ceremony and UMK rotation order (section 12), recovery-key
-  derivation (section 13).
+- Enrolment ceremony, signed device list and UMK rotation order (section
+  12), recovery-key derivation (section 13).
 - Threat-model completeness for a paid multi-tenant service (section 3),
   including the operator-as-publisher update path (T6).
 - Credential handling for helper-side Send Later, if kept (section 10).
