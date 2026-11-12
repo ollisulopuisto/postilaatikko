@@ -478,3 +478,9 @@ README review follow-up: qualify checksum instructions because tagged releases d
 - Status: Review. Owner: Instinct. Branch: `design/dmg-welcome-a`. Worktree: `/tmp/posti` (PR #228 checkout). Implementation commit under review: `eb06ec2`; subsequent review fixes are recorded in this branch history and the reviewed head is kept current here when verification changes.
 - Scope: Bilingual (fi+en) dark DMG installer window, direction A: restyled layout via `packaging/dmg/restyle.py`, capture contract in `packaging/dmg/capture.py`, layout tests in `packaging/dmg/test_layout.py`, and packaging README updates. No merge; CI must stay green.
 - Verification: `python3 packaging/dmg/test_layout.py` passes locally; the same suite now runs in CI (workflow step added on this branch). macOS-only capture/rendering paths are unverified locally. Review pending; no merge.
+
+## Remote-mode parity (2026-11-13)
+
+| ID | Effort | Task | Owner | Status |
+| --- | --- | --- | --- | --- |
+| REMOTE-CRYPTO-DESIGN-001 | Large | Define S/MIME/PGP parity custody and retry boundaries before removing remote crypto gates. | Instinct / `agent/REMOTE-CRYPTO-DESIGN-001` | Design for review; no behavior change. Proposed device-local crypto avoids automatic private-key export. Custody decision and implementation/native acceptance remain open. See `docs/plans/2026-11-13-remote-crypto-parity.md`. |
