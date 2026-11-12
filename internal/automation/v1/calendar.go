@@ -19,6 +19,7 @@ type CalendarRangeRequest struct {
 	ToUnix      int64    `json:"toUnix"`
 }
 
+// Validate checks calendar identities and the time window against read limits.
 func (r CalendarRangeRequest) Validate() error {
 	if len(r.CalendarIDs) < 1 || len(r.CalendarIDs) > 32 || r.FromUnix < 0 || r.ToUnix <= r.FromUnix || r.ToUnix-r.FromUnix > 366*86400 {
 		return errors.New("a positive range up to 366 days and 1..32 calendars are required")
@@ -48,7 +49,7 @@ type CalendarReadOperations interface {
 func MountCalendarReadRoutes(mux *http.ServeMux, ops CalendarReadOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	route := func(pattern string, operation func(context.Context, *http.Request) (any, error)) {
 		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
-			if !requireCap(w, r, Capability("calendar.read")) {
+			if !requireCap(w, r, CapabilityCalendarRead) {
 				return
 			}
 			if ops == nil {
