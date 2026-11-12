@@ -8,7 +8,7 @@ import (
 )
 
 func TestHelperHealthEndpoint(t *testing.T) {
-	handler := helperHandler(nil, false)
+	handler := helperHandler(nil, false, nil)
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "http://127.0.0.1/healthz", nil))
 	if recorder.Code != http.StatusOK {
@@ -24,7 +24,7 @@ func TestHelperHealthEndpoint(t *testing.T) {
 
 func TestHelperHealthRejectsOtherMethods(t *testing.T) {
 	recorder := httptest.NewRecorder()
-	helperHandler(nil, true).ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "http://127.0.0.1/healthz", nil))
+	helperHandler(nil, true, nil).ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "http://127.0.0.1/healthz", nil))
 	if recorder.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusMethodNotAllowed)
 	}
@@ -37,7 +37,7 @@ func TestHelperBrowserProtectionCoversAllRoutes(t *testing.T) {
 				request := httptest.NewRequest(method, "http://127.0.0.1"+route, nil)
 				request.Header.Set("Origin", origin)
 				response := httptest.NewRecorder()
-				helperHandler(nil, false).ServeHTTP(response, request)
+				helperHandler(nil, false, nil).ServeHTTP(response, request)
 				if response.Code != http.StatusForbidden {
 					t.Errorf("%s %s status=%d", method, route, response.Code)
 				}
@@ -60,7 +60,7 @@ func TestHelperHostValidationRejectsNonLoopback(t *testing.T) {
 			request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1"+route, nil)
 			request.Host = badHost
 			response := httptest.NewRecorder()
-			helperHandler(nil, false).ServeHTTP(response, request)
+			helperHandler(nil, false, nil).ServeHTTP(response, request)
 			if response.Code != http.StatusBadRequest {
 				t.Errorf("Host %q %s status=%d, want %d", badHost, route, response.Code, http.StatusBadRequest)
 			}
@@ -68,5 +68,54 @@ func TestHelperHostValidationRejectsNonLoopback(t *testing.T) {
 				t.Errorf("Host %q %s X-Content-Type-Options=%q", badHost, route, got)
 			}
 		}
+	}
+}
+
+func TestValidateListenerAllowsRemoteTLSWithAllowedHosts(t *testing.T) {
+	// Non-loopback without an allowlist fails before any certificate work.
+	if err := validateListener("0.0.0.0:8028", "missing-cert.pem", "missing-key.pem", nil); err == nil ||
+		!strings.Contains(err.Error(), "--allowed-host") {
+		t.Fatalf("expected --allowed-host requirement error, got %v", err)
+	}
+	// TLS is still mandatory off-loopback even with an allowlist.
+	if err := validateListener("0.0.0.0:8028", "", "", []string{"studio.example.com"}); err == nil ||
+		!strings.Contains(err.Error(), "--tls-cert") {
+		t.Fatalf("expected TLS requirement error, got %v", err)
+	}
+	// Wildcard or malformed entries are rejected.
+	if err := validateListener("0.0.0.0:8028", "missing-cert.pem", "missing-key.pem", []string{"*.example.com"}); err == nil ||
+		!strings.Contains(err.Error(), "invalid") {
+		t.Fatalf("expected invalid allowlist entry error, got %v", err)
+	}
+	// Loopback stays unchanged: no TLS, no allowlist needed.
+	if err := validateListener("127.0.0.1:8028", "", "", nil); err != nil {
+		t.Fatalf("loopback listener rejected: %v", err)
+	}
+}
+
+func TestHelperHandlerAllowsConfiguredRemoteHost(t *testing.T) {
+	handler := helperHandler(nil, false, []string{"studio.example.com"})
+
+	remote := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/healthz", nil)
+	remote.Host = "studio.example.com:8028"
+	remoteResponse := httptest.NewRecorder()
+	handler.ServeHTTP(remoteResponse, remote)
+	if remoteResponse.Code != http.StatusOK {
+		t.Fatalf("configured remote Host rejected: got %d", remoteResponse.Code)
+	}
+
+	unlisted := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/healthz", nil)
+	unlisted.Host = "evil.com"
+	unlistedResponse := httptest.NewRecorder()
+	handler.ServeHTTP(unlistedResponse, unlisted)
+	if unlistedResponse.Code != http.StatusBadRequest {
+		t.Fatalf("unlisted Host accepted: got %d", unlistedResponse.Code)
+	}
+
+	loopback := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/healthz", nil)
+	loopbackResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loopbackResponse, loopback)
+	if loopbackResponse.Code != http.StatusOK {
+		t.Fatalf("loopback rejected: got %d", loopbackResponse.Code)
 	}
 }
