@@ -282,15 +282,42 @@ deprecated mailbox-service mode and retire with it. [inferred]
   KEM public key, uploads the wrapped blob. **Expert review flag** on the
   ceremony (compare published Signal/1Password models). **[inferred]**
 - Device list: the set of enrolled devices (each device's signing and KEM
-  public keys, plus the recovery public key from section 13) is a
-  versioned list signed by an already-enrolled device at every change -
-  enrolment, revocation, recovery. Every device keeps the last list it
-  verified and accepts a new version only if it is signed by a device on
-  that list and its version is higher. The server stores and relays the
-  list but cannot add, replace or roll back a key in it. A client never
-  wraps the UMK, or anything else, to a public key that is not in its own
-  verified list; a key the server supplies outside that list is ignored and
-  reported. **[inferred]**
+  public keys, plus the recovery public keys from section 13) is a
+  versioned, hash-chained list: every version names the hash of its
+  predecessor and is signed by a device, or the recovery signing key, listed
+  in that predecessor. The server stores and relays it but cannot add,
+  replace or roll back a key. A client never wraps the UMK, or anything
+  else, to a public key that is not in its own verified list; a key the
+  server supplies outside that list is ignored and reported. **[inferred]**
+- Trust anchors, so every device starts from an authenticated list:
+  - First device: creates version 1 with itself and the recovery public
+    keys.
+  - New device: receives the current list from the enrolling device inside
+    the SAS-verified enrolment channel, never from the server alone.
+  - Recovery after losing every device: the replacement derives the
+    recovery keys from the phrase, fetches the chain from the server and
+    accepts its latest version only if that version lists those exact
+    recovery public keys and every link verifies. The recovery signing key
+    then signs the next version, adding the replacement device. The phrase
+    is the anchor; the server's copy is only transport.
+- Forks: a revoked or stolen device stays a valid signer in any predecessor
+  that lists it, so it can sign a competing successor, and a colluding
+  server can show that fork to a device that missed the real revocation.
+  Countermeasures:
+  - Before a device wraps the UMK to anything (enrolment, rotation), it
+    fetches the latest chain and shows the user every device added since its
+    own last verified version, requiring confirmation. A silent update never
+    leads to a wrap.
+  - Devices sign and exchange the chain head they have seen whenever they
+    talk (enrolment channel, transfer envelopes), so two successors of the
+    same predecessor are detected; a detected fork freezes all wraps until
+    the user resolves it on a trusted device.
+  - A longer-term option is an external, append-only transparency log of
+    list heads.
+  This is the key-transparency problem; implement a published design
+  (compare WhatsApp key transparency, Apple Contact Key Verification,
+  Keybase sigchains), not a home-grown one. **Expert review flag.**
+  **[inferred]**
 - Revoke: delete the device's wrapped-UMK blob, revoke its token (documented
   `api-client revoke` machinery as the pattern), and rotate the UMK so new
   transfer envelopes are unreadable to the revoked device. Pending envelopes
