@@ -316,33 +316,43 @@ deprecated mailbox-service mode and retire with it. [inferred]
     device name is shown as a new device, never silently accepted. A silent update never
     leads to a wrap. The confirmation names the device that signed each new
     list version; a version signed by a device the user believes revoked is
-    a hard warning, never a routine confirm. When a second enrolled device
-    exists, a list version that adds a device must be confirmed on it as
-    well before any wrap, so one stale client cannot wrap to a fork alone.
-    The gate has exactly one exception, and it is the recovery path below:
-    when no enrolled device survives there is no second device to confirm
-    on, so the phrase ceremony is itself the confirmation. The recovering
-    client shows the full device list from the chain head it fetched - not
-    a diff - and the user confirms every device on it before the recovery
-    signing key signs the replacement-adding version, so a fork-injected
-    device is visible in that list. Trade-off, stated plainly: with zero
-    enrolled devices the cross-device barrier does not exist, so recovery
-    leans on the genesis check, the full-list confirmation, and the user's
-    memory of their own devices. The transparency log (owner decision 10)
-    is the hard close here too.
+    a hard warning, never a routine confirm. A list version that adds a
+    device is valid only with a quorum co-signature: a second enrolled
+    device signs it, or - when no second enrolled device exists - the
+    recovery signing key does, and clients reject any device-adding version
+    without one. One stolen or stale device can therefore never add a key
+    alone, on the real chain or on a fork (owner decision 10, resolved).
+    The cost, stated plainly: a single-device user must reach for their
+    phrase to enrol a second device, because the recovery signing key is
+    the only co-signer available to them.
+    The quorum rule meets the recovery path cleanly: when no enrolled
+    device survives there is no second device to co-sign, so the recovery
+    signing key is the co-signer and the phrase ceremony is itself the
+    confirmation. The recovering client shows the full device list from the
+    chain head it fetched - not a diff - and the user confirms every device
+    on it before the recovery signing key signs the replacement-adding
+    version, so a fork-injected device is visible in that list. Trade-off,
+    stated plainly: with zero enrolled devices the cross-device barrier
+    does not exist, so recovery leans on the genesis check, the full-list
+    confirmation, and the user's memory of their own devices; a fork that
+    injected a device without the recovery key still fails quorum.
   - Devices sign and exchange the chain head they have seen whenever they
     talk (enrolment channel, transfer envelopes), so two successors of the
     same predecessor are detected; a detected fork freezes all wraps until
     the user resolves it on a trusted device.
-  - An external, append-only transparency log of list heads closes the
-    residual gap below; whether it is a launch requirement or a follow-up
-    is owner decision 10.
+  - An external, append-only transparency log of list heads would close
+    the residual gap below. Per owner decision 10 (resolved) it is
+    follow-up hardening, not a launch requirement; the quorum rule above is
+    the launch mechanism.
   Residual risk, stated plainly: a client that never sees the real
   revocation (the server withholds it) and has no peer contact accepts a
-  fork signed by the revoked device as a legitimate successor. The user
-  confirmation is then the only barrier, which is why its content and the
-  cross-device requirement above are load-bearing. This is the known limit
-  of key transparency without an external log.
+  fork signed by the revoked device as a legitimate successor - but that
+  fork cannot add a device, because the revoked device has no quorum
+  co-signer, so key injection through it is closed. What remains open on a
+  fork is hiding the revocation itself (the stale device keeps working for
+  that client); the user confirmation is the barrier there, which is why
+  its content and the quorum requirement above are load-bearing. This is
+  the known limit of key transparency without an external log.
   This is the key-transparency problem; implement a published design
   (compare WhatsApp key transparency, Apple Contact Key Verification,
   Keybase sigchains), not a home-grown one. **Expert review flag.**
@@ -569,21 +579,14 @@ measured velocity.
    TASKS.md build on the helper holding mailbox data. Finish them for the
    single-user helper, or freeze them now that the mode is on a deprecation
    path?
-10. **Device-compromise fork scope** (section 12): a stolen device can sign a
-    competing device list for any client that missed the revocation. The
-    countermeasures (per-wrap confirmation naming the signer, cross-device
-    confirmation, fork freeze) reduce this to a UX barrier. The options for
-    the hard close:
-    (a) ship the external transparency log at launch and require list heads
-    to appear in it before clients wrap - strongest, and it also hardens
-    phrase recovery, at the cost of building or adopting the log now;
-    (b) require quorum signatures on device-adding versions - a second
-    enrolled device or the recovery signing key - so one stolen device
-    cannot add a key alone, accepting the friction that a single-device
-    user needs their phrase to enrol their second device;
-    (c) ship with the UX barrier and full-list confirmations as designed,
-    and revisit after the independent cryptographic review (section 19).
-    Decide which, and how far re-keying goes after device compromise.
+10. **Device-compromise fork scope** (section 12): RESOLVED - quorum
+    signatures on device-adding versions (option b). A list version that
+    adds a device is valid only when co-signed by a second enrolled device
+    or the recovery signing key, so one stolen device cannot add a key
+    alone, on the real chain or on a fork. Accepted cost: a single-device
+    user needs their phrase to enrol their second device. The transparency
+    log is follow-up hardening, not a launch requirement. Still open: how
+    far re-keying goes after device compromise.
 
 Open: 1, 2 (for the hosted service), 5-10. Decided: 3, 4.
 
