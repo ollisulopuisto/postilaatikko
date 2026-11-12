@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## Postilaatikko 2026.11.12.1
+
 - The Send Later helper accepts remote HTTPS deployments: non-loopback `--listen` now requires at least one `--allowed-host` naming the exact Host values the listener serves, and the DNS-rebinding Host guard honors them (port-stripped, case-insensitive, no wildcards); loopback-only validation is unchanged, and the installed launchd agent carries the allowed hosts.
 - Add focus-visible styling, high-contrast focus rings, group role, and keyboard glyph disclosure to custom window controls (traffic lights).
 - Virtual folders no longer fail with "database is locked (SQLITE_BUSY)" while sync is writing: virtual-folder writes retry transient lock contention, the cached-view endpoint answers with a bounded deadline and a distinct retryable busy code, and the view falls back to reading conversations directly when the cached index cannot refresh or the cache request times out.
@@ -46,7 +48,6 @@
 - Keyboard shortcut audit: a test now fails on any duplicate binding in one context; every cross-group reuse is listed with its reason.
 - Stop continuous CPU use while an email is open in the reader: the inline-image loading placeholder is now static (no animated SVG) and iframe height updates are skipped when unchanged.
 - Skip meta-charset regex scans on HTML parts without a `<meta` and `charset` token, keeping long-s (`charſet`) spellings on the regex path.
-
 ## Postilaatikko 2026.11.10.4
 
 - Add to Calendar now recognises Finnish dates: dotted dates such as 12.11.2026, month names such as 12. marraskuuta 2026, and times written "klo 14", "klo 14.30" or "klo 9:00-10.30". A bare number after a date (for example "June 5, 2026 14 people", or a price after a dotted date) is no longer read as an hour; use "at 3 pm", minutes or am/pm. Dates still need a four-digit year, and slash dates such as 12/05/2026 are still skipped because they are ambiguous. Finnish times may carry a zone (klo 14 UTC, klo 14 +02:00), and English hour ranges such as 2-3 pm are recognised; a time followed by an ambiguous zone name such as PST is skipped.
