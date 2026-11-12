@@ -283,9 +283,18 @@ deprecated mailbox-service mode and retire with it. [inferred]
   ceremony (compare published Signal/1Password models). **[inferred]**
 - Revoke: delete the device's wrapped-UMK blob, revoke its token (documented
   `api-client revoke` machinery as the pattern), and rotate the UMK so new
-  transfer envelopes are unreadable to the revoked device. Envelopes are
-  short-lived, so there is no history to re-encrypt: delete the pending ones
-  and let devices re-send. Revocation does not touch the mail the device
+  transfer envelopes are unreadable to the revoked device. Pending envelopes
+  are not deleted: a pending envelope may hold the only copy of its mail
+  (the provider no longer has it and the source device may be gone). Instead,
+  the device performing the revocation re-wraps each pending envelope's CEK
+  from the old UMK to the new one and uploads the new wraps; the envelope
+  ciphertext stays unchanged. This needs only the old UMK, not the device
+  that created the envelope, and cuts the revoked device off once its token
+  is refused. It does not protect envelopes the revoked device already
+  downloaded, or ones a colluding operator hands it with their old wraps;
+  where that matters, the revoking device re-encrypts the pending envelope
+  under a fresh CEK instead (re-upload, same TTL). An envelope is deleted on
+  revocation only when the user chooses to. Revocation does not touch the mail the device
   already synced or its provider credentials; the user must also revoke that
   device's access at the provider (password change / OAuth grant removal). A
   live stolen unlocked device exposed what it read (T5).
