@@ -1,9 +1,12 @@
 package app
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -70,14 +73,57 @@ type contactConflictError struct{ cause error }
 func (e *contactConflictError) Error() string { return e.cause.Error() }
 func (e *contactConflictError) Unwrap() error { return e.cause }
 
-// contactsIdempotencyKey returns a fresh key for one user action. The
-// helper's mutation ledger retains the outcome per key, so keys must never
-// derive from request content: repeating an action later (toggling a source
-// off and back on) is a new action, not a retry, and a content-derived key
-// would replay the stale first outcome or trip an idempotency conflict. The
-// desktop issues no automatic retries, so each Wails call gets its own key.
-func contactsIdempotencyKey(operation string) string {
-	return "desktop-contacts-" + operation + "-" + uuid.NewString()
+// contactsPendingKeys retains each pending contacts mutation's idempotency
+// key by request content. The helper's mutation ledger records outcomes per
+// key, so the desktop's key discipline decides both failure modes:
+// content-derived keys replay stale outcomes when a user deliberately
+// repeats an action (toggle off and back on), while a fresh key per call
+// makes a retry after an ambiguous transport failure (timeout, dropped
+// connection) double-run the mutation because the helper cannot match it to
+// its recorded receipt. Retaining the key only while the outcome is unknown
+// avoids both: retries of an unacknowledged request replay the receipt, and
+// a settled action repeated later is a new mutation with a fresh key.
+var contactsPendingKeys = struct {
+	sync.Mutex
+	byContent map[string]string
+}{byContent: make(map[string]string)}
+
+func contactsMutationContent(operation string, operands ...string) string {
+	h := sha256.New()
+	h.Write([]byte(operation))
+	for _, operand := range operands {
+		h.Write([]byte{0})
+		h.Write([]byte(operand))
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// contactsIdempotencyKey returns the retained key for this exact pending
+// request, creating and retaining a fresh one when it has none.
+func contactsIdempotencyKey(operation string, operands ...string) string {
+	content := contactsMutationContent(operation, operands...)
+	contactsPendingKeys.Lock()
+	defer contactsPendingKeys.Unlock()
+	if key, ok := contactsPendingKeys.byContent[content]; ok {
+		return key
+	}
+	key := "desktop-contacts-" + operation + "-" + uuid.NewString()
+	contactsPendingKeys.byContent[content] = key
+	return key
+}
+
+// settleContactsMutation drops the retained key once the mutation's outcome
+// is known: success, or a structured API error the user can act on. A
+// transport-level failure (no fault code) keeps the key so a retry replays
+// the helper's receipt instead of executing twice.
+func settleContactsMutation(err error, operation string, operands ...string) {
+	if err != nil && remoteContactsFaultCode(err) == "" {
+		return
+	}
+	content := contactsMutationContent(operation, operands...)
+	contactsPendingKeys.Lock()
+	delete(contactsPendingKeys.byContent, content)
+	contactsPendingKeys.Unlock()
 }
 
 // contactsExtensionEnabled mirrors the Contacts bridge's enabled gate so
