@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Virtual folders no longer fail with "database is locked (SQLITE_BUSY)" while sync is writing: virtual-folder writes retry transient lock contention, and the view falls back to reading conversations directly when the cached index cannot refresh.
 - Redirect destinations are cleaned when opened or copied; the link menu also allows resolving the original link via Cloudflare when a redirect requires tracking parameters.
 - Correct the CI fallback source-list option so apt actually selects the temporary official Ubuntu mirrors.
 

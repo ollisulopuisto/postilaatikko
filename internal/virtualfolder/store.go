@@ -45,8 +45,8 @@ func (s *Store) ensureTables() error {
 	return nil
 }
 
-// Create inserts a new virtual folder and its folder members
-func (s *Store) Create(vf *VirtualFolder) error {
+// create inserts a new virtual folder and its folder members (retried on SQLITE_BUSY by the public wrapper)
+func (s *Store) create(vf *VirtualFolder) error {
 	if vf == nil {
 		return fmt.Errorf("virtual folder cannot be nil")
 	}
@@ -98,6 +98,42 @@ func (s *Store) Create(vf *VirtualFolder) error {
 	}
 
 	return nil
+}
+
+// Busy-retry policy for virtual-folder writes. Sync churn (per-message
+// upserts, FTS batches) can starve one waiter past the DSN busy_timeout, which
+// used to surface in the UI as "failed to begin transaction: database is
+// locked (5) (SQLITE_BUSY)". A few short retries absorb that transient
+// contention; reads need no retry because WAL readers never block.
+const (
+	busyRetryAttempts  = 5
+	busyRetryBaseDelay = 200 * time.Millisecond
+)
+
+// Create inserts a new virtual folder and its folder members
+func (s *Store) Create(vf *VirtualFolder) error {
+	return database.RetryOnBusy(func() error { return s.create(vf) }, busyRetryAttempts, busyRetryBaseDelay)
+}
+
+// Update modifies an existing virtual folder and its folder members
+func (s *Store) Update(vf *VirtualFolder) error {
+	return database.RetryOnBusy(func() error { return s.update(vf) }, busyRetryAttempts, busyRetryBaseDelay)
+}
+
+// Delete removes a virtual folder and its members from the database
+func (s *Store) Delete(id string) error {
+	return database.RetryOnBusy(func() error { return s.delete(id) }, busyRetryAttempts, busyRetryBaseDelay)
+}
+
+// Reorder updates the display order of virtual folders
+func (s *Store) Reorder(ids []string) error {
+	return database.RetryOnBusy(func() error { return s.reorder(ids) }, busyRetryAttempts, busyRetryBaseDelay)
+}
+
+// SaveCache atomically replaces a virtual folder's cached conversation index
+// and stamps the refresh time.
+func (s *Store) SaveCache(virtualFolderID string, entries []CachedConversation) error {
+	return database.RetryOnBusy(func() error { return s.saveCache(virtualFolderID, entries) }, busyRetryAttempts, busyRetryBaseDelay)
 }
 
 // Get returns a single virtual folder by its ID
@@ -329,7 +365,7 @@ func (s *Store) UnreadCounts() (map[string]int, error) {
 }
 
 // Reorder assigns each virtual folder its position in the supplied ID list.
-func (s *Store) Reorder(ids []string) error {
+func (s *Store) reorder(ids []string) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin virtual folder reorder: %w", err)
@@ -354,8 +390,8 @@ func (s *Store) Reorder(ids []string) error {
 	return nil
 }
 
-// Update modifies an existing virtual folder and its folder members
-func (s *Store) Update(vf *VirtualFolder) error {
+// update modifies an existing virtual folder and its folder members (retried on SQLITE_BUSY by the public wrapper)
+func (s *Store) update(vf *VirtualFolder) error {
 	if vf == nil {
 		return fmt.Errorf("virtual folder cannot be nil")
 	}
@@ -417,8 +453,8 @@ func (s *Store) Update(vf *VirtualFolder) error {
 	return nil
 }
 
-// Delete removes a virtual folder and its members from the database
-func (s *Store) Delete(id string) error {
+// delete removes a virtual folder and its members from the database (retried on SQLITE_BUSY by the public wrapper)
+func (s *Store) delete(id string) error {
 	if id == "" {
 		return fmt.Errorf("virtual folder ID cannot be empty")
 	}
@@ -471,7 +507,7 @@ type CachedConversation struct {
 
 // SaveCache atomically replaces a virtual folder's cached conversation index
 // and stamps the refresh time.
-func (s *Store) SaveCache(virtualFolderID string, entries []CachedConversation) error {
+func (s *Store) saveCache(virtualFolderID string, entries []CachedConversation) error {
 	if virtualFolderID == "" {
 		return fmt.Errorf("virtual folder ID cannot be empty")
 	}
