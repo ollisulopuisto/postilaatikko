@@ -43,3 +43,8 @@ test('claim failures reload persisted pending rows instead of abandoning queued 
  assert.match(failure,/ps.dispatching = false/)
  assert.match(failure,/if \(!persisted.some/)
 })
+test('local delivery errors cannot enter the remote claim retry path', () => {
+ const dispatch=app.slice(app.indexOf('function pendingDispatch'), app.indexOf('async function finishQuitRequest'))
+ assert.match(dispatch,/localAttempted = true\s+await SendMessageWithDraftGuard/)
+ assert.match(dispatch,/if \(localAttempted\) \{\s+pendingRemove\(ps.id\)/)
+})
