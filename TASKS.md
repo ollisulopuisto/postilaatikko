@@ -483,4 +483,4 @@ README review follow-up: qualify checksum instructions because tagged releases d
 
 | ID | Effort | Task | Owner | Status |
 | --- | --- | --- | --- | --- |
-| REMOTE-CRYPTO-DESIGN-001 | Large | Define S/MIME/PGP parity custody and retry boundaries before removing remote crypto gates. | Instinct / `agent/REMOTE-CRYPTO-DESIGN-001` | Design for review; no behavior change. Proposed device-local crypto avoids automatic private-key export. Custody decision and implementation/native acceptance remain open. See `docs/plans/2026-11-13-remote-crypto-parity.md`. |
+| REMOTE-CRYPTO-DESIGN-001 | Large | Define S/MIME/PGP parity custody and retry boundaries before removing remote crypto gates. | Instinct / `agent/REMOTE-CRYPTO-DESIGN-001` / `/tmp/pl-remote-crypto` | Design for review; docs-only verification: `git diff --check` passed; implementation `71525a3c`; no behavior change. Proposed device-local crypto avoids automatic private-key export. Custody decision and implementation/native acceptance remain open. See `docs/plans/2026-11-13-remote-crypto-parity.md`. |
