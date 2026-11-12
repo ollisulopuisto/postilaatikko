@@ -478,3 +478,9 @@ README review follow-up: qualify checksum instructions because tagged releases d
 - Status: Review. Owner: Instinct. Branch: `design/dmg-welcome-a`. Worktree: `/tmp/posti` (PR #228 checkout). Implementation commit under review: `eb06ec2`; subsequent review fixes are recorded in this branch history and the reviewed head is kept current here when verification changes.
 - Scope: Bilingual (fi+en) dark DMG installer window, direction A: restyled layout via `packaging/dmg/restyle.py`, capture contract in `packaging/dmg/capture.py`, layout tests in `packaging/dmg/test_layout.py`, and packaging README updates. No merge; CI must stay green.
 - Verification: `python3 packaging/dmg/test_layout.py` passes locally; the same suite now runs in CI (workflow step added on this branch). macOS-only capture/rendering paths are unverified locally. Review pending; no merge.
+
+## Remote Calendar parity (2026-11-13)
+
+| ID | Effort | Task | Owner | Status |
+| --- | --- | --- | --- | --- |
+| REMOTE-CALENDAR-001 | Large | Add helper-owned Calendar service operations with separate read/write/manage capabilities, typed desktop routing and lifecycle; preserve no-local-mailbox startup. | Instinct / `agent/REMOTE-CALENDAR-001` / `/tmp/pl-remote-calendar` | In progress; bounded typed read contract and recurrence/store budget foundation in this branch. Depends on shared host access PR #248 and Contacts-owned headless Core adapter for production mounting/lifecycle. Existing remote gate remains closed; writes/manage/consent/notifications remain follow-up. New read/recurrence tests and full v1/Calendar package suites pass; native provider/consent/alarm/two-machine acceptance not run. |
