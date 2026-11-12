@@ -79,3 +79,43 @@ func TestRemoteCalendarReadRejectsOversizedStoredEvent(t *testing.T) {
 		t.Fatal("oversized event returned a partial success")
 	}
 }
+
+func TestRemoteMetadataReadSnapshot(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	api := NewAPI(store, nil, nil, nil)
+	source, err := api.AddLocalSource("Local")
+	if err != nil {
+		t.Fatal(err)
+	}
+	calendar, err := api.AddLocalCalendar(source, "Personal", "#123456")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().Unix()
+	id, err := api.CreateEvent(EventInput{CalendarID: calendar, Summary: "One", DTStartUnix: now, DTEndUnix: now + 60})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sources, err := store.RemoteSources(context.Background())
+	if err != nil || len(sources) != 1 {
+		t.Fatalf("sources=%v %v", sources, err)
+	}
+	calendars, err := store.RemoteCalendars(context.Background(), source)
+	if err != nil || len(calendars) != 1 {
+		t.Fatalf("calendars=%v %v", calendars, err)
+	}
+	event, err := store.RemoteEvent(context.Background(), id)
+	if err != nil || event == nil || event.Summary != "One" {
+		t.Fatalf("event=%v %v", event, err)
+	}
+	if _, err := store.DB().Exec(`UPDATE calendar_sources SET name=? WHERE id=?`, strings.Repeat("x", (1<<20)+1), source); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.RemoteSources(context.Background()); err == nil {
+		t.Fatal("unbounded metadata accepted")
+	}
+}
