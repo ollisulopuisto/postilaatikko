@@ -303,8 +303,9 @@ deprecated mailbox-service mode and retire with it. [inferred]
     those exact recovery public keys, and every link verifies. A
     self-consistent chain the server built around the public recovery keys
     fails the genesis check. The recovery signing key
-    then signs the next version, adding the replacement device. The phrase
-    is the anchor; the server's copy is only transport.
+    then signs the next version, adding the replacement device, which
+    co-signs it during the ceremony (the quorum rule under Forks below).
+    The phrase is the anchor; the server's copy is only transport.
 - Forks: a revoked or stolen device stays a valid signer in any predecessor
   that lists it, so it can sign a competing successor, and a colluding
   server can show that fork to a device that missed the real revocation.
@@ -316,26 +317,37 @@ deprecated mailbox-service mode and retire with it. [inferred]
     device name is shown as a new device, never silently accepted. A silent update never
     leads to a wrap. The confirmation names the device that signed each new
     list version; a version signed by a device the user believes revoked is
-    a hard warning, never a routine confirm. A list version that adds a
-    device is valid only with a quorum co-signature: a second enrolled
-    device signs it, or - when no second enrolled device exists - the
-    recovery signing key does, and clients reject any device-adding version
-    without one. One stolen or stale device can therefore never add a key
-    alone, on the real chain or on a fork (owner decision 10, resolved).
+    a hard warning, never a routine confirm. A list version that
+    introduces any new key - adding a device, or replacing an existing
+    device's signing or KEM key - is valid only with a quorum
+    co-signature: the version carries two distinct signatures, its own
+    signer's plus a co-signer that is another enrolled device or the
+    recovery signing key, and clients reject any key-changing version
+    without one. A key replacement under an existing device name counts as
+    a key introduction for this rule, so a stolen signer cannot swap in an
+    attacker KEM key any more than it can add a device. One stolen or
+    stale device can therefore never introduce a key alone, on the real
+    chain or on a fork (owner decision 10, resolved).
     The cost, stated plainly: a single-device user must reach for their
     phrase to enrol a second device, because the recovery signing key is
     the only co-signer available to them.
-    The quorum rule meets the recovery path cleanly: when no enrolled
-    device survives there is no second device to co-sign, so the recovery
-    signing key is the co-signer and the phrase ceremony is itself the
-    confirmation. The recovering client shows the full device list from the
+    The recovery signing key's authority to co-sign does not depend on how
+    many devices the list contains: it is the root the chain is anchored to
+    (the genesis check above), not a fallback that activates only when the
+    list is short. Phrase recovery therefore works after any number of
+    device losses, including every enrolled device at once. The recovery
+    signing key signs the replacement-adding version, and the freshly
+    created replacement device co-signs it during the ceremony, which
+    gives the two distinct signatures the quorum rule requires even when
+    no enrolled device is available. The phrase ceremony is itself the
+    confirmation: the recovering client shows the full device list from the
     chain head it fetched - not a diff - and the user confirms every device
     on it before the recovery signing key signs the replacement-adding
     version, so a fork-injected device is visible in that list. Trade-off,
-    stated plainly: with zero enrolled devices the cross-device barrier
+    stated plainly: with zero available devices the cross-device barrier
     does not exist, so recovery leans on the genesis check, the full-list
     confirmation, and the user's memory of their own devices; a fork that
-    injected a device without the recovery key still fails quorum.
+    injected a key without the recovery key still fails quorum.
   - Devices sign and exchange the chain head they have seen whenever they
     talk (enrolment channel, transfer envelopes), so two successors of the
     same predecessor are detected; a detected fork freezes all wraps until
@@ -580,15 +592,21 @@ measured velocity.
    single-user helper, or freeze them now that the mode is on a deprecation
    path?
 10. **Device-compromise fork scope** (section 12): RESOLVED - quorum
-    signatures on device-adding versions (option b). A list version that
-    adds a device is valid only when co-signed by a second enrolled device
-    or the recovery signing key, so one stolen device cannot add a key
-    alone, on the real chain or on a fork. Accepted cost: a single-device
-    user needs their phrase to enrol their second device. The transparency
-    log is follow-up hardening, not a launch requirement. Still open: how
-    far re-keying goes after device compromise.
+    signatures on key-changing versions (option b, extended from adds to
+    adds-and-replaces after review). A list version that introduces a new
+    key is valid only with two distinct signatures: its signer's plus a
+    co-signer that is another enrolled device or the recovery signing key,
+    so one stolen device cannot introduce a key alone, on the real chain
+    or on a fork. The recovery signing key may always co-sign, whatever
+    the device count, so phrase recovery works after any number of device
+    losses. Accepted cost: a single-device user needs their phrase to
+    enrol their second device. The transparency log is follow-up
+    hardening, not a launch requirement. Still open: how far re-keying
+    goes after device compromise.
 
-Open: 1, 2 (for the hosted service), 5-10. Decided: 3, 4.
+Open: 1, 2 (for the hosted service), 5-9, 10 (re-keying scope only).
+Decided: 3, 4, 10 (fork hard-close: quorum signatures on key-changing
+versions).
 
 ## 23. Expert review flags (collected)
 
