@@ -478,3 +478,10 @@ README review follow-up: qualify checksum instructions because tagged releases d
 - Status: Review. Owner: Instinct. Branch: `design/dmg-welcome-a`. Worktree: `/tmp/posti` (PR #228 checkout). Implementation commit under review: `eb06ec2`; subsequent review fixes are recorded in this branch history and the reviewed head is kept current here when verification changes.
 - Scope: Bilingual (fi+en) dark DMG installer window, direction A: restyled layout via `packaging/dmg/restyle.py`, capture contract in `packaging/dmg/capture.py`, layout tests in `packaging/dmg/test_layout.py`, and packaging README updates. No merge; CI must stay green.
 - Verification: `python3 packaging/dmg/test_layout.py` passes locally; the same suite now runs in CI (workflow step added on this branch). macOS-only capture/rendering paths are unverified locally. Review pending; no merge.
+
+
+## Remote startup guide correction (2026-11-13)
+
+| ID | Effort | Task | Owner | Status |
+| --- | --- | --- | --- | --- |
+| REMOTE-STARTUP-DOCS-001 | Easy | Replace stale remote-only startup limitation with current device/helper ownership and remaining parity limits. | Instinct / `agent/REMOTE-STARTUP-DOCS-001` / `/tmp/pl-remote-docs` | Review; PR #246, implementation `94c16db0`. Source-checked Preflight/startRemoteWorkspace and remote integration guards; `git diff --check` passed. No tests run (documentation only), no native two-machine runtime verified. |
