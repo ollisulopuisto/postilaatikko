@@ -120,6 +120,13 @@ func (a *App) DispatchRemotePendingSend(id string) (bool, error) {
 	}
 	response, err := a.SendPreparedComposerMessage(envelope.Request, id)
 	if err != nil {
+		// Only these structured helper codes are definitive pre-delivery rejections.
+		// Internal/provider/idempotency errors may follow reservation or acceptance.
+		for _, code := range []v1.ErrorCode{v1.CodeRevisionConflict, v1.CodeInvalidRequest, v1.CodeNotFound, v1.CodeCapabilityDenied, v1.CodeUnauthenticated} {
+			if v1.IsCode(err, code) {
+				return finish(pendingremote.StateFailed, fmt.Errorf("helper rejected delivery; draft retained: %w", err))
+			}
+		}
 		// An HTTP failure does not establish that the provider rejected delivery.
 		lookup, lookupErr := a.GetComposerSendReceipt(id)
 		if lookupErr == nil && lookup != nil && lookup.Found && lookup.Response != nil {

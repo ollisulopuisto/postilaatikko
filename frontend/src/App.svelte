@@ -752,9 +752,21 @@
           await SendMessageWithDraftGuard(ps.accountId, message, ps.draftId)
         }
       } catch (err) {
-        // Delivery failed or is uncertain; preserve its draft and stop quit.
+        // A device-db claim can fail before any delivery attempt. Reload before
+        // removing its countdown; terminal/unknown rows are absent from this list.
         await CompletePendingSend(ps.id).catch(() => {})
-        pendingRemove(ps.id)
+        try {
+          const persisted = await ListPendingSends() as PendingSendItem[]
+          if (!persisted.some(item => item.id === ps.id)) pendingRemove(ps.id)
+          else {
+            ps.dispatching = false
+            ps.dispatchAt = new Date(Date.now() + 5000).toISOString()
+          }
+        } catch {
+          // Failed reload is not evidence that the pending row is gone.
+          ps.dispatching = false
+          ps.dispatchAt = new Date(Date.now() + 5000).toISOString()
+        }
         addToast({ type: 'error', message: String(err) })
         return false
       }
