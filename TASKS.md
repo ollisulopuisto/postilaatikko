@@ -485,3 +485,8 @@ README review follow-up: qualify checksum instructions because tagged releases d
 | ID | Effort | Task | Owner | Status |
 | --- | --- | --- | --- | --- |
 | REMOTE-UNDO-SEND-001 | Large | Make the remote desktop Undo Send window device-owned, bounded and safe without a local mailbox DB; submit immutable MIME to the helper with durable request identity. | Instinct / `agent/REMOTE-UNDO-SEND-001` / `/tmp/pl-remote-undo` | In review; PR #247, implementation `5c51f41d`, rejection/claim retry fix `8ef1008e` with red tests `70d6f291`. Nil-mailbox panic and both Devin findings reproduced red; helper/v1/client/queue tests and vet pass, remote app tests pass with a test-only CGO-off platform overlay. Frontend check/build, App ESLint and targeted pending-send tests pass. Native two-machine runtime, real provider ambiguity and keychain/login remain unverified. Cross-device Send Later arbitration remains a separate gate. |
+## Remote startup guide correction (2026-11-13)
+
+| ID | Effort | Task | Owner | Status |
+| --- | --- | --- | --- | --- |
+| REMOTE-STARTUP-DOCS-001 | Easy | Replace stale remote-only startup limitation with current device/helper ownership and remaining parity limits. | Instinct / `agent/REMOTE-STARTUP-DOCS-001` / `/tmp/pl-remote-docs` | Review; PR #246, implementation `94c16db0`. Source-checked Preflight/startRemoteWorkspace and remote integration guards; `git diff --check` passed. No tests run (documentation only), no native two-machine runtime verified. |

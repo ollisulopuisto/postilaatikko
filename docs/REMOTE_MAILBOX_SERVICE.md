@@ -42,4 +42,14 @@ List active clients with `postilaatikko-helper api-client list`. Revocation take
 
 The helper host is trusted with account authorization and mailbox data, including prepared content needed for scheduled sending. This connection is not end-to-end encrypted from the service operator. Protect the host, its credentials, database, logs, backups, TLS keys, and network access accordingly.
 
-The current desktop still requires its normal local mailbox database during startup and retains local stores for workflows that have not moved behind the service API. Remote configuration routes supported service operations to the remote helper and fails closed when that service is unavailable. A standalone remote-only desktop that does not initialize a local mailbox database remains follow-up work.
+## What runs on each computer
+
+When a remote endpoint is already configured, desktop startup opens only the device database. It does not open the local mailbox database, construct local provider clients, or start local mailbox sync workers. The helper owns mailbox storage and provider work; the desktop keeps rendering, device preferences, content policy and certificate trust locally. Changing an existing desktop connection does not retroactively prove that its current process has released local resources: restart the desktop to enter the remote-only startup path.
+
+Supported remote paths include mailbox lists/search/counts, message and attachment reads, drafts and immediate send through the helper, and mailbox actions with helper-owned Undo. A configured remote service failure is reported without silently switching to the local mailbox database.
+
+Remote mode is not yet at local-mode feature parity. Contacts/CardDAV, Calendar service operations and S/MIME/PGP remain explicitly unavailable. The existing Undo Send queue uses the local mailbox database and its remote dispatch is blocked, so do not rely on it remotely. Native two-computer delivery, failure recovery and CPU/RSS savings remain acceptance work, not guarantees established by compilation or API tests.
+
+The first connection still needs a way to configure the helper URL and grant; configuring it is distinct from migrating accounts, provider credentials or mail to a new host. Back up and provision the trusted helper separately. Connecting a desktop must not be treated as implicit permission to transfer private signing/decryption keys.
+
+For source details, see `app/app.go` (`Preflight`, `startRemoteWorkspace`) and the HOSTED-SERVER-051 onward entries in `TASKS.md`. The owner-operated mailbox mode described here is distinct from the hosted zero-knowledge design, which must not keep a full mailbox or provider credentials on its server.
