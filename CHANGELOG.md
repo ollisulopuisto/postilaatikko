@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Inbox month headings now follow a system time-zone change: the cached month formatter is keyed by the active time zone, so a message near a month boundary no longer keeps the previous zone's month name after travel or a zone change.
 - Redirect destinations are cleaned when opened or copied; the link menu also allows resolving the original link via Cloudflare when a redirect requires tracking parameters.
 - Correct the CI fallback source-list option so apt actually selects the temporary official Ubuntu mirrors.
 
