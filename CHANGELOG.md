@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 - Add focus-visible styling, high-contrast focus rings, group role, and keyboard glyph disclosure to custom window controls (traffic lights).
+- macOS signed releases now carry hardened-runtime resource entitlements matching the app's usage descriptions: the Developer ID signing steps pass `build/darwin/entitlements.plist` (currently the Contacts entitlement, without which the system blocks `CNContactStore` before its permission prompt), and a CI guard dumps the packaged app's signed entitlements and fails when a usage string lacks its entitlement.
 - Design document for a zero-knowledge Postilaatikko service (`docs/plans/2026-11-11-zero-knowledge-server.md`): a hosted multi-tenant architecture where the operator cannot read mail content, with an explicit threat model, client-side key hierarchy, hybrid post-quantum transport, encrypted-search options with their leakage, multi-device enrolment and recovery, GDPR/provider-OAuth/abuse/assurance requirements, and a phased implementation plan. Documentation only; no behavior changes.
 - Inbox month headings now follow a system time-zone change: the cached month formatter is keyed by the active time zone, so a message near a month boundary no longer keeps the previous zone's month name after travel or a zone change.
 - Redirect destinations are cleaned when opened or copied; the link menu also allows resolving the original link via Cloudflare when a redirect requires tracking parameters.
