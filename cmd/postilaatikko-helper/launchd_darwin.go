@@ -27,7 +27,7 @@ func launchAgentPath() (string, error) {
 	return filepath.Join(home, "Library", "LaunchAgents", agentLabel+".plist"), nil
 }
 
-func installAgent(ctx context.Context, identity, data, queue, listen, cert, key string, withSync bool, apiConfig apiListenerConfig, gmailPush alwayson.GmailPushConfig) error {
+func installAgent(ctx context.Context, identity, data, queue, listen, cert, key string, allowedHosts []string, withSync bool, apiConfig apiListenerConfig, gmailPush alwayson.GmailPushConfig) error {
 	if err := validateListener(listen, cert, key); err != nil {
 		return err
 	}
@@ -61,6 +61,9 @@ func installAgent(ctx context.Context, identity, data, queue, listen, cert, key 
 	}
 	if cert != "" {
 		arguments = append(arguments, "--tls-cert", cert, "--tls-key", key)
+	}
+	for _, host := range allowedHosts {
+		arguments = append(arguments, "--allowed-host", host)
 	}
 	if apiConfig.cert != "" {
 		arguments = append(arguments, "--api-tls-cert", apiConfig.cert, "--api-tls-key", apiConfig.key)

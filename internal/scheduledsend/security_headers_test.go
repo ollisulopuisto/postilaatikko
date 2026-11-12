@@ -12,7 +12,7 @@ func TestSecurityHeadersAndOriginProtection(t *testing.T) {
 	handler := store.Handler()
 
 	// 1. Origin header rejected with 403 Forbidden
-	reqOrigin := httptest.NewRequest(http.MethodPost, "/v1/commands", bytes.NewReader([]byte("{}")))
+	reqOrigin := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/v1/commands", bytes.NewReader([]byte("{}")))
 	reqOrigin.Header.Set("Origin", "http://evil.com")
 	respOrigin := httptest.NewRecorder()
 	handler.ServeHTTP(respOrigin, reqOrigin)
@@ -21,8 +21,20 @@ func TestSecurityHeadersAndOriginProtection(t *testing.T) {
 	}
 	assertHeaders(t, respOrigin.Header(), "on Origin rejection")
 
-	// 2. 404 Not Found has security headers
-	reqNotFound := httptest.NewRequest(http.MethodPost, "/unknown", bytes.NewReader([]byte("{}")))
+	// 2. Host header validation: reject non-loopback Host (DNS rebinding protection)
+	for _, badHost := range []string{"evil.com", "attacker.local:8028", "rebinding.com"} {
+		reqBadHost := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/v1/commands", bytes.NewReader([]byte("{}")))
+		reqBadHost.Host = badHost
+		respBadHost := httptest.NewRecorder()
+		handler.ServeHTTP(respBadHost, reqBadHost)
+		if respBadHost.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 Bad Request for Host %q, got %d", badHost, respBadHost.Code)
+		}
+		assertHeaders(t, respBadHost.Header(), "on bad Host rejection")
+	}
+
+	// 3. 404 Not Found has security headers
+	reqNotFound := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/unknown", bytes.NewReader([]byte("{}")))
 	respNotFound := httptest.NewRecorder()
 	handler.ServeHTTP(respNotFound, reqNotFound)
 	if respNotFound.Code != http.StatusNotFound {
@@ -30,8 +42,8 @@ func TestSecurityHeadersAndOriginProtection(t *testing.T) {
 	}
 	assertHeaders(t, respNotFound.Header(), "on 404")
 
-	// 3. 405 Method Not Allowed has security headers
-	reqMethod := httptest.NewRequest(http.MethodGet, "/v1/commands", nil)
+	// 4. 405 Method Not Allowed has security headers
+	reqMethod := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/v1/commands", nil)
 	respMethod := httptest.NewRecorder()
 	handler.ServeHTTP(respMethod, reqMethod)
 	if respMethod.Code != http.StatusMethodNotAllowed {
@@ -39,10 +51,10 @@ func TestSecurityHeadersAndOriginProtection(t *testing.T) {
 	}
 	assertHeaders(t, respMethod.Header(), "on 405")
 
-	// 4. Valid authenticated request has security headers
+	// 5. Valid authenticated request has security headers
 	cmd := baselineCommand()
 	sealed := baselineSeal(t, cmd, client, helper)
-	reqValid := httptest.NewRequest(http.MethodPost, "/v1/commands", bytes.NewReader(sealed))
+	reqValid := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/v1/commands", bytes.NewReader(sealed))
 	respValid := httptest.NewRecorder()
 	handler.ServeHTTP(respValid, reqValid)
 	if respValid.Code != http.StatusOK {

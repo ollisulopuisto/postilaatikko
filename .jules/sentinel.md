@@ -44,3 +44,8 @@
 **Vulnerability:** Scheduled send helper endpoints (`/v1/commands` and `/healthz`) handled encrypted scheduling operations and status without complete defense-in-depth security headers (`X-Frame-Options`, `Content-Security-Policy`), and did not reject browser `Origin` headers before parsing.
 **Learning:** Background daemon and helper HTTP handlers exposed on loopback or network interfaces must enforce strict browser `Origin` rejection and comprehensive security headers to prevent framing, MIME sniffing, and unsolicited cross-origin browser interactions.
 **Prevention:** Apply a consistent security header profile (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`, `Cache-Control: no-store`) and reject non-empty `Origin` headers on non-browser daemon APIs.
+
+## 2026-11-11 - Loopback Host Header Validation and DNS Rebinding Prevention
+**Vulnerability:** Daemon helper HTTP protection (`ProtectBrowserRequests`) validated Origin headers and applied HTTP security headers, but did not validate the incoming `Host` header, allowing requests with arbitrary external host headers.
+**Learning:** Local background daemons bound to loopback interfaces must validate incoming `Host` headers in addition to browser `Origin` headers to guard against DNS rebinding attacks from malicious domains resolving to loopback IP addresses.
+**Prevention:** Inspect and normalize `request.Host` on all local helper middleware, verifying that the target host represents a loopback identity (`localhost`, `127.0.0.1`, `::1`) before serving requests.

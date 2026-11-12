@@ -36,7 +36,8 @@ func (e *RemoteError) Error() string { return "Send Later helper: " + e.Code }
 // Handler accepts only authenticated encrypted commands. Pairing, key creation,
 // revocation and administrative unknown-outcome resolution are local operations.
 // Wrap it in a server with body/header/read/write limits; use TLS off-loopback.
-func (s *Store) Handler() http.Handler {
+// Remote TLS listeners pass their allowed Host values through to the guard.
+func (s *Store) Handler(allowedHosts ...string) http.Handler {
 	concurrent := make(chan struct{}, 2)
 	return ProtectBrowserRequests(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/v1/commands" {
@@ -85,20 +86,63 @@ func (s *Store) Handler() http.Handler {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(sealed)
-	}))
+	}), allowedHosts...)
 }
 
 // ProtectBrowserRequests applies the same boundary to command, health, error
 // and router-generated responses. Place it outside the outermost helper mux.
-func ProtectBrowserRequests(next http.Handler) http.Handler {
+// It enforces defense-in-depth security headers, rejects browser Origin headers,
+// and validates Host headers to prevent DNS rebinding attacks. Loopback Host
+// values always pass; remote HTTPS deployments name their exact Host values in
+// allowedHosts (port-stripped, case-insensitive, no wildcards).
+func ProtectBrowserRequests(next http.Handler, allowedHosts ...string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		applySecurityHeaders(w)
 		if _, present := request.Header["Origin"]; present {
 			http.Error(w, "forbidden: browser requests not permitted", http.StatusForbidden)
 			return
 		}
+		if !isLoopbackHost(request.Host) && !hostAllowed(request.Host, allowedHosts) {
+			http.Error(w, "bad request: invalid host header", http.StatusBadRequest)
+			return
+		}
 		next.ServeHTTP(w, request)
 	})
+}
+
+func hostAllowed(host string, allowedHosts []string) bool {
+	host = normalizeHostName(host)
+	if host == "" {
+		return false
+	}
+	for _, allowed := range allowedHosts {
+		if normalized := normalizeHostName(allowed); normalized != "" && host == normalized {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeHostName(host string) string {
+	host = strings.TrimSpace(host)
+	if parsed, _, err := net.SplitHostPort(host); err == nil {
+		host = parsed
+	}
+	host = strings.Trim(host, "[]")
+	return strings.ToLower(host)
+}
+
+func isLoopbackHost(host string) bool {
+	host = strings.TrimSpace(host)
+	if parsed, _, err := net.SplitHostPort(host); err == nil {
+		host = parsed
+	}
+	host = strings.Trim(host, "[]")
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func applySecurityHeaders(w http.ResponseWriter) {
