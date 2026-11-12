@@ -39,6 +39,8 @@ const (
 	CodeInternal ErrorCode = "internal_error"
 	// CodeDatabaseBusy indicates transient SQLite lock contention; retry shortly.
 	CodeDatabaseBusy ErrorCode = "database_busy"
+	// CodeCacheTimeout indicates a cache refresh exceeded the route's time budget.
+	CodeCacheTimeout ErrorCode = "cache_timeout"
 )
 
 // Fault holds a stable public error and an optional private cause. Serialize

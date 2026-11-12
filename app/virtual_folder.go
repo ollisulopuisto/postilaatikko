@@ -221,10 +221,13 @@ func (a *App) listVirtualFolderConversationsLocal(vf *virtualfolder.VirtualFolde
 }
 
 // isVirtualFolderCacheBusy reports whether a cached-view failure is transient
-// lock contention: raw SQLite busy text (local stores and older helpers), the
-// cache route's public database_busy code, or the desktop's two-second request
-// budget expiring while the helper waits on the write lock. All three warrant
-// serving the direct local read instead of failing the view.
+// and worth a direct local read: raw SQLite busy text (local stores and older
+// helpers), the cache route's public database_busy code, the route's
+// cache_timeout budget expiry, or the desktop's two-second request budget
+// expiring while the helper is still working. cache_timeout is not lock
+// contention - a slow healthy hydration also trips it - but the direct read
+// serves the first paint either way; remote desktops without local stores
+// still surface the original error.
 func isVirtualFolderCacheBusy(err error) bool {
 	if err == nil {
 		return false
@@ -234,6 +237,7 @@ func isVirtualFolderCacheBusy(err error) bool {
 	}
 	text := err.Error()
 	return strings.Contains(text, string(v1.CodeDatabaseBusy)) ||
+		strings.Contains(text, string(v1.CodeCacheTimeout)) ||
 		strings.Contains(text, "context deadline exceeded")
 }
 

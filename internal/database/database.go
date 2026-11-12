@@ -43,8 +43,16 @@ const (
 // DB wraps the SQL database connection
 type DB struct {
 	*sql.DB
-	path string
-	log  zerolog.Logger
+	path          string
+	busyTimeoutMS int
+	log           zerolog.Logger
+}
+
+// BusyTimeoutMS returns the connection busy_timeout (milliseconds) the
+// database was opened with. Detached best-effort writes temporarily lower it
+// on a pinned connection and restore this value afterwards.
+func (db *DB) BusyTimeoutMS() int {
+	return db.busyTimeoutMS
 }
 
 // Option customizes Open. Production code uses the defaults; options exist so
@@ -117,9 +125,10 @@ func Open(path string, opts ...Option) (*DB, error) {
 	}
 
 	return &DB{
-		DB:   db,
-		path: path,
-		log:  logging.WithComponent("database"),
+		DB:            db,
+		path:          path,
+		busyTimeoutMS: options.busyTimeoutMS,
+		log:           logging.WithComponent("database"),
 	}, nil
 }
 

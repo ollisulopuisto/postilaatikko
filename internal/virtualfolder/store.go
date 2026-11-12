@@ -1,6 +1,7 @@
 package virtualfolder
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -134,6 +135,36 @@ func (s *Store) Reorder(ids []string) error {
 // and stamps the refresh time.
 func (s *Store) SaveCache(virtualFolderID string, entries []CachedConversation) error {
 	return database.RetryOnBusy(func() error { return s.saveCache(virtualFolderID, entries) }, busyRetryAttempts, busyRetryBaseDelay)
+}
+
+// detachedSaveBusyTimeoutMS bounds how long a detached, best-effort cache
+// write waits on the write lock. The modernc driver does not interrupt a
+// BEGIN IMMEDIATE busy wait when the context expires, so the bound comes
+// from lowering busy_timeout on a pinned connection instead; the connection
+// is restored to the database's configured timeout before returning to the
+// pool.
+const detachedSaveBusyTimeoutMS = 2000
+
+// SaveCacheContext is SaveCache for detached, best-effort cache maintenance:
+// no retry loop, and the lock wait is bounded (see detachedSaveBusyTimeoutMS),
+// so an abandoned refresh cannot occupy a pool connection through the full
+// retry budget.
+func (s *Store) SaveCacheContext(ctx context.Context, virtualFolderID string, entries []CachedConversation) error {
+	if virtualFolderID == "" {
+		return fmt.Errorf("virtual folder ID cannot be empty")
+	}
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to acquire connection: %w", err)
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, fmt.Sprintf("PRAGMA busy_timeout = %d", detachedSaveBusyTimeoutMS)); err != nil {
+		return fmt.Errorf("failed to bound busy timeout: %w", err)
+	}
+	defer func() {
+		_, _ = conn.ExecContext(context.Background(), fmt.Sprintf("PRAGMA busy_timeout = %d", s.db.BusyTimeoutMS()))
+	}()
+	return s.saveCacheTx(ctx, conn, virtualFolderID, entries)
 }
 
 // Get returns a single virtual folder by its ID
@@ -507,11 +538,19 @@ type CachedConversation struct {
 
 // SaveCache atomically replaces a virtual folder's cached conversation index
 // and stamps the refresh time.
+type txBeginner interface {
+	BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
+}
+
 func (s *Store) saveCache(virtualFolderID string, entries []CachedConversation) error {
 	if virtualFolderID == "" {
 		return fmt.Errorf("virtual folder ID cannot be empty")
 	}
-	tx, err := s.db.Begin()
+	return s.saveCacheTx(context.Background(), s.db.DB, virtualFolderID, entries)
+}
+
+func (s *Store) saveCacheTx(ctx context.Context, beginner txBeginner, virtualFolderID string, entries []CachedConversation) error {
+	tx, err := beginner.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}

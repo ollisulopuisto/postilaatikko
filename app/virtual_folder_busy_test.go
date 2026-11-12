@@ -87,6 +87,17 @@ func TestGetVirtualFolderCachedViewFallsBackOnBusyCode(t *testing.T) {
 	_ = db
 }
 
+func TestGetVirtualFolderCachedViewFallsBackOnCacheTimeoutCode(t *testing.T) {
+	_, a := busyFallbackTestApp(t, errors.New("api error (cache_timeout): Virtual-folder cache refresh exceeded its time budget"))
+	view, err := a.GetVirtualFolderCachedView("vf-unread")
+	if err != nil {
+		t.Fatalf("GetVirtualFolderCachedView: %v (want direct-read fallback for cache_timeout)", err)
+	}
+	if view == nil || len(view.Conversations) != 1 || view.HasCache {
+		t.Fatalf("view = %#v, want one direct-read conversation, HasCache=false", view)
+	}
+}
+
 // The desktop's two-second request budget expires long before the helper's
 // lock wait ends; a cache-route timeout gets the same direct-read fallback.
 func TestGetVirtualFolderCachedViewFallsBackOnCacheTimeout(t *testing.T) {
