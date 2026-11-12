@@ -484,3 +484,9 @@ README review follow-up: qualify checksum instructions because tagged releases d
 | ID | Effort | Task | Owner | Status |
 | --- | --- | --- | --- | --- |
 | EXTENSION-HOST-ACCESS-001 | Medium | Extract host-independent extension-scoped Auth and secret-store adapters for remote Contacts and Calendar runtimes. | Instinct / `agent/EXTENSION-HOST-ACCESS-001` / `/tmp/pl-extension-host` | Review; extracted scoped Auth/Secrets and CardDAV read-only host adapter, wired desktop delegates. New adapter and existing broker tests pass, focused app tests pass with test-only CGO-off platform overlay; no native keychain/OAuth/two-machine validation. No HTTP secret-export surface or automatic consent. |
+
+## Remote startup guide correction (2026-11-13)
+
+| ID | Effort | Task | Owner | Status |
+| --- | --- | --- | --- | --- |
+| REMOTE-STARTUP-DOCS-001 | Easy | Replace stale remote-only startup limitation with current device/helper ownership and remaining parity limits. | Instinct / `agent/REMOTE-STARTUP-DOCS-001` / `/tmp/pl-remote-docs` | Review; PR #246, implementation `94c16db0`. Source-checked Preflight/startRemoteWorkspace and remote integration guards; `git diff --check` passed. No tests run (documentation only), no native two-machine runtime verified. |
