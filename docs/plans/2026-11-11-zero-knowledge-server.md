@@ -294,7 +294,23 @@ deprecated mailbox-service mode and retire with it. [inferred]
   downloaded, or ones a colluding operator hands it with their old wraps;
   where that matters, the revoking device re-encrypts the pending envelope
   under a fresh CEK instead (re-upload, same TTL). An envelope is deleted on
-  revocation only when the user chooses to. Revocation does not touch the mail the device
+  revocation only when the user chooses to.
+- Rotation order, so no step can strand a pending envelope (an interrupted
+  rotation resumes from the first unfinished step; every step is idempotent):
+  1. Generate the new UMK and, before anything else, upload it wrapped to
+     every surviving device's KEM public key and to the recovery key
+     (section 13). Device public keys are on the server, so offline devices
+     need nothing from the revoking device: they fetch their new wrap when
+     they next connect.
+  2. Only after the server confirms step 1, upload the new CEK wraps for
+     pending envelopes *alongside* the old ones.
+  3. Only after the server confirms step 2, delete the old wraps and the
+     revoked device's wrapped-UMK blob.
+  If the revoking device is lost mid-rotation, any surviving device or the
+  recovery key still holds whichever UMK each envelope is currently wrapped
+  under, and finishes the rotation. **Expert review flag** on this protocol.
+  **[inferred]**
+- Revocation does not touch the mail the device
   already synced or its provider credentials; the user must also revoke that
   device's access at the provider (password change / OAuth grant removal). A
   live stolen unlocked device exposed what it read (T5).
@@ -316,6 +332,12 @@ deprecated mailbox-service mode and retire with it. [inferred]
 - Recovery phrase: 256-bit seed as a standard word-list phrase or base32,
   written down / password-manager escrow; optional second escrow (e.g. iCloud
   Keychain). **Owner decision.**
+- The phrase is not the UMK. It deterministically derives a recovery KEM
+  keypair (hybrid, like device keys); the server stores only its public key,
+  and the current UMK is always wrapped to it like to another device. UMK
+  rotation (section 12) re-wraps to the recovery public key without the
+  phrase being present, so the phrase the user wrote down stays valid across
+  rotations. **[inferred]**
 - Server backups are ciphertext: safe by construction. Keep Send Later
   tombstones **[documented: docs/SEND_LATER.md:116]**.
 - Exit is not hostage to the operator: the mailbox lives at the provider and
@@ -483,7 +505,8 @@ Open: 1, 2 (for the hosted service), 5-9. Decided: 3, 4.
 
 - Envelope format v1 (section 8).
 - Hybrid KEM combiner, Send Later and device wrap (sections 7, 10).
-- Enrolment ceremony (section 12).
+- Enrolment ceremony and UMK rotation order (section 12), recovery-key
+  derivation (section 13).
 - Threat-model completeness for a paid multi-tenant service (section 3),
   including the operator-as-publisher update path (T6).
 - Credential handling for helper-side Send Later, if kept (section 10).
