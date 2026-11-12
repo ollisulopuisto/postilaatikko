@@ -12,7 +12,10 @@
   import * as Dialog from '$lib/components/ui/dialog'
   import { _ } from '$lib/i18n'
   import { toasts } from '$lib/stores/toast'
-  import { getAlwaysLoadImages, getThemeMode, setAlwaysLoadImages } from '$lib/stores/settings.svelte'
+  import { getAlwaysLoadImages, getThemeMode, setAlwaysLoadImages, getStripTrackingParams } from '$lib/stores/settings.svelte'
+
+  import { stripTrackingParams } from '$lib/utils/linkPrivacy'
+  import { linkForAction, openResolvedLink, copyResolvedLink } from '$lib/utils/linkPrivacyActions'
 
   interface Props {
     conversationId?: string
@@ -52,6 +55,8 @@
   let ctxMenuUrl = $state('')
   let ctxMenuX = $state(0)
   let ctxMenuY = $state(0)
+
+  let ctxUrlStripped = $derived(getStripTrackingParams() && stripTrackingParams(ctxMenuUrl).stripped)
 
   // Derived state
   let hasRemoteImages = $derived(checkForRemoteImages(bodyHtml) || hasBlockedRemoteImages(bodyHtml))
@@ -521,6 +526,12 @@ ${processedHtml}
 </html>`
   }
 
+  // Strip known tracking parameters at use time (link privacy setting).
+  // The stored message and displayed URL are never mutated.
+  function cleanLinkUrl(url: string): string {
+    return getStripTrackingParams() ? stripTrackingParams(url).url : url
+  }
+
   // Handle a clicked link URL — routes mailto: to composer, others to system browser.
   // Used by both the iframe message handler and the plain text div click handler.
   function handleLinkClick(url: string) {
@@ -531,7 +542,7 @@ ${processedHtml}
         return
       }
     }
-    safeOpenURL(url)
+    safeOpenURL(cleanLinkUrl(url))
   }
 
   // Helper function to safely open URLs
@@ -858,10 +869,29 @@ ${processedHtml}
   async function copyLinkToClipboard() {
     if (!ctxMenuUrl) return
     try {
-      await navigator.clipboard.writeText(ctxMenuUrl)
+      await navigator.clipboard.writeText(cleanLinkUrl(ctxMenuUrl))
       ctxMenuVisible = false
     } catch (err) {
       console.error('[EmailBody] Failed to copy link:', err)
+    }
+  }
+
+  // Open the original (unstripped) link — per-link bypass for the rare site
+  // that needs its tracking parameters.
+  function openOriginalLink() {
+    if (!ctxMenuUrl) return
+    safeOpenURL(ctxMenuUrl)
+    ctxMenuVisible = false
+  }
+
+  // Copy the original (unstripped) link to clipboard
+  async function copyOriginalLinkToClipboard() {
+    if (!ctxMenuUrl) return
+    try {
+      await navigator.clipboard.writeText(ctxMenuUrl)
+      ctxMenuVisible = false
+    } catch (err) {
+      console.error('[EmailBody] Failed to copy original link:', err)
     }
   }
 
@@ -880,7 +910,7 @@ ${processedHtml}
   let chainError = $state('')
   let chainOriginal = $state('')
 
-  async function openViaCloudflareDNS() {
+  async function openViaCloudflareDNS(original = false) {
     if (!ctxMenuUrl) return
     chainOriginal = ctxMenuUrl
     ctxMenuVisible = false
@@ -890,7 +920,7 @@ ${processedHtml}
     chainFinal = ''
     chainError = ''
     try {
-      const result = await ResolveLinkViaCloudflareDNS(chainOriginal)
+      const result = await ResolveLinkViaCloudflareDNS(linkForAction(chainOriginal, original, cleanLinkUrl))
       chainHops = result.hops ?? []
       chainFinal = result.finalURL ?? ''
       chainError = result.error ?? ''
@@ -901,14 +931,14 @@ ${processedHtml}
     }
   }
 
-  function openChainURL(url: string) {
-    safeOpenURL(url)
+  function openChainURL(url: string, original = false) {
+    openResolvedLink(url, original, cleanLinkUrl, safeOpenURL)
     chainDialogVisible = false
   }
 
   async function copyChainURL(url: string) {
     try {
-      await navigator.clipboard.writeText(url)
+      await copyResolvedLink(url, cleanLinkUrl, value => navigator.clipboard.writeText(value))
       chainDialogVisible = false
     } catch (err) {
       console.error('[EmailBody] Failed to copy link:', err)
@@ -926,6 +956,12 @@ ${processedHtml}
       selection?.removeAllRanges()
       selection?.addRange(range)
     }
+    ctxMenuVisible = false
+  }
+  // Open the context-menu link (tracking parameters stripped per setting)
+  function openLink() {
+    if (!ctxMenuUrl) return
+    safeOpenURL(cleanLinkUrl(ctxMenuUrl))
     ctxMenuVisible = false
   }
 </script>
@@ -1053,19 +1089,51 @@ ${processedHtml}
       {#if ctxMenuUrl}
         <button
           class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+          onclick={openLink}
+        >
+          <Icon icon="mdi:open-in-new" class="w-4 h-4" />
+          {$_('viewer.openLink')}
+        </button>
+        <button
+          class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
           onclick={copyLinkToClipboard}
         >
           <Icon icon="mdi:link-variant" class="w-4 h-4" />
           {$_('viewer.copyLink')}
         </button>
+        {#if ctxUrlStripped}
+          <button
+            class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+            onclick={openOriginalLink}
+          >
+            <Icon icon="mdi:link-off" class="w-4 h-4" />
+            {$_('viewer.openOriginalLink')}
+          </button>
+          <button
+            class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+            onclick={copyOriginalLinkToClipboard}
+          >
+            <Icon icon="mdi:link-variant-off" class="w-4 h-4" />
+            {$_('viewer.copyOriginalLink')}
+          </button>
+        {/if}
         {#if /^https?:\/\//i.test(ctxMenuUrl)}
           <button
             class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
-            onclick={openViaCloudflareDNS}
+            onclick={() => openViaCloudflareDNS()}
           >
             <Icon icon="mdi:dns" class="w-4 h-4" />
             {$_('viewer.openViaCloudflareDNS')}
           </button>
+          {#if ctxUrlStripped}
+            <button
+              class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+              onclick={() => openViaCloudflareDNS(true)}
+            >
+              <Icon icon="mdi:dns" class="w-4 h-4" />
+              {$_('viewer.resolveOriginalViaCloudflareDNS')}
+            </button>
+          {/if}
         {/if}
       {/if}
       <button
@@ -1109,7 +1177,7 @@ ${processedHtml}
               {$_('viewer.copyFinalURL')}
             </button>
           {/if}
-          <button class="px-3 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => openChainURL(chainOriginal)}>
+          <button class="px-3 py-1.5 text-sm rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => openChainURL(chainOriginal, true)}>
             {$_('viewer.openOriginalLink')}
           </button>
           <button class="px-3 py-1.5 text-sm rounded hover:bg-gray-100 dark:hover:bg-gray-700" onclick={() => chainDialogVisible = false}>

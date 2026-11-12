@@ -2,7 +2,7 @@
 // Provides reactive state for application settings
 
 // @ts-ignore - wailsjs path
-import { GetMessageListDensity, GetMessageListSortOrder, GetThemeMode, GetShowTitleBar, GetRunBackground, GetStartHidden, GetAutostart, GetLanguage, GetComposerMode, GetMailtoMode, GetComposerFormat, GetNativeTitleBar, GetAlwaysLoadImages, GetDarkMailContent, GetDarkComposerBody, GetAccentBarUnread, GetShowMessageListCircles, GetShowMessageListProfilePics, GetAlwaysShowMessageCheckbox, GetShowViewerCircles, GetSpellcheckEnabled, GetSpellcheckLanguages, GetSpellcheckCustomWords, GetMarkAsReadDelay } from '../../../wailsjs/go/app/App'
+import { GetMessageListDensity, GetMessageListSortOrder, GetThemeMode, GetShowTitleBar, GetRunBackground, GetStartHidden, GetAutostart, GetLanguage, GetComposerMode, GetMailtoMode, GetComposerFormat, GetNativeTitleBar, GetAlwaysLoadImages, GetStripTrackingParams, GetDarkMailContent, GetDarkComposerBody, GetAccentBarUnread, GetShowMessageListCircles, GetShowMessageListProfilePics, GetAlwaysShowMessageCheckbox, GetShowViewerCircles, GetSpellcheckEnabled, GetSpellcheckLanguages, GetSpellcheckCustomWords, GetMarkAsReadDelay } from '../../../wailsjs/go/app/App'
 import { setLocale as setI18nLocale } from '$lib/i18n'
 import { loadDateFnsLocale, getDateFnsLocale } from '$lib/i18n/dateFnsLocale'
 import type { Locale } from 'date-fns'
@@ -39,6 +39,7 @@ let mailtoMode = $state<ComposerMode>('inline')
 let composerFormat = $state<ComposerFormat>('rich')
 let nativeTitleBar = $state<boolean>(false)
 let alwaysLoadImages = $state<boolean>(false)
+let stripTrackingParams = $state<boolean>(true)
 let darkMailContent = $state<boolean>(false)
 let darkComposerBody = $state<boolean>(false)
 let accentBarUnread = $state<boolean>(false)
@@ -114,6 +115,10 @@ export function getNativeTitleBar(): boolean {
 
 export function getAlwaysLoadImages(): boolean {
   return alwaysLoadImages
+}
+
+export function getStripTrackingParams(): boolean {
+  return stripTrackingParams
 }
 
 export function getDarkMailContent(): boolean {
@@ -217,6 +222,10 @@ export function setAlwaysLoadImages(v: boolean) {
   alwaysLoadImages = v
 }
 
+export function setStripTrackingParams(v: boolean) {
+  stripTrackingParams = v
+}
+
 export function setDarkMailContent(v: boolean) {
   darkMailContent = v
 }
@@ -252,7 +261,7 @@ export function updateMarkAsReadDelayStore(v: number) {
 // Load settings from backend (call on app startup)
 export async function loadSettings(): Promise<ThemeMode> {
   try {
-    const [density, sortOrder, theme, titleBar, runBg, startHid, autoSt, lang, compMode, mailMode, compFormat, nativeTB, alwaysImages, darkMail, darkComposer, accentBar, listCircles, listProfilePics, alwaysCheckbox, viewerCircles, scEnabled, scLangs, scWords, readDelay] = await Promise.all([
+    const [density, sortOrder, theme, titleBar, runBg, startHid, autoSt, lang, compMode, mailMode, compFormat, nativeTB, alwaysImages, stripTracking, darkMail, darkComposer, accentBar, listCircles, listProfilePics, alwaysCheckbox, viewerCircles, scEnabled, scLangs, scWords, readDelay] = await Promise.all([
       GetMessageListDensity(),
       GetMessageListSortOrder(),
       GetThemeMode(),
@@ -266,6 +275,7 @@ export async function loadSettings(): Promise<ThemeMode> {
       GetComposerFormat(),
       GetNativeTitleBar(),
       GetAlwaysLoadImages(),
+      GetStripTrackingParams(),
       GetDarkMailContent(),
       GetDarkComposerBody(),
       GetAccentBarUnread(),
@@ -290,6 +300,7 @@ export async function loadSettings(): Promise<ThemeMode> {
     composerFormat = (compFormat as ComposerFormat) || 'rich'
     nativeTitleBar = nativeTB ?? false
     alwaysLoadImages = alwaysImages ?? false
+    stripTrackingParams = stripTracking ?? true // Default to true
     darkMailContent = darkMail ?? false
     darkComposerBody = darkComposer ?? false
     accentBarUnread = accentBar ?? false

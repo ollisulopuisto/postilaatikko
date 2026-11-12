@@ -35,6 +35,7 @@
     showViewerCircles: boolean
     darkMailContent: boolean
     darkComposerBody: boolean
+    stripTrackingParams: boolean
     markAsReadDelay: number
   }
 
@@ -62,6 +63,7 @@
     showViewerCircles = $bindable(),
     darkMailContent = $bindable(),
     darkComposerBody = $bindable(),
+    stripTrackingParams = $bindable(),
     markAsReadDelay = $bindable(0),
   }: Props = $props()
 
@@ -310,6 +312,22 @@
     <SidebarLayoutSettings />
 
     <SidebarCardsSettings />
+
+    <!-- Link privacy — strip tracking parameters from links when opening or copying them -->
+    <div class="space-y-2">
+      <div class="flex items-center justify-between">
+        <div>
+          <Label for="strip-tracking-params">{$_('settingsGeneral.stripTrackingParams')}</Label>
+          <p class="text-xs text-muted-foreground">
+            {$_('settingsGeneral.stripTrackingParamsHelp')}
+          </p>
+        </div>
+        <Switch
+          id="strip-tracking-params"
+          bind:checked={stripTrackingParams}
+        />
+      </div>
+    </div>
 
     <!-- Dark mail content — only relevant when a dark theme is active -->
     {#if getIsDarkActive()}
