@@ -28,7 +28,7 @@ func launchAgentPath() (string, error) {
 }
 
 func installAgent(ctx context.Context, identity, data, queue, listen, cert, key string, allowedHosts []string, withSync bool, apiConfig apiListenerConfig, gmailPush alwayson.GmailPushConfig) error {
-	if err := validateListener(listen, cert, key); err != nil {
+	if err := validateListener(listen, cert, key, allowedHosts); err != nil {
 		return err
 	}
 	if err := apiConfig.validate(); err != nil {
