@@ -31,3 +31,9 @@ test('queued notification no longer instructs the user to click a countdown', as
     assert.ok(locale.pendingSend.undo)
   }
 })
+test('remote pending dispatch uses durable queue ID and leaves helper-owned cleanup alone', () => {
+  assert.match(app, /remoteHandled = await DispatchRemotePendingSend\(ps.id\)/)
+  assert.match(app, /if \(!remoteHandled\) \{/)
+  assert.match(app, /if \(ps.draftId && !remoteHandled\) \{/)
+  assert.match(app, /EventsOn\('pending-send:warning'/)
+})
