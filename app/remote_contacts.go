@@ -1,13 +1,12 @@
 package app
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hkdb/aerion/internal/account"
 	automationclient "github.com/hkdb/aerion/internal/automation/client"
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
@@ -71,19 +70,14 @@ type contactConflictError struct{ cause error }
 func (e *contactConflictError) Error() string { return e.cause.Error() }
 func (e *contactConflictError) Unwrap() error { return e.cause }
 
-// contactsIdempotencyKey returns a stable key for one logical operation so a
-// retried UI action never double-executes on the helper. Keys are
-// deterministic per (operation, operands), matching the desktop actionKeys
-// pattern: a user repeating the same action replays the stored outcome, and
-// a distinct action gets a distinct key.
-func contactsIdempotencyKey(operation string, operands ...string) string {
-	h := sha256.New()
-	h.Write([]byte(operation))
-	for _, operand := range operands {
-		h.Write([]byte{0})
-		h.Write([]byte(operand))
-	}
-	return "desktop-contacts-" + hex.EncodeToString(h.Sum(nil))[:32]
+// contactsIdempotencyKey returns a fresh key for one user action. The
+// helper's mutation ledger retains the outcome per key, so keys must never
+// derive from request content: repeating an action later (toggling a source
+// off and back on) is a new action, not a retry, and a content-derived key
+// would replay the stale first outcome or trip an idempotency conflict. The
+// desktop issues no automatic retries, so each Wails call gets its own key.
+func contactsIdempotencyKey(operation string) string {
+	return "desktop-contacts-" + operation + "-" + uuid.NewString()
 }
 
 // contactsExtensionEnabled mirrors the Contacts bridge's enabled gate so
@@ -170,6 +164,29 @@ func (a *App) linkAccountContactSourceRemote(accountID, name string, syncInterva
 	if err != nil {
 		return nil, err
 	}
+	// Mirror the local path: an existing account-linked source without its
+	// own Contacts tokens is a legacy source to migrate in place (keeping its
+	// cached records), not a duplicate to reject. The helper knows the token
+	// state; the desktop's stores are nil in remote mode.
+	client, err := a.remoteContactsClient()
+	if err != nil {
+		return nil, err
+	}
+	sources, err := client.ListContactSources(a.ctx)
+	if err != nil {
+		return nil, remoteContactsError(err, v1.CapabilityContactsRead)
+	}
+	sourceID := ""
+	for _, candidate := range sources {
+		if candidate.AccountID == nil || *candidate.AccountID != accountID {
+			continue
+		}
+		if candidate.HasTokens {
+			return nil, fmt.Errorf("account already has a Contacts source; reauthorize that source in Contacts settings")
+		}
+		sourceID = candidate.ID
+		break
+	}
 	session, err := a.beginContactOAuth(provider, acc.Email)
 	if err != nil {
 		return nil, err
@@ -183,7 +200,7 @@ func (a *App) linkAccountContactSourceRemote(accountID, name string, syncInterva
 	if a.contactOAuthManager != session.manager {
 		return nil, fmt.Errorf("Contacts sign-in was cancelled")
 	}
-	return a.saveContactAuthorization(session, "", accountID, name, syncInterval)
+	return a.saveContactAuthorization(session, sourceID, accountID, name, syncInterval)
 }
 
 // reauthorizeContactSourceRemote mirrors ReauthorizeContactSource: run the

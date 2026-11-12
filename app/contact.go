@@ -61,6 +61,11 @@ func (a *App) GetContact(id string) (*contact.Contact, error) {
 		}
 		r, err := client.GetLegacyContact(a.ctx, id)
 		if err != nil {
+			// Local GetContact answers a missing contact with (nil, nil);
+			// callers treat it as a normal lookup result, not a failure.
+			if v1.ErrorCode(remoteContactsFaultCode(err)) == v1.CodeNotFound {
+				return nil, nil
+			}
 			return nil, remoteContactsError(err, v1.CapabilityContactsRead)
 		}
 		if r == nil {
@@ -81,7 +86,7 @@ func (a *App) AddContact(email, displayName string) error {
 		if err != nil {
 			return err
 		}
-		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "add_legacy", Email: email, DisplayName: displayName}, contactsIdempotencyKey("add_legacy", email, displayName))
+		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "add_legacy", Email: email, DisplayName: displayName}, contactsIdempotencyKey("add_legacy"))
 		return remoteContactsError(err, v1.CapabilityContactsWrite)
 	}
 	if err := a.requireLocalContacts(); err != nil {
@@ -97,7 +102,7 @@ func (a *App) DeleteContact(id string) error {
 		if err != nil {
 			return err
 		}
-		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "delete_legacy", ID: id}, contactsIdempotencyKey("delete_legacy", id))
+		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "delete_legacy", ID: id}, contactsIdempotencyKey("delete_legacy"))
 		return remoteContactsError(err, v1.CapabilityContactsWrite)
 	}
 	if err := a.requireLocalContacts(); err != nil {

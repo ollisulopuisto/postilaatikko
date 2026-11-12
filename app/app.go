@@ -1053,6 +1053,26 @@ func (a *App) startRemoteWorkspace(ctx context.Context) {
 		SettingsStore:     a.settingsStore,
 		UnavailableReason: "Calendar is unavailable in remote mailbox mode",
 	})
+
+	// Register the Contacts extension's UI surfaces (rail tab + account-setup
+	// hook) so the Contacts destination exists in remote mode. The bridge is
+	// constructed lazily like in local mode — its device-local stores never
+	// open because every Contacts_* Wails method branches to the remote
+	// helper before touching the bridge — but registration is what puts the
+	// Contacts tab in the rail.
+	a.uiRegistry = extui.NewRegistry()
+	a.contactsExt = extcontactsbe.NewExtension()
+	a.knownExtensions = []coreapi.Extension{a.contactsExt}
+	a.initContactsExtension()
+	for _, ext := range a.knownExtensions {
+		extCore := newCoreForExtension(a, ext)
+		unreg, err := ext.Register(extCore)
+		if err != nil {
+			log.Warn().Err(err).Str("extension", ext.Manifest().ID).Msg("Failed to register extension")
+			continue
+		}
+		a.extensionUnregs = append(a.extensionUnregs, unreg)
+	}
 	a.ready = true
 	a.emitRuntimeEvent("app:ready")
 	a.initThemeMonitor(ctx)

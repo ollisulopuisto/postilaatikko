@@ -1,10 +1,7 @@
 package app
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
-	"time"
 
 	extcontactsbe "github.com/hkdb/aerion/extensions/contacts/backend"
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
@@ -13,8 +10,10 @@ import (
 )
 
 // Contacts_* methods are explicitly promoted on App by the embedded bridge.
-// These wrappers keep that Wails surface safe in remote mode, where the bridge
-// is deliberately not initialized because Contacts remains device-local.
+// These wrappers keep that Wails surface safe in remote mode: the bridge is
+// constructed (lazy, stores never open) so the Contacts UI exists, but every
+// method branches to the remote helper before the bridge can touch
+// device-local stores.
 // Contacts_ListContactsForBrowse searches and pages extension contacts.
 func (a *App) Contacts_ListContactsForBrowse(query, sourceID string, limit, offset int) ([]coreapi.Contact, error) {
 	if a.remoteContactsActive() {
@@ -49,6 +48,11 @@ func (a *App) Contacts_GetContactDetail(emailOrID string) (*coreapi.Contact, err
 		}
 		detail, err := client.GetContactDetail(a.ctx, emailOrID)
 		if err != nil {
+			// The local bridge answers a missing contact with (nil, nil);
+			// callers treat it as a normal lookup result, not a failure.
+			if v1.ErrorCode(remoteContactsFaultCode(err)) == v1.CodeNotFound {
+				return nil, nil
+			}
 			return nil, remoteContactsError(err, v1.CapabilityContactsRead)
 		}
 		return detail, nil
@@ -69,7 +73,7 @@ func (a *App) Contacts_CreateContact(input coreapi.ContactCreateInput) (string, 
 		if err != nil {
 			return "", err
 		}
-		resp, err := client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "create", Create: &input}, contactsIdempotencyKey("create", input.SourceID, input.AddressbookID, input.Email, input.Name))
+		resp, err := client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "create", Create: &input}, contactsIdempotencyKey("create"))
 		if err != nil {
 			return "", remoteContactsError(err, v1.CapabilityContactsWrite)
 		}
@@ -159,7 +163,7 @@ func (a *App) Contacts_SyncSource(sourceID string) error {
 		if err != nil {
 			return err
 		}
-		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "sync", ID: sourceID}, contactsIdempotencyKey("ext_sync", sourceID, fmt.Sprint(time.Now().Unix()/30)))
+		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "sync", ID: sourceID}, contactsIdempotencyKey("sync"))
 		return remoteContactsError(err, v1.CapabilityContactsWrite)
 	}
 	if err := a.requireLocalContacts(); err != nil {
@@ -178,7 +182,7 @@ func (a *App) Contacts_SyncAllSources() error {
 		if err != nil {
 			return err
 		}
-		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "sync_all"}, contactsIdempotencyKey("ext_sync_all", fmt.Sprint(time.Now().Unix()/30)))
+		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "sync_all"}, contactsIdempotencyKey("sync_all"))
 		return remoteContactsError(err, v1.CapabilityContactsWrite)
 	}
 	if err := a.requireLocalContacts(); err != nil {
@@ -197,11 +201,7 @@ func (a *App) Contacts_UpdateContact(idOrEmail string, patch coreapi.ContactPatc
 		if err != nil {
 			return err
 		}
-		patchKey, marshalErr := json.Marshal(patch)
-		if marshalErr != nil {
-			return marshalErr
-		}
-		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "update", ID: idOrEmail, Patch: &patch}, contactsIdempotencyKey("update", idOrEmail, string(patchKey)))
+		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "update", ID: idOrEmail, Patch: &patch}, contactsIdempotencyKey("update"))
 		if err != nil {
 			if isRemoteContactsConflict(err) {
 				a.emitRemoteContactsConflict(idOrEmail, err)
@@ -227,7 +227,7 @@ func (a *App) Contacts_DeleteLocalContact(idOrEmail string) error {
 		if err != nil {
 			return err
 		}
-		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "delete", ID: idOrEmail}, contactsIdempotencyKey("delete", idOrEmail))
+		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "delete", ID: idOrEmail}, contactsIdempotencyKey("delete"))
 		return remoteContactsError(err, v1.CapabilityContactsWrite)
 	}
 	if err := a.requireLocalContacts(); err != nil {
@@ -275,7 +275,12 @@ func (a *App) Contacts_ReauthorizeSource(sourceID string) error {
 
 // Contacts_CancelSourceAuthorization cancels an in-progress contact OAuth flow.
 func (a *App) Contacts_CancelSourceAuthorization() {
-	if a.remoteServiceMode {
+	if a.remoteContactsActive() {
+		// The interactive consent flow always runs on the desktop (tokens
+		// ship to the helper afterwards), so cancel the desktop-local flow;
+		// without this the Cancel button leaves it active and completing
+		// consent would still save the source.
+		a.CancelContactSourceOAuthFlow()
 		return
 	}
 	a.ContactsBridge.Contacts_CancelSourceAuthorization()

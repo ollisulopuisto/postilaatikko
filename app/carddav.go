@@ -138,7 +138,7 @@ func (a *App) AddContactSource(config carddav.SourceConfig) (*carddav.Source, er
 		if err != nil {
 			return nil, err
 		}
-		source, err := client.MutateContactSource(a.ctx, v1.ContactsSourceMutationRequest{Operation: "create", Config: &config}, contactsIdempotencyKey("source_create", config.Name, string(config.Type), config.URL, config.Username))
+		source, err := client.MutateContactSource(a.ctx, v1.ContactsSourceMutationRequest{Operation: "create", Config: &config}, contactsIdempotencyKey("source_create"))
 		if err != nil {
 			return nil, remoteContactsError(err, v1.CapabilityContactsManage)
 		}
@@ -168,7 +168,7 @@ func (a *App) UpdateContactSource(id string, config carddav.SourceConfig) error 
 		if err != nil {
 			return err
 		}
-		_, err = client.MutateContactSource(a.ctx, v1.ContactsSourceMutationRequest{Operation: "update", ID: id, Config: &config}, contactsIdempotencyKey("source_update", id, config.Name, config.URL, config.Username, fmt.Sprint(config.Writable, config.Enabled, config.SyncInterval)))
+		_, err = client.MutateContactSource(a.ctx, v1.ContactsSourceMutationRequest{Operation: "update", ID: id, Config: &config}, contactsIdempotencyKey("source_update"))
 		return remoteContactsError(err, v1.CapabilityContactsManage)
 	}
 	if err := a.requireLocalContacts(); err != nil {
@@ -194,7 +194,7 @@ func (a *App) DeleteContactSource(id string) error {
 		if err != nil {
 			return err
 		}
-		_, err = client.MutateContactSource(a.ctx, v1.ContactsSourceMutationRequest{Operation: "delete", ID: id}, contactsIdempotencyKey("source_delete", id))
+		_, err = client.MutateContactSource(a.ctx, v1.ContactsSourceMutationRequest{Operation: "delete", ID: id}, contactsIdempotencyKey("source_delete"))
 		return remoteContactsError(err, v1.CapabilityContactsManage)
 	}
 	if err := a.requireLocalContacts(); err != nil {
@@ -243,7 +243,7 @@ func (a *App) SetAddressbookEnabled(addressbookID string, enabled bool) error {
 		if err != nil {
 			return err
 		}
-		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "set_addressbook_enabled", AddressbookID: addressbookID, Enabled: enabled}, contactsIdempotencyKey("ab_enabled", addressbookID, fmt.Sprint(enabled)))
+		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "set_addressbook_enabled", AddressbookID: addressbookID, Enabled: enabled}, contactsIdempotencyKey("ab_enabled"))
 		return remoteContactsError(err, v1.CapabilityContactsWrite)
 	}
 	if err := a.requireLocalContacts(); err != nil {
@@ -260,7 +260,7 @@ func (a *App) SetContactSourceWritable(sourceID string, writable bool) error {
 		if err != nil {
 			return err
 		}
-		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "set_writable", ID: sourceID, Writable: writable}, contactsIdempotencyKey("writable", sourceID, fmt.Sprint(writable)))
+		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "set_writable", ID: sourceID, Writable: writable}, contactsIdempotencyKey("writable"))
 		return remoteContactsError(err, v1.CapabilityContactsWrite)
 	}
 	if err := a.requireLocalContacts(); err != nil {
@@ -285,7 +285,7 @@ func (a *App) SyncContactSource(id string) error {
 		if err != nil {
 			return err
 		}
-		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "sync", ID: id}, contactsIdempotencyKey("sync", id, fmt.Sprint(time.Now().Unix()/30)))
+		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "sync", ID: id}, contactsIdempotencyKey("sync"))
 		return remoteContactsError(err, v1.CapabilityContactsWrite)
 	}
 	if err := a.requireLocalContacts(); err != nil {
@@ -301,7 +301,7 @@ func (a *App) SyncAllContactSources() error {
 		if err != nil {
 			return err
 		}
-		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "sync_all"}, contactsIdempotencyKey("sync_all", fmt.Sprint(time.Now().Unix()/30)))
+		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "sync_all"}, contactsIdempotencyKey("sync_all"))
 		return remoteContactsError(err, v1.CapabilityContactsWrite)
 	}
 	if err := a.requireLocalContacts(); err != nil {
@@ -322,7 +322,7 @@ func (a *App) ForceSyncContactSource(sourceID string) error {
 		if err != nil {
 			return err
 		}
-		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "force_sync", ID: sourceID}, contactsIdempotencyKey("force_sync", sourceID, fmt.Sprint(time.Now().Unix()/30)))
+		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "force_sync", ID: sourceID}, contactsIdempotencyKey("force_sync"))
 		return remoteContactsError(err, v1.CapabilityContactsWrite)
 	}
 	if err := a.requireLocalContacts(); err != nil {

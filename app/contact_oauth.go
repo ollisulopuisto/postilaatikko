@@ -290,7 +290,7 @@ func (a *App) saveContactAuthorization(session *pendingContactOAuth, sourceID, a
 				AccessToken: session.tokens.AccessToken, RefreshToken: session.tokens.RefreshToken,
 				ExpiresIn: session.tokens.ExpiresIn,
 			},
-		}, contactsIdempotencyKey("authorize", session.provider.Name, session.email, sourceID, accountID, name))
+		}, contactsIdempotencyKey("authorize"))
 		if err != nil {
 			return nil, remoteContactsError(err, v1.CapabilityContactsManage)
 		}

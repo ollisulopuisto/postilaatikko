@@ -2,10 +2,13 @@ package alwayson
 
 import (
 	"encoding/base64"
+	"errors"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -431,6 +434,7 @@ func (o *contactsOperations) ListContactSources() ([]v1.ContactsSourceInfo, erro
 		if s == nil {
 			continue
 		}
+		s.HasTokens = o.runtime.creds.HasContactSourceOAuthTokens(s.ID)
 		out = append(out, *s)
 	}
 	return out, nil
@@ -602,7 +606,23 @@ func (o *contactsOperations) DiscoverAddressbooks(req v1.ContactsDiscoverRequest
 	if req.AccountID != "" {
 		// Unified-grant path: a custom OIDC account whose token also
 		// authorizes CardDAV (e.g. Stalwart). The account token getter is
-		// custom-OAuth-aware and refreshing.
+		// custom-OAuth-aware and refreshing. The bearer token must never
+		// leave the account's own mail server: validate the target before
+		// dialing so a contacts.manage client cannot exfiltrate tokens to
+		// an arbitrary (or plain-HTTP) host.
+		acc, err := o.runtime.accounts.Get(req.AccountID)
+		if errors.Is(err, account.ErrAccountNotFound) {
+			return nil, v1.ErrContactNotFound
+		}
+		if err != nil {
+			return nil, err
+		}
+		if acc == nil {
+			return nil, v1.ErrContactNotFound
+		}
+		if err := validateContactsDiscoveryURL(req.URL, acc); err != nil {
+			return nil, err
+		}
 		accessToken, err := o.runtime.getAccountAccessToken(req.AccountID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get OAuth token: %w", err)
@@ -611,6 +631,33 @@ func (o *contactsOperations) DiscoverAddressbooks(req v1.ContactsDiscoverRequest
 		return carddav.DiscoverAddressbooksWithHTTPClient(req.URL, httpClient)
 	}
 	return carddav.DiscoverAddressbooks(req.URL, req.Username, req.Password)
+}
+
+// validateContactsDiscoveryURL constrains bearer-token discovery to HTTPS
+// URLs on the account's own IMAP/SMTP host (loopback exempt for local
+// servers, still the account's host). Unified-grant servers such as
+// Stalwart serve CardDAV from the same host as mail.
+func validateContactsDiscoveryURL(rawURL string, acc *account.Account) error {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Hostname() == "" {
+		return &v1.Fault{Code: v1.CodeInvalidRequest, Message: "A valid discovery URL is required"}
+	}
+	host := strings.ToLower(u.Hostname())
+	loopback := host == "localhost"
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+		loopback = true
+	}
+	if u.Scheme != "https" && !loopback {
+		return &v1.Fault{Code: v1.CodeInvalidRequest, Message: "OAuth addressbook discovery requires an HTTPS URL"}
+	}
+	matchesAccountHost := func(accountHost string) bool {
+		accountHost = strings.ToLower(strings.TrimSpace(accountHost))
+		return accountHost != "" && (host == accountHost || strings.HasSuffix(host, "."+accountHost))
+	}
+	if !matchesAccountHost(acc.IMAPHost) && !matchesAccountHost(acc.SMTPHost) {
+		return &v1.Fault{Code: v1.CodeInvalidRequest, Message: "OAuth discovery URL must match the account's mail server host"}
+	}
+	return nil
 }
 
 func (o *contactsOperations) TestConnection(req v1.ContactsDiscoverRequest) error {
@@ -724,7 +771,26 @@ func (o *contactsOperations) StoreSourceTokens(req v1.ContactsSourceTokensReques
 		return rt.creds.SetContactSourceOAuthTokens(req.SourceID, tokens)
 	}
 	// Account-keyed persistence, scoped to the client config the consent ran
-	// under (incremental-consent path).
+	// under (incremental-consent path). A contacts.manage grant must never
+	// reach another surface's credential slot, so the target config must be
+	// the provider's contacts config (never e.g. google-mail) and the account
+	// must exist.
+	if req.Provider != "google" && req.Provider != "microsoft" {
+		return &v1.Fault{Code: v1.CodeInvalidRequest, Message: "Unsupported contacts OAuth provider"}
+	}
+	if req.ClientConfigID != req.Provider+"-contacts" {
+		return &v1.Fault{Code: v1.CodeInvalidRequest, Message: "Source tokens must target the provider's contacts client configuration"}
+	}
+	acc, err := rt.accounts.Get(req.AccountID)
+	if errors.Is(err, account.ErrAccountNotFound) {
+		return v1.ErrContactNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if acc == nil {
+		return v1.ErrContactNotFound
+	}
 	tokens := &credentials.OAuthTokens{
 		Provider: req.Provider, AccessToken: req.Tokens.AccessToken,
 		RefreshToken: req.Tokens.RefreshToken, ExpiresAt: expiresAt, Scopes: req.Scopes,
