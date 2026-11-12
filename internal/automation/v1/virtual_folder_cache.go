@@ -34,11 +34,12 @@ type CachedVirtualFolderOperations interface {
 // (an idempotent cache refresh) is not lost when the client disconnects.
 var cachedViewRouteDeadline = 1500 * time.Millisecond
 
-// detachedCacheWorkBudget bounds the background refresh after the route has
-// answered. Without it an abandoned refresh could wait on the write lock for
-// the full retry budget (five 30-second attempts), and repeated requests
-// would occupy the helper's bounded database pool long after their clients
-// left.
+// detachedCacheWorkBudget bounds the background refresh's non-lock work
+// (cache query, hydration) after the route has answered, so an abandoned
+// refresh cannot run unbounded. It does not bound the write-lock wait: the
+// SQLite driver does not interrupt a BEGIN IMMEDIATE busy wait on context
+// expiry, so that wait is bounded separately by SaveCacheContext lowering
+// busy_timeout on its pinned connection (detachedSaveBusyTimeoutMS).
 var detachedCacheWorkBudget = 10 * time.Second
 
 type cachedViewResult struct {

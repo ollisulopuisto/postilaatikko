@@ -146,9 +146,10 @@ func (s *Store) SaveCache(virtualFolderID string, entries []CachedConversation) 
 const detachedSaveBusyTimeoutMS = 2000
 
 // SaveCacheContext is SaveCache for detached, best-effort cache maintenance:
-// no retry loop, and the lock wait is bounded (see detachedSaveBusyTimeoutMS),
-// so an abandoned refresh cannot occupy a pool connection through the full
-// retry budget.
+// no retry loop, and the lock wait is bounded by the lowered busy_timeout
+// above - cancellation safety rests on that override, not on the context,
+// which the driver ignores during the busy wait. An abandoned refresh
+// therefore frees its pool connection within detachedSaveBusyTimeoutMS.
 func (s *Store) SaveCacheContext(ctx context.Context, virtualFolderID string, entries []CachedConversation) error {
 	if virtualFolderID == "" {
 		return fmt.Errorf("virtual folder ID cannot be empty")
@@ -549,6 +550,11 @@ func (s *Store) saveCache(virtualFolderID string, entries []CachedConversation) 
 	return s.saveCacheTx(context.Background(), s.db.DB, virtualFolderID, entries)
 }
 
+// saveCacheTx runs the cache replacement in one transaction. The context is
+// threaded through Begin and every statement, but note the modernc driver
+// does not interrupt a BEGIN IMMEDIATE busy wait on context expiry: callers
+// that need a bounded lock wait must bound it with busy_timeout, as
+// SaveCacheContext does.
 func (s *Store) saveCacheTx(ctx context.Context, beginner txBeginner, virtualFolderID string, entries []CachedConversation) error {
 	tx, err := beginner.BeginTx(ctx, nil)
 	if err != nil {
@@ -556,18 +562,18 @@ func (s *Store) saveCacheTx(ctx context.Context, beginner txBeginner, virtualFol
 	}
 	defer func() { _ = tx.Rollback() }() // no-op after a successful Commit
 
-	if _, err = tx.Exec(`DELETE FROM virtual_folder_cache WHERE virtual_folder_id = ?`, virtualFolderID); err != nil {
+	if _, err = tx.ExecContext(ctx, `DELETE FROM virtual_folder_cache WHERE virtual_folder_id = ?`, virtualFolderID); err != nil {
 		return fmt.Errorf("failed to clear virtual folder cache: %w", err)
 	}
 	for position, entry := range entries {
-		if _, err = tx.Exec(`
+		if _, err = tx.ExecContext(ctx, `
 			INSERT INTO virtual_folder_cache (virtual_folder_id, position, account_id, conversation_id)
 			VALUES (?, ?, ?, ?)
 		`, virtualFolderID, position, entry.AccountID, entry.ConversationID); err != nil {
 			return fmt.Errorf("failed to insert virtual folder cache entry %d: %w", position, err)
 		}
 	}
-	if _, err = tx.Exec(`
+	if _, err = tx.ExecContext(ctx, `
 		INSERT INTO virtual_folder_cache_meta (virtual_folder_id, refreshed_at)
 		VALUES (?, ?)
 		ON CONFLICT(virtual_folder_id) DO UPDATE SET refreshed_at = excluded.refreshed_at

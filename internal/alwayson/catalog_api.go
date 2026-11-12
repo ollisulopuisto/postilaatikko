@@ -357,10 +357,11 @@ func (r *SyncRuntime) refreshVirtualFolderCache(id string) error {
 	return r.virtualFolders.SaveCache(id, entries)
 }
 
-// refreshVirtualFolderCacheContext serves detached cache-route work: the
-// context bounds the cache write's lock wait and no retry loop runs, so an
-// abandoned refresh frees its pool connection when the route's work budget
-// expires.
+// refreshVirtualFolderCacheContext serves detached cache-route work: no
+// retry loop runs, and the cache write's lock wait is bounded by
+// SaveCacheContext's lowered busy_timeout - the driver ignores context
+// cancellation during the busy wait - so an abandoned refresh frees its
+// pool connection within that bound.
 func (r *SyncRuntime) refreshVirtualFolderCacheContext(ctx context.Context, id string) error {
 	entries, err := r.virtualFolderCacheEntries(id)
 	if err != nil {
