@@ -2,6 +2,10 @@
 
 Critical UX and Accessibility learnings only.
 
+## 2026-11-11 - Focus Rings and Keyboard Glyph Disclosure on Custom Window Controls
+**Learning:** In custom window decorations (`WindowControls.svelte`), traffic light controls without explicit focus rings rely on browser defaults that clip or disappear against colored circles, while revealing glyph symbols (`×`, `−`, `+`) strictly on mouse hover leaves keyboard users navigating blind dots without visual indication of which button performs which action. Additionally, omitting `role="group"` and `aria-label` prevents assistive tech from identifying the controls as a cohesive window management cluster.
+**Action:** Pair custom window traffic light buttons with `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1`, enclose them in a container with `role="group"` and `aria-label`, and disclose action glyphs on focus (`isHovering || isFocused`) as well as mouse hover.
+
 ## 2026-11-10 - Checkbox Semantics and Focus-Within Disclosure on Conversation Rows
 **Learning:** In conversation list items (`ConversationRow.svelte`), custom selection buttons without explicit `role="checkbox"` and `aria-checked` fail to announce their selection state to screen reader users, while relying on parent hover (`group-hover:opacity-100 group-hover:pointer-events-auto`) on quick-action buttons traps keyboard navigation behind invisible or unresponsive elements.
 **Action:** Always provide `role="checkbox"`, `aria-checked`, and contextual `aria-label` on custom row selection toggles, and pair hover-revealed action containers with `group-focus-within:opacity-100 focus-within:opacity-100 group-focus-within:pointer-events-auto focus-within:pointer-events-auto` along with standard `focus-visible:ring-2` focus rings on each button.

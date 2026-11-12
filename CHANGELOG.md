@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Add focus-visible styling, high-contrast focus rings, group role, and keyboard glyph disclosure to custom window controls (traffic lights).
 - Virtual folders no longer fail with "database is locked (SQLITE_BUSY)" while sync is writing: virtual-folder writes retry transient lock contention, the cached-view endpoint answers with a bounded deadline and a distinct retryable busy code, and the view falls back to reading conversations directly when the cached index cannot refresh or the cache request times out.
 - macOS signed releases now carry hardened-runtime resource entitlements matching the app's usage descriptions: the Developer ID signing steps pass `build/darwin/entitlements.plist` (currently the Contacts entitlement, without which the system blocks `CNContactStore` before its permission prompt), and a CI guard dumps the packaged app's signed entitlements and fails when a usage string lacks its entitlement.
 - Design document for a zero-knowledge Postilaatikko service (`docs/plans/2026-11-11-zero-knowledge-server.md`): a hosted multi-tenant architecture where the operator cannot read mail content, with an explicit threat model, client-side key hierarchy, hybrid post-quantum transport, encrypted-search options with their leakage, multi-device enrolment and recovery, GDPR/provider-OAuth/abuse/assurance requirements, and a phased implementation plan. Documentation only; no behavior changes.
