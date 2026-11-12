@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -196,7 +197,11 @@ func (a *App) Contacts_UpdateContact(idOrEmail string, patch coreapi.ContactPatc
 		if err != nil {
 			return err
 		}
-		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "update", ID: idOrEmail, Patch: &patch}, contactsIdempotencyKey("update", idOrEmail, fmt.Sprintf("%v", patch)))
+		patchKey, marshalErr := json.Marshal(patch)
+		if marshalErr != nil {
+			return marshalErr
+		}
+		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "update", ID: idOrEmail, Patch: &patch}, contactsIdempotencyKey("update", idOrEmail, string(patchKey)))
 		if err != nil {
 			if isRemoteContactsConflict(err) {
 				a.emitRemoteContactsConflict(idOrEmail, err)
