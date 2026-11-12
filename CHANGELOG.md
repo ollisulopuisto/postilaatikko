@@ -3,6 +3,20 @@
 ## [Unreleased]
 
 - Inbox month headings now follow a system time-zone change: the cached month formatter is keyed by the active time zone, so a message near a month boundary no longer keeps the previous zone's month name after travel or a zone change.
+- Redirect destinations are cleaned when opened or copied; the link menu also allows resolving the original link via Cloudflare when a redirect requires tracking parameters.
+- Correct the CI fallback source-list option so apt actually selects the temporary official Ubuntu mirrors.
+
+- CI can recover from the Azure resolver outage using fresh Cloudflare DNS answers for fixed Ubuntu mirrors inside apt-only mount namespaces; global hosts and resolver files are unchanged.
+
+- CI retries failed Ubuntu package installation against official Ubuntu mirrors with bounded timeouts, keeping all backend checks required.
+
+- Select all in a plain-text message context menu now selects the whole message, while HTML messages keep their iframe selection.
+- Cloudflare link checks refuse IPv4-mapped private targets and IPv6 translation/tunnel ranges to prevent requests reaching local services.
+
+- Right-clicking a link offers "Open via Cloudflare DNS": the app resolves the link's host through Cloudflare DNS-over-HTTPS (1.1.1.1), bypassing DNS-level ad blockers, and follows the redirect chain without cookies to show where the link really goes before you open it. The dialog shows every hop with buttons to open or copy the final URL or open the original link. Explicit per-link action only - checking the link contacts the tracking service, same as opening it.
+
+- The macOS disk image opens a dark welcome window with light icon wells and a drag-to-Applications guide.
+- Link privacy: opening or copying a link from a message now strips known tracking parameters (utm_*, fbclid, gclid and similar) before the URL leaves the app. The stored message and the displayed link are never changed. On by default; a new General settings toggle turns it off, and the link context menu offers opening or copying the original URL when a link was cleaned, for the rare site that breaks without its parameters.
 - Clicking a message in the message list now opens it in the open reader tab: the click retargets the tab, but the tab only watched for folder changes, so it kept showing the old message.
 - Shared Postilaatikko/Solmu keyboard layer (approved keymap): search also on Cmd/Ctrl+F, forward on Cmd/Ctrl+L, Read later on Cmd/Ctrl+U, Reply later on Cmd/Ctrl+I, archive and mark read on Cmd/Ctrl+E, next/previous message on Cmd/Ctrl+Shift+]/[, the shortcuts overlay also opens with Cmd/Ctrl+/, previous/next account on Cmd/Ctrl+Alt+Left/Right, and the message-list quick filters on Cmd/Ctrl+Alt+1-4 (all, unread, reply later, read later). Load remote images moves to Cmd/Ctrl+Alt+L (always-load to Cmd/Ctrl+Shift+Alt+L) so Cmd/Ctrl+L can forward, and mark-as-read drops Cmd/Ctrl+U (Shift+I stays) so Cmd/Ctrl+U can queue for later. Every existing Gmail-style bare key keeps working, and Option-mangled keys on macOS now fall back to the physical key, so the new Option chords fire on any keyboard layout.
 - Add checkbox semantics, contextual dynamic accessible name, focus-visible styling to conversation row checkbox, and focus-within disclosure plus focus rings to quick action buttons.

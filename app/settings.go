@@ -363,6 +363,18 @@ func (a *App) GetAlwaysLoadImages() (bool, error) {
 	return a.settingsStore.GetAlwaysLoadImages()
 }
 
+// GetStripTrackingParams returns whether known tracking parameters are
+// stripped from links when they are opened or copied.
+func (a *App) GetStripTrackingParams() (bool, error) {
+	return a.settingsStore.GetStripTrackingParams()
+}
+
+// SetStripTrackingParams sets whether known tracking parameters are stripped
+// from links when they are opened or copied.
+func (a *App) SetStripTrackingParams(enabled bool) error {
+	return a.settingsStore.SetStripTrackingParams(enabled)
+}
+
 // SetAlwaysLoadImages sets whether remote images should always be loaded
 func (a *App) SetAlwaysLoadImages(enabled bool) error {
 	return a.settingsStore.SetAlwaysLoadImages(enabled)

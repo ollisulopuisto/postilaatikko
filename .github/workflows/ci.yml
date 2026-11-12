@@ -30,6 +30,8 @@ jobs:
         run: ./scripts/version.sh check
       - name: Test CI change selection
         run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/tests -v
+      - name: DMG window contract tests
+        run: python3 packaging/dmg/test_layout.py
       - name: Select affected checks
         id: scope
         env:
@@ -81,9 +83,7 @@ jobs:
           go-version: '1.26'
           cache: true
       - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libgtk-3-dev libwebkit2gtk-4.1-dev
+        run: sudo python3 scripts/ci_apt_scoped_dns.py libgtk-3-dev libwebkit2gtk-4.1-dev
       - name: Prepare compile-only embedded asset
         # Go unit tests/lint only need a non-empty go:embed directory. The real
         # production frontend build is checked separately above. This fixture

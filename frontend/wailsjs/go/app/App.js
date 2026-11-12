@@ -522,6 +522,10 @@ export function GetAlwaysLoadImages() {
   return window['go']['app']['App']['GetAlwaysLoadImages']();
 }
 
+export function GetStripTrackingParams() {
+  return window['go']['app']['App']['GetStripTrackingParams']();
+}
+
 export function GetAlwaysShowMessageCheckbox() {
   return window['go']['app']['App']['GetAlwaysShowMessageCheckbox']();
 }
@@ -1321,6 +1325,10 @@ export function OpenURL(arg1) {
   return window['go']['app']['App']['OpenURL'](arg1);
 }
 
+export function ResolveLinkViaCloudflareDNS(arg1) {
+  return window['go']['app']['App']['ResolveLinkViaCloudflareDNS'](arg1);
+}
+
 export function PickAttachmentFiles() {
   return window['go']['app']['App']['PickAttachmentFiles']();
 }
@@ -1587,6 +1595,10 @@ export function SetAddressbookEnabled(arg1, arg2) {
 
 export function SetAlwaysLoadImages(arg1) {
   return window['go']['app']['App']['SetAlwaysLoadImages'](arg1);
+}
+
+export function SetStripTrackingParams(arg1) {
+  return window['go']['app']['App']['SetStripTrackingParams'](arg1);
 }
 
 export function SetAlwaysShowMessageCheckbox(arg1) {
