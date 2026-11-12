@@ -35,18 +35,25 @@ Caveats that travel with that claim, always:
   not durability.
 - **Endpoints are out of scope**: a compromised or stolen unlocked device can
   read that user's mail. (Threat model, T5.)
-- **Scheduled sending has a delivery-window carve-out** unless sending moves to
-  the client. (Section 10.)
-- The claim holds only for **native clients**. A web client served by the
-  operator defeats it (T6).
+- **Scheduled sending is a carve-out** unless sending moves to the client: with
+  helper-side delivery the server holds the scheduled message in plaintext at
+  delivery time *and* the provider credentials needed to send it. For tenants
+  who use it, the "credentials never leave a device" sentence above is false.
+  (Section 10.)
+- The claim holds only for **native clients whose builds the operator cannot
+  alter unnoticed**. A web client served by the operator defeats it, and so
+  does a native build signed by the operator unless independent parties can
+  verify it against public source (T6; section 2, item 3).
 
 ## 2. What cannot be met, stated up front
 
 1. **Server-side incoming sync is incompatible with zero knowledge.** Syncing
    IMAP/Gmail requires the user's credentials and processes plaintext. The
-   current helper does exactly this **[documented: docs/SEND_LATER.md:71,88]**.
+   current helper does exactly this **[documented: docs/SEND_LATER.md:71,88;
+   docs/REMOTE_MAILBOX_SERVICE.md:43]**.
    In this design, sync happens on client devices only; the server never sees
-   provider credentials.
+   provider credentials - with one exception: helper-side Send Later delivery
+   needs sending credentials on the server (section 10).
 2. **A malicious operator cannot be stopped from attacking availability.**
    Deleting blobs, refusing service, or rolling back state are outside what
    cryptography prevents. Mitigations are backups the user can verify and
@@ -54,10 +61,15 @@ Caveats that travel with that claim, always:
 3. **A web client served by the operator cannot be trusted.** An operator (or
    whoever compromises the web deployment) can ship JavaScript that exfiltrates
    keys or plaintext. Zero knowledge to the operator requires signed, native
-   client applications distributed through channels the operator does not
-   control unilaterally (App Store / direct signed builds with reproducible
-   build verification as a stretch goal). **[inferred; standard argument in the
-   E2EE industry]**
+   client applications. Native alone is not enough here: the operator of the
+   hosted service is also the publisher who signs the client, so a malicious
+   or compelled operator can ship a build that exfiltrates keys. The claim
+   against T2 therefore depends on public source plus reproducible builds that
+   independent parties actually verify (and, ideally, a public log of released
+   binaries). Until that exists, the honest claim is "the server cannot read
+   mail", not "the operator cannot". Whether reproducible builds are a launch
+   requirement is an owner decision (section 22). **[inferred; standard
+   argument in the E2EE industry]**
 4. **Post-quantum server authentication is not available from the public
    WebPKI today.** CAs issue classical certificates only. Transport key
    exchange can be hybrid post-quantum; server identity is anchored
@@ -73,11 +85,11 @@ Caveats that travel with that claim, always:
 | # | Adversary | Protected | Not protected |
 | --- | --- | --- | --- |
 | T1 | External attacker with full server compromise | Mail content, credentials, search queries (all ciphertext client-side) | Metadata; availability |
-| T2 | Malicious or compelled operator (root on everything) | Same as T1, because keys never leave clients | Metadata; availability; can serve evil web client (so: native clients only) |
+| T2 | Malicious or compelled operator (root on everything) | Same as T1, because keys never leave clients | Metadata; availability; scheduled mail and sending credentials under helper-side Send Later (section 10); can serve an evil web client (so: native clients only) and, as publisher, a malicious native update (T6) |
 | T3 | Malicious tenant | Other tenants' content (per-user keys, tenant isolation, section 6) | Shared-infrastructure metadata (timing on shared queues) **[inferred]** |
 | T4 | Network attacker (incl. on the tailnet/ISP path) | Content (app-layer E2EE) and recorded-traffic decryption (hybrid PQ TLS) | Traffic analysis |
 | T5 | Stolen/lost endpoint | Locked device with FileVault/keychain protects at rest; revocation (section 12) limits a live theft | An unlocked, logged-in device exposes that user's mail |
-| T6 | Malicious client update | Out of scope for native signed builds with reproducible/verified builds; unfixable for operator-served web | Web clients: not protected |
+| T6 | Malicious client update (incl. one signed by the operator as publisher) | Only when native builds are reproducible from public source and independently verified | Operator-served web clients (unfixable); native builds nobody can verify |
 
 ## 4. Current state (baseline, all documented)
 
@@ -106,15 +118,19 @@ Design principles (owner, 2026-11-11):
 1. **The server must not hold the mailbox.** Mail lives on client devices.
    Client-side IMAP/Gmail sync is the only sync; there is no server-side copy
    of the mailbox, encrypted or otherwise, by default.
-2. **The server is limited to what is strictly needed**: the Send Later relay
+2. **The server is limited to what is strictly needed**: the Send Later helper
    (already E2EE), and optionally small, selective encrypted transfer between a
    user's own devices - never a full server-held archive.
-3. **The current mailbox-service mode moves to opt-out, then deprecated**
+3. **The current mailbox-service mode moves to opt-in, then deprecated**
    (section 20): it is the mode where the server holds mail, which this design
    retires.
 
-**Send Later relay (existing, upgraded cryptography, section 10).** The one
-standing server role. Holds only encrypted scheduled-outgoing envelopes.
+**Send Later helper (existing, upgraded cryptography, section 10).** The one
+standing server role. Today it is a helper that terminates the encryption and
+delivers the mail itself, not a blind relay; there is no hosted relay yet
+**[documented: docs/SEND_LATER.md:3]**. At rest it holds encrypted
+scheduled-outgoing envelopes; with helper-side delivery it also holds the
+sending credentials and sees each message in plaintext when it is sent.
 
 **Optional device-transfer envelopes (new, opt-in, selective).** A user who
 wants another device to catch up without a full IMAP pull may encrypt
@@ -142,7 +158,7 @@ anchoring app-layer identity independent of the WebPKI (section 2, item 4).
 | Mode | Server holds per tenant | Order of magnitude |
 | --- | --- | --- |
 | Mailbox service (current helper, deprecated path) | full mailbox copy + FTS index + SQLite WAL/free-page overhead **[documented WAL note: docs/SEND_LATER.md:63]** | several GB per active tenant, growing forever [inferred; matches the owner's estimate] |
-| Send Later-only | encrypted outgoing envelopes + tombstones, capped **[documented: 10,000 jobs / 512 MiB, docs/SEND_LATER.md:63]** | tens of MB typical; 512 MiB ceiling |
+| Send Later-only | encrypted outgoing envelopes + tombstones, capped **[documented: 10,000 jobs / 512 MiB, docs/SEND_LATER.md:63]**; with helper-side delivery also the tenant's sending credentials | tens of MB typical; 512 MiB ceiling |
 | Client-held mail (this design) | tokens, public keys, wrapped-key blobs, tombstones | KBs to low MBs |
 | + optional transfer envelopes | user-chosen recent window, TTL'd | tens-hundreds of MB, self-pruning [inferred] |
 
@@ -165,10 +181,16 @@ minimal breach blast radius. [inferred]
 
 ## 7. Key hierarchy and where keys live (per user)
 
-- **Master Mailbox Key (MMK)**: 256-bit, generated on the user's first enrolled
+Scope: the server holds no mailbox (section 5), so these keys do not encrypt a
+server-side archive. They protect the only user data that reaches the server:
+optional device-transfer envelopes and the wrapped key blobs used for
+enrolment and recovery. The local mailbox on each device is protected by the
+device's own disk encryption, not by this hierarchy.
+
+- **User Master Key (UMK)**: 256-bit, generated on the user's first enrolled
   client (CSPRNG). Never leaves clients unwrapped.
-- **Per-message content keys (CEK)**: random 256-bit; XChaCha20-Poly1305 for
-  message ciphertext (192-bit nonces, safe random); CEK wrapped to MMK;
+- **Per-envelope content keys (CEK)**: random 256-bit; XChaCha20-Poly1305 for
+  envelope ciphertext (192-bit nonces, safe random); CEK wrapped to UMK;
   HKDF-SHA-256 context separation (RFC 5869).
 - **Device keys**: per device, a signing keypair and a KEM keypair. Apple
   platforms: signing key as Secure Enclave P-256 **[inferred platform
@@ -182,15 +204,22 @@ minimal breach blast radius. [inferred]
 
 ## 8. Envelope format (v1)
 
-Self-describing envelope per message version: header (version, namespace,
-message UID, CEK wrap, timestamps) + ciphertext; AAD binds namespace, folder,
-UIDVALIDITY, UID. **Expert review flag** before implementation. **[inferred]**
+Self-describing device-transfer envelope: header (version, namespace, random
+envelope ID, CEK wrap, creation and expiry timestamps) + ciphertext; AAD binds
+version, namespace, envelope ID and expiry. Provider identifiers (account,
+folder, UIDVALIDITY, UID, Gmail IDs) travel inside the ciphertext, not in the
+header, so the server learns nothing about mailbox structure. **Expert review
+flag** before implementation. **[inferred]**
 
 ## 9. Transport security
 
-- TLS 1.3 only (`tls.VersionTLS13`, one-line change at
-  `internal/automation/server.go:178`) **[documented location; inferred
-  effect]**.
+- TLS 1.3 only, on both listeners. The mailbox API is a one-line change
+  (`tls.VersionTLS13` at `internal/automation/server.go:178`). The Send Later
+  listener - the one that stays - sets no TLS config of its own and so accepts
+  Go's default minimum, TLS 1.2 (`server.ServeTLS` at
+  `cmd/postilaatikko-helper/main.go:456`); it needs an explicit
+  `TLSConfig` with the same minimum. **[documented locations; inferred
+  effect]**
 - Hybrid post-quantum key exchange X25519MLKEM768 is Go's TLS 1.3 default since
   Go 1.24 **[inferred: Go release notes]**; Go clients and server get it free.
   Non-Go clients (future mobile) need per-platform verification.
@@ -202,11 +231,20 @@ UIDVALIDITY, UID. **Expert review flag** before implementation. **[inferred]**
   touching the service. No relay, no abuse surface (section 17). **[inferred]**
 - **Send Later**: someone must hold plaintext MIME at delivery. Options:
   (a) helper-side delivery (current design, upgraded crypto below) - a live
-  operator/compromise at delivery time can read that one payload; violates the
-  headline for scheduled mail; (b) client-side delivery when any enrolled
-  client is online, else the job waits - meets the headline, degrades
-  scheduling reliability; (c) drop Send Later from the hosted service.
-  **Owner decision (section 19).**
+  operator/compromise at delivery time can read that payload, and the helper
+  must hold the tenant's sending credentials the whole time: today it sends
+  with account credentials stored on the helper host **[documented:
+  docs/SEND_LATER.md:7]**. In a hosted service that puts every such tenant's
+  provider credentials in the operator's hands. Where the credential also
+  grants mailbox read access (an IMAP/SMTP password or app password, or a
+  full-mail OAuth scope), the operator can read that tenant's whole mailbox,
+  not one scheduled message. This violates the headline for those tenants. It
+  can be narrowed, not removed, by accepting only send-only credentials where
+  the provider offers them (for example a send-only Gmail API scope instead of
+  SMTP) **[inferred; verify per provider]**; (b) client-side delivery when
+  any enrolled client is online, else the job waits - meets the headline,
+  degrades scheduling reliability; (c) drop Send Later from the hosted
+  service. **Owner decision (section 22).**
 - If helper-side delivery is kept, upgrade its crypto: ephemeral per-submission
   hybrid X25519+ML-KEM-768 KEM (X-Wing construction or HPKE hybrid DHKEM;
   **expert review flag**), rotating helper KEM keys (rotation already needed
@@ -218,9 +256,13 @@ UIDVALIDITY, UID. **Expert review flag** before implementation. **[inferred]**
 
 | Option | Server learns | Effort | Notes |
 | --- | --- | --- | --- |
-| S1. Client-side search only | nothing about queries/content | Small | Decrypt into the client-local DB, search with existing FTS **[documented: messages_fts, internal/database/migrations.go:413]**. Server sees access patterns only. Recommended. |
+| S1. Client-side search only | nothing | None new | Mail is already in the client-local DB from client-side sync; search uses the existing FTS **[documented: messages_fts, internal/database/migrations.go:413]**. The server is not involved. Recommended. |
 | S2. Deterministic keyword tokens (e.g. AES-SIV) | keyword frequency/equality; repeated queries | Medium | Frequency-analysis attacks known. Not recommended. |
-| S3. Structured searchable encryption (OXT-style) | formal leakage profile | Large | **Expert review mandatory.** Evaluate only if archives outgrow client indexing. |
+| S3. Structured searchable encryption (OXT-style) | formal leakage profile | Large | **Expert review mandatory.** |
+
+S2 and S3 only make sense over a server-held mailbox, which principle 1
+rejects. They are listed to record why they were not chosen, not as planned
+work.
 
 **Server-held indexes (owner question, 2026-11-11: "indexes maybe yes?").**
 An index is only useful to the server if the server also holds the ciphertext
@@ -236,21 +278,159 @@ deprecated mailbox-service mode and retire with it. [inferred]
 ## 12. Multi-device enrolment and revocation
 
 - Enrol: new device generates device keys; an existing device verifies a short
-  authentication string out-of-band, wraps the MMK to the new device's hybrid
+  authentication string out-of-band, wraps the UMK to the new device's hybrid
   KEM public key, uploads the wrapped blob. **Expert review flag** on the
   ceremony (compare published Signal/1Password models). **[inferred]**
-- Revoke: delete the device's wrapped-MMK blob, revoke its token (documented
-  `api-client revoke` machinery as the pattern), re-key forward (new MMK for
-  new mail). Full history re-encryption optional and expensive. A live stolen
-  unlocked device exposed what it read (T5).
-- Lost last device = recovery phrase only; no administrative backdoor, by
-  design. Tell users this in plain words before they enable it.
+- Device list: the set of enrolled devices (each device's signing and KEM
+  public keys, plus the recovery public keys from section 13) is a
+  versioned, hash-chained list: every version names the hash of its
+  predecessor and is signed by a device, or the recovery signing key, listed
+  in that predecessor. The server stores and relays it but cannot add,
+  replace or roll back a key. A client never wraps the UMK, or anything
+  else, to a public key that is not in its own verified list; a key the
+  server supplies outside that list is ignored and reported. **[inferred]**
+- Trust anchors, so every device starts from an authenticated list:
+  - First device: creates version 1 with itself and the recovery public
+    keys, and version 1 is signed by the recovery signing key as well as
+    the device. The server knows the recovery public keys but not the
+    phrase, so it cannot forge a genesis.
+  - New device: receives the current list from the enrolling device inside
+    the SAS-verified enrolment channel, never from the server alone.
+  - Recovery after losing every device: the replacement derives the
+    recovery keys from the phrase, fetches the chain from the server and
+    accepts it only if version 1 carries a valid signature by the
+    phrase-derived recovery signing key, its latest version still lists
+    those exact recovery public keys, and every link verifies. A
+    self-consistent chain the server built around the public recovery keys
+    fails the genesis check. The recovery signing key
+    then signs the next version, adding the replacement device, which
+    co-signs it during the ceremony (the quorum rule under Forks below).
+    The phrase is the anchor; the server's copy is only transport.
+- Forks: a revoked or stolen device stays a valid signer in any predecessor
+  that lists it, so it can sign a competing successor, and a colluding
+  server can show that fork to a device that missed the real revocation.
+  Countermeasures:
+  - Before a device wraps the UMK to anything (enrolment, rotation), it
+    fetches the latest chain and shows the user every device added since its
+    own last verified version and every existing device whose signing or
+    KEM key changed, requiring confirmation. A key change under an existing
+    device name is shown as a new device, never silently accepted. A silent update never
+    leads to a wrap. The confirmation names the device that signed each new
+    list version; a version signed by a device the user believes revoked is
+    a hard warning, never a routine confirm. A list version that
+    introduces any new key - adding a device, or replacing an existing
+    device's signing or KEM key - is valid only with a quorum
+    co-signature: the version carries two distinct signatures, its own
+    signer's plus a co-signer that is another enrolled device or the
+    recovery signing key, and clients reject any key-changing version
+    without one. A key replacement under an existing device name counts as
+    a key introduction for this rule, so a stolen signer cannot swap in an
+    attacker KEM key any more than it can add a device. One stolen or
+    stale device can therefore never introduce a key alone, on the real
+    chain or on a fork (owner decision 10, resolved).
+    The cost, stated plainly: a single-device user must reach for their
+    phrase to enrol a second device, because the recovery signing key is
+    the only co-signer available to them.
+    The recovery signing key's authority to co-sign does not depend on how
+    many devices the list contains: it is the root the chain is anchored to
+    (the genesis check above), not a fallback that activates only when the
+    list is short. Phrase recovery therefore works after any number of
+    device losses, including every enrolled device at once. The recovery
+    signing key signs the replacement-adding version, and the freshly
+    created replacement device co-signs it during the ceremony, which
+    gives the two distinct signatures the quorum rule requires even when
+    no enrolled device is available. The phrase ceremony is itself the
+    confirmation: the recovering client shows the full device list from the
+    chain head it fetched - not a diff - and the user confirms every device
+    on it before the recovery signing key signs the replacement-adding
+    version, so a fork-injected device is visible in that list. Trade-off,
+    stated plainly: with zero available devices the cross-device barrier
+    does not exist, so recovery leans on the genesis check, the full-list
+    confirmation, and the user's memory of their own devices; a fork that
+    injected a key without the recovery key still fails quorum.
+  - Devices sign and exchange the chain head they have seen whenever they
+    talk (enrolment channel, transfer envelopes), so two successors of the
+    same predecessor are detected; a detected fork freezes all wraps until
+    the user resolves it on a trusted device.
+  - An external, append-only transparency log of list heads would close
+    the residual gap below. Per owner decision 10 (resolved) it is
+    follow-up hardening, not a launch requirement; the quorum rule above is
+    the launch mechanism.
+  Residual risk, stated plainly: a client that never sees the real
+  revocation (the server withholds it) and has no peer contact accepts a
+  fork signed by the revoked device as a legitimate successor - but that
+  fork cannot add a device, because the revoked device has no quorum
+  co-signer, so key injection through it is closed. What remains open on a
+  fork is hiding the revocation itself (the stale device keeps working for
+  that client); the user confirmation is the barrier there, which is why
+  its content and the quorum requirement above are load-bearing. This is
+  the known limit of key transparency without an external log.
+  This is the key-transparency problem; implement a published design
+  (compare WhatsApp key transparency, Apple Contact Key Verification,
+  Keybase sigchains), not a home-grown one. **Expert review flag.**
+  **[inferred]**
+- Revoke: delete the device's wrapped-UMK blob, revoke its token (documented
+  `api-client revoke` machinery as the pattern), and rotate the UMK so new
+  transfer envelopes are unreadable to the revoked device. Pending envelopes
+  are not deleted: a pending envelope may hold the only copy of its mail
+  (the provider no longer has it and the source device may be gone). Instead,
+  the device performing the revocation re-wraps each pending envelope's CEK
+  from the old UMK to the new one and uploads the new wraps; the envelope
+  ciphertext stays unchanged. This needs only the old UMK, not the device
+  that created the envelope, and cuts the revoked device off once its token
+  is refused. It does not protect envelopes the revoked device already
+  downloaded, or ones a colluding operator hands it with their old wraps;
+  where that matters, the revoking device re-encrypts the pending envelope
+  under a fresh CEK instead (re-upload, same TTL). An envelope is deleted on
+  revocation only when the user chooses to.
+- Rotation order, so no step can strand a pending envelope (an interrupted
+  rotation resumes from the first unfinished step; every step is idempotent):
+  1. Sign and upload the new device-list version without the revoked
+     device. Generate the new UMK and, before anything else, upload it
+     wrapped to every surviving device's KEM public key and to the recovery
+     key (section 13), taking those keys only from the revoking device's own
+     verified device list, never from the server's answer. Offline devices
+     need nothing from the revoking device: they verify the new list and
+     fetch their new wrap when they next connect.
+  2. Only after the server confirms step 1, upload the new CEK wraps for
+     pending envelopes *alongside* the old ones.
+  3. Only after the server confirms step 2, delete the old wraps and the
+     revoked device's wrapped-UMK blob.
+  If the revoking device is lost mid-rotation, any surviving device or the
+  recovery key still holds whichever UMK each envelope is currently wrapped
+  under, and finishes the rotation. **Expert review flag** on this protocol.
+  **[inferred]**
+- Revocation does not touch the mail the device
+  already synced or its provider credentials; the user must also revoke that
+  device's access at the provider (password change / OAuth grant removal). A
+  live stolen unlocked device exposed what it read (T5).
+- Lost last device: mail that still exists at the provider is not lost - a
+  new device syncs it again. Sync cannot restore what the provider no longer
+  holds: provider-deleted mail and local-only drafts that never left the old
+  device are gone with it, with one narrow exception. Recent mail a device
+  selected into a transfer envelope sits at the server until that envelope's
+  TTL expires, and the recovery phrase does permit its retrieval before
+  then: the phrase restores the UMK and each envelope's content key is
+  wrapped to the UMK (section 7), so a recovered UMK decrypts any envelope
+  still pending. Once an envelope's TTL lapses it is pruned and gone, phrase
+  or not. What is lost without the recovery phrase is the UMK and anything
+  still waiting in transfer envelopes. No administrative backdoor, by
+  design. Tell users this in plain words.
 
 ## 13. Backup and recovery
 
 - Recovery phrase: 256-bit seed as a standard word-list phrase or base32,
   written down / password-manager escrow; optional second escrow (e.g. iCloud
   Keychain). **Owner decision.**
+- The phrase is not the UMK. It deterministically derives a recovery KEM
+  keypair (hybrid, like device keys) and a recovery signing keypair. Both
+  public keys are on the signed device list (section 12); the server stores
+  only those public keys, and the current UMK is always wrapped to the
+  recovery KEM key like to another device. The recovery signing key lets a
+  user who lost every device sign the next device-list version. UMK
+  rotation (section 12) re-wraps to the recovery public key without the
+  phrase being present, so the phrase the user wrote down stays valid across
+  rotations. **[inferred]**
 - Server backups are ciphertext: safe by construction. Keep Send Later
   tombstones **[documented: docs/SEND_LATER.md:116]**.
 - Exit is not hostage to the operator: the mailbox lives at the provider and
@@ -280,7 +460,10 @@ Minimisation commitments to design for:
 
 - **Client-side sync keeps provider tokens on devices.** The service never
   presents OAuth tokens to Google/Microsoft, which avoids the deepest
-  third-party-access obligations. **[inferred]**
+  third-party-access obligations. **[inferred]** This holds only without
+  helper-side Send Later: a hosted helper that sends on the user's behalf
+  holds and presents provider credentials, and brings the service itself into
+  scope of the providers' third-party-access reviews (section 10).
 - The app itself still uses Google restricted scopes for Gmail access, so it
   needs Google's OAuth verification, and - while restricted scopes are in use -
   an annual security assessment under Google's CASA framework (tier depends on
@@ -301,12 +484,17 @@ Minimisation commitments to design for:
 - Required before launch: EU data residency for storage and backups, a data
   processing agreement template, a published retention table (section 14), a
   records-of-processing entry, a DPIA (recommended given the data class), and a
-  72-hour personal-data breach notification runbook (encrypted-blob theft is
-  likely not a notifiable personal-data breach if keys are unaffected -
-  document the reasoning, don't improvise it during an incident). **[inferred]**
-- Deletion: deleting a user's blobs + wrapped keys + account row is real
-  deletion of their mail (crypto-shredding is inherent: without keys, blobs are
-  noise). Honour erasure requests by destroying both. **[inferred]**
+  72-hour personal-data breach notification runbook. Theft of encrypted blobs
+  with keys unaffected lowers the risk and may remove the duty to inform the
+  affected users; whether the supervisory authority must still be notified is
+  a separate risk assessment, and account/metadata exposure counts on its
+  own. Get this reasoning reviewed by counsel and written down in advance,
+  don't improvise it during an incident. **[inferred; not legal advice]**
+- Deletion: deleting a user's envelopes, wrapped keys, queued Send Later jobs
+  and account row removes everything the service holds about them, and what
+  remains in backups is unreadable without the client-held keys. It does not
+  delete their mail, which the service never held: that stays at the provider
+  and on their devices. Say so in the erasure response. **[inferred]**
 
 ## 17. Abuse and spam-relay risk
 
@@ -352,10 +540,12 @@ Minimisation commitments to design for:
 2. Make the mailbox-service mode **opt-in** (off by default) in new installs,
    with in-app copy explaining that it stores mail on the server; mark it for
    deprecation in ROADMAP/release notes.
-3. Enrol the owner's devices (dogfood) for the Send Later relay and, if
+3. Enrol the owner's devices (dogfood) for the Send Later helper and, if
    wanted, selective device-transfer envelopes.
 4. Give mailbox-service users an export-and-delete path (the client already
-   holds a local copy; server-side deletion plus key destruction finishes it).
+   holds a local copy). The helper's mailbox database is unencrypted, so
+   there is no key to destroy: finishing means deleting the database, its
+   WAL and every backup of it.
 5. Cut over per account; retire the mailbox API when usage reaches zero; the
    helper continues in Send Later-only mode (`--no-sync`, documented
    `docs/SEND_LATER.md:90`).
@@ -364,11 +554,11 @@ Minimisation commitments to design for:
 
 | Phase | Content | Effort | Buys |
 | --- | --- | --- | --- |
-| P0 | Harden current deploy (TLS 1.3-only, tailnet-only, ACLs, FileVault, least-privilege) | Easy | Transport hybrid-PQ; host exposure down |
+| P0 | Harden current deploy (TLS 1.3-only on both the mailbox API and the Send Later listener, tailnet-only, ACLs, FileVault, least-privilege) | Easy | Transport hybrid-PQ; host exposure down |
 | P1 | Send Later hybrid-PQ + FS + rotation (if helper delivery kept) | Medium | E2EE+PQ for scheduled outgoing |
 | P2 | Optional selective device-transfer envelopes (TTL, user-chosen scope) + enrolment | Large | Cross-device catch-up without a server-held mailbox |
 | P3 | Recovery phrase + revocation | Medium | Device lifecycle, operator-proof |
-| P4 | Search beyond S1 (optional) | Large + review | Server-side queries, bounded leakage |
+| P4 | Verifiable client builds: reproducible builds from public source, published verification steps | Medium-Large | The claim extends from "server" to "operator" (section 2, item 3) |
 | P5 | Multi-tenant hardening: isolation, quotas, abuse, audit log, retention | Large | Hosted-service readiness |
 | P6 | Assurance: external crypto audit, pentest, disclosure program, GDPR pack | Medium (calendar-heavy) | The claim becomes defensible |
 | P7 | Migration + mailbox-API retirement | Medium | Completes cutover |
@@ -380,8 +570,9 @@ measured velocity.
 
 1. Accept that **server-side sync/filters/Gmail push cannot exist** in this
    design (clients sync when open).
-2. **Send Later**: helper delivery with the live-window carve-out, client-side
-   delivery with scheduling degradation, or drop it from the hosted service.
+2. **Send Later**: helper delivery (the server then holds sending credentials
+   and sees scheduled mail at delivery; section 10), client-side delivery
+   with scheduling degradation, or drop it from the hosted service.
    Interim choice (2026-11-11): helper delivery on the single-user Studio in
    Send Later-only mode is accepted now; the hosted service must revisit this
    before multi-tenant launch.
@@ -389,17 +580,40 @@ measured velocity.
    operator-served web app would defeat operator-proofing; section 2, item 3).
 4. Decided 2026-11-11: **the server does not hold the mailbox**; mailbox-service
    mode goes opt-in now, deprecated later (section 20).
-4. Recovery: offline phrase, escrow, or both.
-5. Revocation: forward-only re-key, or full history re-encryption on device
-   compromise.
-6. Fund the external audit + CASA verification + legal (GDPR pack) before
+5. Recovery: offline phrase, escrow, or both.
+6. **Verifiable builds**: make reproducible, independently verifiable client
+   builds a launch requirement, or launch with the narrower claim "the server
+   cannot read mail" (section 2, item 3).
+7. Fund the external audit + CASA verification + legal (GDPR pack) before
    launch; the zero-knowledge claim should not ship unaudited.
-7. Launch geography: EU-only residency at first?
+8. Launch geography: EU-only residency at first?
+9. **In-flight mailbox-service work**: the open `HOSTED-SERVER-*` tasks in
+   TASKS.md build on the helper holding mailbox data. Finish them for the
+   single-user helper, or freeze them now that the mode is on a deprecation
+   path?
+10. **Device-compromise fork scope** (section 12): RESOLVED - quorum
+    signatures on key-changing versions (option b, extended from adds to
+    adds-and-replaces after review). A list version that introduces a new
+    key is valid only with two distinct signatures: its signer's plus a
+    co-signer that is another enrolled device or the recovery signing key,
+    so one stolen device cannot introduce a key alone, on the real chain
+    or on a fork. The recovery signing key may always co-sign, whatever
+    the device count, so phrase recovery works after any number of device
+    losses. Accepted cost: a single-device user needs their phrase to
+    enrol their second device. The transparency log is follow-up
+    hardening, not a launch requirement. Still open: how far re-keying
+    goes after device compromise.
+
+Open: 1, 2 (for the hosted service), 5-9, 10 (re-keying scope only).
+Decided: 3, 4, 10 (fork hard-close: quorum signatures on key-changing
+versions).
 
 ## 23. Expert review flags (collected)
 
 - Envelope format v1 (section 8).
 - Hybrid KEM combiner, Send Later and device wrap (sections 7, 10).
-- Enrolment ceremony (section 12).
-- Any S3 searchable-encryption work (section 11).
-- Threat-model completeness for a paid multi-tenant service (section 3).
+- Enrolment ceremony, signed device list and UMK rotation order (section
+  12), recovery-key derivation (section 13).
+- Threat-model completeness for a paid multi-tenant service (section 3),
+  including the operator-as-publisher update path (T6).
+- Credential handling for helper-side Send Later, if kept (section 10).

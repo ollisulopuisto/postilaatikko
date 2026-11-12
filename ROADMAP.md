@@ -22,11 +22,16 @@ stands (first deployment: Send Later-only on the owner's Mac Studio,
 zero-knowledge design in
 [docs/plans/2026-11-11-zero-knowledge-server.md](docs/plans/2026-11-11-zero-knowledge-server.md):
 if a hosted service is built, the server must not hold the mailbox - mail and
-provider credentials stay on client devices, the server keeps only the E2EE
-Send Later relay plus optional TTL'd device-transfer envelopes. The
+provider credentials stay on client devices, the server keeps only the Send
+Later helper role plus optional TTL'd device-transfer envelopes. Whether a
+hosted helper may deliver scheduled mail itself (it would then hold sending
+credentials) is an open owner decision in that document. The
 mailbox-service mode (a helper holding mailbox data for remote desktops) is
 therefore on a deprecation path: opt-in first, retired when usage reaches
-zero. Do not start new work that expands server-held mail storage.
+zero. Do not start new work that expands server-held mail storage; whether
+the already open `HOSTED-SERVER-*` tasks are finished or frozen is an open
+owner decision (section 22 of the design). The paragraphs below describe the
+single-user trusted helper only.
 
 Build one always-on service/core that owns mailbox change detection, persisted cross-account filtering and safe moves, and scheduled delivery while the desktop UI is closed. The desktop and remote clients should call the same service operations; localhost and user-operated Mac Studio/VPS deployments are configurations of one implementation, not forks. Reuse the current sync, filter/move, and scheduled-send logic where their lifecycle and storage contracts fit. Keep routine sync header/flag-only and body fetch explicit. Make the client feel immediate with bounded header-page queries, a presentation cache, targeted change events, and body fetch only when needed; service ownership should remove background work from the UI without adding full-folder reloads.
 
