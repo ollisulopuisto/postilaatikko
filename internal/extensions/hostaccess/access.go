@@ -29,6 +29,7 @@ type Auth struct {
 	consent     func(coreapi.StartIncrementalConsentRequest) error
 }
 
+// NewAuth binds Auth to a trusted compiled manifest and optional host consent UI.
 func NewAuth(broker Broker, extensionID string, manifest coreapi.Manifest, consent func(coreapi.StartIncrementalConsentRequest) error) (*Auth, error) {
 	if broker == nil || !validID.MatchString(extensionID) || manifest.ID != extensionID {
 		return nil, errors.New("extension Auth requires a broker and matching trusted manifest identity")
@@ -44,24 +45,32 @@ func cloneManifest(m coreapi.Manifest) coreapi.Manifest {
 	}
 	return m
 }
+
+// HTTPClient requests an account client with the pinned extension identity and scopes.
 func (a *Auth) HTTPClient(accountID string, scopes []coreapi.AuthScope) (*http.Client, error) {
 	if a == nil || a.broker == nil {
 		return nil, errors.New("extension Auth is unavailable")
 	}
 	return a.broker.HTTPClientForExtension(a.extensionID, cloneManifest(a.manifest), accountID, append([]coreapi.AuthScope(nil), scopes...))
 }
+
+// IMAPClient delegates the account IMAP connection through the host broker.
 func (a *Auth) IMAPClient(accountID string, caps []string) (coreapi.IMAPClient, error) {
 	if a == nil || a.broker == nil {
 		return nil, errors.New("extension Auth is unavailable")
 	}
 	return a.broker.IMAPClient(accountID, caps)
 }
+
+// SMTPClient delegates the account SMTP connection through the host broker.
 func (a *Auth) SMTPClient(accountID string) (coreapi.SMTPClient, error) {
 	if a == nil || a.broker == nil {
 		return nil, errors.New("extension Auth is unavailable")
 	}
 	return a.broker.SMTPClient(accountID)
 }
+
+// StartIncrementalConsent invokes host UI when available; headless hosts fail closed.
 func (a *Auth) StartIncrementalConsent(req coreapi.StartIncrementalConsentRequest) error {
 	if a == nil || a.consent == nil {
 		return errors.New("interactive extension consent is unavailable on this host; use an explicit device authorization flow")
@@ -77,35 +86,46 @@ type SecretStore interface {
 	DeleteExtensionSecret(string, string) error
 	DeleteAllExtensionSecrets(string) error
 }
+
+// Secrets binds every operation to one trusted extension namespace.
 type Secrets struct {
 	store       SecretStore
 	extensionID string
 }
 
+// NewSecrets validates and pins the host-supplied extension namespace.
 func NewSecrets(store SecretStore, extensionID string) (*Secrets, error) {
 	if store == nil || !validID.MatchString(extensionID) {
 		return nil, errors.New("extension Secrets require a store and valid extension identity")
 	}
 	return &Secrets{store: store, extensionID: extensionID}, nil
 }
+
+// Set writes a value inside the pinned extension namespace.
 func (s *Secrets) Set(key, value string) error {
 	if s == nil || s.store == nil {
 		return errors.New("extension Secrets unavailable")
 	}
 	return s.store.SetExtensionSecret(s.extensionID, key, value)
 }
+
+// Get reads a value only from the pinned extension namespace.
 func (s *Secrets) Get(key string) (string, error) {
 	if s == nil || s.store == nil {
 		return "", errors.New("extension Secrets unavailable")
 	}
 	return s.store.GetExtensionSecret(s.extensionID, key)
 }
+
+// Delete removes one value from the pinned extension namespace.
 func (s *Secrets) Delete(key string) error {
 	if s == nil || s.store == nil {
 		return errors.New("extension Secrets unavailable")
 	}
 	return s.store.DeleteExtensionSecret(s.extensionID, key)
 }
+
+// DeleteAll removes values only from the pinned extension namespace.
 func (s *Secrets) DeleteAll() error {
 	if s == nil || s.store == nil {
 		return errors.New("extension Secrets unavailable")
@@ -117,9 +137,12 @@ func (s *Secrets) DeleteAll() error {
 // The lookup callback must be a host-local credential-store operation.
 type HostSecrets struct{ cardDAVPassword func(string) (string, error) }
 
+// NewHostSecrets wraps a host-local read-only CardDAV password lookup.
 func NewHostSecrets(lookup func(string) (string, error)) *HostSecrets {
 	return &HostSecrets{cardDAVPassword: lookup}
 }
+
+// Get accepts only validated carddav source keys and never other secret classes.
 func (s *HostSecrets) Get(key string) (string, error) {
 	if s == nil || s.cardDAVPassword == nil {
 		return "", errors.New("host Secrets unavailable")
