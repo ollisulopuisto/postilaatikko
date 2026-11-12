@@ -319,6 +319,17 @@ deprecated mailbox-service mode and retire with it. [inferred]
     a hard warning, never a routine confirm. When a second enrolled device
     exists, a list version that adds a device must be confirmed on it as
     well before any wrap, so one stale client cannot wrap to a fork alone.
+    The gate has exactly one exception, and it is the recovery path below:
+    when no enrolled device survives there is no second device to confirm
+    on, so the phrase ceremony is itself the confirmation. The recovering
+    client shows the full device list from the chain head it fetched - not
+    a diff - and the user confirms every device on it before the recovery
+    signing key signs the replacement-adding version, so a fork-injected
+    device is visible in that list. Trade-off, stated plainly: with zero
+    enrolled devices the cross-device barrier does not exist, so recovery
+    leans on the genesis check, the full-list confirmation, and the user's
+    memory of their own devices. The transparency log (owner decision 10)
+    is the hard close here too.
   - Devices sign and exchange the chain head they have seen whenever they
     talk (enrolment channel, transfer envelopes), so two successors of the
     same predecessor are detected; a detected fork freezes all wraps until
@@ -560,10 +571,19 @@ measured velocity.
    path?
 10. **Device-compromise fork scope** (section 12): a stolen device can sign a
     competing device list for any client that missed the revocation. The
-    countermeasures (per-wrap confirmation, cross-device confirmation, fork
-    freeze) reduce this to a UX barrier; only the transparency log closes
-    it. Decide whether the log is a launch requirement and how far
-    re-keying goes after device compromise.
+    countermeasures (per-wrap confirmation naming the signer, cross-device
+    confirmation, fork freeze) reduce this to a UX barrier. The options for
+    the hard close:
+    (a) ship the external transparency log at launch and require list heads
+    to appear in it before clients wrap - strongest, and it also hardens
+    phrase recovery, at the cost of building or adopting the log now;
+    (b) require quorum signatures on device-adding versions - a second
+    enrolled device or the recovery signing key - so one stolen device
+    cannot add a key alone, accepting the friction that a single-device
+    user needs their phrase to enrol their second device;
+    (c) ship with the UX barrier and full-list confirmations as designed,
+    and revisit after the independent cryptographic review (section 19).
+    Decide which, and how far re-keying goes after device compromise.
 
 Open: 1, 2 (for the hosted service), 5-10. Decided: 3, 4.
 
