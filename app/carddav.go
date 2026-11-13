@@ -138,8 +138,8 @@ func (a *App) AddContactSource(config carddav.SourceConfig) (*carddav.Source, er
 		if err != nil {
 			return nil, err
 		}
-		source, err := client.MutateContactSource(a.ctx, v1.ContactsSourceMutationRequest{Operation: "create", Config: &config}, contactsIdempotencyKey("source_create", config.Name, string(config.Type), config.URL, config.Username, config.Password))
-		settleContactsMutation(err, "source_create", config.Name, string(config.Type), config.URL, config.Username, config.Password)
+		source, err := client.MutateContactSource(a.ctx, v1.ContactsSourceMutationRequest{Operation: "create", Config: &config}, contactsIdempotencyKey("source_create", config.Name, string(config.Type), config.URL, config.Username))
+		settleContactsMutation(err, "source_create", config.Name, string(config.Type), config.URL, config.Username)
 		if err != nil {
 			return nil, remoteContactsError(err, v1.CapabilityContactsManage)
 		}
@@ -169,8 +169,8 @@ func (a *App) UpdateContactSource(id string, config carddav.SourceConfig) error 
 		if err != nil {
 			return err
 		}
-		_, err = client.MutateContactSource(a.ctx, v1.ContactsSourceMutationRequest{Operation: "update", ID: id, Config: &config}, contactsIdempotencyKey("source_update", id, config.Name, config.URL, config.Username, config.Password, fmt.Sprint(config.Writable, config.Enabled, config.SyncInterval)))
-		settleContactsMutation(err, "source_update", id, config.Name, config.URL, config.Username, config.Password, fmt.Sprint(config.Writable, config.Enabled, config.SyncInterval))
+		_, err = client.MutateContactSource(a.ctx, v1.ContactsSourceMutationRequest{Operation: "update", ID: id, Config: &config}, contactsIdempotencyKey("source_update", id, config.Name, config.URL, config.Username, fmt.Sprint(config.Writable, config.Enabled, config.SyncInterval)))
+		settleContactsMutation(err, "source_update", id, config.Name, config.URL, config.Username, fmt.Sprint(config.Writable, config.Enabled, config.SyncInterval))
 		return remoteContactsError(err, v1.CapabilityContactsManage)
 	}
 	if err := a.requireLocalContacts(); err != nil {
