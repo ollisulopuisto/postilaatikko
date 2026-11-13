@@ -9,7 +9,10 @@ import (
 	"testing"
 )
 
-type calendarReadFake struct{ calls int }
+type calendarReadFake struct {
+	calls    int
+	eventErr error
+}
 
 func (f *calendarReadFake) CalendarSources(context.Context) ([]calendar.Source, error) {
 	f.calls++
@@ -25,7 +28,7 @@ func (f *calendarReadFake) CalendarEvent(context.Context, string) (*calendar.Eve
 }
 func (f *calendarReadFake) CalendarEvents(context.Context, CalendarRangeRequest) ([]calendar.EventInstance, error) {
 	f.calls++
-	return []calendar.EventInstance{}, nil
+	return []calendar.EventInstance{}, f.eventErr
 }
 func TestCalendarRoutesRequireOwnReadGrant(t *testing.T) {
 	ops := &calendarReadFake{}
@@ -72,5 +75,16 @@ func TestCalendarRangeRejectsOversizedWhitespaceBody(t *testing.T) {
 	mux.ServeHTTP(out, httptest.NewRequest("POST", "/v1/calendar/events/query", strings.NewReader(body)))
 	if out.Code != 400 || ops.calls != 0 {
 		t.Fatalf("oversized query status=%d calls=%d", out.Code, ops.calls)
+	}
+}
+
+func TestCalendarOccurrenceUnavailableIsExplicit(t *testing.T) {
+	ops := &calendarReadFake{eventErr: ErrCalendarOccurrenceUnavailable}
+	mux := http.NewServeMux()
+	MountCalendarReadRoutes(mux, ops, func(http.ResponseWriter, *http.Request, Capability) bool { return true })
+	out := httptest.NewRecorder()
+	mux.ServeHTTP(out, httptest.NewRequest("POST", "/v1/calendar/events/query", strings.NewReader(`{"calendarIds":["one"],"fromUnix":1,"toUnix":2}`)))
+	if out.Code != 501 || !strings.Contains(out.Body.String(), "context-aware recurrence") {
+		t.Fatalf("unsupported route=%d %s", out.Code, out.Body.String())
 	}
 }
