@@ -109,7 +109,7 @@ func (c *Client) doRequestWithHeaders(ctx context.Context, method, path string, 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		var errResp v1.ErrorResponse
 		if jsonErr := json.Unmarshal(respBytes, &errResp); jsonErr == nil && errResp.Error.Code != "" {
-			return nil, fmt.Errorf("api error (%s): %s", errResp.Error.Code, errResp.Error.Message)
+			return nil, fmt.Errorf("api error (%s): %s: %w", errResp.Error.Code, errResp.Error.Message, v1.NewFault(errResp.Error.Code, errResp.Error.Message, errResp.Error.Retryable, nil))
 		}
 		return nil, fmt.Errorf("api error (http %d): %s", resp.StatusCode, string(respBytes))
 	}

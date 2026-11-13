@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+- Clearly label paused Undo Send recovery with a persistent action-needed message in Finnish and English.
+
+- Keep explicit Send now/Undo controls after a verified pre-claim failure, with the automatic countdown paused; unverifiable outcomes never expose a retry.
+
+- Never restart an Undo Send countdown from a dispatch exception or failed reload; uncertain failures require explicit review rather than automatic resend. Remote desktops now check uncertain helper receipts while idle every minute, without submitting mail, and drain that worker before device storage closes.
+
+- Keep local delivery failures out of the remote Undo Send retry path, preventing automatic resubmission after an uncertain local send.
+
+- Remote Undo Send now releases draft locks after definitive helper rejection and keeps pending mail visible for retry when a device-database claim fails.
+
+- Remote desktops now keep the Undo Send safety window in the device database instead of accessing an unopened mailbox database. Cancel and dispatch arbitrate atomically; the remote helper receives immutable MIME under the queue's stable request ID. Restart never auto-sends, uncertain provider outcomes are not resubmitted, and helper-owned draft cleanup does not delete a later draft edit. Native two-machine delivery remains to be verified.
+
 - Allow an exactly-full remote Calendar window when later recurrence candidates add no occurrences; still reject any additional in-window instance.
 
 - Route remote Calendar occurrence reads through bounded helper snapshots and the context-aware recurrence adapter; retain local-store-free desktop reads.

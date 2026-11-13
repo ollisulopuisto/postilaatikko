@@ -80,7 +80,7 @@
   import { runMessageMutation } from '$lib/components/list/mutationInFlight'
   import { messageAnimations } from '$lib/stores/messageAnimations.svelte'
   // @ts-ignore - wailsjs path
-  import { PrepareComposerReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, ClearDraftHistory, SendMessageWithDraftGuard, CancelPendingSend, CompletePendingSend, ListPendingSends, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, ArchiveAndMarkReadWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ResolveMailActionTarget, GetMessage, UndoOperation, UndoLatestWithResult, SyncMailboxActionEvents, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, RequestQuitApp, CancelQuitAppRequest, OpenComposerWindow, OpenMailWindow, OpenReaderWindow, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
+  import { PrepareComposerReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, ClearDraftHistory, SendMessageWithDraftGuard, DispatchRemotePendingSend, CancelPendingSend, CompletePendingSend, ListPendingSends, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, ArchiveAndMarkReadWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ResolveMailActionTarget, GetMessage, UndoOperation, UndoLatestWithResult, SyncMailboxActionEvents, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, RequestQuitApp, CancelQuitAppRequest, OpenComposerWindow, OpenMailWindow, OpenReaderWindow, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
   // @ts-ignore - wailsjs path
   import { smtp, folder, certificate, operations } from '../wailsjs/go/models'
   // @ts-ignore - wailsjs runtime
@@ -706,7 +706,7 @@
   // 30-second undo-send countdown (user-approved). The composer queues the
   // send and closes; this bar owns the timer, dispatch and cancel. Restart
   // never auto-sends: the backend expires leftover rows at startup.
-  type PendingSendItem = { id: string; accountId: string; draftId: string; payload: string; dispatchAt: string; dispatching?: boolean }
+  type PendingSendItem = { id: string; accountId: string; draftId: string; payload: string; dispatchAt: string; dispatching?: boolean; manualRecovery?: boolean }
   let pendingSends = $state<PendingSendItem[]>([])
   let pendingTick: ReturnType<typeof setInterval> | undefined
   let pendingNow = $state(Date.now())
@@ -720,7 +720,7 @@
     pendingTick = setInterval(() => {
       pendingNow = Date.now()
       for (const ps of pendingSends) {
-        if (!ps.dispatching && new Date(ps.dispatchAt).getTime() <= pendingNow) {
+        if (!ps.manualRecovery && !ps.dispatching && new Date(ps.dispatchAt).getTime() <= pendingNow) {
           void pendingDispatch(ps)
         }
       }
@@ -744,20 +744,45 @@
     ps.dispatching = true
     const dispatch = (async (): Promise<boolean> => {
       let message: smtp.ComposeMessage
+      let remoteHandled: boolean
+      let localAttempted = false
       try {
-        message = JSON.parse(ps.payload)
-        await SendMessageWithDraftGuard(ps.accountId, message, ps.draftId)
+        remoteHandled = await DispatchRemotePendingSend(ps.id)
+        if (!remoteHandled) {
+          message = JSON.parse(ps.payload)
+          localAttempted = true
+          await SendMessageWithDraftGuard(ps.accountId, message, ps.draftId)
+        }
       } catch (err) {
-        // SMTP did not accept the message; preserve its draft and stop quit.
+        // A device-db claim can fail before any delivery attempt. Reload before
+        // removing its countdown; terminal/unknown rows are absent from this list.
         await CompletePendingSend(ps.id).catch(() => {})
-        pendingRemove(ps.id)
+        if (localAttempted) {
+          pendingRemove(ps.id)
+          addToast({ type: 'error', message: String(err) })
+          return false
+        }
+        // Only a verified still-pending durable row can expose explicit
+        // Send now/Undo controls. Never restart the countdown after failure.
+        try {
+          const persisted = await ListPendingSends() as PendingSendItem[]
+          const found = persisted.some(item => item.id === ps.id)
+          if (!found) pendingRemove(ps.id)
+          if (found) {
+            ps.manualRecovery = true
+            ps.dispatching = false
+          }
+        } catch {
+          // Unknown durable state is not permission to send again.
+          pendingRemove(ps.id)
+        }
         addToast({ type: 'error', message: String(err) })
         return false
       }
 
       // SMTP accepted the message. Cleanup failures must not retry the send
       // or block quit, since that could deliver a duplicate on the next try.
-      if (ps.draftId) {
+      if (ps.draftId && !remoteHandled) {
         await DeleteDraft(ps.draftId).catch(err => console.error('Failed to delete draft after send:', err))
         // Actual send ends the draft's undo history; cancelling a pending send
         // never reaches here.
@@ -864,6 +889,7 @@
       if (!pendingSends.some(p => p.id === ps.id)) pendingSends = [...pendingSends, ps]
     })
     EventsOn('pending-send:cancelled', (id: string) => pendingRemove(id))
+    EventsOn('pending-send:warning', (message: string) => addToast({ type: 'error', message }))
     EventsOn('notification:clicked', (data: { accountId: string; folderId: string; threadId: string }) => {
       // Find folder info for display
       const folderInfo = findFolderById(data.accountId, data.folderId)
@@ -2783,6 +2809,7 @@
     dispatchAt={pendingSends[0].dispatchAt}
     now={pendingNow}
     dispatching={!!pendingSends[0].dispatching}
+    manualRecovery={!!pendingSends[0].manualRecovery}
     onSendNow={() => void pendingDispatch(pendingSends[0])}
     onUndo={() => void pendingCancel(pendingSends[0])}
   />

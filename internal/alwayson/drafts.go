@@ -413,7 +413,7 @@ func gmailThreadID(original *message.Message) string {
 
 func (r *SyncRuntime) Send(ctx context.Context, req v1.SendRequest, key, hash string) (*v1.SendResponse, error) {
 	if r == nil || r.immediateSend == nil || r.validateSender == nil {
-		return nil, errors.New("immediate send is unavailable")
+		return nil, v1.InvalidRequest("Message submission is unavailable; message not submitted", nil)
 	}
 	if err := validateSendRequest(req); err != nil {
 		return nil, err
@@ -422,7 +422,8 @@ func (r *SyncRuntime) Send(ctx context.Context, req v1.SendRequest, key, hash st
 		return response, err
 	}
 	if err := r.validateSender(req.AccountID, req.From); err != nil {
-		return nil, err
+		// This check precedes idempotency reservation and provider submission.
+		return nil, v1.InvalidRequest("Sender unavailable; message not submitted", err)
 	}
 	if req.DraftID != "" {
 		item, err := r.drafts.Get(req.DraftID)

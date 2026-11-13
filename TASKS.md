@@ -491,6 +491,11 @@ README review follow-up: qualify checksum instructions because tagged releases d
 | --- | --- | --- | --- | --- |
 | REMOTE-CALENDAR-001 | Large | Add helper-owned Calendar service operations with separate read/write/manage capabilities, typed desktop routing and lifecycle; preserve no-local-mailbox startup. | Instinct / `agent/REMOTE-CALENDAR-001` / `/tmp/pl-remote-calendar` | In review; PR #249, implementation `a85d07b0`, shared query-work budget `340a3b92`. Bounded typed read contract and recurrence/store budget foundation only. Depends on shared host access PR #248 and Contacts-owned headless Core adapter for production mounting/lifecycle. Existing remote gate remains closed; writes/manage/consent/notifications remain follow-up. New read/recurrence tests and full v1/Calendar package suites pass; native provider/consent/alarm/two-machine acceptance not run. |
 
+## Remote Undo Send parity (2026-11-13)
+
+| ID | Effort | Task | Owner | Status |
+| --- | --- | --- | --- | --- |
+| REMOTE-UNDO-SEND-001 | Large | Make the remote desktop Undo Send window device-owned, bounded and safe without a local mailbox DB; submit immutable MIME to the helper with durable request identity. | Instinct / `agent/REMOTE-UNDO-SEND-001` / `/tmp/pl-remote-undo` | In review; PR #247, implementation `5c51f41d`, rejection/claim retry fix `8ef1008e` with red tests `70d6f291`. Nil-mailbox panic and both Devin findings reproduced red; helper/v1/client/queue tests and vet pass, remote app tests pass with a test-only CGO-off platform overlay. Frontend check/build, App ESLint and targeted pending-send tests pass. Native two-machine runtime, real provider ambiguity and keychain/login remain unverified. Cross-device Send Later arbitration remains a separate gate. |
 ## Remote startup guide correction (2026-11-13)
 
 | ID | Effort | Task | Owner | Status |

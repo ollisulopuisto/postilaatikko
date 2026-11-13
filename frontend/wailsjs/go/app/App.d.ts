@@ -984,3 +984,5 @@ export function UpdateVirtualFolder(arg1:virtualfolder.VirtualFolder):Promise<vo
 export function IsRemoteServiceMode():Promise<boolean>;
 
 export function SendMessageWithRequestID(arg1:string,arg2:smtp.ComposeMessage,arg3:string):Promise<void>;
+
+export function DispatchRemotePendingSend(arg1:string):Promise<boolean>;
