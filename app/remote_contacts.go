@@ -88,6 +88,12 @@ var contactsPendingKeys = struct {
 	byContent map[string]string
 }{byContent: make(map[string]string)}
 
+// contactsMutationContent digests the request identity for pending-key
+// retention. Callers must not pass secrets (CardDAV passwords): a fast
+// unsalted hash of a password is brute-forceable if it ever leaks, and the
+// identity does not need it - a secret-only change while the previous
+// attempt is still pending surfaces as the helper's idempotency conflict,
+// and after settle the repeat gets a fresh key.
 func contactsMutationContent(operation string, operands ...string) string {
 	h := sha256.New()
 	h.Write([]byte(operation))
