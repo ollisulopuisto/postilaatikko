@@ -16,6 +16,7 @@
 - Avoid a recurrence mask panic for out-of-period ordinal weekdays in bounded Calendar reads, including missing fifth weekdays.
 
 - Add an isolated recurrence evaluator with context/work checks inside generation loops and pre-construction option limits; bounded Calendar store expansion uses it without changing the existing local unbounded API. Remote occurrence routing remains a separate integration step.
+- Remote contact mutations keep at most 64 unacknowledged requests awaiting the helper's receipt (keyed by a fixed-size digest, so photos are not retained while a send's outcome is unknown). Once earlier changes are acknowledged the retry key is dropped; while 64 remain unanswered, further contact changes are refused with a clear error instead of risking a duplicated create on retry.
 - Apply remote Calendar read budgets only to overlapping non-recurring events and recurring candidates, so unrelated history does not block current reads; allow Calendar read grants to be registered.
 
 - Add a bounded Calendar read API foundation for the remote helper, with a separate Calendar read grant, strict query limits and one shared recurrence-work budget across all selected events. The routes are not yet mounted by the helper or used by the desktop; remote Calendar remains unavailable until lifecycle and routing integration is complete.

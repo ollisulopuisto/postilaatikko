@@ -88,7 +88,11 @@ func (a *App) AddContact(email, displayName string) error {
 		}
 		req := v1.ContactsMutationRequest{Operation: "add_legacy", Email: email, DisplayName: displayName}
 		body := contactsCanonicalBody(req)
-		_, err = client.MutateContact(a.ctx, req, contactsIdempotencyKey("mutate", body))
+		key, err := contactsIdempotencyKey("mutate", body)
+		if err != nil {
+			return err
+		}
+		_, err = client.MutateContact(a.ctx, req, key)
 		settleContactsMutation(err, "mutate", body)
 		return remoteContactsError(err, v1.CapabilityContactsWrite)
 	}
@@ -107,7 +111,11 @@ func (a *App) DeleteContact(id string) error {
 		}
 		req := v1.ContactsMutationRequest{Operation: "delete_legacy", ID: id}
 		body := contactsCanonicalBody(req)
-		_, err = client.MutateContact(a.ctx, req, contactsIdempotencyKey("mutate", body))
+		key, err := contactsIdempotencyKey("mutate", body)
+		if err != nil {
+			return err
+		}
+		_, err = client.MutateContact(a.ctx, req, key)
 		settleContactsMutation(err, "mutate", body)
 		return remoteContactsError(err, v1.CapabilityContactsWrite)
 	}

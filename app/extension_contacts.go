@@ -75,7 +75,11 @@ func (a *App) Contacts_CreateContact(input coreapi.ContactCreateInput) (string, 
 		}
 		req := v1.ContactsMutationRequest{Operation: "create", Create: &input}
 		body := contactsCanonicalBody(req)
-		resp, err := client.MutateContact(a.ctx, req, contactsIdempotencyKey("mutate", body))
+		key, err := contactsIdempotencyKey("mutate", body)
+		if err != nil {
+			return "", err
+		}
+		resp, err := client.MutateContact(a.ctx, req, key)
 		settleContactsMutation(err, "mutate", body)
 		if err != nil {
 			return "", remoteContactsError(err, v1.CapabilityContactsWrite)
@@ -168,7 +172,11 @@ func (a *App) Contacts_SyncSource(sourceID string) error {
 		}
 		req := v1.ContactsMutationRequest{Operation: "sync", ID: sourceID}
 		body := contactsCanonicalBody(req)
-		_, err = client.MutateContact(a.ctx, req, contactsIdempotencyKey("mutate", body))
+		key, err := contactsIdempotencyKey("mutate", body)
+		if err != nil {
+			return err
+		}
+		_, err = client.MutateContact(a.ctx, req, key)
 		settleContactsMutation(err, "mutate", body)
 		return remoteContactsError(err, v1.CapabilityContactsWrite)
 	}
@@ -190,7 +198,11 @@ func (a *App) Contacts_SyncAllSources() error {
 		}
 		req := v1.ContactsMutationRequest{Operation: "sync_all"}
 		body := contactsCanonicalBody(req)
-		_, err = client.MutateContact(a.ctx, req, contactsIdempotencyKey("mutate", body))
+		key, err := contactsIdempotencyKey("mutate", body)
+		if err != nil {
+			return err
+		}
+		_, err = client.MutateContact(a.ctx, req, key)
 		settleContactsMutation(err, "mutate", body)
 		return remoteContactsError(err, v1.CapabilityContactsWrite)
 	}
@@ -212,7 +224,11 @@ func (a *App) Contacts_UpdateContact(idOrEmail string, patch coreapi.ContactPatc
 		}
 		req := v1.ContactsMutationRequest{Operation: "update", ID: idOrEmail, Patch: &patch}
 		body := contactsCanonicalBody(req)
-		_, err = client.MutateContact(a.ctx, req, contactsIdempotencyKey("mutate", body))
+		key, err := contactsIdempotencyKey("mutate", body)
+		if err != nil {
+			return err
+		}
+		_, err = client.MutateContact(a.ctx, req, key)
 		settleContactsMutation(err, "mutate", body)
 		if err != nil {
 			if isRemoteContactsConflict(err) {
@@ -241,7 +257,11 @@ func (a *App) Contacts_DeleteLocalContact(idOrEmail string) error {
 		}
 		req := v1.ContactsMutationRequest{Operation: "delete", ID: idOrEmail}
 		body := contactsCanonicalBody(req)
-		_, err = client.MutateContact(a.ctx, req, contactsIdempotencyKey("mutate", body))
+		key, err := contactsIdempotencyKey("mutate", body)
+		if err != nil {
+			return err
+		}
+		_, err = client.MutateContact(a.ctx, req, key)
 		settleContactsMutation(err, "mutate", body)
 		return remoteContactsError(err, v1.CapabilityContactsWrite)
 	}
