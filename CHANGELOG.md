@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Allow an exactly-full remote Calendar window when later recurrence candidates add no occurrences; still reject any additional in-window instance.
+
 - Route remote Calendar occurrence reads through bounded helper snapshots and the context-aware recurrence adapter; retain local-store-free desktop reads.
 - Honor the desktop Calendar enabled setting before any remote read, without opening a local Calendar store.
 

@@ -14,8 +14,8 @@ import (
 // Between expands an existing parsed recurrence set inclusively. Budgets are
 // shared by the caller across events. Errors return no partial occurrence list.
 func Between(ctx context.Context, set *upstream.Set, from, to time.Time, maxInstances int, budget *int) ([]time.Time, error) {
-	if ctx == nil || set == nil || budget == nil || maxInstances < 1 {
-		return nil, errors.New("recurrence requires context, set and positive limits")
+	if ctx == nil || set == nil || budget == nil || maxInstances < 0 {
+		return nil, errors.New("recurrence requires context, set and nonnegative instance limit")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
