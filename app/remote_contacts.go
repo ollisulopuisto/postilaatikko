@@ -106,10 +106,17 @@ func contactsCanonicalBody(request any) string {
 	return string(body)
 }
 
-// maxContactsPendingKeys bounds retained pending mutations. Beyond it, new
-// mutations run without receipt protection rather than growing memory
-// without limit during a helper outage.
+// maxContactsPendingKeys bounds retained pending mutations. At the limit,
+// new distinct mutations fail closed (errContactsPendingFull) before they
+// are sent: sending one with an unretained key would let a later retry
+// duplicate the mutation, and retaining keys without limit would grow
+// memory without bound during a helper outage.
 const maxContactsPendingKeys = 64
+
+// errContactsPendingFull rejects a new contacts mutation while the retained
+// pending set is full of unresolved ones. The mutation is not sent; retrying
+// after the helper acknowledges earlier work (or the app restarts) succeeds.
+var errContactsPendingFull = errors.New("too many unacknowledged contact mutations: the mailbox helper has not answered earlier changes, so this change was not sent; retry once the connection to the helper is restored")
 
 // contactsPendingContentKey digests the request identity to a fixed size:
 // canonical bodies carry inline base64 photos, and retaining the raw bodies
@@ -122,19 +129,22 @@ func contactsPendingContentKey(operation, canonicalBody string) string {
 }
 
 // contactsIdempotencyKey returns the retained key for this exact pending
-// request, creating and retaining a fresh one when it has none.
-func contactsIdempotencyKey(operation, canonicalBody string) string {
+// request, creating and retaining a fresh one when it has none. When the
+// pending set is already full, it fails with errContactsPendingFull and the
+// caller must not send the mutation.
+func contactsIdempotencyKey(operation, canonicalBody string) (string, error) {
 	content := contactsPendingContentKey(operation, canonicalBody)
 	contactsPendingKeys.Lock()
 	defer contactsPendingKeys.Unlock()
 	if key, ok := contactsPendingKeys.byContent[content]; ok {
-		return key
+		return key, nil
+	}
+	if len(contactsPendingKeys.byContent) >= maxContactsPendingKeys {
+		return "", errContactsPendingFull
 	}
 	key := "desktop-contacts-" + operation + "-" + uuid.NewString()
-	if len(contactsPendingKeys.byContent) < maxContactsPendingKeys {
-		contactsPendingKeys.byContent[content] = key
-	}
-	return key
+	contactsPendingKeys.byContent[content] = key
+	return key, nil
 }
 
 // settleContactsMutation drops the retained key once the mutation's outcome
