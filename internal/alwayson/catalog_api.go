@@ -652,5 +652,8 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 	if r.contacts != nil {
 		v1.MountContactsRoutes(mux, &contactsOperations{runtime: r.contacts}, newContactsMutationLedger(r.db), r.accountMutationFingerprint, automation.RequireGrantCapability)
 	}
+	if r.calendar != nil {
+		v1.MountCalendarReadRoutes(mux, r.calendar, automation.RequireGrantCapability)
+	}
 	return mux, nil
 }
