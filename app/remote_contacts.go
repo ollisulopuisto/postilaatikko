@@ -1,6 +1,8 @@
 package app
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -104,17 +106,34 @@ func contactsCanonicalBody(request any) string {
 	return string(body)
 }
 
+// maxContactsPendingKeys bounds retained pending mutations. Beyond it, new
+// mutations run without receipt protection rather than growing memory
+// without limit during a helper outage.
+const maxContactsPendingKeys = 64
+
+// contactsPendingContentKey digests the request identity to a fixed size:
+// canonical bodies carry inline base64 photos, and retaining the raw bodies
+// for transport-failed mutations would accumulate photo data for the
+// process lifetime. Passwords are already scrubbed before the body reaches
+// here, so a fast hash is safe for what remains.
+func contactsPendingContentKey(operation, canonicalBody string) string {
+	sum := sha256.Sum256([]byte(operation + "\x00" + canonicalBody))
+	return hex.EncodeToString(sum[:])
+}
+
 // contactsIdempotencyKey returns the retained key for this exact pending
 // request, creating and retaining a fresh one when it has none.
 func contactsIdempotencyKey(operation, canonicalBody string) string {
-	content := operation + "\x00" + canonicalBody
+	content := contactsPendingContentKey(operation, canonicalBody)
 	contactsPendingKeys.Lock()
 	defer contactsPendingKeys.Unlock()
 	if key, ok := contactsPendingKeys.byContent[content]; ok {
 		return key
 	}
 	key := "desktop-contacts-" + operation + "-" + uuid.NewString()
-	contactsPendingKeys.byContent[content] = key
+	if len(contactsPendingKeys.byContent) < maxContactsPendingKeys {
+		contactsPendingKeys.byContent[content] = key
+	}
 	return key
 }
 
@@ -131,7 +150,7 @@ func settleContactsMutation(err error, operation, canonicalBody string) {
 			return
 		}
 	}
-	content := operation + "\x00" + canonicalBody
+	content := contactsPendingContentKey(operation, canonicalBody)
 	contactsPendingKeys.Lock()
 	delete(contactsPendingKeys.byContent, content)
 	contactsPendingKeys.Unlock()
