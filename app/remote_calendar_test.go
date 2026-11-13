@@ -15,6 +15,10 @@ import (
 func TestRemoteCalendarReadDoesNotOpenLocalMailbox(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/v1/calendar/events/plain" {
+			json.NewEncoder(w).Encode(v1.Response[*calendar.Event]{Data: &calendar.Event{ID: "plain", Description: "One line\nAnother https://example.com", DescriptionHTML: "<b>untrusted</b>"}})
+			return
+		}
 		if r.URL.Path == "/v1/calendar/events/one" {
 			json.NewEncoder(w).Encode(v1.Response[*calendar.Event]{Data: &calendar.Event{ID: "one", Description: "<p>safe<script>alert(1)</script></p>", DescriptionHTML: "<script>remote</script>"}})
 			return
@@ -30,6 +34,10 @@ func TestRemoteCalendarReadDoesNotOpenLocalMailbox(t *testing.T) {
 	event, err := a.Calendar_GetEvent("one")
 	if err != nil || strings.Contains(strings.ToLower(event.DescriptionHTML), "script") {
 		t.Fatalf("trusted remote HTML: %v %v", event, err)
+	}
+	plain, err := a.Calendar_GetEvent("plain")
+	if err != nil || plain.DescriptionHTML != "" || !strings.Contains(plain.Description, "\n") {
+		t.Fatalf("plaintext render changed: %+v %v", plain, err)
 	}
 	if a.db != nil || a.credStore != nil || a.CalendarBridge != nil {
 		t.Fatal("opened local Calendar/mailbox dependencies")
