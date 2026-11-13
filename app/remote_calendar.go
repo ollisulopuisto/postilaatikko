@@ -60,7 +60,10 @@ func (a *App) Calendar_GetEvent(id string) (*calendar.Event, error) {
 		return event, err
 	}
 	// Never trust a helper-supplied ready-to-render HTML field.
-	event.DescriptionHTML = htmlCoreImpl{sanitizer: sharedSanitizer}.Sanitize(event.Description)
+	event.DescriptionHTML = ""
+	if calendar.DescriptionIsHTML(event.Description) {
+		event.DescriptionHTML = htmlCoreImpl{sanitizer: sharedSanitizer}.Sanitize(event.Description)
+	}
 	return event, nil
 }
 

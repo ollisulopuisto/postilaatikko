@@ -562,9 +562,11 @@ func (b *CalendarBridge) Calendar_GetEvent(eventID string) (*Event, error) {
 var htmlBodyRe = regexp.MustCompile(`(?is)<(html|head|body|div|p|br|span|table|ul|ol|li|h[1-6]|a\s|strong|em|b>|i>)`)
 
 // bodyIsHTML reports whether an event body is HTML (vs plaintext).
-func bodyIsHTML(s string) bool {
-	return htmlBodyRe.MatchString(s)
-}
+func bodyIsHTML(s string) bool { return DescriptionIsHTML(s) }
+
+// DescriptionIsHTML applies the shared Calendar rich-body detection policy.
+// Plain text must keep its newline/linkified rendering rather than HTML layout.
+func DescriptionIsHTML(s string) bool { return htmlBodyRe.MatchString(s) }
 
 // Calendar_SetCalendarVisible toggles a calendar's visibility in the UI.
 // Cached events stay in the store; ListEventsInRange filters them out.
