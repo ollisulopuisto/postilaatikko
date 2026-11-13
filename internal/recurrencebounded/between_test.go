@@ -72,7 +72,7 @@ func TestRuleConstructionRejectsDuplicateCartesianExplosion(t *testing.T) {
 func TestCalendarBoundaryParity(t *testing.T) {
 	loc, _ := time.LoadLocation("Europe/Helsinki")
 	starts := []time.Time{time.Date(2026, 10, 23, 3, 30, 0, 0, loc), time.Date(2024, 2, 28, 9, 0, 0, 0, loc), time.Date(2026, 3, 27, 9, 0, 0, 0, loc)}
-	rules := []string{"FREQ=DAILY;COUNT=5", "FREQ=DAILY;INTERVAL=2;COUNT=10", "FREQ=MONTHLY;BYMONTHDAY=-1;COUNT=5", "FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1;COUNT=5", "FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=29;COUNT=2", "FREQ=WEEKLY;BYDAY=SU;WKST=SU;COUNT=8"}
+	rules := []string{"FREQ=DAILY;COUNT=5", "FREQ=DAILY;INTERVAL=2;COUNT=10", "FREQ=MONTHLY;BYMONTHDAY=-1;COUNT=5", "FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1;COUNT=5", "FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=29;COUNT=2", "FREQ=WEEKLY;BYDAY=SU;WKST=SU;COUNT=8", "FREQ=DAILY;UNTIL=20261101T000000Z"}
 	for _, start := range starts {
 		for _, text := range rules {
 			options, err := upstream.StrToROptionInLocation(text, loc)
@@ -115,5 +115,43 @@ func TestInternalCancellationAndOutputLimitReturnNoPartialData(t *testing.T) {
 	budget = 10000
 	if _, err := Between(ctx, set, start, start.Add(time.Hour), 2, &budget); err != context.Canceled {
 		t.Fatal(err)
+	}
+}
+
+func TestUnsafeOptionsRejectedBeforeConstruction(t *testing.T) {
+	for _, rule := range []string{"FREQ=DAILY;BYEASTER=99999", "FREQ=WEEKLY;INTERVAL=9223372036854775807", "FREQ=DAILY;BYHOUR=" + strings.Repeat("1,", 24) + "1", "FREQ=DAILY;BYMINUTE=" + strings.Repeat("1,", 59) + "1;BYSECOND=" + strings.Repeat("1,", 59) + "1;BYHOUR=0,1,2"} {
+		if err := ValidateRuleText(rule); err == nil {
+			t.Fatalf("unsafe rule accepted: %s", rule)
+		}
+	}
+}
+
+// A deterministic context cancels while next() is inside an impossible loop.
+// No timeout goroutine (and hence no leaked evaluator) is used by this test.
+type cancelAfterChecks struct {
+	context.Context
+	calls int
+}
+
+func (c *cancelAfterChecks) Err() error {
+	c.calls++
+	if c.calls > 20 {
+		return context.Canceled
+	}
+	return nil
+}
+func TestCancellationInsideIterator(t *testing.T) {
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	r, err := upstream.NewRRule(upstream.ROption{Freq: upstream.MINUTELY, Interval: 2, Byminute: []int{1}, Dtstart: start})
+	if err != nil {
+		t.Fatal(err)
+	}
+	set := &upstream.Set{}
+	set.RRule(r)
+	budget := 10000
+	ctx := &cancelAfterChecks{Context: context.Background()}
+	got, err := Between(ctx, set, start, start.Add(time.Hour), 100, &budget)
+	if err != context.Canceled || len(got) != 0 || budget <= 0 {
+		t.Fatalf("inner cancellation: %v budget=%d", err, budget)
 	}
 }
