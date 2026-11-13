@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Apply remote Calendar read budgets only to overlapping non-recurring events and recurring candidates, so unrelated history does not block current reads; allow Calendar read grants to be registered.
+
+- Add a bounded Calendar read API foundation for the remote helper, with a separate Calendar read grant, strict query limits and one shared recurrence-work budget across all selected events. The routes are not yet mounted by the helper or used by the desktop; remote Calendar remains unavailable until lifecycle and routing integration is complete.
+
 ## Postilaatikko 2026.11.12.1
 
 - The Send Later helper accepts remote HTTPS deployments: non-loopback `--listen` now requires at least one `--allowed-host` naming the exact Host values the listener serves, and the DNS-rebinding Host guard honors them (port-stripped, case-insensitive, no wildcards); loopback-only validation is unchanged, and the installed launchd agent carries the allowed hosts.
