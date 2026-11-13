@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -17,6 +18,22 @@ import (
 //
 // Returns instances sorted by InstanceStartUnix ASC.
 func ExpandInRange(ev Event, overrides []EventOverride, from, to time.Time) ([]EventInstance, error) {
+	return expandInRange(context.Background(), ev, overrides, from, to, 0, nil)
+}
+
+// ExpandInRangeBounded caps returned instances and iterator work for authenticated
+// remote reads. Exceeding a bound returns an error, never a misleading partial list.
+func ExpandInRangeBounded(ctx context.Context, ev Event, overrides []EventOverride, from, to time.Time, maxInstances, maxIterations int) ([]EventInstance, error) {
+	if ctx == nil || maxInstances < 1 || maxIterations < 1 {
+		return nil, fmt.Errorf("bounded recurrence requires context and positive limits")
+	}
+	return expandInRange(ctx, ev, overrides, from, to, maxInstances, &maxIterations)
+}
+func expandInRange(ctx context.Context, ev Event, overrides []EventOverride, from, to time.Time, maxInstances int, remainingIterations *int) ([]EventInstance, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	if from.After(to) {
 		return nil, nil
 	}
@@ -74,7 +91,35 @@ func ExpandInRange(ev Event, overrides []EventOverride, from, to time.Time) ([]E
 		return nil, fmt.Errorf("rrule_expand: build recurrence set: %w", err)
 	}
 
-	occurrences := set.Between(from, to, true)
+	if set == nil {
+		return nil, fmt.Errorf("rrule_expand: missing recurrence set")
+	}
+	var occurrences []time.Time
+	if remainingIterations == nil {
+		occurrences = set.Between(from, to, true)
+	} else {
+		next := set.Iterator()
+		for {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			if *remainingIterations <= 0 {
+				return nil, fmt.Errorf("recurrence expansion work limit exceeded")
+			}
+			*remainingIterations--
+			occurrence, ok := next()
+			if !ok || occurrence.After(to) {
+				break
+			}
+			if occurrence.Before(from) {
+				continue
+			}
+			if len(occurrences) >= maxInstances {
+				return nil, fmt.Errorf("recurrence instance limit exceeded")
+			}
+			occurrences = append(occurrences, occurrence)
+		}
+	}
 
 	// Index overrides by their RECURRENCE-ID for O(1) lookup. Multiple
 	// overrides at the same instant shouldn't happen; if they do, the last

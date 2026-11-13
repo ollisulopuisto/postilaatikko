@@ -485,6 +485,11 @@ README review follow-up: qualify checksum instructions because tagged releases d
 | ID | Effort | Task | Owner | Status |
 | --- | --- | --- | --- | --- |
 | EXTENSION-HOST-ACCESS-001 | Medium | Extract host-independent extension-scoped Auth and secret-store adapters for remote Contacts and Calendar runtimes. | Instinct / `agent/EXTENSION-HOST-ACCESS-001` / `/tmp/pl-extension-host` | Review; extracted scoped Auth/Secrets and CardDAV read-only host adapter, wired desktop delegates. New adapter and existing broker tests pass, focused app tests pass with test-only CGO-off platform overlay; no native keychain/OAuth/two-machine validation. No HTTP secret-export surface or automatic consent. |
+## Remote Calendar parity (2026-11-13)
+
+| ID | Effort | Task | Owner | Status |
+| --- | --- | --- | --- | --- |
+| REMOTE-CALENDAR-001 | Large | Add helper-owned Calendar service operations with separate read/write/manage capabilities, typed desktop routing and lifecycle; preserve no-local-mailbox startup. | Instinct / `agent/REMOTE-CALENDAR-001` / `/tmp/pl-remote-calendar` | In review; PR #249, implementation `a85d07b0`, shared query-work budget `340a3b92`. Bounded typed read contract and recurrence/store budget foundation only. Depends on shared host access PR #248 and Contacts-owned headless Core adapter for production mounting/lifecycle. Existing remote gate remains closed; writes/manage/consent/notifications remain follow-up. New read/recurrence tests and full v1/Calendar package suites pass; native provider/consent/alarm/two-machine acceptance not run. |
 
 ## Remote startup guide correction (2026-11-13)
 
