@@ -106,9 +106,16 @@ func TestRemotePendingQueueWithoutMailboxDatabase(t *testing.T) {
 		t.Fatalf("submits after uncertain retry=%d", submits)
 	}
 	receiptSent = true
-	if _, err := a.ListPendingSends(); err != nil {
-		t.Fatal(err)
-	}
+	// A receipt arrives while idle, with no ListPendingSends or Queue call.
+	ctx, cancel := context.WithCancel(context.Background())
+	runPendingReceiptLoop(ctx, time.Millisecond, func(ctx context.Context) {
+		store, err := a.remotePendingStore()
+		if err != nil {
+			t.Fatal(err)
+		}
+		a.reconcileRemotePendingOutcomesContext(ctx, store)
+		cancel()
+	})
 	store, err := a.remotePendingStore()
 	if err != nil {
 		t.Fatal(err)
@@ -196,5 +203,56 @@ func TestRemotePendingDefinitiveRejectionReleasesDraft(t *testing.T) {
 				t.Fatal("definitive rejection unnecessarily queried unavailable receipt")
 			}
 		})
+	}
+}
+
+func TestIdleReceiptLoopRepeatsAndDrainsOnCancel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	calls := make(chan struct{}, 10)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		runPendingReceiptLoop(ctx, time.Millisecond, func(ctx context.Context) { calls <- struct{}{} })
+	}()
+	for i := 0; i < 2; i++ {
+		select {
+		case <-calls:
+		case <-time.After(time.Second):
+			t.Fatal("idle loop failed to reconcile")
+		}
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("receipt worker failed to drain")
+	}
+}
+
+func TestReceiptReconcilerLifecycleStartsOnceAndStopsBeforeStoreClose(t *testing.T) {
+	db, err := database.Open(filepath.Join(t.TempDir(), "device.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := &App{remoteServiceMode: true, deviceDB: db}
+	a.startPendingReceiptReconciler(context.Background())
+	first := a.pendingReceiptDone
+	a.startPendingReceiptReconciler(context.Background())
+	if first != a.pendingReceiptDone {
+		t.Fatal("duplicate receipt workers")
+	}
+	a.stopPendingReceiptReconciler()
+	a.stopPendingReceiptReconciler()
+	select {
+	case <-first:
+	default:
+		t.Fatal("worker not drained")
+	}
+	a.startPendingReceiptReconciler(context.Background())
+	if first != a.pendingReceiptDone {
+		t.Fatal("worker restarted after shutdown")
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
 	}
 }
