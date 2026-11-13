@@ -766,10 +766,12 @@
         // Send now/Undo controls. Never restart the countdown after failure.
         try {
           const persisted = await ListPendingSends() as PendingSendItem[]
-          if (persisted.some(item => item.id === ps.id)) {
+          const found = persisted.some(item => item.id === ps.id)
+          if (!found) pendingRemove(ps.id)
+          if (found) {
             ps.manualRecovery = true
             ps.dispatching = false
-          } else pendingRemove(ps.id)
+          }
         } catch {
           // Unknown durable state is not permission to send again.
           pendingRemove(ps.id)
@@ -2807,6 +2809,7 @@
     dispatchAt={pendingSends[0].dispatchAt}
     now={pendingNow}
     dispatching={!!pendingSends[0].dispatching}
+    manualRecovery={!!pendingSends[0].manualRecovery}
     onSendNow={() => void pendingDispatch(pendingSends[0])}
     onUndo={() => void pendingCancel(pendingSends[0])}
   />

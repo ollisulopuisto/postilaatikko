@@ -1,9 +1,10 @@
 <script lang="ts">
   import Icon from '@iconify/svelte'
   import { _ } from '../../i18n'
-  let { dispatchAt, now, dispatching = false, onSendNow, onUndo }: {
+  let { dispatchAt, now, dispatching = false, manualRecovery = false, onSendNow, onUndo }: {
     dispatchAt: string
     now: number
+    manualRecovery?: boolean
     dispatching?: boolean
     onSendNow: () => void
     onUndo: () => void
@@ -14,7 +15,7 @@
 
 <div data-pending-send-toast class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 grid w-max max-w-[calc(100vw-2rem)] grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-2 overflow-hidden rounded-lg border border-border bg-popover px-4 py-3 shadow-lg">
   <Icon icon="mdi:send-clock-outline" class="size-4 shrink-0 text-muted-foreground" />
-  <span class="min-w-0 text-sm" role="status" aria-live="polite" aria-atomic="true">{dispatching ? $_('pendingSend.sending') : $_('pendingSend.queued')}</span>
+  <span class="min-w-0 text-sm" role="status" aria-live="polite" aria-atomic="true">{dispatching ? $_('pendingSend.sending') : manualRecovery ? $_('pendingSend.recoveryRequired') : $_('pendingSend.queued')}</span>
   <button
     type="button"
     class="shrink-0 rounded px-2 py-1 text-sm font-medium hover:bg-muted disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
