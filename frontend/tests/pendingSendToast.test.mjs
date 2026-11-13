@@ -97,3 +97,12 @@ test('verified pending claim failure keeps explicit controls without a countdown
   assert.equal(removes,0);assert.equal(item.manualRecovery,true);assert.equal(item.dispatching,false)
   assert.match(app,/!ps.manualRecovery && !ps.dispatching/)
 })
+
+test('manual recovery has a persistent localized action-needed status', async () => {
+  assert.match(app,/manualRecovery=\{!!pendingSends\[0\].manualRecovery\}/)
+  assert.match(toast,/manualRecovery \? \$_\('pendingSend.recoveryRequired'\)/)
+  for(const code of ['en','fi']){
+    const locale=JSON.parse(await read(`../src/lib/i18n/locales/${code}.json`))
+    assert.ok(locale.pendingSend.recoveryRequired)
+  }
+})
