@@ -37,6 +37,8 @@ Build one always-on service/core that owns mailbox change detection, persisted c
 
 The first deployment is user-operated: normally localhost, with optional self-hosting on the user's Mac Studio or VPS. Postilaatikko Cloud is deferred and may never be built. The service host is trusted with account authorization and, for scheduled delivery, prepared message content; do not describe host-readable data as end-to-end encrypted. Specify device authentication, credential/key storage, revocation, retention, backup, delivery ambiguity and recovery before remote access. Avoid independent desktop/service sync owners or duplicated filter/move logic; define a single service lifecycle and database ownership before moving operations behind the API. The background service has an independent OS-managed lifecycle: quitting the desktop must not stop it, so it can keep sync, cross-account filters, and scheduled delivery running with a headless footprint.
 
+Private-key custody for S/MIME and PGP in remote mode (decided 2026-11-13): keys stay on the user's device by default; helper-held keys are an explicit per-account opt-in that shows a clear security warning first and is never a silent migration. The opt-in is a later slice behind the device-local work. See [the remote crypto parity design](docs/plans/2026-11-13-remote-crypto-parity.md).
+
 For Gmail, `users.watch` notifications require a Cloud Pub/Sub receiver and periodic watch renewal; maintain a bounded polling fallback. An in-app send should add the accepted message to its conversation immediately rather than waiting for the hosted sync cycle. See [the always-on service plan](docs/plans/2026-11-06-always-on-mail-service.md).
 
 ### Compose as a bubble (2026-11-09)

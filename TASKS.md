@@ -514,3 +514,9 @@ README review follow-up: qualify checksum instructions because tagged releases d
 | CALENDAR-RECURRENCE-CONTEXT-001 | Medium | Bound recurrence generation inside iterator loops, including impossible date/time filters, without leaking timeout workers. | Instinct / `agent/CALENDAR-RECURRENCE-CONTEXT-001` / `/tmp/pl-calendar-recurrence` | Merged; PR #252, main `f0cfc604` after head `668f9eb0` had green CI and0 open Devin threads. Isolated adapter over attributed existing recurrence engine, bounded store expansion integration. Tests `75549e10`/`fd7ad225`, implementation `f17c589b`/`b8dc3f85`; broad recurrence/DST parity tests and inner-loop work/cancellation checks pass. No remote occurrence route enabled yet. |
 
 | REMOTE-CALENDAR-OCCURRENCES-001 | Medium | Route bounded helper occurrence queries with desktop-safe rendering. | Instinct / `agent/REMOTE-CALENDAR-OCCURRENCES-001` / `/tmp/pl-calendar-occurrences` | Integrated into PR #251 after #252 merged as `f0cfc604`; helper and desktop red-first routing/HTML/override tests pass. |
+
+## Remote-mode parity (2026-11-13)
+
+| ID | Effort | Task | Owner | Status |
+| --- | --- | --- | --- | --- |
+| REMOTE-CRYPTO-DESIGN-001 | Large | Define S/MIME/PGP parity custody and retry boundaries before removing remote crypto gates. | Instinct / `agent/REMOTE-CRYPTO-DESIGN-001` / `/tmp/pl-remote-crypto` | Design for review; docs-only verification: `git diff --check` passed; implementation `71525a3c`; no behavior change. Proposed device-local crypto avoids automatic private-key export. Custody decided 2026-11-13: device-local by default, helper-held keys only as an explicit opt-in with a security warning (later slice). Implementation and native acceptance remain open. See `docs/plans/2026-11-13-remote-crypto-parity.md`. |
