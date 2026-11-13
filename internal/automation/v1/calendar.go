@@ -12,6 +12,9 @@ import (
 	"time"
 )
 
+// ErrCalendarOccurrenceUnavailable keeps the not-yet-safe evaluator off the API.
+var ErrCalendarOccurrenceUnavailable = errors.New("remote occurrence queries require context-aware recurrence support")
+
 // CalendarRangeRequest asks for bounded occurrences, not an unbounded export.
 type CalendarRangeRequest struct {
 	CalendarIDs []string `json:"calendarIds"`
@@ -60,6 +63,10 @@ func MountCalendarReadRoutes(mux *http.ServeMux, ops CalendarReadOperations, req
 			defer cancel()
 			data, err := operation(ctx, r)
 			if err != nil {
+				if errors.Is(err, ErrCalendarOccurrenceUnavailable) {
+					writeHeaderError(w, r, http.StatusNotImplemented, CodeInvalidRequest, ErrCalendarOccurrenceUnavailable.Error(), false)
+					return
+				}
 				var invalid *calendarRequestError
 				if errors.As(err, &invalid) {
 					writeHeaderError(w, r, 400, CodeInvalidRequest, invalid.Error(), false)

@@ -82,6 +82,7 @@ type SyncRuntime struct {
 	actionReceiptRecoveryOnce   sync.Once
 	actionReceiptRecoveryErr    error
 	contacts                    *contactsRuntime
+	calendar                    *calendarReadRuntime
 	oauth                       *oauth2.Manager
 	started                     bool
 	maintenanceOnce             sync.Once
@@ -167,6 +168,7 @@ func OpenSyncRuntime(dataDirectory string, credentials IMAPConfigSource) (*SyncR
 		return closeOnError(fmt.Errorf("open contacts runtime: %w", contactsErr))
 	}
 	runtime.contacts = contacts
+	runtime.calendar = newCalendarReadRuntime(db, dataDirectory)
 	pool := imap.NewPool(imap.DefaultPoolConfig(), func(accountID string) (*imap.ClientConfig, error) {
 		runtime.ctxMu.RLock()
 		ctx := runtime.ctx
@@ -890,7 +892,8 @@ func (r *SyncRuntime) Close() error {
 		if r.contacts != nil {
 			contactsErr = r.contacts.Close()
 		}
-		closeErr = errors.Join(r.db.Close(), r.schemaOwner.Release(), contactsErr)
+		calendarErr := r.calendar.Close()
+		closeErr = errors.Join(r.db.Close(), r.schemaOwner.Release(), contactsErr, calendarErr)
 	})
 	return closeErr
 }
