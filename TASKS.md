@@ -496,3 +496,9 @@ README review follow-up: qualify checksum instructions because tagged releases d
 | ID | Effort | Task | Owner | Status |
 | --- | --- | --- | --- | --- |
 | REMOTE-STARTUP-DOCS-001 | Easy | Replace stale remote-only startup limitation with current device/helper ownership and remaining parity limits. | Instinct / `agent/REMOTE-STARTUP-DOCS-001` / `/tmp/pl-remote-docs` | Review; PR #246, implementation `94c16db0`. Source-checked Preflight/startRemoteWorkspace and remote integration guards; `git diff --check` passed. No tests run (documentation only), no native two-machine runtime verified. |
+
+## Interruptible remote Calendar recurrence (2026-11-13)
+
+| ID | Effort | Task | Owner | Status |
+| --- | --- | --- | --- | --- |
+| CALENDAR-RECURRENCE-CONTEXT-001 | Medium | Bound recurrence generation inside iterator loops, including impossible date/time filters, without leaking timeout workers. | Instinct / `agent/CALENDAR-RECURRENCE-CONTEXT-001` / `/tmp/pl-calendar-recurrence` | In review; PR #252. Isolated adapter over attributed existing recurrence engine, bounded store expansion integration. Tests `75549e10`/`fd7ad225`, implementation `f17c589b`/`b8dc3f85`; broad recurrence/DST parity tests and inner-loop work/cancellation checks pass. No remote occurrence route enabled yet. |

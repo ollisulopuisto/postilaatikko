@@ -74,7 +74,7 @@ func (s *Store) RemoteEventsInRange(ctx context.Context, calendarIDs []string, f
 	// rows into memory while this transaction is open, then expand without SQL.
 	out := []EventInstance{}
 	responseBudget := int64(0)
-	remainingIterations := 100000
+	remainingIterations := 1000000
 	for _, id := range ids {
 		if err := ctx.Err(); err != nil {
 			return nil, err
