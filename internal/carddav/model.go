@@ -28,6 +28,12 @@ type Source struct {
 	LastErrorAt  *time.Time `json:"last_error_at,omitempty"`
 	CreatedAt    time.Time  `json:"created_at"`
 
+	// HasTokens reports whether dedicated OAuth tokens exist for this source.
+	// Transient: populated only by the helper's remote contacts surface so a
+	// remote desktop can tell an authorized source from a migratable legacy
+	// one; never read from or written to the database.
+	HasTokens bool `json:"has_tokens,omitempty"`
+
 	// Addressbooks associated with this source (populated by GetSourceWithAddressbooks)
 	Addressbooks []*Addressbook `json:"addressbooks,omitempty"`
 }

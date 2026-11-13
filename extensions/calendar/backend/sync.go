@@ -42,7 +42,11 @@ type Syncer struct {
 	busy   map[string]bool
 	busyMu sync.Mutex
 
-	unsubs []coreapi.Unsubscribe
+	unsubs             []coreapi.Unsubscribe
+	subscribeOnceGuard sync.Once
+	workers            sync.WaitGroup
+	started            bool
+	stopped            bool
 }
 
 // NewSyncer constructs a Syncer. Caller must call Start to begin the
@@ -71,27 +75,61 @@ func NewSyncer(store *Store, secrets coreapi.Secrets, events coreapi.EventBus, s
 // extension bridge) can shut down all goroutines together if it ever
 // implements clean teardown. (Currently the lifecycle pattern is "leave
 // them running until process exit," matching contacts.)
-func (s *Syncer) Start() context.CancelFunc {
-	s.mu.Lock()
-	if s.parentCtx == nil {
-		s.parentCtx, s.parentCancel = context.WithCancel(context.Background())
-	}
-	s.mu.Unlock()
+func (s *Syncer) Start() context.CancelFunc { return s.StartContext(context.Background()) }
 
+// StartContext ties all Calendar sync workers to the helper or desktop lifetime.
+func (s *Syncer) StartContext(parent context.Context) context.CancelFunc {
+	s.mu.Lock()
+	if s.started || s.stopped {
+		s.mu.Unlock()
+		return s.Stop
+	}
+	s.started = true
+	s.workers.Add(1)
+	defer s.workers.Done()
+	s.parentCtx, s.parentCancel = context.WithCancel(parent)
+	s.mu.Unlock()
 	sources, err := s.store.ListSources()
 	if err == nil {
 		for _, src := range sources {
 			s.startSourceLoop(src.ID, time.Duration(src.SyncIntervalMin)*time.Minute)
 		}
 	}
-
 	s.subscribeOnce()
+	s.runWorker(func(ctx context.Context) { _ = s.SyncAllSources(ctx) })
+	return s.Stop
+}
 
-	// Fire an initial sync of all sources in the background so newly-
-	// opened calendars populate without waiting for the first tick.
-	go func() { _ = s.SyncAllSources(s.parentCtx) }()
-
-	return s.parentCancel
+// Stop cancels provider requests and waits before the owner closes the store.
+func (s *Syncer) Stop() {
+	s.mu.Lock()
+	s.stopped = true
+	if s.parentCancel != nil {
+		s.parentCancel()
+	}
+	for _, cancel := range s.sourceCancels {
+		cancel()
+	}
+	unsubs := s.unsubs
+	s.unsubs = nil
+	s.mu.Unlock()
+	for _, unsub := range unsubs {
+		if unsub != nil {
+			unsub()
+		}
+	}
+	s.workers.Wait()
+}
+func (s *Syncer) runWorker(work func(context.Context)) {
+	s.mu.Lock()
+	if s.stopped || s.parentCtx == nil {
+		s.mu.Unlock()
+		return
+	}
+	ctx := s.parentCtx
+	s.workers.Add(1)
+	s.mu.Unlock()
+	go func() { defer s.workers.Done(); work(ctx) }()
 }
 
 // AddSource starts a sync goroutine for a newly added source. Called by
@@ -101,11 +139,11 @@ func (s *Syncer) AddSource(sourceID string, intervalMin int) {
 		intervalMin = 15
 	}
 	s.startSourceLoop(sourceID, time.Duration(intervalMin)*time.Minute)
-	go func() {
-		ctx, cancel := context.WithTimeout(s.parentCtx, 2*time.Minute)
+	s.runWorker(func(parent context.Context) {
+		ctx, cancel := context.WithTimeout(parent, 2*time.Minute)
 		defer cancel()
 		_ = s.SyncSource(ctx, sourceID)
-	}()
+	})
 }
 
 // RemoveSource cancels the goroutine for a deleted source. Called by the
@@ -314,6 +352,10 @@ func (s *Syncer) startSourceLoop(sourceID string, interval time.Duration) {
 	}
 
 	s.mu.Lock()
+	if s.stopped || s.parentCtx == nil {
+		s.mu.Unlock()
+		return
+	}
 	if prev, exists := s.sourceCancels[sourceID]; exists {
 		prev()
 		delete(s.sourceCancels, sourceID)
@@ -322,7 +364,7 @@ func (s *Syncer) startSourceLoop(sourceID string, interval time.Duration) {
 	s.sourceCancels[sourceID] = cancel
 	s.mu.Unlock()
 
-	go func() {
+	s.runWorker(func(context.Context) {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
@@ -335,25 +377,40 @@ func (s *Syncer) startSourceLoop(sourceID string, interval time.Duration) {
 				syncCancel()
 			}
 		}
-	}()
+	})
 }
 
 // subscribeOnce wires the system event handlers exactly once. Idempotent.
-var subscribeOnceGuard sync.Once
 
 func (s *Syncer) subscribeOnce() {
-	subscribeOnceGuard.Do(func() {
+	s.subscribeOnceGuard.Do(func() {
 		wakeUnsub, _ := s.events.Subscribe("system:wake", func(_ any) {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-			defer cancel()
-			_ = s.SyncAllSources(ctx)
+			s.runWorker(func(parent context.Context) {
+				ctx, cancel := context.WithTimeout(parent, 5*time.Minute)
+				defer cancel()
+				_ = s.SyncAllSources(ctx)
+			})
 		})
 		netUnsub, _ := s.events.Subscribe("system:network-online", func(_ any) {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-			defer cancel()
-			_ = s.SyncAllSources(ctx)
+			s.runWorker(func(parent context.Context) {
+				ctx, cancel := context.WithTimeout(parent, 5*time.Minute)
+				defer cancel()
+				_ = s.SyncAllSources(ctx)
+			})
 		})
+		s.mu.Lock()
+		if s.stopped {
+			s.mu.Unlock()
+			if wakeUnsub != nil {
+				wakeUnsub()
+			}
+			if netUnsub != nil {
+				netUnsub()
+			}
+			return
+		}
 		s.unsubs = append(s.unsubs, wakeUnsub, netUnsub)
+		s.mu.Unlock()
 	})
 }
 

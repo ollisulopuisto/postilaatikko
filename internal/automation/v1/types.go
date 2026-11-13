@@ -36,6 +36,20 @@ const (
 	CapabilityScheduleRead Capability = "schedule.read"
 	// CapabilityScheduleWrite allows scheduling, cancelling and rescheduling delivery.
 	CapabilityScheduleWrite Capability = "schedule.write"
+	// CapabilityContactsRead allows reading synced contacts, sources, addressbooks and contact photos.
+	CapabilityContactsRead Capability = "contacts.read"
+	// CapabilityContactsWrite allows contact and addressbook mutations, including triggering sync.
+	CapabilityContactsWrite Capability = "contacts.write"
+	// CapabilityContactsManage allows contact source administration: discovery, source
+	// configuration, credential storage and OAuth consent persistence.
+	CapabilityContactsManage Capability = "contacts.manage"
+	// CapabilityCalendarRead allows reading calendars and events.
+	CapabilityCalendarRead Capability = "calendar.read"
+	// CapabilityCalendarWrite allows creating, updating and deleting calendar events.
+	// It does not permit calendar source secrets or OAuth consent.
+	CapabilityCalendarWrite Capability = "calendar.write"
+	// CapabilityCalendarManage allows calendar source, credential and consent administration.
+	CapabilityCalendarManage Capability = "calendar.manage"
 )
 
 // Known reports whether c is a capability defined by this API version.
@@ -43,7 +57,9 @@ func (c Capability) Known() bool {
 	switch c {
 	case CapabilityMailRead, CapabilityMailBodyFetch, CapabilityAttachmentRead,
 		CapabilityDraftRead, CapabilityDraftWrite, CapabilityMailWrite, CapabilityAccountManage,
-		CapabilityMailSend, CapabilityScheduleRead, CapabilityScheduleWrite:
+		CapabilityMailSend, CapabilityScheduleRead, CapabilityScheduleWrite,
+		CapabilityContactsRead, CapabilityContactsWrite, CapabilityContactsManage,
+		CapabilityCalendarRead, CapabilityCalendarWrite, CapabilityCalendarManage:
 		return true
 	default:
 		return false

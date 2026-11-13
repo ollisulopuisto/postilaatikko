@@ -26,7 +26,7 @@ postilaatikko-helper api-client create \
   --capability mail.body.fetch
 ```
 
-The command prints a one-time bearer token and a client ID. Transfer the token to that desktop through a private channel. It is stored in the desktop's OS keychain; do not put it in shell history, source control, logs, or a URL. Add only capabilities the device needs when creating the grant. The current helper CLI creates a replacement grant to change capabilities.
+The command prints a one-time bearer token and a client ID. Transfer the token to that desktop through a private channel. It is stored in the desktop's OS keychain; do not put it in shell history, source control, logs, or a URL. Add only capabilities the device needs when creating the grant. The current helper CLI creates a replacement grant to change capabilities. A desktop that uses Contacts over the helper additionally needs `contacts.read` and `contacts.write`, plus `contacts.manage` if it may add or reauthorize contact sources. Grants created before these capabilities existed keep working for mail; contact calls fail with `capability_denied` naming the missing capability until the grant is recreated with them. Connecting the mailbox service itself is unchanged.
 
 ## Connect and revoke
 
