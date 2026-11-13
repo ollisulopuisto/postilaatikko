@@ -36,6 +36,8 @@ const (
 	CapabilityScheduleRead Capability = "schedule.read"
 	// CapabilityScheduleWrite allows scheduling, cancelling and rescheduling delivery.
 	CapabilityScheduleWrite Capability = "schedule.write"
+	// CapabilityCalendarRead allows reading calendars and events.
+	CapabilityCalendarRead Capability = "calendar.read"
 )
 
 // Known reports whether c is a capability defined by this API version.
@@ -43,7 +45,7 @@ func (c Capability) Known() bool {
 	switch c {
 	case CapabilityMailRead, CapabilityMailBodyFetch, CapabilityAttachmentRead,
 		CapabilityDraftRead, CapabilityDraftWrite, CapabilityMailWrite, CapabilityAccountManage,
-		CapabilityMailSend, CapabilityScheduleRead, CapabilityScheduleWrite:
+		CapabilityMailSend, CapabilityScheduleRead, CapabilityScheduleWrite, CapabilityCalendarRead:
 		return true
 	default:
 		return false
