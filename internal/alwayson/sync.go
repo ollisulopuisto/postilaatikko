@@ -26,6 +26,7 @@ import (
 	"github.com/hkdb/aerion/internal/mailmove"
 	"github.com/hkdb/aerion/internal/mailservice"
 	"github.com/hkdb/aerion/internal/message"
+	"github.com/hkdb/aerion/internal/oauth2"
 	"github.com/hkdb/aerion/internal/replylater"
 	"github.com/hkdb/aerion/internal/scheduledsend"
 	mailSync "github.com/hkdb/aerion/internal/sync"
@@ -80,6 +81,8 @@ type SyncRuntime struct {
 	triageMutationMu            sync.Mutex
 	actionReceiptRecoveryOnce   sync.Once
 	actionReceiptRecoveryErr    error
+	contacts                    *contactsRuntime
+	oauth                       *oauth2.Manager
 	started                     bool
 	maintenanceOnce             sync.Once
 	filterStopOnce              sync.Once
@@ -154,6 +157,16 @@ func OpenSyncRuntime(dataDirectory string, credentials IMAPConfigSource) (*SyncR
 	replyLater := replylater.NewStore(db)
 	triageStore := triage.NewStore(db)
 	runtime := &SyncRuntime{db: db, schemaOwner: schemaOwner, accounts: accounts, messages: messages, drafts: drafts, attachments: attachments, virtualFolders: virtualFolders, replyLater: replyLater, triage: triageStore, replyContent: replycontent.NewService(replycontent.ServiceOptions{}), ctx: context.Background(), syncLockPath: filepath.Join(dataDirectory, "mail-sync.owner.lock")}
+	oauthManager := oauth2.NewManager()
+	runtime.oauth = oauthManager
+	contacts, contactsErr := newContactsRuntime(db, dataDirectory, accounts, oauthManager)
+	if contactsErr != nil {
+		if schemaOwner != nil {
+			_ = schemaOwner.Release()
+		}
+		return closeOnError(fmt.Errorf("open contacts runtime: %w", contactsErr))
+	}
+	runtime.contacts = contacts
 	pool := imap.NewPool(imap.DefaultPoolConfig(), func(accountID string) (*imap.ClientConfig, error) {
 		runtime.ctxMu.RLock()
 		ctx := runtime.ctx
@@ -772,6 +785,9 @@ func (r *SyncRuntime) Start(ctx context.Context) {
 		}
 		go r.runVirtualFolderCacheMaintenance(workerContext, interval)
 		go r.runActionUndoMaintenance(workerContext)
+		if r.contacts != nil && r.contacts.scheduler != nil {
+			r.contacts.scheduler.Start(workerContext)
+		}
 	})
 }
 
@@ -870,7 +886,11 @@ func (r *SyncRuntime) Close() error {
 			r.stopFilterWorker()
 		}
 		r.pool.CloseAll()
-		closeErr = errors.Join(r.db.Close(), r.schemaOwner.Release())
+		var contactsErr error
+		if r.contacts != nil {
+			contactsErr = r.contacts.Close()
+		}
+		closeErr = errors.Join(r.db.Close(), r.schemaOwner.Release(), contactsErr)
 	})
 	return closeErr
 }

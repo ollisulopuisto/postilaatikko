@@ -49,13 +49,49 @@ cannot elevate its grant by naming a capability in JSON.
 | `mail.send` | Submit a draft for immediate delivery. |
 | `schedule.read` | Read Send Later queue status and delivery results. |
 | `schedule.write` | Schedule, cancel, or reschedule a delivery. |
+| `contacts.read` | Read synced contacts, contact sources, addressbooks, contact photos, and legacy recipient contacts. |
+| `contacts.write` | Mutate contacts and addressbooks, flip per-source writable flags, and trigger contact syncs. |
+| `contacts.manage` | Administer contact sources: server discovery and connection tests, source create/update/delete, OAuth authorization persistence, and token storage. |
+| `calendar.read` | Reserved for the Calendar runtime: read calendars and events. |
+| `calendar.write` | Reserved for the Calendar runtime: create, update, and delete calendar events. Never permits source secrets or OAuth consent. |
+| `calendar.manage` | Reserved for the Calendar runtime: calendar source, credential, and consent administration. |
 
 Read and write permissions are separate. `mail.read` never implies
 `mail.body.fetch` or `mail.attachment.read`; `draft.write` never implies
 `mail.send`; `mail.write` never implies `account.manage`. Send Later remains a
 distinct capability from immediate sending.
 Queue membership for Reply Later is an explicit personal triage operation and
-does not imply provider replied/unreplied state.
+does not imply provider replied/unreplied state. Contact data is disclosed
+only under `contacts.*` capabilities: `mail.read`/`mail.write` never expose
+contacts.
+
+## Remote contacts surface
+
+The contacts routes let a remote desktop reach the helper's contact stores
+with the same semantics as local mode.
+
+Reads (`contacts.read`): `POST /v1/contacts/search`, `/v1/contacts/legacy/list`,
+`/v1/contacts/legacy/get`, `/v1/contacts/photos`, `/v1/contacts/account-photos`,
+`/v1/contacts/browse`, `/v1/contacts/detail`, `/v1/contacts/addressbooks`,
+`/v1/contacts/source-addressbooks`, `/v1/contacts/linked-accounts`;
+`GET /v1/contacts/sources`, `/v1/contacts/stats`.
+
+Mutations (`contacts.write`): `POST /v1/contacts/mutations` with an
+`operation` of `add_legacy`, `delete_legacy`, `create`, `update`, `delete`,
+`set_writable`, `set_addressbook_enabled`, `sync`, `sync_all`, or
+`force_sync`. Source administration (`contacts.manage`):
+`POST /v1/contacts/sources/discover`, `/v1/contacts/sources/test`,
+`/v1/contacts/sources/discover-oauth`, `/v1/contacts/sources/mutations`
+(`create`/`update`/`delete`), `/v1/contacts/sources/authorization`, and
+`/v1/contacts/sources/tokens`.
+
+All mutation routes require an `Idempotency-Key` header and follow the rules
+above: a replayed key returns the stored outcome, including a stored failure,
+without re-executing. OAuth consent flows themselves run on the interactive
+desktop; the helper only receives their verified outcome (provider, email,
+tokens) through `contacts.manage` routes and applies the same source-admin
+semantics as the desktop. Interactive incremental consent (write-access
+grants) is desktop-local for now.
 
 ## Identity and scope
 

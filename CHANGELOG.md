@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Share extension-scoped Auth and secret-store adapters between desktop and future headless hosts. Headless interactive consent fails explicitly without a host callback; CardDAV host-secret reads reject malformed source identities. This does not enable remote Contacts or Calendar by itself.
+- Remote mailbox service mode gains Contacts and CardDAV: a desktop connected to a mailbox helper gets the Contacts tab and can browse, search and page contacts, view photos, add or reauthorize Google/Microsoft contact sources (consent runs on the desktop, tokens are stored on the helper), manage CardDAV sources and sync them on the helper. The device grant must include `contacts.read` and `contacts.write`, plus `contacts.manage` for adding, renaming, removing or reauthorizing sources; grants created before these capabilities existed keep working for mail and need to be recreated to add contacts. Enabling write access on a source still requires local mode, and contact-change event subscriptions and MCP contact tools are not routed remotely yet.
+- Remote contact mutations keep at most 64 unacknowledged requests awaiting the helper's receipt (keyed by a fixed-size digest, so photos are not retained while a send's outcome is unknown). Once earlier changes are acknowledged the retry key is dropped; while 64 remain unanswered, further contact changes are refused with a clear error instead of risking a duplicated create on retry.
 - Avoid a recurrence mask panic for out-of-period ordinal weekdays in bounded Calendar reads, including missing fifth weekdays.
 
 - Add an isolated recurrence evaluator with context/work checks inside generation loops and pre-construction option limits; bounded Calendar store expansion uses it without changing the existing local unbounded API. Remote occurrence routing remains a separate integration step.

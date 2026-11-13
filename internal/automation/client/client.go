@@ -15,6 +15,8 @@ import (
 
 	"github.com/hkdb/aerion/internal/account"
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
+	"github.com/hkdb/aerion/internal/contact"
+	coreapi "github.com/hkdb/aerion/internal/core/api/v1"
 	"github.com/hkdb/aerion/internal/mailfilter"
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/operations"
@@ -866,4 +868,194 @@ func (c *Client) undo(ctx context.Context, path, idempotencyKey string) (*v1.Act
 		return nil, err
 	}
 	return &resp.Data, nil
+}
+
+// ============================================================================
+// Remote contacts surface (contacts.read / contacts.write / contacts.manage)
+// ============================================================================
+
+func (c *Client) contactsGet(ctx context.Context, path string, out any) error {
+	bytes, err := c.doRequest(ctx, http.MethodGet, path, nil, "")
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(bytes, out)
+}
+
+func (c *Client) contactsPost(ctx context.Context, path string, body any, idempotencyKey string, out any) error {
+	bytes, err := c.doRequest(ctx, http.MethodPost, path, body, idempotencyKey)
+	if err != nil {
+		return err
+	}
+	if out == nil {
+		return nil
+	}
+	return json.Unmarshal(bytes, out)
+}
+
+// SearchContacts searches the helper's local contact database (synced
+// sources, saved/collected addresses, vCards). Never authorizes Contacts or
+// refreshes Mail credentials.
+func (c *Client) SearchContacts(ctx context.Context, query string, limit int) ([]v1.ContactSearchResult, error) {
+	var resp v1.Response[[]v1.ContactSearchResult]
+	if err := c.contactsPost(ctx, "/v1/contacts/search", v1.ContactsSearchRequest{Query: query, Limit: limit}, "", &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// ListLegacyContacts lists legacy recipient contacts for autocomplete.
+func (c *Client) ListLegacyContacts(ctx context.Context, limit int) ([]v1.ContactSearchResult, error) {
+	var resp v1.Response[[]v1.ContactSearchResult]
+	if err := c.contactsPost(ctx, "/v1/contacts/legacy/list", v1.ContactsListLegacyRequest{Limit: limit}, "", &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// GetLegacyContact returns one legacy contact by ID (email).
+func (c *Client) GetLegacyContact(ctx context.Context, id string) (*v1.ContactSearchResult, error) {
+	var resp v1.Response[*v1.ContactSearchResult]
+	if err := c.contactsPost(ctx, "/v1/contacts/legacy/get", v1.ContactsGetLegacyRequest{ID: id}, "", &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// GetContactPhotos returns inline contact photos for the given emails.
+func (c *Client) GetContactPhotos(ctx context.Context, emails []string) ([]contact.ContactPhoto, error) {
+	var resp v1.Response[[]contact.ContactPhoto]
+	if err := c.contactsPost(ctx, "/v1/contacts/photos", v1.ContactsPhotosRequest{Emails: emails}, "", &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// GetAccountProfilePhotos returns profile photos for authenticated Google
+// mail accounts.
+func (c *Client) GetAccountProfilePhotos(ctx context.Context, emails []string) ([]contact.ContactPhoto, error) {
+	var resp v1.Response[[]contact.ContactPhoto]
+	if err := c.contactsPost(ctx, "/v1/contacts/account-photos", v1.ContactsPhotosRequest{Emails: emails}, "", &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// BrowseContacts lists contacts for the Contacts extension browse UI.
+func (c *Client) BrowseContacts(ctx context.Context, query, sourceID string, limit, offset int) ([]coreapi.Contact, error) {
+	var resp v1.Response[[]coreapi.Contact]
+	if err := c.contactsPost(ctx, "/v1/contacts/browse", v1.ContactsBrowseRequest{Query: query, SourceID: sourceID, Limit: limit, Offset: offset}, "", &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// GetContactDetail returns one unified contact by ID or email.
+func (c *Client) GetContactDetail(ctx context.Context, id string) (*coreapi.Contact, error) {
+	var resp v1.Response[*coreapi.Contact]
+	if err := c.contactsPost(ctx, "/v1/contacts/detail", v1.ContactsDetailRequest{ID: id}, "", &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// ListContactSources returns the configured contact sources.
+func (c *Client) ListContactSources(ctx context.Context) ([]v1.ContactsSourceInfo, error) {
+	var resp v1.Response[[]v1.ContactsSourceInfo]
+	if err := c.contactsGet(ctx, "/v1/contacts/sources", &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// GetContactStats returns aggregate contact source statistics.
+func (c *Client) GetContactStats(ctx context.Context) (*v1.ContactsStats, error) {
+	var resp v1.Response[*v1.ContactsStats]
+	if err := c.contactsGet(ctx, "/v1/contacts/stats", &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// ListContactAddressbooks lists addressbooks on the unified contacts surface.
+func (c *Client) ListContactAddressbooks(ctx context.Context, sourceID string) ([]v1.ContactsAddressbookInfo, error) {
+	var resp v1.Response[[]v1.ContactsAddressbookInfo]
+	if err := c.contactsPost(ctx, "/v1/contacts/addressbooks", v1.ContactsAddressbooksRequest{SourceID: sourceID}, "", &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// ListContactSourceAddressbooks lists the synced addressbooks of a CardDAV source.
+func (c *Client) ListContactSourceAddressbooks(ctx context.Context, sourceID string) ([]v1.ContactsSourceAddressbook, error) {
+	var resp v1.Response[[]v1.ContactsSourceAddressbook]
+	if err := c.contactsPost(ctx, "/v1/contacts/source-addressbooks", v1.ContactsAddressbooksRequest{SourceID: sourceID}, "", &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// ListContactLinkedAccounts lists email accounts linkable to contact sources
+// ("google" or "custom-oauth").
+func (c *Client) ListContactLinkedAccounts(ctx context.Context, kind string) ([]v1.ContactsLinkedAccount, error) {
+	var resp v1.Response[[]v1.ContactsLinkedAccount]
+	if err := c.contactsPost(ctx, "/v1/contacts/linked-accounts", v1.ContactsLinkedAccountsRequest{Kind: kind}, "", &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// MutateContact runs one idempotent contact mutation (contacts.write).
+func (c *Client) MutateContact(ctx context.Context, mutation v1.ContactsMutationRequest, idempotencyKey string) (*v1.ContactsMutationResponse, error) {
+	var resp v1.Response[*v1.ContactsMutationResponse]
+	if err := c.contactsPost(ctx, "/v1/contacts/mutations", mutation, idempotencyKey, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// DiscoverContactAddressbooks discovers addressbooks on a CardDAV server
+// (contacts.manage). With AccountID set it uses the account's OAuth token
+// (custom OIDC unified grant).
+func (c *Client) DiscoverContactAddressbooks(ctx context.Context, req v1.ContactsDiscoverRequest) ([]v1.ContactsDiscoveredAddressbook, error) {
+	var resp v1.Response[[]v1.ContactsDiscoveredAddressbook]
+	path := "/v1/contacts/sources/discover"
+	if req.AccountID != "" {
+		path = "/v1/contacts/sources/discover-oauth"
+	}
+	if err := c.contactsPost(ctx, path, req, "", &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// TestContactConnection tests a CardDAV connection (contacts.manage).
+func (c *Client) TestContactConnection(ctx context.Context, req v1.ContactsDiscoverRequest) error {
+	return c.contactsPost(ctx, "/v1/contacts/sources/test", req, "", nil)
+}
+
+// MutateContactSource creates, updates or deletes a contact source
+// (contacts.manage), idempotently.
+func (c *Client) MutateContactSource(ctx context.Context, req v1.ContactsSourceMutationRequest, idempotencyKey string) (*v1.ContactsSourceInfo, error) {
+	var resp v1.Response[*v1.ContactsSourceInfo]
+	if err := c.contactsPost(ctx, "/v1/contacts/sources/mutations", req, idempotencyKey, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// SaveContactAuthorization persists the outcome of a desktop-run OAuth
+// consent flow for a contact source (contacts.manage), idempotently.
+func (c *Client) SaveContactAuthorization(ctx context.Context, req v1.ContactsAuthorizationRequest, idempotencyKey string) (*v1.ContactsSourceInfo, error) {
+	var resp v1.Response[*v1.ContactsSourceInfo]
+	if err := c.contactsPost(ctx, "/v1/contacts/sources/authorization", req, idempotencyKey, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// StoreContactSourceTokens stores tokens for an existing contact source or
+// account client config (contacts.manage), idempotently.
+func (c *Client) StoreContactSourceTokens(ctx context.Context, req v1.ContactsSourceTokensRequest, idempotencyKey string) error {
+	return c.contactsPost(ctx, "/v1/contacts/sources/tokens", req, idempotencyKey, nil)
 }

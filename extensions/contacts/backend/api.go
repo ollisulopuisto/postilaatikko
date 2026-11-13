@@ -1027,7 +1027,18 @@ func mergeDedupeKey(c coreapi.Contact) string {
 // uses for inline images — pure frontend pick, backend processing).
 // Image processing logic lives in extensions/contacts/backend/imaging
 // because it's contacts-specific; nothing else in the codebase needs it.
+// ResizeContactPhotoImage is the store-free imaging step behind
+// ResizeContactPhoto, exported so hosts without a contacts API instance
+// (remote-mode desktop) can run it locally.
+func ResizeContactPhotoImage(b64In string) (b64Out string, mediaType string, err error) {
+	return resizeContactPhoto(b64In)
+}
+
 func (a *API) ResizeContactPhoto(b64In string) (b64Out string, mediaType string, err error) {
+	return resizeContactPhoto(b64In)
+}
+
+func resizeContactPhoto(b64In string) (b64Out string, mediaType string, err error) {
 	b64In = strings.TrimSpace(b64In)
 	if b64In == "" {
 		return "", "", fmt.Errorf("contacts.ResizeContactPhoto: empty input")

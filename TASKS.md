@@ -24,6 +24,7 @@ The user asked to keep IMAP after the app began feeling faster. Do not start Gma
 
 | Task | Effort | Scope / acceptance | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
+| REMOTE-CONTACTS-001 | Large | Remote Contacts/CardDAV parity: capability-gated contacts.read/write/manage v1 routes on the helper (legacy recipient APIs plus the 14 promoted Contacts extension methods), headless scoped extension core (stacked on EXTENSION-HOST-ACCESS-001), desktop remote routing for all contact paths, idempotent mutations. Also registers calendar.read/write/manage capabilities for the follow-on Calendar task. | Instinct / `agent/REMOTE-CONTACTS-001` / `/tmp/pl-remote-contacts/repo` | Review (PR #250) |
 | ZK-SERVER-DESIGN-001 | Large | Owner request: zero-knowledge Postilaatikko service design (multi-tenant, operator cannot read mail, hybrid-PQ transport): threat model, key hierarchy, encrypted-store architecture, search options, enrolment/revocation, GDPR/OAuth/abuse/assurance, phased plan. Docs only, no code. | Instinct / `agent/zero-knowledge-server-design` / `/tmp/pl-zk` | Review; PR #229 (docs only). CI green (Lint, CodeQL, version consistency; tests skip on docs-only). Review fixes in PR #238 (`34a48d0`): Send Later credential exposure, operator-as-publisher threat, keys/envelopes rescoped to transfer envelopes, TLS 1.3 on both listeners. Outstanding: owner decisions 1-2 and 5-9 in the doc's section 22, expert-review flags in section 23. |
 | KEYMAP-SHARED-001 | Medium | Owner-approved shared Postilaatikko/Solmu keymap, Postilaatikko side: add the modified layer (Cmd/Ctrl+F search, Cmd/Ctrl+L forward, Cmd/Ctrl+U read later, Cmd/Ctrl+I reply later, Cmd/Ctrl+E archive+read, Cmd/Ctrl+Shift+]/[ next/previous, Cmd/Ctrl+/ shortcuts help, Cmd/Ctrl+Alt+Left/Right previous/next account, Cmd/Ctrl+Alt+1-4 quick filters), move load-images to Cmd/Ctrl+Alt+L and always-load to Cmd/Ctrl+Shift+Alt+L, mark read drops Cmd/Ctrl+U; all bare Gmail-style keys kept; macOS Option physical-code fallback in the dispatcher. | Instinct / `agent/shared-keymap` / `/tmp/pl-keymap` | Draft PR; 981 frontend tests pass, eslint and svelte-check clean (2 pre-existing warnings). Native Mac modifier chords unverified. No merge. |
 | HELPER-HEALTH-BROWSER-001 | Easy | Apply browser rejection/security headers before outer helper routing, including health and errors. | Instinct / `agent/helper-health-defense` / `/tmp/pl-health` | Review; helper-route regression failed before, helper/scheduledsend Go tests rerun. No live server tested. |
@@ -479,6 +480,11 @@ README review follow-up: qualify checksum instructions because tagged releases d
 - Scope: Bilingual (fi+en) dark DMG installer window, direction A: restyled layout via `packaging/dmg/restyle.py`, capture contract in `packaging/dmg/capture.py`, layout tests in `packaging/dmg/test_layout.py`, and packaging README updates. No merge; CI must stay green.
 - Verification: `python3 packaging/dmg/test_layout.py` passes locally; the same suite now runs in CI (workflow step added on this branch). macOS-only capture/rendering paths are unverified locally. Review pending; no merge.
 
+## Shared headless extension host access (2026-11-13)
+
+| ID | Effort | Task | Owner | Status |
+| --- | --- | --- | --- | --- |
+| EXTENSION-HOST-ACCESS-001 | Medium | Extract host-independent extension-scoped Auth and secret-store adapters for remote Contacts and Calendar runtimes. | Instinct / `agent/EXTENSION-HOST-ACCESS-001` / `/tmp/pl-extension-host` | Review; extracted scoped Auth/Secrets and CardDAV read-only host adapter, wired desktop delegates. New adapter and existing broker tests pass, focused app tests pass with test-only CGO-off platform overlay; no native keychain/OAuth/two-machine validation. No HTTP secret-export surface or automatic consent. |
 ## Remote Calendar parity (2026-11-13)
 
 | ID | Effort | Task | Owner | Status |
