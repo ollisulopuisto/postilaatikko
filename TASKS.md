@@ -495,4 +495,4 @@ README review follow-up: qualify checksum instructions because tagged releases d
 
 | ID | Effort | Task | Owner | Status |
 | --- | --- | --- | --- | --- |
-| CALENDAR-RECURRENCE-CONTEXT-001 | Medium | Bound recurrence generation inside iterator loops, including impossible date/time filters, without leaking timeout workers. | Instinct / `agent/CALENDAR-RECURRENCE-CONTEXT-001` / `/tmp/pl-calendar-recurrence` | In progress; isolated adapter over attributed existing recurrence engine. No remote occurrence route enabled yet. |
+| CALENDAR-RECURRENCE-CONTEXT-001 | Medium | Bound recurrence generation inside iterator loops, including impossible date/time filters, without leaking timeout workers. | Instinct / `agent/CALENDAR-RECURRENCE-CONTEXT-001` / `/tmp/pl-calendar-recurrence` | In review; isolated adapter over attributed existing recurrence engine, bounded store expansion integration. Tests `75549e10`, implementation `f17c589b`; broad recurrence/DST parity tests and inner-loop work/cancellation checks pass. No remote occurrence route enabled yet. |

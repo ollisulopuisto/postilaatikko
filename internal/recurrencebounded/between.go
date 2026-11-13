@@ -96,6 +96,9 @@ func Between(ctx context.Context, set *upstream.Set, from, to time.Time, maxInst
 			rdates = rdates[1:]
 		} else {
 			d = current
+			if d.After(to) {
+				break
+			}
 			current, valid = next()
 			if stopped != nil {
 				return nil, stopped
@@ -111,6 +114,11 @@ func Between(ctx context.Context, set *upstream.Set, from, to time.Time, maxInst
 	return out, nil
 }
 func convertOptions(o upstream.ROption) (local.ROption, error) {
+	// Upstream does not validate frequency or bound integer arithmetic, and its
+	// non-standard BYEASTER offset indexes a year mask without range checks.
+	if o.Freq < upstream.YEARLY || o.Freq > upstream.SECONDLY || o.Interval < 0 || o.Interval > 1000000 || len(o.Byeaster) > 0 {
+		return local.ROption{}, errors.New("recurrence frequency, interval or BYEASTER unsupported by bounded evaluator")
+	}
 	// Bound Cartesian time-set construction before NewRRule, which runs before
 	// iteration callbacks. Duplicate provider values do not get an unlimited product.
 	if len(o.Byhour) > 24 || len(o.Byminute) > 60 || len(o.Bysecond) > 60 || len(o.Byweekday) > 366 || len(o.Bysetpos) > 366 || len(o.Bymonth) > 12 || len(o.Bymonthday) > 62 || len(o.Byyearday) > 732 || len(o.Byweekno) > 106 || len(o.Byeaster) > 366 {

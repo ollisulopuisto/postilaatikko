@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/emersion/go-ical"
+	"github.com/hkdb/aerion/internal/recurrencebounded"
 )
 
 // ExpandInRange expands a stored Event into concrete EventInstances within
@@ -52,6 +53,9 @@ func expandInRange(ctx context.Context, ev Event, overrides []EventOverride, fro
 		}}, nil
 	}
 
+	if remainingIterations != nil && (len(ev.ICSBlob) > 1024*1024 || len(overrides) > 1000) {
+		return nil, fmt.Errorf("recurrence input budget exceeded")
+	}
 	// Recurring: re-parse the master ICS blob, run RecurrenceSet,
 	// generate the occurrence list in window, then apply overrides.
 	loc := resolveLocation(ev.TZName)
@@ -86,6 +90,13 @@ func expandInRange(ctx context.Context, ev Event, overrides []EventOverride, fro
 	// entire calendar. Split multi-value props into single-value props first.
 	splitMultiValueDateLists(masterEv)
 
+	if remainingIterations != nil {
+		for _, prop := range masterEv.Props.Values(ical.PropRecurrenceRule) {
+			if err := recurrencebounded.ValidateRuleText(prop.Value); err != nil {
+				return nil, err
+			}
+		}
+	}
 	set, err := masterEv.RecurrenceSet(loc)
 	if err != nil {
 		return nil, fmt.Errorf("rrule_expand: build recurrence set: %w", err)
@@ -98,26 +109,9 @@ func expandInRange(ctx context.Context, ev Event, overrides []EventOverride, fro
 	if remainingIterations == nil {
 		occurrences = set.Between(from, to, true)
 	} else {
-		next := set.Iterator()
-		for {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			if *remainingIterations <= 0 {
-				return nil, fmt.Errorf("recurrence expansion work limit exceeded")
-			}
-			*remainingIterations--
-			occurrence, ok := next()
-			if !ok || occurrence.After(to) {
-				break
-			}
-			if occurrence.Before(from) {
-				continue
-			}
-			if len(occurrences) >= maxInstances {
-				return nil, fmt.Errorf("recurrence instance limit exceeded")
-			}
-			occurrences = append(occurrences, occurrence)
+		occurrences, err = recurrencebounded.Between(ctx, set, from, to, maxInstances, remainingIterations)
+		if err != nil {
+			return nil, err
 		}
 	}
 

@@ -21,7 +21,7 @@ Cartesian time-set construction before constructing the local rule.
 Call `ValidateRuleText` for each ICS RRULE BEFORE asking go-ical to construct its
 upstream recurrence set. This prevents an oversized Cartesian product before the
 bounded iterator is reached. Stored ICS itself must have a separate byte limit.
-There are no timeout goroutines. Provider reads/writes and alarm delivery are not
+The bounded path rejects the non-standard BYEASTER option (unchecked upstream mask indexes), intervals above 1,000,000 and option/time-set products above its documented limits. There are no timeout goroutines. Provider reads/writes and alarm delivery are not
 part of this package.
 
 Tests compare ordinary rules and Helsinki spring/autumn DST, month-end, leap-day,
