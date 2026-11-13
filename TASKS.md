@@ -502,3 +502,10 @@ README review follow-up: qualify checksum instructions because tagged releases d
 | ID | Effort | Task | Owner | Status |
 | --- | --- | --- | --- | --- |
 | REMOTE-CALENDAR-INTEGRATION-001 | Large | Stack Calendar typed client, read routing and helper lifecycle on Contacts Core and bounded Calendar foundation. | Instinct / `agent/REMOTE-CALENDAR-INTEGRATION-001` / `/tmp/pl-calendar-integration` | In review; PR #251, stacked on Contacts `8e747ef9` and merged Calendar #249. Implementation `1ba5e48e`, plaintext rendering fix `3126b5c7` (red test `bc62d0a2`). Red-first typed-client, metadata-snapshot and sync-lifecycle tests pass; full Calendar/client/v1 package suites and vet pass. Helper source/calendar/single-event routes and desktop reads now wired; occurrence queries return unsupported pending an interruptible evaluator. No providers/writes/manage/alarms or parity claim. Native/two-machine untested; race run blocked by missing gdk/glib development packages. |
+## Interruptible remote Calendar recurrence (2026-11-13)
+
+| ID | Effort | Task | Owner | Status |
+| --- | --- | --- | --- | --- |
+| CALENDAR-RECURRENCE-CONTEXT-001 | Medium | Bound recurrence generation inside iterator loops, including impossible date/time filters, without leaking timeout workers. | Instinct / `agent/CALENDAR-RECURRENCE-CONTEXT-001` / `/tmp/pl-calendar-recurrence` | In review; PR #252. Isolated adapter over attributed existing recurrence engine, bounded store expansion integration. Tests `75549e10`/`fd7ad225`, implementation `f17c589b`/`b8dc3f85`; broad recurrence/DST parity tests and inner-loop work/cancellation checks pass. No remote occurrence route enabled yet. |
+
+| REMOTE-CALENDAR-OCCURRENCES-001 | Medium | Route bounded helper occurrence queries with desktop-safe rendering. | Instinct / `agent/REMOTE-CALENDAR-OCCURRENCES-001` / `/tmp/pl-calendar-occurrences` | In progress; local only, depends on #251 and #252 review. |
