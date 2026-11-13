@@ -36,18 +36,18 @@ func TestRemoteCalendarReadDoesNotOpenLocalMailbox(t *testing.T) {
 			if r.Method != "POST" {
 				t.Error("wrong occurrence method")
 			}
-			json.NewEncoder(w).Encode(v1.Response[[]calendar.EventInstance]{Data: []calendar.EventInstance{{Event: calendar.Event{ID: "occ", DescriptionHTML: "<script>untrusted</script>"}}}})
+			_ = json.NewEncoder(w).Encode(v1.Response[[]calendar.EventInstance]{Data: []calendar.EventInstance{{Event: calendar.Event{ID: "occ", DescriptionHTML: "<script>untrusted</script>"}}}})
 			return
 		}
 		if r.URL.Path == "/v1/calendar/events/plain" {
-			json.NewEncoder(w).Encode(v1.Response[*calendar.Event]{Data: &calendar.Event{ID: "plain", Description: "One line\nAnother https://example.com", DescriptionHTML: "<b>untrusted</b>"}})
+			_ = json.NewEncoder(w).Encode(v1.Response[*calendar.Event]{Data: &calendar.Event{ID: "plain", Description: "One line\nAnother https://example.com", DescriptionHTML: "<b>untrusted</b>"}})
 			return
 		}
 		if r.URL.Path == "/v1/calendar/events/one" {
-			json.NewEncoder(w).Encode(v1.Response[*calendar.Event]{Data: &calendar.Event{ID: "one", Description: "<p>safe<script>alert(1)</script></p>", DescriptionHTML: "<script>remote</script>"}})
+			_ = json.NewEncoder(w).Encode(v1.Response[*calendar.Event]{Data: &calendar.Event{ID: "one", Description: "<p>safe<script>alert(1)</script></p>", DescriptionHTML: "<script>remote</script>"}})
 			return
 		}
-		json.NewEncoder(w).Encode(v1.Response[[]calendar.Source]{Data: []calendar.Source{{ID: "source"}}})
+		_ = json.NewEncoder(w).Encode(v1.Response[[]calendar.Source]{Data: []calendar.Source{{ID: "source"}}})
 	}))
 	defer server.Close()
 	a := &App{settingsStore: deviceSettings, ctx: context.Background(), remoteServiceMode: true, mailboxService: &mailboxServiceConnector{client: automationclient.New(automationclient.Config{Endpoint: server.URL, Token: "test"})}}

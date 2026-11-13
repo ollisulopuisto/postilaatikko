@@ -27,7 +27,7 @@ func (s *Store) RemoteSources(ctx context.Context) ([]Source, error) {
 		return nil, err
 	}
 	defer cancel()
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var count, total int64
 	err = tx.QueryRowContext(ctx, `SELECT count(*),coalesce(sum(length(CAST(id AS BLOB))+length(CAST(type AS BLOB))+length(CAST(name AS BLOB))+length(CAST(url AS BLOB))+length(CAST(username AS BLOB))+length(CAST(coalesce(last_error,'') AS BLOB))+length(CAST(coalesce(account_id,'') AS BLOB))+length(CAST(coalesce(organizer_identities,'') AS BLOB))+length(CAST(coalesce(itip_mode,'') AS BLOB))),0) FROM calendar_sources`).Scan(&count, &total)
 	if err != nil {
@@ -67,7 +67,7 @@ func (s *Store) RemoteCalendars(ctx context.Context, sourceID string) ([]Calenda
 		return nil, err
 	}
 	defer cancel()
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var count, total int64
 	err = tx.QueryRowContext(ctx, `SELECT count(*),coalesce(sum(length(CAST(id AS BLOB))+length(CAST(source_id AS BLOB))+length(CAST(url AS BLOB))+length(CAST(display_name AS BLOB))+length(CAST(coalesce(description,'') AS BLOB))+length(CAST(coalesce(color,'') AS BLOB))+length(CAST(coalesce(ctag,'') AS BLOB))),0) FROM calendars WHERE source_id=?`, sourceID).Scan(&count, &total)
 	if err != nil {
@@ -106,7 +106,7 @@ func (s *Store) RemoteEvent(ctx context.Context, id string) (*Event, error) {
 		return nil, err
 	}
 	defer cancel()
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var size int64
 	err = tx.QueryRowContext(ctx, `SELECT length(CAST(coalesce(ics_blob,'') AS BLOB))+length(CAST(coalesce(description,'') AS BLOB))+length(CAST(coalesce(summary,'') AS BLOB))+length(CAST(coalesce(location,'') AS BLOB))+length(CAST(coalesce(attendees_json,'') AS BLOB))+length(CAST(coalesce(organizer_json,'') AS BLOB))+length(CAST(coalesce(uid,'') AS BLOB))+length(CAST(coalesce(href,'') AS BLOB))+length(CAST(coalesce(etag,'') AS BLOB))+length(CAST(coalesce(provider_event_id,'') AS BLOB))+length(CAST(coalesce(rrule_text,'') AS BLOB))+length(CAST(coalesce(tz_name,'') AS BLOB))+length(CAST(coalesce(transparency,'') AS BLOB))+length(CAST(coalesce(visibility,'') AS BLOB)) FROM events WHERE id=?`, id).Scan(&size)
 	if errors.Is(err, sql.ErrNoRows) {

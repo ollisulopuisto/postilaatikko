@@ -17,10 +17,10 @@ func TestCalendarClientTypedReadRoutes(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/v1/calendar/events/one" {
-			w.Write([]byte(`{"data":{"id":"one"}}`))
+			_, _ = w.Write([]byte(`{"data":{"id":"one"}}`))
 			return
 		}
-		w.Write([]byte(`{"data":[]}`))
+		_, _ = w.Write([]byte(`{"data":[]}`))
 	}))
 	defer server.Close()
 	c := New(Config{Endpoint: server.URL, Token: "test"})
