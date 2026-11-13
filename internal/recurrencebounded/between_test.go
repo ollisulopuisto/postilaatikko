@@ -155,3 +155,26 @@ func TestCancellationInsideIterator(t *testing.T) {
 		t.Fatalf("inner cancellation: %v budget=%d", err, budget)
 	}
 }
+
+func TestOutOfMonthOrdinalDoesNotPanic(t *testing.T) {
+	for _, start := range []time.Time{time.Date(2026, 1, 1, 9, 0, 0, 0, time.UTC), time.Date(2026, 2, 1, 9, 0, 0, 0, time.UTC)} {
+		for _, freq := range []upstream.Frequency{upstream.MONTHLY, upstream.YEARLY} {
+			for _, n := range []int{-53, -5, 5, 53} {
+				options := upstream.ROption{Freq: freq, Dtstart: start, Byweekday: []upstream.Weekday{upstream.MO.Nth(n)}, Count: 2, Until: start.AddDate(0, 2, 0)}
+				if freq == upstream.YEARLY {
+					options.Bymonth = []int{int(start.Month())}
+				}
+				r, err := upstream.NewRRule(options)
+				if err != nil {
+					t.Fatal(err)
+				}
+				set := &upstream.Set{}
+				set.RRule(r)
+				budget := 100000
+				if _, err := Between(context.Background(), set, start, start.AddDate(0, 1, 0), 10, &budget); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+	}
+}
