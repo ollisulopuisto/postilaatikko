@@ -259,13 +259,17 @@ type App struct {
 	triageLabelMu   goSync.Mutex
 
 	// Background sync (polling + IDLE)
-	syncScheduler   *sync.Scheduler
-	syncOwnerMu     goSync.Mutex
-	syncOwnerLock   *syncowner.Lock
-	syncOwnerError  error
-	syncOwnerCancel context.CancelFunc
-	syncOwnerWait   goSync.WaitGroup
-	syncShutdown    bool
+	syncScheduler         *sync.Scheduler
+	syncOwnerMu           goSync.Mutex
+	syncOwnerLock         *syncowner.Lock
+	syncOwnerError        error
+	syncOwnerCancel       context.CancelFunc
+	syncOwnerWait         goSync.WaitGroup
+	syncShutdown          bool
+	pendingReceiptMu      goSync.Mutex
+	pendingReceiptCancel  context.CancelFunc
+	pendingReceiptDone    chan struct{}
+	pendingReceiptStopped bool
 
 	// activities keeps time-critical background work (in-flight syncs,
 	// outgoing sends, the Undo Send countdown) out of App Nap on macOS;
@@ -1051,6 +1055,7 @@ func (a *App) startRemoteWorkspace(ctx context.Context) {
 	if _, err := a.mailboxService.getClient(); err != nil && !errors.Is(err, errDesktopMailboxAuthorizationRequired) {
 		log.Warn().Err(err).Msg("Remote mailbox service client could not be initialized")
 	}
+	a.startPendingReceiptReconciler(ctx)
 	a.replyContent = replycontent.NewService(replycontent.ServiceOptions{})
 	a.CalendarBridge = extcalendarbe.NewCalendarBridge(extcalendarbe.CalendarBridgeDeps{
 		SettingsStore:     a.settingsStore,
@@ -1233,6 +1238,7 @@ func (a *App) Shutdown(ctx context.Context) {
 }
 
 func (a *App) shutdown(ctx context.Context) {
+	a.stopPendingReceiptReconciler()
 	a.clearContactOAuth()
 	log := logging.WithComponent("app")
 	a.syncOwnerMu.Lock()

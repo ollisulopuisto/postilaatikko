@@ -762,18 +762,10 @@
           addToast({ type: 'error', message: String(err) })
           return false
         }
-        try {
-          const persisted = await ListPendingSends() as PendingSendItem[]
-          if (!persisted.some(item => item.id === ps.id)) pendingRemove(ps.id)
-          else {
-            ps.dispatching = false
-            ps.dispatchAt = new Date(Date.now() + 5000).toISOString()
-          }
-        } catch {
-          // Failed reload is not evidence that the pending row is gone.
-          ps.dispatching = false
-          ps.dispatchAt = new Date(Date.now() + 5000).toISOString()
-        }
+        // Failure before the mode/claim result is known is not proof that a
+        // retry is safe. Keep any stored row for explicit review, never arm a
+        // new countdown from an exception or a failed list reload.
+        pendingRemove(ps.id)
         addToast({ type: 'error', message: String(err) })
         return false
       }

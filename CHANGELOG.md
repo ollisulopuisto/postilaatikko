@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Never restart an Undo Send countdown from a dispatch exception or failed reload; uncertain failures require explicit review rather than automatic resend. Remote desktops now check uncertain helper receipts while idle every minute, without submitting mail, and drain that worker before device storage closes.
+
 - Keep local delivery failures out of the remote Undo Send retry path, preventing automatic resubmission after an uncertain local send.
 
 - Remote Undo Send now releases draft locks after definitive helper rejection and keeps pending mail visible for retry when a device-database claim fails.

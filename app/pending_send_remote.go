@@ -154,11 +154,14 @@ func (a *App) DispatchRemotePendingSend(id string) (bool, error) {
 // reconcileRemotePendingOutcomes queries receipts without submitting any message.
 // Missing or in-flight receipts remain unknown and keep their draft protected.
 func (a *App) reconcileRemotePendingOutcomes(store *pendingremote.Store) {
+	a.reconcileRemotePendingOutcomesContext(a.accountContext(), store)
+}
+func (a *App) reconcileRemotePendingOutcomesContext(parent context.Context, store *pendingremote.Store) {
 	ids, err := store.Uncertain()
 	if err != nil || len(ids) == 0 {
 		return
 	}
-	ctx, cancel := context.WithTimeout(a.accountContext(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(parent, 3*time.Second)
 	defer cancel()
 	client, err := a.composerServiceClient(ctx, v1.CapabilityMailSend)
 	if err != nil {
@@ -192,5 +195,59 @@ func (a *App) reconcileRemotePendingOutcomes(store *pendingremote.Store) {
 		case v1.OperationFailed, v1.OperationRetry:
 			_ = store.Finish(id, pendingremote.StateFailed)
 		}
+	}
+}
+
+// runPendingReceiptLoop never submits messages. It bounds each receipt pass
+// through the caller context and stays idle between minute-spaced checks.
+func runPendingReceiptLoop(ctx context.Context, interval time.Duration, reconcile func(context.Context)) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		reconcile(ctx)
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+func (a *App) startPendingReceiptReconciler(parent context.Context) {
+	if !a.remoteServiceMode {
+		return
+	}
+	a.pendingReceiptMu.Lock()
+	defer a.pendingReceiptMu.Unlock()
+	if a.pendingReceiptCancel != nil || a.pendingReceiptStopped {
+		return
+	}
+	ctx, cancel := context.WithCancel(parent)
+	a.pendingReceiptCancel = cancel
+	done := make(chan struct{})
+	a.pendingReceiptDone = done
+	go func() {
+		defer close(done)
+		runPendingReceiptLoop(ctx, time.Minute, func(ctx context.Context) {
+			store, err := a.remotePendingStore()
+			if err != nil {
+				return
+			}
+			a.reconcileRemotePendingOutcomesContext(ctx, store)
+		})
+	}()
+}
+func (a *App) stopPendingReceiptReconciler() {
+	a.pendingReceiptMu.Lock()
+	a.pendingReceiptStopped = true
+	cancel, done := a.pendingReceiptCancel, a.pendingReceiptDone
+	a.pendingReceiptMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	if done != nil {
+		<-done
 	}
 }
