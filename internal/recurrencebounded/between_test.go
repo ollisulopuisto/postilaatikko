@@ -181,3 +181,27 @@ func TestOutOfMonthOrdinalDoesNotPanic(t *testing.T) {
 		}
 	}
 }
+
+func TestZeroRemainingCapacityAllowsEmptySeriesOnly(t *testing.T) {
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	for _, inside := range []bool{false, true} {
+		dt := start.AddDate(0, 1, 0)
+		if inside {
+			dt = start
+		}
+		r, err := upstream.NewRRule(upstream.ROption{Freq: upstream.DAILY, Count: 1, Dtstart: dt})
+		if err != nil {
+			t.Fatal(err)
+		}
+		set := &upstream.Set{}
+		set.RRule(r)
+		budget := 10000
+		got, err := Between(context.Background(), set, start, start.Add(time.Hour), 0, &budget)
+		if inside && (err == nil || len(got) != 0) {
+			t.Fatal("over-capacity occurrence accepted")
+		}
+		if !inside && (err != nil || len(got) != 0) {
+			t.Fatalf("empty series at capacity: %v %v", got, err)
+		}
+	}
+}
