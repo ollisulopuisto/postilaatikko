@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Keep explicit Send now/Undo controls after a verified pre-claim failure, with the automatic countdown paused; unverifiable outcomes never expose a retry.
+
 - Never restart an Undo Send countdown from a dispatch exception or failed reload; uncertain failures require explicit review rather than automatic resend. Remote desktops now check uncertain helper receipts while idle every minute, without submitting mail, and drain that worker before device storage closes.
 
 - Keep local delivery failures out of the remote Undo Send retry path, preventing automatic resubmission after an uncertain local send.

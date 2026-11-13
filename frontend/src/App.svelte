@@ -706,7 +706,7 @@
   // 30-second undo-send countdown (user-approved). The composer queues the
   // send and closes; this bar owns the timer, dispatch and cancel. Restart
   // never auto-sends: the backend expires leftover rows at startup.
-  type PendingSendItem = { id: string; accountId: string; draftId: string; payload: string; dispatchAt: string; dispatching?: boolean }
+  type PendingSendItem = { id: string; accountId: string; draftId: string; payload: string; dispatchAt: string; dispatching?: boolean; manualRecovery?: boolean }
   let pendingSends = $state<PendingSendItem[]>([])
   let pendingTick: ReturnType<typeof setInterval> | undefined
   let pendingNow = $state(Date.now())
@@ -720,7 +720,7 @@
     pendingTick = setInterval(() => {
       pendingNow = Date.now()
       for (const ps of pendingSends) {
-        if (!ps.dispatching && new Date(ps.dispatchAt).getTime() <= pendingNow) {
+        if (!ps.manualRecovery && !ps.dispatching && new Date(ps.dispatchAt).getTime() <= pendingNow) {
           void pendingDispatch(ps)
         }
       }
@@ -762,10 +762,18 @@
           addToast({ type: 'error', message: String(err) })
           return false
         }
-        // Failure before the mode/claim result is known is not proof that a
-        // retry is safe. Keep any stored row for explicit review, never arm a
-        // new countdown from an exception or a failed list reload.
-        pendingRemove(ps.id)
+        // Only a verified still-pending durable row can expose explicit
+        // Send now/Undo controls. Never restart the countdown after failure.
+        try {
+          const persisted = await ListPendingSends() as PendingSendItem[]
+          if (persisted.some(item => item.id === ps.id)) {
+            ps.manualRecovery = true
+            ps.dispatching = false
+          } else pendingRemove(ps.id)
+        } catch {
+          // Unknown durable state is not permission to send again.
+          pendingRemove(ps.id)
+        }
         addToast({ type: 'error', message: String(err) })
         return false
       }
