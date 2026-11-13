@@ -15,6 +15,13 @@ import (
 func TestRemoteCalendarReadDoesNotOpenLocalMailbox(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/v1/calendar/events/query" {
+			if r.Method != "POST" {
+				t.Error("wrong occurrence method")
+			}
+			json.NewEncoder(w).Encode(v1.Response[[]calendar.EventInstance]{Data: []calendar.EventInstance{{Event: calendar.Event{ID: "occ", DescriptionHTML: "<script>untrusted</script>"}}}})
+			return
+		}
 		if r.URL.Path == "/v1/calendar/events/plain" {
 			json.NewEncoder(w).Encode(v1.Response[*calendar.Event]{Data: &calendar.Event{ID: "plain", Description: "One line\nAnother https://example.com", DescriptionHTML: "<b>untrusted</b>"}})
 			return
@@ -42,7 +49,7 @@ func TestRemoteCalendarReadDoesNotOpenLocalMailbox(t *testing.T) {
 	if a.db != nil || a.credStore != nil || a.CalendarBridge != nil {
 		t.Fatal("opened local Calendar/mailbox dependencies")
 	}
-	if _, err := a.Calendar_ListEventsInRange([]string{"one"}, 1, 2); err == nil {
-		t.Fatal("occurrence queries enabled before adapter")
+	if items, err := a.Calendar_ListEventsInRange([]string{"one"}, 1, 2); err != nil || len(items) != 1 || items[0].DescriptionHTML != "" {
+		t.Fatalf("remote occurrences=%v %v", items, err)
 	}
 }

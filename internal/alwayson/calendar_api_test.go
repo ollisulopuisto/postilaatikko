@@ -26,8 +26,8 @@ func TestCalendarReadRuntimeClosesWithoutStartingProviders(t *testing.T) {
 	if err != nil || len(sources) != 0 {
 		t.Fatalf("sources=%v err=%v", sources, err)
 	}
-	if _, err := r.CalendarEvents(ctx, v1.CalendarRangeRequest{CalendarIDs: []string{"one"}, FromUnix: 1, ToUnix: 2}); err == nil {
-		t.Fatal("unbounded recurrence route became enabled")
+	if items, err := r.CalendarEvents(ctx, v1.CalendarRangeRequest{CalendarIDs: []string{"one"}, FromUnix: 1, ToUnix: 2}); err != nil || len(items) != 0 {
+		t.Fatalf("bounded occurrence read=%v %v", items, err)
 	}
 	if err := r.Close(); err != nil {
 		t.Fatal(err)

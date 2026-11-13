@@ -2,6 +2,7 @@ package backend
 
 import (
 	"context"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -56,5 +57,20 @@ func TestBoundedRecurrenceStopsInsideImpossibleRule(t *testing.T) {
 	// The finite work budget, not an outside timeout goroutine, stops next().
 	if got, err := ExpandInRangeBounded(context.Background(), ev, nil, start, start.Add(time.Hour), 10, 500); err == nil || len(got) != 0 {
 		t.Fatalf("impossible rule=%v err=%v", got, err)
+	}
+}
+
+func TestBoundedRecurrencePreservesStoredOverrides(t *testing.T) {
+	ev := parsedToEvent(t, weeklyMWFICS)
+	from := time.Date(2025, 11, 1, 0, 0, 0, 0, time.UTC)
+	to := from.AddDate(0, 1, 0)
+	overrides := []EventOverride{{EventID: ev.ID, RecurrenceIDUnix: time.Date(2025, 11, 5, 9, 0, 0, 0, time.UTC).Unix(), ICSBlob: "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:weekly-mwf@example.com\r\nRECURRENCE-ID:20251105T090000Z\r\nDTSTART:20251105T100000Z\r\nDTEND:20251105T110000Z\r\nSUMMARY:Moved instance\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"}}
+	want, err := ExpandInRange(ev, overrides, from, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := ExpandInRangeBounded(context.Background(), ev, overrides, from, to, 100, 100000)
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("bounded overrides differ: got=%v want=%v err=%v", got, want, err)
 	}
 }
