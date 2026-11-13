@@ -1,8 +1,7 @@
 package app
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -74,40 +73,41 @@ func (e *contactConflictError) Error() string { return e.cause.Error() }
 func (e *contactConflictError) Unwrap() error { return e.cause }
 
 // contactsPendingKeys retains each pending contacts mutation's idempotency
-// key by request content. The helper's mutation ledger records outcomes per
-// key, so the desktop's key discipline decides both failure modes:
-// content-derived keys replay stale outcomes when a user deliberately
-// repeats an action (toggle off and back on), while a fresh key per call
-// makes a retry after an ambiguous transport failure (timeout, dropped
-// connection) double-run the mutation because the helper cannot match it to
-// its recorded receipt. Retaining the key only while the outcome is unknown
-// avoids both: retries of an unacknowledged request replay the receipt, and
-// a settled action repeated later is a new mutation with a fresh key.
+// key by the mutation's canonical request body. The helper's mutation ledger
+// records outcomes per key, and binding the key to the exact request keeps
+// all three failure modes straight: a retry of the same request after an
+// ambiguous transport failure (timeout, dropped connection) replays the
+// helper's recorded receipt instead of executing twice; an edit to any
+// field is a different request and therefore a new action with its own
+// key; and a settled action repeated later (toggle off and back on) is a
+// new mutation, never a replay of the stale first outcome.
 var contactsPendingKeys = struct {
 	sync.Mutex
 	byContent map[string]string
 }{byContent: make(map[string]string)}
 
-// contactsMutationContent digests the request identity for pending-key
-// retention. Callers must not pass secrets (CardDAV passwords): a fast
-// unsalted hash of a password is brute-forceable if it ever leaks, and the
-// identity does not need it - a secret-only change while the previous
-// attempt is still pending surfaces as the helper's idempotency conflict,
-// and after settle the repeat gets a fresh key.
-func contactsMutationContent(operation string, operands ...string) string {
-	h := sha256.New()
-	h.Write([]byte(operation))
-	for _, operand := range operands {
-		h.Write([]byte{0})
-		h.Write([]byte(operand))
+// contactsCanonicalBody renders the exact mutation request as its canonical
+// JSON identity (Go marshaling is deterministic: struct order is fixed and
+// map keys sort). The pending key is bound to this, so the desktop's notion
+// of "same request" always matches the helper's request fingerprint.
+// Callers must scrub secrets (CardDAV passwords, OAuth tokens) before
+// marshaling: a fast unsalted hash - or a retained plaintext copy - of a
+// password is a credential leak risk, and the identity does not need it. A
+// secret-only change while the previous attempt is still pending surfaces
+// as the helper's idempotency conflict, which is the correct answer while
+// that attempt's outcome is unknown.
+func contactsCanonicalBody(request any) string {
+	body, err := json.Marshal(request)
+	if err != nil {
+		return fmt.Sprintf("%#v", request)
 	}
-	return hex.EncodeToString(h.Sum(nil))
+	return string(body)
 }
 
 // contactsIdempotencyKey returns the retained key for this exact pending
 // request, creating and retaining a fresh one when it has none.
-func contactsIdempotencyKey(operation string, operands ...string) string {
-	content := contactsMutationContent(operation, operands...)
+func contactsIdempotencyKey(operation, canonicalBody string) string {
+	content := operation + "\x00" + canonicalBody
 	contactsPendingKeys.Lock()
 	defer contactsPendingKeys.Unlock()
 	if key, ok := contactsPendingKeys.byContent[content]; ok {
@@ -119,14 +119,19 @@ func contactsIdempotencyKey(operation string, operands ...string) string {
 }
 
 // settleContactsMutation drops the retained key once the mutation's outcome
-// is known: success, or a structured API error the user can act on. A
-// transport-level failure (no fault code) keeps the key so a retry replays
-// the helper's receipt instead of executing twice.
-func settleContactsMutation(err error, operation string, operands ...string) {
-	if err != nil && remoteContactsFaultCode(err) == "" {
-		return
+// is known: success or a definitive structured error. Transport-level
+// failures (no fault code) and idempotency conflicts (the helper reporting
+// the same in-flight or receipt-uncertain operation) keep the key, so a
+// retry of the same request replays the helper's receipt instead of
+// executing twice.
+func settleContactsMutation(err error, operation, canonicalBody string) {
+	if err != nil {
+		code := remoteContactsFaultCode(err)
+		if code == "" || v1.ErrorCode(code) == v1.CodeIdempotencyConflict {
+			return
+		}
 	}
-	content := contactsMutationContent(operation, operands...)
+	content := operation + "\x00" + canonicalBody
 	contactsPendingKeys.Lock()
 	delete(contactsPendingKeys.byContent, content)
 	contactsPendingKeys.Unlock()

@@ -1,7 +1,6 @@
 package app
 
 import (
-	"encoding/json"
 	"errors"
 
 	extcontactsbe "github.com/hkdb/aerion/extensions/contacts/backend"
@@ -74,8 +73,10 @@ func (a *App) Contacts_CreateContact(input coreapi.ContactCreateInput) (string, 
 		if err != nil {
 			return "", err
 		}
-		resp, err := client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "create", Create: &input}, contactsIdempotencyKey("create", input.SourceID, input.AddressbookID, input.Email, input.Name))
-		settleContactsMutation(err, "create", input.SourceID, input.AddressbookID, input.Email, input.Name)
+		req := v1.ContactsMutationRequest{Operation: "create", Create: &input}
+		body := contactsCanonicalBody(req)
+		resp, err := client.MutateContact(a.ctx, req, contactsIdempotencyKey("mutate", body))
+		settleContactsMutation(err, "mutate", body)
 		if err != nil {
 			return "", remoteContactsError(err, v1.CapabilityContactsWrite)
 		}
@@ -165,8 +166,10 @@ func (a *App) Contacts_SyncSource(sourceID string) error {
 		if err != nil {
 			return err
 		}
-		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "sync", ID: sourceID}, contactsIdempotencyKey("sync", sourceID))
-		settleContactsMutation(err, "sync", sourceID)
+		req := v1.ContactsMutationRequest{Operation: "sync", ID: sourceID}
+		body := contactsCanonicalBody(req)
+		_, err = client.MutateContact(a.ctx, req, contactsIdempotencyKey("mutate", body))
+		settleContactsMutation(err, "mutate", body)
 		return remoteContactsError(err, v1.CapabilityContactsWrite)
 	}
 	if err := a.requireLocalContacts(); err != nil {
@@ -185,8 +188,10 @@ func (a *App) Contacts_SyncAllSources() error {
 		if err != nil {
 			return err
 		}
-		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "sync_all"}, contactsIdempotencyKey("sync_all"))
-		settleContactsMutation(err, "sync_all")
+		req := v1.ContactsMutationRequest{Operation: "sync_all"}
+		body := contactsCanonicalBody(req)
+		_, err = client.MutateContact(a.ctx, req, contactsIdempotencyKey("mutate", body))
+		settleContactsMutation(err, "mutate", body)
 		return remoteContactsError(err, v1.CapabilityContactsWrite)
 	}
 	if err := a.requireLocalContacts(); err != nil {
@@ -205,12 +210,10 @@ func (a *App) Contacts_UpdateContact(idOrEmail string, patch coreapi.ContactPatc
 		if err != nil {
 			return err
 		}
-		patchKey, marshalErr := json.Marshal(patch)
-		if marshalErr != nil {
-			return marshalErr
-		}
-		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "update", ID: idOrEmail, Patch: &patch}, contactsIdempotencyKey("update", idOrEmail, string(patchKey)))
-		settleContactsMutation(err, "update", idOrEmail, string(patchKey))
+		req := v1.ContactsMutationRequest{Operation: "update", ID: idOrEmail, Patch: &patch}
+		body := contactsCanonicalBody(req)
+		_, err = client.MutateContact(a.ctx, req, contactsIdempotencyKey("mutate", body))
+		settleContactsMutation(err, "mutate", body)
 		if err != nil {
 			if isRemoteContactsConflict(err) {
 				a.emitRemoteContactsConflict(idOrEmail, err)
@@ -236,8 +239,10 @@ func (a *App) Contacts_DeleteLocalContact(idOrEmail string) error {
 		if err != nil {
 			return err
 		}
-		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "delete", ID: idOrEmail}, contactsIdempotencyKey("delete", idOrEmail))
-		settleContactsMutation(err, "delete", idOrEmail)
+		req := v1.ContactsMutationRequest{Operation: "delete", ID: idOrEmail}
+		body := contactsCanonicalBody(req)
+		_, err = client.MutateContact(a.ctx, req, contactsIdempotencyKey("mutate", body))
+		settleContactsMutation(err, "mutate", body)
 		return remoteContactsError(err, v1.CapabilityContactsWrite)
 	}
 	if err := a.requireLocalContacts(); err != nil {

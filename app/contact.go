@@ -86,8 +86,10 @@ func (a *App) AddContact(email, displayName string) error {
 		if err != nil {
 			return err
 		}
-		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "add_legacy", Email: email, DisplayName: displayName}, contactsIdempotencyKey("add_legacy", email, displayName))
-		settleContactsMutation(err, "add_legacy", email, displayName)
+		req := v1.ContactsMutationRequest{Operation: "add_legacy", Email: email, DisplayName: displayName}
+		body := contactsCanonicalBody(req)
+		_, err = client.MutateContact(a.ctx, req, contactsIdempotencyKey("mutate", body))
+		settleContactsMutation(err, "mutate", body)
 		return remoteContactsError(err, v1.CapabilityContactsWrite)
 	}
 	if err := a.requireLocalContacts(); err != nil {
@@ -103,8 +105,10 @@ func (a *App) DeleteContact(id string) error {
 		if err != nil {
 			return err
 		}
-		_, err = client.MutateContact(a.ctx, v1.ContactsMutationRequest{Operation: "delete_legacy", ID: id}, contactsIdempotencyKey("delete_legacy", id))
-		settleContactsMutation(err, "delete_legacy", id)
+		req := v1.ContactsMutationRequest{Operation: "delete_legacy", ID: id}
+		body := contactsCanonicalBody(req)
+		_, err = client.MutateContact(a.ctx, req, contactsIdempotencyKey("mutate", body))
+		settleContactsMutation(err, "mutate", body)
 		return remoteContactsError(err, v1.CapabilityContactsWrite)
 	}
 	if err := a.requireLocalContacts(); err != nil {

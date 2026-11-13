@@ -43,8 +43,7 @@ const (
 	// CapabilityContactsManage allows contact source administration: discovery, source
 	// configuration, credential storage and OAuth consent persistence.
 	CapabilityContactsManage Capability = "contacts.manage"
-	// CapabilityCalendarRead allows reading calendars and events. Reserved for the
-	// Calendar runtime stacked on the contacts remote surface.
+	// CapabilityCalendarRead allows reading calendars and events.
 	CapabilityCalendarRead Capability = "calendar.read"
 	// CapabilityCalendarWrite allows creating, updating and deleting calendar events.
 	// It does not permit calendar source secrets or OAuth consent.

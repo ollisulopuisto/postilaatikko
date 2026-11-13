@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"github.com/hkdb/aerion/internal/account"
+	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/contact"
 	coreapi "github.com/hkdb/aerion/internal/core/api/v1"
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/mailfilter"
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/operations"

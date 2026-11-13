@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"github.com/google/uuid"
 	"slices"
 	"strings"
 
@@ -283,6 +284,13 @@ func (a *App) saveContactAuthorization(session *pendingContactOAuth, sourceID, a
 		if err != nil {
 			return nil, err
 		}
+		// Each completed consent flow is a distinct user action with fresh
+		// tokens, so it gets its own key; retaining one across flows would
+		// make the helper reject the new tokens as a fingerprint mismatch.
+		// If a save's outcome is uncertain (transport failure), the helper's
+		// duplicate detection on provider+email is the reconciliation path
+		// for new sources, and re-saving an existing source ID is naturally
+		// idempotent.
 		source, err := client.SaveContactAuthorization(a.ctx, v1.ContactsAuthorizationRequest{
 			SourceID: sourceID, AccountID: accountID, Name: name, SyncInterval: interval,
 			Provider: session.provider.Name, Email: session.email,
@@ -290,8 +298,7 @@ func (a *App) saveContactAuthorization(session *pendingContactOAuth, sourceID, a
 				AccessToken: session.tokens.AccessToken, RefreshToken: session.tokens.RefreshToken,
 				ExpiresIn: session.tokens.ExpiresIn,
 			},
-		}, contactsIdempotencyKey("authorize", session.provider.Name, session.email, sourceID, accountID, name))
-		settleContactsMutation(err, "authorize", session.provider.Name, session.email, sourceID, accountID, name)
+		}, "desktop-contacts-authorize-"+uuid.NewString())
 		if err != nil {
 			return nil, remoteContactsError(err, v1.CapabilityContactsManage)
 		}
