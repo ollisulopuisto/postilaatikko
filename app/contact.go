@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/hkdb/aerion/internal/account"
+	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/contact"
 	"github.com/hkdb/aerion/internal/logging"
 )
@@ -27,6 +28,22 @@ func (a *App) requireLocalContacts() error {
 // SearchContacts searches for contacts matching the query
 // Returns contacts from multiple sources: local database, vCard files, CardDAV, and Google Contacts
 func (a *App) SearchContacts(query string, limit int) ([]*contact.Contact, error) {
+	if a.remoteContactsActive() {
+		client, err := a.remoteContactsClient()
+		if err != nil {
+			return nil, err
+		}
+		results, err := client.SearchContacts(a.ctx, query, limit)
+		if err != nil {
+			return nil, remoteContactsError(err, v1.CapabilityContactsRead)
+		}
+		out := make([]*contact.Contact, 0, len(results))
+		for i := range results {
+			r := results[i]
+			out = append(out, &contact.Contact{Email: r.Email, DisplayName: r.DisplayName, Source: r.Source, Kind: r.Kind, AvatarURL: r.AvatarURL, SendCount: r.SendCount, LastUsed: r.LastUsed, CreatedAt: r.CreatedAt})
+		}
+		return out, nil
+	}
 	if err := a.requireLocalContacts(); err != nil {
 		return nil, err
 	}
@@ -37,6 +54,25 @@ func (a *App) SearchContacts(query string, limit int) ([]*contact.Contact, error
 
 // GetContact returns a single contact by ID
 func (a *App) GetContact(id string) (*contact.Contact, error) {
+	if a.remoteContactsActive() {
+		client, err := a.remoteContactsClient()
+		if err != nil {
+			return nil, err
+		}
+		r, err := client.GetLegacyContact(a.ctx, id)
+		if err != nil {
+			// Local GetContact answers a missing contact with (nil, nil);
+			// callers treat it as a normal lookup result, not a failure.
+			if v1.ErrorCode(remoteContactsFaultCode(err)) == v1.CodeNotFound {
+				return nil, nil
+			}
+			return nil, remoteContactsError(err, v1.CapabilityContactsRead)
+		}
+		if r == nil {
+			return nil, nil
+		}
+		return &contact.Contact{Email: r.Email, DisplayName: r.DisplayName, Source: r.Source, Kind: r.Kind, AvatarURL: r.AvatarURL, SendCount: r.SendCount, LastUsed: r.LastUsed, CreatedAt: r.CreatedAt}, nil
+	}
 	if err := a.requireLocalContacts(); err != nil {
 		return nil, err
 	}
@@ -45,6 +81,21 @@ func (a *App) GetContact(id string) (*contact.Contact, error) {
 
 // AddContact adds or updates a contact
 func (a *App) AddContact(email, displayName string) error {
+	if a.remoteContactsActive() {
+		client, err := a.remoteContactsClient()
+		if err != nil {
+			return err
+		}
+		req := v1.ContactsMutationRequest{Operation: "add_legacy", Email: email, DisplayName: displayName}
+		body := contactsCanonicalBody(req)
+		key, err := contactsIdempotencyKey("mutate", body)
+		if err != nil {
+			return err
+		}
+		_, err = client.MutateContact(a.ctx, req, key)
+		settleContactsMutation(err, "mutate", body)
+		return remoteContactsError(err, v1.CapabilityContactsWrite)
+	}
 	if err := a.requireLocalContacts(); err != nil {
 		return err
 	}
@@ -53,6 +104,21 @@ func (a *App) AddContact(email, displayName string) error {
 
 // DeleteContact deletes a contact
 func (a *App) DeleteContact(id string) error {
+	if a.remoteContactsActive() {
+		client, err := a.remoteContactsClient()
+		if err != nil {
+			return err
+		}
+		req := v1.ContactsMutationRequest{Operation: "delete_legacy", ID: id}
+		body := contactsCanonicalBody(req)
+		key, err := contactsIdempotencyKey("mutate", body)
+		if err != nil {
+			return err
+		}
+		_, err = client.MutateContact(a.ctx, req, key)
+		settleContactsMutation(err, "mutate", body)
+		return remoteContactsError(err, v1.CapabilityContactsWrite)
+	}
 	if err := a.requireLocalContacts(); err != nil {
 		return err
 	}
@@ -61,6 +127,22 @@ func (a *App) DeleteContact(id string) error {
 
 // ListContacts returns all contacts
 func (a *App) ListContacts(limit int) ([]*contact.Contact, error) {
+	if a.remoteContactsActive() {
+		client, err := a.remoteContactsClient()
+		if err != nil {
+			return nil, err
+		}
+		results, err := client.ListLegacyContacts(a.ctx, limit)
+		if err != nil {
+			return nil, remoteContactsError(err, v1.CapabilityContactsRead)
+		}
+		out := make([]*contact.Contact, 0, len(results))
+		for i := range results {
+			r := results[i]
+			out = append(out, &contact.Contact{Email: r.Email, DisplayName: r.DisplayName, Source: r.Source, Kind: r.Kind, AvatarURL: r.AvatarURL, SendCount: r.SendCount, LastUsed: r.LastUsed, CreatedAt: r.CreatedAt})
+		}
+		return out, nil
+	}
 	if err := a.requireLocalContacts(); err != nil {
 		return nil, err
 	}
@@ -72,6 +154,17 @@ func (a *App) ListContacts(limit int) ([]*contact.Contact, error) {
 // in the avatar slot (opt-in setting). Resolves the whole batch in one query —
 // the frontend batches per list load rather than calling per row.
 func (a *App) GetContactPhotos(emails []string) ([]contact.ContactPhoto, error) {
+	if a.remoteContactsActive() {
+		client, err := a.remoteContactsClient()
+		if err != nil {
+			return nil, err
+		}
+		photos, err := client.GetContactPhotos(a.ctx, emails)
+		if err != nil {
+			return nil, remoteContactsError(err, v1.CapabilityContactsRead)
+		}
+		return photos, nil
+	}
 	if err := a.requireLocalContacts(); err != nil {
 		return nil, err
 	}
@@ -85,6 +178,17 @@ func (a *App) GetContactPhotos(emails []string) ([]contact.ContactPhoto, error) 
 // accounts. A Google account's own profile is not part of People connections,
 // so it cannot be obtained through GetContactPhotos.
 func (a *App) GetAccountProfilePhotos(emails []string) ([]contact.ContactPhoto, error) {
+	if a.remoteContactsActive() {
+		client, err := a.remoteContactsClient()
+		if err != nil {
+			return nil, err
+		}
+		photos, err := client.GetAccountProfilePhotos(a.ctx, emails)
+		if err != nil {
+			return nil, remoteContactsError(err, v1.CapabilityContactsRead)
+		}
+		return photos, nil
+	}
 	if err := a.requireLocalContacts(); err != nil {
 		return nil, err
 	}

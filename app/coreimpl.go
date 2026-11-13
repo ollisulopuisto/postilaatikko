@@ -12,6 +12,7 @@ import (
 	coreapi "github.com/hkdb/aerion/internal/core/api/v1"
 	"github.com/hkdb/aerion/internal/credentials"
 	"github.com/hkdb/aerion/internal/email"
+	"github.com/hkdb/aerion/internal/extensions/hostaccess"
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/notification"
 	"github.com/hkdb/aerion/internal/oauth2"
@@ -219,7 +220,14 @@ type extensionAuth struct {
 }
 
 func (a *extensionAuth) HTTPClient(accountID string, scopes []coreapi.AuthScope) (*http.Client, error) {
-	return a.app.authBroker.HTTPClientForExtension(a.extensionID, a.manifest, accountID, scopes)
+	if a.app == nil || a.app.authBroker == nil {
+		return nil, fmt.Errorf("extension Auth broker unavailable")
+	}
+	adapter, err := hostaccess.NewAuth(a.app.authBroker, a.extensionID, a.manifest, nil)
+	if err != nil {
+		return nil, err
+	}
+	return adapter.HTTPClient(accountID, scopes)
 }
 
 func (a *extensionAuth) IMAPClient(accountID string, requiredCaps []string) (coreapi.IMAPClient, error) {
@@ -463,11 +471,7 @@ func (h hostSecretsCoreImpl) Get(key string) (string, error) {
 	if h.app.credStore == nil {
 		return "", fmt.Errorf("storage.HostSecrets: credentials store not initialized")
 	}
-	switch {
-	case strings.HasPrefix(key, "carddav:"):
-		return h.app.credStore.GetCardDAVPassword(strings.TrimPrefix(key, "carddav:"))
-	}
-	return "", fmt.Errorf("storage.HostSecrets: unsupported key prefix in %q", key)
+	return hostaccess.NewHostSecrets(h.app.credStore.GetCardDAVPassword).Get(key)
 }
 
 // secretsCoreImpl is the per-extension Secrets handle. The extension ID is
@@ -483,28 +487,44 @@ func (s secretsCoreImpl) Set(key, value string) error {
 	if s.app.credStore == nil {
 		return fmt.Errorf("storage.Secrets: credentials store not initialized")
 	}
-	return s.app.credStore.SetExtensionSecret(s.extensionID, key, value)
+	adapter, err := hostaccess.NewSecrets(s.app.credStore, s.extensionID)
+	if err != nil {
+		return err
+	}
+	return adapter.Set(key, value)
 }
 
 func (s secretsCoreImpl) Get(key string) (string, error) {
 	if s.app.credStore == nil {
 		return "", fmt.Errorf("storage.Secrets: credentials store not initialized")
 	}
-	return s.app.credStore.GetExtensionSecret(s.extensionID, key)
+	adapter, err := hostaccess.NewSecrets(s.app.credStore, s.extensionID)
+	if err != nil {
+		return "", err
+	}
+	return adapter.Get(key)
 }
 
 func (s secretsCoreImpl) Delete(key string) error {
 	if s.app.credStore == nil {
 		return fmt.Errorf("storage.Secrets: credentials store not initialized")
 	}
-	return s.app.credStore.DeleteExtensionSecret(s.extensionID, key)
+	adapter, err := hostaccess.NewSecrets(s.app.credStore, s.extensionID)
+	if err != nil {
+		return err
+	}
+	return adapter.Delete(key)
 }
 
 func (s secretsCoreImpl) DeleteAll() error {
 	if s.app.credStore == nil {
 		return fmt.Errorf("storage.Secrets: credentials store not initialized")
 	}
-	return s.app.credStore.DeleteAllExtensionSecrets(s.extensionID)
+	adapter, err := hostaccess.NewSecrets(s.app.credStore, s.extensionID)
+	if err != nil {
+		return err
+	}
+	return adapter.DeleteAll()
 }
 
 type stubKV struct {

@@ -54,6 +54,9 @@ const PendingSendDelay = 30 * time.Second
 // payload is the serialized smtp.ComposeMessage exactly as SendMessage
 // would receive it. Returns the pending-send ID.
 func (a *App) QueuePendingSend(accountID, draftID, payload string) (string, error) {
+	if a.remoteServiceMode {
+		return a.queueRemotePendingSend(accountID, draftID, payload)
+	}
 	if accountID == "" || payload == "" {
 		return "", fmt.Errorf("pending send: account and payload are required")
 	}
@@ -139,6 +142,18 @@ func (a *App) releaseAllPendingSendActivities() {
 // the row is already gone and cancel reports an error the UI must show
 // truthfully ("already sending").
 func (a *App) CancelPendingSend(id string) error {
+	if a.remoteServiceMode {
+		store, err := a.remotePendingStore()
+		if err != nil {
+			return err
+		}
+		if err := store.Cancel(id); err != nil {
+			return err
+		}
+		a.releasePendingSendActivity(id)
+		a.emitRuntimeEvent("pending-send:cancelled", id)
+		return nil
+	}
 	res, err := a.db.Exec(`DELETE FROM pending_sends WHERE id = ? AND state = 'pending'`, id)
 	if err != nil {
 		return err
@@ -154,6 +169,9 @@ func (a *App) CancelPendingSend(id string) error {
 // CompletePendingSend removes the row after a successful dispatch. Called
 // by the frontend only after the send call returned without error.
 func (a *App) CompletePendingSend(id string) error {
+	if a.remoteServiceMode {
+		return nil
+	} // Remote dispatcher records its own outcome, including uncertainty.
 	a.releasePendingSendActivity(id)
 	_, err := a.db.Exec(`DELETE FROM pending_sends WHERE id = ?`, id)
 	return err
@@ -162,6 +180,22 @@ func (a *App) CompletePendingSend(id string) error {
 // ListPendingSends returns all pending rows (main-window recovery on focus
 // or startup before expiry).
 func (a *App) ListPendingSends() ([]*PendingSend, error) {
+	if a.remoteServiceMode {
+		store, err := a.remotePendingStore()
+		if err != nil {
+			return nil, err
+		}
+		a.reconcileRemotePendingOutcomes(store)
+		items, err := store.List()
+		if err != nil {
+			return nil, err
+		}
+		result := make([]*PendingSend, 0, len(items))
+		for _, item := range items {
+			result = append(result, &PendingSend{ID: item.ID, AccountID: item.AccountID, DraftID: item.DraftID, Payload: item.Payload, DispatchAt: item.DispatchAt.Format(time.RFC3339Nano), CreatedAt: item.CreatedAt.Format(time.RFC3339Nano), State: "pending"})
+		}
+		return result, nil
+	}
 	rows, err := a.db.Query(
 		`SELECT id, account_id, draft_id, payload, dispatch_at, state, created_at
 		 FROM pending_sends WHERE state = 'pending' ORDER BY created_at`)
@@ -183,6 +217,14 @@ func (a *App) ListPendingSends() ([]*PendingSend, error) {
 // ExpirePendingSends marks every leftover pending row expired. Called at
 // startup: a restart NEVER auto-sends; the draft reappears in Drafts.
 func (a *App) ExpirePendingSends() error {
+	if a.remoteServiceMode {
+		a.releaseAllPendingSendActivities()
+		store, err := a.remotePendingStore()
+		if err != nil {
+			return err
+		}
+		return store.Recover()
+	}
 	a.releaseAllPendingSendActivities()
 	_, err := a.db.Exec(`UPDATE pending_sends SET state = 'expired' WHERE state = 'pending'`)
 	return err

@@ -647,5 +647,13 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 		}
 		return grant.ClientID
 	}, automation.RequireGrantCapability)
+	// The remote contacts surface shares this authenticated /v1 router; without
+	// this mount every desktop contacts call in remote service mode 404s.
+	if r.contacts != nil {
+		v1.MountContactsRoutes(mux, &contactsOperations{runtime: r.contacts}, newContactsMutationLedger(r.db), r.accountMutationFingerprint, automation.RequireGrantCapability)
+	}
+	if r.calendar != nil {
+		v1.MountCalendarReadRoutes(mux, r.calendar, automation.RequireGrantCapability)
+	}
 	return mux, nil
 }

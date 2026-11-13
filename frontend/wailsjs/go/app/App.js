@@ -1924,3 +1924,7 @@ export function UpdateScheduledMessage(arg1, arg2) {
 export function UpdateVirtualFolder(arg1) {
   return window['go']['app']['App']['UpdateVirtualFolder'](arg1);
 }
+
+export function DispatchRemotePendingSend(arg1) {
+  return window['go']['app']['App']['DispatchRemotePendingSend'](arg1);
+}

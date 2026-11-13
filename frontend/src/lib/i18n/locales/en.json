@@ -1613,6 +1613,7 @@
     }
   },
   "pendingSend": {
+    "recoveryRequired": "Send paused. Choose Send now or Undo.",
     "queued": "Message queued",
     "sending": "Sending…",
     "undo": "Undo",

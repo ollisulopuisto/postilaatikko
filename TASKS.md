@@ -24,6 +24,7 @@ The user asked to keep IMAP after the app began feeling faster. Do not start Gma
 
 | Task | Effort | Scope / acceptance | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
+| REMOTE-CONTACTS-001 | Large | Remote Contacts/CardDAV parity: capability-gated contacts.read/write/manage v1 routes on the helper (legacy recipient APIs plus the 14 promoted Contacts extension methods), headless scoped extension core (stacked on EXTENSION-HOST-ACCESS-001), desktop remote routing for all contact paths, idempotent mutations. Also registers calendar.read/write/manage capabilities for the follow-on Calendar task. | Instinct / `agent/REMOTE-CONTACTS-001` / `/tmp/pl-remote-contacts/repo` | Review (PR #250) |
 | ZK-SERVER-DESIGN-001 | Large | Owner request: zero-knowledge Postilaatikko service design (multi-tenant, operator cannot read mail, hybrid-PQ transport): threat model, key hierarchy, encrypted-store architecture, search options, enrolment/revocation, GDPR/OAuth/abuse/assurance, phased plan. Docs only, no code. | Instinct / `agent/zero-knowledge-server-design` / `/tmp/pl-zk` | Review; PR #229 (docs only). CI green (Lint, CodeQL, version consistency; tests skip on docs-only). Review fixes in PR #238 (`34a48d0`): Send Later credential exposure, operator-as-publisher threat, keys/envelopes rescoped to transfer envelopes, TLS 1.3 on both listeners. Outstanding: owner decisions 1-2 and 5-9 in the doc's section 22, expert-review flags in section 23. |
 | KEYMAP-SHARED-001 | Medium | Owner-approved shared Postilaatikko/Solmu keymap, Postilaatikko side: add the modified layer (Cmd/Ctrl+F search, Cmd/Ctrl+L forward, Cmd/Ctrl+U read later, Cmd/Ctrl+I reply later, Cmd/Ctrl+E archive+read, Cmd/Ctrl+Shift+]/[ next/previous, Cmd/Ctrl+/ shortcuts help, Cmd/Ctrl+Alt+Left/Right previous/next account, Cmd/Ctrl+Alt+1-4 quick filters), move load-images to Cmd/Ctrl+Alt+L and always-load to Cmd/Ctrl+Shift+Alt+L, mark read drops Cmd/Ctrl+U; all bare Gmail-style keys kept; macOS Option physical-code fallback in the dispatcher. | Instinct / `agent/shared-keymap` / `/tmp/pl-keymap` | Draft PR; 981 frontend tests pass, eslint and svelte-check clean (2 pre-existing warnings). Native Mac modifier chords unverified. No merge. |
 | HELPER-HEALTH-BROWSER-001 | Easy | Apply browser rejection/security headers before outer helper routing, including health and errors. | Instinct / `agent/helper-health-defense` / `/tmp/pl-health` | Review; helper-route regression failed before, helper/scheduledsend Go tests rerun. No live server tested. |
@@ -479,8 +480,43 @@ README review follow-up: qualify checksum instructions because tagged releases d
 - Scope: Bilingual (fi+en) dark DMG installer window, direction A: restyled layout via `packaging/dmg/restyle.py`, capture contract in `packaging/dmg/capture.py`, layout tests in `packaging/dmg/test_layout.py`, and packaging README updates. No merge; CI must stay green.
 - Verification: `python3 packaging/dmg/test_layout.py` passes locally; the same suite now runs in CI (workflow step added on this branch). macOS-only capture/rendering paths are unverified locally. Review pending; no merge.
 
+## Shared headless extension host access (2026-11-13)
+
+| ID | Effort | Task | Owner | Status |
+| --- | --- | --- | --- | --- |
+| EXTENSION-HOST-ACCESS-001 | Medium | Extract host-independent extension-scoped Auth and secret-store adapters for remote Contacts and Calendar runtimes. | Instinct / `agent/EXTENSION-HOST-ACCESS-001` / `/tmp/pl-extension-host` | Review; extracted scoped Auth/Secrets and CardDAV read-only host adapter, wired desktop delegates. New adapter and existing broker tests pass, focused app tests pass with test-only CGO-off platform overlay; no native keychain/OAuth/two-machine validation. No HTTP secret-export surface or automatic consent. |
+## Remote Calendar parity (2026-11-13)
+
+| ID | Effort | Task | Owner | Status |
+| --- | --- | --- | --- | --- |
+| REMOTE-CALENDAR-001 | Large | Add helper-owned Calendar service operations with separate read/write/manage capabilities, typed desktop routing and lifecycle; preserve no-local-mailbox startup. | Instinct / `agent/REMOTE-CALENDAR-001` / `/tmp/pl-remote-calendar` | In review; PR #249, implementation `a85d07b0`, shared query-work budget `340a3b92`. Bounded typed read contract and recurrence/store budget foundation only. Depends on shared host access PR #248 and Contacts-owned headless Core adapter for production mounting/lifecycle. Existing remote gate remains closed; writes/manage/consent/notifications remain follow-up. New read/recurrence tests and full v1/Calendar package suites pass; native provider/consent/alarm/two-machine acceptance not run. |
+
+## Remote Undo Send parity (2026-11-13)
+
+| ID | Effort | Task | Owner | Status |
+| --- | --- | --- | --- | --- |
+| REMOTE-UNDO-SEND-001 | Large | Make the remote desktop Undo Send window device-owned, bounded and safe without a local mailbox DB; submit immutable MIME to the helper with durable request identity. | Instinct / `agent/REMOTE-UNDO-SEND-001` / `/tmp/pl-remote-undo` | In review; PR #247, implementation `5c51f41d`, rejection/claim retry fix `8ef1008e` with red tests `70d6f291`. Nil-mailbox panic and both Devin findings reproduced red; helper/v1/client/queue tests and vet pass, remote app tests pass with a test-only CGO-off platform overlay. Frontend check/build, App ESLint and targeted pending-send tests pass. Native two-machine runtime, real provider ambiguity and keychain/login remain unverified. Cross-device Send Later arbitration remains a separate gate. |
+## Remote startup guide correction (2026-11-13)
+
+| ID | Effort | Task | Owner | Status |
+| --- | --- | --- | --- | --- |
+| REMOTE-STARTUP-DOCS-001 | Easy | Replace stale remote-only startup limitation with current device/helper ownership and remaining parity limits. | Instinct / `agent/REMOTE-STARTUP-DOCS-001` / `/tmp/pl-remote-docs` | Review; PR #246, implementation `94c16db0`. Source-checked Preflight/startRemoteWorkspace and remote integration guards; `git diff --check` passed. No tests run (documentation only), no native two-machine runtime verified. |
+
+## Remote Calendar integration (2026-11-13)
+
+| ID | Effort | Task | Owner | Status |
+| --- | --- | --- | --- | --- |
+| REMOTE-CALENDAR-INTEGRATION-001 | Large | Stack Calendar typed client, read routing and helper lifecycle on Contacts Core and bounded Calendar foundation. | Instinct / `agent/REMOTE-CALENDAR-INTEGRATION-001` / `/tmp/pl-calendar-integration` | In review; PR #251, based on main after Contacts #250 merged `953ad723` and Calendar #249/#252. Implementation `1ba5e48e`, plaintext rendering fix `3126b5c7` (red test `bc62d0a2`). Red-first typed-client, metadata-snapshot and sync-lifecycle tests pass; full Calendar/client/v1 package suites and vet pass. Helper source/calendar/single-event and bounded occurrence routes plus desktop reads now wired; occurrence integration tests `b7e958ff`, implementation `2b9fec15`. No providers/writes/manage/alarms or parity claim. Native/two-machine untested; race run blocked by missing gdk/glib development packages. |
+## Interruptible remote Calendar recurrence (2026-11-13)
+
+| ID | Effort | Task | Owner | Status |
+| --- | --- | --- | --- | --- |
+| CALENDAR-RECURRENCE-CONTEXT-001 | Medium | Bound recurrence generation inside iterator loops, including impossible date/time filters, without leaking timeout workers. | Instinct / `agent/CALENDAR-RECURRENCE-CONTEXT-001` / `/tmp/pl-calendar-recurrence` | Merged; PR #252, main `f0cfc604` after head `668f9eb0` had green CI and0 open Devin threads. Isolated adapter over attributed existing recurrence engine, bounded store expansion integration. Tests `75549e10`/`fd7ad225`, implementation `f17c589b`/`b8dc3f85`; broad recurrence/DST parity tests and inner-loop work/cancellation checks pass. No remote occurrence route enabled yet. |
+
+| REMOTE-CALENDAR-OCCURRENCES-001 | Medium | Route bounded helper occurrence queries with desktop-safe rendering. | Instinct / `agent/REMOTE-CALENDAR-OCCURRENCES-001` / `/tmp/pl-calendar-occurrences` | Integrated into PR #251 after #252 merged as `f0cfc604`; helper and desktop red-first routing/HTML/override tests pass. |
+
 ## Remote-mode parity (2026-11-13)
 
 | ID | Effort | Task | Owner | Status |
 | --- | --- | --- | --- | --- |
-| REMOTE-CRYPTO-DESIGN-001 | Large | Define S/MIME/PGP parity custody and retry boundaries before removing remote crypto gates. | Instinct / `agent/REMOTE-CRYPTO-DESIGN-001` / `/tmp/pl-remote-crypto` | Design for review; docs-only verification: `git diff --check` passed; implementation `71525a3c`; no behavior change. Proposed device-local crypto avoids automatic private-key export. Custody decision and implementation/native acceptance remain open. See `docs/plans/2026-11-13-remote-crypto-parity.md`. |
+| REMOTE-CRYPTO-DESIGN-001 | Large | Define S/MIME/PGP parity custody and retry boundaries before removing remote crypto gates. | Instinct / `agent/REMOTE-CRYPTO-DESIGN-001` / `/tmp/pl-remote-crypto` | Design for review; docs-only verification: `git diff --check` passed; implementation `71525a3c`; no behavior change. Proposed device-local crypto avoids automatic private-key export. Custody decided 2026-11-13: device-local by default, helper-held keys only as an explicit opt-in with a security warning (later slice). Implementation and native acceptance remain open. See `docs/plans/2026-11-13-remote-crypto-parity.md`. |

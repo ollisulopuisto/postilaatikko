@@ -31,3 +31,78 @@ test('queued notification no longer instructs the user to click a countdown', as
     assert.ok(locale.pendingSend.undo)
   }
 })
+test('remote pending dispatch uses durable queue ID and leaves helper-owned cleanup alone', () => {
+  assert.match(app, /remoteHandled = await DispatchRemotePendingSend\(ps.id\)/)
+  assert.match(app, /if \(!remoteHandled\) \{/)
+  assert.match(app, /if \(ps.draftId && !remoteHandled\) \{/)
+  assert.match(app, /EventsOn\('pending-send:warning'/)
+})
+test('local delivery errors cannot enter the remote claim retry path', () => {
+  const dispatch=app.slice(app.indexOf('function pendingDispatch'), app.indexOf('async function finishQuitRequest'))
+  assert.match(dispatch,/localAttempted = true\s+await SendMessageWithDraftGuard/)
+  assert.match(dispatch,/if \(localAttempted\) \{\s+pendingRemove\(ps.id\)/)
+})
+
+test('failed mode lookup and failed reload never arm an automatic resend', () => {
+  const failure=app.slice(app.indexOf('} catch (err) {',app.indexOf('function pendingDispatch')), app.indexOf('// SMTP accepted'))
+  assert.doesNotMatch(failure,/ps.dispatchAt =/)
+  assert.match(failure,/pendingRemove\(ps.id\)/)
+})
+
+test('attempted local delivery never retries when cleanup and reload both fail', async () => {
+  const { default: ts } = await import('typescript')
+  const { runInNewContext } = await import('node:vm')
+  const source=app.slice(app.indexOf('  function pendingDispatch('),app.indexOf('  async function finishQuitRequest'))
+  const js=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText
+  let sends=0,removes=0,reloads=0
+  const sandbox={pendingSendDispatches:new Map(),DispatchRemotePendingSend:async()=>false,
+    SendMessageWithDraftGuard:async()=>{sends++;throw Error('uncertain delivery')},
+    CompletePendingSend:async()=>{throw Error('cleanup failed')},
+    ListPendingSends:async()=>{reloads++;throw Error('reload failed')},
+    pendingRemove:()=>{removes++},addToast:()=>{},Date,JSON,console}
+  runInNewContext(js,sandbox)
+  const item={id:'one',accountId:'a',draftId:'d',payload:'{}',dispatchAt:'original'}
+  assert.equal(await sandbox.pendingDispatch(item),false)
+  assert.equal(sends,1);assert.equal(removes,1);assert.equal(reloads,0)
+  assert.equal(item.dispatchAt,'original');assert.equal(item.dispatching,true)
+})
+
+test('unknown dispatch mode is never retried after a failed reload', async () => {
+  const { default: ts } = await import('typescript')
+  const { runInNewContext } = await import('node:vm')
+  const source=app.slice(app.indexOf('  function pendingDispatch('),app.indexOf('  async function finishQuitRequest'))
+  const js=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText
+  let removes=0,reloads=0,sends=0
+  const sandbox={pendingSendDispatches:new Map(),DispatchRemotePendingSend:async()=>{throw Error('mode unknown')},
+    SendMessageWithDraftGuard:async()=>{sends++},CompletePendingSend:async()=>{throw Error('cleanup failed')},
+    ListPendingSends:async()=>{reloads++;throw Error('reload failed')},pendingRemove:()=>{removes++},addToast:()=>{},Date,JSON,console}
+  runInNewContext(js,sandbox)
+  const item={id:'one',payload:'{}',dispatchAt:'original'}
+  assert.equal(await sandbox.pendingDispatch(item),false)
+  assert.equal(sends,0);assert.equal(removes,1);assert.equal(reloads,1)
+  assert.equal(item.dispatchAt,'original');assert.equal(item.dispatching,true)
+})
+
+test('verified pending claim failure keeps explicit controls without a countdown', async () => {
+  const { default: ts } = await import('typescript')
+  const { runInNewContext } = await import('node:vm')
+  const source=app.slice(app.indexOf('  function pendingDispatch('),app.indexOf('  async function finishQuitRequest'))
+  const js=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText
+  let removes=0
+  const item={id:'one',payload:'{}',dispatchAt:'original'}
+  const sandbox={pendingSendDispatches:new Map(),DispatchRemotePendingSend:async()=>{throw Error('claim failed')},
+    CompletePendingSend:async()=>{},ListPendingSends:async()=>[{id:'one'}],pendingRemove:()=>{removes++},addToast:()=>{},Date,JSON,console}
+  runInNewContext(js,sandbox)
+  assert.equal(await sandbox.pendingDispatch(item),false)
+  assert.equal(removes,0);assert.equal(item.manualRecovery,true);assert.equal(item.dispatching,false)
+  assert.match(app,/!ps.manualRecovery && !ps.dispatching/)
+})
+
+test('manual recovery has a persistent localized action-needed status', async () => {
+  assert.match(app,/manualRecovery=\{!!pendingSends\[0\].manualRecovery\}/)
+  assert.match(toast,/manualRecovery \? \$_\('pendingSend.recoveryRequired'\)/)
+  for(const code of ['en','fi']){
+    const locale=JSON.parse(await read(`../src/lib/i18n/locales/${code}.json`))
+    assert.ok(locale.pendingSend.recoveryRequired)
+  }
+})

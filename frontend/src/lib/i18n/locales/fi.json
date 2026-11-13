@@ -1613,6 +1613,7 @@
     }
   },
   "pendingSend": {
+    "recoveryRequired": "Lähetys keskeytyi. Valitse Lähetä nyt tai Kumoa.",
     "queued": "Viesti odottaa lähetystä",
     "sending": "Lähetetään…",
     "undo": "Kumoa",

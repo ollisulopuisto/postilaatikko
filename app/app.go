@@ -259,13 +259,17 @@ type App struct {
 	triageLabelMu   goSync.Mutex
 
 	// Background sync (polling + IDLE)
-	syncScheduler   *sync.Scheduler
-	syncOwnerMu     goSync.Mutex
-	syncOwnerLock   *syncowner.Lock
-	syncOwnerError  error
-	syncOwnerCancel context.CancelFunc
-	syncOwnerWait   goSync.WaitGroup
-	syncShutdown    bool
+	syncScheduler         *sync.Scheduler
+	syncOwnerMu           goSync.Mutex
+	syncOwnerLock         *syncowner.Lock
+	syncOwnerError        error
+	syncOwnerCancel       context.CancelFunc
+	syncOwnerWait         goSync.WaitGroup
+	syncShutdown          bool
+	pendingReceiptMu      goSync.Mutex
+	pendingReceiptCancel  context.CancelFunc
+	pendingReceiptDone    chan struct{}
+	pendingReceiptStopped bool
 
 	// activities keeps time-critical background work (in-flight syncs,
 	// outgoing sends, the Undo Send countdown) out of App Nap on macOS;
@@ -1036,6 +1040,9 @@ func (a *App) Startup(ctx context.Context) {
 // the helper in remote mode.
 func (a *App) startRemoteWorkspace(ctx context.Context) {
 	log := logging.WithComponent("app")
+	if err := a.ExpirePendingSends(); err != nil {
+		log.Error().Err(err).Msg("Recover remote pending sends")
+	}
 	a.settingsStore = settings.NewStore(a.deviceDB)
 	a.appStateStore = appstate.NewStore(a.deviceDB.DB)
 	a.imageAllowlistStore = settings.NewImageAllowlistStore(a.deviceDB)
@@ -1048,11 +1055,32 @@ func (a *App) startRemoteWorkspace(ctx context.Context) {
 	if _, err := a.mailboxService.getClient(); err != nil && !errors.Is(err, errDesktopMailboxAuthorizationRequired) {
 		log.Warn().Err(err).Msg("Remote mailbox service client could not be initialized")
 	}
+	a.startPendingReceiptReconciler(ctx)
 	a.replyContent = replycontent.NewService(replycontent.ServiceOptions{})
 	a.CalendarBridge = extcalendarbe.NewCalendarBridge(extcalendarbe.CalendarBridgeDeps{
 		SettingsStore:     a.settingsStore,
 		UnavailableReason: "Calendar is unavailable in remote mailbox mode",
 	})
+
+	// Register the Contacts extension's UI surfaces (rail tab + account-setup
+	// hook) so the Contacts destination exists in remote mode. The bridge is
+	// constructed lazily like in local mode — its device-local stores never
+	// open because every Contacts_* Wails method branches to the remote
+	// helper before touching the bridge — but registration is what puts the
+	// Contacts tab in the rail.
+	a.uiRegistry = extui.NewRegistry()
+	a.contactsExt = extcontactsbe.NewExtension()
+	a.knownExtensions = []coreapi.Extension{a.contactsExt}
+	a.initContactsExtension()
+	for _, ext := range a.knownExtensions {
+		extCore := newCoreForExtension(a, ext)
+		unreg, err := ext.Register(extCore)
+		if err != nil {
+			log.Warn().Err(err).Str("extension", ext.Manifest().ID).Msg("Failed to register extension")
+			continue
+		}
+		a.extensionUnregs = append(a.extensionUnregs, unreg)
+	}
 	a.ready = true
 	a.emitRuntimeEvent("app:ready")
 	a.initThemeMonitor(ctx)
@@ -1210,6 +1238,7 @@ func (a *App) Shutdown(ctx context.Context) {
 }
 
 func (a *App) shutdown(ctx context.Context) {
+	a.stopPendingReceiptReconciler()
 	a.clearContactOAuth()
 	log := logging.WithComponent("app")
 	a.syncOwnerMu.Lock()

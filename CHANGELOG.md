@@ -2,6 +2,37 @@
 
 ## [Unreleased]
 
+- Clearly label paused Undo Send recovery with a persistent action-needed message in Finnish and English.
+
+- Keep explicit Send now/Undo controls after a verified pre-claim failure, with the automatic countdown paused; unverifiable outcomes never expose a retry.
+
+- Never restart an Undo Send countdown from a dispatch exception or failed reload; uncertain failures require explicit review rather than automatic resend. Remote desktops now check uncertain helper receipts while idle every minute, without submitting mail, and drain that worker before device storage closes.
+
+- Keep local delivery failures out of the remote Undo Send retry path, preventing automatic resubmission after an uncertain local send.
+
+- Remote Undo Send now releases draft locks after definitive helper rejection and keeps pending mail visible for retry when a device-database claim fails.
+
+- Remote desktops now keep the Undo Send safety window in the device database instead of accessing an unopened mailbox database. Cancel and dispatch arbitrate atomically; the remote helper receives immutable MIME under the queue's stable request ID. Restart never auto-sends, uncertain provider outcomes are not resubmitted, and helper-owned draft cleanup does not delete a later draft edit. Native two-machine delivery remains to be verified.
+
+- Allow an exactly-full remote Calendar window when later recurrence candidates add no occurrences; still reject any additional in-window instance.
+
+- Route remote Calendar occurrence reads through bounded helper snapshots and the context-aware recurrence adapter; retain local-store-free desktop reads.
+- Honor the desktop Calendar enabled setting before any remote read, without opening a local Calendar store.
+
+- Preserve Calendar plaintext body rendering in remote mode while discarding helper-supplied HTML and using the shared rich-body policy.
+
+- Prepare remote Calendar typed reads with bounded metadata snapshots and explicit sync worker cancellation/draining before store shutdown. The helper mounts source, calendar, single-event and bounded occurrence reads using the context-aware evaluator; the desktop sanitizes rich event bodies locally. Provider synchronization, source administration and alarms are not enabled by this read-only slice.
+
+- Share extension-scoped Auth and secret-store adapters between desktop and future headless hosts. Headless interactive consent fails explicitly without a host callback; CardDAV host-secret reads reject malformed source identities. This does not enable remote Contacts or Calendar by itself.
+- Remote mailbox service mode gains Contacts and CardDAV: a desktop connected to a mailbox helper gets the Contacts tab and can browse, search and page contacts, view photos, add or reauthorize Google/Microsoft contact sources (consent runs on the desktop, tokens are stored on the helper), manage CardDAV sources and sync them on the helper. The device grant must include `contacts.read` and `contacts.write`, plus `contacts.manage` for adding, renaming, removing or reauthorizing sources; grants created before these capabilities existed keep working for mail and need to be recreated to add contacts. Enabling write access on a source still requires local mode, and contact-change event subscriptions and MCP contact tools are not routed remotely yet.
+- Avoid a recurrence mask panic for out-of-period ordinal weekdays in bounded Calendar reads, including missing fifth weekdays.
+
+- Add an isolated recurrence evaluator with context/work checks inside generation loops and pre-construction option limits; bounded Calendar store expansion uses it without changing the existing local unbounded API. Remote occurrence routing remains a separate integration step.
+- Remote contact mutations keep at most 64 unacknowledged requests awaiting the helper's receipt (keyed by a fixed-size digest, so photos are not retained while a send's outcome is unknown). Once earlier changes are acknowledged the retry key is dropped; while 64 remain unanswered, further contact changes are refused with a clear error instead of risking a duplicated create on retry.
+- Apply remote Calendar read budgets only to overlapping non-recurring events and recurring candidates, so unrelated history does not block current reads; allow Calendar read grants to be registered.
+
+- Add a bounded Calendar read API foundation for the remote helper, with a separate Calendar read grant, strict query limits and one shared recurrence-work budget across all selected events. The routes are not yet mounted by the helper or used by the desktop; remote Calendar remains unavailable until lifecycle and routing integration is complete.
+
 ## Postilaatikko 2026.11.12.1
 
 - The Send Later helper accepts remote HTTPS deployments: non-loopback `--listen` now requires at least one `--allowed-host` naming the exact Host values the listener serves, and the DNS-rebinding Host guard honors them (port-stripped, case-insensitive, no wildcards); loopback-only validation is unchanged, and the installed launchd agent carries the allowed hosts.

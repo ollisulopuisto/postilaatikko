@@ -1,6 +1,6 @@
 # Remote S/MIME and PGP parity: security design for review
 
-Status: proposal only. Existing remote crypto gates stay closed. This document does not authorize a key migration or claim working remote crypto.
+Status: custody decided by the owner (2026-11-13); implementation not started. Existing remote crypto gates stay closed. This document does not authorize a key migration or claim working remote crypto.
 
 ## Trust boundary and custody
 
@@ -38,6 +38,16 @@ Sensitive plaintext, key material and passphrases must not enter logs, errors, a
 
 Each code PR needs failing tests before the fix. Minimum coverage: cross-account key misuse; no key transfer on connect; locked/missing/revoked keys; no plaintext fallback; Bcc confidentiality; expired/mismatched recipient certificates; payload/recipient/concurrency bounds; identical retry bytes; unknown-outcome no-resend; remote startup without a mailbox DB; local-mode regression tests. Record tests actually run and tests not run.
 
-## Acceptance and unresolved decision
+## Custody decision
 
-Review whether device-local crypto is the desired first parity path. Helper-owned custody is not inferred from a request for a lean frontend. No API or runtime behavior changes in this PR. Native OS-keychain prompts, real S/MIME/PGP interoperability, and two-machine delivery require validation outside this source-only environment before parity can be claimed.
+Decided by the owner on 2026-11-13 (WhatsApp voice note, 08:12 Helsinki time): he does not use S/MIME, and has not knowingly enabled it in Gmail, so he chose the more secure option while still allowing server-held keys.
+
+- Default: device-local keys, as described above. Nothing is copied to the helper unless the user chooses it.
+- Optional: helper-held (server-side) private keys as an explicit opt-in per account, never a default and never a silent migration. Turning it on must show a clear security warning before the keys are provisioned: anyone who compromises the helper can decrypt mail and sign as the user, and revoking a device does not undo keys already placed on the helper. The warning text and the user's confirmation are recorded with the grant, and the user can switch back to device-local keys.
+- Helper-held keys keep the rules above: local administrative import only, separate crypto-use and administrative grants bound to accounts and identities, no private-key export, no caller-chosen paths, commands, URLs or algorithms.
+
+Implementation order: device-local slices 1 to 4 first. The opt-in helper-held mode is a later slice that needs its own security review and tests, including a test that no key leaves the device without the explicit opt-in and warning.
+
+## Acceptance
+
+Review whether the slices and the opt-in warning flow match the intent. No API or runtime behavior changes in this PR. Native OS-keychain prompts, real S/MIME/PGP interoperability, and two-machine delivery require validation outside this source-only environment before parity can be claimed.
