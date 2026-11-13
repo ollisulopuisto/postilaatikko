@@ -2,8 +2,8 @@ package alwayson
 
 import (
 	"encoding/base64"
-	"errors"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
