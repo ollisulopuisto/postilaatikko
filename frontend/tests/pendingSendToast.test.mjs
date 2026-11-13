@@ -45,7 +45,7 @@ test('local delivery errors cannot enter the remote claim retry path', () => {
 
 test('failed mode lookup and failed reload never arm an automatic resend', () => {
   const failure=app.slice(app.indexOf('} catch (err) {',app.indexOf('function pendingDispatch')), app.indexOf('// SMTP accepted'))
-  assert.doesNotMatch(failure,/ps.dispatching = false|ps.dispatchAt =/)
+  assert.doesNotMatch(failure,/ps.dispatchAt =/)
   assert.match(failure,/pendingRemove\(ps.id\)/)
 })
 
@@ -79,6 +79,21 @@ test('unknown dispatch mode is never retried after a failed reload', async () =>
   runInNewContext(js,sandbox)
   const item={id:'one',payload:'{}',dispatchAt:'original'}
   assert.equal(await sandbox.pendingDispatch(item),false)
-  assert.equal(sends,0);assert.equal(removes,1);assert.equal(reloads,0)
+  assert.equal(sends,0);assert.equal(removes,1);assert.equal(reloads,1)
   assert.equal(item.dispatchAt,'original');assert.equal(item.dispatching,true)
+})
+
+test('verified pending claim failure keeps explicit controls without a countdown', async () => {
+  const { default: ts } = await import('typescript')
+  const { runInNewContext } = await import('node:vm')
+  const source=app.slice(app.indexOf('  function pendingDispatch('),app.indexOf('  async function finishQuitRequest'))
+  const js=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText
+  let removes=0
+  const item={id:'one',payload:'{}',dispatchAt:'original'}
+  const sandbox={pendingSendDispatches:new Map(),DispatchRemotePendingSend:async()=>{throw Error('claim failed')},
+    CompletePendingSend:async()=>{},ListPendingSends:async()=>[{id:'one'}],pendingRemove:()=>{removes++},addToast:()=>{},Date,JSON,console}
+  runInNewContext(js,sandbox)
+  assert.equal(await sandbox.pendingDispatch(item),false)
+  assert.equal(removes,0);assert.equal(item.manualRecovery,true);assert.equal(item.dispatching,false)
+  assert.match(app,/!ps.manualRecovery && !ps.dispatching/)
 })
