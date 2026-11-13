@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Route remote Calendar occurrence reads through bounded helper snapshots and the context-aware recurrence adapter; retain local-store-free desktop reads.
+
 - Preserve Calendar plaintext body rendering in remote mode while discarding helper-supplied HTML and using the shared rich-body policy.
 
 - Prepare remote Calendar typed reads with bounded metadata snapshots and explicit sync worker cancellation/draining before store shutdown. The helper mounts source, calendar and single-event reads; the desktop sanitizes rich event bodies locally. Occurrence queries remain explicitly unsupported until a context-aware recurrence evaluator is available. Provider synchronization, source administration and alarms are not enabled by this read-only slice.

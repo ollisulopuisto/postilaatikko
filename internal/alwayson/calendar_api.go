@@ -67,8 +67,16 @@ func (r *calendarReadRuntime) CalendarEvent(ctx context.Context, id string) (out
 	err = r.withStore(ctx, func(s *calendar.Store) error { out, err = s.RemoteEvent(ctx, id); return err })
 	return
 }
-func (r *calendarReadRuntime) CalendarEvents(context.Context, v1.CalendarRangeRequest) ([]calendar.EventInstance, error) {
-	return nil, v1.ErrCalendarOccurrenceUnavailable
+func (r *calendarReadRuntime) CalendarEvents(ctx context.Context, request v1.CalendarRangeRequest) (out []calendar.EventInstance, err error) {
+	if err = request.Validate(); err != nil {
+		return nil, err
+	}
+	out = []calendar.EventInstance{}
+	err = r.withStore(ctx, func(s *calendar.Store) error {
+		out, err = s.RemoteEventsInRange(ctx, request.CalendarIDs, request.FromUnix, request.ToUnix)
+		return err
+	})
+	return
 }
 func (r *calendarReadRuntime) Close() error {
 	if r == nil {

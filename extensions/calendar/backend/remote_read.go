@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -104,6 +105,7 @@ func (s *Store) RemoteEventsInRange(ctx context.Context, calendarIDs []string, f
 		}
 		out = append(out, instances...)
 	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].InstanceStartUnix < out[j].InstanceStartUnix })
 	return out, nil
 }
 

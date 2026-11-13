@@ -4,6 +4,7 @@ import (
 	"errors"
 	calendar "github.com/hkdb/aerion/extensions/calendar/backend"
 	automationclient "github.com/hkdb/aerion/internal/automation/client"
+	v1 "github.com/hkdb/aerion/internal/automation/v1"
 )
 
 func (a *App) remoteCalendarClient() (*automationclient.Client, error) {
@@ -67,8 +68,7 @@ func (a *App) Calendar_GetEvent(id string) (*calendar.Event, error) {
 	return event, nil
 }
 
-// Calendar_ListEventsInRange keeps remote occurrence queries explicitly unavailable
-// until recurrence work can be interrupted inside the evaluator's inner loops.
+// Calendar_ListEventsInRange reads bounded occurrences without opening local stores.
 func (a *App) Calendar_ListEventsInRange(ids []string, from, to int64) ([]calendar.EventInstance, error) {
 	if !a.remoteServiceMode {
 		if a.CalendarBridge == nil {
@@ -76,5 +76,20 @@ func (a *App) Calendar_ListEventsInRange(ids []string, from, to int64) ([]calend
 		}
 		return a.CalendarBridge.Calendar_ListEventsInRange(ids, from, to)
 	}
-	return nil, errors.New("remote Calendar occurrence queries are unavailable pending context-aware recurrence support")
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	c, err := a.remoteCalendarClient()
+	if err != nil {
+		return nil, err
+	}
+	items, err := c.CalendarEvents(a.accountContext(), v1.CalendarRangeRequest{CalendarIDs: ids, FromUnix: from, ToUnix: to})
+	if err != nil {
+		return nil, err
+	}
+	// Like the local hot path, occurrence lists never supply ready-to-render bodies.
+	for i := range items {
+		items[i].DescriptionHTML = ""
+	}
+	return items, nil
 }
