@@ -425,7 +425,6 @@ func (info *iterInfo) rebuild(year int, month time.Month) {
 					lno1wkst := pymod(7-lyearweekday+info.rrule.wkst, 7)
 					lyearlen := 365 + isLeap(year-1)
 					if lno1wkst >= 4 {
-						lno1wkst = 0
 						lnumweeks = 52 + pymod(lyearlen+pymod(lyearweekday-info.rrule.wkst, 7), 7)/4
 					} else {
 						lnumweeks = 52 + pymod(info.yearlen-no1wkst, 7)/4
@@ -466,9 +465,15 @@ func (info *iterInfo) rebuild(year int, month time.Month) {
 					var i int
 					if n < 0 {
 						i = last + (n+1)*7
+						if i < first || i > last {
+							continue
+						}
 						i -= pymod(info.wdaymask[i]-wday, 7)
 					} else {
 						i = first + (n-1)*7
+						if i < first || i > last {
+							continue
+						}
 						i += pymod(7-info.wdaymask[i]+wday, 7)
 					}
 					if first <= i && i <= last {
