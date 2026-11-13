@@ -11,7 +11,10 @@ Review the engine delta against that exact upstream version. The changes are:
   loop, including the hour/minute/second advancement loops that can otherwise
   run forever for impossible interval/filter combinations;
 - `IteratorWithCheck`, leaving the original iterator behavior intact;
-- one weekday conversion constructor for the adapter.
+- one weekday conversion constructor for the adapter;
+- range-check ordinal weekday mask candidates before indexing, including valid
+  fifth weekdays that do not exist in a particular month; remove one upstream
+  ineffective assignment caught by the repository linter.
 
 `Between` converts already-parsed upstream options, preserves RDATE/EXDATE and
 sorted unique inclusive results, and returns no partial result on a limit or
