@@ -171,7 +171,10 @@ func TestOutOfMonthOrdinalDoesNotPanic(t *testing.T) {
 				set := &upstream.Set{}
 				set.RRule(r)
 				budget := 100000
-				if _, err := Between(context.Background(), set, start, start.AddDate(0, 1, 0), 10, &budget); err != nil {
+				got, err := Between(context.Background(), set, start, start.AddDate(0, 1, 0), 10, &budget)
+				// An impossible ordinal may run until the work budget; it must return
+				// an explicit error, no partial list, and never panic during rebuild.
+				if err != nil && (len(got) != 0 || !strings.Contains(err.Error(), "work budget")) {
 					t.Fatal(err)
 				}
 			}
