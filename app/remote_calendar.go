@@ -7,6 +7,15 @@ import (
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
 )
 
+// calendarExtensionEnabled mirrors the local bridge's device-level gate.
+func (a *App) calendarExtensionEnabled() bool {
+	if a.settingsStore == nil {
+		return false
+	}
+	enabled, err := a.settingsStore.IsExtensionEnabled("calendar")
+	return err == nil && enabled
+}
+
 func (a *App) remoteCalendarClient() (*automationclient.Client, error) {
 	if a.mailboxService == nil {
 		return nil, errors.New("remote mailbox service is not configured")
@@ -21,6 +30,9 @@ func (a *App) Calendar_ListSources() ([]calendar.Source, error) {
 			return nil, errors.New("Calendar is unavailable")
 		}
 		return a.CalendarBridge.Calendar_ListSources()
+	}
+	if !a.calendarExtensionEnabled() {
+		return nil, nil
 	}
 	c, err := a.remoteCalendarClient()
 	if err != nil {
@@ -37,6 +49,9 @@ func (a *App) Calendar_ListCalendars(sourceID string) ([]calendar.Calendar, erro
 		}
 		return a.CalendarBridge.Calendar_ListCalendars(sourceID)
 	}
+	if !a.calendarExtensionEnabled() {
+		return nil, nil
+	}
 	c, err := a.remoteCalendarClient()
 	if err != nil {
 		return nil, err
@@ -51,6 +66,9 @@ func (a *App) Calendar_GetEvent(id string) (*calendar.Event, error) {
 			return nil, errors.New("Calendar is unavailable")
 		}
 		return a.CalendarBridge.Calendar_GetEvent(id)
+	}
+	if !a.calendarExtensionEnabled() {
+		return nil, nil
 	}
 	c, err := a.remoteCalendarClient()
 	if err != nil {
@@ -75,6 +93,9 @@ func (a *App) Calendar_ListEventsInRange(ids []string, from, to int64) ([]calend
 			return nil, errors.New("Calendar is unavailable")
 		}
 		return a.CalendarBridge.Calendar_ListEventsInRange(ids, from, to)
+	}
+	if !a.calendarExtensionEnabled() {
+		return nil, nil
 	}
 	if len(ids) == 0 {
 		return nil, nil

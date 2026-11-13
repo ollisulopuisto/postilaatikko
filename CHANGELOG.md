@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 - Route remote Calendar occurrence reads through bounded helper snapshots and the context-aware recurrence adapter; retain local-store-free desktop reads.
+- Honor the desktop Calendar enabled setting before any remote read, without opening a local Calendar store.
 
 - Preserve Calendar plaintext body rendering in remote mode while discarding helper-supplied HTML and using the shared rich-body policy.
 
