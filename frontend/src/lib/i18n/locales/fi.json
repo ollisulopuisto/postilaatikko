@@ -1550,6 +1550,32 @@
     "saveDraftFirst": "Luonnosta ei voitu tallentaa. Tallenna se ennen ajastusta.",
     "awaitingConfirmation": "Odotetaan Studion vahvistusta. Säilytä luonnos ja yritä tallennettua pyyntöä uudelleen.",
     "scheduled": "Ajastettu Studiossa",
+    "repeat": "Toista",
+    "repeatEvery": "Joka",
+    "repeatUnit": "Toiston yksikkö",
+    "repeatEnds": "Päättyy",
+    "unit": {
+      "day": "päivä(ä)",
+      "week": "viikko(a)",
+      "month": "kuukausi(a)"
+    },
+    "endsNever": "ei koskaan",
+    "endsCount": "näin monen lähetyksen jälkeen",
+    "endsUntil": "tänä päivänä",
+    "repeatHelp": "Jokainen lähetys tehdään vasta, kun edellinen on hyväksytty. Jos yksi epäonnistuu, sarja pysähtyy kunnes tarkistat sen. Studion ollessa pois päältä ohitetut lähetykset ohitetaan, niitä ei lähetetä myöhässä kerralla. Ajan muuttaminen aloittaa sarjan alusta; viesti pysyy sellaisena kuin se nyt on.",
+    "repeatEveryInvalid": "Toistoväli on kokonaisluku väliltä 1-366.",
+    "repeatCountInvalid": "Lähetysten määrä on kokonaisluku väliltä 2-1000.",
+    "repeatUntilInvalid": "Päättymispäivän on oltava ensimmäisen lähetyksen päivä tai myöhemmin.",
+    "listMode": "Postituslista",
+    "listOff": "Pois: lähetä sellaisenaan",
+    "listBcc": "Vastaanottajat piilokopiona, Vastaanottaja olen minä",
+    "listCc": "Vastaanottajat kopiona, Vastaanottaja olen minä",
+    "listHelp": "Kaikki saavat saman viestin. Piilokopio piilottaa muiden osoitteet, kopio näyttää ne. Poistumislinkkiä ei ole; ihmiset pyytävät sinua poistamaan heidät listalta.",
+    "repeatSummary": {
+      "day": "Toistuu {count} päivän välein",
+      "week": "Toistuu {count} viikon välein",
+      "month": "Toistuu {count} kuukauden välein"
+    },
     "status": {
       "awaiting_ack": "Odotetaan Studion vahvistusta",
       "cancellation_awaiting_ack": "Peruutus odottaa Studion vahvistusta",

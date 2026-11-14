@@ -23,6 +23,7 @@ type Preview struct {
 	To      string `json:"to"`
 	ToCount int    `json:"toCount"`
 	Kind    string `json:"kind"`
+	Repeat  string `json:"repeat,omitempty"` // "unit:every", empty for a one-off
 }
 
 func deliveryPreview(delivery *Delivery) (Preview, error) {
@@ -38,7 +39,11 @@ func deliveryPreview(delivery *Delivery) (Preview, error) {
 	if len(runes) > 512 {
 		subject = string(runes[:512]) + "…"
 	}
-	return Preview{Subject: subject, From: delivery.From, To: strings.Join(delivery.To[:min(3, len(delivery.To))], ", "), ToCount: len(delivery.To), Kind: "scheduled-preview-v1"}, nil
+	preview := Preview{Subject: subject, From: delivery.From, To: strings.Join(delivery.To[:min(3, len(delivery.To))], ", "), ToCount: len(delivery.To), Kind: "scheduled-preview-v1"}
+	if delivery.Repeat != nil {
+		preview.Repeat = delivery.Repeat.Summary()
+	}
+	return preview, nil
 }
 
 func sealPreview(preview Preview, client *Identity) ([]byte, error) {

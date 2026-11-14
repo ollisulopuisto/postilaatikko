@@ -4,6 +4,7 @@
   import type { ComposerApi } from '$lib/composerApi'
   import type { ScheduledJob } from '$lib/scheduledSendApi'
   import { _ } from '$lib/i18n'
+  import { buildRepeat, defaultRepeatForm, repeatError, type ListMode, type RepeatRule } from '$lib/scheduledRepeat'
 
   interface Props {
     open?: boolean
@@ -11,7 +12,7 @@
     api: ComposerApi
     canSchedule: boolean
     sending: boolean
-    onSchedule: (due: string) => Promise<void>
+    onSchedule: (due: string, repeat: RepeatRule, listMode: ListMode) => Promise<void>
     setupOnly?: boolean
   }
 
@@ -28,6 +29,8 @@
   let settingsOpen = $state(false)
   let due = $state('')
   let jobs = $state<ScheduledJob[]>([])
+  let repeatForm = $state(defaultRepeatForm())
+  let listMode = $state<ListMode>('off')
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
   function defaultTime(): string {
@@ -46,6 +49,8 @@
     busy = true
     error = ''
     due = defaultTime()
+    repeatForm = defaultRepeatForm()
+    listMode = 'off'
     try {
       const setup = await api.getSendLaterSetup(id)
       if (!open || id !== accountId) return
@@ -112,8 +117,13 @@
       error = $_('sendLater.futureTime')
       return
     }
+    const problem = repeatError(repeatForm, date)
+    if (problem) {
+      error = $_(`sendLater.${problem}`)
+      return
+    }
     open = false
-    await onSchedule(date.toISOString())
+    await onSchedule(date.toISOString(), buildRepeat(repeatForm, timezone), listMode)
   }
 </script>
 
@@ -134,6 +144,48 @@
       {#if due && Number.isFinite(new Date(due).getTime())}
         <p class="text-xs text-muted-foreground">{new Date(due).toLocaleString(undefined, { timeZoneName: 'short' })}</p>
       {/if}
+
+      <div class="mt-3 space-y-2">
+        <label class="flex items-center gap-2 text-sm">
+          <input type="checkbox" bind:checked={repeatForm.enabled} disabled={busy || sending} />
+          {$_('sendLater.repeat')}
+        </label>
+        {#if repeatForm.enabled}
+          <div class="flex flex-wrap items-center gap-2 text-sm">
+            <span>{$_('sendLater.repeatEvery')}</span>
+            <input type="number" min="1" max="366" bind:value={repeatForm.every} aria-label={$_('sendLater.repeatEvery')}
+              class="w-20 rounded-md border border-border bg-background px-2 py-1" />
+            <select bind:value={repeatForm.unit} aria-label={$_('sendLater.repeatUnit')} class="rounded-md border border-border bg-background px-2 py-1">
+              <option value="day">{$_('sendLater.unit.day')}</option>
+              <option value="week">{$_('sendLater.unit.week')}</option>
+              <option value="month">{$_('sendLater.unit.month')}</option>
+            </select>
+            <select bind:value={repeatForm.ends} aria-label={$_('sendLater.repeatEnds')} class="rounded-md border border-border bg-background px-2 py-1">
+              <option value="never">{$_('sendLater.endsNever')}</option>
+              <option value="count">{$_('sendLater.endsCount')}</option>
+              <option value="until">{$_('sendLater.endsUntil')}</option>
+            </select>
+            {#if repeatForm.ends === 'count'}
+              <input type="number" min="2" max="1000" bind:value={repeatForm.count} aria-label={$_('sendLater.endsCount')}
+                class="w-20 rounded-md border border-border bg-background px-2 py-1" />
+            {:else if repeatForm.ends === 'until'}
+              <input type="date" bind:value={repeatForm.until} aria-label={$_('sendLater.endsUntil')}
+                class="rounded-md border border-border bg-background px-2 py-1" />
+            {/if}
+          </div>
+          <p class="text-xs text-muted-foreground">{$_('sendLater.repeatHelp')}</p>
+        {/if}
+      </div>
+
+      <div class="mt-3 space-y-1">
+        <label class="block text-sm" for="list-mode">{$_('sendLater.listMode')}</label>
+        <select id="list-mode" bind:value={listMode} disabled={busy || sending} class="w-full rounded-md border border-border bg-background px-3 py-2 text-sm">
+          <option value="off">{$_('sendLater.listOff')}</option>
+          <option value="bcc">{$_('sendLater.listBcc')}</option>
+          <option value="cc">{$_('sendLater.listCc')}</option>
+        </select>
+        {#if listMode !== 'off'}<p class="text-xs text-muted-foreground">{$_('sendLater.listHelp')}</p>{/if}
+      </div>
     </div>{/if}
 
     <details bind:open={settingsOpen} class="rounded-md border border-border p-3">

@@ -11,6 +11,7 @@
 
 // @ts-ignore - Wails generated imports
 import { smtp, account, contact, app, smime, pgp } from '../../wailsjs/go/models'
+import type { RepeatRule } from './scheduledRepeat'
 import { sendLaterBackend, type SendLaterConfig, type SendLaterSetup, type ScheduledJob, type ScheduleResult } from './scheduledSendApi'
 
 /**
@@ -34,7 +35,7 @@ export interface ComposerApi {
   getSendLaterSetup: (accountId: string) => Promise<SendLaterSetup>
   initializeSendLaterClient: () => Promise<string>
   saveSendLaterConfig: (config: SendLaterConfig) => Promise<void>
-  scheduleMessage: (accountId: string, message: smtp.ComposeMessage, draftId: string, due: string) => Promise<ScheduleResult>
+  scheduleMessage: (accountId: string, message: smtp.ComposeMessage, draftId: string, due: string, repeat: RepeatRule) => Promise<ScheduleResult>
   listScheduledMessages: (accountId: string) => Promise<ScheduledJob[]>
   updateScheduledMessage: (id: string, action: string) => Promise<ScheduleResult>
 
@@ -212,7 +213,7 @@ export function createMainWindowApi(): ComposerApi {
     getSendLaterSetup: accountId => sendLaterBackend().GetSendLaterSetup(accountId),
     initializeSendLaterClient: () => sendLaterBackend().InitializeSendLaterClient(),
     saveSendLaterConfig: config => sendLaterBackend().SaveSendLaterConfig(config),
-    scheduleMessage: (accountId, message, draftId, due) => sendLaterBackend().ScheduleMessage(accountId, message, draftId, due),
+    scheduleMessage: (accountId, message, draftId, due, repeat) => sendLaterBackend().ScheduleMessage(accountId, message, draftId, due, repeat),
     listScheduledMessages: accountId => sendLaterBackend().ListScheduledMessages(accountId),
     updateScheduledMessage: (id, action) => sendLaterBackend().UpdateScheduledMessage(id, action),
 
@@ -408,7 +409,7 @@ export function createComposerWindowApi(_accountId: string): ComposerApi {
     getSendLaterSetup: accountId => sendLaterBackend(true).GetSendLaterSetup(accountId),
     initializeSendLaterClient: () => sendLaterBackend(true).InitializeSendLaterClient(),
     saveSendLaterConfig: config => sendLaterBackend(true).SaveSendLaterConfig(config),
-    scheduleMessage: (accountId, message, draftId, due) => sendLaterBackend(true).ScheduleMessage(accountId, message, draftId, due),
+    scheduleMessage: (accountId, message, draftId, due, repeat) => sendLaterBackend(true).ScheduleMessage(accountId, message, draftId, due, repeat),
     listScheduledMessages: accountId => sendLaterBackend(true).ListScheduledMessages(accountId),
     updateScheduledMessage: (id, action) => sendLaterBackend(true).UpdateScheduledMessage(id, action),
 

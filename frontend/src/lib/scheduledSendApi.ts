@@ -1,4 +1,5 @@
 import type { smtp } from '../../wailsjs/go/models'
+import type { RepeatRule } from './scheduledRepeat'
 
 export interface SendLaterConfig {
   accountId: string
@@ -26,6 +27,7 @@ export interface ScheduledJob {
   from?: string
   to?: string
   toCount?: number
+  repeat?: string
   previewAvailable: boolean
   draftCleanup: string
 }
@@ -45,7 +47,7 @@ interface Backend {
   GetSendLaterSetup(accountId: string): Promise<SendLaterSetup>
   InitializeSendLaterClient(): Promise<string>
   SaveSendLaterConfig(config: SendLaterConfig): Promise<void>
-  ScheduleMessage(accountId: string, message: smtp.ComposeMessage, draftId: string, due: string): Promise<ScheduleResult>
+  ScheduleMessage(accountId: string, message: smtp.ComposeMessage, draftId: string, due: string, repeat: RepeatRule): Promise<ScheduleResult>
   ListScheduledMessages(accountId: string): Promise<ScheduledJob[]>
   UpdateScheduledMessage(id: string, action: string): Promise<ScheduleResult>
   RescheduleMessage(id: string, due: string): Promise<ScheduleResult>

@@ -33,6 +33,7 @@ type ClientJob struct {
 	From             string    `json:"from,omitempty"`
 	To               string    `json:"to,omitempty"`
 	ToCount          int       `json:"toCount,omitempty"`
+	Repeat           string    `json:"repeat,omitempty"` // "unit:every" for a repeating series
 	DraftCleanup     string    `json:"draftCleanup"`
 	DraftFingerprint string    `json:"-"`
 	PreviewAvailable bool      `json:"previewAvailable"`

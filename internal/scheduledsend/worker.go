@@ -125,11 +125,20 @@ func (w *Worker) ProcessNext(ctx context.Context) (bool, error) {
 	}
 	// Credential lookup, connection setup, authentication, and submission must
 	// all fit this limit. Interrupted claims are recovered only after 15 minutes.
+	delivery := *command.Delivery
+	repeat := delivery.Repeat
+	if repeat != nil {
+		delivery.DueAt = repeat.occurrence(command.Delivery.DueAt, job.seq)
+		delivery.RFC822 = occurrenceMessage(command.Delivery.RFC822, job.id, job.epoch, job.seq, delivery.DueAt)
+		if job.seq > 0 || job.epoch > 0 {
+			defer clear(delivery.RFC822)
+		}
+	}
 	deliveryContext, cancel := context.WithTimeout(ctx, 2*time.Minute)
-	err = w.Transport.Deliver(deliveryContext, *command.Delivery)
+	err = w.Transport.Deliver(deliveryContext, delivery)
 	cancel()
 	if err == nil {
-		return true, w.complete(ctx, job, Sent, "", time.Time{})
+		return true, w.finishRun(ctx, job, command.Delivery, false)
 	}
 	var failure *DeliveryError
 	if !errors.As(err, &failure) || failure == nil {
@@ -137,6 +146,10 @@ func (w *Worker) ProcessNext(ctx context.Context) (bool, error) {
 	}
 	switch failure.Kind {
 	case AcceptedWithoutSentCopy:
+		if repeat != nil {
+			// Provider accepted this run; only the Sent copy is missing.
+			return true, w.finishRun(ctx, job, command.Delivery, true)
+		}
 		return true, w.complete(ctx, job, Sent, "sent_copy_failed", time.Time{})
 	case SafeRetry:
 		if job.attempts >= 8 {
@@ -151,6 +164,24 @@ func (w *Worker) ProcessNext(ctx context.Context) (bool, error) {
 	default:
 		return true, w.complete(ctx, job, Unknown, "delivery_outcome_unknown", time.Time{})
 	}
+}
+
+// finishRun records a provider-accepted run. A repeating job is requeued for
+// its next run; the series ends as Sent when no run remains.
+func (w *Worker) finishRun(ctx context.Context, job claimedJob, delivery *Delivery, sentCopyLost bool) error {
+	if delivery.Repeat != nil {
+		if seq, due, ok := delivery.Repeat.next(delivery.DueAt, job.seq, job.sends+1, time.Now().UTC()); ok {
+			writeContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			defer cancel()
+			return w.Store.advance(writeContext, job, seq, due)
+		}
+	}
+	if sentCopyLost {
+		// The last run was accepted but its Sent copy is missing: keep the
+		// payload and the code so the client can still repair the Sent folder.
+		return w.complete(ctx, job, Sent, "sent_copy_failed", time.Time{})
+	}
+	return w.complete(ctx, job, Sent, "", time.Time{})
 }
 
 func (w *Worker) complete(ctx context.Context, job claimedJob, state State, code string, next time.Time) error {

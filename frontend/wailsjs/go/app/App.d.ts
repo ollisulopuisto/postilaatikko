@@ -787,7 +787,7 @@ export function SaveSendLaterConfig(arg1:scheduledsend.ClientConfig):Promise<voi
 
 export function SaveUIState(arg1:appstate.UIState):Promise<void>;
 
-export function ScheduleMessage(arg1:string,arg2:smtp.ComposeMessage,arg3:string,arg4:string):Promise<app.ScheduleResult>;
+export function ScheduleMessage(arg1:string,arg2:smtp.ComposeMessage,arg3:string,arg4:string,arg5:scheduledsend.Repeat):Promise<app.ScheduleResult>;
 
 export function SearchContacts(arg1:string,arg2:number):Promise<Array<contact.Contact>>;
 

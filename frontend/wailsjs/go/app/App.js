@@ -1537,8 +1537,8 @@ export function SaveUIState(arg1) {
   return window['go']['app']['App']['SaveUIState'](arg1);
 }
 
-export function ScheduleMessage(arg1, arg2, arg3, arg4) {
-  return window['go']['app']['App']['ScheduleMessage'](arg1, arg2, arg3, arg4);
+export function ScheduleMessage(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['app']['App']['ScheduleMessage'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function SearchContacts(arg1, arg2) {
