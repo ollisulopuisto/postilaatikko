@@ -138,7 +138,7 @@ func (w *Worker) ProcessNext(ctx context.Context) (bool, error) {
 	err = w.Transport.Deliver(deliveryContext, delivery)
 	cancel()
 	if err == nil {
-		return true, w.finishRun(ctx, job, command.Delivery)
+		return true, w.finishRun(ctx, job, command.Delivery, false)
 	}
 	var failure *DeliveryError
 	if !errors.As(err, &failure) || failure == nil {
@@ -148,7 +148,7 @@ func (w *Worker) ProcessNext(ctx context.Context) (bool, error) {
 	case AcceptedWithoutSentCopy:
 		if repeat != nil {
 			// Provider accepted this run; only the Sent copy is missing.
-			return true, w.finishRun(ctx, job, command.Delivery)
+			return true, w.finishRun(ctx, job, command.Delivery, true)
 		}
 		return true, w.complete(ctx, job, Sent, "sent_copy_failed", time.Time{})
 	case SafeRetry:
@@ -168,13 +168,18 @@ func (w *Worker) ProcessNext(ctx context.Context) (bool, error) {
 
 // finishRun records a provider-accepted run. A repeating job is requeued for
 // its next run; the series ends as Sent when no run remains.
-func (w *Worker) finishRun(ctx context.Context, job claimedJob, delivery *Delivery) error {
+func (w *Worker) finishRun(ctx context.Context, job claimedJob, delivery *Delivery, sentCopyLost bool) error {
 	if delivery.Repeat != nil {
-		if seq, due, ok := delivery.Repeat.next(delivery.DueAt, job.seq, time.Now().UTC()); ok {
+		if seq, due, ok := delivery.Repeat.next(delivery.DueAt, job.seq, job.sends+1, time.Now().UTC()); ok {
 			writeContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 			defer cancel()
 			return w.Store.advance(writeContext, job, seq, due)
 		}
+	}
+	if sentCopyLost {
+		// The last run was accepted but its Sent copy is missing: keep the
+		// payload and the code so the client can still repair the Sent folder.
+		return w.complete(ctx, job, Sent, "sent_copy_failed", time.Time{})
 	}
 	return w.complete(ctx, job, Sent, "", time.Time{})
 }

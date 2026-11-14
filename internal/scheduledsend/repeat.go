@@ -79,12 +79,13 @@ func (r Repeat) occurrence(first time.Time, n int) time.Time {
 
 // next returns the first run after index current that is later than now. Runs
 // missed while the helper was offline are skipped rather than sent in a burst.
-// ok is false when the series has ended.
-func (r Repeat) next(first time.Time, current int, now time.Time) (index int, at time.Time, ok bool) {
+// sent is the number of runs delivered so far including the one just done, so
+// skipped runs do not use up Count. ok is false when the series has ended.
+func (r Repeat) next(first time.Time, current, sent int, now time.Time) (index int, at time.Time, ok bool) {
+	if r.Count > 0 && sent >= r.Count {
+		return 0, time.Time{}, false
+	}
 	for index = current + 1; index-current <= maxRepeatSkips; index++ {
-		if r.Count > 0 && index >= r.Count {
-			return 0, time.Time{}, false
-		}
 		at = r.occurrence(first, index)
 		if r.Until != nil && at.After(*r.Until) {
 			return 0, time.Time{}, false

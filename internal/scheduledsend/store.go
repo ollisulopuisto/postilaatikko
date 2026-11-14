@@ -118,6 +118,12 @@ func OpenStore(directory string, helper *Identity) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("upgrade scheduled queue: %w", err)
 	}
+	// sends counts runs delivered, so a count limit ignores runs skipped
+	// while the helper was offline.
+	if _, err = db.Exec("ALTER TABLE jobs ADD COLUMN sends INTEGER NOT NULL DEFAULT 0"); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+		db.Close()
+		return nil, fmt.Errorf("upgrade scheduled queue: %w", err)
+	}
 	if _, err = db.Exec("INSERT OR IGNORE INTO helper_identity(singleton, public_key) VALUES(1, ?)", helper.PublicKey().String()); err != nil {
 		db.Close()
 		return nil, err
@@ -311,7 +317,7 @@ func (s *Store) acceptCommand(ctx context.Context, encoded []byte, command Comma
 		VALUES(?, ?, ?, ?, ?, ?, ?, ?, 0, '', ?)
 		ON CONFLICT(id) DO UPDATE SET revision = excluded.revision, envelope = excluded.envelope,
 		fingerprint = excluded.fingerprint, due_at = excluded.due_at, next_attempt = excluded.next_attempt,
-		state = excluded.state, epoch = CASE WHEN jobs.seq > 0 THEN jobs.epoch + 1 ELSE jobs.epoch END, seq = 0, attempts = 0, code = '', updated_at = excluded.updated_at`,
+		state = excluded.state, epoch = CASE WHEN jobs.seq > 0 THEN jobs.epoch + 1 ELSE jobs.epoch END, seq = 0, sends = 0, attempts = 0, code = '', updated_at = excluded.updated_at`,
 		command.JobID, clientKey.String(), command.Revision, encoded, digest[:], dueAt, dueAt, state, now)
 	if err != nil {
 		return empty, err
@@ -400,6 +406,7 @@ type claimedJob struct {
 	attempts int
 	seq      int
 	epoch    int
+	sends    int
 	envelope []byte
 }
 
@@ -407,7 +414,7 @@ func (s *Store) claim(ctx context.Context, now time.Time) (claimedJob, error) {
 	var job claimedJob
 	err := s.db.QueryRowContext(ctx, `UPDATE jobs SET state = 'sending', attempts = attempts + 1, updated_at = ?
 		WHERE id = (SELECT id FROM jobs WHERE state IN ('queued','retry') AND next_attempt <= ? ORDER BY next_attempt, id LIMIT 1)
-		AND state IN ('queued','retry') RETURNING id, revision, attempts, seq, epoch, envelope`, now.UnixMilli(), now.UnixMilli()).Scan(&job.id, &job.revision, &job.attempts, &job.seq, &job.epoch, &job.envelope)
+		AND state IN ('queued','retry') RETURNING id, revision, attempts, seq, epoch, sends, envelope`, now.UnixMilli(), now.UnixMilli()).Scan(&job.id, &job.revision, &job.attempts, &job.seq, &job.epoch, &job.sends, &job.envelope)
 	return job, err
 }
 
@@ -432,7 +439,7 @@ func (s *Store) finish(ctx context.Context, job claimedJob, state State, code st
 // can never leave both a finished run and no successor: until this update
 // commits the job stays in 'sending' and later becomes outcome_unknown.
 func (s *Store) advance(ctx context.Context, job claimedJob, seq int, due time.Time) error {
-	result, err := s.db.ExecContext(ctx, `UPDATE jobs SET state = 'queued', code = '', seq = ?, due_at = ?, next_attempt = ?,
+	result, err := s.db.ExecContext(ctx, `UPDATE jobs SET state = 'queued', code = '', seq = ?, sends = sends + 1, due_at = ?, next_attempt = ?,
 		attempts = 0, updated_at = ? WHERE id = ? AND revision = ? AND state = 'sending'`,
 		seq, due.UnixMilli(), due.UnixMilli(), time.Now().UTC().UnixMilli(), job.id, job.revision)
 	if err != nil {
