@@ -52,7 +52,7 @@ function t(key) {
   return value
 }
 
-const cell = text => text.replace(/\|/g, '\\|')
+const cell = text => text.replace(/\\/g, '\\\\').replace(/\|/g, '\\|')
 const code = text => (text.includes('`') ? '`` ' + text + ' ``' : '`' + text + '`')
 
 function comboText(combo, macOnly) {
