@@ -11,7 +11,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json && npm run check:shortcuts && npm run check:shortcuts-doc",
-    "check:shortcuts": "node --test tests/shortcutRegistry.test.mjs",
+    "check:shortcuts": "node --test tests/shortcutRegistry.test.mjs tests/shortcutsDocBlocks.test.mjs",
     "check:shortcuts-doc": "node scripts/gen-shortcuts-doc.mjs --check",
     "docs:shortcuts": "node scripts/gen-shortcuts-doc.mjs",
     "lint": "eslint .",

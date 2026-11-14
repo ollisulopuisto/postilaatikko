@@ -10,6 +10,7 @@ import { readFile, writeFile, readdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { createServer } from 'vite'
+import { isUpToDate, replaceGeneratedBlocks } from './shortcuts-doc-blocks.mjs'
 
 const frontendDir = fileURLToPath(new URL('..', import.meta.url))
 const repoDir = path.resolve(frontendDir, '..')
@@ -94,18 +95,11 @@ const extensions = EXTENSION_REGISTRIES.map(reg => {
 }).join('\n\n')
 
 const blocks = { core, extensions }
-let doc = await readFile(docPath, 'utf8')
-for (const [name, body] of Object.entries(blocks)) {
-  const begin = `<!-- BEGIN GENERATED: ${name} (run \`npm run docs:shortcuts\` in frontend/; do not edit by hand) -->`
-  const end = `<!-- END GENERATED: ${name} -->`
-  const re = new RegExp(`<!-- BEGIN GENERATED: ${name}[^\\n]*-->[\\s\\S]*?${end}`)
-  if (!re.test(doc)) throw new Error(`Markers for the "${name}" block are missing from docs/KEYBOARD_SHORTCUTS.md`)
-  doc = doc.replace(re, () => `${begin}\n\n${body}\n\n${end}`)
-}
+const current = await readFile(docPath, 'utf8')
+const doc = replaceGeneratedBlocks(current, blocks)
 
 if (check) {
-  const current = await readFile(docPath, 'utf8')
-  if (current !== doc) {
+  if (!isUpToDate(current, blocks)) {
     console.error('docs/KEYBOARD_SHORTCUTS.md is out of date with the shortcut registry. Run `npm run docs:shortcuts` in frontend/ and commit the result.')
     process.exit(1)
   }
