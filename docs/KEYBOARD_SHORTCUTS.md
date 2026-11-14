@@ -6,215 +6,142 @@ Complete reference of all keyboard shortcuts in Postilaatikko. Existing upstream
 
 Press `?` anywhere outside a text field (and while the composer is closed) to open the keyboard shortcuts overlay. It is also reachable from the keyboard icon in the Mail sidebar footer and the keyboard button in the Calendar and Contacts sidebar footers. The overlay lists the shortcuts for the active view, can show all views, is searchable by action or key, and renders `⌘` on macOS. Toolbar tooltips and message context-menu items show the same key labels.
 
-The overlay and hints are generated from `frontend/src/lib/keyboard/registry.ts` (and `extensions/<name>/frontend/keyboard/registry.ts`). When you add or change a binding, update the registry; `npm run check` fails if a displayed key no longer matches its predicate, or if `App.svelte` / `Composer.svelte` gain or lose a key case that the registry does not describe. This document remains the long-form reference.
+The overlay and hints are generated from `frontend/src/lib/keyboard/registry.ts` (and `extensions/<name>/frontend/keyboard/registry.ts`). When you add or change a binding, update the registry; `npm run check` fails if a displayed key no longer matches its predicate, or if `App.svelte` / `Composer.svelte` gain or lose a key case that the registry does not describe.
+
+The shortcut tables in this document are generated from the same registry. After changing a binding, run `npm run docs:shortcuts` in `frontend/` and commit the result; `npm run check` fails when the committed tables are stale. Only the text between the `GENERATED` markers is rewritten. The prose around the tables is hand-written.
 
 
 These shortcuts work anywhere in the application, except while the composer is open (see [Composer Blocking](#composer-blocking)). They are ignored while a context menu or modal dialog is open.
 
 On macOS, `⌘` works wherever `Ctrl` is listed below, unless macOS reserves the chord for itself (for example `⌘+Tab`, which switches applications; use `Ctrl+Tab` to switch rail items).
 
-### Application
+<!-- BEGIN GENERATED: core (run `npm run docs:shortcuts` in frontend/; do not edit by hand) -->
+
+### General
 
 | Shortcut | Action |
 |----------|--------|
-| `?` | Show the keyboard shortcuts overlay (not in text fields or while composing) |
-| `Ctrl+K` / `Ctrl+P` / `Ctrl+Shift+P` (macOS: `⌘K` / `⌘P` / `⌘⇧P`) | Open the command palette (Alfred-style quick launcher). Undo, star, mark read/unread and the theme switch keep it open so you can repeat them; your last 8 palette commands are listed first. the sidebar button also opens it |
-| `⌘+,` (macOS) | Open Preferences |
-| `Ctrl+Q` | Quit application |
-| `Ctrl+N` | Compose new message |
-| `Ctrl+S` | Focus search bar |
-| `Ctrl+Z` | Undo the last flag change or move/archive/delete/spam action |
-| `Ctrl+Shift+A` | Start sync of all accounts (cancels the sync if one is already running) |
-| `Ctrl+Shift+S` | Start sync of the selected folder (cancels it if already running) |
-| `Ctrl+Tab` | Switch to next extension on the rail (Mail / Contacts / ...) |
-| `` Ctrl+` `` | Switch to previous extension on the rail |
-| `Ctrl+1…9,0` (macOS: `⌘1…9,0`) | Open favorite 1–10 on the quick-access rail (star any folder in the sidebar cards, folder tree or All folders browser to set them) |
+| `Ctrl+K` (macOS `⌘K`) / `Ctrl+P` (macOS `⌘P`) / `Ctrl+Shift+P` (macOS `⌘⇧P`) | Command palette |
+| `?` / `Ctrl+/` (macOS `⌘/`) | Show keyboard shortcuts |
+| `⌘,` (macOS only) | Open settings |
+| `c` / `Ctrl+N` (macOS `⌘N`) | New message |
+| `/` / `Ctrl+S` (macOS `⌘S`) / `Ctrl+F` (macOS `⌘F`) | Search |
+| `Ctrl+D` (macOS `⌘D`) | Show folder tree or message list |
+| `z` / `Ctrl+Z` (macOS `⌘Z`) | Undo last action |
+| `Ctrl+Shift+A` (macOS `⌘⇧A`) | Sync all accounts (again to cancel) |
+| `Ctrl+Shift+S` (macOS `⌘⇧S`) | Sync current folder (again to cancel) |
+| `Ctrl+Tab` (macOS `⌃⇥`) | Next view on the rail |
+| `` Ctrl+` `` (macOS `` ⌃` ``) | Previous view on the rail |
+| `Ctrl+W` (macOS `⌘W`) | Close active tab |
+| `Ctrl+Q` (macOS `⌘Q`) | Quit |
 
-### Pane Navigation
-
-| Shortcut | Action |
-|----------|--------|
-| `Alt+Left` / `Alt+H` | Focus previous pane (viewer -> list -> sidebar) |
-| `Alt+Right` / `Alt+L` | Focus next pane (sidebar -> list -> viewer) |
-
-All `Alt` pane and folder navigation is disabled while focus mode is on.
-
-### Folder Navigation
+### Panes and folders
 
 | Shortcut | Action |
 |----------|--------|
-| `Alt+Up` / `Alt+K` | Navigate to previous folder |
-| `Alt+Down` / `Alt+J` | Navigate to next folder |
-| `Alt+G` | Jump to top of sidebar (All Inboxes when present) |
-| `Alt+Shift+G` | Jump to last visible folder (last account header if all trees are collapsed) |
-| `Alt+Enter` | Expand/collapse focused account folder tree |
-| `Alt(L)+Alt(R)` | Brings up context menu for the focused folder (`ContextMenu` does the same while the sidebar is focused) |
+| `⌘←` (macOS only) | Back to previous message |
+| `⌘→` (macOS only) | Forward to next message |
+| `Alt+→` (macOS `⌥→`) / `Alt+L` (macOS `⌥L`) | Focus next pane |
+| `Alt+←` (macOS `⌥←`) / `Alt+H` (macOS `⌥H`) | Focus previous pane |
+| `Alt+↓` (macOS `⌥↓`) / `Alt+J` (macOS `⌥J`) | Next folder |
+| `Alt+↑` (macOS `⌥↑`) / `Alt+K` (macOS `⌥K`) | Previous folder |
+| `Alt+G` (macOS `⌥G`) | First folder |
+| `Alt+Shift+G` (macOS `⌥⇧G`) | Last visible folder |
+| `Alt+Enter` (macOS `⌥↩`) | Expand or collapse account |
+| `Ctrl+Alt+←` (macOS `⌘⌥←`) | Previous account |
+| `Ctrl+Alt+→` (macOS `⌘⌥→`) | Next account |
+| `Left Alt` + `Right Alt` pressed together | Folder context menu |
 
-### Message Actions (when message is selected/focused)
-
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+R` | Reply to last message (requires viewed conversation) |
-| `Ctrl+Shift+R` | Reply All to last message (requires viewed conversation) |
-| `Ctrl+F` | Forward last message (requires viewed conversation) |
-| `Ctrl+U` | Mark as read (keyboard-focused or checked messages) |
-| `Ctrl+Shift+U` | Mark as unread (keyboard-focused or checked messages) |
-| `e` | Archive and mark as read (keyboard-focused or checked messages) |
-| `l` | Add/remove from Read Later |
-| `Shift+L` | Add/remove from Reply Later |
-| `Ctrl+J` | Mark as spam (keyboard-focused or checked messages) |
-| `Ctrl+L` | Load remote images in viewed message |
-| `Ctrl+Shift+L` | Open "Always Load Images" dropdown |
-| `Shift+F` | Toggle focus mode for the Tab-focused message (the last message if none is focused) |
-
----
-
-## Pane-Specific Shortcuts
-
-These shortcuts depend on which pane is focused. They are disabled when typing in input fields.
-
-### Sidebar (Folder List)
+### Folder list
 
 | Shortcut | Action |
 |----------|--------|
-| `Up` / `K` | Navigate to previous folder |
-| `Down` / `J` | Navigate to next folder |
-| `Alt+G` / `Alt+Shift+G` | Jump to top of sidebar / last visible folder |
-| `Alt + Enter` / `Space` | Expand/collapse account (when account header is focused) |
-| `Alt(L) + Alt(R)` | Brings up context menu for the focused folder (`ContextMenu` does the same) |
+| `↓` / `j` | Next folder |
+| `↑` / `k` | Previous folder |
+| `Enter` (macOS `↩`) / `Space` | Expand or collapse account |
 
-### Message List
+### Message list
 
 | Shortcut | Action |
 |----------|--------|
-| `Up` / `K` | Select previous conversation |
-| `Down` / `J` | Select next conversation |
-| `G` (lowercase) | Select + scroll to first conversation |
-| `Shift+G` | Select + scroll to last loaded conversation (does not auto-load more) |
-| `Shift+Up` / `Shift+K` | Select previous + toggle checkbox |
-| `Shift+Down` / `Shift+J` | Select next + toggle checkbox |
-| `Space` | Toggle checkbox on current conversation |
-| `Enter` / `V` | Open selected conversation in viewer |
-| `D` | Delete selected/checked message(s) — move to Trash (same as `Delete`) |
-| `CTRL+A` | Select all messages in folder |
-| `Alt+M` | Toggle "Move to folder" dialog for the focused message |
-| `Alt+C` | Toggle "Copy to folder" dialog for the focused message |
-| `ContextMenu` / `Alt(R)` | Brings up context menu for the selected message(s) |
+| `↓` / `j` / `Ctrl+Shift+]` (macOS `⌘⇧]`) | Next item |
+| `↑` / `k` / `Ctrl+Shift+[` (macOS `⌘⇧[`) | Previous item |
+| `g` | First item |
+| `Shift+G` (macOS `⇧G`) | Last loaded item |
+| `Shift+↓` (macOS `⇧↓`) / `Shift+J` (macOS `⇧J`) | Select next and check |
+| `Shift+↑` (macOS `⇧↑`) / `Shift+K` (macOS `⇧K`) | Select previous and check |
+| `Space` / `x` | Check or uncheck |
+| `Enter` (macOS `↩`) / `o` | Open |
+| `Ctrl+A` (macOS `⌘A`) | Select all messages |
+| `Ctrl+Alt+1` (macOS `⌘⌥1`) | Filter: All messages |
+| `Ctrl+Alt+2` (macOS `⌘⌥2`) | Filter: Unread |
+| `Ctrl+Alt+3` (macOS `⌘⌥3`) | Filter: Reply Later |
+| `Ctrl+Alt+4` (macOS `⌘⌥4`) | Filter: Read Later |
+| `Menu` / `Right Alt` (macOS `Right ⌥`) | Context menu |
+| `Esc` / `u` | Clear checked messages, then close conversation |
 
-`G` / `Shift+G` / `V` also work in extension list panes (e.g., Contacts list, Calendar agenda).
-
-### Conversation Viewer
-
-| Shortcut | Action |
-|----------|--------|
-| `Up` / `K` | Scroll up |
-| `Down` / `J` | Scroll down |
-| `Tab` | Cycle through messages when focused on conversation viewer |
-| `Delete` / `Backspace` | Delete focused message when focused on conversation viewer |
-| `Ctrl + A` | Select all text of message in viewport |
-| `ContextMenu` / `Alt(R)` | Brings up context menu for the message focused |
-| `F` | Toggles focus mode on the current thread (conversation) |
-
----
-
-## Single-Key Shortcuts
-
-These work when not in an input field. They apply to checked messages (bulk) or the keyboard-focused message in the list.
+### Message actions
 
 | Shortcut | Action |
 |----------|--------|
-| `S` | Toggle star |
-| `M` | Toggle read / unread. If any target message is unread, marks them all read; otherwise marks them unread |
-| `Backspace` / `Delete` | Move to trash |
-| `Shift+Backspace` / `Shift+Delete` | Permanently delete |
-| `Escape` | Leave focus mode or close the responsive viewer/sidebar overlay if one is open; otherwise clear checkboxes (first press), then close the conversation (second press) |
+| `Ctrl+R` (macOS `⌘R`) / `r` | Reply |
+| `Ctrl+Shift+R` (macOS `⌘⇧R`) / `a` | Reply all |
+| `f` / `Ctrl+L` (macOS `⌘L`) | Forward |
+| `e` / `Ctrl+E` (macOS `⌘E`) | Archive and mark as read |
+| `l` / `Ctrl+U` (macOS `⌘U`) | Add to Read Later |
+| `Shift+L` (macOS `⇧L`) / `Ctrl+I` (macOS `⌘I`) | Add to Reply Later |
+| `h` | Snooze conversation |
+| `!` / `Ctrl+J` (macOS `⌘J`) | Mark as spam |
+| `#` / `Delete` (macOS `⌦`) / `Backspace` (macOS `⌫`) / `d` | Move to trash |
+| `Shift+Delete` (macOS `⇧⌦`) / `Shift+Backspace` (macOS `⇧⌫`) | Delete permanently |
+| `s` | Star or unstar |
+| `Shift+I` (macOS `⇧I`) | Mark as read |
+| `Shift+U` (macOS `⇧U`) / `Ctrl+Shift+U` (macOS `⌘⇧U`) | Mark as unread |
+| `m` | Toggle read / unread |
+| `v` / `Alt+M` (macOS `⌥M`) | Move to folder |
+| `Alt+C` (macOS `⌥C`) | Copy to folder |
 
----
-
-## Composer Shortcuts
-
-These only work when the composer is open.
-
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+Enter` | Send message |
-| `Alt+T` | Activate/Deactivate toolbar mode |
-| `Alt+A` | Attach a file |
-| `Alt+P` | Toggle PGP security mode (S = sign, E = encrypt) |
-| `Alt+S` | Toggle S/MIME security mode (S = sign, E = encrypt) |
-| `Ctrl+D` | Pop out/detach composer to separate window |
-| `Escape` | Close composer (prompts to save draft if unsaved) |
-
----
-
-### Text Formatting
+### Conversation viewer
 
 | Shortcut | Action |
 |----------|--------|
-| `Ctrl+B` | Bold |
-| `Ctrl+I` | Italic |
-| `Ctrl+U` | Underline |
-| `Alt+T`  | Toggle toolbar and follow hint to choose |
+| `↓` / `j` | Scroll down |
+| `↑` / `k` | Scroll up |
+| `Shift+F` (macOS `⇧F`) | Focus mode for conversation |
+| `Shift+F` (macOS `⇧F`) | Focus mode for message |
+| `Ctrl+A` (macOS `⌘A`) | Select all message text |
+| `Ctrl+Alt+L` (macOS `⌘⌥L`) | Load remote images |
+| `Ctrl+Shift+Alt+L` (macOS `⌘⇧⌥L`) | Always load images from… |
 
----
+### Composer
 
-## Quick Reference Card
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+Enter` (macOS `⌘↩`) | Send |
+| `Alt+A` (macOS `⌥A`) | Attach file |
+| `Ctrl+Shift+D` (macOS `⌘⇧D`) | Open composer in its own window |
+| `Alt+T` (macOS `⌥T`) | Formatting toolbar |
+| `Alt+P` (macOS `⌥P`) | PGP mode (then S to sign, E to encrypt) |
+| `Alt+S` (macOS `⌥S`) | S/MIME mode (then S to sign, E to encrypt) |
+| `Ctrl+B` (macOS `⌘B`) | Bold |
+| `Ctrl+I` (macOS `⌘I`) | Italic |
+| `Ctrl+U` (macOS `⌘U`) | Underline |
+| `Ctrl+Z` (macOS `⌘Z`) | Undo last action |
+| `Ctrl+Shift+Z` (macOS `⌘⇧Z`) | Redo |
+| `Esc` / `Ctrl+W` (macOS `⌘W`) | Close composer |
 
-```
-NAVIGATION
-  Alt + Arrow Keys    Pane focus (Left/Right) or Folder nav (Up/Down)
-  Alt + H/J/K/L       Vim-style: pane (H/L) or folder (J/K)
-  Alt + G             Jump to top of sidebar (All Inboxes)
-  Alt + Shift + G     Jump to last visible folder
-  Alt(L) + Alt(R)     Brings context menu up for the focused folder
-  Alt + Enter         Expand/collapse account
-  Ctrl + Tab          Switch to next extension on rail
-  Ctrl + `            Switch to previous extension on rail
-  Arrow Keys / HJKL   Navigate within focused pane
-  Enter               Open conversation / Expand account
-  Space               Toggle checkbox / Expand account
+### Lists
 
-COMPOSE & REPLY
-  ⌘ + ,             Preferences (macOS)
-  Ctrl + N            New message
-  Ctrl + R            Reply
-  Ctrl + Shift + R    Reply All
-  Ctrl + F            Forward
-  Ctrl + Enter        Send (in composer)
-  Ctrl + D            Detach composer
-  Alt  + T            Toggle format toolbar mode
-  Alt + P             PGP mode (S/E to toggle sign/encrypt)
-  Alt + S             S/MIME mode (S/E to toggle sign/encrypt)
+| Shortcut | Action |
+|----------|--------|
+| `↓` / `j` | Next item _(Calendar, Contacts only)_ |
+| `↑` / `k` | Previous item _(Calendar, Contacts only)_ |
+| `g` | First item _(Calendar, Contacts only)_ |
+| `Shift+G` (macOS `⇧G`) | Last loaded item _(Calendar, Contacts only)_ |
+| `Enter` (macOS `↩`) / `o` | Open _(Calendar, Contacts only)_ |
+| `Delete` (macOS `⌦`) / `Backspace` (macOS `⌫`) | Delete _(Contacts only)_ |
 
-SELECTION
-  Ctrl + A            Select all messages (list) / text (viewer)
-
-MESSAGE ACTIONS
-  S                   Star/Unstar
-  Ctrl + U            Mark read
-  Ctrl + Shift + U    Mark unread
-  E                   Archive + mark read
-  Ctrl + K            Archive only
-  L                   Read Later
-  Shift + L           Reply Later
-  Ctrl + J            Spam
-  V                   View message
-  G / Shift + G       Jump to first / last loaded message
-  Alt + M             Move to folder
-  Alt + C             Copy to folder
-  Delete / D          Trash
-  Shift + Delete      Permanent delete
-  ContextMenu / Alt(R)  Context Menu
-
-OTHER
-  Ctrl + Z            Undo last action
-  Ctrl + Shift + A    Sync all accounts (again to cancel)
-  Ctrl + Shift + S    Sync selected folder (again to cancel)
-  Ctrl + S            Search
-  Ctrl + L            Load images
-  Ctrl + Q            Quit
-  Escape              Clear/Close
-```
+<!-- END GENERATED: core -->
 
 ---
 
@@ -255,7 +182,7 @@ First `Escape` clears checkboxes, second `Escape` closes the conversation viewer
 ### Composer Blocking
 
 When the composer is open:
-- `Ctrl+R`, `Ctrl+Shift+R`, `Ctrl+F` are blocked to prevent accidental replies
+- The reply, reply all and forward shortcuts are blocked to prevent accidental replies
 - The global Mail shortcuts (`Ctrl+N`, `Ctrl+Q`, `Ctrl+Z`, `Ctrl+S`, sync, `Ctrl+Tab` rail switching, and `Alt` pane/folder navigation) do not fire; only the composer's own shortcuts work
 - `⌘+,` (macOS Preferences) and the active extension's registered shortcuts still run, except while typing in a text field
 
@@ -280,66 +207,44 @@ Extension shortcuts only fire when the corresponding extension is the active rai
 
 Pane-local navigation (Up/Down/J/K, Enter, Space, Alt+H/L for pane cycling, Alt+Up/Down for sidebar) uses the same kit-shared predicates Mail does — they're listed per-extension below for completeness, but they're not extension-specific re-implementations.
 
+<!-- BEGIN GENERATED: extensions (run `npm run docs:shortcuts` in frontend/; do not edit by hand) -->
+
 ### Calendar
 
-**Navigation (pane cycling)**
+#### Calendar
 
 | Shortcut | Action |
 |----------|--------|
-| `Alt+Left` / `Alt+H` | Focus previous pane |
-| `Alt+Right` / `Alt+L` | Focus next pane |
-
-**Date / view navigation**
-
-| Shortcut | Action |
-|----------|--------|
-| `T` | Jump the calendar view to today |
-| `←` | Previous view-unit (prev month / week / day) |
-| `→` | Next view-unit (next month / week / day) |
-| `Alt+M` | Switch to month view |
-| `Alt+W` | Switch to week view |
-| `Alt+D` | Switch to day view |
-| `Alt+A` | Switch to agenda view |
-
-**Actions**
-
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+N` | Open the new-event composer |
-| `Ctrl+R` | Sync all calendar sources |
-| `Ctrl+Shift+A` | Sync all calendar sources (same chord as Mail's "sync all accounts" — fires whichever handler matches the active rail) |
-| `F` | Toggle focus mode for the selected event |
-
-> The calendar sidebar uses checkbox toggles per calendar (not single-select navigation), so it doesn't follow the kit's `J`/`K` row-cycling pattern. Clicking a checkbox or row in the sidebar toggles visibility.
+| `t` | Go to today |
+| `←` | Previous month, week or day |
+| `→` | Next month, week or day |
+| `Alt+M` (macOS `⌥M`) | Month view |
+| `Alt+W` (macOS `⌥W`) | Week view |
+| `Alt+D` (macOS `⌥D`) | Day view |
+| `Alt+A` (macOS `⌥A`) | Agenda view |
+| `Ctrl+N` (macOS `⌘N`) | New event |
+| `Ctrl+R` (macOS `⌘R`) / `Ctrl+Shift+A` (macOS `⌘⇧A`) | Sync all calendars |
+| `f` | Focus mode for selected event |
 
 ### Contacts
 
-**Sidebar navigation (works from any pane)**
-
-Mirrors mail's "Folder Navigation" shortcuts. These fire regardless of which contacts pane currently has keyboard focus — so you can scroll through addressbooks while the list or detail pane is focused.
+#### Contacts
 
 | Shortcut | Action |
 |----------|--------|
-| `Alt+Up` / `Alt+K` | Move to previous source / addressbook in the sidebar |
-| `Alt+Down` / `Alt+J` | Move to next source / addressbook in the sidebar |
+| `e` | Edit focused contact |
+| `Ctrl+N` (macOS `⌘N`) | New contact |
+| `Ctrl+Shift+A` (macOS `⌘⇧A`) | Sync all contact sources |
+| `Ctrl+Shift+S` (macOS `⌘⇧S`) | Sync focused contact source |
 
-**Pane cycling**
+<!-- END GENERATED: extensions -->
 
-| Shortcut | Action |
-|----------|--------|
-| `Alt+Left` / `Alt+H` | Focus previous pane (detail → list → sidebar) |
-| `Alt+Right` / `Alt+L` | Focus next pane (sidebar → list → detail) |
+Notes on extension shortcuts:
 
-**Actions**
-
-| Shortcut | Action |
-|----------|--------|
-| `E` | Edit the currently-focused contact |
-| `Ctrl+N` | Open the new-contact dialog (pre-targeted to the sidebar-focused addressbook; falls back to local when the focused source isn't writable) |
-| `Ctrl+Shift+A` | Sync all contact sources (same chord as Mail's "sync all accounts" — fires whichever handler matches the active rail) |
-| `Ctrl+Shift+S` | Sync the contact source currently focused in the sidebar (no-op with warning toast when a built-in entry like "All" / "Local" is focused) |
-
-> Within a focused pane, `Up`/`K` and `Down`/`J` cycle rows (contact list, sidebar sources) and `Enter` opens / activates — same kit predicates Mail's list and folder tree use.
+- The calendar sidebar uses checkbox toggles per calendar, so it does not follow the `J`/`K` row-cycling pattern. Clicking a checkbox or row toggles visibility.
+- `Ctrl+Shift+A` is the same chord as Mail's "sync all accounts"; whichever handler matches the active rail runs.
+- In Contacts, sidebar navigation (`Alt+Up/K`, `Alt+Down/J`) works from any pane. `Ctrl+N` targets the sidebar-focused addressbook and falls back to local when that source is not writable. `Ctrl+Shift+S` is a no-op with a warning toast on built-in entries like "All" or "Local".
+- Within a focused pane, `Up`/`K` and `Down`/`J` cycle rows and `Enter` opens or activates, using the same predicates Mail's list and folder tree use.
 
 ## Collision rules
 
