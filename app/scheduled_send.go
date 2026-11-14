@@ -94,11 +94,19 @@ func initializeSendLaterClient(ctx context.Context, data string) (string, error)
 	return identity.PublicKey().String(), nil
 }
 
-func scheduleMessage(ctx context.Context, data string, ops *composeOps, drafts *draft.Store, accountID string, message smtp.ComposeMessage, draftID, due string) (ScheduleResult, error) {
+func scheduleMessage(ctx context.Context, data string, ops *composeOps, drafts *draft.Store, accountID string, message smtp.ComposeMessage, draftID, due string, repeat scheduledsend.Repeat) (ScheduleResult, error) {
 	var result ScheduleResult
 	when, err := time.Parse(time.RFC3339, due)
 	if err != nil || !when.After(time.Now()) {
 		return result, errors.New("choose a future delivery time with an explicit timezone")
+	}
+	// The IPC bridge rejects null arguments, so "no repeat" is a zero value.
+	var rule *scheduledsend.Repeat
+	if repeat.Unit != "" {
+		rule = &repeat
+		if err := rule.Validate(when); err != nil {
+			return result, err
+		}
 	}
 	savedDraft, err := drafts.Get(draftID)
 	if err != nil || savedDraft == nil || savedDraft.AccountID != accountID {
@@ -142,7 +150,7 @@ func scheduleMessage(ctx context.Context, data string, ops *composeOps, drafts *
 	}
 	defer store.Close()
 	result.Job, err = store.Schedule(ctx, accountID, draftID, draft.Fingerprint(savedDraft), scheduledsend.Delivery{
-		From: message.From.Address, To: message.AllRecipients(), RFC822: raw, DueAt: when}, identity)
+		From: message.From.Address, To: message.AllRecipients(), RFC822: raw, DueAt: when, Repeat: rule}, identity)
 	if err != nil && result.Job.ID != "" {
 		result.Error = err.Error()
 		return result, nil
@@ -224,8 +232,8 @@ func (a *App) SaveSendLaterConfig(config scheduledsend.ClientConfig) error {
 }
 
 // ScheduleMessage prepares MIME once and queues an E2EE delivery to the helper.
-func (a *App) ScheduleMessage(accountID string, message smtp.ComposeMessage, draftID, due string) (ScheduleResult, error) {
-	result, err := scheduleMessage(a.ctx, a.paths.Data, &a.composeOps, a.draftStore, accountID, message, draftID, due)
+func (a *App) ScheduleMessage(accountID string, message smtp.ComposeMessage, draftID, due string, repeat scheduledsend.Repeat) (ScheduleResult, error) {
+	result, err := scheduleMessage(a.ctx, a.paths.Data, &a.composeOps, a.draftStore, accountID, message, draftID, due, repeat)
 	if err == nil {
 		result.Job = cleanupScheduledDraft(a.ctx, a.paths.Data, result.Job, &a.draftOps, a.cancelDraftSync, func(accountID, draftID string) {
 			_ = a.draftHistoryStore().Clear(accountID + ":" + draftID)
@@ -288,8 +296,8 @@ func (c *ComposerApp) SaveSendLaterConfig(config scheduledsend.ClientConfig) err
 }
 
 // ScheduleMessage prepares MIME once and queues an E2EE delivery to the helper.
-func (c *ComposerApp) ScheduleMessage(accountID string, message smtp.ComposeMessage, draftID, due string) (ScheduleResult, error) {
-	return callParentValue[ScheduleResult](c, "ScheduleMessage", accountID, message, draftID, due)
+func (c *ComposerApp) ScheduleMessage(accountID string, message smtp.ComposeMessage, draftID, due string, repeat scheduledsend.Repeat) (ScheduleResult, error) {
+	return callParentValue[ScheduleResult](c, "ScheduleMessage", accountID, message, draftID, due, repeat)
 }
 
 // ListScheduledMessages returns bounded local metadata without loading bodies.

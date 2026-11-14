@@ -1550,6 +1550,32 @@
     "saveDraftFirst": "The draft could not be saved. Save it before scheduling.",
     "awaitingConfirmation": "Awaiting the Studio’s acknowledgement. Keep the draft and retry the saved request.",
     "scheduled": "Scheduled on Studio",
+    "repeat": "Repeat",
+    "repeatEvery": "Every",
+    "repeatUnit": "Repeat unit",
+    "repeatEnds": "Ends",
+    "unit": {
+      "day": "day(s)",
+      "week": "week(s)",
+      "month": "month(s)"
+    },
+    "endsNever": "never",
+    "endsCount": "after this many sends",
+    "endsUntil": "on this date",
+    "repeatHelp": "Each run is sent only after the previous one was accepted. If one fails the series stops until you look at it. Runs missed while the Studio was off are skipped, not sent late in a batch. Editing the time restarts the series; the text stays as it is now.",
+    "repeatEveryInvalid": "Repeat interval must be a whole number from 1 to 366.",
+    "repeatCountInvalid": "Number of sends must be a whole number from 2 to 1000.",
+    "repeatUntilInvalid": "The end date must be on or after the first send.",
+    "listMode": "Mailing list",
+    "listOff": "Off: send as written",
+    "listBcc": "Recipients in Bcc, To is me",
+    "listCc": "Recipients in Cc, To is me",
+    "listHelp": "Everyone gets the same message. Bcc hides the other addresses, Cc shows them. There is no unsubscribe link; people ask you to leave the list.",
+    "repeatSummary": {
+      "day": "Repeats every {count} day(s)",
+      "week": "Repeats every {count} week(s)",
+      "month": "Repeats every {count} month(s)"
+    },
     "status": {
       "awaiting_ack": "Waiting for Studio acknowledgement",
       "cancellation_awaiting_ack": "Cancellation awaiting Studio confirmation",

@@ -3578,6 +3578,7 @@ export namespace scheduledsend {
 	    from?: string;
 	    to?: string;
 	    toCount?: number;
+	    repeat?: string;
 	    draftCleanup: string;
 	    previewAvailable: boolean;
 
@@ -3599,6 +3600,7 @@ export namespace scheduledsend {
 	        this.from = source["from"];
 	        this.to = source["to"];
 	        this.toCount = source["toCount"];
+	        this.repeat = source["repeat"];
 	        this.draftCleanup = source["draftCleanup"];
 	        this.previewAvailable = source["previewAvailable"];
 	    }
@@ -3635,6 +3637,45 @@ export namespace scheduledsend {
 	        this.jobs = this.convertValues(source["jobs"], ClientJob);
 	        this.total = source["total"];
 	        this.keyAvailable = source["keyAvailable"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Repeat {
+	    unit: string;
+	    every: number;
+	    zone: string;
+	    count?: number;
+	    // Go type: time
+	    until?: any;
+
+	    static createFrom(source: any = {}) {
+	        return new Repeat(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.unit = source["unit"];
+	        this.every = source["every"];
+	        this.zone = source["zone"];
+	        this.count = source["count"];
+	        this.until = this.convertValues(source["until"], null);
 	    }
 
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

@@ -116,6 +116,17 @@ The original draft remains until this client refreshes a delivery-confirmed `sen
 
 Raw MIME is limited to 10 MiB. Prepared payloads are immutable; large attachment streaming, relay transport, automatic Sent-copy repair and multi-device job discovery remain outside this helper milestone. Paired static keys have no forward secrecy, and key rotation/history retention still need an explicit migration design. Keep queue metadata/tombstones when backing up or moving a helper, so old encrypted submissions cannot be replayed as new deliveries.
 
+### Repeating sends and mailing-list mode
+
+The Send Later dialog has a **Repeat** row (every N days, weeks or months; ends never, after N sends, or on a date) and a **Mailing list** choice. The first send is the chosen time; later runs are computed from it in your time zone, so 09:00 stays 09:00 across daylight-saving changes and a monthly send on the 31st goes out on the last day of shorter months.
+
+- One queue row is the series. The Studio queues the next run in the same database update that follows provider acceptance of the current one. A crash between the two leaves the row in `sending`, which becomes `outcome_unknown` and stops the series; it never sends twice.
+- A failed, rejected or uncertain run stops the series until you inspect it. Runs missed while the Studio was off are skipped, not sent late in a batch.
+- Each run gets its own Message-ID (derived from the job and run number, so a retry reuses it) and Date. The text, attachments and recipients are the ones prepared at scheduling time.
+- Cancel and Reschedule use the normal revision. Rescheduling restarts the series at the new time; its runs get fresh Message-IDs.
+- Mailing-list mode sets To to your sender address and moves every other recipient into Cc or Bcc once (Bcc by default). It sends one identical message. There is no unsubscribe link, no per-recipient copy and no merge field; recipients ask you to remove them. Gmail limits a free account to 500 recipients per message and 500 messages a day.
+- A repeating series keeps its source draft, because the job is still queued.
+
 ## Ambiguous SMTP results
 
 If a connection fails after message data was submitted, the provider may already have accepted it. Studio records `outcome_unknown` and does not automatically resend. Check the provider's Sent folder and delivery evidence before resolving it locally:

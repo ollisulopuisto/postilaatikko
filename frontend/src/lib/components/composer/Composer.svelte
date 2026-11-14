@@ -34,6 +34,7 @@
   import QuickReplies from './QuickReplies.svelte'
   import ComposerAttachmentList from './ComposerAttachmentList.svelte'
   import SendLaterDialog from './SendLaterDialog.svelte'
+  import { applyListMode, NO_REPEAT, type ListMode, type RepeatRule } from '$lib/scheduledRepeat'
   import {
     addParagraphStyles,
     stripParagraphStyles,
@@ -134,6 +135,8 @@
   let sending = $state(false)
   let showSendLaterDialog = $state(false)
   let scheduledDue = $state<string | null>(null)
+  let scheduledRepeat = $state<RepeatRule>({ ...NO_REPEAT })
+  let scheduledListMode = $state<ListMode>('off')
   let scheduledDraftState = $state('')
   let poppingOut = $state(false)  // Pop-out in progress
   let editorElement = $state<HTMLElement | null>(null)
@@ -1648,11 +1651,15 @@
 
   async function handleSend() {
     scheduledDue = null
+    scheduledRepeat = { ...NO_REPEAT }
+    scheduledListMode = 'off'
     await validateAndSend()
   }
 
-  async function handleScheduledSend(due: string) {
+  async function handleScheduledSend(due: string, repeat: RepeatRule = { ...NO_REPEAT }, listMode: ListMode = 'off') {
     scheduledDue = due
+    scheduledRepeat = repeat
+    scheduledListMode = listMode
     await validateAndSend()
   }
 
@@ -1702,7 +1709,13 @@
         if (saved === 'failed' || saved === 'discarding' || !currentDraftId) {
           throw new Error($_('sendLater.saveDraftFirst'))
         }
-        const result = await api.scheduleMessage(activeAccountId, buildMessage(), currentDraftId, due)
+        let scheduled = buildMessage()
+        if (scheduledListMode !== 'off') {
+          // Mailing-list mode: one identical message, sender in To, the rest in Cc or Bcc.
+          const identity = identities.find(i => i.id === selectedIdentityId)
+          scheduled = applyListMode(scheduled, scheduledListMode, new smtp.Address({ name: identity?.name || '', address: identity?.email || '' }))
+        }
+        const result = await api.scheduleMessage(activeAccountId, scheduled, currentDraftId, due, scheduledRepeat)
         if (result.error || !['queued', 'retry', 'sending', 'sent'].includes(result.job.state)) {
           addToast({ type: 'error', message: result.error || $_('sendLater.awaitingConfirmation') })
           showSendLaterDialog = true
@@ -1754,6 +1767,8 @@
     } finally {
       sending = false
       scheduledDue = null
+      scheduledRepeat = { ...NO_REPEAT }
+      scheduledListMode = 'off'
     }
   }
 

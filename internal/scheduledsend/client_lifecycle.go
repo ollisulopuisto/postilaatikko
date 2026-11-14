@@ -201,6 +201,7 @@ func (s *ClientStore) ListPage(ctx context.Context, accountID string, history bo
 		}
 		page.Jobs[index].Subject, page.Jobs[index].From = preview.Subject, preview.From
 		page.Jobs[index].To, page.Jobs[index].ToCount = preview.To, preview.ToCount
+		page.Jobs[index].Repeat = preview.Repeat
 		page.Jobs[index].PreviewAvailable = true
 	}
 	return page, nil

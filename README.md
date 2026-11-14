@@ -22,7 +22,7 @@ The source also has Linux, Windows and Flatpak build paths. Availability of a pa
 
 - **Several accounts in one workspace.** Browse individual accounts or All Inboxes, plus unified Sent, Drafts, Trash, Spam, Starred and Archive views. Configure sender identities and signatures.
 - **Two ways to read.** Switch between Conversation and Traditional readers, keep messages in reader tabs, and use inline or detached compose windows. Duplicate label copies are collapsed in thread reads.
-- **Personal queues.** Read Later, Reply Later and Snooze sit alongside saved virtual folders. Virtual-folder criteria can span folders and accounts. Reply Later is a reminder queue, not a scheduled send.
+- **Personal queues.** Read Later, Reply Later and Snooze sit alongside saved virtual folders. Virtual-folder criteria can span folders and accounts. Reply Later is a reminder queue, not a scheduled send. Send Later can repeat and has a simple mailing-list mode (you in To, everyone else in Cc or Bcc, one identical message).
 - **Search and filters.** Search cached mail, use Gmail's server-side search where authorized, and apply local cross-account filter rules. Moves confirm the destination copy before removing the source.
 - **Everyday compose.** Drafts, attachments, reply/forward, identities, signatures and saved quick-reply snippets. Keyboard shortcuts share a searchable reference and command palette.
 - **Contacts and calendar tools.** Account-backed contact sources and calendar extensions; macOS Contacts is an optional, permission-gated read source. Native contact edits happen in Apple's Contacts app.

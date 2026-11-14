@@ -67,6 +67,9 @@ type Delivery struct {
 	RFC822        []byte    `json:"rfc822"`
 	GmailThreadID string    `json:"gmailThreadId,omitempty"`
 	DueAt         time.Time `json:"dueAt"`
+	// Repeat is optional. DueAt is the first run; the helper queues each later
+	// run only after the previous one was accepted by the provider.
+	Repeat *Repeat `json:"repeat,omitempty"`
 }
 
 // Command carries a monotonic revision. A cancel tombstone prevents an older,
@@ -257,6 +260,11 @@ func (d Delivery) validate() error {
 		parsed, err := mail.ParseAddress(address)
 		if err != nil || parsed.Address != address || strings.ContainsAny(address, "\r\n") {
 			return errors.New("scheduled delivery requires bare valid envelope addresses")
+		}
+	}
+	if d.Repeat != nil {
+		if err := d.Repeat.Validate(d.DueAt); err != nil {
+			return err
 		}
 	}
 	message, err := mail.ReadMessage(bytes.NewReader(d.RFC822))

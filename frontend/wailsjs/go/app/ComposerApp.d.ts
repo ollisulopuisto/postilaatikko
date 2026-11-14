@@ -125,7 +125,7 @@ export function SaveDraft(arg1:string,arg2:smtp.ComposeMessage,arg3:string):Prom
 
 export function SaveSendLaterConfig(arg1:scheduledsend.ClientConfig):Promise<void>;
 
-export function ScheduleMessage(arg1:string,arg2:smtp.ComposeMessage,arg3:string,arg4:string):Promise<app.ScheduleResult>;
+export function ScheduleMessage(arg1:string,arg2:smtp.ComposeMessage,arg3:string,arg4:string,arg5:scheduledsend.Repeat):Promise<app.ScheduleResult>;
 
 export function SearchContacts(arg1:string,arg2:number):Promise<Array<contact.Contact>>;
 

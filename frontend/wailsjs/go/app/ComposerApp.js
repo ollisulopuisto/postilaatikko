@@ -226,8 +226,8 @@ export function SaveSendLaterConfig(arg1) {
   return window['go']['app']['ComposerApp']['SaveSendLaterConfig'](arg1);
 }
 
-export function ScheduleMessage(arg1, arg2, arg3, arg4) {
-  return window['go']['app']['ComposerApp']['ScheduleMessage'](arg1, arg2, arg3, arg4);
+export function ScheduleMessage(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['app']['ComposerApp']['ScheduleMessage'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function SearchContacts(arg1, arg2) {

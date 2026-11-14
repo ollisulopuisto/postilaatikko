@@ -107,6 +107,17 @@ func OpenStore(directory string, helper *Identity) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("initialize scheduled queue: %w", err)
 	}
+	// seq is the index of the run currently queued for a repeating job.
+	if _, err = db.Exec("ALTER TABLE jobs ADD COLUMN seq INTEGER NOT NULL DEFAULT 0"); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+		db.Close()
+		return nil, fmt.Errorf("upgrade scheduled queue: %w", err)
+	}
+	// epoch counts replacements of a series that had already sent a run, so a
+	// restarted series never reuses a Message-ID that went out earlier.
+	if _, err = db.Exec("ALTER TABLE jobs ADD COLUMN epoch INTEGER NOT NULL DEFAULT 0"); err != nil && !strings.Contains(err.Error(), "duplicate column") {
+		db.Close()
+		return nil, fmt.Errorf("upgrade scheduled queue: %w", err)
+	}
 	if _, err = db.Exec("INSERT OR IGNORE INTO helper_identity(singleton, public_key) VALUES(1, ?)", helper.PublicKey().String()); err != nil {
 		db.Close()
 		return nil, err
@@ -300,7 +311,7 @@ func (s *Store) acceptCommand(ctx context.Context, encoded []byte, command Comma
 		VALUES(?, ?, ?, ?, ?, ?, ?, ?, 0, '', ?)
 		ON CONFLICT(id) DO UPDATE SET revision = excluded.revision, envelope = excluded.envelope,
 		fingerprint = excluded.fingerprint, due_at = excluded.due_at, next_attempt = excluded.next_attempt,
-		state = excluded.state, attempts = 0, code = '', updated_at = excluded.updated_at`,
+		state = excluded.state, epoch = CASE WHEN jobs.seq > 0 THEN jobs.epoch + 1 ELSE jobs.epoch END, seq = 0, attempts = 0, code = '', updated_at = excluded.updated_at`,
 		command.JobID, clientKey.String(), command.Revision, encoded, digest[:], dueAt, dueAt, state, now)
 	if err != nil {
 		return empty, err
@@ -387,6 +398,8 @@ type claimedJob struct {
 	id       string
 	revision int64
 	attempts int
+	seq      int
+	epoch    int
 	envelope []byte
 }
 
@@ -394,7 +407,7 @@ func (s *Store) claim(ctx context.Context, now time.Time) (claimedJob, error) {
 	var job claimedJob
 	err := s.db.QueryRowContext(ctx, `UPDATE jobs SET state = 'sending', attempts = attempts + 1, updated_at = ?
 		WHERE id = (SELECT id FROM jobs WHERE state IN ('queued','retry') AND next_attempt <= ? ORDER BY next_attempt, id LIMIT 1)
-		AND state IN ('queued','retry') RETURNING id, revision, attempts, envelope`, now.UnixMilli(), now.UnixMilli()).Scan(&job.id, &job.revision, &job.attempts, &job.envelope)
+		AND state IN ('queued','retry') RETURNING id, revision, attempts, seq, epoch, envelope`, now.UnixMilli(), now.UnixMilli()).Scan(&job.id, &job.revision, &job.attempts, &job.seq, &job.epoch, &job.envelope)
 	return job, err
 }
 
@@ -402,6 +415,26 @@ func (s *Store) finish(ctx context.Context, job claimedJob, state State, code st
 	result, err := s.db.ExecContext(ctx, `UPDATE jobs SET state = ?, code = ?, next_attempt = ?, updated_at = ?,
 		envelope = CASE WHEN ? = 'sent' AND ? != 'sent_copy_failed' THEN X'' ELSE envelope END
 		WHERE id = ? AND revision = ? AND state = 'sending'`, state, code, next.UnixMilli(), time.Now().UTC().UnixMilli(), state, code, job.id, job.revision)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count != 1 {
+		return ErrStateChanged
+	}
+	return nil
+}
+
+// advance queues the next run of a repeating job in the same row, so a crash
+// can never leave both a finished run and no successor: until this update
+// commits the job stays in 'sending' and later becomes outcome_unknown.
+func (s *Store) advance(ctx context.Context, job claimedJob, seq int, due time.Time) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE jobs SET state = 'queued', code = '', seq = ?, due_at = ?, next_attempt = ?,
+		attempts = 0, updated_at = ? WHERE id = ? AND revision = ? AND state = 'sending'`,
+		seq, due.UnixMilli(), due.UnixMilli(), time.Now().UTC().UnixMilli(), job.id, job.revision)
 	if err != nil {
 		return err
 	}

@@ -2,6 +2,7 @@
   import { onMount, untrack } from 'svelte'
   import Icon from '@iconify/svelte'
   import { _ } from '$lib/i18n'
+  import { parseRepeatSummary } from '$lib/scheduledRepeat'
   import { accountStore } from '$lib/stores/accounts.svelte'
   import { setActiveExtension } from '$lib/stores/uiState.svelte'
   import { createMainWindowApi } from '$lib/composerApi'
@@ -178,7 +179,8 @@
                 <p class="mt-1 truncate text-xs text-muted-foreground">{accountName(job)}</p>
                 {#if job.to}<p class="mt-1 truncate text-xs text-muted-foreground" title={job.to}>{job.to}{(job.toCount || 0) > 3 ? ` (+${(job.toCount || 0) - 3})` : ''}</p>{/if}
               </td>
-              <td class="py-4 pr-4 whitespace-nowrap"><time datetime={job.dueAt}>{new Date(job.dueAt).toLocaleString(undefined, { timeZoneName: 'short' })}</time></td>
+              <td class="py-4 pr-4 whitespace-nowrap"><time datetime={job.dueAt}>{new Date(job.dueAt).toLocaleString(undefined, { timeZoneName: 'short' })}</time>
+                {#if parseRepeatSummary(job.repeat)}{@const rule = parseRepeatSummary(job.repeat)}<p class="mt-1 flex items-center gap-1 text-xs text-muted-foreground"><Icon icon="mdi:repeat" class="h-3.5 w-3.5" />{$_(`sendLater.repeatSummary.${rule?.unit}`, { values: { count: rule?.every } })}</p>{/if}</td>
               <td class="max-w-sm py-4 pr-4">
                 <p>{$_(`sendLater.status.${job.state}`)}</p>
                 {#if job.code}<p class="mt-1 text-xs text-muted-foreground">{$_(`sendLater.errors.${job.code}`)}</p>{/if}
