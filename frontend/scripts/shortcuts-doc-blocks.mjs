@@ -9,9 +9,13 @@ export function replaceGeneratedBlocks(docText, blocks) {
   for (const [name, body] of Object.entries(blocks)) {
     const begin = `<!-- BEGIN GENERATED: ${name} (run \`npm run docs:shortcuts\` in frontend/; do not edit by hand) -->`
     const end = `<!-- END GENERATED: ${name} -->`
-    const re = new RegExp(`<!-- BEGIN GENERATED: ${name}[^\\n]*-->[\\s\\S]*?${end}`)
-    if (!re.test(doc)) throw new Error(`Markers for the "${name}" block are missing from docs/KEYBOARD_SHORTCUTS.md`)
-    doc = doc.replace(re, () => `${begin}\n\n${body}\n\n${end}`)
+    // Plain string search, not a RegExp built from `name`: nothing here is interpreted as a pattern.
+    const startAt = doc.indexOf(`<!-- BEGIN GENERATED: ${name}`)
+    const endAt = startAt === -1 ? -1 : doc.indexOf(end, startAt)
+    if (startAt === -1 || endAt === -1) {
+      throw new Error(`Markers for the "${name}" block are missing from docs/KEYBOARD_SHORTCUTS.md`)
+    }
+    doc = doc.slice(0, startAt) + `${begin}\n\n${body}\n\n${end}` + doc.slice(endAt + end.length)
   }
   return doc
 }
