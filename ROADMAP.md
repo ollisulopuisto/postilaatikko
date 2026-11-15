@@ -113,6 +113,8 @@ Implement sidebar cards/rail shortcuts, then Gmail-first operations, global serv
 3. **Scheduled send (P-011) remains critical:** continue its helper/security/live-delivery release gates in parallel; candidate code is not a shipped guarantee.
 4. **Remaining roadmap:** continue D-002 presentation/agent clients, calendar recognition, templates and notifications with their existing dependencies. Safety and delivery recovery fixes may proceed throughout.
 
+Build/release maintenance pending integration: PR #255 fixes malformed-source rejection under macOS Bash 3.2. The source-guard tests pass locally under Bash 3.2 and 5.1; native Mac packaging and the Studio/client install still need acceptance.
+
 ## Guidance for agents
 
 Read this before writing code in this repo. Full contributor rules are in `CONTRIBUTING.md`; these are the ones that matter most here.
