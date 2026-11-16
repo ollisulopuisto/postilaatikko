@@ -4,6 +4,10 @@
 
 - Mac test builds now stop before checkout if GitHub returns a malformed main commit SHA, including on the Bash 3.2 shipped with macOS. This restores the source-validation test on Mac build runners while keeping stale-source and non-arm64 requests blocked.
 
+- Expand native menus across mail, composer formatting, attachments, folders, scheduled delivery, Calendar and Contacts. Menu actions reuse UI handlers and confirmations, disable ambiguous or unavailable targets, and reject stale selection requests. Existing keyboard bindings are unchanged. Inline replies block background mail commands; nonmodal event details keep Calendar navigation available. Explicit read-state actions include mixed conversations, and detached composers keep native image/rich-text paste.
+
+- Keep message attachments on one line: show up to three as file chips, or a collapsed attachment count and Save All bar for larger sets. Expand to see every full filename and action. No attachment deduplication or data changes.
+
 - Attachment cache repair leaves attached multipart files untouched rather than losing their named attachment during parsing. Move reconciliation and fallback cleanup protect repaired attachment rows, exact payloads and undo history; conflicts keep both local messages for explicit reconciliation.
 
 - Repair repeated attachment rows on the local mailbox-owning app from a verified complete original IMAP message. Preserve every real MIME part and exact download payload, archive old cache rows and inline bytes transactionally, and provide a reversible local restore command. Unsupported/damaged MIME and remote-only desktops retain the original cache. See docs/attachment-cache-repair.md; native/live mailbox validation remains outstanding.
