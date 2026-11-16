@@ -29,8 +29,11 @@ test('native Edit shortcuts are registered and target the focused sandboxed fram
 })
 
 test('detached composer preserves native image and rich-text paste',async()=>{
-  assert.match(nativeMenu,/if nativeEdit && def\.Label == "Edit"/)
-  assert.match(nativeMenu,/result\.Append\(menu\.EditMenu\(\)\)/)
+  assert.match(nativeMenu,/if nativeEdit && nativeClipboard\(id\)/)
+  const objc=await readFile(new URL('../../internal/nativemenu/clipboard_darwin.m',import.meta.url),'utf8')
+  assert.match(objc,/@selector\(paste:\)/)
+  assert.match(objc,/dispatch_async\(dispatch_get_main_queue\(\)/)
+  assert.doesNotMatch(objc,/@selector\((undo|redo):\)/)
   const main=await readFile(new URL('../../main.go',import.meta.url),'utf8')
   assert.match(main.slice(main.indexOf('func runComposerMode()')),/nativemenu\.NewComposer\(\)/)
 })

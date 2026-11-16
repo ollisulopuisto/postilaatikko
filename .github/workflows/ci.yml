@@ -138,3 +138,17 @@ jobs:
             echo "Required backend checks: $BACKEND_RESULT" >&2
             exit 1
           fi
+
+  native-menu-macos:
+    name: Native menu (macOS)
+    needs: version
+    if: needs.version.outputs.backend == 'true'
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Compile and test native menu bridge
+        run: go test -race ./internal/nativemenu

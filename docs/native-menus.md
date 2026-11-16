@@ -6,7 +6,7 @@ The native layer only emits an action ID and UI epoch. It cannot mutate mail or 
 
 Availability comes from the active view, current selection, composer, source permissions and displayed controls. Repeated per-message, attachment or scheduled-delivery commands require a single target or the focused row. Ambiguous actions are disabled rather than applied to the first row. Dialogs exclude background actions. Semantic selection/context keys and target identities reject delayed clicks after a selection change; unrelated clocks and text updates do not discard valid clicks.
 
-The main window, detached composer, detached reader and mail windows all install the bridge. Detached processes do not acquire commands belonging to the primary window. Detached composers use the standard native Edit menu so AppKit/WKWebView keep screenshot and rich-text paste; their draft-history commands are under File > Draft Tools. In other windows the four existing native editing accelerators remain registered; other shortcut labels are hints only and the existing context-aware keyboard handlers keep ownership.
+The main window, detached composer, detached reader and mail windows all install the bridge. Detached processes do not acquire commands belonging to the primary window. Detached composers keep catalog-based Undo/Redo and history commands in Edit. Their four clipboard commands alone use AppKit/WKWebView selectors on macOS, preserving screenshot and rich-text paste. Other platforms use the existing clipboard bridge. In other windows the four existing native editing accelerators remain registered; other shortcut labels are hints only and the existing context-aware keyboard handlers keep ownership.
 
 ## Coverage
 
@@ -33,3 +33,5 @@ These show the actual frontend used in the dispatcher tests, not a native macOS 
 ## Verification boundary
 
 Automated browser tests use a deterministic backend, not a live mailbox. They exercise all four frontend entry points, stale/disabled/ambiguous targets, modal isolation, editing, view switching, formatting and destructive-action confirmation. Go tests cover disabled startup, duplicate entries, stale states and preserved editing accelerators. Native macOS menu activation, shortcut-hint rendering, VoiceOver and packaged behavior still require an installed-app check.
+
+Clipboard follow-up: detached composers keep the complete catalog Edit submenu on every platform. On macOS only, its four clipboard actions dispatch AppKit responder-chain selectors on the main thread. Undo/Redo stay frontend draft-history actions; no native Edit-role substitution or File > Draft Tools duplicate. Installed native activation remains an acceptance check.

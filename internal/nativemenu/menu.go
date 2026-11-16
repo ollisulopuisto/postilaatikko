@@ -44,7 +44,7 @@ type Controller struct {
 
 func New() *Controller { return newController(false) }
 
-// NewComposer preserves AppKit responder-chain clipboard formats in the editor.
+// NewComposer preserves AppKit clipboard formats without replacing draft Undo.
 func NewComposer() *Controller { return newController(true) }
 
 func newController(nativeEdit bool) *Controller {
@@ -53,10 +53,6 @@ func newController(nativeEdit bool) *Controller {
 	build = func(items []Item) *menu.Menu {
 		result := menu.NewMenu()
 		for _, def := range items {
-			if nativeEdit && def.Label == "Edit" {
-				result.Append(menu.EditMenu())
-				continue
-			}
 			if def.Label == "Window" && def.ID == "" && len(def.Children) == 0 {
 				result.Append(menu.WindowMenu())
 				continue
@@ -95,6 +91,9 @@ func newController(nativeEdit bool) *Controller {
 				ctx, epoch, enabled := c.ctx, c.epoch, !c.items[id][0].Disabled
 				c.mu.Unlock()
 				if ctx != nil && enabled {
+					if nativeEdit && nativeClipboard(id) {
+						return
+					}
 					wr.EventsEmit(ctx, "native-menu:invoke", map[string]interface{}{"id": id, "epoch": epoch})
 				}
 			})
@@ -105,27 +104,6 @@ func newController(nativeEdit bool) *Controller {
 		return result
 	}
 	definitions := Catalog()
-	if nativeEdit {
-		// The native Edit role sends paste: to WKWebView, preserving images
-		// and rich text. Draft-history operations remain reachable from File.
-		var draftTools []Item
-		for _, def := range definitions {
-			if def.Label != "Edit" {
-				continue
-			}
-			for _, item := range def.Children {
-				if item.ID == "edit.undo" || item.ID == "composer.redo" || item.ID == "edit.history" || item.ID == "composer.history" || item.ID == "app.search" {
-					item.Key = ""
-					draftTools = append(draftTools, item)
-				}
-			}
-		}
-		for i := range definitions {
-			if definitions[i].Label == "File" {
-				definitions[i].Children = append(definitions[i].Children, Item{Label: "Draft Tools", Children: draftTools})
-			}
-		}
-	}
 	c.menu = build(definitions)
 	c.menu.Prepend(menu.AppMenu())
 	return c

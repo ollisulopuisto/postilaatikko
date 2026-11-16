@@ -1,7 +1,6 @@
 package nativemenu
 
 import (
-	"github.com/wailsapp/wails/v2/pkg/menu"
 	"reflect"
 	"testing"
 )
@@ -78,25 +77,12 @@ func TestStateReconciliationAcrossSelectionAndPageReload(t *testing.T) {
 	}
 }
 
-func TestDetachedComposerKeepsNativeEditResponderChain(t *testing.T) {
-	c := NewComposer()
-	var found bool
-	for _, item := range c.Menu().Items {
-		if item.Role == menu.EditMenuRole {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatal("composer must use native Edit role for image/rich-text paste")
-	}
-	for _, id := range []string{"edit.cut", "edit.copy", "edit.paste", "edit.selectAll"} {
-		if len(c.items[id]) > 0 {
-			t.Fatalf("composer intercepts native responder-chain command %s", id)
-		}
-	}
-	for _, id := range []string{"edit.undo", "composer.redo", "composer.history"} {
-		if len(c.items[id]) == 0 {
-			t.Fatalf("draft tool missing: %s", id)
+func TestDetachedComposerKeepsCatalogEditAndDraftHistory(t *testing.T) {
+	for _, c := range []*Controller{New(), NewComposer()} {
+		for _, id := range []string{"edit.cut", "edit.copy", "edit.paste", "edit.selectAll", "edit.undo", "composer.redo", "composer.history"} {
+			if len(c.items[id]) == 0 {
+				t.Fatalf("Edit command missing: %s", id)
+			}
 		}
 	}
 }
