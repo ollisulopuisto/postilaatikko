@@ -22,14 +22,10 @@ test('real attachment component: counts, chips, one line, expansion, routing and
     await page.evaluate(async()=>{
       await import('/src/app.css')
       window.calls=[];window.attachments=[];window.cardToggles=0
-      // Reproduce the reader card handler around the production component.
-      document.querySelector('#fixture').addEventListener('keydown',event=>{
-        if(event.key==='Enter'||event.key===' '){event.preventDefault();window.cardToggles++}
-      })
       window.go={app:{App:new Proxy({},{get:(_,name)=>(...args)=>{window.calls.push([name,args]);return Promise.resolve(name==='GetMessageAttachments'?window.attachments:'')}})}}
       await (await import('/src/lib/i18n/index.ts')).initI18n('en')
       const {mount,unmount}=await import('/attachment-mount.js')
-      const {default:Component}=await import('/src/lib/components/viewer/AttachmentList.svelte')
+      const {default:Component}=await import('/tests/fixtures/AttachmentReaderCard.svelte')
       window.show=async(count,encrypted=false)=>{
         if(window.component)await unmount(window.component)
         window.attachments=Array.from({length:count},(_,i)=>({id:`part-${i}`,filename:i<2?'same-name-report.pdf':`Very-long-original-file-name-${i}.pdf`,contentType:'application/pdf',size:(i+1)*1024,isInline:false}))
@@ -49,6 +45,7 @@ test('real attachment component: counts, chips, one line, expansion, routing and
       if(count===19)await page.screenshot({path:join(captureDir,'postilaatikko-attachment-bar.png')})
       await page.getByRole('button',{name:'Expand attachments',exact:true}).focus()
       await page.keyboard.press('Enter')
+      await section.locator('li').first().waitFor()
       assert.equal(await section.locator('li').count(),count)
       if(count===19)await page.screenshot({path:join(captureDir,'postilaatikko-attachments-expanded.png'),fullPage:true})
       await section.locator('li').last().getByRole('button',{name:/^Download:/}).click()
