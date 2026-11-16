@@ -96,6 +96,10 @@ test('real App native menus reuse navigation and isolate Calendar, Contacts and 
     await page.waitForTimeout(250)
     const enabled=id=>page.evaluate(id=>window.states.at(-1)?.enabled.includes(id),id)
     const invoke=async id=>{await page.waitForFunction(id=>window.states.at(-1)?.enabled.includes(id),id);await page.evaluate(id=>{for(const cb of window.listeners.get('native-menu:invoke')||[])cb({...window.states.at(-1),id})},id);await page.waitForTimeout(150)}
+    await invoke('list.group')
+    await page.getByRole('dialog').waitFor()
+    await page.getByRole('dialog').getByRole('button',{name:'Dismiss',exact:true}).click()
+    await page.waitForTimeout(100)
     await invoke('list.filters')
     await page.getByRole('menu').waitFor()
     await page.keyboard.press('Escape')

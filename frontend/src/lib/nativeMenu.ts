@@ -87,7 +87,7 @@ export function actionTarget(id: string, root: Document = document, scope = read
     }
     return target ? { run: () => {
       // Bits UI picker triggers open on keydown/pointerdown, not click.
-      if(target.getAttribute('aria-haspopup')) {
+      if(['menu','listbox'].includes(target.getAttribute('aria-haspopup') ?? '')) {
         target.focus()
         target.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',code:'ArrowDown',bubbles:true,cancelable:true}))
         return
