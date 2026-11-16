@@ -105,11 +105,26 @@ jobs:
       - name: Run Go tests
         run: make test
 
+  native-menu-macos:
+    name: Native menu (macOS)
+    needs: version
+    if: needs.version.outputs.backend == 'true'
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Compile and test native menu bridge
+        run: go test -race ./internal/nativemenu
+
+
   lint:
     # Preserve the old required status and fail even when a dependency failed
     # before a selected job could start. Never accept skipped selected work.
     name: Lint
-    needs: [version, check, test]
+    needs: [version, check, test, native-menu-macos]
     if: always()
     runs-on: ubuntu-22.04
     timeout-minutes: 5
@@ -121,6 +136,7 @@ jobs:
           FRONTEND_RESULT: ${{ needs.check.result }}
           BACKEND_REQUIRED: ${{ needs.version.outputs.backend }}
           BACKEND_RESULT: ${{ needs.test.result }}
+          NATIVE_MENU_RESULT: ${{ needs.native-menu-macos.result }}
         run: |
           if [[ "$VERSION_RESULT" != 'success' ]]; then
             echo 'Version/policy checks did not succeed' >&2
@@ -138,17 +154,7 @@ jobs:
             echo "Required backend checks: $BACKEND_RESULT" >&2
             exit 1
           fi
-
-  native-menu-macos:
-    name: Native menu (macOS)
-    needs: version
-    if: needs.version.outputs.backend == 'true'
-    runs-on: macos-14
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-      - name: Compile and test native menu bridge
-        run: go test -race ./internal/nativemenu
+          if [[ "$BACKEND_REQUIRED" == 'true' && "$NATIVE_MENU_RESULT" != 'success' ]]; then
+            echo "Required native menu checks: $NATIVE_MENU_RESULT" >&2
+            exit 1
+          fi

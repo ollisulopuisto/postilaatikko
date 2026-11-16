@@ -65,8 +65,11 @@ export function actionTarget(id: string, root: Document = document, scope = read
         if(root.activeElement===active && before===after) insertClipboardTextAtFocus(text)
         return
       }
-      if(active instanceof HTMLIFrameElement && active.contentWindow)active.contentWindow.postMessage({type:'native-edit-command',command},'*')
-      else root.execCommand(command)
+      if(active instanceof HTMLIFrameElement && active.contentWindow){
+        active.contentWindow.postMessage({type:'native-edit-command',command},'*')
+        return
+      }
+      root.execCommand(command)
     },available:()=>true,token:'edit:'+identity(root.activeElement ?? root)})
   }
   // All ids are fixed catalog strings, not user content/selectors.

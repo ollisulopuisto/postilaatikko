@@ -22,6 +22,7 @@ type Item struct {
 	Children []Item `json:"children"`
 }
 
+// Catalog returns the shared ordered native-menu definitions.
 func Catalog() []Item {
 	var items []Item
 	if err := json.Unmarshal(catalogJSON, &items); err != nil {
@@ -42,6 +43,7 @@ type Controller struct {
 	menu  *menu.Menu
 }
 
+// New creates disabled native menus until a frontend publishes valid state.
 func New() *Controller { return newController(false) }
 
 // NewComposer preserves AppKit clipboard formats without replacing draft Undo.
@@ -108,7 +110,11 @@ func newController(nativeEdit bool) *Controller {
 	c.menu.Prepend(menu.AppMenu())
 	return c
 }
+
+// Menu returns the Wails application menu owned by the controller.
 func (c *Controller) Menu() *menu.Menu { return c.menu }
+
+// Start connects menu state updates to the current frontend context.
 func (c *Controller) Start(ctx context.Context) {
 	c.mu.Lock()
 	c.ctx = ctx
