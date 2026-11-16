@@ -25,8 +25,14 @@ func ParseAttachmentsForRepair(messageID string, raw []byte) ([]*AttachmentData,
 		return nil, fmt.Errorf("parse repair MIME: %w", err)
 	}
 	var result []*AttachmentData
+	totalBytes := 0
+	totalParts := 0
 	var walk func(*gomessage.Entity, int) error
 	walk = func(part *gomessage.Entity, depth int) error {
+		totalParts++
+		if totalParts > 10000 {
+			return fmt.Errorf("repair part count exceeds limit")
+		}
 		if depth >= 64 {
 			return fmt.Errorf("repair MIME nesting exceeds limit")
 		}
@@ -67,7 +73,8 @@ func ParseAttachmentsForRepair(messageID string, raw []byte) ([]*AttachmentData,
 		if err != nil {
 			return fmt.Errorf("incomplete repair part: %w", err)
 		}
-		if len(content) > maxAttachmentBytes {
+		totalBytes += len(content)
+		if totalBytes > maxAttachmentBytes {
 			return fmt.Errorf("repair part exceeds limit")
 		}
 		cid := strings.Trim(part.Header.Get("Content-ID"), "<>")

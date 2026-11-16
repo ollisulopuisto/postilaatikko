@@ -1,6 +1,7 @@
 package message
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -131,5 +132,37 @@ func TestAttachmentRepairRollbackLeavesOriginalAndNoBackupMarker(t *testing.T) {
 	}
 	if id, err := store.RepairBackupID("mail"); err != nil || id != "" {
 		t.Fatal("failed transaction marked repaired")
+	}
+}
+
+func TestAttachmentRepairRacesAndForceSyncDoNotLoseParts(t *testing.T) {
+	ms, db := setupThreadTestDB(t)
+	t.Cleanup(func() { _ = db.Close() })
+	if err := ms.Create(&Message{ID: "mail", AccountID: "acc-1", FolderID: "fld-1", UID: 1, ThreadID: "mail", Date: time.Now(), ReceivedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	store := NewAttachmentStore(db)
+	parts := []RepairPart{{Metadata: Attachment{ID: "canonical", MessageID: "mail", Filename: "one", Size: 3}, Payload: []byte("one")}}
+	errs := make(chan error, 9)
+	for i := 0; i < 8; i++ {
+		go func(i int) {
+			errs <- store.CreateBatch([]*Attachment{{ID: fmt.Sprintf("late-%d", i), MessageID: "mail", Filename: "old", Size: 3}})
+		}(i)
+	}
+	go func() { _, err := store.RepairFromMIME("acc-1", "mail", "snapshot", parts, ""); errs <- err }()
+	for i := 0; i < 9; i++ {
+		if err := <-errs; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.DeleteByMessage("mail"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.DeleteAttachmentsForFolder("fld-1"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.GetByMessage("mail")
+	if err != nil || len(got) != 1 || got[0].ID != "canonical" {
+		t.Fatalf("refetch/force-sync lost canonical parts %v %v", got, err)
 	}
 }

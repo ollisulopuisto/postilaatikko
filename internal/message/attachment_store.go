@@ -149,7 +149,7 @@ func (s *AttachmentStore) UpdateLocalPath(id, localPath string) error {
 
 // DeleteByMessage deletes all attachments for a message
 func (s *AttachmentStore) DeleteByMessage(messageID string) error {
-	_, err := s.db.Exec("DELETE FROM attachments WHERE message_id = ?", messageID)
+	_, err := s.db.Exec("DELETE FROM attachments WHERE message_id = ? AND NOT EXISTS (SELECT 1 FROM attachment_repairs WHERE message_id=?)", messageID, messageID)
 	if err != nil {
 		return fmt.Errorf("failed to delete attachments: %w", err)
 	}
@@ -242,6 +242,7 @@ func (s *AttachmentStore) DeleteAttachmentsForFolder(folderID string) (int64, er
 		DELETE FROM attachments
 		WHERE message_id IN (
 			SELECT id FROM messages WHERE folder_id = ?
+        ) AND NOT EXISTS (SELECT 1 FROM attachment_repairs r WHERE r.message_id=attachments.message_id
 		)
 	`
 	result, err := s.db.Exec(query, folderID)
