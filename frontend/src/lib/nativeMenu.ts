@@ -103,14 +103,15 @@ export function installNativeMenu() {
     const context = [...document.querySelectorAll<HTMLElement>('[data-native-context]')]
       .filter(element => element.getClientRects().length > 0 && !element.closest('[hidden], [inert], [aria-hidden="true"]'))
       .map(element => element.dataset.nativeContext)
-    return { enabled:targets.map(([id])=>id), key:JSON.stringify([context,targets.map(([id,target])=>[id,target?.token])]) }
+    const view = document.querySelector<HTMLElement>('[data-native-view]')?.dataset.nativeView ?? 'mail'
+    return { view, enabled:targets.map(([id])=>id), key:JSON.stringify([view,context,targets.map(([id,target])=>[id,target?.token])]) }
   }
   const publish = () => {
     timer = undefined
     const state = snapshot()
     if (state.key === snapshotKey) return
     snapshotKey = state.key
-    EventsEmit('native-menu:state', { epoch: ++epoch, enabled:state.enabled })
+    EventsEmit('native-menu:state', { epoch: ++epoch, enabled:state.enabled, view:state.view })
   }
   const changed = () => { if (!timer) timer = setTimeout(publish, 40) }
   invalidate = changed

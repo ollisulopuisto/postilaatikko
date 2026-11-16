@@ -86,3 +86,21 @@ func TestDetachedComposerKeepsCatalogEditAndDraftHistory(t *testing.T) {
 		}
 	}
 }
+
+func TestContextualTaskMenuMatchesSelectedView(t *testing.T) {
+	c := New()
+	for i, tc := range []struct{ view, label, first string }{{"mail", "Message", "Reply"}, {"calendar", "Event", "New Event…"}, {"contacts", "Contact", "New Contact…"}, {"unknown", "Message", "Reply"}} {
+		c.applyState(State{Epoch: uint64(i + 1), View: tc.view})
+		if c.taskMenu.Label != tc.label {
+			t.Fatalf("view %s got %s", tc.view, c.taskMenu.Label)
+		}
+		if c.taskMenu.SubMenu != c.taskViews[map[string]string{"Message": "mail", "Event": "calendar", "Contact": "contacts"}[tc.label]] {
+			t.Fatal("incorrect task submenu")
+		}
+	}
+	c.applyState(State{Epoch: 100, View: "calendar"})
+	c.applyState(State{Epoch: 99, View: "contacts"})
+	if c.taskMenu.Label != "Event" {
+		t.Fatal("stale view changed task menu")
+	}
+}

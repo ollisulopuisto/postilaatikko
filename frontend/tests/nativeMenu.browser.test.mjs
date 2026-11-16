@@ -130,6 +130,7 @@ test('real App native menus reuse navigation and isolate Calendar, Contacts and 
       window.data.Calendar_ListEventsInRange=[event];window.data.Calendar_GetEvent=event
     })
     await invoke('view.calendar');await page.waitForTimeout(250)
+    assert.equal(await page.evaluate(()=>window.states.at(-1).view),'calendar')
     assert.equal(await enabled('mail.trash'),false)
     assert.equal(await enabled('calendar.today'),true)
     await page.getByText('Selected calendar fixture',{exact:true}).first().click()

@@ -2609,7 +2609,7 @@
 
 <svelte:window onmousemove={handleMouseMove} onmouseup={handleMouseUp} onkeydown={handleGlobalKeyDown} onkeyup={handleGlobalKeyUp} />
 
-<div data-native-mail-primary={getActiveExtension()==='mail' && activeMailWorkspace==='primary'} data-native-context={JSON.stringify([getActiveExtension(),activeMailWorkspace,selectedAccountId,selectedFolderId,selectedThreadId,getFocusedPane(),showComposer])} class="flex flex-col h-full w-full overflow-hidden bg-background">
+<div data-native-view={getActiveExtension()} data-native-mail-primary={getActiveExtension()==='mail' && activeMailWorkspace==='primary'} data-native-context={JSON.stringify([getActiveExtension(),activeMailWorkspace,selectedAccountId,selectedFolderId,selectedThreadId,getFocusedPane(),showComposer])} class="flex flex-col h-full w-full overflow-hidden bg-background">
   <!-- Main Content -->
   <div class="flex flex-1 min-h-0 overflow-hidden relative">
     <ExtensionRail windowControls={getShowTitleBar() && !getNativeTitleBar() && effectiveTitleBarMode === 'custom'} onCloseWindow={handleClose} onRevealContext={revealContextPane} onHideContext={scheduleContextPaneHide} foldersOpen={contextPaneMode === 'folders' && getActiveExtension() === 'mail'} />

@@ -32,15 +32,18 @@ func Catalog() []Item {
 }
 
 type State struct {
+	View    string   `json:"view"`
 	Epoch   uint64   `json:"epoch"`
 	Enabled []string `json:"enabled"`
 }
 type Controller struct {
-	mu    sync.Mutex
-	ctx   context.Context
-	items map[string][]*menu.MenuItem
-	epoch uint64
-	menu  *menu.Menu
+	mu        sync.Mutex
+	ctx       context.Context
+	items     map[string][]*menu.MenuItem
+	epoch     uint64
+	menu      *menu.Menu
+	taskMenu  *menu.MenuItem
+	taskViews map[string]*menu.Menu
 }
 
 // New creates disabled native menus until a frontend publishes valid state.
@@ -107,6 +110,29 @@ func newController(nativeEdit bool) *Controller {
 	}
 	definitions := Catalog()
 	c.menu = build(definitions)
+	c.taskViews = map[string]*menu.Menu{}
+	for _, top := range c.menu.Items {
+		if top.Label != "Message" {
+			continue
+		}
+		c.taskMenu = top
+		c.taskViews["mail"] = top.SubMenu
+		var mailItems []*menu.MenuItem
+		for _, item := range top.SubMenu.Items {
+			switch item.Label {
+			case "Event":
+				c.taskViews["calendar"] = item.SubMenu
+			case "Contact":
+				c.taskViews["contacts"] = item.SubMenu
+			default:
+				mailItems = append(mailItems, item)
+			}
+		}
+		for len(mailItems) > 0 && mailItems[len(mailItems)-1].Type == menu.SeparatorType {
+			mailItems = mailItems[:len(mailItems)-1]
+		}
+		top.SubMenu.Items = mailItems
+	}
 	c.menu.Prepend(menu.AppMenu())
 	return c
 }
@@ -151,6 +177,18 @@ func (c *Controller) applyState(state State) bool {
 	}
 	c.epoch = state.Epoch
 	changed := false
+	view := state.View
+	submenu, ok := c.taskViews[view]
+	if !ok {
+		view = "mail"
+		submenu = c.taskViews[view]
+	}
+	label := map[string]string{"mail": "Message", "calendar": "Event", "contacts": "Contact"}[view]
+	if c.taskMenu != nil && (c.taskMenu.Label != label || c.taskMenu.SubMenu != submenu) {
+		c.taskMenu.Label = label
+		c.taskMenu.SubMenu = submenu
+		changed = true
+	}
 	for id, items := range c.items {
 		disabled := !enabled[id]
 		for _, item := range items {
