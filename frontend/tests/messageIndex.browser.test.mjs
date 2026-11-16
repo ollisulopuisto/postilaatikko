@@ -79,8 +79,41 @@ test('real App: open mail, leave index, focus, resize and return on desktop and 
         await page.mouse.move(25, 300)
         assert.ok(await row.isVisible(), 'phone returns to index')
       }
+      // Exercise the actual Contacts activation + kit DetailPane on the same
+      // shared layout store, not a source-code facsimile of its behavior.
+      await page.evaluate(async () => {
+        const original = window.go.app.App
+        const contact = { id: 'fixture-contact', name: 'Fixture contact', emails: ['contact@example.test'], phones: [], sourceId: 'aerion' }
+        window.go.app.App = new Proxy(original, { get: (target, key) => key === 'Contacts_ListContactsForBrowse' ? () => Promise.resolve([contact]) : key === 'Contacts_GetContactDetail' ? () => Promise.resolve(contact) : target[key] })
+        const { setActiveExtension } = await import('/src/lib/stores/uiState.svelte.ts')
+        setActiveExtension('contacts')
+      })
+      const contactRow = page.getByText('Fixture contact', { exact: true }).first()
+      await contactRow.click()
+      const contactOverlay = page.locator('section.responsive-viewer-overlay').filter({ hasText: 'contact@example.test' })
+      if (width <= 1024) {
+        await contactOverlay.waitFor({ state: 'visible' })
+        await page.waitForTimeout(300)
+        assert.equal(await contactOverlay.evaluate(el => el.classList.contains('responsive-viewer-visible') && el.getBoundingClientRect().left < innerWidth / 2), true, `contact detail revealed at ${width}`)
+        await contactOverlay.getByRole('button', { name: 'Back', exact: true }).click()
+        await page.waitForTimeout(300)
+        assert.equal(await contactOverlay.evaluate(el => el.classList.contains('responsive-viewer-visible')), false, `contact back at ${width}`)
+        await contactRow.click()
+        await page.setViewportSize({ width: 1280, height: 800 })
+        await page.waitForTimeout(200)
+        assert.equal(await page.locator('section.responsive-viewer-overlay').count(), 0, 'full width removes contact overlay')
+        await page.setViewportSize({ width, height: 800 })
+        await page.waitForTimeout(300)
+        assert.equal(await contactOverlay.evaluate(el => el.classList.contains('responsive-viewer-visible')), false, 'returning from full clears old overlay state')
+        await contactRow.click()
+        await page.waitForTimeout(300)
+        assert.equal(await contactOverlay.evaluate(el => el.classList.contains('responsive-viewer-visible')), true, 'contact reactivation after resize')
+      } else {
+        assert.equal(await page.locator('section.responsive-viewer-overlay').count(), 0)
+        assert.ok(await page.getByText('contact@example.test', { exact: true }).last().isVisible())
+      }
       assert.deepEqual(errors, [], `no render errors at ${width}`)
-      if (process.env.POSTI_INDEX_SCREENSHOT && width === 1000) await page.screenshot({ path: process.env.POSTI_INDEX_SCREENSHOT })
+      if (process.env.POSTI_INDEX_SCREENSHOT && width === 1000) await page.screenshot({ path: process.env.POSTI_INDEX_SCREENSHOT.replace('.png', '-contacts.png') })
       await page.close()
     }
   } finally {

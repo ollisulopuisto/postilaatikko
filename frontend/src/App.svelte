@@ -185,7 +185,7 @@
       triageStatus = visit.triageStatus
       contextPaneMode = 'messages'
       hideSidebar()
-      showViewer()
+      if (getLayoutMode() === 'narrow') showViewer()
       if (workspace) {
         updateWorkspaceScope(workspace.id, { ...scope })
         mailWindowTabInstances[workspace.id]?.restoreMessageVisit(scope)
@@ -1338,7 +1338,7 @@
         threadSubject: subject || undefined,
       })
     }
-    showViewer()
+    if (getLayoutMode() === 'narrow') showViewer()
     recordMessageVisit()
 
     // Persist state

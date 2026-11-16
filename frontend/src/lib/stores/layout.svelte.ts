@@ -21,8 +21,8 @@ function updateMode() {
     layoutMode = 'full'
   }
 
-  // Only narrow windows use reader/sidebar overlays
-  if (layoutMode !== 'narrow') {
+  // Reset overlays when entering full mode
+  if (layoutMode === 'full') {
     responsiveView = 'default'
   }
 }
@@ -50,12 +50,12 @@ export function isResponsive(): boolean {
 }
 
 export function showViewer() {
-  if (layoutMode !== 'narrow') return
+  if (layoutMode === 'full') return
   responsiveView = 'viewer'
 }
 
 export function hideViewer() {
-  if (layoutMode !== 'narrow') return
+  if (layoutMode === 'full') return
   responsiveView = 'default'
 }
 

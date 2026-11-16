@@ -35,11 +35,11 @@ test('auto-hide cannot hide the desktop index while a conversation is selected',
   }
 })
 
-test('phone overlay state is not entered for a medium desktop window', () => {
+test('shared overlay transitions remain available to Contacts at medium widths', () => {
   const showViewer = layout.match(/export function showViewer\(\) \{([\s\S]*?)\n\}/)[1]
   for (const mode of ['narrow', 'medium', 'full']) {
     const next = Function('layoutMode', `let responsiveView = 'default'; function run() {${showViewer}} run(); return responsiveView`)(mode)
-    assert.equal(next, mode === 'narrow' ? 'viewer' : 'default', mode)
+    assert.equal(next, mode !== 'full' ? 'viewer' : 'default', mode)
   }
 })
 
