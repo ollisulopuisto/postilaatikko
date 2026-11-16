@@ -199,7 +199,7 @@
   <div class="space-y-2">
     {#each encryptedAttachments as att (att.filename)}
       {@const isDownloading = downloadingIds.has(att.filename)}
-      <div class="flex items-center gap-3 p-2 rounded-md border border-border bg-muted/30 hover:bg-muted/50 transition-colors group">
+      <div data-native-row role="group" tabindex="-1" class="flex items-center gap-3 p-2 rounded-md border border-border bg-muted/30 hover:bg-muted/50 transition-colors group">
         <div class="flex-shrink-0 w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center">
           <Icon icon={getFileIcon(att.contentType)} class="w-5 h-5 text-primary" />
         </div>
@@ -221,7 +221,7 @@
               class="p-2 rounded-md hover:bg-muted transition-colors opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               title={$_('attachment.open')}
               aria-label={$_('attachment.open')}
-              onclick={() => handleEncryptedOpen(att)}
+              data-native-action="attachment.open" onclick={() => handleEncryptedOpen(att)}
             >
               <Icon icon="mdi:open-in-new" class="w-4 h-4 text-muted-foreground" />
             </button>
@@ -229,7 +229,7 @@
               class="p-2 rounded-md hover:bg-muted transition-colors opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               title={$_('attachment.download')}
               aria-label={$_('attachment.download')}
-              onclick={() => handleEncryptedDownload(att)}
+              data-native-action="attachment.save" onclick={() => handleEncryptedDownload(att)}
             >
               <Icon icon="mdi:download" class="w-4 h-4 text-muted-foreground" />
             </button>
@@ -241,7 +241,7 @@
     {#if encryptedAttachments.length > 1}
       <button
         class="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors w-full justify-center border border-dashed border-border"
-        onclick={handleSaveAll}
+        data-native-action="attachment.saveAll" onclick={handleSaveAll}
         disabled={savingAll}
       >
         {#if savingAll}
@@ -258,7 +258,7 @@
   <div class="space-y-2">
     {#each attachments as att (att.id)}
       {@const isDownloading = downloadingIds.has(att.id)}
-      <div class="flex items-center gap-3 p-2 rounded-md border border-border bg-muted/30 hover:bg-muted/50 transition-colors group">
+      <div data-native-row role="group" tabindex="-1" class="flex items-center gap-3 p-2 rounded-md border border-border bg-muted/30 hover:bg-muted/50 transition-colors group">
         <div class="flex-shrink-0 w-10 h-10 rounded-md bg-primary/10 flex items-center justify-center">
           <Icon icon={getFileIcon(att.contentType)} class="w-5 h-5 text-primary" />
         </div>
@@ -283,7 +283,7 @@
               class="p-2 rounded-md hover:bg-muted transition-colors opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               title={$_('attachment.open')}
               aria-label={$_('attachment.open')}
-              onclick={() => handleOpen(att)}
+              data-native-action="attachment.open" onclick={() => handleOpen(att)}
             >
               <Icon icon="mdi:open-in-new" class="w-4 h-4 text-muted-foreground" />
             </button>
@@ -291,7 +291,7 @@
               class="p-2 rounded-md hover:bg-muted transition-colors opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               title={$_('attachment.download')}
               aria-label={$_('attachment.download')}
-              onclick={() => handleDownload(att)}
+              data-native-action="attachment.save" onclick={() => handleDownload(att)}
             >
               <Icon icon="mdi:download" class="w-4 h-4 text-muted-foreground" />
             </button>
@@ -303,7 +303,7 @@
     {#if attachments.length > 1}
       <button
         class="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors w-full justify-center border border-dashed border-border"
-        onclick={handleSaveAll}
+        data-native-action="attachment.saveAll" onclick={handleSaveAll}
         disabled={savingAll}
       >
         {#if savingAll}

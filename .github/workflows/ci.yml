@@ -67,6 +67,11 @@ jobs:
         run: npm run check --prefix frontend
       - name: Run frontend regression tests
         run: npm test --prefix frontend
+      - name: Native menu browser regressions
+        run: |
+          npm install --prefix "$RUNNER_TEMP/posti-browser" --no-package-lock --no-save playwright@1.65.1
+          "$RUNNER_TEMP/posti-browser/node_modules/.bin/playwright" install --with-deps chromium
+          POSTI_PLAYWRIGHT_PATH="$RUNNER_TEMP/posti-browser/node_modules/playwright/index.mjs" POSTI_CHROMIUM_BUNDLED=1 node --test frontend/tests/nativeMenu.browser.test.mjs
       - name: Build frontend
         run: npm run build --prefix frontend
 
