@@ -217,7 +217,7 @@
 {:else if items.length > 0}
   <section class="attachment-set min-w-0" data-attachment-count={items.length} data-attachment-expanded={expanded} aria-label={$_('attachment.listLabel')}>
     <div class="attachment-line flex min-w-0 items-center gap-2">
-      <button type="button" class="attachment-toggle flex min-w-0 items-center gap-1 rounded-md text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {items.length>3 || expanded ? 'flex-1' : 'shrink-0'}"
+      <button type="button" onkeydown={(event) => event.stopPropagation()} class="attachment-toggle flex min-w-0 items-center gap-1 rounded-md text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {items.length>3 || expanded ? 'flex-1' : 'shrink-0'}"
         aria-expanded={expanded} title={$_(expanded?'attachment.collapse':'attachment.expand')} aria-label={$_(expanded?'attachment.collapse':'attachment.expand')}
         onclick={toggleExpanded}>
         <Icon icon={expanded?'mdi:chevron-down':'mdi:chevron-right'} class="h-4 w-4 shrink-0" />
@@ -227,12 +227,12 @@
         <div class="attachment-chips flex flex-1 min-w-0 gap-2 overflow-x-auto">
           {#each items as item (item.key)}
             <div data-native-row tabindex="-1" class="attachment-chip flex min-w-[8rem] flex-1 items-center rounded-md border border-border bg-muted/30">
-              <button type="button" class="flex min-w-0 flex-1 items-center gap-1.5 rounded-md p-1.5 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              <button type="button" onkeydown={(event) => event.stopPropagation()} class="flex min-w-0 flex-1 items-center gap-1.5 rounded-md p-1.5 text-left hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 title={item.attachment.filename} aria-label={`${$_('attachment.open')}: ${item.attachment.filename}`} data-native-action="attachment.open" disabled={busy(item)} onclick={()=>openItem(item)}>
                 <Icon icon={busy(item)?'mdi:loading':getFileIcon(item.attachment.contentType)} class="h-4 w-4 shrink-0 text-primary" />
                 <span class="min-w-0"><span class="block truncate text-xs font-medium">{item.attachment.filename}</span><span class="block whitespace-nowrap text-[10px] text-muted-foreground">{formatSize(item.attachment.size)}</span></span>
               </button>
-              <button type="button" class="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              <button type="button" onkeydown={(event) => event.stopPropagation()} class="shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 title={`${$_('attachment.download')}: ${item.attachment.filename}`} aria-label={`${$_('attachment.download')}: ${item.attachment.filename}`} data-native-action="attachment.save" disabled={busy(item)} onclick={()=>saveItem(item)}>
                 <Icon icon="mdi:download" class="h-3.5 w-3.5" />
               </button>
@@ -241,7 +241,7 @@
         </div>
       {/if}
       {#if items.length>1}
-        <button type="button" class="shrink-0 flex items-center gap-1 rounded-md p-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        <button type="button" onkeydown={(event) => event.stopPropagation()} class="shrink-0 flex items-center gap-1 rounded-md p-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           title={$_('attachment.saveAll',{values:{count:items.length}})} aria-label={$_('attachment.saveAll',{values:{count:items.length}})} data-native-action="attachment.saveAll" onclick={handleSaveAll} disabled={savingAll}>
           {#if items.length>3 || expanded}<span class="whitespace-nowrap">{$_('attachment.saveAllShort')}</span>{/if}
           <Icon icon={savingAll?'mdi:loading':'mdi:download-multiple'} class="h-4 w-4" />
@@ -254,9 +254,9 @@
           <li data-native-row tabindex="-1" class="flex min-w-0 items-center gap-2 rounded-md border border-border bg-muted/20 p-2">
             <Icon icon={getFileIcon(item.attachment.contentType)} class="h-5 w-5 shrink-0 text-primary" />
             <div class="min-w-0 flex-1"><span class="block break-all text-sm">{item.attachment.filename}</span><span class="text-xs text-muted-foreground">{formatSize(item.attachment.size)} {item.attachment.isInline?$_('attachment.inline'):''}</span></div>
-            <button type="button" class="shrink-0 rounded-md p-2 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            <button type="button" onkeydown={(event) => event.stopPropagation()} class="shrink-0 rounded-md p-2 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label={`${$_('attachment.open')}: ${item.attachment.filename}`} title={$_('attachment.open')} data-native-action="attachment.open" disabled={busy(item)} onclick={()=>openItem(item)}><Icon icon={busy(item)?'mdi:loading':'mdi:open-in-new'} class="h-4 w-4" /></button>
-            <button type="button" class="shrink-0 rounded-md p-2 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            <button type="button" onkeydown={(event) => event.stopPropagation()} class="shrink-0 rounded-md p-2 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label={`${$_('attachment.download')}: ${item.attachment.filename}`} title={$_('attachment.download')} data-native-action="attachment.save" disabled={busy(item)} onclick={()=>saveItem(item)}><Icon icon="mdi:download" class="h-4 w-4" /></button>
           </li>
         {/each}

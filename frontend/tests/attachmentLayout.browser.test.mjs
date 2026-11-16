@@ -21,7 +21,11 @@ test('real attachment component: counts, chips, one line, expansion, routing and
     await page.goto('http://127.0.0.1:5192/attachment-fixture')
     await page.evaluate(async()=>{
       await import('/src/app.css')
-      window.calls=[];window.attachments=[]
+      window.calls=[];window.attachments=[];window.cardToggles=0
+      // Reproduce the reader card handler around the production component.
+      document.querySelector('#fixture').addEventListener('keydown',event=>{
+        if(event.key==='Enter'||event.key===' '){event.preventDefault();window.cardToggles++}
+      })
       window.go={app:{App:new Proxy({},{get:(_,name)=>(...args)=>{window.calls.push([name,args]);return Promise.resolve(name==='GetMessageAttachments'?window.attachments:'')}})}}
       await (await import('/src/lib/i18n/index.ts')).initI18n('en')
       const {mount,unmount}=await import('/attachment-mount.js')
@@ -43,12 +47,14 @@ test('real attachment component: counts, chips, one line, expansion, routing and
       assert.ok(collapsed.height<55,`count ${count} remains a single line`)
       if(count===3)await page.screenshot({path:join(captureDir,'postilaatikko-attachment-chips.png')})
       if(count===19)await page.screenshot({path:join(captureDir,'postilaatikko-attachment-bar.png')})
-      await page.getByRole('button',{name:'Expand attachments',exact:true}).click()
+      await page.getByRole('button',{name:'Expand attachments',exact:true}).focus()
+      await page.keyboard.press('Enter')
       assert.equal(await section.locator('li').count(),count)
       if(count===19)await page.screenshot({path:join(captureDir,'postilaatikko-attachments-expanded.png'),fullPage:true})
       await section.locator('li').last().getByRole('button',{name:/^Download:/}).click()
       assert.deepEqual(await page.evaluate(()=>window.calls.filter(([name])=>name==='SaveAttachmentAsForAccount').at(-1)),['SaveAttachmentAsForAccount',['account-A','message-A',`part-${count-1}`]])
-      await page.getByRole('button',{name:'Collapse attachments',exact:true}).click()
+      await page.getByRole('button',{name:'Collapse attachments',exact:true}).focus()
+      await page.keyboard.press('Space')
       if(count>1){await page.getByRole('button',{name:/Save All/}).click();assert.deepEqual(await page.evaluate(()=>window.calls.filter(([name])=>name==='SaveAllAttachmentsForAccount').at(-1)),['SaveAllAttachmentsForAccount',['account-A','message-A']])}
     }
     await page.evaluate(()=>window.show(3))
@@ -66,6 +72,7 @@ test('real attachment component: counts, chips, one line, expansion, routing and
     assert.deepEqual(await page.evaluate(()=>window.calls.filter(([name])=>name==='SaveEncryptedAttachmentAs').at(-1)),['SaveEncryptedAttachmentAs',['message-A','Very-long-original-file-name-3.pdf']])
     await page.getByRole('button',{name:/Save All/}).click()
     assert.deepEqual(await page.evaluate(()=>window.calls.filter(([name])=>name==='SaveAllEncryptedAttachments').at(-1)),['SaveAllEncryptedAttachments',['message-A']])
+    assert.equal(await page.evaluate(()=>window.cardToggles),0,'reader card never steals attachment keyboard activation')
     assert.deepEqual(errors,[])
   }finally{await browser.close();await server.close()}
 })
