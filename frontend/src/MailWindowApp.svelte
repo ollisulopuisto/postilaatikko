@@ -241,7 +241,7 @@
     viewer?.prepareForSuspend()
   }
   function keydown(event: KeyboardEvent) {
-    if (!active || isInputElement(event.target) || isDialogGuardActive() || event.defaultPrevented) return
+    if (!active || !mailActive || isInputElement(event.target) || isDialogGuardActive() || event.defaultPrevented) return
     if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === 'n') { event.preventDefault(); if (embedded) onNewTab?.(); else void newWindow(); return }
     if (event.ctrlKey || event.metaKey || event.altKey) return
     if (event.key === 'Escape') { closeReader(); return }
@@ -381,7 +381,7 @@
       {#if active && windowState.thread}
         {@const thread = windowState.thread}
         <ConversationViewer nativeOwnsMailActions={active && mailActive && getFocusedPane()==='viewer'} bind:this={viewer} threadId={thread.threadId} folderId={thread.folderId} accountId={thread.accountId} folderType={windowState.scope.folderType}
-          isViewerVisible={active} deferMarkAsReadUntilLeave={deferMarkAsReadUntilLeave} isFocused={active && mailActive && getFocusedPane() === 'viewer'} showBackButton onBack={closeReader} onReply={reply}
+          isViewerVisible={active && mailActive} deferMarkAsReadUntilLeave={deferMarkAsReadUntilLeave} isFocused={active && mailActive && getFocusedPane() === 'viewer'} showBackButton onBack={closeReader} onReply={reply}
           restoreScrollTop={restoreReaderScrollTop}
           onSaveScrollPosition={(threadId, folderId, accountId, top) => { savedReaderPosition = { key: readerPositionKey({ threadId, folderId, accountId }), top } }}
           onEditDraft={draftId => run(() => OpenComposerWindow(thread.accountId, 'new', '', draftId, ''))}
