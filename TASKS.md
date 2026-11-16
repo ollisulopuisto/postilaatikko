@@ -529,6 +529,12 @@ README review follow-up: qualify checksum instructions because tagged releases d
 | --- | --- | --- | --- | --- |
 | DRAFT-SOURCE-GUARD-001 | Small | Reject malformed main SHA under macOS Bash 3.2 as well as modern Bash. | Instinct / `agent/draft-source-guard` / `/tmp/posti-source-guard` | Review; explicit malformed-SHA rejection fixes the Bash 3.2 errexit gap. Red test reproduced on compiled GNU Bash 3.2; all 1,061 frontend tests now pass with Bash 3.2, and the workflow tests pass with Bash 5.1. Native macOS packaging not rerun. |
 
+## Attachment refetch idempotency (2026-11-16)
+
+| ID | Effort | Task | Owner | Status |
+| --- | --- | --- | --- | --- |
+| ATTACHMENT-REFETCH-001 | Medium | Repair repeated local IMAP attachment cache rows from complete authoritative MIME, with exact per-part content and reversible old-row backup. | Instinct / `fix/authoritative-attachment-repair` / `/tmp/posti-attachments` | Review; repair pushed to PR #257, supersedes prevention-only scope. Strict fetch/parser, transactional backup/restore, cache-path verification, refetch guards and exact-part downloads implemented. Source/UIDVALIDITY, charset and moved-row collision safety guards covered; move collision requires explicit reconciliation. Devin findings fixed: terminal move conflict + fallback cleanup guard, attached-multipart rejection; full mock-IMAP move regression covers both collision directions. Tests on fixture DBs pass; native/live IMAP/remote Studio not verified. No production cache mutation run. |
+
 ## Message index visibility (2026-11-16)
 
 | ID | Effort | Task | Owner | Status |
