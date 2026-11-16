@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Attachment cache repair leaves attached multipart files untouched rather than losing their named attachment during parsing. Move reconciliation and fallback cleanup protect repaired attachment rows, exact payloads and undo history; conflicts keep both local messages for explicit reconciliation.
+
 - Repair repeated attachment rows on the local mailbox-owning app from a verified complete original IMAP message. Preserve every real MIME part and exact download payload, archive old cache rows and inline bytes transactionally, and provide a reversible local restore command. Unsupported/damaged MIME and remote-only desktops retain the original cache. See docs/attachment-cache-repair.md; native/live mailbox validation remains outstanding.
 
 - Keep the message index visible beside opened mail in desktop windows, including 768-1024px tiled windows and with context auto-hide enabled. Phone drill-down and explicit focus mode are unchanged.
