@@ -527,7 +527,7 @@ README review follow-up: qualify checksum instructions because tagged releases d
 
 | ID | Effort | Task | Owner | Status |
 | --- | --- | --- | --- | --- |
-| DRAFT-SOURCE-GUARD-001 | Small | Reject malformed main SHA under macOS Bash 3.2 as well as modern Bash. | Instinct / `agent/draft-source-guard` / `/tmp/posti-source-guard` | Review; explicit malformed-SHA rejection fixes the Bash 3.2 errexit gap. Red test reproduced on compiled GNU Bash 3.2; all 1,061 frontend tests now pass with Bash 3.2, and the workflow tests pass with Bash 5.1. Native macOS packaging not rerun. |
+| DRAFT-SOURCE-GUARD-001 | Small | Reject malformed main SHA under macOS Bash 3.2 as well as modern Bash. | Instinct / `agent/draft-source-guard` / `/tmp/posti-source-guard` | Review; explicit malformed-SHA rejection fixes the Bash 3.2 errexit gap. Red test reproduced on compiled GNU Bash 3.2; all 1,061 frontend tests now pass with Bash 3.2, and the workflow tests pass with Bash 5.1. Native macOS packaging and Studio/client installation acceptance remain unverified. Execution status removed from ROADMAP.md per AGENTS.md; no product scope/priority change. |
 
 ## Attachment refetch idempotency (2026-11-16)
 
