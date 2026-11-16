@@ -65,6 +65,9 @@ func (e *Engine) parseMessageBodyFull(raw []byte, messageID string, timeout time
 // parseMessageBodyInternal does the actual parsing work, extracting body text, HTML, and attachments.
 func (e *Engine) parseMessageBodyInternal(raw []byte, messageID string) *ParsedBody {
 	result := &ParsedBody{}
+	// Bind IDs to the original bytes, before signed-body unwrapping changes raw.
+	snapshot := raw
+	defer func() { message.AssignSnapshotAttachmentIDs(result.Attachments, messageID, snapshot, "sync-body") }()
 	reader := bytes.NewReader(raw)
 
 	entity, err := gomessage.Read(reader)

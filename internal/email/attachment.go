@@ -49,6 +49,11 @@ func (e *AttachmentExtractor) ExtractAttachments(messageID string, raw []byte) (
 		attachments = e.extractFromMultipart(messageID, mr)
 	}
 
+	metadata := make([]*message.Attachment, 0, len(attachments))
+	for _, att := range attachments {
+		metadata = append(metadata, att.Attachment)
+	}
+	message.AssignSnapshotAttachmentIDs(metadata, messageID, raw, "attachment-extractor")
 	return attachments, nil
 }
 

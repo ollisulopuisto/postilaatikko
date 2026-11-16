@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Prevent exact repeated IMAP MIME parses from appending another copy of every attachment. Distinct same-name parts and existing cached file paths are preserved. This prevents future duplicate cache rows; it does not remove existing duplicates or merge different/partial MIME snapshots.
+
 - Send Later can repeat (every N days, weeks or months; never, after N sends or until a date) and has a mailing-list mode that puts you in To and everyone else in one identical Cc or Bcc message. The Studio queues each run only after the previous one was accepted by the provider; a failed or uncertain run stops the series, missed runs are skipped, and every run gets its own Message-ID and Date. No unsubscribe link, per-recipient copies or merge fields. Go tests pass; the desktop app package and native Studio delivery were not compiled or run here.
 
 - Clearly label paused Undo Send recovery with a persistent action-needed message in Finnish and English.
