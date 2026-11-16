@@ -2663,6 +2663,7 @@ type MovedUIDReconcileResult struct {
 // owned by a different logical message. Callers must not overwrite or delete
 // either row in this state.
 type MovedUIDConflictError struct {
+	RepairProtected bool
 	MovingLocalID   string
 	ExistingLocalID string
 	DestinationUID  uint32
@@ -2670,6 +2671,9 @@ type MovedUIDConflictError struct {
 }
 
 func (e *MovedUIDConflictError) Error() string {
+	if e.RepairProtected {
+		return "attachment repair history prevents automatic move reconciliation; both local rows retained"
+	}
 	return fmt.Sprintf("destination UID %d is owned by a different local message", e.DestinationUID)
 }
 
@@ -2763,7 +2767,7 @@ func (s *Store) ReconcileMovedMessageUIDs(destinationFolderID string, uidsByLoca
 			return nil, err
 		}
 		if repairedRows > 0 {
-			return nil, fmt.Errorf("attachment repair prevents automatic moved-row collision merge: %s and %s", movingLocalID, existingLocalID)
+			return nil, &MovedUIDConflictError{MovingLocalID: movingLocalID, ExistingLocalID: existingLocalID, DestinationUID: uid, MessageIDMatch: true, RepairProtected: true}
 		}
 
 		// Preserve the stable local ID and its richer cached content, but adopt
@@ -2842,11 +2846,25 @@ func (s *Store) SetMovedMessageUIDs(destinationFolderID string, uidsByLocalID ma
 // DeleteTempUIDs removes messages with temporary negative UIDs in a folder.
 // These are left over after MoveMessages assigns -rowid as a placeholder UID.
 func (s *Store) DeleteTempUIDs(folderID string) error {
-	_, err := s.db.Exec("DELETE FROM messages WHERE folder_id = ? AND uid < 0", folderID)
+	tx, err := s.db.Begin()
 	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	// Fallback sync without COPYUID (or another simultaneous move) must not
+	// cascade-delete exact repaired payloads or their undo generations.
+	var protected string
+	err = tx.QueryRow(`SELECT m.id FROM messages m JOIN attachment_repairs r ON r.message_id=m.id WHERE m.folder_id=? AND m.uid<0 LIMIT 1`, folderID).Scan(&protected)
+	if err == nil {
+		return &MovedUIDConflictError{MovingLocalID: protected, RepairProtected: true}
+	}
+	if err != sql.ErrNoRows {
+		return err
+	}
+	if _, err = tx.Exec("DELETE FROM messages WHERE folder_id = ? AND uid < 0", folderID); err != nil {
 		return fmt.Errorf("failed to delete temp UID messages: %w", err)
 	}
-	return nil
+	return tx.Commit()
 }
 
 // GetIDsByMessageIDs finds local DB message IDs by RFC822 Message-ID header and folder.

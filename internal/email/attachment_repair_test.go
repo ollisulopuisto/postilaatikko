@@ -53,3 +53,12 @@ func TestRepairPreservesInlineTextFile(t *testing.T) {
 		t.Fatal("inline text file lost", err)
 	}
 }
+
+func TestRepairRejectsAttachedMultipartWithoutReturningReplacement(t *testing.T) {
+	for _, disposition := range []string{"attachment; filename=archive.mht", "inline; filename=archive.mht"} {
+		raw := []byte("Content-Type: multipart/related; boundary=archive\r\nContent-Disposition: " + disposition + "\r\n\r\n--archive\r\nContent-Type: text/html\r\n\r\n<p>Only child</p>\r\n--archive--\r\n")
+		if got, err := ParseAttachmentsForRepair("mail", raw); err == nil || got != nil {
+			t.Fatal("attached multipart allowed to drop its named part", err)
+		}
+	}
+}

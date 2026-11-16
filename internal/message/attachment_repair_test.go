@@ -193,6 +193,14 @@ func TestRepairMoveCollisionRetainsBothMessagesAndUndo(t *testing.T) {
 					t.Fatal("message lost on collision")
 				}
 			}
+			if repairedID == "moving" {
+				if err := ms.DeleteTempUIDs("fld-1"); err == nil {
+					t.Fatal("fallback cleanup allowed repaired temp deletion")
+				}
+				if got, err := ms.Get("moving"); err != nil || got == nil {
+					t.Fatal("fallback cleanup lost repair owner")
+				}
+			}
 			if got, ok, err := store.RepairedContent("exact"); err != nil || !ok || string(got) != "one" {
 				t.Fatal("exact payload lost")
 			}

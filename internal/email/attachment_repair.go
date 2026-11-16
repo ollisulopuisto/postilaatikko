@@ -51,6 +51,9 @@ func ParseAttachmentsForRepair(messageID string, raw []byte) ([]*AttachmentData,
 				return fmt.Errorf("invalid repair disposition: %w", err)
 			}
 		}
+		if strings.HasPrefix(ct, "multipart/") && (disp == "attachment" || disp == "inline" || dp["filename"] != "" || params["name"] != "" || part.Header.Get("Content-ID") != "") {
+			return fmt.Errorf("attached multipart repair is unsupported")
+		}
 		if strings.HasPrefix(ct, "multipart/") {
 			mr := part.MultipartReader()
 			if mr == nil {

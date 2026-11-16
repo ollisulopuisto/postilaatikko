@@ -527,7 +527,7 @@ README review follow-up: qualify checksum instructions because tagged releases d
 
 | ID | Effort | Task | Owner | Status |
 | --- | --- | --- | --- | --- |
-| ATTACHMENT-REFETCH-001 | Medium | Repair repeated local IMAP attachment cache rows from complete authoritative MIME, with exact per-part content and reversible old-row backup. | Instinct / `fix/authoritative-attachment-repair` / `/tmp/posti-attachments` | Review; repair pushed to PR #257, supersedes prevention-only scope. Strict fetch/parser, transactional backup/restore, cache-path verification, refetch guards and exact-part downloads implemented. Source/UIDVALIDITY, charset and moved-row collision safety guards covered; move collision requires explicit reconciliation. Tests on fixture DBs pass; native/live IMAP/remote Studio not verified. No production cache mutation run. |
+| ATTACHMENT-REFETCH-001 | Medium | Repair repeated local IMAP attachment cache rows from complete authoritative MIME, with exact per-part content and reversible old-row backup. | Instinct / `fix/authoritative-attachment-repair` / `/tmp/posti-attachments` | Review; repair pushed to PR #257, supersedes prevention-only scope. Strict fetch/parser, transactional backup/restore, cache-path verification, refetch guards and exact-part downloads implemented. Source/UIDVALIDITY, charset and moved-row collision safety guards covered; move collision requires explicit reconciliation. Devin findings fixed: terminal move conflict + fallback cleanup guard, attached-multipart rejection; full mock-IMAP move regression covers both collision directions. Tests on fixture DBs pass; native/live IMAP/remote Studio not verified. No production cache mutation run. |
 
 ## Message index visibility (2026-11-16)
 
