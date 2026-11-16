@@ -109,7 +109,7 @@ jobs:
     name: Native menu (macOS)
     needs: version
     if: needs.version.outputs.backend == 'true'
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
