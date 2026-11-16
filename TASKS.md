@@ -528,3 +528,9 @@ README review follow-up: qualify checksum instructions because tagged releases d
 | ID | Effort | Task | Owner | Status |
 | --- | --- | --- | --- | --- |
 | ATTACHMENT-REFETCH-001 | Medium | Repair repeated local IMAP attachment cache rows from complete authoritative MIME, with exact per-part content and reversible old-row backup. | Instinct / `fix/authoritative-attachment-repair` / `/tmp/posti-attachments` | Review preparation; supersedes prevention-only PR #257. Strict fetch/parser, transactional backup/restore, cache-path verification, refetch guards and exact-part downloads implemented. Tests on fixture DBs pass; native/live IMAP/remote Studio not verified. No production cache mutation run. |
+
+## Message index visibility (2026-11-16)
+
+| ID | Effort | Task | Owner | Status |
+| --- | --- | --- | --- | --- |
+| MESSAGE-INDEX-001 | Small | Keep the message index beside an opened message in desktop windows; preserve phone drill-down and explicit focus mode. | Instinct / `fix/keep-message-index` / `/tmp/posti-index` | Review; medium desktop now uses split reader/index, desktop selection pins the auto-hide index. Full-App Chrome regression fails on main at 768px and passes at 767/768/1000/1024/1280px with auto-hide, focus and resize checks. Frontend suite, Svelte checks, focused ESLint and production build passed. Shared layout-store medium overlay transitions restored for Contacts; real-App Contacts activation, back and breakpoint tests added after Devin found the regression. Native WKWebView and real mailbox not run. |
