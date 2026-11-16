@@ -6,7 +6,7 @@ The native layer only emits an action ID and UI epoch. It cannot mutate mail or 
 
 Availability comes from the active view, current selection, composer, source permissions and displayed controls. Repeated per-message, attachment or scheduled-delivery commands require a single target or the focused row. Ambiguous actions are disabled rather than applied to the first row. Dialogs exclude background actions. Semantic selection/context keys and target identities reject delayed clicks after a selection change; unrelated clocks and text updates do not discard valid clicks.
 
-The main window, detached composer, detached reader and mail windows all install the bridge. Detached processes do not acquire commands belonging to the primary window. The four existing native editing accelerators remain registered; other shortcut labels are hints only and the existing context-aware keyboard handlers keep ownership.
+The main window, detached composer, detached reader and mail windows all install the bridge. Detached processes do not acquire commands belonging to the primary window. Detached composers use the standard native Edit menu so AppKit/WKWebView keep screenshot and rich-text paste; their draft-history commands are under File > Draft Tools. In other windows the four existing native editing accelerators remain registered; other shortcut labels are hints only and the existing context-aware keyboard handlers keep ownership.
 
 ## Coverage
 

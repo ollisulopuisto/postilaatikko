@@ -42,12 +42,21 @@ type Controller struct {
 	menu  *menu.Menu
 }
 
-func New() *Controller {
+func New() *Controller { return newController(false) }
+
+// NewComposer preserves AppKit responder-chain clipboard formats in the editor.
+func NewComposer() *Controller { return newController(true) }
+
+func newController(nativeEdit bool) *Controller {
 	c := &Controller{items: map[string][]*menu.MenuItem{}}
 	var build func([]Item) *menu.Menu
 	build = func(items []Item) *menu.Menu {
 		result := menu.NewMenu()
 		for _, def := range items {
+			if nativeEdit && def.Label == "Edit" {
+				result.Append(menu.EditMenu())
+				continue
+			}
 			if def.Label == "Window" && def.ID == "" && len(def.Children) == 0 {
 				result.Append(menu.WindowMenu())
 				continue
@@ -95,7 +104,29 @@ func New() *Controller {
 		}
 		return result
 	}
-	c.menu = build(Catalog())
+	definitions := Catalog()
+	if nativeEdit {
+		// The native Edit role sends paste: to WKWebView, preserving images
+		// and rich text. Draft-history operations remain reachable from File.
+		var draftTools []Item
+		for _, def := range definitions {
+			if def.Label != "Edit" {
+				continue
+			}
+			for _, item := range def.Children {
+				if item.ID == "edit.undo" || item.ID == "composer.redo" || item.ID == "edit.history" || item.ID == "composer.history" || item.ID == "app.search" {
+					item.Key = ""
+					draftTools = append(draftTools, item)
+				}
+			}
+		}
+		for i := range definitions {
+			if definitions[i].Label == "File" {
+				definitions[i].Children = append(definitions[i].Children, Item{Label: "Draft Tools", Children: draftTools})
+			}
+		}
+	}
+	c.menu = build(definitions)
 	c.menu.Prepend(menu.AppMenu())
 	return c
 }

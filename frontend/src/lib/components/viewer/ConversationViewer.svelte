@@ -1543,10 +1543,12 @@
   }
 
   async function handleMarkRead() {
+    return setReadState(!conversation?.messages?.every(message=>message.isRead))
+  }
+
+  async function setReadState(read: boolean) {
     if (!conversation?.messages) return
 
-    // Toggle based on current state
-    const allRead = conversation.messages.every(m => m.isRead)
     let messageIds = conversation.messages.map(m => m.id)
 
     try {
@@ -1554,11 +1556,11 @@
       await runMessageMutation(messageIds, async () => {
         // Explicit actions supersede the leave snapshot and remain immediate.
         pendingReadOnLeave.cancel(messageIds)
-        if (allRead) {
+        if (!read) {
           await MarkAsUnread(messageIds)
           toasts.success($_('toast.markedAsUnread'))
         }
-        if (!allRead) {
+        if (read) {
           await MarkAsRead(messageIds)
           toasts.success($_('toast.markedAsRead'))
         }
@@ -1858,7 +1860,7 @@
   }
 
   export function requestReadState(read: boolean) {
-    if (allRead !== read) return handleMarkRead()
+    return setReadState(read)
   }
 
   export function nativeMailReady() {
@@ -1944,7 +1946,7 @@
       'mail.reply':handleReply,'mail.replyAll':handleReplyAll,'mail.forward':handleForward,
       'mail.archive':handleArchive,'mail.archiveAndMarkRead':handleArchiveAndMarkRead,'mail.trash':requestTrash,
       'mail.deletePermanently':requestPermanentDelete,'mail.spam':handleSpam,'mail.star':handleStar,
-      'mail.markRead':()=>{if(!allRead)return handleMarkRead()},'mail.markUnread':()=>{if(allRead)return handleMarkRead()},
+      'mail.markRead':()=>requestReadState(true),'mail.markUnread':()=>requestReadState(false),
       'mail.toggleRead':handleMarkRead,'mail.moveTo':()=>toggleFolderPicker('move'),'mail.copyTo':()=>toggleFolderPicker('copy'),
       'viewer.scrollUp':scrollUp,'viewer.scrollDown':scrollDown,
     }

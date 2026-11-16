@@ -1225,7 +1225,7 @@
 
   onMount(() => {
     const removers: (() => void)[] = []
-    const noComposer = () => !showComposer
+    const noComposer = () => !showComposer && ![...document.querySelectorAll<HTMLElement>('[data-composer-root]')].some(element=>element.getClientRects().length>0)
     const mail = () => noComposer() && getActiveExtension() === 'mail' && activeMailWorkspace === 'primary'
     const add = (id: string, run: () => unknown, available = noComposer) => removers.push(registerMenuAction(id, run, available))
     for (const id of ['app.compose','app.search','app.folders','app.syncAll','app.syncFolder','app.preferences','app.shortcuts','theme.toggle','view.mail','view.calendar','view.contacts'] as const) {

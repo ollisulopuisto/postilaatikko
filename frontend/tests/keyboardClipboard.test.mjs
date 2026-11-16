@@ -27,3 +27,10 @@ test('native Edit shortcuts are registered and target the focused sandboxed fram
   assert.match(editCommand, /active\.contentWindow\.postMessage\(\{ type: 'native-edit-command', command:/)
   assert.ok(editCommand.includes(`document.execCommand('"+command+"')`))
 })
+
+test('detached composer preserves native image and rich-text paste',async()=>{
+  assert.match(nativeMenu,/if nativeEdit && def\.Label == "Edit"/)
+  assert.match(nativeMenu,/result\.Append\(menu\.EditMenu\(\)\)/)
+  const main=await readFile(new URL('../../main.go',import.meta.url),'utf8')
+  assert.match(main.slice(main.indexOf('func runComposerMode()')),/nativemenu\.NewComposer\(\)/)
+})

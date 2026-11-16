@@ -3,9 +3,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createServer } from 'vite'
-import { realpathSync } from 'node:fs'
+import { realpathSync, mkdirSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 const browserModule=process.env.POSTI_PLAYWRIGHT_PATH
+const captureDir=process.env.POSTI_BROWSER_CAPTURE_DIR||join(tmpdir(),'posti-menu-captures')
+mkdirSync(captureDir,{recursive:true})
 
 test('native menu dispatch: stale selections, busy controls, modal isolation, focused rows and edit focus', {skip:!browserModule,timeout:60000},async()=>{
   const server=await createServer({root:fileURLToPath(new URL('..',import.meta.url)),server:{host:'127.0.0.1',port:5188,strictPort:true,fs:{allow:[fileURLToPath(new URL('../..',import.meta.url)),fileURLToPath(new URL('../node_modules',import.meta.url)),realpathSync(fileURLToPath(new URL('../node_modules',import.meta.url)))]}},logLevel:'error'})
@@ -65,7 +69,7 @@ test('native menu dispatch: stale selections, busy controls, modal isolation, fo
     await page.waitForTimeout(25)
     assert.equal(await page.locator('#other').inputValue(),'')
     assert.equal(await page.locator('#editor').inputValue(),'PASTEDbefore')
-    await page.screenshot({path:'/downloads/postilaatikko-native-menu-dispatch.png'})
+    await page.screenshot({path:join(captureDir,'postilaatikko-native-menu-dispatch.png')})
     await page.evaluate(()=>window.cancel())
   } finally {await browser.close();await server.close()}
 })
@@ -82,8 +86,8 @@ test('real App native menus reuse navigation and isolate Calendar, Contacts and 
       localStorage.setItem('postilaatikko:context-pane-auto-hide','false')
       window.listeners=new Map();window.states=[];window.backendCalls=[]
       window.runtime=new Proxy({}, {get:(_,key)=>key==='EventsOnMultiple'?(name,callback)=>{const list=window.listeners.get(name)||[];list.push(callback);window.listeners.set(name,list);return()=>window.listeners.set(name,list.filter(cb=>cb!==callback))}:key==='EventsEmit'?(name,state)=>{if(name==='native-menu:state')window.states.push(state)}:()=>Promise.resolve()})
-      const data={GetComposeMode:{accountId:'demo',mode:'new'},GetWindowDecorationStatus:{effective_mode:'native'},DraftHistoryTree:{nodes:[],draftKey:'fixture',headNodeId:''},IsReady:true,GetThemeMode:'dark',GetLanguage:'en',GetAccounts:[{id:'demo',name:'Demo',email:'demo@example.test',type:'imap',enabled:true}],GetUIState:{selectedAccountId:'unified',selectedFolderId:'inbox',selectedFolderName:'Inbox',selectedFolderType:'inbox'},GetUnifiedFolderCount:1,GetUnifiedFolderConversations:[{threadId:'thread1',accountId:'demo',folderId:'inbox',subject:'Native menu coverage',snippet:'Menu fixture',latestDate:new Date().toISOString(),messageCount:1,unreadCount:0,participants:[{name:'Fixture sender',email:'fixture@example.test'}]}],GetConversation:{id:'thread1',subject:'Native menu coverage',messages:[{id:'msg1',accountId:'demo',folderId:'inbox',threadId:'thread1',subject:'Native menu coverage',fromName:'Fixture sender',fromEmail:'fixture@example.test',toList:[],ccList:[],date:new Date().toISOString(),bodyText:'Native menus use this selected conversation.',isRead:true}]}}
-      const backend=new Proxy({}, {get:(_,key)=>(...args)=>{window.backendCalls.push([key,args]);return Promise.resolve(key in data?data[key]:key.startsWith('Get')||key.startsWith('List')?[]:null)}})
+      window.data={};const data=window.data;Object.assign(data,{GetComposeMode:{accountId:'demo',mode:'new'},GetWindowDecorationStatus:{effective_mode:'native'},DraftHistoryTree:{nodes:[],draftKey:'fixture',headNodeId:''},IsReady:true,GetThemeMode:'dark',GetLanguage:'en',GetAccounts:[{id:'demo',name:'Demo',email:'demo@example.test',type:'imap',enabled:true}],GetUIState:{selectedAccountId:'unified',selectedFolderId:'inbox',selectedFolderName:'Inbox',selectedFolderType:'inbox'},GetUnifiedFolderCount:1,GetUnifiedFolderConversations:[{threadId:'thread1',accountId:'demo',folderId:'inbox',subject:'Native menu coverage',snippet:'Menu fixture',latestDate:new Date().toISOString(),messageCount:1,unreadCount:0,participants:[{name:'Fixture sender',email:'fixture@example.test'}]}],GetConversation:{id:'thread1',subject:'Native menu coverage',messages:[{id:'msg1',accountId:'demo',folderId:'inbox',threadId:'thread1',subject:'Native menu coverage',fromName:'Fixture sender',fromEmail:'fixture@example.test',toList:[],ccList:[],date:new Date().toISOString(),bodyText:'Native menus use this selected conversation.',isRead:true}]}})
+      const backend=new Proxy({}, {get:(_,key)=>(...args)=>{window.backendCalls.push([key,args]);return Promise.resolve(key==='ResolveMailActionTarget'?args[0].messages.map(message=>message.messageId):key in data?data[key]:key.startsWith('Get')||key.startsWith('List')?[]:null)}})
       window.go={app:{App:backend,ComposerApp:backend,ReaderApp:{GetConfig:async()=>({accountId:'demo',folderId:'inbox',folderName:'Inbox',folderType:'inbox',threadId:'thread1',threadAccountId:'demo',threadFolderId:'inbox'}),Call:(operation,args)=>backend[operation](...args)}}}
     })
     await page.goto('http://127.0.0.1:5189',{waitUntil:'domcontentloaded'})
@@ -96,7 +100,7 @@ test('real App native menus reuse navigation and isolate Calendar, Contacts and 
     // Opening requires a selected item, so select via the existing row first.
     if(!await page.getByText('Native menus use this selected conversation.',{exact:true}).count())await page.locator('[data-mail-row-key]').click()
     await page.getByText('Native menus use this selected conversation.',{exact:true}).waitFor()
-    await page.screenshot({path:'/downloads/postilaatikko-native-menu-mail-debug.png'})
+    await page.screenshot({path:join(captureDir,'postilaatikko-native-menu-mail-debug.png')})
     await page.waitForFunction(()=>window.states.at(-1)?.enabled.includes('mail.reply'))
     assert.ok(await enabled('mail.reply'))
     await page.locator('main[data-pane="viewer"]').click({position:{x:400,y:300}})
@@ -106,14 +110,40 @@ test('real App native menus reuse navigation and isolate Calendar, Contacts and 
     assert.equal(await page.evaluate(()=>window.backendCalls.filter(([name])=>name==='DeletePermanently').length),0,'menu deletion must stop at confirmation')
     await page.getByRole('alertdialog').getByRole('button',{name:'Cancel',exact:true}).click()
     await page.waitForTimeout(100)
+    // Real inline reply uses its own Composer without App.showComposer.
+    await page.evaluate(()=>{window.data.PrepareComposerReply={to:[{email:'fixture@example.test'}],subject:'Re: Native menu coverage',body:'',isHTML:true}})
+    await page.locator('[data-message-id="msg1"]').focus()
+    await page.waitForTimeout(100)
+    await invoke('mail.reply')
+    await page.locator('[data-inline-reply] [data-composer-root]').waitFor()
+    await page.waitForTimeout(100)
+    for(const id of ['mail.archive','mail.trash','view.calendar','view.contacts'])assert.equal(await enabled(id),false,`inline reply excludes ${id}`)
+    await page.locator('[data-inline-reply] [data-native-action="app.close"]').click()
+    await page.getByRole('button',{name:/Discard/i}).click()
+    // Discard through the existing confirmation, not by unmounting the editor.
+    await page.locator('[data-inline-reply] [data-composer-root]').waitFor({state:'detached'})
+    await page.evaluate(()=>{
+      const stamp=Math.floor(Date.now()/1000)
+      window.data.Calendar_ListSources=[{id:'cal-source',name:'Fixture source',type:'caldav'}]
+      window.data.Calendar_ListCalendars=[{id:'cal',sourceId:'cal-source',displayName:'Fixture calendar',visible:true,writable:true}]
+      const event={id:'event1',calendarId:'cal',uid:'event1',summary:'Selected calendar fixture',dtstartUnix:stamp,dtendUnix:stamp+1800,instanceStartUnix:stamp,instanceEndUnix:stamp+1800,isAllDay:false}
+      window.data.Calendar_ListEventsInRange=[event];window.data.Calendar_GetEvent=event
+    })
     await invoke('view.calendar');await page.waitForTimeout(250)
     assert.equal(await enabled('mail.trash'),false)
     assert.equal(await enabled('calendar.today'),true)
+    await page.getByText('Selected calendar fixture',{exact:true}).first().click()
+    await page.locator('[role="dialog"][aria-modal="false"]').waitFor()
+    await page.waitForTimeout(100)
+    assert.equal(await enabled('calendar.today'),true)
+    assert.equal(await enabled('calendar.focus'),true)
+    assert.equal(await enabled('view.contacts'),true)
+    await invoke('calendar.focus')
     await invoke('calendar.today')
     await invoke('view.contacts');await page.waitForTimeout(250)
     assert.equal(await enabled('calendar.today'),false)
     assert.equal(await enabled('contacts.new'),true)
-    await page.screenshot({path:'/downloads/postilaatikko-native-menus-contacts.png'})
+    await page.screenshot({path:join(captureDir,'postilaatikko-native-menus-contacts.png')})
     await invoke('view.mail');await invoke('app.compose')
     await page.locator('[data-composer-root]').waitFor()
     await page.waitForTimeout(250)
@@ -124,14 +154,20 @@ test('real App native menus reuse navigation and isolate Calendar, Contacts and 
     await page.locator('[data-composer-root] input[placeholder]:not(#composer-subject)').first().press('Enter')
     await page.waitForTimeout(150)
     assert.equal(await enabled('composer.send'),true)
-    await page.screenshot({path:'/downloads/postilaatikko-native-menus-composer.png'})
+    await page.screenshot({path:join(captureDir,'postilaatikko-native-menus-composer.png')})
     // Empty subject opens the existing confirmation, never a backend send.
     await invoke('composer.send')
     assert.equal(await page.evaluate(()=>window.backendCalls.filter(([name])=>/^(SendMessage|SendComposed|SendMail)$/.test(name)).length),0)
     assert.deepEqual(errors,[])
+    await page.addInitScript(()=>{window.addEventListener('DOMContentLoaded',()=>{window.data.GetConversation.messages.push({...window.data.GetConversation.messages[0],id:'msg2',isRead:false})})})
     await page.goto('http://127.0.0.1:5189/reader.html',{waitUntil:'domcontentloaded'})
     await page.waitForFunction(()=>window.states.at(-1)?.enabled.includes('mail.reply'))
     assert.equal(await enabled('app.compose'),false,'reader has no background primary mail command owner')
+    // Mixed read/unread conversations must support both explicit states.
+    await invoke('mail.markUnread')
+    await page.waitForFunction(()=>window.backendCalls.some(([name,args])=>name==='MarkAsUnread'&&args[0].includes('msg2')))
+    await invoke('mail.markRead')
+    await page.waitForFunction(()=>window.backendCalls.some(([name,args])=>name==='MarkAsRead'&&args[0].includes('msg2')))
     await invoke('mail.deletePermanently')
     await page.getByRole('alertdialog').waitFor()
     assert.equal(await page.evaluate(()=>window.backendCalls.filter(([name])=>name==='DeletePermanently').length),0)
@@ -145,7 +181,7 @@ test('real App native menus reuse navigation and isolate Calendar, Contacts and 
     assert.equal(await enabled('composer.send'),false)
     await invoke('composer.toolbar')
     await page.waitForFunction(()=>window.states.at(-1)?.enabled.includes('format.bold'))
-    await page.screenshot({path:'/downloads/postilaatikko-native-menus-detached-composer.png'})
+    await page.screenshot({path:join(captureDir,'postilaatikko-native-menus-detached-composer.png')})
     assert.deepEqual(errors,[])
   } finally {await browser.close();await server.close()}
 })

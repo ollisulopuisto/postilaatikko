@@ -263,7 +263,7 @@ func runComposerMode() {
 	// Create a custom asset handler that serves composer.html instead of index.html
 	composerAssetHandler := &composerAssetHandler{assets: assets}
 
-	nativeMenus := nativemenu.New()
+	nativeMenus := nativemenu.NewComposer()
 	// Run Wails application for composer window
 	err := wails.Run(&options.App{
 		Title:                    title,

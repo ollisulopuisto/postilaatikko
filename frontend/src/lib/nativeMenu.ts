@@ -32,7 +32,7 @@ function visible(element: HTMLElement) {
 
 function readScope(root: Document) {
   const composer = [...root.querySelectorAll<HTMLElement>('[data-composer-root]')].find(visible)
-  const modal = [...root.querySelectorAll<HTMLElement>('[role="dialog"], [role="alertdialog"]')].filter(visible).at(-1)
+  const modal = [...root.querySelectorAll<HTMLElement>('[role="dialog"]:not([aria-modal="false"]), [role="alertdialog"]:not([aria-modal="false"])')].filter(visible).at(-1)
   const controls = new Map<string, HTMLElement[]>()
   for (const control of root.querySelectorAll<HTMLElement>('[data-native-action]')) {
     const id = control.dataset.nativeAction!
