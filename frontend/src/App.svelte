@@ -121,8 +121,6 @@
   let contextPaneRevealed = $state(true)
   let contextPaneHideTimer: ReturnType<typeof setTimeout> | null = null
   const CONTEXT_PANE_AUTO_HIDE_KEY = 'postilaatikko:context-pane-auto-hide'
-  // An opened desktop conversation must not make its message index disappear.
-  const contextPaneVisible = $derived(!contextPaneAutoHide || contextPaneRevealed || (getLayoutMode() !== 'narrow' && !!selectedThreadId))
   let triageStatus = $state<'all' | 'unread' | 'readLater' | 'replyLater'>('all')
   // Quick-filter applied to the folder list while the Kaikki kansiot panel is
   // open; the same four buttons then prune folders instead of messages.
@@ -439,6 +437,8 @@
 
   // Selected conversation state
   let selectedThreadId = $state<string | null>(null)
+  // An opened desktop conversation must not make its message index disappear.
+  const contextPaneVisible = $derived(!contextPaneAutoHide || contextPaneRevealed || (getLayoutMode() !== 'narrow' && !!selectedThreadId))
   let selectedConversationFolderId = $state<string | null>(null)
   let selectedConversationAccountId = $state<string | null>(null)
   // Read-state changes are intentionally excluded from the backend's global
