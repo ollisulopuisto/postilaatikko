@@ -96,6 +96,10 @@ test('real App native menus reuse navigation and isolate Calendar, Contacts and 
     await page.waitForTimeout(250)
     const enabled=id=>page.evaluate(id=>window.states.at(-1)?.enabled.includes(id),id)
     const invoke=async id=>{await page.waitForFunction(id=>window.states.at(-1)?.enabled.includes(id),id);await page.evaluate(id=>{for(const cb of window.listeners.get('native-menu:invoke')||[])cb({...window.states.at(-1),id})},id);await page.waitForTimeout(150)}
+    await invoke('list.filters')
+    await page.getByRole('menu').waitFor()
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(100)
     await invoke('nav.open')
     // Opening requires a selected item, so select via the existing row first.
     if(!await page.getByText('Native menus use this selected conversation.',{exact:true}).count())await page.locator('[data-mail-row-key]').click()
@@ -129,7 +133,14 @@ test('real App native menus reuse navigation and isolate Calendar, Contacts and 
       const event={id:'event1',calendarId:'cal',uid:'event1',summary:'Selected calendar fixture',dtstartUnix:stamp,dtendUnix:stamp+1800,instanceStartUnix:stamp,instanceEndUnix:stamp+1800,isAllDay:false}
       window.data.Calendar_ListEventsInRange=[event];window.data.Calendar_GetEvent=event
     })
+    // Open a real embedded reader tab, retain its viewer focus, then hide
+    // mail by switching extensions. No hidden reader may own mutations.
+    await page.locator('[data-mail-row-key]').dblclick()
+    await page.waitForTimeout(200)
+    await page.locator('.mail-window [data-message-id="msg1"]').focus()
+    await page.waitForTimeout(100)
     await invoke('view.calendar');await page.waitForTimeout(250)
+    for(const id of ['mail.archive','mail.trash','mail.markRead','mail.unsnooze'])assert.equal(await enabled(id),false,`hidden embedded reader excludes ${id}`)
     assert.equal(await page.evaluate(()=>window.states.at(-1).view),'calendar')
     assert.equal(await enabled('mail.trash'),false)
     assert.equal(await enabled('calendar.today'),true)
@@ -145,12 +156,16 @@ test('real App native menus reuse navigation and isolate Calendar, Contacts and 
     assert.equal(await enabled('calendar.today'),false)
     assert.equal(await enabled('contacts.new'),true)
     await page.screenshot({path:join(captureDir,'postilaatikko-native-menus-contacts.png')})
-    await invoke('view.mail');await invoke('app.compose')
+    await invoke('view.mail');await page.keyboard.press('Control+Tab');await page.waitForTimeout(100);await invoke('app.compose')
     await page.locator('[data-composer-root]').waitFor()
     await page.waitForTimeout(250)
     assert.equal(await enabled('mail.trash'),false)
     assert.equal(await enabled('composer.attach'),true)
     assert.equal(await enabled('composer.send'),false,'empty recipient list disables Send')
+    await invoke('composer.identity')
+    await page.getByRole('listbox').waitFor()
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(100)
     await page.locator('[data-composer-root] input[placeholder]:not(#composer-subject)').first().fill('recipient@example.test')
     await page.locator('[data-composer-root] input[placeholder]:not(#composer-subject)').first().press('Enter')
     await page.waitForTimeout(150)

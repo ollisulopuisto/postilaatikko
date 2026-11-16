@@ -85,7 +85,15 @@ export function actionTarget(id: string, root: Document = document, scope = read
       const focused = buttons.filter(button => button === root.activeElement || button.closest('[data-native-row]')?.contains(root.activeElement))
       if (focused.length === 1) target = focused[0]
     }
-    return target ? { run: () => target.click(), available: () => visible(target), token: 'button:'+identity(target) } : undefined
+    return target ? { run: () => {
+      // Bits UI picker triggers open on keydown/pointerdown, not click.
+      if(target.getAttribute('aria-haspopup')) {
+        target.focus()
+        target.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',code:'ArrowDown',bubbles:true,cancelable:true}))
+        return
+      }
+      target.click()
+    }, available: () => visible(target), token: 'button:'+identity(target) } : undefined
   }
   return candidates.length === 1 ? { ...candidates[0], token:candidates[0].token??'action:'+identity(candidates[0]) } : undefined
 }
