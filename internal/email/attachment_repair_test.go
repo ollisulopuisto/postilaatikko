@@ -1,0 +1,46 @@
+package email
+
+import (
+	"strings"
+	"testing"
+)
+
+func repairFixture() string {
+	return "MIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=b\r\n\r\n--b\r\nContent-Type: text/plain\r\n\r\nHello\r\n--b\r\nContent-Type: image/png\r\nContent-Disposition: inline; filename=same.png\r\nContent-ID: <img>\r\n\r\none\r\n--b\r\nContent-Type: image/png\r\nContent-Disposition: attachment; filename=same.png\r\n\r\ntwo\r\n--b--\r\n"
+}
+func TestRepairParseRequiresCompleteMIMEAndKeepsRealParts(t *testing.T) {
+	raw := repairFixture()
+	parts, err := ParseAttachmentsForRepair("mail", []byte(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(parts) != 2 || string(parts[0].Content) != "one" || string(parts[1].Content) != "two" {
+		t.Fatal("real parts lost")
+	}
+	if parts[0].Attachment.ID == parts[1].Attachment.ID {
+		t.Fatal("same-name parts merged")
+	}
+	repeated, err := ParseAttachmentsForRepair("mail", []byte(raw))
+	if err != nil || repeated[0].Attachment.ID != parts[0].Attachment.ID {
+		t.Fatal("repair identity unstable")
+	}
+	if AttachmentContentDigest(parts[0].Content) == AttachmentContentDigest(parts[1].Content) {
+		t.Fatal("distinct content conflated")
+	}
+	for name, bad := range map[string]string{
+		"missing final boundary":            strings.TrimSuffix(raw, "--b--\r\n"),
+		"truncated after attachment header": strings.Split(raw, "\r\n\r\ntwo")[0],
+		"unknown encoding":                  strings.Replace(raw, "Content-Type: image/png", "Content-Transfer-Encoding: invalid\r\nContent-Type: image/png", 1),
+		"corrupt base64":                    strings.Replace(raw, "\r\n\r\none", "\r\nContent-Transfer-Encoding: base64\r\n\r\n%%%%", 1),
+		"encrypted":                         strings.Replace(raw, "multipart/mixed", "multipart/encrypted", 1),
+		"signed":                            strings.Replace(raw, "multipart/mixed", "multipart/signed", 1),
+		"nested original":                   strings.Replace(raw, "image/png", "message/rfc822", 1),
+		"tnef":                              strings.Replace(raw, "image/png", "application/ms-tnef", 1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got, err := ParseAttachmentsForRepair("mail", []byte(bad)); err == nil || got != nil {
+				t.Fatalf("unsafe repair accepted: %v parts=%d", err, len(got))
+			}
+		})
+	}
+}
