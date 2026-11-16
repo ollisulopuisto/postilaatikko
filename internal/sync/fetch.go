@@ -947,9 +947,13 @@ func (e *Engine) fetchRawMessage(ctx context.Context, accountID, folderID string
 	defer e.pool.Release(conn)
 
 	// Select the mailbox
-	_, err = conn.Client().SelectMailbox(ctx, f.Path)
+	selected, err := conn.Client().SelectMailbox(ctx, f.Path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to select mailbox: %w", err)
+	}
+
+	if strict && (selected == nil || f.UIDValidity == 0 || selected.UIDValidity != f.UIDValidity) {
+		return nil, fmt.Errorf("repair requires matching known UIDVALIDITY")
 	}
 
 	// Fetch the raw message

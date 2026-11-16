@@ -5,10 +5,10 @@ It is not available on a remote-only desktop or through the helper's network API
 
 When the local app opens a message whose attachment metadata repeats, it tries
 one repair per message/account per app session. It fetches the original IMAP
-message with BODY.PEEK, requires the exact UID and RFC822.SIZE and successful
+message with BODY.PEEK, requires matching known UIDVALIDITY, the exact UID and RFC822.SIZE and successful
 FETCH completion, checks the original Message-ID, and strictly parses the whole
 MIME tree. A failure leaves all old cache rows in place. Signed, encrypted, TNEF,
-nested-message, missing-type and damaged MIME are currently left untouched.
+nested-message, missing-type, non-UTF8 text attachments and damaged MIME are currently left untouched.
 
 A successful repair keeps every real attachment occurrence, even when filenames,
 sizes or payloads match. It saves the old rows, inline bytes and download paths
@@ -17,7 +17,7 @@ Exact decoded bytes are retained for each repaired part so downloading two files
 with the same name cannot accidentally choose the first file twice. Cache paths
 are reused only when a bounded read under the app's attachment cache matches the
 actual payload. No existing file is deleted. Later body refetches and force-sync
-attachment cleanup cannot overwrite the repaired set.
+attachment cleanup cannot overwrite the repaired set. Automatic moved-row collision merges are refused when either row has a repair, preserving both messages and undo history. A source-folder/UID/Message-ID change during fetching also aborts the replacement.
 
 This stores decoded attachment payloads and undo snapshots in the local database,
 so the database can grow. A repair snapshot is limited to 50 MiB and 10,000 MIME

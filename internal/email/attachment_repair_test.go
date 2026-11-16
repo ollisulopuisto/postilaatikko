@@ -35,6 +35,7 @@ func TestRepairParseRequiresCompleteMIMEAndKeepsRealParts(t *testing.T) {
 		"encrypted":                         strings.Replace(raw, "multipart/mixed", "multipart/encrypted", 1),
 		"signed":                            strings.Replace(raw, "multipart/mixed", "multipart/signed", 1),
 		"nested original":                   strings.Replace(raw, "image/png", "message/rfc822", 1),
+		"converted text attachment":         strings.Replace(raw, "Content-Type: image/png\r\nContent-Disposition: attachment", "Content-Type: text/plain; charset=iso-8859-1\r\nContent-Disposition: attachment", 1),
 		"tnef":                              strings.Replace(raw, "image/png", "application/ms-tnef", 1),
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -42,5 +43,13 @@ func TestRepairParseRequiresCompleteMIMEAndKeepsRealParts(t *testing.T) {
 				t.Fatalf("unsafe repair accepted: %v parts=%d", err, len(got))
 			}
 		})
+	}
+}
+
+func TestRepairPreservesInlineTextFile(t *testing.T) {
+	raw := []byte("Content-Type: text/plain; charset=utf-8\r\nContent-Disposition: inline; filename=notes.txt\r\n\r\ntext file")
+	got, err := ParseAttachmentsForRepair("mail", raw)
+	if err != nil || len(got) != 1 || string(got[0].Content) != "text file" || got[0].Attachment.Filename != "notes.txt" {
+		t.Fatal("inline text file lost", err)
 	}
 }

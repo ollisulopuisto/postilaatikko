@@ -49,7 +49,7 @@ func (a *App) RepairMessageAttachments(accountID, messageID string) (string, err
 		parts = append(parts, message.RepairPart{Metadata: *part.Attachment, Payload: part.Content})
 	}
 	digest := fmt.Sprintf("%x", sha256.Sum256(raw))
-	return a.attachmentStore.RepairFromMIME(accountID, messageID, digest, parts, a.paths.AttachmentsPath())
+	return a.attachmentStore.RepairFromMIME(accountID, messageID, digest, parts, a.paths.AttachmentsPath(), message.RepairSource{FolderID: msg.FolderID, UID: msg.UID, MessageID: msg.MessageID})
 }
 
 func (a *App) RestoreMessageAttachmentRepair(accountID, messageID, backupID string) error {

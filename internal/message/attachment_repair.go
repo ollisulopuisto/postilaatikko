@@ -16,6 +16,12 @@ import (
 
 // RepairPart is produced only by the strict, complete authoritative MIME parser.
 // Every occurrence stays distinct; payload is retained for exact downloads.
+type RepairSource struct {
+	FolderID  string
+	UID       uint32
+	MessageID string
+}
+
 type RepairPart struct {
 	Metadata Attachment
 	Payload  []byte
@@ -29,7 +35,7 @@ type attachmentBackup struct {
 // RepairFromMIME replaces one IMAP message's metadata transactionally and keeps
 // a full undo snapshot. No files are deleted. Caller verifies original MIME
 // identity and completeness; this method verifies account and DB ownership.
-func (s *AttachmentStore) RepairFromMIME(accountID, messageID, snapshot string, parts []RepairPart, cacheRoot string) (string, error) {
+func (s *AttachmentStore) RepairFromMIME(accountID, messageID, snapshot string, parts []RepairPart, cacheRoot string, expected ...RepairSource) (string, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return "", err
@@ -39,6 +45,15 @@ func (s *AttachmentStore) RepairFromMIME(accountID, messageID, snapshot string, 
 	var gmail int
 	if err = tx.QueryRow(`SELECT account_id FROM messages WHERE id=?`, messageID).Scan(&owner); err != nil {
 		return "", err
+	}
+	if len(expected) > 0 {
+		var current RepairSource
+		if err = tx.QueryRow("SELECT folder_id,uid,COALESCE(message_id,'') FROM messages WHERE id=?", messageID).Scan(&current.FolderID, &current.UID, &current.MessageID); err != nil {
+			return "", err
+		}
+		if current != expected[0] {
+			return "", fmt.Errorf("message source changed during attachment repair")
+		}
 	}
 	if accountID == "" || messageID == "" || snapshot == "" {
 		return "", fmt.Errorf("missing repair identity")

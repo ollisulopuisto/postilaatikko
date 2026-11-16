@@ -80,11 +80,18 @@ func ParseAttachmentsForRepair(messageID string, raw []byte) ([]*AttachmentData,
 		cid := strings.Trim(part.Header.Get("Content-ID"), "<>")
 		// Match ordinary MIME attachment classification, without folding parts by
 		// filename, CID, size or payload. Every occurrence is a separate part.
-		if disp != "attachment" && ct != "" && strings.HasPrefix(ct, "text/") {
+		if disp != "attachment" && disp != "inline" && dp["filename"] == "" && params["name"] == "" && cid == "" && strings.HasPrefix(ct, "text/") {
 			return nil
 		}
 		if disp != "attachment" && disp != "inline" && cid == "" && ct == "" {
 			return nil
+		}
+		// go-message converts text bodies to UTF-8. Never install converted
+		// bytes as an exact attachment payload. Unsupported charsets leave the
+		// whole existing cache untouched instead.
+		charset := strings.ToLower(params["charset"])
+		if strings.HasPrefix(ct, "text/") && charset != "" && charset != "utf-8" && charset != "us-ascii" {
+			return fmt.Errorf("repair cannot preserve text attachment charset %s", charset)
 		}
 		filename := dp["filename"]
 		if filename == "" {

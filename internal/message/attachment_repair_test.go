@@ -166,3 +166,75 @@ func TestAttachmentRepairRacesAndForceSyncDoNotLoseParts(t *testing.T) {
 		t.Fatalf("refetch/force-sync lost canonical parts %v %v", got, err)
 	}
 }
+
+func TestRepairMoveCollisionRetainsBothMessagesAndUndo(t *testing.T) {
+	for _, repairedID := range []string{"moving", "existing"} {
+		t.Run(repairedID, func(t *testing.T) {
+			ms, db := setupThreadTestDB(t)
+			t.Cleanup(func() { _ = db.Close() })
+			for i, id := range []string{"moving", "existing"} {
+				if err := ms.Create(&Message{ID: id, AccountID: "acc-1", FolderID: "fld-1", UID: uint32(i + 1), MessageID: "same@example.test", ThreadID: id, Date: time.Now(), ReceivedAt: time.Now()}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := db.Exec(`UPDATE messages SET uid=-1 WHERE id='moving'`); err != nil {
+				t.Fatal(err)
+			}
+			store := NewAttachmentStore(db)
+			token, err := store.RepairFromMIME("acc-1", repairedID, "snapshot", []RepairPart{{Metadata: Attachment{ID: "exact", MessageID: repairedID, Filename: "one", Size: 3}, Payload: []byte("one")}}, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = ms.ReconcileMovedMessageUIDs("fld-1", map[string]uint32{"moving": 2}); err == nil {
+				t.Fatal("unsafe collision merge allowed")
+			}
+			for _, id := range []string{"moving", "existing"} {
+				if msg, err := ms.Get(id); err != nil || msg == nil {
+					t.Fatal("message lost on collision")
+				}
+			}
+			if got, ok, err := store.RepairedContent("exact"); err != nil || !ok || string(got) != "one" {
+				t.Fatal("exact payload lost")
+			}
+			if err = store.RestoreRepair("acc-1", repairedID, token); err != nil {
+				t.Fatal("undo lost", err)
+			}
+		})
+	}
+}
+
+func TestRepairRejectsGmailAndChangedSourceWithoutTouchingEitherMessage(t *testing.T) {
+	ms, db := setupThreadTestDB(t)
+	t.Cleanup(func() { _ = db.Close() })
+	for i, id := range []string{"mail", "other"} {
+		if err := ms.Create(&Message{ID: id, AccountID: "acc-1", FolderID: "fld-1", UID: uint32(i + 1), MessageID: id + "@example.test", ThreadID: id, Date: time.Now(), ReceivedAt: time.Now()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	store := NewAttachmentStore(db)
+	for _, id := range []string{"mail", "other"} {
+		if err := store.Create(&Attachment{ID: id + "-old", MessageID: id, Filename: "same", Size: 3}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	parts := []RepairPart{{Metadata: Attachment{ID: "canonical", MessageID: "mail", Filename: "same", Size: 3}, Payload: []byte("one")}}
+	if _, err := store.RepairFromMIME("acc-1", "mail", "snapshot", parts, "", RepairSource{FolderID: "fld-1", UID: 99, MessageID: "mail@example.test"}); err == nil {
+		t.Fatal("changed source allowed")
+	}
+	if _, err := db.Exec(`INSERT INTO gmail_message_refs(account_id,folder_id,provider_id,message_id) VALUES('acc-1','fld-1','gmail-id','mail')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.RepairFromMIME("acc-1", "mail", "snapshot", parts, ""); err == nil {
+		t.Fatal("Gmail-native repair allowed")
+	}
+	for _, id := range []string{"mail", "other"} {
+		got, err := store.GetByMessage(id)
+		if err != nil || len(got) != 1 || got[0].ID != id+"-old" {
+			t.Fatal("source isolation failed")
+		}
+	}
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM attachment_repair_backups`).Scan(&n); err != nil || n != 0 {
+		t.Fatal("rejected source wrote backup")
+	}
+}

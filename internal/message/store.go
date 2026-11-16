@@ -2754,6 +2754,18 @@ func (s *Store) ReconcileMovedMessageUIDs(destinationFolderID string, uidsByLoca
 			}
 		}
 
+		// A repair owns an exact set and reversible backup generations.
+		// Reparenting a second row's attachments would corrupt that invariant;
+		// deleting a repaired duplicate would cascade away its undo history.
+		// Keep both rows unchanged for explicit reconciliation instead.
+		var repairedRows int
+		if err := tx.QueryRow("SELECT COUNT(*) FROM attachment_repairs WHERE message_id IN (?,?)", movingLocalID, existingLocalID).Scan(&repairedRows); err != nil {
+			return nil, err
+		}
+		if repairedRows > 0 {
+			return nil, fmt.Errorf("attachment repair prevents automatic moved-row collision merge: %s and %s", movingLocalID, existingLocalID)
+		}
+
 		// Preserve the stable local ID and its richer cached content, but adopt
 		// server-authoritative flags from the sync-created row. Fill optional
 		// body/security/thread fields only when the moving row lacks them.
