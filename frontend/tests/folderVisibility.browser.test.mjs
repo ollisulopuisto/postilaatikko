@@ -94,6 +94,13 @@ test('account folder controls preserve selections and references, confirm descen
     assert.equal(placement.invisible,true)
     assert.deepEqual(placement.card,['folder:a:parent'])
     assert.ok(placement.quick.includes('folder:a:parent'))
+    assert.equal(await page.evaluate(async()=>{
+      const {accountStore}=await import('/src/lib/stores/accounts.svelte.ts')
+      window.folders.forEach(f=>f.hidden=true)
+      accountStore.accounts=[{account:{id:'a',email:'a@example.org'},folders:[],syncing:false,loading:false,error:null}]
+      await accountStore.syncAllComplete()
+      return accountStore.accounts[0].syncing
+    }),false,'all-hidden sync must settle without folder events')
     assert.deepEqual(errors,[])
     await page.setViewportSize({width:390,height:800})
     await page.screenshot({path:`${captures}/account-folders-narrow.png`,fullPage:true})

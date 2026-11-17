@@ -15,10 +15,12 @@ type FolderVisibilityRequest struct {
 	Refresh   bool     `json:"refresh"`
 }
 
+// FolderVisibilityOperations changes preferences on the mailbox-owning runtime.
 type FolderVisibilityOperations interface {
 	SetFolderVisibility(context.Context, string, []string, bool, bool) error
 }
 
+// MountFolderVisibilityRoutes exposes account-validated folder visibility with mail-write authorization.
 func MountFolderVisibilityRoutes(mux *http.ServeMux, ops FolderVisibilityOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	mux.HandleFunc("/v1/folders/visibility", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailWrite) {

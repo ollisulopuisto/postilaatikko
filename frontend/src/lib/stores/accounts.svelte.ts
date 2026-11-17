@@ -307,6 +307,7 @@ class AccountStore {
       acc.lastSync = new Date()
       // Reload folders after sync
       await this.loadFolders(accountId)
+      if (!(this.folderCatalog[accountId] || []).some(folder => !folder.hidden)) acc.syncing = false
     } catch (err) {
       acc.error = err instanceof Error ? err.message : String(err)
       console.error(`Failed to sync account ${accountId}:`, err)
@@ -339,6 +340,7 @@ class AccountStore {
       // Reload folders for all accounts
       for (const acc of this.accounts) {
         await this.loadFolders(acc.account.id)
+        if (!(this.folderCatalog[acc.account.id] || []).some(folder => !folder.hidden)) acc.syncing = false
       }
     } catch (err) {
       // Parse which account(s) actually failed and only set error on those

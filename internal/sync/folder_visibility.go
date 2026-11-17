@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"fmt"
 	"sort"
 )
 
@@ -30,4 +31,18 @@ func (e *Engine) SetFolderVisibility(ctx context.Context, accountID string, ids 
 		unlocks = append(unlocks, unlock)
 	}
 	return e.folderStore.SetHiddenBatch(accountID, ids, hidden)
+}
+
+// LockVisibleFolder serializes destructive cache maintenance with visibility changes.
+func (e *Engine) LockVisibleFolder(ctx context.Context, accountID, folderID string) (func(), error) {
+	unlock, err := e.folderLocks.lock(ctx, folderID)
+	if err != nil {
+		return nil, err
+	}
+	f, err := e.folderStore.Get(folderID)
+	if err != nil || f == nil || f.AccountID != accountID || f.Hidden {
+		unlock()
+		return nil, fmt.Errorf("folder unavailable or hidden")
+	}
+	return unlock, nil
 }

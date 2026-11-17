@@ -544,6 +544,17 @@ func (a *App) refreshVirtualFolderCache(vf *virtualfolder.VirtualFolder) error {
 	if err != nil {
 		return fmt.Errorf("failed to resolve virtual folder members: %w", err)
 	}
+	if vf.SearchQuery != "" {
+		for _, id := range folderIDs {
+			f, err := a.folderStore.Get(id)
+			if err != nil {
+				return err
+			}
+			if f != nil && f.Hidden {
+				return nil
+			}
+		}
+	}
 	refs := []message.ConversationRef{}
 	if len(folderIDs) > 0 {
 		refs, err = a.messageStore.ListVirtualFolderConversationIDs(folderIDs, vf.SearchQuery, virtualFolderCacheLimit, virtualFolderMessageCriteria(vf))

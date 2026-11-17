@@ -382,6 +382,18 @@ func (r *SyncRuntime) virtualFolderCacheEntries(id string) ([]virtualfolder.Cach
 	if err != nil {
 		return nil, fmt.Errorf("resolve virtual folder members: %w", err)
 	}
+	if vf.SearchQuery != "" && r.folders != nil {
+		for _, folderID := range folderIDs {
+			f, err := r.folders.Get(folderID)
+			if err != nil {
+				return nil, err
+			}
+			if f != nil && f.Hidden {
+				entries, _, _, err := r.virtualFolders.LoadCache(id)
+				return entries, err
+			}
+		}
+	}
 	refs, err := r.messages.ListVirtualFolderConversationIDs(folderIDs, vf.SearchQuery, 200, message.VirtualFolderCriteria{
 		ReadStatus: vf.ReadStatus, ReplyStatus: vf.ReplyStatus, StarStatus: vf.StarStatus, DateWindow: vf.DateWindow,
 	})

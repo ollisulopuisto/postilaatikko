@@ -117,6 +117,7 @@
   let virtualCursor = $state('')
   let onlineCountRevision = $state(0)
   let virtualIssues = $state('')
+  let virtualWarnings = $state('')
   const hiddenVirtualSource = $derived.by(() => {
     if (!isVirtualFolderView) return false
     const view = virtualFoldersStore.folders.find(item => item.id === folderId)
@@ -913,7 +914,7 @@
     filterMode = ''
     loadGeneration++ // Invalidate any in-flight loads from the previous folder (#200)
     offset = 0
-    virtualCursor = ''; virtualIssues = ''; virtualQueryCursor = ''
+    virtualWarnings = ''; virtualCursor = ''; virtualIssues = ''; virtualQueryCursor = ''
     virtualCacheRefreshedAt = null
     void CancelMailSearch(virtualSearchSession)
     checkedThreadIds = new Set()
@@ -1161,6 +1162,7 @@
         const response = await SearchMail(new searchModels.MailSearchRequest({sessionId: virtualSearchSession, query: '', accountIds: [], virtualFolderId: folderId!, filter: filterMode, cursor: currentOffset === 0 ? '' : virtualCursor, limit: Math.min(limit, 100)}))
         if (generation !== loadGeneration || isSearchMode) return
         virtualCursor = response.cursor || ''
+        virtualWarnings = (response.issues || []).filter(item => item.warning).map(item => `${item.accountName}: ${item.message}`).join(' · ')
         virtualIssues = (response.issues || []).filter(item => !item.warning).map(item => `${item.accountName}: ${item.message}`).join(' · ')
         let items = response.conversations || []
         if (currentOffset === 0 && lastLoadedFolderId === folderId && virtualCursor) {
@@ -1489,6 +1491,7 @@
         if (generation !== localSearchGeneration || query !== searchQuery.trim()) return
         virtualQueryCursor = response.cursor || ''
         count = results.length + (virtualQueryCursor ? 1 : 0)
+        virtualWarnings = (response.issues || []).filter(item => item.warning).map(item => `${item.accountName}: ${item.message}`).join(' · ')
         virtualIssues = (response.issues || []).filter(item => !item.warning).map(item => `${item.accountName}: ${item.message}`).join(' · ')
 
       } else if (isUnifiedView) {
@@ -1550,6 +1553,7 @@
         if (generation !== localSearchGeneration || query !== searchQuery.trim()) return
         results = response.conversations || []
         virtualQueryCursor = response.cursor || ''
+        virtualWarnings = (response.issues || []).filter(item => item.warning).map(item => `${item.accountName}: ${item.message}`).join(' · ')
         virtualIssues = (response.issues || []).filter(item => !item.warning).map(item => `${item.accountName}: ${item.message}`).join(' · ')
       } else if (isUnifiedView) {
         results = await SearchUnifiedFolder(folderId!, query, newOffset, PAGE_SIZE, filterMode)
@@ -3281,7 +3285,7 @@
   {/if}
 
   {#if isVirtualFolderView && folderId && !isSearchMode && !filterMode}<OnlineViewCount {folderId} revision={onlineCountRevision} />{/if}
-  {#if hiddenVirtualSource}<p class="px-3 py-2 text-xs text-amber-500" role="status">{$_('folderVisibility.viewsWarning')}</p>{/if}
+  {#if virtualWarnings}<p class="px-3 py-2 text-xs text-amber-500" role="status">{virtualWarnings}</p>{:else if hiddenVirtualSource}<p class="px-3 py-2 text-xs text-amber-500" role="status">{$_('folderVisibility.viewsWarning')}</p>{/if}
   {#if virtualIssues}<p class="px-3 py-2 text-xs text-destructive" role="status">{virtualIssues}</p>{/if}
   {#if isVirtualFolderView && virtualCacheRefreshedAt && !isSearchMode}
     <p class="px-3 pb-1 text-[10px] text-muted-foreground" role="status">{$_('search.virtualFolderCacheUpdated', { values: { time: virtualCacheRefreshedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) } })}</p>

@@ -72,6 +72,18 @@ func TestHiddenVirtualSourceKeepsCachedConversationsWithoutProvider(t *testing.T
 		t.Fatalf("filtered cached page inaccessible: %#v %v", unread, err)
 	}
 
+	vf.SearchQuery = "from:alice"
+	if err = vs.Update(vf); err != nil {
+		t.Fatal(err)
+	}
+	if err = vs.SaveCache(vf.ID, []virtualfolder.CachedConversation{{AccountID: "a", ConversationID: "thread"}}); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := svc.Search(context.Background(), MailSearchRequest{VirtualFolderID: "v", Limit: 10})
+	if err != nil || len(saved.Conversations) != 1 || saved.Conversations[0].Subject != "Retained mail" {
+		t.Fatalf("provider operator lost retained results: %#v %v", saved, err)
+	}
+
 	retained, err := vs.Get("v")
 	if err != nil || len(retained.FolderIDs) != 1 || retained.FolderIDs[0] != "old" {
 		t.Fatal("membership changed", err)

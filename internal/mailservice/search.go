@@ -338,6 +338,50 @@ func (s *Service) Search(parent context.Context, req MailSearchRequest) (*MailSe
 							return
 						}
 					}
+					// Provider query syntax cannot be replayed as literal local FTS.
+					// Preserve the last provider-resolved membership for saved searches.
+					if vf.SearchQuery != "" {
+						refs, _, _, err := s.virtualFolderStore.LoadCache(vf.ID)
+						if err != nil {
+							issue(err)
+							return
+						}
+						selectedRefs := []message.ConversationRef{}
+						for _, ref := range refs {
+							if ref.AccountID == acc.ID {
+								selectedRefs = append(selectedRefs, message.ConversationRef{AccountID: ref.AccountID, ConversationID: ref.ConversationID})
+							}
+						}
+						convs, err := s.messageStore.ListConversationsByRefs(selectedRefs)
+						if err != nil {
+							issue(err)
+							return
+						}
+						var filtered []*message.Conversation
+						for _, conv := range convs {
+							if matchesFilter(conv) {
+								filtered = append(filtered, conv)
+							}
+						}
+						// A new typed provider query cannot safely narrow cached membership.
+						if state.Query != "" {
+							issue(fmt.Errorf("Hidden saved search supports its retained results only; show sources to run a new query"))
+							return
+						}
+						if offset > len(filtered) {
+							offset = len(filtered)
+						}
+						end := min(offset+limit, len(filtered))
+						mu.Lock()
+						result.Conversations = append(result.Conversations, filtered[offset:end]...)
+						result.Issues = append(result.Issues, MailSearchIssue{AccountID: acc.ID, AccountName: acc.Name, Message: "Saved search is stale: showing retained provider results; hidden sources are not refreshed", Warning: true})
+						state.Pages[acc.ID] = "!done"
+						if end < len(filtered) {
+							state.Pages[acc.ID] = "hidden:" + strconv.Itoa(end)
+						}
+						mu.Unlock()
+						return
+					}
 					criteria := message.VirtualFolderCriteria{ReadStatus: vf.ReadStatus, ReplyStatus: vf.ReplyStatus, StarStatus: vf.StarStatus, DateWindow: vf.DateWindow}
 					if req.Filter == "unread" {
 						if criteria.ReadStatus == "read" {

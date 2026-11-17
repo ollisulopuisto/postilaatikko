@@ -140,6 +140,11 @@
   let selectedFolderId = $state<string | null>(null)
   let selectedFolderName = $state('Inbox')
   let selectedFolderType = $state<string | null>(null)
+  $effect(() => {
+    const hidden = accountStore.folderCatalog[selectedAccountId || '']?.some(f => f.id === selectedFolderId && f.hidden)
+    if (hidden) untrack(() => handleFolderSelect('unified', 'inbox', '', 'Inbox', 'inbox'))
+  })
+
   // Wide windows keep the folder tree and message list in one shared column:
   // one opens while the other folds to a strip.
   const sharedColumn = $derived(getLayoutMode() === 'full')
@@ -1123,7 +1128,7 @@
         a => a.account.id === uiState.selectedAccountId
       )
 
-      if (accountExists) {
+      if (accountExists && !accountStore.folderCatalog[uiState.selectedAccountId]?.some(f => f.id === uiState.selectedFolderId && f.hidden)) {
         selectedAccountId = uiState.selectedAccountId
         selectedFolderId = uiState.selectedFolderId
         selectedFolderName = restoredFolderName(uiState.selectedAccountId, uiState.selectedFolderType, uiState.selectedFolderId, uiState.selectedFolderName)

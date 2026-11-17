@@ -59,3 +59,25 @@ func TestHiddenFolderLeavesTreeAndDisablesPrefetchWithoutChangingOverride(t *tes
 		t.Fatalf("tree not restored %#v %v", tree, err)
 	}
 }
+
+func TestForceRefreshHiddenFolderKeepsCachedContent(t *testing.T) {
+	db, err := database.Open(filepath.Join(t.TempDir(), "force.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err = db.Migrate(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`INSERT INTO accounts(id,name,email,imap_host,smtp_host,username) VALUES ('a','A','a@example.org','imap','smtp','a'); INSERT INTO folders(id,account_id,name,path,folder_type,hidden) VALUES ('f','a','Old','Old','folder',1); INSERT INTO messages(id,account_id,folder_id,uid,body_text,body_fetched) VALUES ('m','a','f',1,'Keep body',1);`); err != nil {
+		t.Fatal(err)
+	}
+	a := &App{folderStore: folder.NewStore(db)}
+	if err = a.ForceSyncFolder("a", "f"); err == nil {
+		t.Fatal("hidden force refresh accepted")
+	}
+	var body string
+	if err = db.QueryRow(`SELECT body_text FROM messages WHERE id='m'`).Scan(&body); err != nil || body != "Keep body" {
+		t.Fatal("content lost", body, err)
+	}
+}

@@ -8,7 +8,7 @@ Explicit folder header and flag refresh, scheduler/bulk refresh, and automatic b
 
 Gmail account-wide history and all-mail search can still include messages carrying a hidden label through other labels. Hiding a label is not a zero-network guarantee.
 
-Saved views retain their folder links. If an account's saved-view scope includes a hidden folder, that account's part of the view serves retained cached conversations with a stale-source warning instead of querying the provider. Other accounts in the view continue normally. Cached pages may be incomplete until the folder is shown and refreshed. Automatic filters whose destination is hidden are skipped dynamically; their Enabled preference is not rewritten, and showing the destination restores routing.
+Saved views retain their folder links. If an account's saved-view scope includes a hidden folder, that account's part of the view serves retained cached conversations with a stale-source warning instead of querying the provider. Other accounts in the view continue normally. Cached pages may be incomplete until the folder is shown and refreshed. Saved provider searches keep their last resolved cached membership rather than replaying provider operators as local FTS; a new typed query requires showing the sources first. Automatic filters whose destination is hidden are skipped dynamically; their Enabled preference is not rewritten, and showing the destination restores routing.
 
 ## Storage and rollout
 
