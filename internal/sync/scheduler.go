@@ -54,9 +54,10 @@ type Scheduler struct {
 	checkInterval time.Duration
 
 	// Track syncing accounts to prevent concurrent syncs
-	syncing   map[string]bool
-	syncDone  map[string]chan struct{}
-	syncingMu sync.Mutex
+	syncing            map[string]bool
+	syncDone           map[string]chan struct{}
+	syncingMu          sync.Mutex
+	hiddenInboxAttempt map[string]time.Time
 
 	// Per-account cancellation for running syncs
 	syncCancels  map[string]context.CancelFunc
@@ -246,6 +247,13 @@ func (s *Scheduler) isSyncDue(acc *account.Account) bool {
 		return true // No INBOX yet, needs sync
 	}
 
+	if inbox.Hidden {
+		s.syncingMu.Lock()
+		last := s.hiddenInboxAttempt[acc.ID]
+		s.syncingMu.Unlock()
+		return last.IsZero() || time.Since(last) >= time.Duration(acc.SyncInterval)*time.Minute
+	}
+
 	// Never synced - definitely due
 	if inbox.LastSync == nil {
 		return true
@@ -357,6 +365,12 @@ func (s *Scheduler) syncAccountInbox(parent context.Context, acc *account.Accoun
 	if inbox.Hidden {
 		s.log.Debug().Str("account_id", acc.ID).Msg("INBOX is hidden, skipping its scheduled refresh")
 		s.syncAdditionalFolders(ctx, acc, inbox)
+		s.syncingMu.Lock()
+		if s.hiddenInboxAttempt == nil {
+			s.hiddenInboxAttempt = map[string]time.Time{}
+		}
+		s.hiddenInboxAttempt[acc.ID] = time.Now()
+		s.syncingMu.Unlock()
 		return
 	}
 

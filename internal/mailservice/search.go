@@ -339,25 +339,50 @@ func (s *Service) Search(parent context.Context, req MailSearchRequest) (*MailSe
 						}
 					}
 					criteria := message.VirtualFolderCriteria{ReadStatus: vf.ReadStatus, ReplyStatus: vf.ReplyStatus, StarStatus: vf.StarStatus, DateWindow: vf.DateWindow}
-					var cached []*message.Conversation
-					if req.Query != "" {
-						hits, _, readErr := s.messageStore.SearchVirtualFolderConversations(accountMembers, req.Query, offset, limit, criteria)
-						if readErr != nil {
-							issue(readErr)
+					if req.Filter == "unread" {
+						if criteria.ReadStatus == "read" {
+							mu.Lock()
+							state.Pages[acc.ID] = "!done"
+							mu.Unlock()
 							return
 						}
-						for _, hit := range hits {
-							cached = append(cached, &hit.Conversation)
+						criteria.ReadStatus = "unread"
+					}
+					var cached []*message.Conversation
+					exhausted := false
+					for len(cached) < limit && !exhausted {
+						batchLimit := limit - len(cached)
+						var batch []*message.Conversation
+						if req.Query != "" {
+							hits, _, readErr := s.messageStore.SearchVirtualFolderConversations(accountMembers, req.Query, offset, batchLimit, criteria)
+							if readErr != nil {
+								issue(readErr)
+								return
+							}
+							for _, hit := range hits {
+								batch = append(batch, &hit.Conversation)
+							}
+						} else {
+							var readErr error
+							batch, readErr = s.messageStore.ListVirtualFolderConversations(accountMembers, offset, batchLimit, "newest", criteria)
+							if readErr != nil {
+								issue(readErr)
+								return
+							}
 						}
-					} else {
-						var readErr error
-						cached, readErr = s.messageStore.ListVirtualFolderConversations(accountMembers, offset, limit, "newest", criteria)
-						if readErr != nil {
-							issue(readErr)
+						offset += len(batch)
+						exhausted = len(batch) < batchLimit
+						for _, conv := range batch {
+							if matchesFilter(conv) {
+								cached = append(cached, conv)
+							}
+						}
+						if err := ctx.Err(); err != nil {
+							issue(err)
 							return
 						}
 					}
-					issue(fmt.Errorf("Saved view is stale: hidden source refresh paused; showing cached mail"))
+
 					mu.Lock()
 					for _, conv := range cached {
 						if matchesFilter(conv) {
@@ -365,8 +390,8 @@ func (s *Service) Search(parent context.Context, req MailSearchRequest) (*MailSe
 						}
 					}
 					state.Pages[acc.ID] = "!done"
-					if len(cached) == limit {
-						state.Pages[acc.ID] = "hidden:" + strconv.Itoa(offset+len(cached))
+					if !exhausted {
+						state.Pages[acc.ID] = "hidden:" + strconv.Itoa(offset)
 					}
 					mu.Unlock()
 					return

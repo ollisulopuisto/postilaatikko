@@ -3,7 +3,6 @@ package mailservice
 import (
 	"context"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/hkdb/aerion/internal/account"
@@ -49,11 +48,11 @@ func TestHiddenVirtualSourceKeepsCachedConversationsWithoutProvider(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(page.Conversations) != 1 || !strings.Contains(page.Conversations[0].Subject, "Retained") {
+	if len(page.Conversations) != 1 || page.Conversations[0].Subject != "Retained mail" {
 		t.Fatalf("cached mail missing: %#v", page)
 	}
-	if len(page.Issues) != 1 || !strings.Contains(page.Issues[0].Message, "stale") {
-		t.Fatalf("stale warning missing: %#v", page.Issues)
+	if len(page.Issues) != 0 {
+		t.Fatalf("expected stale source is not a provider failure: %#v", page.Issues)
 	}
 	if page.Cursor == "" {
 		t.Fatal("cached pagination lost")

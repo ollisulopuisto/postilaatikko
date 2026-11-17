@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte'
+  import { dialogGuardOpen, dialogGuardClose } from '$lib/stores/dialogGuard'
   import * as Dialog from '$lib/components/ui/dialog'
   import { Button } from '$lib/components/ui/button'
   import { GetFolders, GetVirtualFolders, GetFilterRules, SetFolderVisibility } from '../../../../wailsjs/go/app/App'
@@ -19,6 +20,11 @@
   const descendants = $derived(descendantFolderIds(all, folderIds))
   const targets = $derived(children ? [...folderIds, ...descendants] : folderIds)
   const dependencies = $derived(folderDependencies(targets, views, rules))
+  $effect(() => {
+    if (!open) return
+    dialogGuardOpen()
+    return () => dialogGuardClose()
+  })
   $effect(() => {
     if (!open) { generation++; return }
     const token = ++generation

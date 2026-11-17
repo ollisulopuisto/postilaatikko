@@ -469,7 +469,7 @@ func (s *Store) SetHiddenBatch(accountID string, ids []string, hidden bool) erro
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	for _, id := range ids {
 		var owner string
 		if err := tx.QueryRow("SELECT account_id FROM folders WHERE id = ?", id).Scan(&owner); err != nil || owner != accountID {

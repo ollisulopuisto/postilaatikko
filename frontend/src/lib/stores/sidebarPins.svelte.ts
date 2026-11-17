@@ -22,6 +22,8 @@ export const sidebarPins = {
     return pins.filter(pin => !accountStore.folderCatalog[pin.accountId]?.some(item => item.id === pin.folderId && item.hidden))
   },
 
+  get all(): PinnedFolder[] { return pins },
+
   // Whether the account's folder is pinned.
   has(accountId: string, folderId: string): boolean {
     return isPinned(pins, accountId, folderId)
