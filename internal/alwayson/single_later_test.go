@@ -101,7 +101,9 @@ func TestLaterOneReceiptAndExactUndo(t *testing.T) {
 						t.Fatalf("state=%+v err=%v", got, err)
 					}
 					var replay v1.Response[v1.TriageMutationResponse]
-					json.Unmarshal(post("/v1/triage/later/mutations", "one", body).Body.Bytes(), &replay)
+					if err := json.Unmarshal(post("/v1/triage/later/mutations", "one", body).Body.Bytes(), &replay); err != nil {
+						t.Fatal(err)
+					}
 					if !replay.Data.Receipt.Replayed || replay.Data.Receipt.OperationID != response.Data.Receipt.OperationID {
 						t.Fatal("idempotency changed receipt")
 					}
@@ -125,7 +127,9 @@ func TestLaterOneReceiptAndExactUndo(t *testing.T) {
 						path = "/v1/undo/operations/" + response.Data.Receipt.OperationID
 					}
 					var result v1.Response[v1.ActionUndoResult]
-					json.Unmarshal(post(path, "undo", "{}").Body.Bytes(), &result)
+					if err := json.Unmarshal(post(path, "undo", "{}").Body.Bytes(), &result); err != nil {
+						t.Fatal(err)
+					}
 					if result.Data.State != "undone" || len(result.Data.AffectedTriage) != 2 {
 						t.Fatalf("undo=%+v", result.Data)
 					}

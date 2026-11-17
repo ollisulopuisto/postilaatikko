@@ -75,7 +75,7 @@ func (a *App) RestoreLaterMembership(ref triage.Ref, expected, prior triage.Late
 	return nil
 }
 func (a *App) emitLaterChanged() {
-	a.emitRuntimeEvent("readLater:synced", map[string]interface{}{})
-	a.emitRuntimeEvent("replyLater:synced", map[string]interface{}{})
+	a.emitRuntimeEvent("readLater:refresh", map[string]interface{}{})
+	a.emitRuntimeEvent("replyLater:refresh", map[string]interface{}{})
 	a.emitRuntimeEvent("undo:history-changed")
 }

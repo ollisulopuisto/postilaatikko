@@ -68,7 +68,7 @@ func (s *Store) SetLaterState(ctx context.Context, ref Ref, before, after LaterS
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	current = LaterState{}
 	err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM read_later_queue WHERE account_id=? AND conversation_id=?), EXISTS(SELECT 1 FROM reply_later_queue WHERE account_id=? AND conversation_id=?)`, ref.AccountID, ref.ConversationID, ref.AccountID, ref.ConversationID).Scan(&current.Read, &current.Reply)
 	if err != nil {

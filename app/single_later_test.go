@@ -34,7 +34,8 @@ func TestStandaloneLaterGlobalUndoRestoresBothFlags(t *testing.T) {
 	if _, err := db.Exec(`INSERT INTO accounts(id,name,email,imap_host,smtp_host,username) VALUES('acc','Account','test@example.test','imap.example.test','smtp.example.test','test')`); err != nil {
 		t.Fatal(err)
 	}
-	a := &App{db: db, accountStore: account.NewStore(db), triageStore: triage.NewStore(db), undoStack: undo.NewStack(100, time.Hour), runtimeEventEmitter: func(string, ...interface{}) {}}
+	events := map[string]int{}
+	a := &App{db: db, accountStore: account.NewStore(db), triageStore: triage.NewStore(db), undoStack: undo.NewStack(100, time.Hour), runtimeEventEmitter: func(name string, _ ...interface{}) { events[name]++ }}
 	ref := triage.Ref{AccountID: "acc", ConversationID: "c"}
 	prior := triage.LaterState{Read: true, Reply: true}
 	if err := a.triageStore.SetLaterState(context.Background(), ref, triage.LaterState{}, prior, nil); err != nil {
@@ -43,6 +44,9 @@ func TestStandaloneLaterGlobalUndoRestoresBothFlags(t *testing.T) {
 	result, err := a.ChangeLaterWithUndo("acc", "c", false)
 	if err != nil || !result.Changed || result.OperationID == "" {
 		t.Fatalf("result=%+v err=%v", result, err)
+	}
+	if events["readLater:refresh"] != 1 || events["replyLater:refresh"] != 1 {
+		t.Fatal("Later list refresh missing")
 	}
 	if a.undoStack.Size() != 1 {
 		t.Fatal("not one command")

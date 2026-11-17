@@ -30,7 +30,7 @@ test('single Later pile preserves old marks and explicit removal in real App', {
           const [accountId,conversationId,on]=args
           for(const target of [read,reply]){const i=target.findIndex(x=>x.accountId===accountId&&x.conversationId===conversationId);if(i>=0)target.splice(i,1)}
           if(on)read.push({accountId,conversationId})
-          emit('readLater:synced',{});emit('replyLater:synced',{})
+          emit('readLater:refresh',{});emit('replyLater:refresh',{})
           return Promise.resolve({changed:true,operationId:'later-op'})
         }
         return Promise.resolve(key in data?data[key]:key.startsWith('Get')||key.startsWith('List')?[]:null)
