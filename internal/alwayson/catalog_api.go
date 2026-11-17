@@ -704,9 +704,12 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 	return mux, nil
 }
 
+// PreviewFilterRule counts stored messages without changing mail or saving the rule.
 func (r *SyncRuntime) PreviewFilterRule(rule *mailfilter.Rule) (int, error) {
 	return r.rules.CountMatching(rule)
 }
+
+// GetMessageListID returns a captured List-ID, fetching the message header if needed.
 func (r *SyncRuntime) GetMessageListID(id string) (string, error) {
 	value, err := r.messages.GetListID(id)
 	if err != nil || value != "" {
@@ -735,6 +738,8 @@ func (r *SyncRuntime) GetMessageListID(id string) (string, error) {
 	}
 	return value, nil
 }
+
+// ApplyFilterRuleToExisting queues explicit application using a snapshot of the saved rule.
 func (r *SyncRuntime) ApplyFilterRuleToExisting(id string) (int, error) {
 	rule, err := r.rules.Get(id)
 	if err != nil {

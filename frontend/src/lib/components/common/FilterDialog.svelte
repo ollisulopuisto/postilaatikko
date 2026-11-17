@@ -191,8 +191,12 @@
     void (async () => {
       await loadAccounts()
       if (!alive) return
-      if (rule && rule.id) prefillFromRule(rule)
-      else if (messageId) await prefillFromMessage(messageId)
+      if (rule && rule.id) {
+        prefillFromRule(rule)
+        initializing = false
+        return
+      }
+      if (messageId) await prefillFromMessage(messageId)
       if (alive) initializing = false
     })()
   })

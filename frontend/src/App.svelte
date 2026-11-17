@@ -1235,8 +1235,11 @@
       else messageListRef?.toggleMoveToDialog()
     })
     registerCommand('mail.createFilter', () => {
-      if (getFocusedPane() === 'viewer' && selectedThreadId) viewerRef?.openCreateFilter()
-      else messageListRef?.openCreateFilter()
+      if (getFocusedPane() === 'viewer' && selectedThreadId) {
+        viewerRef?.openCreateFilter()
+        return
+      }
+      messageListRef?.openCreateFilter()
     }, () => selectedThreadId !== null)
     registerCommand('mail.copyTo', () => {
       if (getFocusedPane() === 'viewer' && selectedThreadId) viewerRef?.toggleFolderPicker('copy')

@@ -243,6 +243,7 @@ func (s *Store) MatchingMessageIDs(rule *Rule, limit int) ([]string, error) {
 	return ids, rows.Err()
 }
 
+// CountMatching counts stored messages matching the same criteria as incoming mail.
 func (s *Store) CountMatching(rule *Rule) (int, error) {
 	ids, err := s.MatchingMessageIDs(rule, 0)
 	return len(ids), err
