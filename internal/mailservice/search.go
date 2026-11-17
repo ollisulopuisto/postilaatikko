@@ -372,6 +372,11 @@ func (s *Service) Search(parent context.Context, req MailSearchRequest) (*MailSe
 								selectedRefs = append(selectedRefs, message.ConversationRef{AccountID: ref.AccountID, ConversationID: ref.ConversationID})
 							}
 						}
+						selectedRefs, err = s.messageStore.FilterVirtualFolderRefs(accountMembers, selectedRefs, savedViewCriteria(vf))
+						if err != nil {
+							issue(err)
+							return
+						}
 						convs, err := s.messageStore.ListConversationsByRefs(selectedRefs)
 						if err != nil {
 							issue(err)
@@ -767,6 +772,20 @@ func (s *Service) searchIMAPAccountPage(ctx context.Context, acc *account.Accoun
 		}
 		convs = append(convs, &message.Conversation{ThreadID: m.ThreadID, Subject: m.Subject, Snippet: m.Snippet, LatestDate: m.Date, MessageIDs: []string{m.ID}, MessageCount: 1, UnreadCount: unread, IsStarred: m.IsStarred, AccountID: acc.ID, AccountName: acc.Name, FolderID: m.FolderID, Participants: []message.Address{{Name: m.FromName, Email: m.FromEmail}}})
 	}
+	if vf != nil {
+		refs := make([]message.ConversationRef, 0, len(convs))
+		for _, conv := range convs {
+			refs = append(refs, message.ConversationRef{AccountID: acc.ID, ConversationID: conv.ThreadID})
+		}
+		refs, err = s.messageStore.FilterVirtualFolderRefs(ids, refs, savedViewCriteria(vf))
+		if err != nil {
+			return nil, "", err
+		}
+		convs, err = s.messageStore.ListConversationsByRefs(refs)
+		if err != nil {
+			return nil, "", err
+		}
+	}
 	state.Cursor = page.Next
 	if page.Next == nil {
 		state.Index++
@@ -776,4 +795,8 @@ func (s *Service) searchIMAPAccountPage(ctx context.Context, acc *account.Accoun
 	}
 	encoded, err := json.Marshal(state)
 	return convs, string(encoded), err
+}
+
+func savedViewCriteria(vf *virtualfolder.VirtualFolder) message.VirtualFolderCriteria {
+	return message.VirtualFolderCriteria{ReadStatus: vf.ReadStatus, ReplyStatus: vf.ReplyStatus, StarStatus: vf.StarStatus, DateWindow: vf.DateWindow}
 }
