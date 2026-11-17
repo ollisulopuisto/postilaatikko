@@ -487,7 +487,7 @@ func (a *App) SyncVirtualFolder(virtualFolderID string) error {
 				refreshErrors[folderID] = getErr
 				continue
 			}
-			if f == nil {
+			if f == nil || f.Hidden {
 				continue // a deleted selected folder is no longer a member
 			}
 			acc, getErr := a.accountStore.Get(f.AccountID)

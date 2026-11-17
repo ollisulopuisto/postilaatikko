@@ -986,3 +986,5 @@ export function IsRemoteServiceMode():Promise<boolean>;
 export function SendMessageWithRequestID(arg1:string,arg2:smtp.ComposeMessage,arg3:string):Promise<void>;
 
 export function DispatchRemotePendingSend(arg1:string):Promise<boolean>;
+
+export function SetFolderVisibility(accountId:string, folderIds:string[], hidden:boolean, refresh:boolean):Promise<void>;

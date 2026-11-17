@@ -14,6 +14,7 @@ import (
 	"github.com/hkdb/aerion/internal/virtualfolder"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -219,6 +220,9 @@ func (s *Service) Search(parent context.Context, req MailSearchRequest) (*MailSe
 		if f == nil || !slices.Contains(ids, f.AccountID) {
 			return nil, fmt.Errorf("folder %s is outside the selected account scope", folderID)
 		}
+		if f.Hidden {
+			return nil, fmt.Errorf("folder is hidden; show it before searching")
+		}
 		foldersByAccount[f.AccountID] = append(foldersByAccount[f.AccountID], f)
 	}
 	if req.VirtualFolderID != "" {
@@ -303,6 +307,70 @@ func (s *Service) Search(parent context.Context, req MailSearchRequest) (*MailSe
 					text = "Gmail is temporarily rate limiting this account. Requests are paused; retry shortly."
 				}
 				result.Issues = append(result.Issues, MailSearchIssue{AccountID: acc.ID, AccountName: acc.Name, Message: text, Reauthorize: errors.Is(err, gmail.ErrReauthRequired) || errors.Is(err, gmail.ErrInsufficientScope)})
+			}
+
+			if vf != nil {
+				memberIDs, lookupErr := s.virtualFolderStore.QueryFolderIDs(vf)
+				if lookupErr != nil {
+					issue(lookupErr)
+					return
+				}
+				accountMembers := []string{}
+				paused := false
+				for _, id := range memberIDs {
+					f, lookupErr := s.folderStore.Get(id)
+					if lookupErr != nil {
+						issue(lookupErr)
+						return
+					}
+					if f != nil && f.AccountID == acc.ID {
+						accountMembers = append(accountMembers, id)
+						paused = paused || f.Hidden
+					}
+				}
+				if paused {
+					offset := 0
+					if strings.HasPrefix(token, "hidden:") {
+						parsed, parseErr := strconv.Atoi(strings.TrimPrefix(token, "hidden:"))
+						offset = parsed
+						if parseErr != nil || offset < 0 {
+							issue(fmt.Errorf("invalid cached view cursor"))
+							return
+						}
+					}
+					criteria := message.VirtualFolderCriteria{ReadStatus: vf.ReadStatus, ReplyStatus: vf.ReplyStatus, StarStatus: vf.StarStatus, DateWindow: vf.DateWindow}
+					var cached []*message.Conversation
+					if req.Query != "" {
+						hits, _, readErr := s.messageStore.SearchVirtualFolderConversations(accountMembers, req.Query, offset, limit, criteria)
+						if readErr != nil {
+							issue(readErr)
+							return
+						}
+						for _, hit := range hits {
+							cached = append(cached, &hit.Conversation)
+						}
+					} else {
+						var readErr error
+						cached, readErr = s.messageStore.ListVirtualFolderConversations(accountMembers, offset, limit, "newest", criteria)
+						if readErr != nil {
+							issue(readErr)
+							return
+						}
+					}
+					issue(fmt.Errorf("Saved view is stale: hidden source refresh paused; showing cached mail"))
+					mu.Lock()
+					for _, conv := range cached {
+						if matchesFilter(conv) {
+							result.Conversations = append(result.Conversations, conv)
+						}
+					}
+					state.Pages[acc.ID] = "!done"
+					if len(cached) == limit {
+						state.Pages[acc.ID] = "hidden:" + strconv.Itoa(offset+len(cached))
+					}
+					mu.Unlock()
+					return
+				}
 			}
 			c, err := s.syncEngine.GmailClient(ctx, acc.ID)
 			if errors.Is(err, gmail.ErrNotCapable) {
@@ -547,6 +615,9 @@ func (s *Service) searchIMAPAccountPage(ctx context.Context, acc *account.Accoun
 			return nil, "", err
 		}
 		for _, f := range fs {
+			if f.Hidden {
+				continue
+			}
 			if slices.Contains(vf.FolderIDs, f.ID) == (vf.FolderMode == "exclude") {
 				continue
 			}
@@ -554,6 +625,9 @@ func (s *Service) searchIMAPAccountPage(ctx context.Context, acc *account.Accoun
 		}
 	} else if len(selectedFolders) > 0 {
 		for _, f := range selectedFolders {
+			if f.Hidden {
+				continue
+			}
 			ids = append(ids, f.ID)
 		}
 	} else {
@@ -562,6 +636,9 @@ func (s *Service) searchIMAPAccountPage(ctx context.Context, acc *account.Accoun
 			return nil, "", err
 		}
 		for _, f := range fs {
+			if f.Hidden {
+				continue
+			}
 			if vf != nil && slices.Contains(vf.FolderIDs, f.ID) == (vf.FolderMode == "exclude") {
 				continue
 			}

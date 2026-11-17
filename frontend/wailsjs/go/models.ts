@@ -2507,6 +2507,7 @@ export namespace folder {
 	    // Go type: time
 	    lastSync?: any;
 	    subscribed: boolean;
+ hidden: boolean;
 
 	    static createFrom(source: any = {}) {
 	        return new Folder(source);
@@ -2528,6 +2529,7 @@ export namespace folder {
 	        this.unreadCount = source["unreadCount"];
 	        this.lastSync = this.convertValues(source["lastSync"], null);
 	        this.subscribed = source["subscribed"];
+ this.hidden = source["hidden"];
 	    }
 
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

@@ -369,12 +369,15 @@ func (a *App) getSyncFolders(accountID string) ([]*folder.Folder, error) {
 		return nil, err
 	}
 	if acct.SyncAllFolders {
-		return a.folderStore.List(accountID)
+		items, err := a.folderStore.List(accountID)
+		return folder.WithoutHidden(items), err
 	}
 	if acct.SyncFoldersEnabled {
-		return a.folderStore.ListSubscribed(accountID)
+		items, err := a.folderStore.ListSubscribed(accountID)
+		return folder.WithoutHidden(items), err
 	}
-	return a.folderStore.List(accountID)
+	items, err := a.folderStore.List(accountID)
+	return folder.WithoutHidden(items), err
 }
 
 // getCoreOnlyFolders returns core folders (Inbox, Drafts, Sent, Trash) — the default sync behavior.
@@ -386,7 +389,7 @@ func (a *App) getCoreOnlyFolders(accountID string) ([]*folder.Folder, error) {
 		if err != nil {
 			continue
 		}
-		if f != nil {
+		if f != nil && !f.Hidden {
 			folders = append(folders, f)
 		}
 	}

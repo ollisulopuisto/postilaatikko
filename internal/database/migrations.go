@@ -1908,4 +1908,12 @@ var migrations = []Migration{
   content BLOB NOT NULL
  );
  `},
+	{Version: 81, SQL: `
+ -- Postilaatikko-local per-folder hidden flag ("hide from Postilaatikko").
+ -- Local display state only: never an IMAP subscription or Gmail label
+ -- visibility change. Preserved across folder discovery because discovery
+ -- updates do not touch the column.
+ ALTER TABLE folders ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
+
+ `},
 }
