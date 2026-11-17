@@ -239,7 +239,7 @@
     }
     if (id === 'mail.spam') {
       await run(() => runMessageMutation(ids, async () => {
-        const spamFolder = windowState.scope.folderType === 'spam'
+        const spamFolder = !searchActive && windowState.scope.folderType === 'spam'
         const result = spamFolder ? await MarkAsNotSpamWithUndo(ids) : await MarkAsSpamWithUndo(ids)
         publishUndoOperationCreated(result.operationId, ids, spamFolder ? 'mark-as-not-spam' : 'mark-as-spam')
         list?.clearChecked()
@@ -412,11 +412,11 @@
     {/if}
     <section class="mail-reader flex w-full flex-col flex-1 min-w-0 min-h-0" role="presentation" onclick={() => setFocusedPane('viewer')}>
       {#if active && messageFind.open}
-        <div role="search" aria-label="Find in message" class="flex shrink-0 items-center gap-2 border-b border-border p-2">
-          <label for="window-reader-find">Find in message</label>
+        <div role="search" aria-label={$_('searchUI.find')} class="flex shrink-0 items-center gap-2 border-b border-border p-2">
+          <label for="window-reader-find">{$_('searchUI.find')}</label>
           <input id="window-reader-find" bind:this={findInput} bind:value={messageFind.query} type="search" class="min-w-0 flex-1 rounded border border-border bg-background px-3 py-2" onkeydown={event => { if (event.key === 'Escape') { messageFind.open = false; event.stopPropagation() } }} />
-          <button type="button" onclick={() => openAllMail(messageFind.query)}>All mail</button>
-          <button type="button" aria-label="Close find" onclick={() => messageFind.open = false}>×</button>
+          <button type="button" onclick={() => openAllMail(messageFind.query)}>{$_('searchUI.allMail')}</button>
+          <button type="button" aria-label={$_('searchUI.closeFind')} onclick={() => messageFind.open = false}>×</button>
         </div>
       {/if}
       {#if active && windowState.thread}

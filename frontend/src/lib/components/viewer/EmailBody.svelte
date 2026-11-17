@@ -457,7 +457,7 @@
             shiftKey: e.shiftKey,
             altGraph: e.getModifierState('AltGraph')
           }, '*');
-          if (isUnmodifiedShortcut) e.preventDefault();
+          if (isUnmodifiedShortcut || ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'f')) e.preventDefault();
         }
       });
 

@@ -968,7 +968,7 @@
     checkFTSIndexStatus()
   })
 
-  const isSearchMode = $derived(showSearch && searchQuery.trim().length > 0)
+  const isSearchMode = $derived(showSearch && (allMailSearch || searchQuery.trim().length > 0))
 
   // Compute selected message IDs from all checked conversations (for multi-select context menu)
   // Check normal, local-search and server-search result caches.
@@ -2895,35 +2895,35 @@
     <section class="shrink-0 space-y-3 border-b border-border p-3" aria-label="Search workspace">
       <div class="flex min-w-0 items-center gap-2">
         <Icon icon="mdi:magnify" width="20" />
-        <h2 class="min-w-0 flex-1 truncate font-semibold">{allMailSearch ? `Search: ${searchQuery}` : folderName}</h2>
-        <button type="button" class="rounded px-2 py-1 hover:bg-muted" aria-label="Close search" onclick={clearSearch}>×</button>
+        <h2 class="min-w-0 flex-1 truncate font-semibold">{allMailSearch ? $_('searchUI.title', { values: { query: searchQuery } }) : folderName}</h2>
+        <button type="button" class="rounded px-2 py-1 hover:bg-muted" aria-label={$_('searchUI.closeSearch')} onclick={clearSearch}>×</button>
       </div>
       {#if allMailSearch}
-        <p class="text-sm text-muted-foreground">{searchAccountScope ? 'Selected account, all folders' : 'All accounts, all folders'}</p>
-        <div class="flex flex-wrap gap-2"><button type="button" class="rounded border border-border px-3 py-2 text-sm" onclick={() => { editingSearch = !editingSearch; setTimeout(() => searchInputRef?.focus(), 0) }}>{editingSearch ? 'Done' : 'Edit'}</button>
-        <button type="button" data-native-action="list.saveSearch" class="rounded border border-border px-3 py-2 text-sm disabled:opacity-50" disabled={!searchQuery.trim() || !!searchAccountScope} title={searchAccountScope ? 'Choose all accounts before saving this search' : 'Save as virtual folder'} onclick={() => virtualFoldersStore.requestSaveSearch(searchQuery.trim())}>Save</button></div>
+        <p class="text-sm text-muted-foreground">{searchAccountScope ? $_('searchUI.selectedScope') : $_('searchUI.allScope')}</p>
+        <div class="flex flex-wrap gap-2"><button type="button" class="rounded border border-border px-3 py-2 text-sm" onclick={() => { editingSearch = !editingSearch; setTimeout(() => searchInputRef?.focus(), 0) }}>{editingSearch ? $_('searchUI.done') : $_('searchUI.edit')}</button>
+        <button type="button" data-native-action="list.saveSearch" class="rounded border border-border px-3 py-2 text-sm disabled:opacity-50" disabled={!searchQuery.trim() || !!searchAccountScope} title={searchAccountScope ? $_('searchUI.saveScopeHint') : $_('searchUI.saveFolder')} onclick={() => virtualFoldersStore.requestSaveSearch(searchQuery.trim())}>{$_('searchUI.save')}</button></div>
       {/if}
       {#if !allMailSearch || editingSearch}
-      <input bind:this={searchInputRef} bind:value={searchQuery} oninput={handleSearchInput} onkeydown={handleSearchKeydown} type="search" aria-label="Search messages" placeholder="Search messages..." class="w-full min-w-0 rounded border border-border bg-muted/30 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring" />
-      {#if !allMailSearch}<button type="button" class="rounded border border-border bg-muted px-3 py-1 text-sm" aria-label="Search all mail instead" onclick={() => onWidenSearch?.(searchQuery)}>{folderName} ×</button>{/if}
+      <input bind:this={searchInputRef} bind:value={searchQuery} oninput={handleSearchInput} onkeydown={handleSearchKeydown} type="search" aria-label={$_('searchUI.searchMessages')} placeholder={$_('searchUI.searchMessagesPlaceholder')} class="w-full min-w-0 rounded border border-border bg-muted/30 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring" />
+      {#if !allMailSearch}<button type="button" class="rounded border border-border bg-muted px-3 py-1 text-sm" aria-label={$_('searchUI.widen')} onclick={() => onWidenSearch?.(searchQuery)}>{folderName} ×</button>{/if}
       <button type="button" data-native-action="list.refresh" class="sr-only" onclick={refreshActiveSearch}>Refresh search</button>
       <SearchOperators compact limited={!allMailSearch} onInsert={insertSearchOperator} />
       {#if allMailSearch}
-        <label class="block text-sm">Scope
-          <select aria-label="Scope" bind:value={searchAccountScope} onchange={handleSearchInput} class="w-full rounded border border-border bg-background p-2">
-            <option value="">All accounts, all folders</option>
+        <label class="block text-sm">{$_('searchUI.scope')}
+          <select aria-label={$_('searchUI.scope')} bind:value={searchAccountScope} onchange={handleSearchInput} class="w-full rounded border border-border bg-background p-2">
+            <option value="">{$_('searchUI.allScope')}</option>
             {#each accountStore.accounts as item (item.account.id)}<option value={item.account.id}>{item.account.name || item.account.email} · all folders</option>{/each}
           </select>
         </label>
-        <label class="block text-sm">Sort loaded results
-          <select bind:value={searchSort} onchange={() => searchResults = sortSearchRows(searchResults)} class="w-full rounded border border-border bg-background p-2"><option value="newest">Newest first</option><option value="oldest">Oldest first (loaded results)</option></select>
+        <label class="block text-sm">{$_('searchUI.sortLoaded')}
+          <select bind:value={searchSort} onchange={() => searchResults = sortSearchRows(searchResults)} class="w-full rounded border border-border bg-background p-2"><option value="newest">{$_('searchUI.newest')}</option><option value="oldest">{$_('searchUI.oldestLoaded')}</option></select>
         </label>
 
       {:else}
-        <label class="block text-sm">Search in <select class="rounded border border-border bg-background p-1" value={searchSource} onchange={event => { if (event.currentTarget.value === 'server') startServerSearch(); else { switchToLocalSearch(); void performSearch() } }}><option value="local">Local index</option><option value="server" disabled={isVirtualFolderView || (isUnifiedView && folderId !== 'inbox')}>Server</option></select></label>
+        <label class="block text-sm">{$_('searchUI.searchIn')} <select class="rounded border border-border bg-background p-1" value={searchSource} onchange={event => { if (event.currentTarget.value === 'server') startServerSearch(); else { switchToLocalSearch(); void performSearch() } }}><option value="local">{$_('searchUI.localIndex')}</option><option value="server" disabled={isVirtualFolderView || (isUnifiedView && folderId !== 'inbox')}>{$_('searchUI.server')}</option></select></label>
       {/if}
       {/if}
-      <p role="status" class="text-sm text-muted-foreground">{allMailSearch ? searchResults.length : activeCount}{allMailSearch && virtualQueryCursor ? '+' : ''} in {allMailSearch ? (searchAccountScope ? 'selected account, all folders' : 'all mail') : folderName}{isSearching || isServerSearching ? ' · Searching...' : ''}</p>
+      <p role="status" class="text-sm text-muted-foreground">{$_('searchUI.count', { values: { count: `${allMailSearch ? searchResults.length : activeCount}${allMailSearch && virtualQueryCursor ? '+' : ''}`, scope: allMailSearch ? (searchAccountScope ? $_('searchUI.selectedScope') : $_('searchUI.allMail')) : folderName } })}{isSearching || isServerSearching ? ` · ${$_('searchUI.searching')}` : ''}</p>
 
     </section>
   {/if}

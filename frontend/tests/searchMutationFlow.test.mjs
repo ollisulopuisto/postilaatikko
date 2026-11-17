@@ -132,9 +132,9 @@ test('global Ctrl+Z publishes the returned operation ID for snapshot restoration
 
 test('search uses a full-width field and scoped workspace, with refresh and one explicit close', () => {
   const workspace = messageListSource.slice(messageListSource.indexOf('{#if showSearch}\n    <section'), messageListSource.indexOf('<!-- Header -->'))
-  assert.match(workspace, /aria-label="Search messages"/)
+  assert.match(workspace, /searchUI\.searchMessages/)
   assert.match(workspace, /class="w-full min-w-0/)
-  assert.match(workspace, /Search all mail instead/)
+  assert.match(workspace, /searchUI\.widen/)
   assert.match(workspace, /onclick=\{refreshActiveSearch\}/)
   assert.equal((workspace.match(/onclick=\{clearSearch\}/g) || []).length, 1)
   assert.match(workspace, /limited=\{!allMailSearch\}/)

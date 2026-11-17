@@ -35,7 +35,7 @@
   function keydown(event: KeyboardEvent) {
     if (event.defaultPrevented || document.querySelector('[role="dialog"], [role="alertdialog"]')) return
     const target = event.target as HTMLElement | null
-    if (target?.closest('input, textarea, select, [contenteditable="true"]')) return
+    if (target instanceof Element && target.closest('input, textarea, select, [contenteditable="true"]')) return
     const index = shortcutIndex(event, mac), entry = nav.quick[index]
     if (entry) { event.preventDefault(); event.stopPropagation(); nav.navigate(entry) }
   }

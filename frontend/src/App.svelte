@@ -2833,11 +2833,11 @@
       </div>
       {#if activeMailWorkspace === 'primary'}
       {#if messageFind.open}
-        <div class="flex shrink-0 items-center gap-2 border-b border-border p-2" role="search" aria-label="Find in message">
-          <label for="reader-find" class="text-sm">Find in message</label>
+        <div class="flex shrink-0 items-center gap-2 border-b border-border p-2" role="search" aria-label={$_('searchUI.find')}>
+          <label for="reader-find" class="text-sm">{$_('searchUI.find')}</label>
           <input id="reader-find" bind:this={findInput} bind:value={messageFind.query} type="search" class="min-w-0 flex-1 rounded border border-border bg-background px-3 py-2 focus:ring-2 focus:ring-ring" onkeydown={event => { if (event.key === 'Escape') { messageFind.open = false; event.stopPropagation() } }} />
-          <button type="button" class="rounded border border-border px-2 py-1 text-sm" onclick={() => openAllMail(messageFind.query)}>All mail</button>
-          <button type="button" aria-label="Close find" class="px-2" onclick={() => messageFind.open = false}>×</button>
+          <button type="button" class="rounded border border-border px-2 py-1 text-sm" onclick={() => openAllMail(messageFind.query)}>{$_('searchUI.allMail')}</button>
+          <button type="button" aria-label={$_('searchUI.closeFind')} class="px-2" onclick={() => messageFind.open = false}>×</button>
         </div>
       {/if}
       <ConversationViewer

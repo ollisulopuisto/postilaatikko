@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { _ } from '$lib/i18n'
   import { onDestroy } from 'svelte'
   import Icon from '@iconify/svelte'
   import * as Dialog from '$lib/components/ui/dialog'
@@ -44,24 +45,24 @@
   <Dialog.Content class="rail-search-flyout fixed grid max-w-none gap-2 overflow-hidden p-4" style={`left:${anchor.left}px;top:${anchor.top}px`} >
     <form class="flex min-w-0 items-center gap-3 pr-7" onsubmit={event => { event.preventDefault(); submit() }}>
       <Icon icon="mdi:magnify" width="24" class="shrink-0 text-primary" />
-      <input bind:this={input} bind:value={query} aria-label="Search all mail" placeholder="Search all mail..." type="search" class="min-w-0 flex-1 rounded border border-border bg-muted/40 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring" />
+      <input bind:this={input} bind:value={query} aria-label={$_('searchUI.searchAll')} placeholder={$_('searchUI.searchAllPlaceholder')} type="search" class="min-w-0 flex-1 rounded border border-border bg-muted/40 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring" />
     </form>
-    <Dialog.Header class="sr-only"><Dialog.Title>All mail</Dialog.Title><Dialog.Description>Search all accounts and folders</Dialog.Description></Dialog.Header>
-    <p class="text-xs text-muted-foreground">All accounts, all folders</p>
+    <Dialog.Header class="sr-only"><Dialog.Title>{$_('searchUI.allMail')}</Dialog.Title><Dialog.Description>Search all accounts and folders</Dialog.Description></Dialog.Header>
+    <p class="text-xs text-muted-foreground">{$_('searchUI.allScope')}</p>
     <div class="min-h-0 overflow-auto" aria-busy={busy}>
-      {#if busy}<p role="status">Searching...</p>{/if}
+      {#if busy}<p role="status">{$_('searchUI.searching')}</p>{/if}
       {#if error}<p role="alert" class="text-sm text-destructive">{error}</p>{/if}
-      {#if query.trim() && !busy && results.length === 0 && !error}<p role="status">No matches</p>{/if}
+      {#if query.trim() && !busy && results.length === 0 && !error}<p role="status">{$_('searchUI.noMatches')}</p>{/if}
       {#each results as result (`${result.accountId}:${result.threadId}`)}
         <button type="button" class="my-1 block w-full rounded border border-border p-3 text-left hover:bg-muted" onclick={submit}>
           <span class="block truncate font-medium">{result.subject || '(No subject)'}</span>
           <span class="block truncate text-sm text-muted-foreground">{result.accountName} · {result.participants?.map(person => person.name || person.email).join(', ')}</span>
         </button>
       {/each}
-      {#if more}<p class="text-xs text-muted-foreground">More results available in the message list</p>{/if}
+      {#if more}<p class="text-xs text-muted-foreground">{$_('searchUI.more')}</p>{/if}
     </div>
     <SearchOperators compact onInsert={value => { query = `${query.trimEnd()} ${value}`.trimStart(); input?.focus() }} />
-    <p class="text-xs text-muted-foreground">Enter: open results in message list</p>
+    <p class="text-xs text-muted-foreground">{$_('searchUI.enterHint')}</p>
   </Dialog.Content>
 </Dialog.Root>
 <style>
