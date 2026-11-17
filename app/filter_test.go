@@ -364,7 +364,7 @@ func newFilterFixture(t *testing.T, rejectAppend bool) *filterFixture {
 		filterStore:         mailfilter.NewStore(db),
 	}
 	app.filterRouter = mailfilter.NewAutomaticRouter(app.filterStore, folderStore, func(rule *mailfilter.Rule, destination *folder.Folder, msg *message.Message) {
-		go app.applyFilterRule(rule, destination, msg)
+		go app.applyMatchedFilterRule(rule, msg)
 	})
 
 	// Pre-populate server A with the test message (UID 10 in the inbox).
@@ -558,10 +558,13 @@ func TestCreateFilterRuleValidation(t *testing.T) {
 		syncLastRequest: make(map[string]time.Time),
 	}
 
-	t.Run("same-account destination is rejected", func(t *testing.T) {
+	t.Run("same-account destination is accepted", func(t *testing.T) {
 		rule := &mailfilter.Rule{Name: "bad", AccountID: "acct-a", DestFolderID: "a-work"}
-		if err := app.CreateFilterRule(rule); err == nil {
-			t.Fatal("expected error for same-account destination")
+		if err := app.CreateFilterRule(rule); err != nil {
+			t.Fatal(err)
+		}
+		if err := app.DeleteFilterRule(rule.ID); err != nil {
+			t.Fatal(err)
 		}
 	})
 

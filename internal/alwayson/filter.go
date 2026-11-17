@@ -13,11 +13,14 @@ import (
 
 var errMissingFilterDestination = errors.New("automatic filter destination is missing")
 
-func (r *SyncRuntime) enqueueFilter(rule *mailfilter.Rule, destination *folder.Folder, msg *message.Message) {
-	if r == nil || rule == nil || destination == nil || msg == nil {
+func (r *SyncRuntime) enqueueFilter(rule *mailfilter.Rule, msg *message.Message) {
+	if r == nil || rule == nil || msg == nil {
 		return
 	}
-	if err := r.filterJobs.Enqueue(rule, destination.ID, msg); err != nil {
+	if !rule.HasActions() {
+		return
+	}
+	if err := r.filterJobs.Enqueue(rule, rule.DestFolderID, msg); err != nil {
 		log := logging.WithComponent("alwayson.filters")
 		log.Error().Err(err).Str("ruleID", rule.ID).Str("messageID", msg.ID).Msg("Failed to persist automatic filter job")
 		return
@@ -67,18 +70,25 @@ func (r *SyncRuntime) runFilterJob(ctx context.Context, job *mailfilter.FilterJo
 		r.markFilterJobUnknown(job, err)
 		return
 	}
-	if rule == nil || !rule.Enabled || rule.DestFolderID != job.DestinationFolderID {
+	if rule == nil || (!rule.Enabled && !job.Actions.ApplyExisting) || rule.DestFolderID != job.DestinationFolderID || rule.ActionMarkRead != job.Actions.MarkRead || rule.ActionArchive != job.Actions.Archive || rule.ActionTrash != job.Actions.Trash {
 		finishStale("rule changed")
 		return
 	}
-	destination, err := r.folders.Get(job.DestinationFolderID)
-	if err != nil {
-		r.markFilterJobUnknown(job, err)
-		return
-	}
-	if destination == nil {
-		r.markFilterJobUnknown(job, errMissingFilterDestination)
-		return
+	var destination *folder.Folder
+	if job.DestinationFolderID != "" {
+		destination, err = r.folders.Get(job.DestinationFolderID)
+		if err != nil {
+			r.markFilterJobUnknown(job, err)
+			return
+		}
+		if destination != nil && destination.Hidden {
+			finishStale("destination hidden")
+			return
+		}
+		if destination == nil {
+			r.markFilterJobUnknown(job, errMissingFilterDestination)
+			return
+		}
 	}
 	if destination.Hidden {
 		if err := r.filterJobs.DeferUnstarted(job.ID); err != nil {
@@ -96,21 +106,74 @@ func (r *SyncRuntime) runFilterJob(ctx context.Context, job *mailfilter.FilterJo
 		return
 	}
 	jobContext, cancel := context.WithTimeout(ctx, 45*time.Second)
-	applied, err := r.filterOp.Apply(jobContext, rule, destination, current[0])
-	cancel()
+	defer cancel()
+
+	// Recheck criteria and current source before starting any provider actions.
+	current[0].ListID, err = r.messages.GetListID(current[0].ID)
 	if err != nil {
 		r.markFilterJobUnknown(job, err)
 		return
 	}
-	if !applied {
-		finishStale("source no longer available")
+	effective := *rule
+	effective.Enabled = rule.Enabled || job.Actions.ApplyExisting
+	if current[0].IsDeleted || current[0].IsDraft || !mailfilter.Match(&effective, mailfilter.FromMessage(current[0])) {
+		finishStale("criteria changed")
 		return
 	}
+	ops := &mailboxActionOperations{runtime: r, contextOverride: jobContext}
+	if job.Actions.Archive || job.Actions.Trash {
+		kind := folder.TypeTrash
+		if job.Actions.Archive {
+			kind = folder.TypeArchive
+			_, isGmail, err := ops.gmailClient(job.SourceAccountID)
+			if err != nil {
+				r.markFilterJobUnknown(job, err)
+				return
+			}
+			if isGmail {
+				kind = folder.TypeAll
+			}
+		}
+		destination, err = r.folders.GetByType(job.SourceAccountID, kind)
+		if err != nil {
+			r.markFilterJobUnknown(job, err)
+			return
+		}
+		if destination == nil {
+			r.markFilterJobUnknown(job, errMissingFilterDestination)
+			return
+		}
+		if destination.Hidden {
+			finishStale("destination hidden")
+			return
+		}
+	}
+	if job.Actions.MarkRead {
+		if err := ops.MarkAsRead([]string{job.MessageID}); err != nil {
+			r.markFilterJobUnknown(job, err)
+			return
+		}
+	}
+	switch {
+	case destination != nil:
+		effective.DestFolderID = destination.ID
+		applied, err := r.filterOp.Apply(jobContext, &effective, destination, current[0])
+		if err != nil {
+			r.markFilterJobUnknown(job, err)
+			return
+		}
+		if !applied {
+			finishStale("source changed")
+			return
+		}
+
+	}
+
 	if err := r.filterJobs.Complete(job.ID); err != nil {
-		log.Error().Err(err).Str("jobID", job.ID).Msg("Move succeeded but automatic filter completion was not persisted; outcome needs inspection")
+		log.Error().Err(err).Str("jobID", job.ID).Msg("Filter actions ran but automatic filter completion was not persisted; outcome needs inspection")
 		return
 	}
-	log.Info().Str("ruleID", rule.ID).Str("destinationFolder", destination.Path).Msg("Automatic filter routed message")
+	log.Info().Str("ruleID", rule.ID).Msg("Automatic filter applied to message")
 }
 
 func (r *SyncRuntime) markFilterJobUnknown(job *mailfilter.FilterJob, cause error) {
@@ -119,5 +182,5 @@ func (r *SyncRuntime) markFilterJobUnknown(job *mailfilter.FilterJob, cause erro
 		log.Error().Err(err).Str("jobID", job.ID).Msg("Could not persist uncertain automatic filter outcome")
 		return
 	}
-	log.Warn().Err(cause).Str("ruleID", job.RuleID).Str("jobID", job.ID).Msg("Automatic filter move stopped; outcome needs inspection and will not be retried automatically")
+	log.Warn().Err(cause).Str("ruleID", job.RuleID).Str("jobID", job.ID).Msg("Automatic filter actions stopped; outcome needs inspection and will not be retried automatically")
 }
