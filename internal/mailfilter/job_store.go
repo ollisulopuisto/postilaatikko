@@ -95,10 +95,21 @@ func (s *JobStore) EnqueueBatch(rule *Rule, destinationFolderID string, messages
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if applyExisting {
+		for _, msg := range messages {
+			var processing int
+			if err := tx.QueryRow(`SELECT COUNT(*) FROM automatic_filter_jobs WHERE rule_id=? AND message_id=? AND source_folder_id=? AND destination_folder_id=? AND state='processing'`, rule.ID, msg.ID, msg.FolderID, destinationFolderID).Scan(&processing); err != nil {
+				return err
+			}
+			if processing > 0 {
+				return errors.New("filtering is already in progress for this selection; wait before applying again")
+			}
+		}
+	}
 	for _, msg := range messages {
 		_, err = tx.Exec(`INSERT INTO automatic_filter_jobs
    (id,rule_id,destination_folder_id,message_id,source_account_id,source_folder_id,source_uid,state,actions)
-   VALUES (?,?,?,?,?,?,?,'pending',?) ON CONFLICT(rule_id,message_id,source_folder_id,destination_folder_id) DO NOTHING`, uuid.NewString(), rule.ID, destinationFolderID, msg.ID, msg.AccountID, msg.FolderID, msg.UID, string(actions))
+   VALUES (?,?,?,?,?,?,?,'pending',?) ON CONFLICT(rule_id,message_id,source_folder_id,destination_folder_id) DO UPDATE SET actions=excluded.actions,source_uid=excluded.source_uid,source_account_id=excluded.source_account_id,updated_at=datetime('now') WHERE automatic_filter_jobs.state='pending' AND ?`, uuid.NewString(), rule.ID, destinationFolderID, msg.ID, msg.AccountID, msg.FolderID, msg.UID, string(actions), applyExisting)
 		if err != nil {
 			return fmt.Errorf("persist automatic filter job: %w", err)
 		}

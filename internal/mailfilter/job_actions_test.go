@@ -72,3 +72,29 @@ func TestPausedJobKeepsItsSnapshotWithoutBusyReclaim(t *testing.T) {
 		t.Fatalf("resume lost source/actions: %+v %v", resumed, err)
 	}
 }
+
+func TestExplicitSubmissionUpgradesPendingAutomaticJob(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+	jobs := NewJobStore(db)
+	rule := &Rule{ID: "rule", ActionMarkRead: true}
+	m := &message.Message{ID: "m", AccountID: "account1", FolderID: "folder1", UID: 10}
+	if err := jobs.Enqueue(rule, "", m); err != nil {
+		t.Fatal(err)
+	}
+	rule.ActionTrash = true
+	if err := jobs.EnqueueBatch(rule, "", []*message.Message{m}, true); err != nil {
+		t.Fatal(err)
+	}
+	// A late automatic callback must never downgrade a user's explicit choice.
+	if err := jobs.Enqueue(rule, "", m); err != nil {
+		t.Fatal(err)
+	}
+	job, err := jobs.ClaimNext()
+	if err != nil || job == nil || !job.Actions.ApplyExisting || !job.Actions.Trash {
+		t.Fatalf("explicit application lost to pending job: %+v %v", job, err)
+	}
+	if err := jobs.EnqueueBatch(rule, "", []*message.Message{m}, true); err == nil {
+		t.Fatal("reported a second explicit submission while provider work was in progress")
+	}
+}
