@@ -272,18 +272,22 @@
     schedulePreview()
   })
 
+  async function saveRule(built: mailfilter.Rule) {
+    if (editMode) {
+      await UpdateFilterRule(built)
+      toasts.success($_('filters.updated'))
+      return
+    }
+    await CreateFilterRule(built)
+    toasts.success($_('filters.created'))
+  }
+
   async function handleSave() {
     if (!canSave) return
     saving = true
     try {
       const built = buildRule()
-      if (editMode) {
-        await UpdateFilterRule(built)
-        toasts.success($_('filters.updated'))
-      } else {
-        await CreateFilterRule(built)
-        toasts.success($_('filters.created'))
-      }
+      await saveRule(built)
       if (applyToExisting && previewCount !== null && previewCount <= 500) {
         const ruleId = built.id
         if (ruleId) {
