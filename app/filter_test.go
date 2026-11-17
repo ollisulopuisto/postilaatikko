@@ -647,3 +647,27 @@ func TestFilterWaitsForProviderReadBeforeCopy(t *testing.T) {
 		t.Fatalf("read not confirmed before copy: store %d append %d", store, copy)
 	}
 }
+
+func TestReadOnlyFilterRefreshesFolderBadge(t *testing.T) {
+	f := newFilterFixture(t, false)
+	f.app.ownFlagChangeAt = make(map[string]time.Time)
+	if err := f.app.folderStore.UpdateCounts("a-inbox", 1, 1); err != nil {
+		t.Fatal(err)
+	}
+	countEvents := 0
+	f.app.runtimeEventEmitter = func(name string, args ...interface{}) {
+		if name == "folders:countsChanged" {
+			countEvents++
+		}
+	}
+	rule := *f.rule
+	rule.DestFolderID = ""
+	rule.ActionMarkRead = true
+	if n, err := f.app.applyFilterActions(&rule, []string{f.message.ID}, f.message); err != nil || n != 1 {
+		t.Fatalf("apply %d %v", n, err)
+	}
+	folder, err := f.app.folderStore.Get("a-inbox")
+	if err != nil || folder.UnreadCount != 0 || countEvents != 1 {
+		t.Fatalf("badge not refreshed: %+v events %d error %v", folder, countEvents, err)
+	}
+}

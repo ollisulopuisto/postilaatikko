@@ -344,6 +344,20 @@ func (a *App) markFilterReadSynchronously(m *message.Message) error {
 	if err := a.messageStore.UpdateFlagsBatch([]string{m.ID}, &read, nil); err != nil {
 		return err
 	}
+	unread, err := a.messageStore.CountUnreadByFolder(m.FolderID)
+	if err != nil {
+		return err
+	}
+	f, err := a.folderStore.Get(m.FolderID)
+	if err != nil {
+		return err
+	}
+	if f != nil {
+		if err := a.folderStore.UpdateCounts(f.ID, f.TotalCount, unread); err != nil {
+			return err
+		}
+		a.emitRuntimeEvent("folders:countsChanged", map[string]int{f.ID: unread})
+	}
 	a.emitRuntimeEvent("messages:readChanged", map[string]interface{}{"messageIds": []string{m.ID}, "isRead": true})
 	return nil
 }

@@ -62,9 +62,11 @@ func (s *Store) UpsertGmail(m *Message, providerID string) error {
 	if err != nil {
 		return err
 	}
-	if err = tx.QueryRow(`SELECT uid FROM messages WHERE id=?`, id).Scan(&m.UID); err != nil {
+	var storedUID int64
+	if err = tx.QueryRow(`SELECT uid FROM messages WHERE id=?`, id).Scan(&storedUID); err != nil {
 		return err
 	}
+	m.UID = uint32(storedUID)
 	if err = tx.Commit(); err != nil {
 		return err
 	}

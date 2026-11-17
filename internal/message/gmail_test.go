@@ -69,3 +69,28 @@ func TestHeaderRefreshReturnsCanonicalIDForListID(t *testing.T) {
 		t.Fatalf("backfill %q %v", value, err)
 	}
 }
+
+func TestGmailAdoptsMovedRowWithNegativeTemporaryUID(t *testing.T) {
+	s, a, f := newBodyFailedTestStore(t)
+	if _, err := s.db.Exec(`INSERT INTO folders(id,account_id,name,path,folder_type) VALUES ('moved',?,'Moved','Moved','folder')`, a); err != nil {
+		t.Fatal(err)
+	}
+	original := &Message{ID: "legacy", AccountID: a, FolderID: f, UID: 12, MessageID: "<adopted@example.com>", Date: time.Now()}
+	if err := s.Create(original); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MoveMessages([]string{original.ID}, "moved"); err != nil {
+		t.Fatal(err)
+	}
+	var signed int64
+	if err := s.db.QueryRow(`SELECT uid FROM messages WHERE id=?`, original.ID).Scan(&signed); err != nil || signed >= 0 {
+		t.Fatalf("expected temporary UID %d %v", signed, err)
+	}
+	refreshed := &Message{AccountID: a, FolderID: "moved", MessageID: original.MessageID, Date: original.Date}
+	if err := s.UpsertGmail(refreshed, "provider-adopted"); err != nil {
+		t.Fatal(err)
+	}
+	if refreshed.ID != original.ID || refreshed.UID != uint32(signed) {
+		t.Fatalf("adopted snapshot lost identity: %+v", refreshed)
+	}
+}
