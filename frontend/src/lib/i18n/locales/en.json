@@ -1,5 +1,6 @@
 {
   "searchUI": {
+    "clearFiltersHint": "Clear quick filters before saving this search",
     "allMail": "All mail",
     "allScope": "All accounts, all folders",
     "searchAll": "Search all mail",

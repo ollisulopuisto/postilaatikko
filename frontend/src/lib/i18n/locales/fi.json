@@ -1,5 +1,6 @@
 {
   "searchUI": {
+    "clearFiltersHint": "Poista pikasuodattimet ennen haun tallennusta",
     "allMail": "Kaikki posti",
     "allScope": "Kaikki tilit ja kansiot",
     "searchAll": "Hae kaikesta postista",

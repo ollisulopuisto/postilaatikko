@@ -1477,7 +1477,7 @@
       let count = 0
 
       if (allMailSearch || isVirtualFolderView) {
-        const response = await SearchMail(new searchModels.MailSearchRequest({sessionId: virtualSearchSession, query, accountIds: allMailSearch && searchAccountScope ? [searchAccountScope] : [], virtualFolderId: allMailSearch ? '' : folderId!, filter: allMailSearch ? '' : filterMode, cursor: '', limit: PAGE_SIZE}))
+        const response = await SearchMail(new searchModels.MailSearchRequest({sessionId: virtualSearchSession, query, accountIds: allMailSearch && searchAccountScope ? [searchAccountScope] : [], virtualFolderId: allMailSearch ? '' : folderId!, filter: filterMode, cursor: '', limit: PAGE_SIZE}))
         results = response.conversations || []
         if (generation !== localSearchGeneration || query !== searchQuery.trim()) return
         virtualQueryCursor = response.cursor || ''
@@ -1539,7 +1539,7 @@
       let results: any[] = []
       if (allMailSearch || isVirtualFolderView) {
         if (!virtualQueryCursor) return
-        const response = await SearchMail(new searchModels.MailSearchRequest({ sessionId: virtualSearchSession, query, accountIds: allMailSearch && searchAccountScope ? [searchAccountScope] : [], virtualFolderId: allMailSearch ? '' : folderId!, filter: allMailSearch ? '' : filterMode, cursor: virtualQueryCursor, limit: PAGE_SIZE }))
+        const response = await SearchMail(new searchModels.MailSearchRequest({ sessionId: virtualSearchSession, query, accountIds: allMailSearch && searchAccountScope ? [searchAccountScope] : [], virtualFolderId: allMailSearch ? '' : folderId!, filter: filterMode, cursor: virtualQueryCursor, limit: PAGE_SIZE }))
         if (generation !== localSearchGeneration || query !== searchQuery.trim()) return
         results = response.conversations || []
         virtualQueryCursor = response.cursor || ''
@@ -2901,13 +2901,13 @@
       {#if allMailSearch}
         <p class="text-sm text-muted-foreground">{searchAccountScope ? $_('searchUI.selectedScope') : $_('searchUI.allScope')}</p>
         <div class="flex flex-wrap gap-2"><button type="button" class="rounded border border-border px-3 py-2 text-sm" onclick={() => { editingSearch = !editingSearch; setTimeout(() => searchInputRef?.focus(), 0) }}>{editingSearch ? $_('searchUI.done') : $_('searchUI.edit')}</button>
-        <button type="button" data-native-action="list.saveSearch" class="rounded border border-border px-3 py-2 text-sm disabled:opacity-50" disabled={!searchQuery.trim() || !!searchAccountScope} title={searchAccountScope ? $_('searchUI.saveScopeHint') : $_('searchUI.saveFolder')} onclick={() => virtualFoldersStore.requestSaveSearch(searchQuery.trim())}>{$_('searchUI.save')}</button></div>
+        <button type="button" data-native-action="list.saveSearch" class="rounded border border-border px-3 py-2 text-sm disabled:opacity-50" disabled={!searchQuery.trim() || !!searchAccountScope || !!filterMode} title={filterMode ? $_('searchUI.clearFiltersHint') : searchAccountScope ? $_('searchUI.saveScopeHint') : $_('searchUI.saveFolder')} onclick={() => virtualFoldersStore.requestSaveSearch(searchQuery.trim())}>{$_('searchUI.save')}</button></div>
       {/if}
       {#if !allMailSearch || editingSearch}
       <input bind:this={searchInputRef} bind:value={searchQuery} oninput={handleSearchInput} onkeydown={handleSearchKeydown} type="search" aria-label={$_('searchUI.searchMessages')} placeholder={$_('searchUI.searchMessagesPlaceholder')} class="w-full min-w-0 rounded border border-border bg-muted/30 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring" />
       {#if !allMailSearch}<button type="button" class="rounded border border-border bg-muted px-3 py-1 text-sm" aria-label={$_('searchUI.widen')} onclick={() => onWidenSearch?.(searchQuery)}>{folderName} ×</button>{/if}
       <button type="button" data-native-action="list.refresh" class="sr-only" onclick={refreshActiveSearch}>Refresh search</button>
-      <SearchOperators compact limited={!allMailSearch} onInsert={insertSearchOperator} />
+      {#if allMailSearch || isVirtualFolderView || (searchSource === 'server' && preferServerSearch)}<SearchOperators compact limited={!allMailSearch} onInsert={insertSearchOperator} />{/if}
       {#if allMailSearch}
         <label class="block text-sm">{$_('searchUI.scope')}
           <select aria-label={$_('searchUI.scope')} bind:value={searchAccountScope} onchange={handleSearchInput} class="w-full rounded border border-border bg-background p-2">

@@ -44,6 +44,9 @@
     contextPaneMode = 'messages'
     contextPaneAutoHide = false
     selectedThreadId = null
+    triageStatus = 'all'
+    hideViewer()
+    hideSidebar()
     messageListRef?.startAllMailSearch(query)
     setFocusedPane('messageList')
   }
@@ -2521,7 +2524,7 @@
     messageAnimations.startRemoval(messageIds, 'spam')
     try {
       await runMessageMutation(messageIds, async () => {
-        const isSpamFolder = selectedFolderType === 'spam'
+        const isSpamFolder = !allMailSearchActive && selectedFolderType === 'spam'
 
         if (isSpamFolder) {
           // If we're in spam folder, mark as NOT spam
@@ -2541,7 +2544,7 @@
       })
     } catch (err) {
       messageAnimations.finishRemoval(messageIds)
-      const isSpamFolder = selectedFolderType === 'spam'
+      const isSpamFolder = !allMailSearchActive && selectedFolderType === 'spam'
       console.error('Spam toggle failed:', err)
       addToast({ type: 'error', message: $_(isSpamFolder ? 'toast.failedToMarkAsNotSpam' : 'toast.failedToMarkAsSpam') })
     } finally {
