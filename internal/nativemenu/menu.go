@@ -38,6 +38,7 @@ type State struct {
 }
 type Controller struct {
 	mu        sync.Mutex
+	updateMu  sync.Mutex
 	ctx       context.Context
 	items     map[string][]*menu.MenuItem
 	epoch     uint64
@@ -151,6 +152,9 @@ func (c *Controller) Start(ctx context.Context) {
 		if json.Unmarshal(raw, &state) != nil {
 			return
 		}
+		// Keep each framework rebuild and its native hint snapshot ordered.
+		c.updateMu.Lock()
+		defer c.updateMu.Unlock()
 		changed := c.applyState(state)
 		if changed {
 			wr.MenuUpdateApplicationMenu(ctx)
