@@ -105,6 +105,7 @@ func (a *App) GetUnifiedFolderConversations(folderType string, offset, limit int
 	if folderType == "readLater" {
 		if offset == 0 {
 			a.syncGmailTriageQueues("read-later")
+			a.syncGmailTriageQueues("reply-later")
 		}
 		return a.messageStore.ListReadLaterConversations(offset, limit, sortOrder, filterValue)
 	}
