@@ -110,6 +110,7 @@ func containsFold(values []string, target string) bool {
 // haystack; both sides are compared case-insensitively.
 func anyContainsFold(patterns []string, haystack string) bool {
 	for _, pattern := range patterns {
+		pattern = strings.TrimSpace(pattern)
 		if pattern == "" {
 			continue
 		}

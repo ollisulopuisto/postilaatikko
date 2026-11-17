@@ -24,6 +24,16 @@ func ValidateRule(rule *Rule, accounts interface {
 	if strings.TrimSpace(rule.Name) == "" {
 		return fmt.Errorf("filter rule name cannot be empty")
 	}
+	// Normalize here, not only in the dialog: automation and Wails callers
+	// share the same safety boundary. Empty alternatives cannot create a
+	// catch-all rule accidentally.
+	rule.FromContains = cleanPatterns(rule.FromContains)
+	rule.ToContains = cleanPatterns(rule.ToContains)
+	rule.SubjectContains = cleanPatterns(rule.SubjectContains)
+	rule.ListIDContains = cleanPatterns(rule.ListIDContains)
+	if len(rule.FromContains)+len(rule.ToContains)+len(rule.SubjectContains)+len(rule.ListIDContains) == 0 {
+		return fmt.Errorf("filter rule needs at least one non-blank match condition")
+	}
 	if !rule.HasActions() {
 		return fmt.Errorf("filter rule needs at least one action")
 	}
@@ -54,4 +64,14 @@ func ValidateRule(rule *Rule, accounts interface {
 		}
 	}
 	return nil
+}
+
+func cleanPatterns(values []string) []string {
+	var out []string
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			out = append(out, value)
+		}
+	}
+	return out
 }

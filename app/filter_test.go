@@ -561,8 +561,30 @@ func TestCreateFilterRuleValidation(t *testing.T) {
 		syncLastRequest: make(map[string]time.Time),
 	}
 
+	t.Run("backend rejects catch-all trash create and update", func(t *testing.T) {
+		unsafe := &mailfilter.Rule{Name: "Unsafe", Enabled: true, ActionTrash: true, SubjectContains: []string{" ", "\t"}}
+		if err := app.CreateFilterRule(unsafe); err == nil {
+			t.Fatal("Wails create accepted catch-all Trash")
+		}
+		safe := &mailfilter.Rule{Name: "Safe", Enabled: true, ActionTrash: true, SubjectContains: []string{"invoice"}}
+		if err := app.CreateFilterRule(safe); err != nil {
+			t.Fatal(err)
+		}
+		safe.SubjectContains = nil
+		if err := app.UpdateFilterRule(safe); err == nil {
+			t.Fatal("Wails update accepted catch-all Trash")
+		}
+		stored, err := app.filterStore.Get(safe.ID)
+		if err != nil || len(stored.SubjectContains) != 1 {
+			t.Fatal("rejected update changed saved criteria")
+		}
+		if err := app.DeleteFilterRule(safe.ID); err != nil {
+			t.Fatal(err)
+		}
+	})
+
 	t.Run("same-account destination is accepted", func(t *testing.T) {
-		rule := &mailfilter.Rule{Name: "bad", AccountID: "acct-a", DestFolderID: "a-work"}
+		rule := &mailfilter.Rule{Name: "same account", FromContains: []string{"sender@example.com"}, AccountID: "acct-a", DestFolderID: "a-work"}
 		if err := app.CreateFilterRule(rule); err != nil {
 			t.Fatal(err)
 		}
