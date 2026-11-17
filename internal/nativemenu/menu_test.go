@@ -171,3 +171,18 @@ func TestShortcutHintSpecialKeysAndModifiers(t *testing.T) {
 		}
 	}
 }
+
+func TestCatalogLabelsAreUnambiguousWithinEachMenu(t *testing.T) {
+	var walk func([]Item)
+	walk = func(items []Item) {
+		labels := map[string]bool{}
+		for _, item := range items {
+			if item.Label != "-" && labels[item.Label] {
+				t.Fatalf("ambiguous menu label %q", item.Label)
+			}
+			labels[item.Label] = true
+			walk(item.Children)
+		}
+	}
+	walk(Catalog())
+}

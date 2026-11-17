@@ -80,6 +80,22 @@ int main(void) {
         objc_registerClassPair(later); object_setClass(root,later);
         assert(![root performKeyEquivalent:keyEvent(@"m",0)]);
         assert(target.calls == 3);
+        // Direct submenu lookup must be as safe as application-root lookup.
+        assert(![message performKeyEquivalent:keyEvent(@"m",0)]);
+        assert(target.calls == 3);
+        // Exercise the real NSWindow event path while typing into an editor.
+        NSWindow *window = [[[NSWindow alloc] initWithContentRect:NSMakeRect(100,100,500,200)
+            styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO] autorelease];
+        NSTextView *editor = [[[NSTextView alloc] initWithFrame:NSMakeRect(0,0,500,200)] autorelease];
+        window.contentView = editor;
+        [window makeKeyAndOrderFront:nil];
+        [window makeFirstResponder:editor];
+        for (NSString *letter in @[@"c",@"f",@"e",@"l",@"h",@"m",@"s",@"v",@"g",@"t"]) {
+            [window sendEvent:keyEvent(letter,0)];
+        }
+        assert([editor.string isEqualToString:@"cfelhmsvgt"]);
+        assert(target.calls == 3);
+        [window orderOut:nil];
         // Disabled native actions remain disabled.
         copy.enabled = NO;
         // AppKit can return YES for a disabled match (consumed, not invoked).

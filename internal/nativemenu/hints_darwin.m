@@ -18,13 +18,16 @@ static BOOL performHintKeyEquivalent(NSMenu *menu, SEL selector, NSEvent *event)
     }
     objc_setAssociatedObject(menu, &shortcutLookupKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     NSArray *hints = [objc_getAssociatedObject(menu, &shortcutHintsKey) retain];
+    NSMutableArray *previous = [NSMutableArray array];
     for (NSDictionary *hint in hints) {
-        [(NSMenuItem *)hint[@"item"] setKeyEquivalent:@""];
+        NSMenuItem *item = hint[@"item"];
+        [previous addObject:@{@"item":item, @"key":item.keyEquivalent, @"modifiers":@(item.keyEquivalentModifierMask)}];
+        item.keyEquivalent = @"";
     }
     @try {
         return ((BOOL (*)(struct objc_super *, SEL, NSEvent *))objc_msgSendSuper)(&parent, selector, event);
     } @finally {
-        for (NSDictionary *hint in hints) {
+        for (NSDictionary *hint in previous) {
             NSMenuItem *item = hint[@"item"];
             item.keyEquivalent = hint[@"key"];
             item.keyEquivalentModifierMask = [hint[@"modifiers"] unsignedIntegerValue];
@@ -34,11 +37,21 @@ static BOOL performHintKeyEquivalent(NSMenu *menu, SEL selector, NSEvent *event)
     }
 }
 
+static void decorateMenu(NSMenu *menu, NSArray *definitions);
+
 static void applyHints(NSMenu *menu, NSArray *definitions, NSMutableArray *hints) {
     for (NSDictionary *definition in definitions) {
-        NSMenuItem *item = [menu itemWithTitle:definition[@"title"]];
+        NSMenuItem *item = nil;
+        for (NSMenuItem *candidate in menu.itemArray) {
+            if (![candidate.title isEqualToString:definition[@"title"]]) continue;
+            if (item) { item = nil; break; } // Ambiguous labels fail closed.
+            item = candidate;
+        }
         if (!item) continue;
-        if (item.submenu) applyHints(item.submenu, definition[@"children"], hints);
+        if (item.submenu) {
+            decorateMenu(item.submenu, definition[@"children"]);
+            [hints addObjectsFromArray:objc_getAssociatedObject(item.submenu, &shortcutHintsKey) ?: @[]];
+        }
         NSString *key = definition[@"key"];
         if (!key.length) continue;
         item.keyEquivalent = key;
@@ -50,7 +63,8 @@ static void applyHints(NSMenu *menu, NSArray *definitions, NSMutableArray *hints
 // Keep Wails' original root and complete item tree in place. Its context keeps
 // the root pointer and can reinstall it, so moving items to a replacement menu
 // would empty the application menu on queued updates. An ivar-free, per-class
-// subclass changes only this root's keyboard lookup, not WailsMenu globally.
+// subclass guards each menu's lookup, including direct submenu calls. It does not
+// change WailsMenu globally.
 static void decorateMenu(NSMenu *menu, NSArray *definitions) {
     if (!menu) return;
     if (!objc_getAssociatedObject(menu, &shortcutHintsKey)) {
