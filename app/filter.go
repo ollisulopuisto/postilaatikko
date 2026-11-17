@@ -291,7 +291,7 @@ func (a *App) applyFilterActions(rule *mailfilter.Rule, ids []string, snapshots 
 				}
 			}
 			if rule.ActionMarkRead {
-				if err := a.MarkAsRead([]string{m.ID}); err != nil {
+				if err := a.markFilterReadSynchronously(m); err != nil {
 					return false, "", err
 				}
 			}
@@ -329,4 +329,21 @@ func (a *App) evaluateFilterThroughService(req v1.FilterRuleMutationRequest, res
 		return true, errDesktopMailboxWriteAuthorizationRequired
 	}
 	return true, a.mailboxService.evaluateFilterRule(ctx, req, result)
+}
+
+// Filters cannot use the optimistic UI read path: provider STORE must finish
+// before COPY or the destination can retain the old unread flag.
+func (a *App) markFilterReadSynchronously(m *message.Message) error {
+	if m.IsRead {
+		return nil
+	}
+	if err := a.syncFlagsToIMAP([]*message.Message{m}, m.FolderID, "read", true); err != nil {
+		return err
+	}
+	read := true
+	if err := a.messageStore.UpdateFlagsBatch([]string{m.ID}, &read, nil); err != nil {
+		return err
+	}
+	a.emitRuntimeEvent("messages:readChanged", map[string]interface{}{"messageIds": []string{m.ID}, "isRead": true})
+	return nil
 }

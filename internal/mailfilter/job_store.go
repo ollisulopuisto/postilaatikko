@@ -98,11 +98,11 @@ func (s *JobStore) EnqueueBatch(rule *Rule, destinationFolderID string, messages
 	if applyExisting {
 		for _, msg := range messages {
 			var processing int
-			if err := tx.QueryRow(`SELECT COUNT(*) FROM automatic_filter_jobs WHERE rule_id=? AND message_id=? AND source_folder_id=? AND destination_folder_id=? AND state='processing'`, rule.ID, msg.ID, msg.FolderID, destinationFolderID).Scan(&processing); err != nil {
+			if err := tx.QueryRow(`SELECT COUNT(*) FROM automatic_filter_jobs WHERE rule_id=? AND message_id=? AND source_folder_id=? AND destination_folder_id=? AND state IN ('processing','outcome_unknown')`, rule.ID, msg.ID, msg.FolderID, destinationFolderID).Scan(&processing); err != nil {
 				return err
 			}
 			if processing > 0 {
-				return errors.New("filtering is already in progress for this selection; wait before applying again")
+				return errors.New("filtering is in progress or has an uncertain outcome for this selection; inspect its status before applying again")
 			}
 		}
 	}

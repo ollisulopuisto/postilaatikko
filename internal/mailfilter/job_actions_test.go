@@ -98,3 +98,28 @@ func TestExplicitSubmissionUpgradesPendingAutomaticJob(t *testing.T) {
 		t.Fatal("reported a second explicit submission while provider work was in progress")
 	}
 }
+
+func TestUncertainConflictRejectsEntireExplicitBatch(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+	jobs := NewJobStore(db)
+	rule := &Rule{ID: "rule", ActionMarkRead: true}
+	m := &message.Message{ID: "uncertain", AccountID: "account1", FolderID: "folder1", UID: 10}
+	if err := jobs.Enqueue(rule, "", m); err != nil {
+		t.Fatal(err)
+	}
+	job, err := jobs.ClaimNext()
+	if err != nil || job == nil {
+		t.Fatal(err)
+	}
+	if err := jobs.MarkOutcomeUnknown(job.ID, "connection lost"); err != nil {
+		t.Fatal(err)
+	}
+	other := &message.Message{ID: "other", AccountID: "account1", FolderID: "folder1", UID: 11}
+	if err := jobs.EnqueueBatch(rule, "", []*message.Message{other, m}, true); err == nil {
+		t.Fatal("uncertain conflict reported success")
+	}
+	if next, err := jobs.ClaimNext(); next != nil || err != nil {
+		t.Fatalf("rejected batch queued partial work: %+v %v", next, err)
+	}
+}

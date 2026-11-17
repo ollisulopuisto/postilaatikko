@@ -61,6 +61,7 @@ type testIMAPSession struct {
 	messages     map[uint32][]byte // UID -> raw RFC822
 	nextUID      uint32
 	selected     string
+	storeDelay   time.Duration
 	rejectAppend bool // when true, Append is rejected after recording the attempt
 }
 
@@ -204,6 +205,8 @@ func (s *testIMAPSession) Copy(numSet imap.NumSet, dest string) (*imap.CopyData,
 }
 
 func (s *testIMAPSession) Store(w *imapserver.FetchWriter, numSet imap.NumSet, flags *imap.StoreFlags, options *imap.StoreOptions) error {
+	time.Sleep(s.storeDelay)
+	s.ops.record("store:complete")
 	return nil
 }
 
@@ -595,4 +598,30 @@ func TestCreateFilterRuleValidation(t *testing.T) {
 			t.Fatalf("GetFilterRules round trip failed: %v %+v", err, rules)
 		}
 	})
+}
+
+func TestFilterWaitsForProviderReadBeforeCopy(t *testing.T) {
+	f := newFilterFixture(t, false)
+	f.serverA.sess.storeDelay = 100 * time.Millisecond
+	f.app.ownFlagChangeAt = make(map[string]time.Time)
+	rule, err := f.app.filterStore.Get(f.rule.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rule.ActionMarkRead = true
+	if err := f.app.UpdateFilterRule(rule); err != nil {
+		t.Fatal(err)
+	}
+	m, err := f.app.messageStore.Get("msg-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.app.applyFilterActions(rule, []string{m.ID}, m); err != nil {
+		t.Fatal(err)
+	}
+	store := f.ops.indexOf("store:complete")
+	copy := f.ops.indexOf("append:")
+	if store < 0 || copy < 0 || store > copy {
+		t.Fatalf("read not confirmed before copy: store %d append %d", store, copy)
+	}
 }
