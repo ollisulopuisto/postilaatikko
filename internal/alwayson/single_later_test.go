@@ -171,3 +171,30 @@ func TestLaterProviderFailureDoesNotPartiallyRemove(t *testing.T) {
 		t.Fatal("stale Undo modified provider")
 	}
 }
+
+func TestLaterDatabaseFailureRollsBackBothMemberships(t *testing.T) {
+	db, _, _ := newCachedVirtualFolderTestRuntime(t)
+	defer db.Close()
+	store := triage.NewStore(db)
+	ref := triage.Ref{AccountID: "acc", ConversationID: "thread-a"}
+	prior := triage.LaterState{Read: true, Reply: true}
+	if err := store.SetLaterState(context.Background(), ref, triage.LaterState{}, prior, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TRIGGER reject_later_delete BEFORE DELETE ON reply_later_queue BEGIN SELECT RAISE(ABORT,'injected failure'); END`); err != nil {
+		t.Fatal(err)
+	}
+	remote := prior
+	err := store.SetLaterState(context.Background(), ref, prior, triage.LaterState{}, func(queue string, on bool) error {
+		if queue == "read-later" {
+			remote.Read = on
+		} else {
+			remote.Reply = on
+		}
+		return nil
+	})
+	got, _ := store.LaterState(ref)
+	if err == nil || got != prior || remote != prior {
+		t.Fatalf("err=%v local=%+v provider=%+v", err, got, remote)
+	}
+}

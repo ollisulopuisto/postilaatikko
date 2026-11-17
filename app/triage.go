@@ -247,6 +247,8 @@ func (a *App) ChangeReadLaterWithUndo(accountID, conversationID string, inQueue 
 		}
 		return TriageChangeResult{Changed: response.Changed, OperationID: response.Receipt.OperationID}, nil
 	}
+	a.laterMutationMu.Lock()
+	defer a.laterMutationMu.Unlock()
 	if err := a.setGmailTriageLabel(accountID, conversationID, "read-later", inQueue); err != nil {
 		return TriageChangeResult{}, err
 	}
