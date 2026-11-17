@@ -1928,3 +1928,5 @@ export function UpdateVirtualFolder(arg1) {
 export function DispatchRemotePendingSend(arg1) {
   return window['go']['app']['App']['DispatchRemotePendingSend'](arg1);
 }
+
+export function SetFolderVisibility(a,b,c,d) { return window["go"]["app"]["App"]["SetFolderVisibility"](a,b,c,d); }

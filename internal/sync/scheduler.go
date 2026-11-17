@@ -352,6 +352,14 @@ func (s *Scheduler) syncAccountInbox(parent context.Context, acc *account.Accoun
 		return
 	}
 
+	// A hidden INBOX is not refreshed: skip its message sync and only catch
+	// up the account's remaining visible folders.
+	if inbox.Hidden {
+		s.log.Debug().Str("account_id", acc.ID).Msg("INBOX is hidden, skipping its scheduled refresh")
+		s.syncAdditionalFolders(ctx, acc, inbox)
+		return
+	}
+
 	// Get current message count before sync
 	previousCount := inbox.TotalCount
 
@@ -463,15 +471,20 @@ func (s *Scheduler) syncAdditionalFolders(ctx context.Context, acc *account.Acco
 	wg.Wait()
 }
 
-// getAccountSyncFolders returns the folders to sync for an account.
+// getAccountSyncFolders returns the folders to sync for an account. Hidden
+// folders are never refreshed by scheduled or bulk sync; showing a folder
+// again (Show + refresh) catches it up explicitly.
 func (s *Scheduler) getAccountSyncFolders(acc *account.Account) ([]*folder.Folder, error) {
 	if acc.SyncAllFolders {
-		return s.folderStore.List(acc.ID)
+		folders, err := s.folderStore.List(acc.ID)
+		return folder.WithoutHidden(folders), err
 	}
 	if acc.SyncFoldersEnabled {
-		return s.folderStore.ListSubscribed(acc.ID)
+		folders, err := s.folderStore.ListSubscribed(acc.ID)
+		return folder.WithoutHidden(folders), err
 	}
-	return s.folderStore.List(acc.ID)
+	folders, err := s.folderStore.List(acc.ID)
+	return folder.WithoutHidden(folders), err
 }
 
 // TriggerSync manually triggers a sync for a specific account (non-blocking)

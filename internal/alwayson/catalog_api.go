@@ -617,6 +617,7 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 	v1.MountVirtualFolderUnreadCountRoute(mux, r, automation.RequireGrantCapability)
 	v1.NewAccountMutationHandler(r, newAccountMutationLedger(r.db), r.accountMutationFingerprint).MountRoutes(mux, automation.RequireGrantCapability)
 	v1.MountFolderMutationRoutes(mux, r, automation.RequireGrantCapability)
+	v1.MountFolderVisibilityRoutes(mux, r, automation.RequireGrantCapability)
 	v1.MountVirtualFolderMutationRoutes(mux, r, automation.RequireGrantCapability)
 	v1.MountFilterRuleRoutes(mux, r, automation.RequireGrantCapability)
 	v1.MountFilterJobRoutes(mux, r, automation.RequireGrantCapability)

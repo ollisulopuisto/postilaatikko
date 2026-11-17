@@ -19,6 +19,7 @@
   import { focusedRowKey, findFocusedRow } from './focusedRow'
   import { selectionAfterFolderSwitch, selectionSurvivesRefresh } from './selectionReconcile'
   import { mailRowKey, captureScrollAnchor, anchoredScrollTop, newRowsBeforeAnchor, extendAnchorWindow } from './scrollAnchor'
+  import { folderDependencies } from '$lib/sidebar/folderVisibility'
   import { retainReadSelection } from '$lib/sidebar/virtualView'
   import { dayGroupFor } from '$lib/components/list/dayGroup'
   import { app as searchModels } from '../../../../wailsjs/go/models'
@@ -112,6 +113,12 @@
   let virtualCursor = $state('')
   let onlineCountRevision = $state(0)
   let virtualIssues = $state('')
+  const hiddenVirtualSource = $derived.by(() => {
+    if (!isVirtualFolderView) return false
+    const view = virtualFoldersStore.folders.find(item => item.id === folderId)
+    const hidden = Object.values(accountStore.folderCatalog).flat().filter(item => item.hidden).map(item => item.id)
+    return !!view && folderDependencies(hidden, [view], []).views.length > 0
+  })
   let virtualCacheRefreshedAt = $state<Date | null>(null)
   let virtualQueryCursor = $state('')
   const virtualSearchSession = crypto.randomUUID()
@@ -3242,6 +3249,7 @@
   {/if}
 
   {#if isVirtualFolderView && folderId && !isSearchMode && !filterMode}<OnlineViewCount {folderId} revision={onlineCountRevision} />{/if}
+  {#if hiddenVirtualSource}<p class="px-3 py-2 text-xs text-amber-500" role="status">{$_('folderVisibility.viewsWarning')}</p>{/if}
   {#if virtualIssues}<p class="px-3 py-2 text-xs text-destructive" role="status">{virtualIssues}</p>{/if}
   {#if isVirtualFolderView && virtualCacheRefreshedAt && !isSearchMode}
     <p class="px-3 pb-1 text-[10px] text-muted-foreground" role="status">{$_('search.virtualFolderCacheUpdated', { values: { time: virtualCacheRefreshedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) } })}</p>

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Hide folders locally from the folder menu or Account settings > Folders, with search and bulk hide/show. Hidden folders leave navigation and pickers and pause explicit refresh and body prefetch without deleting cached mail or changing provider subscriptions. Saved views keep cached mail with stale-source warnings; filters to hidden destinations pause until shown. Adds a folder visibility preference to the local database.
+
 ## Postilaatikko 2026.11.17.1
 
 - Attachment cache repair ignores unnamed inline plain-text and HTML bodies instead of exporting them as files, while preserving inline calendar invitations and vCards. Save All through the Linux file portal gives repeated filenames separate names and rejects duplicate destinations before writing.
