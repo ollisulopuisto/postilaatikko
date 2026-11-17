@@ -44,7 +44,7 @@ test('real App: hidden startup selection rejected and hiding active folder leave
 
       await page.waitForFunction(()=>document.querySelector('[data-native-context]'))
       await page.waitForFunction(()=>document.querySelector('[data-native-context]').dataset.nativeContext.includes('mail'))
-      assert.equal(await page.locator('[data-native-context]').evaluate(el=>el.dataset.nativeContext.includes('old')),false,'startup cannot restore hidden folder')
+      assert.equal(await page.locator('[data-native-mail-primary]').evaluate(el=>el.dataset.nativeContext.includes('old')),false,'startup cannot restore hidden folder')
       await page.evaluate(async()=>{
         const {accountStore}=await import('/src/lib/stores/accounts.svelte.ts')
         accountStore.folderCatalog.demo=[{id:'old',accountId:'demo',name:'Old',hidden:false}]
