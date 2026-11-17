@@ -1373,6 +1373,7 @@
     "notSyncedLocally": "(ei synkronoitu paikallisesti)",
     "serverResultsCapped": "Näytetään {shown} / {total} tuloksesta haulle ”{query}”",
     "showAllResults": "Näytä kaikki {total} tulosta",
+    "findInMessage": "Etsi viestistä",
     "saveAsVirtualFolder": "Tallenna virtuaalikansioksi",
     "expandFolder": "Laajenna kansio",
     "collapseFolder": "Pienennä kansio",

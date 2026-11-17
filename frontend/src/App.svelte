@@ -21,9 +21,32 @@
 
   import { onDestroy, onMount, tick, untrack } from 'svelte'
   import Sidebar from './lib/components/sidebar/Sidebar.svelte'
+  import { messageFind } from './lib/components/viewer/messageFind.svelte'
   import GlobalSearch from './lib/components/common/GlobalSearch.svelte'
 
   let showGlobalSearch = $state(false)
+  let allMailSearchActive = $state(false)
+  let globalSearchQuery = $state('')
+  let findInput = $state<HTMLInputElement>()
+  function openAllMail(query = '') {
+    globalSearchQuery = query
+    messageFind.open = false
+    setActiveExtension('mail')
+    showGlobalSearch = true
+  }
+  function findInMessage() {
+    if (!selectedThreadId || messageFind.open) { openAllMail(messageFind.query); return }
+    messageFind.open = true
+    setTimeout(() => findInput?.focus(), 0)
+  }
+  function submitAllMail(query: string) {
+    returnToPrimaryContextForFolderNavigation()
+    contextPaneMode = 'messages'
+    contextPaneAutoHide = false
+    selectedThreadId = null
+    messageListRef?.startAllMailSearch(query)
+    setFocusedPane('messageList')
+  }
   let showUndoHistory = $state(false)
   import ScheduledPane from './lib/components/scheduled/ScheduledPane.svelte'
   import MessageList from './lib/components/list/MessageList.svelte'
@@ -1150,12 +1173,13 @@
     // Register actions for the command palette
     registerCommand('app.compose', () => handleCompose())
     registerCommand('app.search', () => {
-      if (getActiveExtension() === 'mail') { showGlobalSearch = true; return }
+      if (getActiveExtension() === 'mail') { openAllMail(); return }
       const search = getPaneNav('messageList')?.focusSearch
       if (!search) return
       search()
       setFocusedPane('messageList')
     })
+    registerCommand('app.find', findInMessage)
     registerCommand('app.folders', () => toggleFolderBrowser())
     registerCommand('app.syncAll', () => {
       sidebarRef?.toggleSync()
@@ -1250,6 +1274,7 @@
     add('app.whatsNew', () => { whatsNewHistory = true; showWhatsNewDialog = true })
     add('edit.undo', handleGlobalUndo, mail)
     add('edit.history', () => { showUndoHistory = true }, mail)
+    add('app.find', findInMessage, mail)
     add('app.close', () => closeWorkspaceTab(activeMailWorkspace), () => noComposer() && getActiveExtension()==='mail' && activeMailWorkspace !== 'primary')
     for (const id of ['mail.archive','mail.archiveAndMarkRead','mail.spam','mail.trash','mail.star','mail.markRead','mail.markUnread','mail.toggleRead','mail.deletePermanently','mail.moveTo','mail.copyTo','mail.readLater','mail.replyLater','mail.snooze','mail.reply','mail.replyAll','mail.forward'] as const) {
       add(id, () => {
@@ -1853,6 +1878,13 @@
     if (!showComposer && KEY.COMMAND_PALETTE(e)) {
       e.preventDefault()
       openCommandPalette()
+      return
+    }
+
+    if (!showComposer && getActiveExtension() === 'mail' && (e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'f') {
+      e.preventDefault()
+      if (e.shiftKey) openAllMail(messageFind.open ? messageFind.query : '')
+      else findInMessage()
       return
     }
 
@@ -2612,7 +2644,7 @@
 <div data-native-view={getActiveExtension()} data-native-mail-primary={getActiveExtension()==='mail' && activeMailWorkspace==='primary'} data-native-context={JSON.stringify([getActiveExtension(),activeMailWorkspace,selectedAccountId,selectedFolderId,selectedThreadId,getFocusedPane(),showComposer])} class="flex flex-col h-full w-full overflow-hidden bg-background">
   <!-- Main Content -->
   <div class="flex flex-1 min-h-0 overflow-hidden relative">
-    <ExtensionRail windowControls={getShowTitleBar() && !getNativeTitleBar() && effectiveTitleBarMode === 'custom'} onCloseWindow={handleClose} onRevealContext={revealContextPane} onHideContext={scheduleContextPaneHide} foldersOpen={contextPaneMode === 'folders' && getActiveExtension() === 'mail'} />
+    <ExtensionRail windowControls={getShowTitleBar() && !getNativeTitleBar() && effectiveTitleBarMode === 'custom'} onCloseWindow={handleClose} onSearch={() => openAllMail()} onAddVirtualFolder={() => sidebarRef?.openVirtualFolderDialog()} onRevealContext={revealContextPane} onHideContext={scheduleContextPaneHide} foldersOpen={contextPaneMode === 'folders' && getActiveExtension() === 'mail'} />
 
     {#if getActiveExtension() === 'scheduled'}
       <ScheduledPane />
@@ -2665,7 +2697,7 @@
       </div>
       <Sidebar
         navigationEnabled={true}
-        onGlobalSearch={() => showGlobalSearch = true}
+        onGlobalSearch={() => openAllMail()}
         bind:this={sidebarRef}
         onFolderSelect={handleFolderSelect}
         onUnifiedFolderSelect={handleUnifiedFolderSelect}
@@ -2737,6 +2769,8 @@
       </div>
       <div class="flex-1 min-h-0">
         <MessageList
+          onAllMailSearchChange={active => allMailSearchActive = active}
+          onWidenSearch={submitAllMail}
           bind:this={messageListRef}
           accountId={selectedAccountId}
           folderId={selectedFolderId}
@@ -2798,11 +2832,19 @@
         </button>
       </div>
       {#if activeMailWorkspace === 'primary'}
+      {#if messageFind.open}
+        <div class="flex shrink-0 items-center gap-2 border-b border-border p-2" role="search" aria-label="Find in message">
+          <label for="reader-find" class="text-sm">Find in message</label>
+          <input id="reader-find" bind:this={findInput} bind:value={messageFind.query} type="search" class="min-w-0 flex-1 rounded border border-border bg-background px-3 py-2 focus:ring-2 focus:ring-ring" onkeydown={event => { if (event.key === 'Escape') { messageFind.open = false; event.stopPropagation() } }} />
+          <button type="button" class="rounded border border-border px-2 py-1 text-sm" onclick={() => openAllMail(messageFind.query)}>All mail</button>
+          <button type="button" aria-label="Close find" class="px-2" onclick={() => messageFind.open = false}>×</button>
+        </div>
+      {/if}
       <ConversationViewer
         bind:this={viewerRef}
         threadId={selectedThreadId}
         folderId={selectedConversationFolderId}
-        folderType={selectedFolderType}
+        folderType={allMailSearchActive ? 'search' : selectedFolderType}
         accountId={selectedConversationAccountId}
         onReply={handleReply}
         onComposeToAddress={handleComposeToAddress}
@@ -2976,4 +3018,4 @@
   }
 </style>
 
-<GlobalSearch bind:open={showGlobalSearch} onSelect={(thread, folder, account) => { handleConversationSelect(thread, folder, account); setFocusedPane('viewer') }} />
+<GlobalSearch bind:open={showGlobalSearch} bind:query={globalSearchQuery} onSubmit={submitAllMail} />
