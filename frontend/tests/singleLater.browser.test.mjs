@@ -26,11 +26,12 @@ test('single Later pile preserves old marks and explicit removal in real App', {
       window.go={app:{App:new Proxy({}, {get:(_,key)=>(...args)=>{
         calls.push([key,...args])
         if(key==='GetReadLaterQueue')return Promise.resolve([...read]);if(key==='GetReplyLaterQueue')return Promise.resolve([...reply])
-        if(key==='ChangeReadLaterWithUndo'||key==='ChangeReplyLaterWithUndo'){
-          const target=key==='ChangeReadLaterWithUndo'?read:reply;const [accountId,conversationId,on]=args
-          const index=target.findIndex(x=>x.accountId===accountId&&x.conversationId===conversationId);if(index>=0)target.splice(index,1);if(on)target.push({accountId,conversationId})
-          emit(key==='ChangeReadLaterWithUndo'?'readLater:changed':'replyLater:changed',{accountId,conversationId,inQueue:on})
-          return Promise.resolve({changed:true,operationId:key+'-op'})
+        if(key==='ChangeLaterWithUndo'){
+          const [accountId,conversationId,on]=args
+          for(const target of [read,reply]){const i=target.findIndex(x=>x.accountId===accountId&&x.conversationId===conversationId);if(i>=0)target.splice(i,1)}
+          if(on)read.push({accountId,conversationId})
+          emit('readLater:synced',{});emit('replyLater:synced',{})
+          return Promise.resolve({changed:true,operationId:'later-op'})
         }
         return Promise.resolve(key in data?data[key]:key.startsWith('Get')||key.startsWith('List')?[]:null)
       }})}}
@@ -50,7 +51,7 @@ test('single Later pile preserves old marks and explicit removal in real App', {
     await page.screenshot({path:'/downloads/posti-later-implemented.png',fullPage:true})
     await button.click()
     await page.waitForFunction(()=>window.fixture.read.length===0&&window.fixture.reply.length===0)
-    assert.equal((await page.evaluate(()=>window.fixture.calls.filter(x=>x[0].startsWith('Change')&&x[0].includes('Later')).length)),2)
+    assert.equal((await page.evaluate(()=>window.fixture.calls.filter(x=>x[0].startsWith('Change')&&x[0].includes('Later')).length)),1)
     await page.screenshot({path:'/downloads/posti-later-removed.png',fullPage:true})
     assert.deepEqual(errors,[])
     await page.close()

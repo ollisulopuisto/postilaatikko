@@ -1,7 +1,7 @@
 // Presentation compatibility layer: no data migration, old clients keep working.
 import { readLaterQueue } from './readLater.svelte'
 import { replyLaterQueue } from './replyLater.svelte'
-import { UndoOperation } from '../../../wailsjs/go/app/App'
+import { UndoOperation, ChangeLaterWithUndo } from '../../../wailsjs/go/app/App'
 
 export type LaterRef = { accountId: string; conversationId: string; indexed?: boolean }
 export type LaterChange = { changed: boolean; operationId: string; operationIds: string[] }
@@ -10,8 +10,7 @@ const key = (ref: Ref) => JSON.stringify([ref.accountId, ref.conversationId])
 let busy = $state<Set<string>>(new Set())
 
 export async function undoLaterChange(result: Pick<LaterChange, 'operationIds'>) {
-  // Reverse the two legacy writes in reverse order. Stop on failure so callers
-  // retain their receipt rather than silently claiming a complete restoration.
+  // Each conversation is one backend-owned operation, including both legacy flags.
   for (const id of [...result.operationIds].reverse()) await UndoOperation(id)
 }
 
@@ -23,41 +22,12 @@ async function setWithUndo(accountId: string, conversationId: string, inQueue: b
   const id = key({ accountId, conversationId })
   if (busy.has(id)) return null
   busy = new Set([...busy, id])
-  const result: LaterChange = { changed: false, operationId: '', operationIds: [] }
-  let restoreReadWithoutReceipt = false
   try {
-    await load()
-    const read = readLaterQueue.has(accountId, conversationId)
-    const reply = replyLaterQueue.has(accountId, conversationId)
-    const remember = (change: { changed: boolean; operationId?: string } | null) => {
-      if (!change?.changed) return
-      result.changed = true
-      if (change.operationId) result.operationIds.push(change.operationId)
-      result.operationId = result.operationIds[0] || ''
-    }
-    if (inQueue) {
-      if (!read && !reply) remember(await readLaterQueue.setWithUndo(accountId, conversationId, true))
-    } else {
-      if (read) {
-        const change = await readLaterQueue.setWithUndo(accountId, conversationId, false)
-        remember(change)
-        restoreReadWithoutReceipt = !!change?.changed && !change.operationId
-      }
-      if (reply) remember(await replyLaterQueue.set(accountId, conversationId, false))
-    }
-    return result
-  } catch (err) {
-    // Preserve a legacy mark if the second provider/helper write fails.
-    try {
-      await undoLaterChange(result)
-      if (restoreReadWithoutReceipt) await readLaterQueue.setWithUndo(accountId, conversationId, true)
-    }
-    catch (rollbackError) { throw new Error(`${String(err)}; restoration failed: ${String(rollbackError)}`, { cause: rollbackError }) }
-    throw err
+    const result = await ChangeLaterWithUndo(accountId, conversationId, inQueue)
+    return { ...result, operationIds: result.changed && result.operationId ? [result.operationId] : [] }
   } finally {
     busy = new Set([...busy].filter(item => item !== id))
-    // Refresh both stores even after a partial/provider failure.
-    void load(true).catch(() => {})
+    await load(true).catch(() => {})
   }
 }
 
