@@ -313,6 +313,20 @@ func (s *Scheduler) syncAccountInbox(parent context.Context, acc *account.Accoun
 	defer act.End()
 
 	s.log.Info().Str("account_id", acc.ID).Msg("Starting scheduled sync for INBOX")
+	// Account cadence is independent of a hidden inbox's freshness, including
+	// Gmail history refresh and failed attempts. Never mark the inbox synced.
+	defer func() {
+		inbox, err := s.folderStore.GetByType(acc.ID, folder.TypeInbox)
+		if err != nil || inbox == nil || !inbox.Hidden {
+			return
+		}
+		s.syncingMu.Lock()
+		defer s.syncingMu.Unlock()
+		if s.hiddenInboxAttempt == nil {
+			s.hiddenInboxAttempt = map[string]time.Time{}
+		}
+		s.hiddenInboxAttempt[acc.ID] = time.Now()
+	}()
 
 	// First, ensure folders are synced
 	if err := s.engine.SyncFolders(ctx, acc.ID); err != nil {
@@ -365,12 +379,6 @@ func (s *Scheduler) syncAccountInbox(parent context.Context, acc *account.Accoun
 	if inbox.Hidden {
 		s.log.Debug().Str("account_id", acc.ID).Msg("INBOX is hidden, skipping its scheduled refresh")
 		s.syncAdditionalFolders(ctx, acc, inbox)
-		s.syncingMu.Lock()
-		if s.hiddenInboxAttempt == nil {
-			s.hiddenInboxAttempt = map[string]time.Time{}
-		}
-		s.hiddenInboxAttempt[acc.ID] = time.Now()
-		s.syncingMu.Unlock()
 		return
 	}
 
