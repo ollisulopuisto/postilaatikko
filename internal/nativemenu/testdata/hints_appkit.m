@@ -88,13 +88,14 @@ int main(void) {
             // Capture an actual AppKit popup when the runner has a WindowServer.
             // Capture failure is nonfatal; assertions above remain mandatory.
             [NSApp activateIgnoringOtherApps:YES];
-            [NSTimer scheduledTimerWithTimeInterval:1 repeats:NO block:^(NSTimer *timer) {
+            NSTimer *timer = [NSTimer timerWithTimeInterval:1 repeats:NO block:^(NSTimer *timer) {
                 NSTask *capture = [[[NSTask alloc] init] autorelease];
                 capture.launchPath = @"/usr/sbin/screencapture";
                 capture.arguments = @[@"-x", [NSString stringWithUTF8String:getenv("POSTI_MENU_SCREENSHOT")]];
                 [capture launch]; [capture waitUntilExit];
                 [message cancelTracking];
             }];
+            [[NSRunLoop mainRunLoop] addTimer:timer forMode:NSRunLoopCommonModes];
             [message popUpMenuPositioningItem:nil atLocation:NSMakePoint(150,500) inView:nil];
         }
         puts("AppKit shortcut column and keyboard ownership tests passed");
