@@ -145,12 +145,14 @@
       {
         "label": "Find in Message",
         "id": "app.find",
-        "key": "⌘F"
+        "key": "⌘F",
+        "shortcutId": "app.find"
       },
       {
         "label": "Search All Mail…",
         "id": "app.search",
-        "key": "⌘⇧F"
+        "key": "⌘⇧F",
+        "shortcutId": "app.search"
       }
     ]
   },
