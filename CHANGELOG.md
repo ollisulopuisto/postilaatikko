@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- Attachment cache repair ignores unnamed inline text bodies instead of exporting them as files. Save All through the Linux file portal gives repeated filenames separate names and rejects duplicate destinations before writing.
+- Attachment cache repair ignores unnamed inline plain-text and HTML bodies instead of exporting them as files, while preserving inline calendar invitations and vCards. Save All through the Linux file portal gives repeated filenames separate names and rejects duplicate destinations before writing.
 
 - Mac test builds now stop before checkout if GitHub returns a malformed main commit SHA, including on the Bash 3.2 shipped with macOS. This restores the source-validation test on Mac build runners while keeping stale-source and non-arm64 requests blocked.
 
