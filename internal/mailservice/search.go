@@ -341,7 +341,7 @@ func (s *Service) Search(parent context.Context, req MailSearchRequest) (*MailSe
 					// Provider query syntax cannot be replayed as literal local FTS.
 					// Preserve the last provider-resolved membership for saved searches.
 					if vf.SearchQuery != "" {
-						refs, _, _, err := s.virtualFolderStore.LoadCache(vf.ID)
+						refs, _, found, err := s.virtualFolderStore.LoadCache(vf.ID)
 						if err != nil {
 							issue(err)
 							return
@@ -374,7 +374,11 @@ func (s *Service) Search(parent context.Context, req MailSearchRequest) (*MailSe
 						end := min(offset+limit, len(filtered))
 						mu.Lock()
 						result.Conversations = append(result.Conversations, filtered[offset:end]...)
-						result.Issues = append(result.Issues, MailSearchIssue{AccountID: acc.ID, AccountName: acc.Name, Message: "Saved search is stale: showing retained provider results; hidden sources are not refreshed", Warning: true})
+						notice := "Saved search is stale: showing retained provider results; hidden sources are not refreshed"
+						if !found || len(refs) == 0 {
+							notice = "Saved search results unavailable: no compatible retained membership; show hidden sources and refresh"
+						}
+						result.Issues = append(result.Issues, MailSearchIssue{AccountID: acc.ID, AccountName: acc.Name, Message: notice, Warning: true})
 						state.Pages[acc.ID] = "!done"
 						if end < len(filtered) {
 							state.Pages[acc.ID] = "hidden:" + strconv.Itoa(end)

@@ -326,3 +326,33 @@ func TestStore_CacheSaveLoadDelete(t *testing.T) {
 		t.Errorf("LoadCache after delete: found=%v err=%v, want false/nil", found, err)
 	}
 }
+
+func TestDefinitionEditInvalidatesRetainedMembershipButRenameKeepsIt(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+	s := NewStore(db)
+	vf := &VirtualFolder{ID: "saved", Name: "Saved", FolderIDs: []string{"folder1", "folder2"}, SearchQuery: "from:alice"}
+	if err := s.Create(vf); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveCache(vf.ID, []CachedConversation{{AccountID: "account1", ConversationID: "from-removed-folder"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`UPDATE folders SET hidden=1 WHERE id='folder1'`); err != nil {
+		t.Fatal(err)
+	}
+	vf.Name = "Renamed"
+	if err := s.Update(vf); err != nil {
+		t.Fatal(err)
+	}
+	if refs, _, found, err := s.LoadCache(vf.ID); err != nil || !found || len(refs) != 1 {
+		t.Fatal("rename lost membership", err)
+	}
+	vf.FolderIDs = []string{"folder1"}
+	if err := s.Update(vf); err != nil {
+		t.Fatal(err)
+	}
+	if refs, _, found, err := s.LoadCache(vf.ID); err != nil || found || len(refs) != 0 {
+		t.Fatal("edited scope retained stale membership", err)
+	}
+}

@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -408,11 +410,11 @@ func (s *Store) reorder(ids []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to reorder virtual folder %s: %w", id, err)
 		}
-		rows, err := result.RowsAffected()
+		affected, err := result.RowsAffected()
 		if err != nil {
 			return fmt.Errorf("failed to confirm virtual folder reorder: %w", err)
 		}
-		if rows == 0 {
+		if affected == 0 {
 			return fmt.Errorf("virtual folder not found: %s", id)
 		}
 	}
@@ -445,6 +447,41 @@ func (s *Store) update(vf *VirtualFolder) error {
 	}
 	defer func() { _ = tx.Rollback() }() // no-op after a successful Commit
 
+	// Cached provider-resolved membership belongs to one exact definition.
+	var oldMode, oldRead, oldReply, oldStar, oldDate, oldQuery string
+	if err := tx.QueryRow(`SELECT folder_mode,read_status,reply_status,star_status,date_window,search_query FROM virtual_folders WHERE id=?`, vf.ID).Scan(&oldMode, &oldRead, &oldReply, &oldStar, &oldDate, &oldQuery); err != nil {
+		return err
+	}
+	rows, err := tx.Query(`SELECT folder_id FROM virtual_folder_members WHERE virtual_folder_id=? ORDER BY folder_id`, vf.ID)
+	if err != nil {
+		return err
+	}
+	oldIDs := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		oldIDs = append(oldIDs, id)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+	newIDs := append([]string{}, vf.FolderIDs...)
+	sort.Strings(newIDs)
+	changed := oldMode != vf.FolderMode || oldRead != vf.ReadStatus || oldReply != vf.ReplyStatus || oldStar != vf.StarStatus || oldDate != vf.DateWindow || oldQuery != vf.SearchQuery || !slices.Equal(oldIDs, newIDs)
+	if changed {
+		if _, err := tx.Exec(`DELETE FROM virtual_folder_cache WHERE virtual_folder_id=?`, vf.ID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(`DELETE FROM virtual_folder_cache_meta WHERE virtual_folder_id=?`, vf.ID); err != nil {
+			return err
+		}
+	}
+
 	result, err := tx.Exec(`
 		UPDATE virtual_folders
 		SET name = ?, order_index = ?, folder_mode = ?, read_status = ?, reply_status = ?, star_status = ?, date_window = ?, search_query = ?, updated_at = ?
@@ -453,11 +490,11 @@ func (s *Store) update(vf *VirtualFolder) error {
 	if err != nil {
 		return fmt.Errorf("failed to update virtual folder: %w", err)
 	}
-	rows, err := result.RowsAffected()
+	affected, err := result.RowsAffected()
 	if err != nil {
 		return fmt.Errorf("failed to check affected rows: %w", err)
 	}
-	if rows == 0 {
+	if affected == 0 {
 		return fmt.Errorf("virtual folder not found: %s", vf.ID)
 	}
 
@@ -516,11 +553,11 @@ func (s *Store) delete(id string) error {
 	if err != nil {
 		return fmt.Errorf("failed to delete virtual folder: %w", err)
 	}
-	rows, err := result.RowsAffected()
+	affected, err := result.RowsAffected()
 	if err != nil {
 		return fmt.Errorf("failed to check affected rows: %w", err)
 	}
-	if rows == 0 {
+	if affected == 0 {
 		return fmt.Errorf("virtual folder not found: %s", id)
 	}
 
