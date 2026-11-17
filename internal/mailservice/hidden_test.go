@@ -51,7 +51,7 @@ func TestHiddenVirtualSourceKeepsCachedConversationsWithoutProvider(t *testing.T
 	if len(page.Conversations) != 1 || page.Conversations[0].Subject != "Retained mail" {
 		t.Fatalf("cached mail missing: %#v", page)
 	}
-	if len(page.Issues) != 0 {
+	if len(page.Issues) != 1 || !page.Issues[0].Warning {
 		t.Fatalf("expected stale source is not a provider failure: %#v", page.Issues)
 	}
 	if page.Cursor == "" {
@@ -61,6 +61,17 @@ func TestHiddenVirtualSourceKeepsCachedConversationsWithoutProvider(t *testing.T
 	if err != nil || len(page.Conversations) != 0 || page.Cursor != "" {
 		t.Fatalf("pagination %#v %v", page, err)
 	}
+	if _, err = db.Exec(`UPDATE messages SET is_read=1,date=datetime('now') WHERE id='m'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`INSERT INTO messages(id,account_id,folder_id,uid,subject,date,thread_id,is_read) VALUES ('older','a','old',2,'Older unread',datetime('now','-1 day'),'other-thread',0)`); err != nil {
+		t.Fatal(err)
+	}
+	unread, err := svc.Search(context.Background(), MailSearchRequest{VirtualFolderID: "v", Limit: 1, Filter: "unread"})
+	if err != nil || len(unread.Conversations) != 1 || unread.Conversations[0].Subject != "Older unread" || len(unread.Issues) != 1 || !unread.Issues[0].Warning {
+		t.Fatalf("filtered cached page inaccessible: %#v %v", unread, err)
+	}
+
 	retained, err := vs.Get("v")
 	if err != nil || len(retained.FolderIDs) != 1 || retained.FolderIDs[0] != "old" {
 		t.Fatal("membership changed", err)

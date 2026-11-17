@@ -61,3 +61,41 @@ func TestHiddenFolderSkipsProviderAndVisibilityWaitsForReconciliation(t *testing
 		}
 	}
 }
+
+func TestHiddenInboxSchedulerRespectsAccountInterval(t *testing.T) {
+	db, err := database.Open(filepath.Join(t.TempDir(), "interval.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err = db.Migrate(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`INSERT INTO accounts(id,name,email,imap_host,smtp_host,username) VALUES ('a','A','a@example.org','imap','smtp','a')`); err != nil {
+		t.Fatal(err)
+	}
+	fs := folder.NewStore(db)
+	if err = fs.Create(&folder.Folder{ID: "i", AccountID: "a", Name: "Inbox", Path: "INBOX", Type: folder.TypeInbox}); err != nil {
+		t.Fatal(err)
+	}
+	if err = fs.SetHiddenBatch("a", []string{"i"}, true); err != nil {
+		t.Fatal(err)
+	}
+	s := NewScheduler(nil, account.NewStore(db), fs)
+	acc := &account.Account{ID: "a", SyncInterval: 30}
+	if !s.isSyncDue(acc) {
+		t.Fatal("initial hidden account refresh not due")
+	}
+	s.hiddenInboxAttempt = map[string]time.Time{"a": time.Now()}
+	if s.isSyncDue(acc) {
+		t.Fatal("repeat tick ignored interval")
+	}
+	s.hiddenInboxAttempt["a"] = time.Now().Add(-31 * time.Minute)
+	if !s.isSyncDue(acc) {
+		t.Fatal("interval did not expire")
+	}
+	f, _ := fs.Get("i")
+	if f.LastSync != nil {
+		t.Fatal("account attempt changed hidden inbox freshness")
+	}
+}

@@ -686,6 +686,7 @@ export namespace app {
 	    accountName: string;
 	    message: string;
 	    reauthorize: boolean;
+ warning?: boolean;
 
 	    static createFrom(source: any = {}) {
 	        return new MailSearchIssue(source);
@@ -697,6 +698,7 @@ export namespace app {
 	        this.accountName = source["accountName"];
 	        this.message = source["message"];
 	        this.reauthorize = source["reauthorize"];
+ this.warning = source["warning"];
 	    }
 	}
 	export class MailSearchPage {

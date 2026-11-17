@@ -14,7 +14,7 @@ Saved views retain their folder links. If an account's saved-view scope includes
 
 Migration 81 adds `folders.hidden INTEGER NOT NULL DEFAULT 0`. Existing folders remain visible. Discovery updates do not overwrite the preference. Batches validate that every folder belongs to the stated account before committing atomically. The desktop forwards changes to the owning helper, with mail-write authorization, rather than silently mutating a remote desktop cache.
 
-Update the desktop and helper together. Older versions may refuse a database with a newer schema. Merge is held for explicit schema clearance; this change does not publish a DMG.
+Update the desktop and helper together. Older versions may refuse a database with a newer schema. Schema migration 81 has explicit owner clearance. The concurrent filter change must use migration 82; the migrator skips later-added lower numbers. This change does not publish a DMG.
 
 ## Verification
 

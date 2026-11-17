@@ -1161,7 +1161,7 @@
         const response = await SearchMail(new searchModels.MailSearchRequest({sessionId: virtualSearchSession, query: '', accountIds: [], virtualFolderId: folderId!, filter: filterMode, cursor: currentOffset === 0 ? '' : virtualCursor, limit: Math.min(limit, 100)}))
         if (generation !== loadGeneration || isSearchMode) return
         virtualCursor = response.cursor || ''
-        virtualIssues = (response.issues || []).map(item => `${item.accountName}: ${item.message}`).join(' · ')
+        virtualIssues = (response.issues || []).filter(item => !item.warning).map(item => `${item.accountName}: ${item.message}`).join(' · ')
         let items = response.conversations || []
         if (currentOffset === 0 && lastLoadedFolderId === folderId && virtualCursor) {
           items = await extendAnchorWindow(items, viewportAnchorKey(), row => mailRowKey(row, accountId), async () => {
@@ -1174,7 +1174,7 @@
         }
         // Keep already visible mail during provider failures; errors are not an
         // empty mailbox. Accounts that returned successfully still contribute.
-        const failedAccounts = new Set((response.issues || []).map(item => item.accountId))
+        const failedAccounts = new Set((response.issues || []).filter(item => !item.warning).map(item => item.accountId))
         if (currentOffset === 0 && failedAccounts.size && lastLoadedFolderId === folderId) {
           const keys = new Set(items.map(item => `${item.accountId}:${item.threadId}`))
           for (const prior of conversations) if (failedAccounts.has(prior.accountId || '') && !keys.has(`${prior.accountId}:${prior.threadId}`)) items.push(prior)
@@ -1489,7 +1489,7 @@
         if (generation !== localSearchGeneration || query !== searchQuery.trim()) return
         virtualQueryCursor = response.cursor || ''
         count = results.length + (virtualQueryCursor ? 1 : 0)
-        virtualIssues = (response.issues || []).map(item => `${item.accountName}: ${item.message}`).join(' · ')
+        virtualIssues = (response.issues || []).filter(item => !item.warning).map(item => `${item.accountName}: ${item.message}`).join(' · ')
 
       } else if (isUnifiedView) {
         ;[results, count] = await Promise.all([
@@ -1550,7 +1550,7 @@
         if (generation !== localSearchGeneration || query !== searchQuery.trim()) return
         results = response.conversations || []
         virtualQueryCursor = response.cursor || ''
-        virtualIssues = (response.issues || []).map(item => `${item.accountName}: ${item.message}`).join(' · ')
+        virtualIssues = (response.issues || []).filter(item => !item.warning).map(item => `${item.accountName}: ${item.message}`).join(' · ')
       } else if (isUnifiedView) {
         results = await SearchUnifiedFolder(folderId!, query, newOffset, PAGE_SIZE, filterMode)
       } else if (accountId && folderId) {

@@ -75,6 +75,25 @@ test('account folder controls preserve selections and references, confirm descen
     await page.locator('[data-folder-row="archive"]').getByRole('button',{name:'Show + refresh'}).click()
     await page.getByRole('alert').filter({hasText:'catch-up failed'}).waitFor()
     assert.deepEqual(await page.evaluate(()=>window.calls.filter(([name])=>name==='SetFolderVisibility').at(-1)),['SetFolderVisibility',['a',['archive'],false,true]])
+    const placement=await page.evaluate(async()=>{
+      const {accountStore}=await import('/src/lib/stores/accounts.svelte.ts')
+      const {navigationCards:nav}=await import('/src/lib/stores/navigationCards.svelte.ts')
+      const {getUIState}=await import('/src/lib/stores/uiState.svelte.ts')
+      const entries=[{id:'folder:a:parent',kind:'folder',accountId:'a',folderId:'parent',name:'Old'},{id:'other',kind:'system',name:'Other'}]
+      nav.sync(entries)
+      nav.update({...nav.state,cards:[...nav.state.cards,{id:'custom',name:'Custom',hidden:false,collapsed:false,entries:[]}]})
+      nav.moveEntry('folder:a:parent','custom',0);nav.update({...nav.state,quick:['folder:a:parent']})
+      accountStore.folderCatalog={a:[{id:'parent',hidden:true}]}
+      nav.sync(entries)
+      const invisible=!nav.entries.some(e=>e.folderId==='parent')&&!nav.quick.some(e=>e.folderId==='parent')
+      nav.toggleQuick('other')
+      const saved=JSON.parse(getUIState().sidebarCards)
+      accountStore.folderCatalog={a:[{id:'parent',hidden:false}]};nav.sync(entries)
+      return {invisible,card:saved.cards.find(c=>c.id==='custom').entries,quick:nav.quick.map(e=>e.id)}
+    })
+    assert.equal(placement.invisible,true)
+    assert.deepEqual(placement.card,['folder:a:parent'])
+    assert.ok(placement.quick.includes('folder:a:parent'))
     assert.deepEqual(errors,[])
     await page.setViewportSize({width:390,height:800})
     await page.screenshot({path:`${captures}/account-folders-narrow.png`,fullPage:true})

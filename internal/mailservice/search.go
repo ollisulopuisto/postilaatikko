@@ -384,6 +384,7 @@ func (s *Service) Search(parent context.Context, req MailSearchRequest) (*MailSe
 					}
 
 					mu.Lock()
+					result.Issues = append(result.Issues, MailSearchIssue{AccountID: acc.ID, AccountName: acc.Name, Message: "Saved view is stale: hidden source refresh paused; showing cached mail", Warning: true})
 					for _, conv := range cached {
 						if matchesFilter(conv) {
 							result.Conversations = append(result.Conversations, conv)
