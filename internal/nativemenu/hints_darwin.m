@@ -88,8 +88,12 @@ static void decorateMenu(NSMenu *menu, NSArray *definitions) {
 // Wails queues whole-menu replacement on the main queue. Follow it on that same
 // queue and capture the current tree, including contextual Event/Contact menus.
 void postilaatikkoDecorateMenu(const char *json) {
+    @autoreleasepool {
     NSData *data = [[NSString stringWithUTF8String:json] dataUsingEncoding:NSUTF8StringEncoding];
     NSArray *definitions = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
     if (![definitions isKindOfClass:[NSArray class]]) return;
-    dispatch_async(dispatch_get_main_queue(), ^{ decorateMenu(NSApp.mainMenu, definitions); });
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @autoreleasepool { decorateMenu(NSApp.mainMenu, definitions); }
+    });
+    }
 }
