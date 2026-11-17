@@ -372,7 +372,14 @@ func (s *Service) Search(parent context.Context, req MailSearchRequest) (*MailSe
 								selectedRefs = append(selectedRefs, message.ConversationRef{AccountID: ref.AccountID, ConversationID: ref.ConversationID})
 							}
 						}
-						selectedRefs, err = s.messageStore.FilterVirtualFolderRefs(accountMembers, selectedRefs, savedViewCriteria(vf))
+						criteria := savedViewCriteria(vf)
+						// Gmail reply membership came from sent/In-Reply-To metadata,
+						// not IMAP's Answered flag. Keep that provider decision while
+						// paused; the stale warning applies until sources are shown.
+						if acc.AuthType == account.AuthOAuth2 && strings.EqualFold(acc.IMAPHost, "imap.gmail.com") {
+							criteria.ReplyStatus = "all"
+						}
+						selectedRefs, err = s.messageStore.FilterVirtualFolderRefs(accountMembers, selectedRefs, criteria)
 						if err != nil {
 							issue(err)
 							return
