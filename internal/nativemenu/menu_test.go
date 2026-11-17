@@ -161,7 +161,7 @@ func TestShortcutHintSpecialKeysAndModifiers(t *testing.T) {
 		{"⌘⇧⌥L", "l", hintCommand | hintShift | hintOption},
 		{"⇧I", "i", hintShift}, {"H", "h", 0},
 		{"⌘↩", "\r", hintCommand}, {"⌃⇥", "\t", hintControl},
-		{"⇧⌫", "\x7f", hintShift}, {"Esc", "\x1b", 0}, {"Space", " ", 0},
+		{"⇧⌫", "\x7f", hintShift}, {"⇧⌦", "\uf728", hintShift}, {"Esc", "\x1b", 0}, {"Space", " ", 0},
 		{"⌥↓", "\uf701", hintOption}, {"⌘←", "\uf702", hintCommand},
 		{"unknown", "", 0}, {"", "", 0},
 	} {

@@ -3,7 +3,7 @@
 ## [Unreleased]
 
 ### Native menu shortcut column
-- macOS shortcut hints now use AppKit's aligned right column instead of title tabs. Existing webview shortcut ownership, context checks and native clipboard actions are preserved.
+- macOS shortcut hints now use AppKit's aligned right column instead of title tabs. Native hints match the same primary keyboard bindings as the in-app context menus, including v for Move, l/Shift+L for Later, ! for Spam and # for Trash. Existing webview shortcut ownership, context checks and native clipboard actions are preserved.
 
 ## Postilaatikko 2026.11.17.1
 

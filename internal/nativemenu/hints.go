@@ -46,6 +46,8 @@ func shortcutHint(shortcut string) (string, uint) {
 		return "\r", modifiers
 	case "⇥":
 		return "\t", modifiers
+	case "⌦":
+		return "\uf728", modifiers
 	case "⌫":
 		return "\x7f", modifiers
 	case "↑":

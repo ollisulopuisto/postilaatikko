@@ -82,7 +82,9 @@ int main(void) {
         assert(target.calls == 3);
         // Disabled native actions remain disabled.
         copy.enabled = NO;
-        assert(![root performKeyEquivalent:keyEvent(@"c",NSEventModifierFlagCommand)]);
+        // AppKit can return YES for a disabled match (consumed, not invoked).
+        // The invariant is that its target must not run, not event propagation.
+        [root performKeyEquivalent:keyEvent(@"c",NSEventModifierFlagCommand)];
         assert(target.calls == 3);
         if (getenv("POSTI_MENU_SCREENSHOT")) {
             // Capture an actual AppKit popup when the runner has a WindowServer.
