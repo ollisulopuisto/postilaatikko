@@ -83,6 +83,17 @@ int main(void) {
         // Direct submenu lookup must be as safe as application-root lookup.
         assert(![message performKeyEquivalent:keyEvent(@"m",0)]);
         assert(target.calls == 3);
+        // Give every audited letter a real enabled menu equivalent before
+        // exercising the window path; a no-binding typing test proves nothing.
+        NSMutableArray *typingHints = [NSMutableArray array];
+        for (NSString *letter in @[@"c",@"f",@"e",@"l",@"h",@"s",@"v",@"g",@"t"]) {
+            NSString *title = [@"Typing " stringByAppendingString:letter];
+            NSMenuItem *item = [message addItemWithTitle:title action:@selector(invoke:) keyEquivalent:@""];
+            item.target = target;
+            [typingHints addObject:@{@"title":title,@"key":letter,@"modifiers":@0}];
+        }
+        [typingHints addObject:@{@"title":@"Toggle Read",@"key":@"m",@"modifiers":@0}];
+        decorateMenu(root,@[@{@"title":@"Message",@"children":typingHints}]);
         // Exercise the real NSWindow event path while typing into an editor.
         NSWindow *window = [[[NSWindow alloc] initWithContentRect:NSMakeRect(100,100,500,200)
             styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO] autorelease];
@@ -91,11 +102,16 @@ int main(void) {
         [window makeKeyAndOrderFront:nil];
         [window makeFirstResponder:editor];
         for (NSString *letter in @[@"c",@"f",@"e",@"l",@"h",@"m",@"s",@"v",@"g",@"t"]) {
-            [window sendEvent:keyEvent(letter,0)];
+            NSEvent *event = [NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint
+                modifierFlags:0 timestamp:0 windowNumber:window.windowNumber context:nil
+                characters:letter charactersIgnoringModifiers:letter isARepeat:NO keyCode:0];
+            [window sendEvent:event];
         }
         assert([editor.string isEqualToString:@"cfelhmsvgt"]);
         assert(target.calls == 3);
         [window orderOut:nil];
+        while (message.numberOfItems > 4) [message removeItemAtIndex:message.numberOfItems-1];
+        decorateMenu(root,definitions);
         // Disabled native actions remain disabled.
         copy.enabled = NO;
         // AppKit can return YES for a disabled match (consumed, not invoked).
