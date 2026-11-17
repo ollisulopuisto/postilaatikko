@@ -143,9 +143,14 @@
         "label": "-"
       },
       {
-        "label": "Search…",
-        "id": "app.search",
+        "label": "Find in Message",
+        "id": "app.find",
         "key": "⌘F"
+      },
+      {
+        "label": "Search All Mail…",
+        "id": "app.search",
+        "key": "⌘⇧F"
       }
     ]
   },
