@@ -33,6 +33,7 @@ type MailSearchPage struct {
 }
 
 type mailCursor struct {
+	Revision string            `json:"r,omitempty"`
 	Query    string            `json:"q"`
 	Virtual  string            `json:"v"`
 	Filter   string            `json:"f,omitempty"`

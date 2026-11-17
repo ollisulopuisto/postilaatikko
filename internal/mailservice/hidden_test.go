@@ -76,7 +76,7 @@ func TestHiddenVirtualSourceKeepsCachedConversationsWithoutProvider(t *testing.T
 	if err = vs.Update(vf); err != nil {
 		t.Fatal(err)
 	}
-	if err = vs.SaveCache(vf.ID, []virtualfolder.CachedConversation{{AccountID: "a", ConversationID: "thread"}}); err != nil {
+	if err = vs.SaveSearchCachePage(vf, "a", []virtualfolder.CachedConversation{{AccountID: "a", ConversationID: "thread"}}, true); err != nil {
 		t.Fatal(err)
 	}
 	saved, err := svc.Search(context.Background(), MailSearchRequest{VirtualFolderID: "v", Limit: 10})

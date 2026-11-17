@@ -1914,6 +1914,10 @@ var migrations = []Migration{
  -- visibility change. Preserved across folder discovery because discovery
  -- updates do not touch the column.
  ALTER TABLE folders ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;
+ -- Older saved-query indexes used local FTS rather than provider operators.
+ -- Do not present those incompatible indexes as retained provider results.
+ DELETE FROM virtual_folder_cache WHERE virtual_folder_id IN (SELECT id FROM virtual_folders WHERE search_query != '');
+ DELETE FROM virtual_folder_cache_meta WHERE virtual_folder_id IN (SELECT id FROM virtual_folders WHERE search_query != '');
 
  `},
 }

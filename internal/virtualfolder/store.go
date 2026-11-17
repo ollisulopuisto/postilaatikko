@@ -139,6 +139,61 @@ func (s *Store) SaveCache(virtualFolderID string, entries []CachedConversation) 
 	return database.RetryOnBusy(func() error { return s.saveCache(virtualFolderID, entries) }, busyRetryAttempts, busyRetryBaseDelay)
 }
 
+// SaveSearchCachePage retains provider-resolved membership, never a local FTS
+// approximation. Pages replace only their account on the first page and append
+// thereafter. The definition revision is checked in the write transaction so
+// an edited/deleted view cannot be repopulated by an old in-flight search.
+func (s *Store) SaveSearchCachePage(vf *VirtualFolder, accountID string, entries []CachedConversation, first bool) error {
+	return database.RetryOnBusy(func() error {
+		tx, err := s.db.Begin()
+		if err != nil {
+			return err
+		}
+		defer func() { _ = tx.Rollback() }()
+		var revision time.Time
+		err = tx.QueryRow(`SELECT updated_at FROM virtual_folders WHERE id=?`, vf.ID).Scan(&revision)
+		if err == sql.ErrNoRows {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if !revision.Equal(vf.UpdatedAt) {
+			return nil
+		}
+		if first {
+			if _, err = tx.Exec(`DELETE FROM virtual_folder_cache WHERE virtual_folder_id=? AND account_id=?`, vf.ID, accountID); err != nil {
+				return err
+			}
+		}
+		var position, count int
+		if err = tx.QueryRow(`SELECT COALESCE(MAX(position)+1,0), COUNT(*) FROM virtual_folder_cache WHERE virtual_folder_id=?`, vf.ID).Scan(&position, &count); err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			if entry.AccountID != accountID {
+				return fmt.Errorf("search cache account mismatch")
+			}
+			var exists int
+			if err = tx.QueryRow(`SELECT COUNT(*) FROM virtual_folder_cache WHERE virtual_folder_id=? AND account_id=? AND conversation_id=?`, vf.ID, accountID, entry.ConversationID).Scan(&exists); err != nil {
+				return err
+			}
+			if exists > 0 || count >= 200 {
+				continue
+			}
+			if _, err = tx.Exec(`INSERT INTO virtual_folder_cache(virtual_folder_id,position,account_id,conversation_id) VALUES(?,?,?,?)`, vf.ID, position, accountID, entry.ConversationID); err != nil {
+				return err
+			}
+			position++
+			count++
+		}
+		if _, err = tx.Exec(`INSERT INTO virtual_folder_cache_meta(virtual_folder_id,refreshed_at) VALUES(?,?) ON CONFLICT(virtual_folder_id) DO UPDATE SET refreshed_at=excluded.refreshed_at`, vf.ID, time.Now().UTC().Unix()); err != nil {
+			return err
+		}
+		return tx.Commit()
+	}, busyRetryAttempts, busyRetryBaseDelay)
+}
+
 // detachedSaveBusyTimeoutMS bounds how long a detached, best-effort cache
 // write waits on the write lock. The modernc driver does not interrupt a
 // BEGIN IMMEDIATE busy wait when the context expires, so the bound comes
@@ -598,6 +653,16 @@ func (s *Store) saveCacheTx(ctx context.Context, beginner txBeginner, virtualFol
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }() // no-op after a successful Commit
+
+	// A local maintenance pass may have started before the definition changed
+	// into a provider search. Recheck inside the write transaction.
+	var query string
+	if err = tx.QueryRowContext(ctx, `SELECT search_query FROM virtual_folders WHERE id=?`, virtualFolderID).Scan(&query); err != nil {
+		return err
+	}
+	if query != "" {
+		return nil
+	}
 
 	if _, err = tx.ExecContext(ctx, `DELETE FROM virtual_folder_cache WHERE virtual_folder_id = ?`, virtualFolderID); err != nil {
 		return fmt.Errorf("failed to clear virtual folder cache: %w", err)

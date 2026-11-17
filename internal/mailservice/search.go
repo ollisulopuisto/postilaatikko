@@ -236,6 +236,11 @@ func (s *Service) Search(parent context.Context, req MailSearchRequest) (*MailSe
 		if vf == nil {
 			return nil, fmt.Errorf("virtual folder not found")
 		}
+		revision := vf.UpdatedAt.UTC().Format(time.RFC3339Nano)
+		if req.Cursor != "" && state.Revision != revision {
+			return nil, fmt.Errorf("saved view changed; start a new search")
+		}
+		state.Revision = revision
 		for _, id := range vf.FolderIDs {
 			f, err := s.folderStore.Get(id)
 			if err != nil {
@@ -309,6 +314,21 @@ func (s *Service) Search(parent context.Context, req MailSearchRequest) (*MailSe
 				result.Issues = append(result.Issues, MailSearchIssue{AccountID: acc.ID, AccountName: acc.Name, Message: text, Reauthorize: errors.Is(err, gmail.ErrReauthRequired) || errors.Is(err, gmail.ErrInsufficientScope)})
 			}
 
+			retainProviderPage := func(convs []*message.Conversation) {
+				// Typed queries and temporary filters are narrower than the saved
+				// definition and must never replace its retained membership.
+				if vf == nil || vf.SearchQuery == "" || state.Query != "" || req.Filter != "" {
+					return
+				}
+				entries := make([]virtualfolder.CachedConversation, 0, len(convs))
+				for _, conv := range convs {
+					entries = append(entries, virtualfolder.CachedConversation{AccountID: acc.ID, ConversationID: conv.ThreadID})
+				}
+				if err := s.virtualFolderStore.SaveSearchCachePage(vf, acc.ID, entries, token == ""); err != nil {
+					issue(fmt.Errorf("could not retain saved search results: %w", err))
+				}
+			}
+
 			if vf != nil {
 				memberIDs, lookupErr := s.virtualFolderStore.QueryFolderIDs(vf)
 				if lookupErr != nil {
@@ -375,7 +395,7 @@ func (s *Service) Search(parent context.Context, req MailSearchRequest) (*MailSe
 						mu.Lock()
 						result.Conversations = append(result.Conversations, filtered[offset:end]...)
 						notice := "Saved search is stale: showing retained provider results; hidden sources are not refreshed"
-						if !found || len(refs) == 0 {
+						if !found {
 							notice = "Saved search results unavailable: no compatible retained membership; show hidden sources and refresh"
 						}
 						result.Issues = append(result.Issues, MailSearchIssue{AccountID: acc.ID, AccountName: acc.Name, Message: notice, Warning: true})
@@ -453,6 +473,7 @@ func (s *Service) Search(parent context.Context, req MailSearchRequest) (*MailSe
 					issue(e)
 					return
 				}
+				retainProviderPage(convs)
 				mu.Lock()
 				for _, conv := range convs {
 					if matchesFilter(conv) {
@@ -619,6 +640,7 @@ func (s *Service) Search(parent context.Context, req MailSearchRequest) (*MailSe
 				}
 				newSeen = append(newSeen, key)
 			}
+			retainProviderPage(convs)
 			mu.Lock()
 			defer mu.Unlock()
 			result.Conversations = append(result.Conversations, convs...)

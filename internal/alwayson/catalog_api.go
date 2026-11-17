@@ -349,8 +349,13 @@ func (r *SyncRuntime) GetVirtualFolderUnreadCounts() (map[string]int, error) {
 	return r.virtualFolders.UnreadCounts()
 }
 
+var errProviderSearchCache = errors.New("saved search membership is maintained by provider search")
+
 func (r *SyncRuntime) refreshVirtualFolderCache(id string) error {
 	entries, err := r.virtualFolderCacheEntries(id)
+	if errors.Is(err, errProviderSearchCache) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
@@ -364,6 +369,9 @@ func (r *SyncRuntime) refreshVirtualFolderCache(id string) error {
 // pool connection within that bound.
 func (r *SyncRuntime) refreshVirtualFolderCacheContext(ctx context.Context, id string) error {
 	entries, err := r.virtualFolderCacheEntries(id)
+	if errors.Is(err, errProviderSearchCache) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
@@ -382,18 +390,10 @@ func (r *SyncRuntime) virtualFolderCacheEntries(id string) ([]virtualfolder.Cach
 	if err != nil {
 		return nil, fmt.Errorf("resolve virtual folder members: %w", err)
 	}
-	if vf.SearchQuery != "" && r.folders != nil {
-		for _, folderID := range folderIDs {
-			f, err := r.folders.Get(folderID)
-			if err != nil {
-				return nil, err
-			}
-			if f != nil && f.Hidden {
-				entries, _, _, err := r.virtualFolders.LoadCache(id)
-				return entries, err
-			}
-		}
+	if vf.SearchQuery != "" {
+		return nil, errProviderSearchCache
 	}
+
 	refs, err := r.messages.ListVirtualFolderConversationIDs(folderIDs, vf.SearchQuery, 200, message.VirtualFolderCriteria{
 		ReadStatus: vf.ReadStatus, ReplyStatus: vf.ReplyStatus, StarStatus: vf.StarStatus, DateWindow: vf.DateWindow,
 	})
