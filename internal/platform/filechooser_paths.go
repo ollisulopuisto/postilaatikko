@@ -41,10 +41,14 @@ func validatePortalSavePaths(paths []string, count int) error {
 			return fmt.Errorf("portal returned an invalid destination")
 		}
 		key := filepath.Clean(path)
-		if resolved, err := filepath.EvalSymlinks(key); err == nil {
+		resolved, resolveErr := filepath.EvalSymlinks(key)
+		if resolveErr == nil {
 			key = resolved
-		} else if parent, err := filepath.EvalSymlinks(filepath.Dir(key)); err == nil {
-			key = filepath.Join(parent, filepath.Base(key))
+		}
+		if resolveErr != nil {
+			if parent, err := filepath.EvalSymlinks(filepath.Dir(key)); err == nil {
+				key = filepath.Join(parent, filepath.Base(key))
+			}
 		}
 		if seen[key] {
 			return fmt.Errorf("portal returned duplicate attachment destinations")
