@@ -77,7 +77,7 @@ func (o *catalogReadOperations) ListConversationsUnifiedInbox(offset, limit int,
 }
 
 func (o *catalogReadOperations) ListConversationsUnifiedFolder(folderType string, offset, limit int, sortOrder, filter string) ([]*message.Conversation, error) {
-	if folderType == "readLater" {
+	if folderType == "readLater" || folderType == "replyLater" {
 		return o.messages.ListReadLaterConversations(offset, limit, sortOrder, filter)
 	}
 	typeValue, err := parseUnifiedFolderType(folderType)
@@ -128,7 +128,7 @@ func (o *catalogReadOperations) ListConversationsUnifiedFolder(folderType string
 }
 
 func (o *catalogReadOperations) CountConversationsUnifiedFolder(folderType, filter string) (int, error) {
-	if folderType == "readLater" {
+	if folderType == "readLater" || folderType == "replyLater" {
 		return o.messages.CountReadLaterConversations(filter)
 	}
 	typeValue, err := parseUnifiedFolderType(folderType)
@@ -155,7 +155,7 @@ func (o *catalogReadOperations) CountConversationsUnifiedFolder(folderType, filt
 }
 
 func (o *catalogReadOperations) SearchConversationsUnifiedFolder(folderType, query string, offset, limit int, filter string) ([]*message.ConversationSearchResult, int, error) {
-	if folderType == "readLater" {
+	if folderType == "readLater" || folderType == "replyLater" {
 		folderIDs := []string{}
 		accounts, err := o.accounts.List()
 		if err != nil {

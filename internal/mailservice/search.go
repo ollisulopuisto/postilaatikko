@@ -122,7 +122,7 @@ func (s *Service) Search(parent context.Context, req MailSearchRequest) (*MailSe
 			s.syncTriageQueues("reply-later")
 		}
 	}
-	if req.Filter == "readLater" {
+	if req.Filter == "readLater" || req.Filter == "replyLater" {
 		if s.syncTriageQueues != nil {
 			s.syncTriageQueues("read-later")
 		}
@@ -139,7 +139,7 @@ func (s *Service) Search(parent context.Context, req MailSearchRequest) (*MailSe
 			queued[ref.AccountID+"\x00"+ref.ConversationID] = true
 		}
 	}
-	if req.Filter == "readLater" {
+	if req.Filter == "readLater" || req.Filter == "replyLater" {
 		refs, err := s.triageStore.ListReadLater()
 		if err != nil {
 			return nil, err

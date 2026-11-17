@@ -96,13 +96,7 @@ func (a *App) GetUnifiedFolderConversations(folderType string, offset, limit int
 		}
 		return conversations, nil
 	}
-	if folderType == "replyLater" {
-		if offset == 0 {
-			a.syncGmailTriageQueues("reply-later")
-		}
-		return a.messageStore.ListReplyLaterConversations(offset, limit, sortOrder, filterValue)
-	}
-	if folderType == "readLater" {
+	if folderType == "readLater" || folderType == "replyLater" {
 		if offset == 0 {
 			a.syncGmailTriageQueues("read-later")
 			a.syncGmailTriageQueues("reply-later")
@@ -196,10 +190,7 @@ func (a *App) GetUnifiedFolderCount(folderType, filterValue string) (int, error)
 		}
 		return count, nil
 	}
-	if folderType == "replyLater" {
-		return a.messageStore.CountReplyLaterConversations(filterValue)
-	}
-	if folderType == "readLater" {
+	if folderType == "readLater" || folderType == "replyLater" {
 		return a.messageStore.CountReadLaterConversations(filterValue)
 	}
 	if folderType == "snoozed" {

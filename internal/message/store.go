@@ -60,9 +60,7 @@ func filterHavingClause(filter, prefix string) string {
 		clause = fmt.Sprintf("MAX(CASE WHEN %sis_starred = 1 THEN 1 ELSE 0 END) = 1", prefix)
 	case "attachments":
 		clause = fmt.Sprintf("MAX(CASE WHEN %shas_attachments = 1 THEN 1 ELSE 0 END) = 1", prefix)
-	case "replyLater":
-		clause = fmt.Sprintf("SUM(CASE WHEN EXISTS (SELECT 1 FROM reply_later_queue rl WHERE rl.account_id = %saccount_id AND rl.conversation_id = COALESCE(%sthread_id, %sid)) THEN 1 ELSE 0 END) > 0", prefix, prefix, prefix)
-	case "readLater":
+	case "replyLater", "readLater":
 		clause = fmt.Sprintf("SUM(CASE WHEN EXISTS (SELECT 1 FROM (SELECT account_id, conversation_id FROM read_later_queue UNION SELECT account_id, conversation_id FROM reply_later_queue) rl WHERE rl.account_id = %saccount_id AND rl.conversation_id = COALESCE(%sthread_id, %sid)) THEN 1 ELSE 0 END) > 0", prefix, prefix, prefix)
 	}
 	if clause == "" {
@@ -93,9 +91,7 @@ func filterWhereClause(filter, prefix string) string {
 		clause = fmt.Sprintf(" AND %sis_starred = 1", prefix)
 	case "attachments":
 		clause = fmt.Sprintf(" AND %shas_attachments = 1", prefix)
-	case "replyLater":
-		clause = fmt.Sprintf(" AND EXISTS (SELECT 1 FROM reply_later_queue rl WHERE rl.account_id = %saccount_id AND rl.conversation_id = COALESCE(%sthread_id, %sid))", prefix, prefix, prefix)
-	case "readLater":
+	case "replyLater", "readLater":
 		clause = fmt.Sprintf(" AND EXISTS (SELECT 1 FROM (SELECT account_id, conversation_id FROM read_later_queue UNION SELECT account_id, conversation_id FROM reply_later_queue) rl WHERE rl.account_id = %saccount_id AND rl.conversation_id = COALESCE(%sthread_id, %sid))", prefix, prefix, prefix)
 	}
 	return clause + snoozed
@@ -122,9 +118,7 @@ func snoozedViewHavingClause(filter string) string {
 		return " HAVING MAX(CASE WHEN m.is_starred=1 THEN 1 ELSE 0 END)=1"
 	case "attachments":
 		return " HAVING MAX(CASE WHEN m.has_attachments=1 THEN 1 ELSE 0 END)=1"
-	case "replyLater":
-		return " HAVING MAX(CASE WHEN EXISTS(SELECT 1 FROM reply_later_queue rl WHERE rl.account_id=m.account_id AND rl.conversation_id=COALESCE(m.thread_id,m.id)) THEN 1 ELSE 0 END)=1"
-	case "readLater":
+	case "replyLater", "readLater":
 		return " HAVING MAX(CASE WHEN EXISTS(SELECT 1 FROM (SELECT account_id, conversation_id FROM read_later_queue UNION SELECT account_id, conversation_id FROM reply_later_queue) rl WHERE rl.account_id=m.account_id AND rl.conversation_id=COALESCE(m.thread_id,m.id)) THEN 1 ELSE 0 END)=1"
 	default:
 		return ""

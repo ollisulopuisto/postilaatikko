@@ -30,7 +30,7 @@ func TestSingleLaterUnion(t *testing.T) {
 	for _, tc := range []struct {
 		filter string
 		want   int
-	}{{"", 3}, {"unread", 1}, {"readLater", 3}, {"readLater+unread", 1}} {
+	}{{"", 3}, {"unread", 1}, {"readLater", 3}, {"replyLater", 3}, {"readLater+unread", 1}} {
 		t.Run(tc.filter, func(t *testing.T) {
 			items, err := s.ListReadLaterConversations(0, 50, "newest", tc.filter)
 			if err != nil {

@@ -307,7 +307,7 @@ func (o *mailboxReadOperations) messageInScope(msg *message.Message, scope views
 	case views.ScopeFolder:
 		return msg.AccountID == scope.AccountID && msg.FolderID == scope.FolderID, nil
 	case views.ScopeUnifiedFolder:
-		if scope.FolderType == "readLater" {
+		if scope.FolderType == "readLater" || scope.FolderType == "replyLater" {
 			id := msg.ThreadID
 			if id == "" {
 				id = msg.ID

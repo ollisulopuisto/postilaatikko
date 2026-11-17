@@ -66,7 +66,7 @@ export const laterQueue = {
     const refs = new Map<string, Ref>()
     for (const ref of [...readLaterQueue.refs, ...replyLaterQueue.refs]) {
       const previous = refs.get(key(ref))
-      refs.set(key(ref), { ...previous, ...ref })
+      refs.set(key(ref), { ...previous, ...ref, indexed: previous?.indexed === true || ref.indexed === true ? true : ref.indexed ?? previous?.indexed })
     }
     return [...refs.values()]
   },
