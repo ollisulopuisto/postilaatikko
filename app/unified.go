@@ -244,6 +244,9 @@ func (a *App) GetSearchCountUnifiedFolder(folderType, query, filterValue string)
 }
 
 func isRemoteUnifiedFolderType(folderType string) bool {
+	if folderType == "readLater" || folderType == "replyLater" {
+		return true
+	}
 	switch folder.Type(folderType) {
 	case folder.TypeDrafts, folder.TypeSent, folder.TypeTrash, folder.TypeStarred, folder.TypeArchive, folder.TypeSpam:
 		return true
