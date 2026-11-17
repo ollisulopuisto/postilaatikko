@@ -65,6 +65,11 @@ func (r *SyncRuntime) runFilterJob(ctx context.Context, job *mailfilter.FilterJo
 			log.Error().Err(err).Str("jobID", job.ID).Str("reason", reason).Msg("Could not remove stale automatic filter job")
 		}
 	}
+	pauseHidden := func() {
+		if err := r.filterJobs.DeferUnstarted(job.ID); err != nil {
+			log.Error().Err(err).Str("jobID", job.ID).Msg("Could not pause hidden-destination filter job")
+		}
+	}
 	rule, err := r.rules.Get(job.RuleID)
 	if err != nil {
 		r.markFilterJobUnknown(job, err)
@@ -82,7 +87,7 @@ func (r *SyncRuntime) runFilterJob(ctx context.Context, job *mailfilter.FilterJo
 			return
 		}
 		if destination != nil && destination.Hidden {
-			finishStale("destination hidden")
+			pauseHidden()
 			return
 		}
 		if destination == nil {
@@ -144,7 +149,7 @@ func (r *SyncRuntime) runFilterJob(ctx context.Context, job *mailfilter.FilterJo
 			return
 		}
 		if destination.Hidden {
-			finishStale("destination hidden")
+			pauseHidden()
 			return
 		}
 	}

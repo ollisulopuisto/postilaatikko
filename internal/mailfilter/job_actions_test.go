@@ -41,3 +41,34 @@ func TestExplicitJobsAreAtomicAndSnapshotActions(t *testing.T) {
 		t.Fatalf("duplicate work: %+v %v", next, err)
 	}
 }
+
+func TestPausedJobKeepsItsSnapshotWithoutBusyReclaim(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+	jobs := NewJobStore(db)
+	rule := &Rule{ID: "paused", ActionMarkRead: true, DestFolderID: "folder2"}
+	m := &message.Message{ID: "source", AccountID: "account1", FolderID: "folder1", UID: 10}
+	if err := jobs.Enqueue(rule, rule.DestFolderID, m); err != nil {
+		t.Fatal(err)
+	}
+	job, err := jobs.ClaimNext()
+	if err != nil || job == nil {
+		t.Fatalf("claim: %+v %v", job, err)
+	}
+	if err := jobs.DeferUnstarted(job.ID); err != nil {
+		t.Fatal(err)
+	}
+	if next, err := jobs.ClaimNext(); next != nil || err != nil {
+		t.Fatalf("paused job reclaimed in hot loop: %+v %v", next, err)
+	}
+	if unknown, err := jobs.ListOutcomeUnknown(0, 10); err != nil || len(unknown) != 0 {
+		t.Fatalf("unattempted pause reported uncertain: %v %v", unknown, err)
+	}
+	if _, err := db.Exec(`UPDATE automatic_filter_jobs SET updated_at=datetime('now','-1 second') WHERE id=?`, job.ID); err != nil {
+		t.Fatal(err)
+	}
+	resumed, err := jobs.ClaimNext()
+	if err != nil || resumed == nil || resumed.ID != job.ID || resumed.SourceUID != 10 || !resumed.Actions.MarkRead {
+		t.Fatalf("resume lost source/actions: %+v %v", resumed, err)
+	}
+}
