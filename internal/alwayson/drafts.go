@@ -114,6 +114,7 @@ func (r *SyncRuntime) SaveDraft(id string, mutation v1.DraftMutation) (*v1.Draft
 		}
 		current.Subject, current.BodyHTML, current.BodyText = composed.Subject, composed.HTMLBody, composed.TextBody
 		current.InReplyToID = composed.InReplyTo
+		current.ReplyType = composed.ReplyMode
 		references, marshalErr := json.Marshal(composed.References)
 		err = marshalErr
 		if err != nil {
@@ -169,7 +170,7 @@ func (r *SyncRuntime) SaveDraft(id string, mutation v1.DraftMutation) (*v1.Draft
 		requestID = uuid.NewString()
 	}
 	item := &draft.Draft{ID: requestID, AccountID: accountID, ToList: toList, CcList: ccList, BccList: bccList,
-		Subject: composed.Subject, BodyHTML: composed.HTMLBody, BodyText: composed.TextBody, InReplyToID: composed.InReplyTo,
+		Subject: composed.Subject, BodyHTML: composed.HTMLBody, BodyText: composed.TextBody, InReplyToID: composed.InReplyTo, ReplyType: composed.ReplyMode,
 		ReferencesList: string(references), IdentityID: composed.IdentityID, SignMessage: composed.SignMessage,
 		Encrypted: mutation.Encrypted, EncryptedBody: mutation.EncryptedBody, PGPSignMessage: composed.PGPSignMessage,
 		PGPEncrypted: mutation.PGPEncrypted, PGPEncryptedBody: mutation.PGPEncryptedBody,
@@ -323,7 +324,7 @@ func (r *SyncRuntime) PrepareReply(req v1.ReplyPreparationRequest) (*smtp.Compos
 		refs = append(refs, angleMessageID(original.MessageID))
 	}
 	attachments := r.replyAttachments(original, req.Mode, quotedHTML)
-	return &smtp.ComposeMessage{From: from, To: to, Cc: cc, Subject: subject, HTMLBody: htmlBody, TextBody: body,
+	return &smtp.ComposeMessage{From: from, ReplyMode: req.Mode, To: to, Cc: cc, Subject: subject, HTMLBody: htmlBody, TextBody: body,
 		InReplyTo: angleMessageID(original.MessageID), References: refs, GmailThreadID: gmailThreadID(original),
 		IdentityID: identityID(identity), Attachments: attachments}, nil
 }
@@ -610,7 +611,7 @@ func (r *SyncRuntime) draftDocument(item *draft.Draft) (*v1.DraftDocument, error
 	return &v1.DraftDocument{ID: item.ID, AccountID: item.AccountID, Revision: item.StorageVersion, UpdatedAt: item.UpdatedAt.Format(time.RFC3339Nano),
 		Encrypted: item.Encrypted, EncryptedBody: item.EncryptedBody, PGPEncrypted: item.PGPEncrypted,
 		PGPEncryptedBody: item.PGPEncryptedBody, AttachmentsData: item.AttachmentsData,
-		Message: smtp.ComposeMessage{From: from, IdentityID: item.IdentityID, To: to, Cc: cc, Bcc: bcc, Subject: item.Subject,
+		Message: smtp.ComposeMessage{From: from, IdentityID: item.IdentityID, ReplyMode: item.ReplyType, To: to, Cc: cc, Bcc: bcc, Subject: item.Subject,
 			HTMLBody: item.BodyHTML, TextBody: item.BodyText, Attachments: attachments, InReplyTo: item.InReplyToID, References: references,
 			SignMessage: item.SignMessage, PGPSignMessage: item.PGPSignMessage}}, nil
 }
