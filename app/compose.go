@@ -767,6 +767,32 @@ func (a *App) GetComposerSendReceipt(requestID string) (*v1.SendReceiptLookup, e
 	return client.GetSendReceipt(ctx, requestID)
 }
 
+// HandleOpenURL receives a URL the operating system hands to the running app
+// (macOS delivers mailto: links as an Apple Event, not as a command-line
+// argument). Anything but a valid mailto: URL is ignored. Before startup has
+// finished the data waits in PendingMailto, which the frontend reads on load.
+func (a *App) HandleOpenURL(rawURL string) {
+	mailtoData := ParseMailtoURL(strings.TrimSpace(rawURL))
+	if mailtoData == nil {
+		return
+	}
+	a.mailtoMu.Lock()
+	if !a.mailtoReady || a.settingsStore == nil {
+		a.PendingMailto = mailtoData
+		a.mailtoMu.Unlock()
+		return
+	}
+	a.mailtoMu.Unlock()
+	a.handleExternalMailto(strings.TrimSpace(rawURL))
+}
+
+// markMailtoReady records that URLs can be routed to a composer directly.
+func (a *App) markMailtoReady() {
+	a.mailtoMu.Lock()
+	a.mailtoReady = true
+	a.mailtoMu.Unlock()
+}
+
 // handleExternalMailto handles a mailto URL received from a second instance.
 // Routes to inline or detached composer based on the mailto_mode setting.
 func (a *App) handleExternalMailto(rawURL string) {

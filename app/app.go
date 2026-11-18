@@ -100,7 +100,8 @@ func ParseMailtoURL(rawURL string) *MailtoData {
 
 	// Parse To addresses (comma-separated, URL-encoded)
 	if addrPart != "" {
-		decoded, err := url.QueryUnescape(addrPart)
+		// RFC 6068: "+" is a literal plus in mailto, not a space (olli+news@x.fi).
+		decoded, err := url.PathUnescape(addrPart)
 		if err == nil {
 			addrPart = decoded
 		}
@@ -118,9 +119,23 @@ func ParseMailtoURL(rawURL string) *MailtoData {
 		return data
 	}
 
-	params, err := url.ParseQuery(queryPart)
+	// RFC 6068: "+" is literal in mailto query values, so protect it before the
+	// form-style parser turns it into a space. Header names are case-insensitive.
+	params, err := url.ParseQuery(strings.ReplaceAll(queryPart, "+", "%2B"))
 	if err != nil {
 		return data
+	}
+	params = lowerKeys(params)
+
+	// A "to" header adds recipients to those in the path.
+	if to := params.Get("to"); to != "" {
+		for _, addr := range strings.Split(to, ",") {
+			addr = sanitizeField(strings.TrimSpace(addr))
+			if addr == "" || !isValidEmail(addr) {
+				continue
+			}
+			data.To = append(data.To, addr)
+		}
 	}
 
 	if subject := params.Get("subject"); subject != "" {
@@ -160,6 +175,15 @@ func ParseMailtoURL(rawURL string) *MailtoData {
 }
 
 // sanitizeField strips CR and LF characters to prevent header injection.
+func lowerKeys(in url.Values) url.Values {
+	out := make(url.Values, len(in))
+	for k, v := range in {
+		lk := strings.ToLower(k)
+		out[lk] = append(out[lk], v...)
+	}
+	return out
+}
+
 func sanitizeField(s string) string {
 	s = strings.ReplaceAll(s, "\r", "")
 	s = strings.ReplaceAll(s, "\n", "")
@@ -367,8 +391,11 @@ type App struct {
 	pendingContactOAuth *pendingContactOAuth
 	contactTokenMu      goSync.Mutex
 
-	// Pending mailto: URL data (from command line)
+	// Pending mailto: URL data (from command line or a macOS open-URL event
+	// that arrives before startup has finished). Guarded by mailtoMu.
 	PendingMailto *MailtoData
+	mailtoMu      goSync.Mutex
+	mailtoReady   bool
 
 	// Full-text search indexer
 	ftsIndexer *message.FTSIndexer
@@ -660,6 +687,7 @@ var quitRequestPending atomic.Bool
 func (a *App) Startup(ctx context.Context) {
 	startedAt := time.Now()
 	a.ctx = ctx
+	defer a.markMailtoReady()
 
 	// Set single-instance onShow callback immediately — must happen before any
 	// potentially-blocking D-Bus calls (theme monitor, sleep/wake, network)

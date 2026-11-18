@@ -115,7 +115,7 @@ func TestIsAllowedProtocol(t *testing.T) {
 		{"http://-flag", false},
 		{"https://--version", false},
 		{"http://-flag:8080/path", false},
-		{"mailto:--help", false},
+		{false},
 		{"mailto:-flag@example.com", false},
 		{"mailto:%2D%2Dhelp", false},
 		{"mailto:%2d-flag@example.com", false},
@@ -130,5 +130,70 @@ func TestIsAllowedProtocol(t *testing.T) {
 				t.Errorf("isAllowedProtocol(%q) = %v, want %v", tc.url, got, tc.allowed)
 			}
 		})
+	}
+}
+
+func TestParseMailtoURL_PlusIsLiteral(t *testing.T) {
+	result := ParseMailtoURL("mailto:olli+news@example.com?subject=C%2B%2B+jobs&body=a+b")
+	if result == nil {
+		t.Fatal("ParseMailtoURL returned nil")
+	}
+	if len(result.To) != 1 || result.To[0] != "olli+news@example.com" {
+		t.Errorf("To = %v, want [olli+news@example.com]", result.To)
+	}
+	if result.Subject != "C+++jobs" {
+		t.Errorf("Subject = %q, want %q", result.Subject, "C+++jobs")
+	}
+	if result.Body != "a+b" {
+		t.Errorf("Body = %q, want %q", result.Body, "a+b")
+	}
+}
+
+func TestParseMailtoURL_PercentAndSpaces(t *testing.T) {
+	result := ParseMailtoURL("mailto:hi@callsono.com?subject=Application: Forward Deployed Engineer&body=Hei%20maailma%0A%C3%A4")
+	if result == nil {
+		t.Fatal("ParseMailtoURL returned nil")
+	}
+	if result.Subject != "Application: Forward Deployed Engineer" {
+		t.Errorf("Subject = %q", result.Subject)
+	}
+	// sanitizeField strips the newline; the UTF-8 byte pair must decode to ä.
+	if result.Body != "Hei maailmaä" {
+		t.Errorf("Body = %q", result.Body)
+	}
+}
+
+func TestParseMailtoURL_ToHeaderAndCaseInsensitiveNames(t *testing.T) {
+	result := ParseMailtoURL("mailto:a@example.com?TO=b@example.com&Cc=c@example.com&BCC=d@example.com&Subject=Hi")
+	if result == nil {
+		t.Fatal("ParseMailtoURL returned nil")
+	}
+	if len(result.To) != 2 || result.To[0] != "a@example.com" || result.To[1] != "b@example.com" {
+		t.Errorf("To = %v", result.To)
+	}
+	if len(result.Cc) != 1 || len(result.Bcc) != 1 || result.Subject != "Hi" {
+		t.Errorf("Cc=%v Bcc=%v Subject=%q", result.Cc, result.Bcc, result.Subject)
+	}
+}
+
+func TestHandleOpenURL_BeforeStartupWaitsAsPending(t *testing.T) {
+	a := &App{}
+	a.HandleOpenURL("mailto:x@example.com?subject=Moi")
+	got := a.GetPendingMailto()
+	if got == nil || len(got.To) != 1 || got.To[0] != "x@example.com" || got.Subject != "Moi" {
+		t.Fatalf("pending = %+v", got)
+	}
+	if a.GetPendingMailto() != nil {
+		t.Error("pending mailto should be cleared after reading")
+	}
+}
+
+func TestHandleOpenURL_IgnoresOtherSchemesAndGarbage(t *testing.T) {
+	a := &App{}
+	for _, raw := range []string{"https://example.com", "file:///etc/passwd", "", "javascript:alert(1)"} {
+		a.HandleOpenURL(raw)
+		if a.PendingMailto != nil {
+			t.Fatalf("%q must not create pending mailto: %+v", raw, a.PendingMailto)
+		}
 	}
 }

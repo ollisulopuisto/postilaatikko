@@ -62,6 +62,8 @@ func (a *App) GetWindowDecorationStatus() platform.WindowDecorationStatus {
 // GetPendingMailto returns and clears any pending mailto: URL data.
 // This is used when Aerion is launched with a mailto: URL argument.
 func (a *App) GetPendingMailto() *MailtoData {
+	a.mailtoMu.Lock()
+	defer a.mailtoMu.Unlock()
 	data := a.PendingMailto
 	a.PendingMailto = nil // Clear after reading
 	return data
