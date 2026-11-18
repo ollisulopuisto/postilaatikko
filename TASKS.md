@@ -15,7 +15,7 @@
 
 - Status: Review. Owner: Instinct. Branch: `agent/create-filter-ui`.
 - Message menu and native Message menu entry, prefilled EN/FI editor, settings CRUD/order, local/helper preview, multi-account/List-ID rules and explicit existing-mail application.
-- Migration 82 is reserved for this feature. Additive schema only; merge held for schema clearance. Folder hidden state/store integration depends on the separate migration 81 change; hidden destinations pause rules without changing Enabled.
+- Migration 82 follows merged migration 81. Additive schema has owner clearance and upgrade coverage; hidden destinations pause rules without changing Enabled. Exact-head Devin and CI gate the merge.
 - Existing-mail application is off by default and rejects more than 500 matches. Helper application is queued durably; legacy List-ID coverage is limited to captured headers and is stated in the dialog.
 - Checks: full Go tests and affected-package vet with CGO disabled and a temporary local startup-notification stub (not committed); frontend check, lint, build, all regression tests, filter-browser and native-menu-browser tests pass. Captures use synthetic mail.
 - No DMG publication in this change. Native macOS behavior and live IMAP/Gmail acceptance remain unverified locally.

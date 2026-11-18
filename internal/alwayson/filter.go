@@ -95,12 +95,6 @@ func (r *SyncRuntime) runFilterJob(ctx context.Context, job *mailfilter.FilterJo
 			return
 		}
 	}
-	if destination.Hidden {
-		if err := r.filterJobs.DeferUnstarted(job.ID); err != nil {
-			log.Error().Err(err).Str("jobID", job.ID).Msg("Could not pause hidden-destination filter job")
-		}
-		return
-	}
 	current, err := r.filterOp.Messages.GetByIDs([]string{job.MessageID})
 	if err != nil {
 		r.markFilterJobUnknown(job, err)

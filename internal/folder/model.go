@@ -22,8 +22,6 @@ const (
 
 // Folder represents an email folder
 type Folder struct {
-	Hidden bool `json:"hidden"`
-
 	ID        string `json:"id"`
 	AccountID string `json:"accountId"`
 	Name      string `json:"name"`

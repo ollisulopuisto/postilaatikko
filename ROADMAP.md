@@ -208,4 +208,4 @@ Use the [task board](TASKS.md) for current claims and integration status; the [D
 - **Postilaatikko product naming (v0.3.10).** Updated visible product branding while retaining compatibility-sensitive app identifiers.
 
 
-Create-filter UI follow-up is in review preparation on `agent/create-filter-ui`: message-derived conditions, settings CRUD/order, multiple-account scope, List-ID, same-account moves and mark-read/archive/Trash actions. Existing-mail application is explicit, limited to 500 locally matched messages, and helper jobs are durable. Migration 82 needs schema clearance; hidden destination integration follows the separate migration 81 work. Not integrated yet.
+Create-filter UI follow-up is in review preparation on `agent/create-filter-ui`: message-derived conditions, settings CRUD/order, multiple-account scope, List-ID, same-account moves and mark-read/archive/Trash actions. Existing-mail application is explicit, limited to 500 locally matched messages, and helper jobs are durable. Migration 82 has schema clearance and follows merged migration 81. Hidden destination pause/resume is integrated; final review and CI gate the merge.
