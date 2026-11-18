@@ -589,7 +589,10 @@ func (a *App) handleNewMailNotification(info sync.NewMailInfo) {
 	// unbounded database scan. If the header window is incomplete, keep the
 	// notification: suppressing mail based on a partial sample could hide a
 	// sender the user explicitly allowed.
-	if prefsErr == nil && len(prefs.Rules) > 0 && info.Count > 0 && !info.ReceivedSince.IsZero() {
+	allowBySenderRules := func() bool {
+		if prefsErr != nil || len(prefs.Rules) == 0 || info.Count <= 0 || info.ReceivedSince.IsZero() {
+			return true
+		}
 		const maxNotificationHeaders = 100
 		limit := info.Count
 		if limit > maxNotificationHeaders {
@@ -598,38 +601,43 @@ func (a *App) handleNewMailNotification(info sync.NewMailInfo) {
 		headers, headerErr := a.messageStore.ListByFolderReceivedSince(info.FolderID, info.ReceivedSince, limit+1)
 		if headerErr != nil {
 			log.Warn().Err(headerErr).Msg("Could not read headers for notification rules; allowing notification")
-		} else if len(headers) > 0 {
-			if info.Count != len(headers) || info.Count > maxNotificationHeaders {
-				log.Debug().Int("newCount", info.Count).Int("headerCount", len(headers)).Msg("Notification rule sample incomplete; allowing notification")
-			} else {
-				senders := make([]string, 0, len(headers))
-				for _, header := range headers {
-					senders = append(senders, header.FromEmail)
-				}
-				allowed := prefs.ShouldNotifyBatch(senders, info.Count)
-				for _, header := range headers {
-					if prefs.ShouldNotify(header.FromEmail) {
-						if subject == "" || info.Count == 1 {
-							target, targetErr := a.messageStore.NotificationTarget(header.ID, info.AccountID, info.FolderID)
-							if targetErr != nil {
-								log.Warn().Err(targetErr).Msg("Could not resolve notification target; using existing notification target")
-							}
-							if targetErr == nil {
-								subject = target.Subject
-								fromName = target.FromName
-								fromEmail = target.FromEmail
-								threadID = target.ThreadID
-							}
-						}
-						break
-					}
-				}
-				if !allowed {
-					log.Debug().Int("count", info.Count).Msg("New-mail notification suppressed by sender rules")
-					return
-				}
-			}
+			return true
 		}
+		if len(headers) == 0 {
+			return true
+		}
+		if info.Count != len(headers) || info.Count > maxNotificationHeaders {
+			log.Debug().Int("newCount", info.Count).Int("headerCount", len(headers)).Msg("Notification rule sample incomplete; allowing notification")
+			return true
+		}
+		senders := make([]string, 0, len(headers))
+		for _, header := range headers {
+			senders = append(senders, header.FromEmail)
+		}
+		allowed := prefs.ShouldNotifyBatch(senders, info.Count)
+		for _, header := range headers {
+			if !prefs.ShouldNotify(header.FromEmail) {
+				continue
+			}
+			if subject != "" && info.Count != 1 {
+				break
+			}
+			target, targetErr := a.messageStore.NotificationTarget(header.ID, info.AccountID, info.FolderID)
+			if targetErr != nil {
+				log.Warn().Err(targetErr).Msg("Could not resolve notification target; using existing notification target")
+				break
+			}
+			subject = target.Subject
+			fromName = target.FromName
+			fromEmail = target.FromEmail
+			threadID = target.ThreadID
+			break
+		}
+		return allowed
+	}
+	if !allowBySenderRules() {
+		log.Debug().Int("count", info.Count).Msg("New-mail notification suppressed by sender rules")
+		return
 	}
 	if prefsErr != nil {
 		log.Warn().Err(prefsErr).Msg("Could not load notification preferences; using existing notification behavior")
