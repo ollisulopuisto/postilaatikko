@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Save reusable subject/body email templates for the main-window composer. Insert without replacing an existing subject, sender or recipients; detached composer support is not included yet.
+
 - Keep message index order and inbox cards stable while reading. Pending arrivals/changes wait behind a re-sort pill; deliberate mail/context actions reconcile the list.
 
 - Combine Read later and Reply later into one Later pile, preserving existing marks and removing them only when explicitly requested.

@@ -9,7 +9,7 @@ const captures=process.env.POSTI_BROWSER_CAPTURE_DIR||'/tmp/posti-template-captu
 test('templates save, insert subject/body and release the dialog guard on unmount',{skip:!browserModule,timeout:60000},async()=>{
   const root=fileURLToPath(new URL('..',import.meta.url));mkdirSync(captures,{recursive:true})
   const server=await createServer({root,plugins:[{name:'mount-helper',resolveId(id){if(id==='/rescue-mount.js')return id},load(id){if(id==='/rescue-mount.js')return `export {mount,unmount} from 'svelte'`}}],server:{host:'127.0.0.1',port:5196,strictPort:true,fs:{allow:[root,realpathSync(join(root,'node_modules'))]}},logLevel:'error'})
-  await server.listen();const{chromium}=await import(browserModule);const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome-stable',headless:true,args:['--no-sandbox']})
+  await server.listen();const{chromium}=await import(browserModule);const browser=await chromium.launch({executablePath:process.env.POSTI_CHROMIUM_BUNDLED?undefined:process.env.POSTI_CHROMIUM_PATH,headless:true,args:['--no-sandbox']})
   try{
     const page=await browser.newPage({viewport:{width:940,height:800}});const errors=[];page.on('pageerror',e=>errors.push(e.message))
     await page.route('**/rescue-fixture',route=>route.fulfill({contentType:'text/html',body:'<html data-theme="light"><body><div id="fixture" style="padding:24px"></div></body></html>'}));await page.goto('http://127.0.0.1:5196/rescue-fixture')
