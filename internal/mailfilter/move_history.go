@@ -41,7 +41,7 @@ func (s *MoveHistory) Record(actionID, destFolderID string, messages []*message.
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	for _, m := range messages {
 		if m == nil || m.FolderID == "" || m.FolderID == destFolderID {
