@@ -206,3 +206,12 @@ func TestHandleOpenURL_PendingKeepsRawURLForDetachedComposer(t *testing.T) {
 		t.Fatalf("pending = %+v, want Raw set to the trimmed URL", got)
 	}
 }
+
+func TestGetPendingMailto_RemoteWorkspaceComposesInline(t *testing.T) {
+	a := &App{remoteServiceMode: true}
+	a.HandleOpenURL("mailto:x@example.com")
+	got := a.GetPendingMailto()
+	if got == nil || got.Raw != "" || len(got.To) != 1 {
+		t.Fatalf("pending = %+v, want data without Raw in remote mode", got)
+	}
+}

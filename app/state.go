@@ -66,5 +66,10 @@ func (a *App) GetPendingMailto() *MailtoData {
 	defer a.mailtoMu.Unlock()
 	data := a.PendingMailto
 	a.PendingMailto = nil // Clear after reading
+	// A remote workspace cannot spawn a detached composer, so the frontend must
+	// compose inline: without Raw it does.
+	if data != nil && a.remoteServiceMode {
+		data.Raw = ""
+	}
 	return data
 }
