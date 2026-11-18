@@ -646,6 +646,14 @@ export function GetFTSIndexStatusAll() {
   return window['go']['app']['App']['GetFTSIndexStatusAll']();
 }
 
+export function DismissFilterSuggestion(arg1) {
+  return window['go']['app']['App']['DismissFilterSuggestion'](arg1);
+}
+
+export function MarkFilterSuggestionCreated(arg1) {
+  return window['go']['app']['App']['MarkFilterSuggestionCreated'](arg1);
+}
+
 export function GetFilterRules() {
   return window['go']['app']['App']['GetFilterRules']();
 }

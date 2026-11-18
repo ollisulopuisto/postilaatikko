@@ -238,6 +238,7 @@ type App struct {
 	replyContent        *replycontent.Service
 	virtualFolderStore  *virtualfolder.Store
 	filterStore         *mailfilter.Store
+	moveFilterHistory   *mailfilter.MoveHistory
 	filterRouter        *mailfilter.AutomaticRouter
 	contentPolicyStore  *folder.ContentPolicyStore
 	attachmentStore     *message.AttachmentStore
@@ -717,6 +718,7 @@ func (a *App) Startup(ctx context.Context) {
 	a.replyContent = replycontent.NewService(replycontent.ServiceOptions{})
 	a.virtualFolderStore = virtualfolder.NewStore(db)
 	a.filterStore = mailfilter.NewStore(db)
+	a.moveFilterHistory = mailfilter.NewMoveHistory(db)
 	a.filterRouter = mailfilter.NewAutomaticRouter(a.filterStore, a.folderStore, func(rule *mailfilter.Rule, _ *folder.Folder, msg *message.Message) {
 		go a.applyMatchedFilterRule(rule, msg)
 	})

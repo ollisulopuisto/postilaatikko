@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- After you move similar mail to the same folder in two separate actions, Postilaatikko offers to create a filter from the shared sender, recipient or subject words. You review and edit it in the filter dialog first; nothing is created automatically, and dismissing the offer suppresses it. Only message headers from your own moves are kept locally (last 1000 messages), never bodies. Adds a local database migration (83).
+
 - Keep message index order and inbox cards stable while reading. Pending arrivals/changes wait behind a re-sort pill; deliberate mail/context actions reconcile the list.
 
 - Combine Read later and Reply later into one Later pile, preserving existing marks and removing them only when explicitly requested.

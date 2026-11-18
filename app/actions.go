@@ -12,6 +12,7 @@ import (
 	"time"
 
 	goImap "github.com/emersion/go-imap/v2"
+	"github.com/google/uuid"
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/folder"
 	"github.com/hkdb/aerion/internal/imap"
@@ -523,6 +524,11 @@ func (a *App) MoveToFolder(messageIDs []string, destFolderID string) error {
 
 // MoveToFolderWithUndo moves messages and atomically returns its undo operation.
 func (a *App) MoveToFolderWithUndo(messageIDs []string, destFolderID string) (UndoableActionResult, error) {
+	// Header-only samples are read before the move changes folder_id.
+	var moved []*message.Message
+	if a.moveFilterHistory != nil && a.messageStore != nil && len(messageIDs) > 0 {
+		moved, _ = a.messageStore.GetMoveFilterHeadersByIDs(messageIDs)
+	}
 	if a.mailboxService != nil {
 		response, handled, err := a.mutateResolvedAction(a.actionContext(), messageIDs, v1.ActionMove, destFolderID)
 		if handled {
@@ -533,6 +539,7 @@ func (a *App) MoveToFolderWithUndo(messageIDs []string, destFolderID string) (Un
 				return UndoableActionResult{}, errors.New("mailbox service returned no action receipt")
 			}
 			a.publishRemoteMove(messageIDs, destFolderID)
+			a.suggestFilterAfterMove(moved, destFolderID)
 			return UndoableActionResult{OperationID: response.Receipt.OperationID}, nil
 		}
 	}
@@ -540,7 +547,64 @@ func (a *App) MoveToFolderWithUndo(messageIDs []string, destFolderID string) (Un
 		op, moveErr := a.moveToFolder(messageIDs, destFolderID, true, "")
 		return false, op, moveErr
 	})
+	if err == nil {
+		a.suggestFilterAfterMove(moved, destFolderID)
+	}
 	return UndoableActionResult{OperationID: operationID, Coalesced: coalesced}, err
+}
+
+// suggestFilterAfterMove records one explicit user move and, when an earlier
+// independent move to the same folder shares a sender, recipient or subject
+// words, emits a suggestion for the user to review. It never creates a rule.
+func (a *App) suggestFilterAfterMove(moved []*message.Message, destFolderID string) {
+	if a.moveFilterHistory == nil || len(moved) == 0 {
+		return
+	}
+	log := logging.WithComponent("app.filters")
+	actionID := uuid.NewString()
+	if err := a.moveFilterHistory.Record(actionID, destFolderID, moved); err != nil {
+		log.Warn().Err(err).Msg("Failed to record user move for filter suggestions")
+		return
+	}
+	seen := make(map[string]struct{})
+	for _, sample := range moved {
+		if sample == nil {
+			continue
+		}
+		if _, ok := seen[sample.AccountID]; ok {
+			continue
+		}
+		seen[sample.AccountID] = struct{}{}
+		suggestion, err := a.moveFilterHistory.SuggestionForRecentMove(actionID, sample.AccountID, destFolderID)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to derive move filter suggestion")
+			continue
+		}
+		if suggestion == nil {
+			continue
+		}
+		if dest, destErr := a.folderStore.Get(destFolderID); destErr == nil && dest != nil {
+			suggestion.DestAccountID = dest.AccountID
+		}
+		a.emitRuntimeEvent("filters:suggestionAvailable", suggestion)
+		return
+	}
+}
+
+// DismissFilterSuggestion stops a suggestion from being offered again.
+func (a *App) DismissFilterSuggestion(key string) error {
+	if a.moveFilterHistory == nil {
+		return nil
+	}
+	return a.moveFilterHistory.SetState(key, "dismissed")
+}
+
+// MarkFilterSuggestionCreated records that the user created the rule.
+func (a *App) MarkFilterSuggestionCreated(key string) error {
+	if a.moveFilterHistory == nil {
+		return nil
+	}
+	return a.moveFilterHistory.SetState(key, "created")
 }
 
 func (a *App) moveToFolder(messageIDs []string, destFolderID string, recordUndo bool, operationID string) (string, error) {

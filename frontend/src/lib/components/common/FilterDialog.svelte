@@ -22,6 +22,17 @@
   import { dialogGuardOpen, dialogGuardClose } from '$lib/stores/dialogGuard'
   import FolderPickerDialog from './FolderPickerDialog.svelte'
 
+  export interface FilterSuggestion {
+    key: string
+    accountId: string
+    sourceFolderId: string
+    destFolderId: string
+    destAccountId: string
+    fromContains: string[]
+    toContains: string[]
+    subjectContains: string[]
+  }
+
   interface Props {
     open: boolean
     // Edit mode: the rule being edited. Create mode: null.
@@ -30,9 +41,12 @@
     messageId?: string
     accountId?: string
     onSaved?: (ruleId: string) => void
+    // Create mode prefill from a move-history suggestion: criteria, destination
+    // and the source folder the user moved the mail out of.
+    suggestion?: FilterSuggestion | null
   }
 
-  let { open = $bindable(false), rule = null, messageId = '', accountId = '', onSaved }: Props = $props()
+  let { open = $bindable(false), rule = null, messageId = '', accountId = '', onSaved, suggestion = null }: Props = $props()
 
   const editMode = $derived(Boolean(rule && rule.id))
 
@@ -92,7 +106,7 @@
     built.enabled = rule?.enabled ?? true
     built.accountId = ''
     built.accountIds = scopeAll ? [] : [...scopeAccountIds]
-    built.folderIds = rule?.folderIds ?? []
+    built.folderIds = rule?.folderIds ?? (suggestion?.sourceFolderId ? [suggestion.sourceFolderId] : [])
     built.fromContains = useFrom ? splitPatterns(fromValue) : []
     built.toContains = useTo ? splitPatterns(toValue) : []
     built.subjectContains = useSubject ? splitPatterns(subjectValue) : []
@@ -156,6 +170,27 @@
     }
   }
 
+  async function prefillFromSuggestion(s: FilterSuggestion) {
+    useFrom = s.fromContains.length > 0
+    fromValue = s.fromContains.join('\n')
+    useTo = s.toContains.length > 0
+    toValue = s.toContains.join('\n')
+    useSubject = s.subjectContains.length > 0
+    subjectValue = s.subjectContains.join('\n')
+    useListId = false
+    listIdValue = ''
+    scopeAll = false
+    scopeAccountIds = [s.accountId]
+    actionMove = true
+    destFolderId = s.destFolderId
+    const label = await folderLabel(s.destFolderId, s.destAccountId)
+    const acc = accounts.find(item => item.id === s.destAccountId)
+    destFolderLabel = label ? (acc ? `${acc.name}: ${label}` : label) : ''
+    const basis = s.fromContains[0] || s.toContains[0] || s.subjectContains[0] || ''
+    name = basis ? $_('filters.ruleForSender', { values: { sender: basis } }) : ''
+    schedulePreview()
+  }
+
   function prefillFromRule(existing: mailfilter.Rule) {
     name = existing.name
     scopeAll = !(existing.accountIds && existing.accountIds.length > 0) && !existing.accountId
@@ -196,7 +231,8 @@
         initializing = false
         return
       }
-      if (messageId) await prefillFromMessage(messageId)
+      if (suggestion) { await prefillFromSuggestion(suggestion) }
+      else if (messageId) await prefillFromMessage(messageId)
       if (alive) initializing = false
     })()
   })
