@@ -765,6 +765,7 @@ export namespace app {
 	    bcc: string[];
 	    subject: string;
 	    body: string;
+	    raw?: string;
 
 	    static createFrom(source: any = {}) {
 	        return new MailtoData(source);
@@ -777,6 +778,7 @@ export namespace app {
 	        this.bcc = source["bcc"];
 	        this.subject = source["subject"];
 	        this.body = source["body"];
+	        this.raw = source["raw"];
 	    }
 	}
 	export class OAuthBuildStatus {

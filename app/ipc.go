@@ -221,14 +221,18 @@ func (a *App) OpenComposerWindow(accountID, mode, messageID, draftID, mailtoURL 
 		}
 	}
 
+	// The mailto URL can carry a private message body, so it stays out of the log.
+	logArgs := append([]string(nil), args...)
+
 	// Add mailto URL if provided
 	if mailtoURL != "" {
 		args = append(args, "--mailto", mailtoURL)
+		logArgs = append(logArgs, "--mailto", "<redacted>")
 	}
 
 	log.Info().
 		Str("execPath", execPath).
-		Strs("args", args).
+		Strs("args", logArgs).
 		Msg("Spawning composer window")
 
 	cmd := exec.Command(execPath, args...)
