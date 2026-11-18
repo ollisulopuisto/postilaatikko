@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Undo-send bar now shows whether the message is a Reply or Reply All and lists To, Cc and Bcc, with an Edit recipients button that reopens the draft with focus on To. A draft remembers its reply mode, so a reply-all stays labelled reply-all after recipients are edited.
+
 - Keep message index order and inbox cards stable while reading. Pending arrivals/changes wait behind a re-sort pill; deliberate mail/context actions reconcile the list.
 
 - Combine Read later and Reply later into one Later pile, preserving existing marks and removing them only when explicitly requested.

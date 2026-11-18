@@ -1712,7 +1712,13 @@
     "sendNow": "Lähetä nyt",
     "cancel": "Peruuta",
     "cancelled": "Lähetys peruttu - luonnos palautettu",
-    "alreadySending": "Liian myöhäistä - lähetys on jo käynnissä"
+    "alreadySending": "Liian myöhäistä - lähetys on jo käynnissä",
+    "reply": "Vastaus",
+    "replyAll": "Vastaa kaikille",
+    "to": "Vastaanottaja",
+    "cc": "Kopio",
+    "bcc": "Piilokopio",
+    "editRecipients": "Muokkaa vastaanottajia"
   },
   "macOSContacts": {
     "title": "macOS-yhteystiedot",
