@@ -303,6 +303,7 @@ func (ops *draftOps) saveDraftToDB(accountID string, localDraft *draft.Draft, ms
 		localDraft.BodyHTML = enc.bodyHTML
 		localDraft.BodyText = enc.bodyText
 		localDraft.InReplyToID = msg.InReplyTo
+		localDraft.ReplyType = msg.ReplyMode
 		if references, err := json.Marshal(msg.References); err == nil {
 			localDraft.ReferencesList = string(references)
 		}
@@ -342,6 +343,7 @@ func (ops *draftOps) saveDraftToDB(accountID string, localDraft *draft.Draft, ms
 		BodyHTML:         enc.bodyHTML,
 		BodyText:         enc.bodyText,
 		InReplyToID:      msg.InReplyTo,
+		ReplyType:        msg.ReplyMode,
 		ReferencesList:   marshalReferences(msg.References),
 		IdentityID:       ops.resolveIdentityID(accountID, msg),
 		SignMessage:      msg.SignMessage,
@@ -738,6 +740,7 @@ func (ops *draftOps) toComposeMessage(d *draft.Draft) *smtp.ComposeMessage {
 	return &smtp.ComposeMessage{
 		From:              smtp.Address{Address: identityEmail},
 		IdentityID:        d.IdentityID,
+		ReplyMode:         d.ReplyType,
 		To:                parseAddressList(d.ToList),
 		Cc:                parseAddressList(d.CcList),
 		Bcc:               parseAddressList(d.BccList),
@@ -1214,7 +1217,7 @@ func draftFromHelperDocument(document *v1.DraftDocument) *draft.Draft {
 	return &draft.Draft{ID: document.ID, AccountID: document.AccountID, StorageVersion: document.Revision,
 		UpdatedAt: updatedAt, ToList: addressListToJSON(message.To), CcList: addressListToJSON(message.Cc),
 		BccList: addressListToJSON(message.Bcc), Subject: message.Subject, BodyHTML: message.HTMLBody,
-		BodyText: message.TextBody, InReplyToID: message.InReplyTo, ReferencesList: marshalReferences(message.References),
+		BodyText: message.TextBody, InReplyToID: message.InReplyTo, ReplyType: message.ReplyMode, ReferencesList: marshalReferences(message.References),
 		IdentityID: message.IdentityID, SignMessage: message.SignMessage, Encrypted: document.Encrypted,
 		EncryptedBody: document.EncryptedBody, PGPSignMessage: message.PGPSignMessage,
 		PGPEncrypted: document.PGPEncrypted, PGPEncryptedBody: document.PGPEncryptedBody,
