@@ -2827,7 +2827,9 @@
         {#if !isCompact}{$_('composer.attachFiles')}{/if}
       </button>
       <QuickReplies onInsert={insertQuickReply} compact={isCompact} />
-      <EmailTemplates onInsert={insertEmailTemplate} compact={isCompact} />
+      {#if !isDetached}
+        <EmailTemplates onInsert={insertEmailTemplate} compact={isCompact} />
+      {/if}
       {#if isCompact}
         <button
           onclick={() => showFormatting = !showFormatting}

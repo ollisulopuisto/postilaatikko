@@ -2,7 +2,7 @@
   // Full-message templates are stored locally. Selecting one only fills a blank
   // subject and inserts its body at the current cursor, preserving draft fields.
   import Icon from '@iconify/svelte'
-  import { onMount } from 'svelte'
+  import { onMount, onDestroy } from 'svelte'
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu'
   import * as Dialog from '$lib/components/ui/dialog'
   import { Button } from '$lib/components/ui/button'
@@ -49,6 +49,10 @@
       dialogGuardClose()
       guarded = false
     }
+  })
+
+  onDestroy(() => {
+    if (guarded) dialogGuardClose()
   })
 
   function resetForm() {
@@ -128,7 +132,7 @@
 </DropdownMenu.Root>
 
 <Dialog.Root bind:open={manageOpen}>
-  <Dialog.Content class="max-h-[90vh] max-w-xl overflow-y-auto">
+  <Dialog.Content class="relative max-h-[90vh] max-w-xl overflow-y-auto">
     <Dialog.Header>
       <Dialog.Title>{$_('composer.emailTemplatesManage')}</Dialog.Title>
       <Dialog.Description>{$_('composer.emailTemplatesDescription')}</Dialog.Description>

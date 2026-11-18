@@ -4,12 +4,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 )
 
 // KeyEmailTemplates stores reusable full-message templates locally.
 const KeyEmailTemplates = "email_templates"
+
+// Serialize the local UI bindings' read-modify-write operations.
+var emailTemplateWrites sync.Mutex
 
 // EmailTemplate is a reusable subject/body pair for composing messages.
 type EmailTemplate struct {
@@ -38,6 +42,8 @@ func (s *Store) ListEmailTemplates() ([]EmailTemplate, error) {
 
 // SaveEmailTemplate creates or updates a template. It must contain a subject or body.
 func (s *Store) SaveEmailTemplate(template EmailTemplate) (EmailTemplate, error) {
+	emailTemplateWrites.Lock()
+	defer emailTemplateWrites.Unlock()
 	template.Name = strings.TrimSpace(template.Name)
 	template.Subject = strings.TrimSpace(template.Subject)
 	if template.Name == "" {
@@ -68,6 +74,8 @@ func (s *Store) SaveEmailTemplate(template EmailTemplate) (EmailTemplate, error)
 
 // DeleteEmailTemplate removes a template by ID; deleting a missing ID is harmless.
 func (s *Store) DeleteEmailTemplate(id string) error {
+	emailTemplateWrites.Lock()
+	defer emailTemplateWrites.Unlock()
 	templates, err := s.ListEmailTemplates()
 	if err != nil {
 		return err
