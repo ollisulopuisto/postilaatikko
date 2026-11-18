@@ -1217,7 +1217,7 @@ func draftFromHelperDocument(document *v1.DraftDocument) *draft.Draft {
 	return &draft.Draft{ID: document.ID, AccountID: document.AccountID, StorageVersion: document.Revision,
 		UpdatedAt: updatedAt, ToList: addressListToJSON(message.To), CcList: addressListToJSON(message.Cc),
 		BccList: addressListToJSON(message.Bcc), Subject: message.Subject, BodyHTML: message.HTMLBody,
-		BodyText: message.TextBody, InReplyToID: message.InReplyTo, ReferencesList: marshalReferences(message.References),
+		BodyText: message.TextBody, InReplyToID: message.InReplyTo, ReplyType: message.ReplyMode, ReferencesList: marshalReferences(message.References),
 		IdentityID: message.IdentityID, SignMessage: message.SignMessage, Encrypted: document.Encrypted,
 		EncryptedBody: document.EncryptedBody, PGPSignMessage: message.PGPSignMessage,
 		PGPEncrypted: document.PGPEncrypted, PGPEncryptedBody: document.PGPEncryptedBody,

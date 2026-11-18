@@ -751,7 +751,9 @@
         address: selectedIdentity?.email || '',
       }),
       identity_id: selectedIdentityId,
-      reply_mode: getDisplayMode() === 'new' ? '' : getDisplayMode(),
+      // Only an explicit mode is stored. A guessed one could label a plain reply
+      // to a many-recipient message as Reply All.
+      reply_mode: initialMessage?.reply_mode || '',
       to: toRecipients,
       cc: ccRecipients,
       bcc: bccRecipients,

@@ -118,3 +118,9 @@ test('undo bar shows reply mode and recipients and can reopen the draft at the T
   assert.match(composer, /initialMessage\.reply_mode/)
   for (const k of ['reply', 'replyAll', 'to', 'cc', 'bcc', 'editRecipients']) assert.ok(en.pendingSend[k], k)
 })
+
+test('editing a draft without an explicit account keeps the conversation account fallback', async () => {
+  assert.match(app, /const accountId = \(options\.accountId \? resolveAccountId\(options\.accountId\) : undefined\) \|\| resolveAccountId\(selectedConversationAccountId\) \|\| resolveAccountId\(selectedAccountId\)/)
+  const composer = await read('../src/lib/components/composer/Composer.svelte')
+  assert.match(composer, /reply_mode: initialMessage\?\.reply_mode \|\| ''/)
+})

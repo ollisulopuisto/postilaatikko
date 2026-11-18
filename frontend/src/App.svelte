@@ -1490,7 +1490,7 @@
   async function handleEditDraft(draftId: string, options: { accountId?: string; focusRecipients?: boolean } = {}) {
     messageListRef?.releaseFrozenOrder?.()
     // Use conversation's account ID, fall back to selected account or first account
-    const accountId = resolveAccountId(options.accountId || null) || resolveAccountId(selectedConversationAccountId) || resolveAccountId(selectedAccountId)
+    const accountId = (options.accountId ? resolveAccountId(options.accountId) : undefined) || resolveAccountId(selectedConversationAccountId) || resolveAccountId(selectedAccountId)
     if (!accountId) return
 
     try {
