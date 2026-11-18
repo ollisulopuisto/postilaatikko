@@ -125,6 +125,25 @@ func snoozedViewHavingClause(filter string) string {
 	}
 }
 
+// NotificationTarget keeps a notification's displayed headers and click target
+// on the same stored message without reading its body.
+type NotificationTarget struct {
+	Subject   string
+	FromName  string
+	FromEmail string
+	ThreadID  string
+}
+
+func (s *Store) NotificationTarget(messageID, accountID, folderID string) (*NotificationTarget, error) {
+	target := &NotificationTarget{}
+	err := s.db.QueryRow(`SELECT subject, from_name, from_email, COALESCE(NULLIF(thread_id, ''), id)
+ FROM messages WHERE id = ? AND account_id = ? AND folder_id = ?`, messageID, accountID, folderID).Scan(&target.Subject, &target.FromName, &target.FromEmail, &target.ThreadID)
+	if err != nil {
+		return nil, fmt.Errorf("resolve notification target: %w", err)
+	}
+	return target, nil
+}
+
 // ListByFolder returns message headers for a folder with pagination
 func (s *Store) ListByFolder(folderID string, offset, limit int) ([]*MessageHeader, error) {
 	return s.listByFolderSince(folderID, offset, limit, time.Time{})

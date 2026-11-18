@@ -610,9 +610,13 @@ func (a *App) handleNewMailNotification(info sync.NewMailInfo) {
 				for _, header := range headers {
 					if prefs.ShouldNotify(header.FromEmail) {
 						if subject == "" || info.Count == 1 {
-							subject = header.Subject
-							fromName = header.FromName
-							fromEmail = header.FromEmail
+							target, targetErr := a.messageStore.NotificationTarget(header.ID, info.AccountID, info.FolderID)
+							if targetErr == nil {
+								subject = target.Subject
+								fromName = target.FromName
+								fromEmail = target.FromEmail
+								threadID = target.ThreadID
+							}
 						}
 						break
 					}

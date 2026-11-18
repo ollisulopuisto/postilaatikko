@@ -9,7 +9,7 @@ const captures=process.env.POSTI_BROWSER_CAPTURE_DIR||'/tmp/posti-notifications-
 test('smart notification controls load, save rules and preserve failed-load state',{skip:!browserModule,timeout:60000},async()=>{
   const root=fileURLToPath(new URL('..',import.meta.url));mkdirSync(captures,{recursive:true})
   const server=await createServer({root,plugins:[{name:'mount-helper',resolveId(id){if(id==='/rescue-mount.js')return id},load(id){if(id==='/rescue-mount.js')return `export {mount,unmount} from 'svelte'`}}],server:{host:'127.0.0.1',port:5195,strictPort:true,fs:{allow:[root,realpathSync(join(root,'node_modules'))]}},logLevel:'error'})
-  await server.listen();const{chromium}=await import(browserModule);const browser=await chromium.launch({executablePath:'/usr/bin/google-chrome-stable',headless:true,args:['--no-sandbox']})
+  await server.listen();const{chromium}=await import(browserModule);const browser=await chromium.launch({executablePath:process.env.POSTI_CHROMIUM_BUNDLED?undefined:process.env.POSTI_CHROMIUM_PATH,headless:true,args:['--no-sandbox']})
   try{
     const page=await browser.newPage({viewport:{width:940,height:700}});const errors=[];page.on('pageerror',e=>errors.push(e.message))
     await page.route('**/rescue-fixture',route=>route.fulfill({contentType:'text/html',body:'<html data-theme="light"><body><div id="fixture" style="padding:24px"></div></body></html>'}));await page.goto('http://127.0.0.1:5195/rescue-fixture')
@@ -22,6 +22,7 @@ test('smart notification controls load, save rules and preserve failed-load stat
     })
     const input=page.locator('input:not([type=checkbox])');await input.waitFor();await input.fill('muted@example.com');await page.locator('button[type=submit]').click();await page.waitForTimeout(100)
     assert.equal(await page.evaluate(()=>window.saves.at(-1).rules[0].match),'muted@example.com')
+    assert.equal(await page.getByText('muted@example.com',{exact:true}).locator('..').getByRole('combobox').count(),1,'saved rule scope is fixed; only the action is editable')
     await page.screenshot({path:join(captures,'notifications-en.png'),fullPage:true})
     await page.evaluate(async()=>{document.documentElement.dataset.theme='dark';await(await import('/src/lib/i18n/index.ts')).initI18n('fi')})
     await page.waitForTimeout(100);await page.screenshot({path:join(captures,'notifications-fi-dark.png'),fullPage:true})

@@ -89,10 +89,7 @@
             <option value="notify">{$_('settingsGeneral.notificationAllow')}</option>
           </select>
           <span class="text-xs text-muted-foreground">{$_('settingsGeneral.notificationFrom')}</span>
-          <select class="rounded-md border border-input bg-background px-2 py-1.5 text-sm" value={rule.scope} onchange={(event) => updateRule(rule.id, { scope: (event.currentTarget as HTMLSelectElement).value as Rule['scope'] })} disabled={saving} aria-label={$_('settingsGeneral.notificationMatchType')}>
-            <option value="sender">{$_('settingsGeneral.notificationSender')}</option>
-            <option value="domain">{$_('settingsGeneral.notificationDomain')}</option>
-          </select>
+          <span class="text-xs text-muted-foreground">{rule.scope === 'sender' ? $_('settingsGeneral.notificationSender') : $_('settingsGeneral.notificationDomain')}</span>
           <span class="min-w-0 flex-1 truncate text-sm" title={rule.match}>{rule.match}</span>
           <button type="button" class="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground" onclick={() => removeRule(rule.id)} disabled={saving} aria-label={$_('settingsGeneral.notificationRemoveRule')}>
             <Icon icon="mdi:close" class="h-4 w-4" />

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Add local sender/domain notification controls. Unknown or incomplete arrival batches keep alerts; notification clicks follow the displayed message. Existing rule scope is fixed, so remove and re-add a rule to change sender/domain matching.
+
 - Keep message index order and inbox cards stable while reading. Pending arrivals/changes wait behind a re-sort pill; deliberate mail/context actions reconcile the list.
 
 - Combine Read later and Reply later into one Later pile, preserving existing marks and removing them only when explicitly requested.
