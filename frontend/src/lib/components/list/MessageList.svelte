@@ -2354,9 +2354,24 @@
     }
   }
 
+  // latestDate is an ISO-8601 string from Go's time.Time JSON, which drops
+  // the fraction when it is zero, so "...:05Z" and "...:05.123Z" both occur
+  // and do NOT sort chronologically as plain strings ('.' < 'Z'). Parse each
+  // row's date once (decorate-sort-undecorate) instead of per comparison -
+  // O(n) parses instead of O(n log n) on every search reload / sort toggle.
+  // Date.parse returns NaN on a malformed date; NaN breaks a numeric
+  // comparator, so unparseable rows are pinned last in both directions.
   function sortSearchRows(rows: any[]) {
     const direction = searchSort === 'oldest' ? 1 : -1
-    return [...rows].sort((a, b) => direction * (new Date(a.latestDate).getTime() - new Date(b.latestDate).getTime()))
+    return rows
+      .map((row) => ({ row, ts: Date.parse(row.latestDate) }))
+      .sort((a, b) => {
+        const aBad = Number.isNaN(a.ts)
+        const bBad = Number.isNaN(b.ts)
+        if (aBad || bBad) return aBad === bBad ? 0 : aBad ? 1 : -1
+        return direction * (a.ts - b.ts)
+      })
+      .map(({ row }) => row)
   }
 
   export function startAllMailSearch(query: string) {
