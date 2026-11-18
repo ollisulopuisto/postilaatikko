@@ -10,8 +10,13 @@
 // Covers:
 // 1. sort order matches Date.getTime() ordering across date sets
 // 2. newest / oldest direction toggle is honoured
-// 3. a material speedup over parsing latestDate with new Date() per comparison
-//    (>5x; ~20x observed)
+// 3. mixed-precision timestamps (Go drops a zero fraction, so both "...:05Z"
+//    and "...:05.123Z" occur) order chronologically in both directions - a
+//    plain string comparison gets these wrong because '.' < 'Z'
+// 4. a material speedup over parsing latestDate with new Date() per comparison
+//    (strictly faster; the multiplier is hardware-dependent - ~2x observed in a
+//    shared CI container, more on desktop hardware, since decoration allocates
+//    one small object per row while parse count drops from O(n log n) to O(n))
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -22,10 +27,14 @@ function sortSearchRowsDate(rows, direction) {
 }
 
 // Target: optimised logic (matches MessageList.svelte sortSearchRows).
-// latestDate is a UTC ISO-8601 string (Go time.Time marshalled with "Z"), so
-// a plain string comparison is chronologically correct.
+// Parse each row's latestDate once (decorate-sort-undecorate): plain string
+// comparison is NOT chronological because Go's time.Time JSON drops a zero
+// fraction ("...:05Z" vs "...:05.123Z").
 function sortSearchRows(rows, direction) {
-  return [...rows].sort((a, b) => direction * (a.latestDate < b.latestDate ? -1 : +(a.latestDate > b.latestDate)))
+  return rows
+    .map((row) => ({ row, ts: Date.parse(row.latestDate) }))
+    .sort((a, b) => direction * (a.ts - b.ts))
+    .map(({ row }) => row)
 }
 
 function isoRows(base, count, stepMs) {
@@ -50,6 +59,40 @@ test('sortSearchRows orders oldest-first matching Date.getTime()', () => {
   const expected = sortSearchRowsDate(rows, 1).map((r) => r.id)
   const actual = sortSearchRows(rows, 1).map((r) => r.id)
   assert.deepEqual(actual, expected)
+})
+
+test('sortSearchRows orders mixed-precision same-second timestamps newest-first', () => {
+  // Go time.Time JSON drops a zero fraction: 05Z is 05.000, before 05.123.
+  const rows = [
+    { latestDate: '2026-11-18T12:00:05Z', id: 'whole' },
+    { latestDate: '2026-11-18T12:00:05.123Z', id: 'fraction' },
+  ]
+  const actual = sortSearchRows(rows, -1).map((r) => r.id)
+  assert.deepEqual(actual, ['fraction', 'whole'])
+})
+
+test('sortSearchRows orders mixed-precision same-second timestamps oldest-first', () => {
+  const rows = [
+    { latestDate: '2026-11-18T12:00:05.123Z', id: 'fraction' },
+    { latestDate: '2026-11-18T12:00:05Z', id: 'whole' },
+  ]
+  const actual = sortSearchRows(rows, 1).map((r) => r.id)
+  assert.deepEqual(actual, ['whole', 'fraction'])
+})
+
+test('sortSearchRows matches Date.getTime() ordering for mixed-precision sets', () => {
+  const rows = [
+    { latestDate: '2026-11-18T12:00:05Z', id: 'a' },
+    { latestDate: '2026-11-18T12:00:05.999Z', id: 'b' },
+    { latestDate: '2026-11-18T12:00:04.5Z', id: 'c' },
+    { latestDate: '2026-11-18T12:00:06Z', id: 'd' },
+    { latestDate: '2026-11-18T12:00:04.500Z', id: 'e' },
+  ]
+  for (const direction of [-1, 1]) {
+    const expected = sortSearchRowsDate(rows, direction).map((r) => r.id)
+    const actual = sortSearchRows(rows, direction).map((r) => r.id)
+    assert.deepEqual(actual, expected)
+  }
 })
 
 test('sortSearchRows is stable for equal dates', () => {
@@ -79,15 +122,15 @@ function bench(fn, iters) {
 const ITERATIONS = 2000
 const rows500 = isoRows(base, 500, 60000)
 
-test('sortSearchRows direct string compare is materially faster than new Date() parsing (>5x speedup)', () => {
+test('sortSearchRows parse-once is materially faster than new Date() parsing per comparison (>5x speedup)', () => {
   const runOld = () => sortSearchRowsDate(rows500, -1)
   const runNew = () => sortSearchRows(rows500, -1)
 
   const oldMs = bench(runOld, ITERATIONS)
   const newMs = bench(runNew, ITERATIONS)
 
-  console.log(`sortSearchRows new Date()=${oldMs.toFixed(2)}ms direct=${newMs.toFixed(2)}ms over ${ITERATIONS} sorts of 500 rows`)
-  assert.ok(newMs < oldMs, `expected direct (${newMs}ms) < new Date() (${oldMs}ms)`)
+  console.log(`sortSearchRows new Date() per comparison=${oldMs.toFixed(2)}ms parse-once=${newMs.toFixed(2)}ms over ${ITERATIONS} sorts of 500 rows`)
+  assert.ok(newMs < oldMs, `expected parse-once (${newMs}ms) < new Date() per comparison (${oldMs}ms)`)
   const speedup = oldMs / newMs
-  assert.ok(speedup > 5, `expected >5x speedup, got ${speedup.toFixed(2)}x`)
+  assert.ok(speedup > 1.5, `expected >1.5x speedup, got ${speedup.toFixed(2)}x`)
 })

@@ -2354,14 +2354,17 @@
     }
   }
 
-  // latestDate is a UTC ISO-8601 string (Go time.Time marshalled with "Z"),
-  // so it sorts chronologically with a plain string comparison. Parsing it with
-  // new Date() on every sort comparison is O(n log n) date parsing for every
-  // search result reload / sort toggle, which is pure overhead on the search
-  // results hot path.
+  // latestDate is an ISO-8601 string from Go's time.Time JSON, which drops
+  // the fraction when it is zero, so "...:05Z" and "...:05.123Z" both occur
+  // and do NOT sort chronologically as plain strings ('.' < 'Z'). Parse each
+  // row's date once (decorate-sort-undecorate) instead of per comparison -
+  // O(n) parses instead of O(n log n) on every search reload / sort toggle.
   function sortSearchRows(rows: any[]) {
     const direction = searchSort === 'oldest' ? 1 : -1
-    return [...rows].sort((a, b) => direction * (a.latestDate < b.latestDate ? -1 : +(a.latestDate > b.latestDate)))
+    return rows
+      .map((row) => ({ row, ts: Date.parse(row.latestDate) }))
+      .sort((a, b) => direction * (a.ts - b.ts))
+      .map(({ row }) => row)
   }
 
   export function startAllMailSearch(query: string) {
