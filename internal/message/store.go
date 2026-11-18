@@ -153,7 +153,16 @@ func (s *Store) listByFolderSince(folderID string, offset, limit int, since time
 		LIMIT ? OFFSET ?
 	`
 
-	rows, err := s.db.Query(query, args...)
+	// Receive-time lookups have no schema/index change in this rescue PR. Keep
+	// background notifications cheap even in a large folder; timeout means the
+	// caller allows the alert rather than guessing from a partial result.
+	ctx := context.Background()
+	if !since.IsZero() {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 100*time.Millisecond)
+		defer cancel()
+	}
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query messages: %w", err)
 	}
