@@ -1,6 +1,7 @@
 package mailfilter
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/hkdb/aerion/internal/message"
@@ -9,7 +10,7 @@ import (
 func moved(from, subject string) []*message.Message {
 	return []*message.Message{{
 		AccountID: "account1", FolderID: "folder1", FromEmail: from, Subject: subject,
-		ToList: `[{"name":"","email":"me@example.com"}]`, CcList: "[]",
+		ToList: `[{"name":"","email":"user1@example.com"}]`, CcList: "[]",
 	}}
 }
 
@@ -66,5 +67,92 @@ func TestMoveHistoryIgnoresSameFolderNoopAndUnrelatedMail(t *testing.T) {
 	s, _ := h.SuggestionForRecentMove("a3", "account1", "folder2")
 	if s != nil {
 		t.Fatalf("unrelated moves must not suggest: %+v", s)
+	}
+}
+
+func withRecipients(from, subject, to, cc string) []*message.Message {
+	m := moved(from, subject)
+	m[0].ToList, m[0].CcList = to, cc
+	return m
+}
+
+func recipientSuggestion(t *testing.T, prior, current []*message.Message) *SuggestedFilter {
+	t.Helper()
+	h := NewMoveHistory(setupTestDB(t))
+	if err := h.Record("a1", "folder2", prior); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.Record("a2", "folder2", current); err != nil {
+		t.Fatal(err)
+	}
+	s, err := h.SuggestionForRecentMove("a2", "account1", "folder2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+func TestMoveHistoryRecipientOnlySuggestions(t *testing.T) {
+	list := `[{"name":"","email":"team@lists.example"}]`
+	other := `[{"name":"","email":"someone@else.example"}]`
+	cases := []struct {
+		name     string
+		pTo, pCc string
+		cTo, cCc string
+		want     string
+	}{
+		{"to and to", list, "[]", list, "[]", "team@lists.example"},
+		{"cc and cc", "[]", list, "[]", list, "team@lists.example"},
+		{"to and cc", list, "[]", "[]", list, "team@lists.example"},
+		{"nothing shared", list, "[]", other, "[]", ""},
+	}
+	for _, c := range cases {
+		s := recipientSuggestion(t,
+			withRecipients("a@one.example", "alpha", c.pTo, c.pCc),
+			withRecipients("b@two.example", "omega", c.cTo, c.cCc))
+		if c.want == "" {
+			if s != nil {
+				t.Fatalf("%s: unexpected suggestion %+v", c.name, s)
+			}
+			continue
+		}
+		if s == nil || len(s.ToContains) != 1 || s.ToContains[0] != c.want || len(s.FromContains) != 0 {
+			t.Fatalf("%s: got %+v", c.name, s)
+		}
+	}
+}
+
+func TestMoveHistoryOwnAddressIsNotARecipientSignal(t *testing.T) {
+	me := `[{"name":"","email":"User1@example.com"}]`
+	s := recipientSuggestion(t,
+		withRecipients("a@one.example", "alpha", me, "[]"),
+		withRecipients("b@two.example", "omega", me, "[]"))
+	if s != nil {
+		t.Fatalf("own address produced a suggestion: %+v", s)
+	}
+}
+
+func TestMoveHistoryComparesEverySampleOfABulkMove(t *testing.T) {
+	prior := moved("news@shop.example", "alpha")
+	current := append(moved("x@unrelated.example", "zzzz"), moved("news@shop.example", "beta")...)
+	s := recipientSuggestion(t, prior, current)
+	if s == nil || len(s.FromContains) != 1 || s.FromContains[0] != "news@shop.example" {
+		t.Fatalf("matching non-first sample was ignored: %+v", s)
+	}
+}
+
+func TestSuggestionJSONCarriesArraysNotNull(t *testing.T) {
+	s := recipientSuggestion(t,
+		moved("news@shop.example", "alpha"), moved("news@shop.example", "beta"))
+	if s == nil {
+		t.Fatal("want suggestion")
+	}
+	raw, _ := json.Marshal(s)
+	for _, k := range []string{"toContains", "subjectContains"} {
+		var m map[string]json.RawMessage
+		_ = json.Unmarshal(raw, &m)
+		if string(m[k]) == "null" {
+			t.Fatalf("%s serialised as null: %s", k, raw)
+		}
 	}
 }

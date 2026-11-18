@@ -171,12 +171,16 @@
   }
 
   async function prefillFromSuggestion(s: FilterSuggestion) {
-    useFrom = s.fromContains.length > 0
-    fromValue = s.fromContains.join('\n')
-    useTo = s.toContains.length > 0
-    toValue = s.toContains.join('\n')
-    useSubject = s.subjectContains.length > 0
-    subjectValue = s.subjectContains.join('\n')
+    // Go serialises nil slices as null; treat missing criteria as empty.
+    const from = s.fromContains ?? []
+    const to = s.toContains ?? []
+    const subject = s.subjectContains ?? []
+    useFrom = from.length > 0
+    fromValue = from.join('\n')
+    useTo = to.length > 0
+    toValue = to.join('\n')
+    useSubject = subject.length > 0
+    subjectValue = subject.join('\n')
     useListId = false
     listIdValue = ''
     scopeAll = false
@@ -186,7 +190,7 @@
     const label = await folderLabel(s.destFolderId, s.destAccountId)
     const acc = accounts.find(item => item.id === s.destAccountId)
     destFolderLabel = label ? (acc ? `${acc.name}: ${label}` : label) : ''
-    const basis = s.fromContains[0] || s.toContains[0] || s.subjectContains[0] || ''
+    const basis = from[0] || to[0] || subject[0] || ''
     name = basis ? $_('filters.ruleForSender', { values: { sender: basis } }) : ''
     schedulePreview()
   }
@@ -231,8 +235,12 @@
         initializing = false
         return
       }
-      if (suggestion) { await prefillFromSuggestion(suggestion) }
-      else if (messageId) await prefillFromMessage(messageId)
+      if (suggestion) {
+        await prefillFromSuggestion(suggestion)
+        if (alive) initializing = false
+        return
+      }
+      if (messageId) await prefillFromMessage(messageId)
       if (alive) initializing = false
     })()
   })

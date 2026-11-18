@@ -59,57 +59,111 @@ func (s *MoveHistory) Record(actionID, destFolderID string, messages []*message.
 
 // SuggestionForRecentMove returns an existing or newly-derived suggestion when
 // a second independent action moves a matching envelope to the same folder.
+// Every sample of the current action is compared with every retained sample
+// of earlier actions from the same account, source folder and destination, so
+// a bulk move is not judged by one arbitrary row. The account's own addresses
+// never count as a shared recipient.
 func (s *MoveHistory) SuggestionForRecentMove(actionID, accountID, destFolderID string) (*SuggestedFilter, error) {
-	rows, err := s.db.Query(`SELECT action_id,folder_id,from_email,to_list,cc_list,subject FROM mail_filter_move_history WHERE account_id=? AND dest_folder_id=? AND action_id<>? ORDER BY moved_at DESC LIMIT 100`, accountID, destFolderID, actionID)
+	priors, err := s.samples(`SELECT action_id,folder_id,from_email,to_list,cc_list,subject FROM mail_filter_move_history WHERE account_id=? AND dest_folder_id=? AND action_id<>? ORDER BY moved_at DESC,id DESC LIMIT 200`, accountID, destFolderID, actionID)
+	if err != nil {
+		return nil, err
+	}
+	currents, err := s.samples(`SELECT action_id,folder_id,from_email,to_list,cc_list,subject FROM mail_filter_move_history WHERE account_id=? AND dest_folder_id=? AND action_id=? ORDER BY id LIMIT 200`, accountID, destFolderID, actionID)
+	if err != nil {
+		return nil, err
+	}
+	if len(priors) == 0 || len(currents) == 0 {
+		return nil, nil
+	}
+	own, err := s.ownAddresses(accountID)
+	if err != nil {
+		return nil, err
+	}
+	for _, current := range currents {
+		for _, prior := range priors {
+			if prior.folder != current.folder {
+				continue
+			}
+			from := sharedExact(prior.from, current.from)
+			to := sharedAddresses(prior.recipients(), current.recipients(), own)
+			subject := sharedSubject(prior.subject, current.subject)
+			if len(from)+len(to)+len(subject) == 0 {
+				continue
+			}
+			keyMaterial := strings.Join([]string{accountID, current.folder, destFolderID, strings.Join(from, "|"), strings.Join(to, "|"), strings.Join(subject, "|")}, "|")
+			key := uuid.NewSHA1(uuid.NameSpaceURL, []byte(keyMaterial)).String()
+			// Criteria are never nil so the JSON event always carries arrays.
+			draft := &SuggestedFilter{Key: key, AccountID: accountID, SourceFolderID: current.folder, DestFolderID: destFolderID, FromContains: nonNil(from), ToContains: nonNil(to), SubjectContains: nonNil(subject)}
+			payload, _ := json.Marshal(draft)
+			if _, err := s.db.Exec(`INSERT OR IGNORE INTO mail_filter_suggestions(suggestion_key,state,payload_json,updated_at) VALUES(?,?,?,?)`, key, "pending", string(payload), time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+				return nil, err
+			}
+			var state string
+			if err := s.db.QueryRow(`SELECT state FROM mail_filter_suggestions WHERE suggestion_key=?`, key).Scan(&state); err != nil {
+				return nil, err
+			}
+			if state != "pending" {
+				continue
+			}
+			return draft, nil
+		}
+	}
+	return nil, nil
+}
+
+func (s *MoveHistory) samples(query string, args ...any) ([]moveSample, error) {
+	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var samples []moveSample
+	var out []moveSample
 	for rows.Next() {
 		var v moveSample
 		if err := rows.Scan(&v.action, &v.folder, &v.from, &v.to, &v.cc, &v.subject); err != nil {
 			return nil, err
 		}
-		samples = append(samples, v)
+		out = append(out, v)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	var current moveSample
-	if err := s.db.QueryRow(`SELECT folder_id,from_email,to_list,cc_list,subject FROM mail_filter_move_history WHERE account_id=? AND dest_folder_id=? AND action_id=? LIMIT 1`, accountID, destFolderID, actionID).Scan(&current.folder, &current.from, &current.to, &current.cc, &current.subject); err != nil {
-		return nil, err
-	}
-	for _, prior := range samples {
-		if prior.folder != current.folder {
-			continue
-		}
-		from := sharedExact(prior.from, current.from)
-		to := sharedAddresses(prior.to+" "+prior.cc, current.to+" "+current.cc)
-		subject := sharedSubject(prior.subject, current.subject)
-		if len(from)+len(to)+len(subject) == 0 {
-			continue
-		}
-		keyMaterial := strings.Join([]string{accountID, current.folder, destFolderID, strings.Join(from, "|"), strings.Join(to, "|"), strings.Join(subject, "|")}, "|")
-		key := uuid.NewSHA1(uuid.NameSpaceURL, []byte(keyMaterial)).String()
-		draft := &SuggestedFilter{Key: key, AccountID: accountID, SourceFolderID: current.folder, DestFolderID: destFolderID, FromContains: from, ToContains: to, SubjectContains: subject}
-		payload, _ := json.Marshal(draft)
-		_, err := s.db.Exec(`INSERT OR IGNORE INTO mail_filter_suggestions(suggestion_key,state,payload_json,updated_at) VALUES(?,?,?,?)`, key, "pending", string(payload), time.Now().UTC().Format(time.RFC3339Nano))
+	return out, rows.Err()
+}
+
+// ownAddresses returns the account address and its identities, lower-cased.
+func (s *MoveHistory) ownAddresses(accountID string) ([]string, error) {
+	var own []string
+	for _, q := range []string{`SELECT email FROM accounts WHERE id=?`, `SELECT email FROM identities WHERE account_id=?`} {
+		rows, err := s.db.Query(q, accountID)
 		if err != nil {
 			return nil, err
 		}
-		var state string
-		if err := s.db.QueryRow(`SELECT state FROM mail_filter_suggestions WHERE suggestion_key=?`, key).Scan(&state); err != nil {
+		for rows.Next() {
+			var e string
+			if err := rows.Scan(&e); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			if e = strings.ToLower(strings.TrimSpace(e)); e != "" {
+				own = append(own, e)
+			}
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
 			return nil, err
 		}
-		if state != "pending" {
-			continue
-		}
-		return draft, nil
 	}
-	return nil, nil
+	return own, nil
 }
 
+func nonNil(v []string) []string {
+	if v == nil {
+		return []string{}
+	}
+	return v
+}
+
+// Pending lists every suggestion still waiting for the user's decision. It
+// does not derive new ones; SuggestionForRecentMove does that after a move.
 func (s *MoveHistory) Pending() ([]*SuggestedFilter, error) {
 	rows, err := s.db.Query(`SELECT payload_json FROM mail_filter_suggestions WHERE state='pending' ORDER BY updated_at DESC`)
 	if err != nil {
@@ -163,16 +217,21 @@ func sharedExact(a, b string) []string {
 	}
 	return nil
 }
-func sharedAddresses(a, b string) []string {
-	aa := addresses(a)
-	bb := addresses(b)
-	for _, v := range aa {
-		if v != "" && containsFold(bb, v) {
+func sharedAddresses(a, b, own []string) []string {
+	for _, v := range a {
+		if v != "" && !containsFold(own, v) && containsFold(b, v) {
 			return []string{v}
 		}
 	}
 	return nil
 }
+
+// recipients decodes To and Cc as separate JSON arrays and returns the
+// combined, lower-cased addresses.
+func (m moveSample) recipients() []string {
+	return append(addresses(m.to), addresses(m.cc)...)
+}
+
 func addresses(raw string) []string {
 	var vals []message.Address
 	_ = json.Unmarshal([]byte(raw), &vals)

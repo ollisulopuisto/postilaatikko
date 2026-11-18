@@ -527,7 +527,12 @@ func (a *App) MoveToFolderWithUndo(messageIDs []string, destFolderID string) (Un
 	// Header-only samples are read before the move changes folder_id.
 	var moved []*message.Message
 	if a.moveFilterHistory != nil && a.messageStore != nil && len(messageIDs) > 0 {
-		moved, _ = a.messageStore.GetMoveFilterHeadersByIDs(messageIDs)
+		var headersErr error
+		moved, headersErr = a.messageStore.GetMoveFilterHeadersByIDs(messageIDs)
+		if headersErr != nil {
+			filterLog := logging.WithComponent("app.filters")
+			filterLog.Warn().Err(headersErr).Msg("Failed to read user move headers for filter suggestions")
+		}
 	}
 	if a.mailboxService != nil {
 		response, handled, err := a.mutateResolvedAction(a.actionContext(), messageIDs, v1.ActionMove, destFolderID)

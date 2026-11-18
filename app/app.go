@@ -718,6 +718,8 @@ func (a *App) Startup(ctx context.Context) {
 	a.replyContent = replycontent.NewService(replycontent.ServiceOptions{})
 	a.virtualFolderStore = virtualfolder.NewStore(db)
 	a.filterStore = mailfilter.NewStore(db)
+	// Known limitation: remote mailbox mode does not create the history store,
+	// so remote desktops get no move-based filter suggestions yet.
 	a.moveFilterHistory = mailfilter.NewMoveHistory(db)
 	a.filterRouter = mailfilter.NewAutomaticRouter(a.filterStore, a.folderStore, func(rule *mailfilter.Rule, _ *folder.Folder, msg *message.Message) {
 		go a.applyMatchedFilterRule(rule, msg)
