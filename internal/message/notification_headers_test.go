@@ -1,6 +1,8 @@
 package message
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -90,5 +92,24 @@ func TestNotificationTargetAlignsHeadersAndClickConversation(t *testing.T) {
 		if _, err := s.NotificationTarget(id, "a", "wrong-folder"); err == nil {
 			t.Fatal("wrong-folder notification target accepted")
 		}
+	}
+}
+
+type interruptedHeaderRows struct{ remaining int }
+
+func (r *interruptedHeaderRows) Next() bool {
+	if r.remaining > 0 {
+		r.remaining--
+		return true
+	}
+	return false
+}
+func (r *interruptedHeaderRows) Scan(...any) error { return nil }
+func (r *interruptedHeaderRows) Err() error        { return context.DeadlineExceeded }
+
+func TestInterruptedHeaderSampleReturnsNoPartialResult(t *testing.T) {
+	got, err := scanFolderHeaders(&interruptedHeaderRows{remaining: 1})
+	if !errors.Is(err, context.DeadlineExceeded) || got != nil {
+		t.Fatalf("partial notification sample accepted: got=%#v err=%v", got, err)
 	}
 }

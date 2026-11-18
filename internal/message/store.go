@@ -187,6 +187,16 @@ func (s *Store) listByFolderSince(folderID string, offset, limit int, since time
 	}
 	defer rows.Close()
 
+	return scanFolderHeaders(rows)
+}
+
+type headerRows interface {
+	Next() bool
+	Scan(...any) error
+	Err() error
+}
+
+func scanFolderHeaders(rows headerRows) ([]*MessageHeader, error) {
 	var messages []*MessageHeader
 	for rows.Next() {
 		m := &MessageHeader{}
@@ -215,6 +225,9 @@ func (s *Store) listByFolderSince(folderID string, offset, limit int, since time
 		messages = append(messages, m)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate message headers: %w", err)
+	}
 	return messages, nil
 }
 
