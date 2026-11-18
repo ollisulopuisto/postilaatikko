@@ -1722,7 +1722,13 @@
     "sendNow": "Send now",
     "cancel": "Cancel",
     "cancelled": "Send cancelled - draft restored",
-    "alreadySending": "Too late - the send already started"
+    "alreadySending": "Too late - the send already started",
+    "reply": "Reply",
+    "replyAll": "Reply All",
+    "to": "To",
+    "cc": "Cc",
+    "bcc": "Bcc",
+    "editRecipients": "Edit recipients"
   },
   "macOSContacts": {
     "title": "macOS Contacts",

@@ -3979,6 +3979,7 @@ export namespace smtp {
 	export class ComposeMessage {
 	    from: Address;
 	    identity_id?: string;
+	    reply_mode?: string;
 	    to: Address[];
 	    cc: Address[];
 	    bcc: Address[];
@@ -4004,6 +4005,7 @@ export namespace smtp {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.from = this.convertValues(source["from"], Address);
 	        this.identity_id = source["identity_id"];
+        this.reply_mode = source["reply_mode"];
 	        this.to = this.convertValues(source["to"], Address);
 	        this.cc = this.convertValues(source["cc"], Address);
 	        this.bcc = this.convertValues(source["bcc"], Address);

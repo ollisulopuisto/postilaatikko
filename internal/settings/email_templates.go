@@ -53,11 +53,19 @@ func (s *Store) SaveEmailTemplate(template EmailTemplate) (EmailTemplate, error)
 		return EmailTemplate{}, fmt.Errorf("email template subject or body is required")
 	}
 
+	// Bound local JSON read-modify-write cost without changing the storage schema.
+	if len(template.Name) > 256 || len(template.Subject) > 4096 || len(template.Body) > 65536 {
+		return EmailTemplate{}, fmt.Errorf("email template exceeds size limit (name 256, subject 4096, body 65536 bytes)")
+	}
+
 	templates, err := s.ListEmailTemplates()
 	if err != nil {
 		return EmailTemplate{}, err
 	}
 	if template.ID == "" {
+		if len(templates) >= 100 {
+			return EmailTemplate{}, fmt.Errorf("email template limit reached (100)")
+		}
 		template.ID = uuid.NewString()
 		templates = append(templates, template)
 		return template, s.writeEmailTemplates(templates)

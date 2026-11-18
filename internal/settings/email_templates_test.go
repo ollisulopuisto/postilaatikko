@@ -1,7 +1,9 @@
 package settings
 
 import (
+	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -105,4 +107,49 @@ func TestConcurrentTemplateSavesKeepEveryTemplate(t *testing.T) {
 	if err != nil || len(got) != count {
 		t.Fatalf("lost concurrent template writes: count=%d want %d error=%v", len(got), count, err)
 	}
+}
+
+func TestEmailTemplateLimitsPreserveStoredData(t *testing.T) {
+	for _, input := range []EmailTemplate{
+		{Name: strings.Repeat("x", 257), Body: "body"},
+		{Name: "subject", Subject: strings.Repeat("x", 4097)},
+		{Name: "body", Body: strings.Repeat("x", 65537)},
+	} {
+		t.Run(input.Name[:1], func(t *testing.T) {
+			s := NewStore(openTestDB(t))
+			saved, err := s.SaveEmailTemplate(EmailTemplate{Name: "keep", Body: "keep"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.SaveEmailTemplate(input); err == nil {
+				t.Fatal("accepted oversized field")
+			}
+			got, err := s.ListEmailTemplates()
+			if err != nil || len(got) != 1 || got[0] != saved {
+				t.Fatalf("changed stored templates: %v %v", got, err)
+			}
+		})
+	}
+	t.Run("count", func(t *testing.T) {
+		s := NewStore(openTestDB(t))
+		templates := make([]EmailTemplate, 100)
+		for i := range templates {
+			templates[i] = EmailTemplate{ID: fmt.Sprint(i), Name: "keep", Body: "body"}
+		}
+		data, _ := json.Marshal(templates)
+		if err := s.Set(KeyEmailTemplates, string(data)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.SaveEmailTemplate(EmailTemplate{Name: "extra", Body: "body"}); err == nil {
+			t.Fatal("accepted 101st template")
+		}
+		templates[0].Body = "updated"
+		if _, err := s.SaveEmailTemplate(templates[0]); err != nil {
+			t.Fatal("update at count limit:", err)
+		}
+		got, err := s.ListEmailTemplates()
+		if err != nil || len(got) != 100 || got[0].Body != "updated" {
+			t.Fatalf("count/update: %d %v", len(got), err)
+		}
+	})
 }

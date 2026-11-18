@@ -76,6 +76,8 @@
     initialMessage?: smtp.ComposeMessage | null
     /** Existing draft ID if editing a draft */
     draftId?: string | null
+    /** Focus the To field after restoring a draft for recipient correction. */
+    focusRecipients?: boolean
     /** Original message ID for reply/forward (needed for pop-out) */
     messageId?: string | null
     onClose?: () => void
@@ -96,7 +98,7 @@
     variant?: 'default' | 'compact'
   }
 
-  let { accountId, initialMessage = null, draftId = null, messageId = null, onClose, onSent, api: propApi, isDetached = false, closeRequested = false, onCloseHandled, onTitleChange, imagesLoaded = false, variant = 'default' }: Props = $props()
+  let { accountId, initialMessage = null, draftId = null, focusRecipients = false, messageId = null, onClose, onSent, api: propApi, isDetached = false, closeRequested = false, onCloseHandled, onTitleChange, imagesLoaded = false, variant = 'default' }: Props = $props()
   const isCompact = $derived(!isDetached && variant === 'compact')
 
   // Get API from context, props, or create default main window API
@@ -585,6 +587,9 @@
   // Determine display mode from initialMessage
   function getDisplayMode(): 'new' | 'reply' | 'reply-all' | 'forward' {
     if (!initialMessage) return 'new'
+    if (['reply', 'reply-all', 'forward'].includes(initialMessage.reply_mode || '')) {
+      return initialMessage.reply_mode as 'reply' | 'reply-all' | 'forward'
+    }
     if (initialMessage.subject?.startsWith('Fwd:')) return 'forward'
     if (initialMessage.in_reply_to) {
       // reply-all if there are multiple To recipients or any Cc
@@ -747,6 +752,9 @@
         address: selectedIdentity?.email || '',
       }),
       identity_id: selectedIdentityId,
+      // Only an explicit mode is stored. A guessed one could label a plain reply
+      // to a many-recipient message as Reply All.
+      reply_mode: initialMessage?.reply_mode || '',
       to: toRecipients,
       cc: ccRecipients,
       bcc: bccRecipients,
@@ -1132,8 +1140,13 @@
         // Capture only after restored state and the initial signature settle.
         lastContent = getContentHash()
       }
-      // Focus editor body for reply/reply-all, To field for new/forward
+      // Recipient repair always returns focus to To; otherwise replies focus
+      // the body and new/forward messages focus the recipient field.
       const mode = getDisplayMode()
+      if (focusRecipients) {
+        toInputRef?.focus()
+        return
+      }
       switch (mode) {
         case 'reply':
         case 'reply-all':
