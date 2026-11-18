@@ -122,7 +122,7 @@ function bench(fn, iters) {
 const ITERATIONS = 2000
 const rows500 = isoRows(base, 500, 60000)
 
-test('sortSearchRows parse-once is materially faster than new Date() parsing per comparison (>5x speedup)', () => {
+test('sortSearchRows parse-once is materially faster than new Date() parsing per comparison', () => {
   const runOld = () => sortSearchRowsDate(rows500, -1)
   const runNew = () => sortSearchRows(rows500, -1)
 
