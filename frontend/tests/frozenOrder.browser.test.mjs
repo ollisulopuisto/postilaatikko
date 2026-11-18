@@ -19,7 +19,7 @@ test('frozen App index survives reading/selection and arrivals, explicit pill re
     }
     browser = await chromium.launch({ executablePath: process.env.POSTI_CHROMIUM_BUNDLED ? undefined : process.env.CHROME_BIN || '/usr/bin/google-chrome-stable', headless: true, args: ['--no-sandbox'] })
     for (const mode of ['categories', 'priority', 'plain']) {
-      const plain = mode === 'plain' 
+      const plain = mode === 'plain'
       const page = await browser.newPage({ viewport: { width: 1360, height: 900 } })
       const errors = []; page.on('pageerror', err => errors.push(err.message))
       await page.addInitScript(({ plain, mode }) => {
