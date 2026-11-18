@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Keep message index order and inbox cards stable while reading. Pending arrivals/changes wait behind a re-sort pill; deliberate mail/context actions reconcile the list.
+
 - Combine Read later and Reply later into one Later pile, preserving existing marks and removing them only when explicitly requested.
 
 ### Native menu shortcut column

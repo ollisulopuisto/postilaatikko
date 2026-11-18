@@ -56,6 +56,7 @@
     folderId?: string | null
     folderType?: string | null
     accountId?: string | null
+    onReplyStart?: () => void
     onReply?: (mode: 'reply' | 'reply-all' | 'forward', messageId: string, imagesLoaded?: boolean) => void
     onComposeToAddress?: (toAddress: string) => void
     onEditDraft?: (draftId: string) => void
@@ -88,6 +89,7 @@
     folderType = null,
     accountId = null,
     onReply,
+    onReplyStart,
     onComposeToAddress,
     onEditDraft,
     onActionComplete,
@@ -1221,6 +1223,7 @@
   }
 
   async function openReply(mode: 'reply' | 'reply-all' | 'forward', messageId: string, imagesLoaded = false) {
+    onReplyStart?.()
     const targetImagesLoaded = imagesLoaded || messagesWithImagesLoaded.has(messageId)
     if (mode === 'forward' || readerMode !== 'conversation' || inFocusMode) {
       onReply?.(mode, messageId, targetImagesLoaded)
@@ -2194,7 +2197,7 @@
       </div>
 
       <div class="flex flex-wrap items-center gap-2">
-        <LaterQueueButton nativeMenu={nativeOwnsMailActions && isFocused} accountId={conversation.messages?.[0]?.accountId || accountId || ''} conversationId={threadId || ''} />
+        <LaterQueueButton onComplete={() => onActionComplete?.(false)} nativeMenu={nativeOwnsMailActions && isFocused} accountId={conversation.messages?.[0]?.accountId || accountId || ''} conversationId={threadId || ''} />
         {#if folderType !== 'snoozed'}<SnoozeButton nativeMenu={nativeOwnsMailActions && isFocused} accountId={conversation.messages?.[0]?.accountId || accountId || ''} conversationId={threadId || ''} />{/if}
         <ReaderModeToggle mode={readerMode} onChange={switchReaderMode} />
         {#if readerMode === 'traditional' && conversation.messages && conversation.messages.length > 1}
@@ -2319,7 +2322,7 @@
                   >
                 {#if readerMode === 'conversation'}
                   <div class="bubble-heading flex items-center gap-2 px-4 pt-2 pb-1 text-xs text-muted-foreground">
-                    <LaterQueueButton nativeMenu={nativeOwnsMailActions && isFocused} accountId={msg.accountId || accountId || ''} conversationId={msg.threadId || threadId || ''} variant="row" />
+                    <LaterQueueButton onComplete={() => onActionComplete?.(false)} nativeMenu={nativeOwnsMailActions && isFocused} accountId={msg.accountId || accountId || ''} conversationId={msg.threadId || threadId || ''} variant="row" />
                     <button type="button" class="flex min-w-0 flex-1 items-center justify-between gap-3 text-left" aria-expanded={expandedHeaders.has(msg.id)} data-native-action="viewer.details" title={$_('viewer.messageDetails')} onkeydown={(event) => event.stopPropagation()} onclick={() => toggleHeader(msg.id)}>
                       <span class="truncate font-medium text-foreground">{bubble?.showSender ? (msg.fromName || msg.fromEmail) : ''}</span>
                       <span class="whitespace-nowrap">{formatDate(msg.date)} <span aria-hidden="true">⌄</span></span>
@@ -2451,7 +2454,7 @@
                   </div>
 
                   <div class="flex shrink-0 items-center gap-1" role="group" aria-label={$_('shortcuts.group.messageActions')}>
-                    <LaterQueueButton nativeMenu={nativeOwnsMailActions && isFocused} accountId={msg.accountId || accountId || ''} conversationId={msg.threadId || threadId || ''} />
+                    <LaterQueueButton onComplete={() => onActionComplete?.(false)} nativeMenu={nativeOwnsMailActions && isFocused} accountId={msg.accountId || accountId || ''} conversationId={msg.threadId || threadId || ''} />
                   </div>
                   <!-- Date, edit button (drafts), and expand icon -->
                   <div class="flex flex-col items-end gap-1 flex-shrink-0">

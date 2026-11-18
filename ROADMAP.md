@@ -1,5 +1,9 @@
 # Roadmap
 
+### Frozen message index (2026-11-18)
+
+Owner-approved: freeze every loaded row and its inbox card until a deliberate action changes the message set or context. Selecting, reading and incoming mail do not re-sort. Explicit mutations, compose/reply/forward, view/filter changes and refresh may reconcile. A counted pending-change pill offers immediate reconciliation; plain folders follow the same rule. This supersedes releasing the selected-row pin when another conversation is selected.
+
 Planned, in flight, open questions, and parked items for this fork. Done items are marked with the version that shipped them. Suitable changes are intended to be proposed upstream to Eterno Mail after they are stable.
 
 ## Product direction

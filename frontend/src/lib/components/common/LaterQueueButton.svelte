@@ -24,7 +24,7 @@
       const result = await laterQueue.setWithUndo(accountId, conversationId, target)
       if (result?.changed) toasts.success($_(`readLater.${target ? 'added' : 'removed'}`), result.operationId ? [{
         label: $_('common.undo'),
-        onClick: () => { void undoLaterChange(result).catch(() => toasts.error($_('toast.undoFailed'))) },
+        onClick: () => { void undoLaterChange(result).then(() => onComplete?.()).catch(() => toasts.error($_('toast.undoFailed'))) },
       }] : undefined)
       onComplete?.()
     } catch (err) { toasts.error(`${$_(`readLater.failed`)}: ${String(err)}`) }

@@ -1458,6 +1458,7 @@
 
   // Handle compose button click (new message)
   function handleCompose() {
+    messageListRef?.releaseFrozenOrder?.()
     // Use the selected account, or the first account if none selected
     const accountId = resolveAccountId(selectedAccountId)
     if (!accountId) return
@@ -1476,6 +1477,7 @@
 
   // Handle edit draft (opens composer with existing draft)
   async function handleEditDraft(draftId: string) {
+    messageListRef?.releaseFrozenOrder?.()
     // Use conversation's account ID, fall back to selected account or first account
     const accountId = resolveAccountId(selectedConversationAccountId) || resolveAccountId(selectedAccountId)
     if (!accountId) return
@@ -1502,6 +1504,7 @@
 
   // Handle compose to a specific email address (from mailto: links in emails)
   function handleComposeToAddress(toAddress: string) {
+    messageListRef?.releaseFrozenOrder?.()
     // Use conversation's account ID, or selected account, or first account
     const accountId = resolveAccountId(selectedConversationAccountId) || resolveAccountId(selectedAccountId)
     if (!accountId) return
@@ -1533,6 +1536,7 @@
   }
 
   function handleMailtoData(data: MailtoData, rawMailtoURL?: string) {
+    messageListRef?.releaseFrozenOrder?.()
     // Use selected account or first account (resolve 'unified' to real account)
     const accountId = resolveAccountId(selectedAccountId)
     if (!accountId) {
@@ -1568,6 +1572,7 @@
 
   // Handle reply/reply-all/forward - calls backend API
   async function handleReply(mode: 'reply' | 'reply-all' | 'forward', messageId: string, imagesLoaded?: boolean) {
+    messageListRef?.releaseFrozenOrder?.()
     // Use conversation's account ID (important for unified inbox), fall back to selected account or first account
     const accountId = resolveAccountId(selectedConversationAccountId) || resolveAccountId(selectedAccountId)
     if (!accountId) return
@@ -2840,6 +2845,7 @@
         folderType={allMailSearchActive ? 'search' : selectedFolderType}
         accountId={selectedConversationAccountId}
         onReply={handleReply}
+        onReplyStart={() => messageListRef?.releaseFrozenOrder?.()}
         onComposeToAddress={handleComposeToAddress}
         onEditDraft={handleEditDraft}
         onActionComplete={(autoSelectNext) => messageListRef?.handleActionComplete(autoSelectNext)}
@@ -2889,7 +2895,7 @@
 <UpdateAvailableNotice hidden={showTermsDialog || showOAuthMissingDialog || showWhatsNewDialog || showCertDialog || showFlatpakFsDialog} />
 
 <!-- Toast notifications -->
-<SnoozeDialog bind:open={snoozeDialog.open} targets={snoozeDialog.targets} />
+<SnoozeDialog bind:open={snoozeDialog.open} targets={snoozeDialog.targets} onDone={() => messageListRef?.handleActionComplete(true)} />
 <ToastContainer />
 
 <!-- Spellcheck right-click suggestion menu (composer) -->

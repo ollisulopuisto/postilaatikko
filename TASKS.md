@@ -569,3 +569,9 @@ README review follow-up: qualify checksum instructions because tagged releases d
 | ID | Effort | Task | Owner | Status |
 | --- | --- | --- | --- | --- |
 | REPO-FACTS-001 | Small | Record verified per-repo facts, the Devin + CI merge gate and a two-failure loop guard in AGENTS.md. | Instinct / `chore/agents-md-repo-facts` / `/tmp/gh/postilaatikko` | Review; PR #268, implementation `3397c27`. Facts verified 2026-11-17 against ci.yml and the Makefile (Go 1.26, golangci-lint v2.12.2 with webkit2_41, Node 24 npm pipeline, ci_scope.py change scoping, frontend/dist compile fixture, Playwright browser tests). No flaky tests documented as of 2026-11-17; the section says so. Documentation-only: test suites intentionally not run; ci_scope.py selects neither frontend nor backend jobs for this diff. |
+
+## Frozen message index (2026-11-18)
+
+| ID | Effort | Task | Owner / branch / worktree | Status |
+| --- | --- | --- | --- | --- |
+| UX-FROZEN-INDEX-001 | Medium | Supersede selection-only row pinning with a per-view frozen order and card snapshot. Passive reading, navigation and arrivals never reorder it. Deliberate set/context actions and the pending-change pill reconcile it. | Instinct / `feat/frozen-message-index` / `/tmp/postilaatikko-index` | Review; pure failing-first regressions pass; full frontend suite 1086 pass/10 opt-in skips; full-App categories/priority/plain browser regression passes; lint, type/shortcut checks and build pass. One existing viewerRef Svelte warning and bundle-size warnings remain. Action audit in docs/decisions/2026-11-18-frozen-index.md. |
