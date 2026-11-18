@@ -119,3 +119,20 @@ func (prefs SmartNotificationSettings) ShouldNotify(sender string) bool {
 	}
 	return domainAction != "mute"
 }
+
+// ShouldNotifyBatch fails open unless the bounded local receive window covers
+// the full arrival count. A missing, oversized or mixed batch must not hide mail.
+func (prefs SmartNotificationSettings) ShouldNotifyBatch(senders []string, expected int) bool {
+	if !prefs.Enabled {
+		return false
+	}
+	if expected <= 0 || expected > 100 || len(senders) != expected {
+		return true
+	}
+	for _, sender := range senders {
+		if prefs.ShouldNotify(sender) {
+			return true
+		}
+	}
+	return false
+}

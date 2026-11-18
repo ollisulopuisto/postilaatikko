@@ -127,16 +127,33 @@ func snoozedViewHavingClause(filter string) string {
 
 // ListByFolder returns message headers for a folder with pagination
 func (s *Store) ListByFolder(folderID string, offset, limit int) ([]*MessageHeader, error) {
+	return s.listByFolderSince(folderID, offset, limit, time.Time{})
+}
+
+// ListByFolderReceivedSince reads locally received headers, never message bodies.
+// Unlike the message Date, ReceivedAt is set locally when sync stores the mail.
+func (s *Store) ListByFolderReceivedSince(folderID string, since time.Time, limit int) ([]*MessageHeader, error) {
+	return s.listByFolderSince(folderID, 0, limit, since)
+}
+
+func (s *Store) listByFolderSince(folderID string, offset, limit int, since time.Time) ([]*MessageHeader, error) {
+	where := "folder_id = ?"
+	args := []any{folderID}
+	if !since.IsZero() {
+		where += " AND received_at >= ?"
+		args = append(args, since)
+	}
+	args = append(args, limit, offset)
 	query := `
 		SELECT id, account_id, folder_id, uid, subject, from_name, from_email,
 		       date, snippet, is_read, is_starred, has_attachments
 		FROM messages
-		WHERE folder_id = ?
+		WHERE ` + where + `
 		ORDER BY date DESC, id DESC
 		LIMIT ? OFFSET ?
 	`
 
-	rows, err := s.db.Query(query, folderID, limit, offset)
+	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query messages: %w", err)
 	}

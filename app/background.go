@@ -583,28 +583,32 @@ func (a *App) handleNewMailNotification(info sync.NewMailInfo) {
 		}
 	}
 
-	// Apply sender/domain rules using only the already-synced message headers.
+	// Apply sender/domain rules only to headers stored during this sync, never
+	// a date-sorted sample that could omit a backdated new arrival.
 	// Bound the lookup so a large burst never turns a notification into an
 	// unbounded database scan. If the header window is incomplete, keep the
 	// notification: suppressing mail based on a partial sample could hide a
 	// sender the user explicitly allowed.
-	if prefsErr == nil && len(prefs.Rules) > 0 && info.Count > 0 {
+	if prefsErr == nil && len(prefs.Rules) > 0 && info.Count > 0 && !info.ReceivedSince.IsZero() {
 		const maxNotificationHeaders = 100
 		limit := info.Count
 		if limit > maxNotificationHeaders {
 			limit = maxNotificationHeaders
 		}
-		headers, headerErr := a.messageStore.ListByFolder(info.FolderID, 0, limit)
+		headers, headerErr := a.messageStore.ListByFolderReceivedSince(info.FolderID, info.ReceivedSince, limit+1)
 		if headerErr != nil {
 			log.Warn().Err(headerErr).Msg("Could not read headers for notification rules; allowing notification")
 		} else if len(headers) > 0 {
-			if info.Count > len(headers) {
+			if info.Count != len(headers) || info.Count > maxNotificationHeaders {
 				log.Debug().Int("newCount", info.Count).Int("headerCount", len(headers)).Msg("Notification rule sample incomplete; allowing notification")
 			} else {
-				allowed := false
+				senders := make([]string, 0, len(headers))
+				for _, header := range headers {
+					senders = append(senders, header.FromEmail)
+				}
+				allowed := prefs.ShouldNotifyBatch(senders, info.Count)
 				for _, header := range headers {
 					if prefs.ShouldNotify(header.FromEmail) {
-						allowed = true
 						if subject == "" || info.Count == 1 {
 							subject = header.Subject
 							fromName = header.FromName

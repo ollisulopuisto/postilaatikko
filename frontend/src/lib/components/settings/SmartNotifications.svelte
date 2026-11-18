@@ -6,7 +6,9 @@
   import { addToast } from '$lib/stores/toast'
   import { GetSmartNotificationSettings, SaveSmartNotificationSettings } from '../../../../wailsjs/go/app/App.js'
 
-  type Rule = { id: string; scope: 'sender' | 'domain'; match: string; action: 'notify' | 'mute' }
+  import { settings } from '../../../../wailsjs/go/models'
+
+  type Rule = settings.NotificationRule
   type Preferences = { enabled: boolean; rules: Rule[] }
 
   let preferences = $state<Preferences>({ enabled: true, rules: [] })
@@ -20,11 +22,10 @@
     try {
       const saved = await GetSmartNotificationSettings()
       preferences = { enabled: saved.enabled, rules: saved.rules ?? [] }
+      loaded = true
     } catch (error) {
       console.error('Failed to load smart notification settings:', error)
       addToast({ type: 'error', message: $_('settingsGeneral.notificationsLoadError') })
-    } finally {
-      loaded = true
     }
   })
 
@@ -33,7 +34,7 @@
     preferences = next
     saving = true
     try {
-      await SaveSmartNotificationSettings(next)
+      await SaveSmartNotificationSettings(new settings.SmartNotificationSettings(next))
       return true
     } catch (error) {
       console.error('Failed to save smart notification settings:', error)
