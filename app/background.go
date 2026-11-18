@@ -611,6 +611,9 @@ func (a *App) handleNewMailNotification(info sync.NewMailInfo) {
 					if prefs.ShouldNotify(header.FromEmail) {
 						if subject == "" || info.Count == 1 {
 							target, targetErr := a.messageStore.NotificationTarget(header.ID, info.AccountID, info.FolderID)
+							if targetErr != nil {
+								log.Warn().Err(targetErr).Msg("Could not resolve notification target; using existing notification target")
+							}
 							if targetErr == nil {
 								subject = target.Subject
 								fromName = target.FromName

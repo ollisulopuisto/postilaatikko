@@ -134,6 +134,8 @@ type NotificationTarget struct {
 	ThreadID  string
 }
 
+// NotificationTarget resolves display headers and the click conversation from
+// one account- and folder-scoped message without reading its body.
 func (s *Store) NotificationTarget(messageID, accountID, folderID string) (*NotificationTarget, error) {
 	target := &NotificationTarget{}
 	err := s.db.QueryRow(`SELECT subject, from_name, from_email, COALESCE(NULLIF(thread_id, ''), id)
