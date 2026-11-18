@@ -8,12 +8,12 @@ const browserModule = process.env.POSTI_PLAYWRIGHT_PATH
 
 test('frozen App index survives reading/selection and arrivals, explicit pill releases it in grouped and plain folders', { skip: !browserModule, timeout: 120000 }, async () => {
   const { chromium } = await import(browserModule)
-  const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '5193', '--strictPort'], { cwd: fileURLToPath(new URL('..', import.meta.url)), stdio: ['ignore', 'pipe', 'pipe'] })
+  const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', '5197', '--strictPort'], { cwd: fileURLToPath(new URL('..', import.meta.url)), stdio: ['ignore', 'pipe', 'pipe'] })
   let log = ''; server.stdout.on('data', data => { log += data }); server.stderr.on('data', data => { log += data })
   let browser
   try {
     for (let i = 0; i < 150; i++) {
-      try { if ((await fetch('http://127.0.0.1:5193')).ok) break } catch { /* starting */ }
+      try { if ((await fetch('http://127.0.0.1:5197')).ok) break } catch { /* starting */ }
       if (server.exitCode !== null || i === 149) throw new Error(log)
       await delay(100)
     }
@@ -47,7 +47,7 @@ test('frozen App index survives reading/selection and arrivals, explicit pill re
           return Promise.resolve(key in data ? data[key] : key.startsWith('Get') || key.startsWith('List') ? [] : null)
         } }) } }
       }, { plain, mode })
-      await page.goto('http://127.0.0.1:5193', { waitUntil: 'domcontentloaded' })
+      await page.goto('http://127.0.0.1:5197', { waitUntil: 'domcontentloaded' })
       const rows = page.locator('[data-mail-row-key]'); await rows.first().waitFor()
       const identities = () => rows.evaluateAll(nodes => nodes.map(node => node.getAttribute('data-mail-row-key')))
       const original = await identities(); assert.equal(original.length, 3)
