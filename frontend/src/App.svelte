@@ -2513,7 +2513,8 @@
       await readLaterQueue.load()
       const inQueue = !readLaterQueue.has(accountId, conversationId)
       const result = await readLaterQueue.setWithUndo(accountId, conversationId, inQueue)
-      if (result?.changed) addToast({ type: 'success', message: $_(inQueue ? 'readLater.added' : 'readLater.removed'), actions: result.operationId ? [{ label: $_('common.undo'), onClick: () => { void undoLaterChange(result).catch(() => addToast({ type: 'error', message: $_('toast.undoFailed') })) } }] : undefined })
+      if (result?.changed) addToast({ type: 'success', message: $_(inQueue ? 'readLater.added' : 'readLater.removed'), actions: result.operationId ? [{ label: $_('common.undo'), onClick: () => { void undoLaterChange(result).then(() => messageListRef?.handleActionComplete(false)).catch(() => addToast({ type: 'error', message: $_('toast.undoFailed') })) } }] : undefined })
+      messageListRef?.handleActionComplete(false)
     } catch (err) { addToast({ type: 'error', message: `${$_('readLater.failed')}: ${String(err)}` }) }
   }
 

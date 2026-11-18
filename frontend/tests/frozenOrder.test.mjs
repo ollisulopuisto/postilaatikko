@@ -36,3 +36,25 @@ test('count is deduplicated and pagination adds only requested new identities', 
   assert.deepEqual(frozenRows(state, key).map(key), [key(a), key(b)])
   assert.equal(state.changed.length, 1)
 })
+
+
+test('retained filter-excluded rows keep last live read state, independent of grouping basis', () => {
+  let state = freezeOrder([a, b], clone)
+  const live = frozenRows(state, key)
+  live[0].unreadCount = 0
+  state = updateFrozenOrder(state, [b], key, signature)
+  assert.equal(frozenRows(state, key)[0].unreadCount, 0)
+  assert.equal(state.baseline[0].unreadCount, 1)
+  frozenRows(state, key)[0].unreadCount = 2
+  state = updateFrozenOrder(state, [b], key, signature)
+  assert.equal(frozenRows(state, key)[0].unreadCount, 2, 'later flag events still update a retained row')
+})
+
+test('cached release followed by passive arrival still freezes, pagination appends rather than replacing', () => {
+  const c = { accountId: 'three', threadId: 'c', unreadCount: 1 }
+  const released = freezeOrder([a, b], clone)
+  const passive = updateFrozenOrder(released, [c, a, b], key, signature)
+  assert.deepEqual(frozenRows(passive, key).map(key), [key(a), key(b)])
+  const next = appendFrozenRows(released, [a, b, c], key, clone)
+  assert.deepEqual(frozenRows(next, key).map(key), [key(a), key(b), key(c)])
+})

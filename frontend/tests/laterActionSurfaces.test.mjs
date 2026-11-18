@@ -68,8 +68,8 @@ test('one failed selected conversation does not skip later targets or lose succe
     calls.push([account,conversation]); if (conversation === 'B') throw new Error('offline')
     return {changed:true,operationId:'op-'+conversation}
   } }
-  const factory = new Function('queueTargets','laterActionsEnabled','laterBusy','readLaterQueue','replyLaterQueue','toasts','$_','UndoOperation', outputText.replace(/export \{ toggleLater \};?/, '')+'; return toggleLater;')
-  const handler = factory(['A','B','C'].map(conversationId=>({accountId:'one',conversationId})),true,false,queue,{}, {success:(...args)=>notices.push(args),error:(...args)=>notices.push(args)},x=>x,async()=>{})
+  const factory = new Function('queueTargets','laterActionsEnabled','laterBusy','readLaterQueue','replyLaterQueue','toasts','$_','UndoOperation','onActionComplete', outputText.replace(/export \{ toggleLater \};?/, '')+'; return toggleLater;')
+  const handler = factory(['A','B','C'].map(conversationId=>({accountId:'one',conversationId})),true,false,queue,{}, {success:(...args)=>notices.push(args),error:(...args)=>notices.push(args)},x=>x,async()=>{},()=>{})
   await handler('readLater')
   assert.deepEqual(calls.map(c=>c[1]), ['A','B','C'])
   assert.equal(notices.filter(n=>n[0]==='readLater.added').length,2)

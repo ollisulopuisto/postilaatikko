@@ -279,6 +279,7 @@
   },
   "messageList": {
     "newAbove": "{count} new above",
+    "retainedUnavailable": "This message is no longer available. Re-sort the list to update it.",
     "pendingIndexChanges": "{count} new or changed, tap to re-sort",
     "refreshVirtualFolder": "Refresh virtual folder",
     "searchMessages": "Search messages...",

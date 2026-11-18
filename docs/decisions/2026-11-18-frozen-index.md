@@ -4,10 +4,14 @@ The loaded view freezes account-qualified thread order and inbox card membership
 Reading, selecting another row, keyboard navigation, hover/prefetch and backend
 sync/arrival/read events do not release it. Read indicators still update. External
 removals remain represented until reconciliation; actions still resolve canonical
-backend targets through the existing guarded mutation paths.
+backend targets through the existing guarded mutation paths. Opening an excluded
+retained row first verifies its message still exists; unavailable rows show a
+re-sort notice rather than opening a broken reader.
 
 The pending-change pill counts distinct changed/new/removed identities, not event
-notifications. Clicking it reconciles and refreshes the loaded window, without
+notifications. Reading can increase this count because reconciling would move
+the row between Read/Priority cards; it never changes its frozen position.
+Clicking it reconciles and refreshes the loaded window, without
 selecting or marking another message read. It is a normal focusable button above
 the rows, not an overlay covering them. Dark mode and forced-colour screenshots
 are generated from the actual App with deterministic Wails fixtures.
@@ -47,3 +51,13 @@ fixed module. Full-App browser coverage opens one message, marks it read, select
 another, injects a new/reordered backend window and verifies unchanged DOM row
 identities in grouped and plain folders. It then clicks the pill and starts an
 inline reply after another arrival, verifying both deliberate releases.
+
+Review regressions cover compose followed by pagination/passive arrival, external
+removal at the first-page boundary, last live read state after unread-filter
+exclusion, detached viewer false/true completion forwarding, detached compose and
+full/inline reply, and Later mutation/undo completion. New behavioral tests were
+run against the previous PR head and observed failing before restoring the fixes.
+Explicit replacement permission is local to each query, never a lingering view
+flag. Standard folders re-fetch a growing header prefix when loading more, so
+external removals cannot skip a boundary row; virtual folders retain their own
+provider cursor. Retained display rows do not count as backend progress.

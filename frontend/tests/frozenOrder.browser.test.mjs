@@ -37,7 +37,7 @@ test('frozen App index survives reading/selection and arrivals, explicit pill re
           GetFolders: [{ id: 'inbox', accountId: 'demo', name: 'Fixture folder', type: plain ? 'folder' : 'inbox', children: [] }],
         }
         window.go = { app: { App: new Proxy({}, { get: (_, key) => (...args) => {
-          if (key === 'GetUnifiedFolderConversations' || key === 'GetConversations') return Promise.resolve(structuredClone(window.__rows))
+          if (key === 'GetUnifiedFolderConversations' || key === 'GetConversations') { const shift = key === 'GetConversations' ? 1 : 0; const offset = args[1 + shift] || 0; const limit = args[2 + shift] || 50; return Promise.resolve(structuredClone(window.__rows.slice(offset, offset + limit))) }
           if (key === 'GetUnifiedFolderCount' || key === 'GetConversationCount') return Promise.resolve(window.__rows.length)
           if (key === 'GetConversation') {
             const id = args[0]; const row = window.__rows.find(row => row.threadId === id) || window.__rows[0]
@@ -79,6 +79,35 @@ test('frozen App index survives reading/selection and arrivals, explicit pill re
       await page.getByRole('button', { name: 'Reply', exact: true }).first().click()
       await page.waitForTimeout(250)
       assert.equal((await identities()).length, 5, 'reply releases pending membership')
+      if (plain) {
+        // Rebuild a 150-header backend window. Explicit pill establishes the
+        // first 50; compose/reply then passive removals must not grant a later
+        // background query permission to replace that snapshot.
+        await page.evaluate(() => {
+          const template = window.__rows[0]
+          window.__rows = [...window.__rows, ...Array.from({ length: 150 }, (_, i) => ({ ...template, threadId: `page-${i}`, subject: `Pagination ${i}`, messageIds: [`page-msg-${i}`] }))]
+          window.__emit('folder:synced', { accountId: 'demo', folderId: 'inbox' })
+        })
+        await pill.waitFor(); await pill.click(); await page.waitForTimeout(450)
+        assert.equal((await identities()).length, 50)
+        await rows.first().click()
+        await page.getByRole('button', { name: 'Reply', exact: true }).first().click()
+        await page.evaluate(() => { window.__rows.splice(5, 1); window.__emit('folder:synced', { accountId: 'demo', folderId: 'inbox' }) })
+        await page.waitForTimeout(650)
+        assert.equal((await identities()).length, 50, 'reply does not grant the next passive query replacement permission')
+        const scroll = page.locator('.message-list-scroll')
+        await scroll.evaluate(node => { node.scrollTop = node.scrollHeight; node.dispatchEvent(new Event('scroll')) })
+        await page.waitForTimeout(500)
+        let loaded = await identities()
+        assert.ok(loaded.some(id => id.includes('page-50')), 'deletion never skips old backend boundary row')
+        assert.ok(loaded.some(id => id.includes('page-0')), 'pagination never discards the frozen first page')
+        assert.ok(loaded.length >= 100, `appended prefix, got ${loaded.length}`)
+        // Clicking retained removed data reports unavailable, not a stale reader.
+        await page.evaluate(() => { window.go.app.App = new Proxy(window.go.app.App, { get: (target, key) => key === 'GetMessage' ? () => Promise.reject(new Error('gone')) : target[key] }) })
+        await scroll.evaluate(node => { node.scrollTop = 0 })
+        await rows.filter({ hasText: 'Pagination 0', exact: false }).first().click()
+        await page.getByText('This message is no longer available. Re-sort the list to update it.', { exact: true }).waitFor()
+      }
       assert.equal(errors.length, 0, errors.join('\n'))
       await page.close()
     }
