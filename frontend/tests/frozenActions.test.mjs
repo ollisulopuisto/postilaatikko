@@ -82,11 +82,42 @@ test('Snooze undo completes all operations before reconciling restored membershi
   const events = [], notices = []
   const scope = { busy: false, open: true, targets: [{ accountId: 'one', conversationId: 'a' }, { accountId: 'one', conversationId: 'b' }],
     SnoozeConversationWithUndo: async (_, id) => ({ changed: true, operationId: id }), UndoOperation: async id => events.push(id),
-    onDone: () => events.push('done'), describe: () => 'later', $_: x => x,
+    onDone: autoNext => events.push(autoNext), describe: () => 'later', $_: x => x,
     toasts: { success: (_, actions) => notices.push(actions), error: error => { throw new Error(error) } },
   }
   await new Function('scope', `with(scope) { return async function(wakeAt) { ${js(body)} } }`)(scope)(new Date('2026-12-01T12:00:00Z'))
-  assert.deepEqual(events, ['done'])
+  assert.deepEqual(events, [true])
   notices[0][0].onClick(); await new Promise(resolve => setImmediate(resolve))
-  assert.deepEqual(events, ['done', 'a', 'b', 'done'])
+  assert.deepEqual(events, [true, 'a', 'b', false])
+})
+
+
+test('all Snooze callers preserve the completion selection policy', () => {
+  for (const name of ['App.svelte', 'MailWindowApp.svelte', 'lib/components/common/MessageContextMenu.svelte']) {
+    const source = files[name]
+    const expr = expression(source.slice(source.indexOf('<SnoozeDialog')), 'onDone={')
+    const results = [], handler = value => results.push(value)
+    const run = new Function('messageListRef', 'list', 'onActionComplete', `return (${js(`const callback = ${expr}`).replace(/^const callback = /, '').replace(/;\s*$/, '')})`)({ handleActionComplete: handler }, { handleActionComplete: handler }, handler)
+    run(true); run(false)
+    assert.deepEqual(results, [true, false], name)
+  }
+})
+
+test('Snooze undo completion cannot invalidate or advance the next active search result', async () => {
+  const body = functionBody(files['lib/components/list/MessageList.svelte'], 'doHandleActionComplete')
+  const results = ['A', 'B', 'C'].map(threadId => ({ threadId }))
+  const scope = { selectedThreadId: 'A', activeList: results, checkedThreadIds: new Set(), pendingServerActionSelection: null,
+    releaseFrozenOrder: () => {}, captureAutoSelectNext: (_, selected) => ({ originThreadId: selected }),
+    isSearchMode: true, searchSource: 'local', searchResults: results, serverSearchResults: [],
+    serverSearchResultIdentity: result => result.threadId,
+    invalidateActiveSearchResults: (_, identities) => { for (const id of identities) results.splice(results.findIndex(row => row.threadId === id), 1) },
+    onRowActionComplete: () => {}, listContainerRef: null,
+    finishAutoSelectAfterSearchAction: (_, autoNext) => { if (autoNext) scope.selectedThreadId = results[0]?.threadId },
+  }
+  const complete = new Function('scope', `with(scope) { return async function(autoSelectNext) { ${js(body)} } }`)(scope)
+  await complete(true)
+  assert.equal(scope.selectedThreadId, 'B'); assert.deepEqual(results.map(row => row.threadId), ['B', 'C'])
+  results.unshift({ threadId: 'A' }) // successful backend undo restores A
+  await complete(false)
+  assert.equal(scope.selectedThreadId, 'B'); assert.deepEqual(results.map(row => row.threadId), ['A', 'B', 'C'])
 })

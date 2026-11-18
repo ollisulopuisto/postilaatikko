@@ -2896,7 +2896,7 @@
 <UpdateAvailableNotice hidden={showTermsDialog || showOAuthMissingDialog || showWhatsNewDialog || showCertDialog || showFlatpakFsDialog} />
 
 <!-- Toast notifications -->
-<SnoozeDialog bind:open={snoozeDialog.open} targets={snoozeDialog.targets} onDone={() => messageListRef?.handleActionComplete(true)} />
+<SnoozeDialog bind:open={snoozeDialog.open} targets={snoozeDialog.targets} onDone={(autoSelectNext) => messageListRef?.handleActionComplete(autoSelectNext)} />
 <ToastContainer />
 
 <!-- Spellcheck right-click suggestion menu (composer) -->

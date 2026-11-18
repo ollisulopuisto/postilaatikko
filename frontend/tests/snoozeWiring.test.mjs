@@ -7,7 +7,7 @@ const read = path => readFile(new URL(path, import.meta.url), 'utf8')
 test('a detached mail window hosts its own Snooze dialog, the embedded one reuses the primary window dialog', async () => {
   const source = await read('../src/MailWindowApp.svelte')
   assert.match(source, /\{#if !embedded\}<SnoozeDialog bind:open=\{snoozeDialog\.open\}/)
-  assert.match(source, /onDone=\{\(\) => list\?\.handleActionComplete\(true\)\}/)
+  assert.match(source, /onDone=\{\(autoSelectNext\) => list\?\.handleActionComplete\(autoSelectNext\)\}/)
 })
 
 test('snoozeSelection owns checked rows and the focused row, with the queue canonical guard', async () => {

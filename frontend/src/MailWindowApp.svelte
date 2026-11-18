@@ -442,7 +442,7 @@
 <GlobalSearch bind:open={showGlobalSearch} bind:query={globalSearchQuery} onSubmit={query => void submitAllMail(query)} />
 <ToastContainer />
 <!-- The primary window's App hosts the shared dialog; a detached window has to host its own. -->
-{#if !embedded}<SnoozeDialog bind:open={snoozeDialog.open} targets={snoozeDialog.targets} onDone={() => list?.handleActionComplete(true)} />{/if}
+{#if !embedded}<SnoozeDialog bind:open={snoozeDialog.open} targets={snoozeDialog.targets} onDone={(autoSelectNext) => list?.handleActionComplete(autoSelectNext)} />{/if}
 <VirtualFolderDialog bind:open={showVirtualFolderDialog} virtualFolder={null} accounts={accountStore.accounts}
   initialSearchQuery={pendingSearchQuery} initialFolderId={pendingSearchFolderId}
   onRefreshFolders={loadNavigation}

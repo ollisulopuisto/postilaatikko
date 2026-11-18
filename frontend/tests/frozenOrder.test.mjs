@@ -58,3 +58,16 @@ test('cached release followed by passive arrival still freezes, pagination appen
   const next = appendFrozenRows(released, [a, b, c], key, clone)
   assert.deepEqual(frozenRows(next, key).map(key), [key(a), key(b), key(c)])
 })
+
+test('live headers stay bounded to frozen rows plus the current backend window', () => {
+  const base = [{ ...a }, { ...b }]
+  let state = freezeOrder(base, clone)
+  state.live[0].unreadCount = 0
+  for (let window = 0; window < 20; window++) {
+    const next = Array.from({ length: 50 }, (_, i) => ({ accountId: 'one', threadId: `${window}-${i}`, unreadCount: 1 }))
+    state = updateFrozenOrder(state, next, key, signature)
+    assert.equal(state.live.length, base.length + next.length)
+    assert.equal(frozenRows(state, key)[0].unreadCount, 0)
+    assert.ok(state.live.every(row => base.some(item => key(item) === key(row)) || next.some(item => key(item) === key(row))))
+  }
+})

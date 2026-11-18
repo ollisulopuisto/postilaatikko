@@ -13,7 +13,7 @@ export function updateFrozenOrder<T>(state: FrozenOrder<T>, incoming: T[], key: 
   const baselineKeys = state.baseline.map(key)
   const known = incoming.map(key).filter(id => before.has(id))
   if (known.length === baselineKeys.length) known.forEach((id, index) => { if (id !== baselineKeys[index]) changed.add(id) })
-  const live = new Map(state.live.map(row => [key(row), row]))
+  const live = new Map(state.live.filter(row => before.has(key(row))).map(row => [key(row), row]))
   for (const row of incoming) live.set(key(row), row)
   return { baseline: state.baseline, latest: incoming, live: [...live.values()], changed: [...changed] }
 }

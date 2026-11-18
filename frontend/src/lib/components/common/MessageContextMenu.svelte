@@ -601,7 +601,7 @@
   </ContextMenuContent>
 </ContextMenuPrimitive.Root>
 
-<SnoozeDialog bind:open={showSnoozeDialog} targets={snoozeTargets} onDone={() => onActionComplete?.(true)} />
+<SnoozeDialog bind:open={showSnoozeDialog} targets={snoozeTargets} onDone={(autoSelectNext) => onActionComplete?.(autoSelectNext)} />
 
 <!-- Permanent Delete Confirmation Dialog -->
 <ConfirmDialog
