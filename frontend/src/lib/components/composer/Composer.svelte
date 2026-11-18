@@ -1194,7 +1194,9 @@
   function insertEmailTemplate(template: settings.EmailTemplate) {
     if (!subject.trim() && template.subject.trim()) subject = template.subject
     if (template.body) insertQuickReply(template.body)
-    scheduleDraftSave()
+    // Subject-only templates must be durable edits too. Body callbacks may
+    // already record this state; the history controller deduplicates it.
+    historyEdit('template')
   }
 
   // Append signature for the current identity based on compose mode

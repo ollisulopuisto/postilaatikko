@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Keep subject-only email template insertion in composer undo/redo history without losing the preceding edit.
+
 - Save reusable subject/body email templates for the main-window composer. Insert without replacing an existing subject, sender or recipients; detached composer support is not included yet.
 
 - Keep message index order and inbox cards stable while reading. Pending arrivals/changes wait behind a re-sort pill; deliberate mail/context actions reconcile the list.
