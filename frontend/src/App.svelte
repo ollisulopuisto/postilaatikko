@@ -1252,7 +1252,7 @@
       if (mailtoData && (mailtoData.to?.length > 0 || mailtoData.subject || mailtoData.body)) {
         // Wait a moment for accounts to load
         await new Promise(resolve => setTimeout(resolve, 100))
-        handleMailtoData(mailtoData)
+        handleMailtoData(mailtoData, mailtoData.raw)
       }
     } catch (err) {
       console.error('Failed to check pending mailto:', err)
@@ -1533,6 +1533,7 @@
     bcc?: string[]
     subject?: string
     body?: string
+    raw?: string
   }
 
   function handleMailtoData(data: MailtoData, rawMailtoURL?: string) {

@@ -115,7 +115,7 @@ func TestIsAllowedProtocol(t *testing.T) {
 		{"http://-flag", false},
 		{"https://--version", false},
 		{"http://-flag:8080/path", false},
-		{false},
+		{"mailto:--help", false},
 		{"mailto:-flag@example.com", false},
 		{"mailto:%2D%2Dhelp", false},
 		{"mailto:%2d-flag@example.com", false},
@@ -195,5 +195,14 @@ func TestHandleOpenURL_IgnoresOtherSchemesAndGarbage(t *testing.T) {
 		if a.PendingMailto != nil {
 			t.Fatalf("%q must not create pending mailto: %+v", raw, a.PendingMailto)
 		}
+	}
+}
+
+func TestHandleOpenURL_PendingKeepsRawURLForDetachedComposer(t *testing.T) {
+	a := &App{}
+	a.HandleOpenURL("  mailto:x@example.com?subject=Moi  ")
+	got := a.GetPendingMailto()
+	if got == nil || got.Raw != "mailto:x@example.com?subject=Moi" {
+		t.Fatalf("pending = %+v, want Raw set to the trimmed URL", got)
 	}
 }

@@ -95,6 +95,9 @@ func main() {
 		if strings.HasPrefix(strings.ToLower(arg), "mailto:") {
 			mailtoData = app.ParseMailtoURL(arg)
 			rawMailtoArg = arg
+			if mailtoData != nil {
+				mailtoData.Raw = arg
+			}
 			break
 		}
 	}

@@ -772,10 +772,12 @@ func (a *App) GetComposerSendReceipt(requestID string) (*v1.SendReceiptLookup, e
 // argument). Anything but a valid mailto: URL is ignored. Before startup has
 // finished the data waits in PendingMailto, which the frontend reads on load.
 func (a *App) HandleOpenURL(rawURL string) {
-	mailtoData := ParseMailtoURL(strings.TrimSpace(rawURL))
+	rawURL = strings.TrimSpace(rawURL)
+	mailtoData := ParseMailtoURL(rawURL)
 	if mailtoData == nil {
 		return
 	}
+	mailtoData.Raw = rawURL
 	a.mailtoMu.Lock()
 	if !a.mailtoReady || a.settingsStore == nil {
 		a.PendingMailto = mailtoData
@@ -783,7 +785,7 @@ func (a *App) HandleOpenURL(rawURL string) {
 		return
 	}
 	a.mailtoMu.Unlock()
-	a.handleExternalMailto(strings.TrimSpace(rawURL))
+	a.handleExternalMailto(rawURL)
 }
 
 // markMailtoReady records that URLs can be routed to a composer directly.
@@ -807,7 +809,8 @@ func (a *App) handleExternalMailto(rawURL string) {
 	mailtoMode, _ := a.settingsStore.GetMailtoMode()
 	log.Info().Str("mode", mailtoMode).Msg("Handling external mailto")
 
-	if mailtoMode == "detached" {
+	// Remote workspaces have no local account store: fall back to the inline composer.
+	if mailtoMode == "detached" && a.accountStore != nil {
 		// Pick first account for detached composer
 		accounts, err := a.accountStore.List()
 		if err != nil || len(accounts) == 0 {

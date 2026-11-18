@@ -61,6 +61,8 @@ type MailtoData struct {
 	Bcc     []string `json:"bcc"`
 	Subject string   `json:"subject"`
 	Body    string   `json:"body"`
+	// Raw is the original URL; the frontend needs it to open a detached composer.
+	Raw string `json:"raw,omitempty"`
 }
 
 // maxMailtoURLLength is the maximum allowed length for a mailto URL (2KB)
