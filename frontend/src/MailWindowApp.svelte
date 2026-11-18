@@ -150,11 +150,13 @@
     await run(() => OpenMailWindow(accountId, folderId, folderName, folderType, windowState.thread?.threadId || '', windowState.thread?.accountId || '', windowState.thread?.folderId || '', list?.getSearchQuery() || ''))
   }
   async function compose() {
+    list?.releaseFrozenOrder()
     const accountId = accountStore.accounts.some(item => item.account.id === windowState.scope.accountId)
       ? windowState.scope.accountId : accountStore.accounts[0]?.account.id
     if (accountId) await run(() => OpenComposerWindow(accountId, 'new', '', '', ''))
   }
   async function reply(mode: 'reply' | 'reply-all' | 'forward', messageId: string) {
+    list?.releaseFrozenOrder()
     // Row menus can target an unselected row from a different account.
     await run(async () => {
       const message = await GetMessage(messageId)
@@ -298,14 +300,16 @@
             const result = await readLaterQueue.setWithUndo(thread.accountId, thread.threadId, inQueue)
             if (result?.changed) toasts.success($_(inQueue ? 'readLater.added' : 'readLater.removed'), result.operationId ? [{
               label: $_('common.undo'),
-              onClick: () => { void undoLaterChange(result).catch(() => toasts.error($_('toast.undoFailed'))) },
+              onClick: () => { void undoLaterChange(result).then(() => list?.handleActionComplete(false)).catch(() => toasts.error($_('toast.undoFailed'))) },
             }] : undefined)
+            list?.handleActionComplete(false)
             return
           }
           await replyLaterQueue.load()
           const inQueue = !replyLaterQueue.has(thread.accountId, thread.threadId)
           const result = await replyLaterQueue.set(thread.accountId, thread.threadId, inQueue)
-          if (result?.changed) toasts.success($_(inQueue ? 'replyLater.added' : 'replyLater.removed'), result.operationId ? [{ label: $_('common.undo'), onClick: () => { void undoLaterChange(result).catch(() => toasts.error($_('toast.undoFailed'))) } }] : undefined)
+          if (result?.changed) toasts.success($_(inQueue ? 'replyLater.added' : 'replyLater.removed'), result.operationId ? [{ label: $_('common.undo'), onClick: () => { void undoLaterChange(result).then(() => list?.handleActionComplete(false)).catch(() => toasts.error($_('toast.undoFailed'))) } }] : undefined)
+          list?.handleActionComplete(false)
         } catch (error) {
           toasts.error(String(error))
         }
@@ -423,13 +427,13 @@
       {#if active && windowState.thread}
         {@const thread = windowState.thread}
         <ConversationViewer nativeOwnsMailActions={active && mailActive && getFocusedPane()==='viewer'} bind:this={viewer} threadId={thread.threadId} folderId={thread.folderId} accountId={thread.accountId} folderType={searchActive ? 'search' : windowState.scope.folderType}
-          isViewerVisible={active && mailActive} deferMarkAsReadUntilLeave={deferMarkAsReadUntilLeave} isFocused={active && mailActive && getFocusedPane() === 'viewer'} showBackButton onBack={closeReader} onReply={reply}
+          isViewerVisible={active && mailActive} deferMarkAsReadUntilLeave={deferMarkAsReadUntilLeave} isFocused={active && mailActive && getFocusedPane() === 'viewer'} showBackButton onBack={closeReader} onReply={reply} onReplyStart={() => list?.releaseFrozenOrder()}
           restoreScrollTop={restoreReaderScrollTop}
           onSaveScrollPosition={(threadId, folderId, accountId, top) => { savedReaderPosition = { key: readerPositionKey({ threadId, folderId, accountId }), top } }}
-          onEditDraft={draftId => run(() => OpenComposerWindow(thread.accountId, 'new', '', draftId, ''))}
+          onEditDraft={draftId => { list?.releaseFrozenOrder(); return run(() => OpenComposerWindow(thread.accountId, 'new', '', draftId, '')) }}
           onToggleThreadFocus={readerTab ? undefined : () => readerOnly = !readerOnly} inFocusMode={readerOnly}
-          onActionComplete={() => list?.handleActionComplete(true)}
-          onComposeToAddress={address => run(() => OpenComposerWindow(thread.accountId, 'new', '', '', `mailto:${encodeURIComponent(address)}`))} />
+          onActionComplete={(autoSelectNext) => list?.handleActionComplete(autoSelectNext)}
+          onComposeToAddress={address => { list?.releaseFrozenOrder(); return run(() => OpenComposerWindow(thread.accountId, 'new', '', '', `mailto:${encodeURIComponent(address)}`)) }} />
       {:else if active}<div class="h-full flex items-center justify-center text-muted-foreground text-sm">{$_('mailWindow.selectMessage')}</div>{/if}
     </section>
   </main>
@@ -438,7 +442,7 @@
 <GlobalSearch bind:open={showGlobalSearch} bind:query={globalSearchQuery} onSubmit={query => void submitAllMail(query)} />
 <ToastContainer />
 <!-- The primary window's App hosts the shared dialog; a detached window has to host its own. -->
-{#if !embedded}<SnoozeDialog bind:open={snoozeDialog.open} targets={snoozeDialog.targets} onDone={() => list?.handleActionComplete(true)} />{/if}
+{#if !embedded}<SnoozeDialog bind:open={snoozeDialog.open} targets={snoozeDialog.targets} onDone={(autoSelectNext) => list?.handleActionComplete(autoSelectNext)} />{/if}
 <VirtualFolderDialog bind:open={showVirtualFolderDialog} virtualFolder={null} accounts={accountStore.accounts}
   initialSearchQuery={pendingSearchQuery} initialFolderId={pendingSearchFolderId}
   onRefreshFolders={loadNavigation}

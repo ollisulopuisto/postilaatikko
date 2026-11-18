@@ -12,7 +12,7 @@
   let { open = $bindable(false), targets, onDone }: {
     open: boolean
     targets: SnoozeTarget[]
-    onDone?: () => void
+    onDone?: (autoSelectNext: boolean) => void
   } = $props()
 
   let now = $state(new Date())
@@ -63,12 +63,12 @@
       const message = $_(changed === 1 ? 'snooze.doneUntil' : 'snooze.doneUntilMany', { values: { when: describe(wakeAt), count: changed } })
       toasts.success(message, operationIds.length > 0 ? [{
         label: $_('common.undo'),
-        onClick: () => { void Promise.all(operationIds.map(id => UndoOperation(id))).catch(() => toasts.error($_('toast.undoFailed'))) },
+        onClick: () => { void Promise.all(operationIds.map(id => UndoOperation(id))).then(() => onDone?.(false)).catch(() => toasts.error($_('toast.undoFailed'))) },
       }] : undefined)
     }
     if (changed > 0 || failures === 0) {
       open = false
-      onDone?.()
+      onDone?.(true)
     }
   }
 

@@ -68,8 +68,8 @@ test('one failed selected conversation does not skip later targets or lose succe
     calls.push([account,conversation]); if (conversation === 'B') throw new Error('offline')
     return {changed:true,operationId:'op-'+conversation}
   } }
-  const factory = new Function('queueTargets','laterActionsEnabled','laterBusy','readLaterQueue','replyLaterQueue','toasts','$_','UndoOperation', outputText.replace(/export \{ toggleLater \};?/, '')+'; return toggleLater;')
-  const handler = factory(['A','B','C'].map(conversationId=>({accountId:'one',conversationId})),true,false,queue,{}, {success:(...args)=>notices.push(args),error:(...args)=>notices.push(args)},x=>x,async()=>{})
+  const factory = new Function('queueTargets','laterActionsEnabled','laterBusy','readLaterQueue','replyLaterQueue','toasts','$_','UndoOperation','onActionComplete', outputText.replace(/export \{ toggleLater \};?/, '')+'; return toggleLater;')
+  const handler = factory(['A','B','C'].map(conversationId=>({accountId:'one',conversationId})),true,false,queue,{}, {success:(...args)=>notices.push(args),error:(...args)=>notices.push(args)},x=>x,async()=>{},()=>{})
   await handler('readLater')
   assert.deepEqual(calls.map(c=>c[1]), ['A','B','C'])
   assert.equal(notices.filter(n=>n[0]==='readLater.added').length,2)
@@ -201,7 +201,7 @@ test('keyboard opening preserves checked rows and resolves server rows through s
   }
 })
 
-test('canonical server resolution carries checked IDs forward and opening pins inbox cards', async () => {
+test('canonical server resolution carries checked IDs forward and opening does not release frozen order', async () => {
   const ts=(await import('typescript')).default
   const source=list.slice(list.indexOf('  async function resolveLocalServerConversation'),list.indexOf('  function isMissingServerSearchResult'))
   const code=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText
@@ -221,7 +221,7 @@ test('canonical server resolution carries checked IDs forward and opening pins i
     assert.equal(state.rows()[0].threadId,'provisional')
   }
   const shared=list.slice(list.indexOf('  function openConversation'),list.indexOf('  async function resolveLocalServerConversation'))
-  assert.match(shared,/pinInboxGroupForConversation\(threadId\)/)
+  assert.doesNotMatch(shared,/releaseFrozenOrder\(/)
   assert.doesNotMatch(shared,/checkedThreadIds = new Set/)
 })
 

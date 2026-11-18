@@ -279,6 +279,8 @@
   },
   "messageList": {
     "newAbove": "{count} uutta ylempänä",
+    "retainedUnavailable": "Viesti ei ole enää saatavilla. Päivitä luettelo järjestämällä se uudelleen.",
+    "pendingIndexChanges": "{count} uutta tai muuttunutta, järjestä uudelleen",
     "refreshVirtualFolder": "Päivitä virtuaalikansio",
     "searchMessages": "Etsi viestejä...",
     "noMessages": "Tässä kansiossa ei ole viestejä",

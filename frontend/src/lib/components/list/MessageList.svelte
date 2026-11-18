@@ -15,12 +15,11 @@
 
 <script lang="ts">
   import { refreshVirtualView, isExpectedSearchCancellation } from './virtualFolderRefresh'
-  import { pinnedGroupForSelection, retainPinnedConversationPosition, type PinnedInboxGroup } from './activeInboxGroup'
+  import { freezeOrder, updateFrozenOrder, frozenRows, appendFrozenRows, type FrozenOrder } from './frozenOrder'
   import { focusedRowKey, findFocusedRow } from './focusedRow'
   import { selectionAfterFolderSwitch, selectionSurvivesRefresh } from './selectionReconcile'
   import { mailRowKey, captureScrollAnchor, anchoredScrollTop, newRowsBeforeAnchor, extendAnchorWindow } from './scrollAnchor'
   import { folderDependencies } from '$lib/sidebar/folderVisibility'
-  import { retainReadSelection } from '$lib/sidebar/virtualView'
   import { dayGroupFor } from '$lib/components/list/dayGroup'
   import { app as searchModels } from '../../../../wailsjs/go/models'
 
@@ -240,22 +239,46 @@
     conversations: message.Conversation[]
   }
 
-  type InboxGroupPin = PinnedInboxGroup<Pick<InboxDisplayGroup, 'id' | 'label' | 'icon' | 'category' | 'recipient'>>
-
-  // Inbox presentation is deliberately a view preference: it never changes
-  // folders, messages or the server-side sort order.
   let inboxDisplayMode = $state<InboxDisplayMode>(getInboxDisplayMode())
   let showInboxDisplayPicker = $state(false)
   let collapsedInboxGroups = $state<Set<string>>(new Set())
   let expandedInboxGroups = $state<Set<string>>(new Set())
-  let pinnedInboxGroup = $state<InboxGroupPin | null>(null)
   let inboxCardPreferencesVersion = $state(0)
-
-  $effect(() => {
-    if (pinnedInboxGroup && pinnedInboxGroup.threadId !== selectedThreadId) {
-      pinnedInboxGroup = null
-    }
+  let frozen = $state<FrozenOrder<message.Conversation> | null>(null)
+  const rowKey = (row: message.Conversation) => mailRowKey(row, accountId)
+  // Snapshot only header fields. Never recursively copy any hydrated message bodies.
+  const cloneHeader = (row: message.Conversation): message.Conversation => new message.Conversation({
+    ...row, messages: undefined, messageIds: [...(row.messageIds ?? [])],
+    participants: (row.participants ?? []).map(person => ({ ...person })),
   })
+  const headerSignature = (row: message.Conversation) => JSON.stringify([row.subject, row.snippet, row.latestDate, row.unreadCount, row.isStarred, row.messageIds, row.folderId])
+  type LoadMode = 'passive' | 'replace' | 'append'
+  let deferredLoad: { limit?: number; mode: LoadMode } | null = null
+  const frozenGroupBasis = $derived(new Map((frozen?.baseline ?? []).map(row => [rowKey(row), row])))
+  const pendingIndexCount = $derived(frozen?.changed.length ?? 0)
+
+  // A deliberate mutation/context action releases the whole view, never merely
+  // the selected thread. Reading and j/k navigation do not call this.
+  export function releaseFrozenOrder() {
+    if (frozen) conversations = frozen.latest
+    frozen = freezeOrder(conversations, cloneHeader)
+    newAboveKeys = new Set()
+  }
+
+  function reconcilePassiveRows(next: message.Conversation[], mode: LoadMode): message.Conversation[] {
+    if (!frozen || mode === 'replace') {
+      frozen = freezeOrder(next, cloneHeader)
+      return frozenRows(frozen, rowKey)
+    }
+    frozen = mode === 'append'
+      ? appendFrozenRows(frozen, next, rowKey, cloneHeader)
+      : updateFrozenOrder(frozen, next, rowKey, headerSignature)
+    return frozenRows(frozen, rowKey)
+  }
+
+  function flagChangesPending() {
+    if (frozen) frozen = updateFrozenOrder(frozen, frozen.latest, rowKey, headerSignature)
+  }
 
   const inboxDisplayOptions = $derived<Array<{ id: InboxDisplayMode; label: string; description: string; icon: string }>>([
     { id: 'priority', label: $_('inbox.priority'), description: $_('inbox.priorityDescription'), icon: 'mdi:lightning-bolt-outline' },
@@ -276,11 +299,12 @@
       inboxDisplayMode = mode
       collapsedInboxGroups = new Set()
       expandedInboxGroups = new Set()
-      pinnedInboxGroup = null
+      releaseFrozenOrder()
     }
     const handleInboxCardPreferencesChange = () => {
       // Recreate the category view after an option is changed in Settings.
       // This prevents stale grouped rows when the two panels are open together.
+      releaseFrozenOrder()
       inboxCardPreferencesVersion += 1
       collapsedInboxGroups = new Set()
       expandedInboxGroups = new Set()
@@ -294,40 +318,16 @@
   })
 
   function setInboxDisplayMode(mode: InboxDisplayMode) {
+    releaseFrozenOrder()
     inboxDisplayMode = mode
     setInboxDisplayPreference(mode)
     collapsedInboxGroups = new Set()
     expandedInboxGroups = new Set()
-    pinnedInboxGroup = null
     showInboxDisplayPicker = false
   }
 
-  function pinInboxGroupForConversation(threadId: string) {
-    if (!canUseInboxDisplay) {
-      pinnedInboxGroup = null
-      return
-    }
-
-    const group = inboxGroups().find(item => item.conversations.some(conversation => conversation.threadId === threadId))
-    if (!group) {
-      pinnedInboxGroup = null
-      return
-    }
-
-    pinnedInboxGroup = {
-      threadId,
-      index: group.conversations.findIndex(conversation => conversation.threadId === threadId),
-      group: {
-        id: group.id,
-        label: group.label,
-        icon: group.icon,
-        category: group.category,
-        recipient: group.recipient,
-      },
-    }
-  }
-
   function toggleInboxGroup(groupID: string) {
+    releaseFrozenOrder()
     const next = new Set(collapsedInboxGroups)
     if (next.has(groupID)) next.delete(groupID)
     else next.add(groupID)
@@ -358,6 +358,7 @@
   }
 
   function showAllInboxConversations(groupID: string) {
+    releaseFrozenOrder()
     expandedInboxGroups = new Set([...expandedInboxGroups, groupID])
   }
 
@@ -461,18 +462,13 @@
     }
 
     for (const conversation of conversations) {
-      const pinnedGroup = pinnedGroupForSelection(conversation.threadId, selectedThreadId, pinnedInboxGroup)
-      if (pinnedGroup) {
-        add(pinnedGroup.id, pinnedGroup.label, pinnedGroup.icon, pinnedGroup.category, conversation, pinnedGroup.recipient)
-        continue
-      }
+      const basis = frozenGroupBasis.get(rowKey(conversation)) ?? conversation
 
       if (inboxDisplayMode === 'categories') {
-        // Read conversations always live in one "Lidos" card. This keeps the
-        // action of opening an email tangible: once the last unread message in
-        // its conversation is read, it leaves its source category immediately.
-        const isRead = (conversation.unreadCount || 0) === 0
-        const classified = categoryForConversation(conversation)
+        // Read/priority grouping uses the frozen snapshot. Indicators update
+        // live, but reading cannot move a row to another card.
+        const isRead = (basis.unreadCount || 0) === 0
+        const classified = categoryForConversation(basis)
         const category = isRead
           ? { id: 'read', label: $_('inbox.read'), icon: 'mdi:eye-outline' }
           // Commercial mail is a type of notification in this compact inbox,
@@ -488,10 +484,10 @@
         const groupID = recipient ? `${category.id}:${recipient.toLowerCase()}` : category.id
         add(groupID, category.label, category.icon, category.id, conversation, recipient)
       } else if (inboxDisplayMode === 'priority') {
-        const isPriority = (conversation.unreadCount || 0) > 0 || conversation.isStarred
+        const isPriority = (basis.unreadCount || 0) > 0 || basis.isStarred
         add(isPriority ? 'priority' : 'other', isPriority ? $_('inbox.priority') : $_('inbox.other'), isPriority ? 'mdi:lightning-bolt-outline' : 'mdi:inbox-outline', isPriority ? 'priority' : 'other', conversation)
       } else {
-        const day = dayGroupFor(conversation.latestDate, getLanguage() || 'en', { today: $_('inbox.today'), yesterday: $_('inbox.yesterday') })
+        const day = dayGroupFor(basis.latestDate, getLanguage() || 'en', { today: $_('inbox.today'), yesterday: $_('inbox.yesterday') })
         add(day.id, day.label, 'mdi:calendar-blank-outline', 'chronological', conversation)
       }
     }
@@ -501,16 +497,7 @@
       : inboxDisplayMode === 'priority'
         ? ['priority', 'other']
         : []
-    const selectedPinnedGroup = selectedThreadId
-      ? pinnedGroupForSelection(selectedThreadId, selectedThreadId, pinnedInboxGroup)
-      : null
-    return [...groups.values()].map(group => {
-      if (!selectedPinnedGroup || group.id !== selectedPinnedGroup.id || !pinnedInboxGroup) return group
-      return {
-        ...group,
-        conversations: retainPinnedConversationPosition(group.conversations, pinnedInboxGroup.threadId, pinnedInboxGroup.index),
-      }
-    }).sort((a, b) => {
+    return [...groups.values()].sort((a, b) => {
       if (order.length === 0) return 0
       return order.indexOf(a.category) - order.indexOf(b.category)
     })
@@ -737,19 +724,6 @@
     EventsOn('messages:readChanged', (data: { messageIds: string[], isRead: boolean }) => {
       // Update conversations locally instead of reloading from DB
       let anyUpdated: boolean
-      const selected = conversations.find(conversation => conversation.threadId === selectedThreadId)
-      const selectedMessageIds = selected?.messageIds || []
-      if (
-        selected &&
-        data.isRead &&
-        selectedMessageIds.some(id => data.messageIds.includes(id)) &&
-        pinnedInboxGroup?.threadId !== selected.threadId
-      ) {
-        // Capture its pre-read card before the unread count moves it into the
-        // Read/Other card. It stays visible there until another conversation
-        // is selected, while the underlying read status can update normally.
-        pinInboxGroupForConversation(selected.threadId)
-      }
       // Search rows are separate cached arrays with their own unread counts. Keep them in
       // step, or the unread snapshot taken for archive-and-mark-read (and the unread dots)
       // would use a count that is already out of date.
@@ -759,6 +733,7 @@
       if (applyReadDelta(serverSearchResults, data.messageIds, data.isRead, touched)) serverSearchResults = serverSearchResults
       if (anyUpdated) {
         conversations = conversations
+        flagChangesPending()
         if (isVirtualFolderView) scheduleReload()
         return
       }
@@ -898,6 +873,7 @@
       prevAccountId = null
       prevFolderId = null
       conversations = []
+      frozen = null
       totalCount = 0
       checkedThreadIds = new Set()
       return
@@ -909,7 +885,7 @@
     rememberListState()
     prevAccountId = currentAccount
     prevFolderId = currentFolder
-    pinnedInboxGroup = null
+    releaseFrozenOrder()
     filterMode = ''
     loadGeneration++ // Invalidate any in-flight loads from the previous folder (#200)
     offset = 0
@@ -953,7 +929,7 @@
     // window and put the scroll back after the matching query completes.
     const restoreCount = remembered && remembered.loadedCount > PAGE_SIZE ? remembered.loadedCount : undefined
     void RefreshViewHeaders(currentAccount!, currentFolder!).catch(err => console.warn('Header refresh failed', err))
-    loadConversations(restoreCount).then(() => {
+    loadConversations(restoreCount, 'replace').then(() => {
       // Guard against rapid folder switches: only restore if we're still on
       // the folder this load was for.
       if (!remembered || prevAccountId !== currentAccount || prevFolderId !== currentFolder) {
@@ -1111,7 +1087,7 @@
     }
   }
 
-  async function loadConversations(customLimit?: number) {
+  async function loadConversations(customLimit?: number, mode: LoadMode = 'passive') {
     // For unified view, we don't need accountId/folderId
     if (!isUnifiedView && !isVirtualFolderView && (!accountId || !folderId)) return
 
@@ -1125,7 +1101,8 @@
 
     // Prevent concurrent loads — defer instead of dropping
     if (loading) {
-      pendingReload = true
+      if (mode !== 'passive') { deferredLoad = { limit: customLimit, mode }; loadGeneration += 1 }
+      else pendingReload = true
       return
     }
 
@@ -1177,10 +1154,10 @@
           const keys = new Set(items.map(item => `${item.accountId}:${item.threadId}`))
           for (const prior of conversations) if (failedAccounts.has(prior.accountId || '') && !keys.has(`${prior.accountId}:${prior.threadId}`)) items.push(prior)
         }
-        const view = virtualFoldersStore.folders.find(item => item.id === folderId)
-        await replaceConversationRows(currentOffset === 0 ? retainReadSelection(conversations, items, selectedThreadId, (view?.readStatus === 'unread' || filterMode === 'unread') && lastLoadedFolderId === folderId) : [...new Map([...conversations, ...items].map(c => [`${c.accountId}:${c.threadId}`, c])).values()], currentOffset === 0)
+        await replaceConversationRows(currentOffset === 0 ? items : [...new Map([...(frozen?.latest ?? conversations), ...items].map(c => [rowKey(c), c])).values()], currentOffset === 0, mode)
+
         listError = conversations.length === 0 && virtualIssues ? virtualIssues : null
-        totalCount = conversations.length + (virtualCursor ? 1 : 0)
+        totalCount = (frozen?.latest.length ?? conversations.length) + (virtualCursor ? 1 : 0)
         lastLoadedFolderId = folderId
         return
       }
@@ -1219,7 +1196,7 @@
       }
 
       if (currentOffset !== 0) {
-        conversations = [...conversations, ...(convList || [])]
+        conversations = reconcilePassiveRows(convList || [], 'append')
         totalCount = Math.max(totalCount, currentOffset + (convList?.length ?? 0))
         listRendered = true
         if (resolvedCount !== null) totalCount = resolvedCount
@@ -1241,14 +1218,8 @@
         })
         if (generation !== loadGeneration || isSearchMode) return
       }
-      const previousConversations = conversations
-      await replaceConversationRows(retainReadSelection(
-        previousConversations,
-        convList || [],
-        selectedThreadId,
-        (filterMode === 'unread' || (isVirtualFolderView && virtualFoldersStore.folders.find(item => item.id === folderId)?.readStatus === 'unread')) && lastLoadedFolderId === folderId,
-      ), true)
-      totalCount = conversations.length
+      await replaceConversationRows(convList || [], true, mode)
+      totalCount = (frozen?.latest.length ?? conversations.length) + ((convList?.length ?? 0) >= limit ? 1 : 0)
       listRendered = true
       if (resolvedCount !== null) totalCount = resolvedCount
 
@@ -1267,6 +1238,7 @@
           }
         }
         pendingFlagChanges = []
+        flagChangesPending()
       }
 
       lastLoadedFolderId = folderId
@@ -1293,6 +1265,12 @@
       listError = $_('viewer.failedToLoadMessages')
     } finally {
       loading = false
+      if (deferredLoad) {
+        const request = deferredLoad
+        deferredLoad = null
+        pendingReload = false
+        void loadConversations(request.limit, request.mode)
+      }
       // Flush any deferred reload (from sync event during load or dialog guard).
       // Only the latest-generation load should drive the flush — otherwise a
       // stale completion could fire scheduleReload redundantly.
@@ -1310,11 +1288,12 @@
   export async function syncFolder() {
     // Prevent repeated clicks while the Wails/backend progress event catches up.
     if (manualSyncing) return
+    releaseFrozenOrder()
 
     // virtual:archive is derived from All Mail; it is never a valid IMAP
     // folder ID and must not reach SyncFolder.
     if (!isUnifiedView && folderId === 'virtual:archive') {
-      await loadConversations(Math.max(conversations.length, PAGE_SIZE))
+      await loadConversations(Math.max(conversations.length, PAGE_SIZE), 'replace')
       return
     }
 
@@ -1331,7 +1310,7 @@
             offset = 0
             virtualCursor = ''
           },
-          reload: () => loadConversations(Math.max(conversations.length, PAGE_SIZE)),
+          reload: () => loadConversations(Math.max(conversations.length, PAGE_SIZE), 'replace'),
         })
         virtualIssues = ''
       } catch (err) {
@@ -1359,7 +1338,7 @@
       }
 
       offset = 0
-      await loadConversations(totalLoaded)
+      await loadConversations(totalLoaded, 'replace')
 
 
     } catch (err) {
@@ -1392,6 +1371,7 @@
 
   // Force re-sync folder (clears bodies & attachments, then re-fetches)
   async function forceSyncFolder() {
+    releaseFrozenOrder()
     if (isUnifiedView || isVirtualFolderView || !accountId || !folderId) return
 
     listError = null
@@ -1399,7 +1379,7 @@
     try {
       await ForceSyncFolder(accountId, folderId)
       offset = 0
-      await loadConversations()
+      await loadConversations(undefined, 'replace')
     } catch (err) {
       console.error('Failed to force re-sync folder:', err)
       listError = $_('viewer.failedToLoadMessages')
@@ -1422,6 +1402,7 @@
 
   // Handle search input with debounce
   function handleSearchInput() {
+    releaseFrozenOrder()
     searchTypedAt = performance.now()
     checkedThreadIds = new Set()
     selectedThreadId = null
@@ -1576,6 +1557,7 @@
 
   // Clear search and return to normal view
   function clearSearch() {
+    releaseFrozenOrder()
     allMailSearch = false
     virtualIssues = ''; virtualQueryCursor = ''
     void CancelMailSearch(virtualSearchSession)
@@ -1651,6 +1633,7 @@
   }
 
   function refreshActiveSearch() {
+    releaseFrozenOrder()
     if (searchSource === 'server') {
       void performServerSearch()
       return
@@ -1846,9 +1829,26 @@
   // Opening is shared by mouse and keyboard. Only mouse selection resets checks.
   function openConversation(conversation: any) {
     if (!conversation) return
+    if (!isSearchMode && frozen && !frozen.latest.some(row => rowKey(row) === rowKey(conversation))) {
+      const view = currentListView()
+      const selected = selectedThreadId
+      const id = conversation.messageIds?.[0]
+      // A retained row may merely be excluded by an unread filter, or it may
+      // have been removed elsewhere. Verify before routing it to the reader.
+      if (!id) { toasts.error($_('messageList.retainedUnavailable')); return }
+      void GetMessage(id).then(message => {
+        if (!message?.id) throw new Error('retained header unavailable')
+        if (view !== currentListView() || selectedThreadId !== selected) return
+        openVerifiedConversation(conversation)
+      }).catch(() => toasts.error($_('messageList.retainedUnavailable')))
+      return
+    }
+    openVerifiedConversation(conversation)
+  }
+
+  function openVerifiedConversation(conversation: any) {
     serverResultFetchGeneration += 1
     const threadId = conversation.threadId
-    pinInboxGroupForConversation(threadId)
     // For unified view or search, use real folderId and accountId from conversation data
     const realFolderId = (isUnifiedView || isVirtualFolderView || isSearchMode) && conversation.folderId ? conversation.folderId : folderId!
     const realAccountId = (isUnifiedView || isVirtualFolderView || isSearchMode) && conversation.accountId ? conversation.accountId : accountId!
@@ -2037,6 +2037,7 @@
       ? pendingServerActionSelection ?? captureAutoSelectNext(activeList, selectedThreadId, checkedThreadIds)
       : null
     pendingServerActionSelection = null
+    releaseFrozenOrder()
     // The backend action has completed. Invalidate the current result before
     // the viewer is cleared, even if runtime event delivery is delayed.
     if (autoSelectNext && isSearchMode && selection?.originThreadId) {
@@ -2060,7 +2061,7 @@
     const totalLoaded = Math.max(conversations.length, PAGE_SIZE)
     offset = 0
 
-    await loadConversations(totalLoaded).then(() => {
+    await loadConversations(totalLoaded, 'replace').then(() => {
       // Restore scroll position
       if (listContainerRef) {
         requestAnimationFrame(() => {
@@ -2116,12 +2117,13 @@
 
   // Toggle sort order and persist to backend
   async function toggleSortOrder() {
+    releaseFrozenOrder()
     const newOrder = getMessageListSortOrder() === 'newest' ? 'oldest' : 'newest'
     try {
       await SetMessageListSortOrder(newOrder)
       setMessageListSortOrder(newOrder)
       offset = 0
-      loadConversations()
+      loadConversations(undefined, 'replace')
     } catch (err) {
       console.error('Failed to save sort order:', err)
     }
@@ -2135,6 +2137,7 @@
   }
 
   function setFilter(mode: string) {
+    releaseFrozenOrder()
     filterMode = mode
     loadGeneration++
     virtualCursor = ''; virtualQueryCursor = ''; virtualIssues = ''
@@ -2151,7 +2154,7 @@
       refreshActiveSearch()
       return
     }
-    loadConversations()
+    loadConversations(undefined, 'replace')
   }
 
   export function setQuickFilter(mode: '' | 'unread' | 'readLater' | 'replyLater') {
@@ -2181,7 +2184,7 @@
     return [...listContainerRef.querySelectorAll<HTMLElement>('[data-mail-row-key]')].find(row => row.getBoundingClientRect().bottom > top)?.dataset.mailRowKey ?? null
   }
 
-  async function replaceConversationRows(next: message.Conversation[], refresh: boolean) {
+  async function replaceConversationRows(next: message.Conversation[], refresh: boolean, mode: LoadMode) {
     const container = listContainerRef
     const view = currentListView()
     const rows = container ? [...container.querySelectorAll<HTMLElement>('[data-mail-row-key]')] : []
@@ -2190,7 +2193,7 @@
       ? captureScrollAnchor(rows.map(row => ({ key: row.dataset.mailRowKey!, top: row.getBoundingClientRect().top, bottom: row.getBoundingClientRect().bottom })), viewportTop, container.scrollTop)
       : null
     const previousKeys = conversations.map(row => mailRowKey(row, accountId))
-    conversations = next
+    conversations = reconcilePassiveRows(next, mode)
     // A same-folder refresh can drop the selected conversation (snoozed or
     // moved from another client): clear the phantom so Space can't open a
     // bulk action on a row that no longer exists. Never auto-select a
@@ -2217,6 +2220,9 @@
   }
 
   function showNewestMail() {
+    releaseFrozenOrder()
+    offset = 0
+    void loadConversations(Math.max(conversations.length, PAGE_SIZE), 'replace')
     // Navigation only: never change the selected/open message or mark anything read.
     listContainerRef?.scrollTo({ top: 0, behavior: 'instant' })
     newAboveKeys = new Set()
@@ -2224,11 +2230,13 @@
   }
 
   function loadNextPage() {
-    if (loading || conversations.length >= totalCount) return
-    // Continue at the actual end of the loaded window. This also avoids
-    // duplicate rows after a reload that restored more than one page.
-    offset = isVirtualFolderView ? Math.max(1, conversations.length) : conversations.length
-    void loadConversations()
+    const loaded = frozen?.latest.length ?? conversations.length
+    if (loading || loaded >= totalCount) return
+    // Fetch a complete header prefix again: retained rows are not backend
+    // offsets, and arrivals/removals can shift even the last known window.
+    // Virtual views keep their provider cursor, independent of display rows.
+    offset = isVirtualFolderView ? Math.max(1, loaded) : 0
+    void loadConversations(isVirtualFolderView ? undefined : loaded + PAGE_SIZE, 'append')
   }
 
   function handleListScroll(event: Event) {
@@ -2375,6 +2383,7 @@
   }
 
   export function startAllMailSearch(query: string) {
+    releaseFrozenOrder()
     loadGeneration++
     loading = false
     allMailSearch = true
@@ -2685,6 +2694,7 @@
   }
 
   function handleUndoOperationCompleted(event: CustomEvent<string>) {
+    releaseFrozenOrder()
     restoreSearchSnapshot(event.detail)
   }
 
@@ -2707,6 +2717,7 @@
   }
 
   async function handleUndo(toastId: string, operationID: string) {
+    releaseFrozenOrder()
     if (undoInFlight.has(operationID)) return
     undoInFlight.add(operationID)
     if (toastId) toasts.replace(toastId, { actions: [], duration: 20_000 })
@@ -2829,13 +2840,14 @@
           const operationId = result.operationId
           toasts.success($_(inQueue ? `${kind}.added` : `${kind}.removed`), operationId ? [{
             label: $_('common.undo'),
-            onClick: () => { void undoLaterChange(result).catch(() => toasts.error($_('toast.undoFailed'))) },
+            onClick: () => { void undoLaterChange(result).then(() => handleActionComplete(false)).catch(() => toasts.error($_('toast.undoFailed'))) },
           }] : undefined)
         } catch (err) {
           failed += 1
           console.error(`Failed to update ${kind} queue for selected conversation:`, err)
         }
       }
+      if (changed > 0) handleActionComplete(false)
       if (changed === 0 || failed > 0) toasts.error($_(`${kind}.failed`))
     } catch (err) {
       console.error(`Failed to load ${kind} queue:`, err)
@@ -3288,10 +3300,10 @@
   {/if}
   {#if isVirtualFolderView && virtualCursor && !loading && !isSearchMode && !virtualIssues}<button type="button" class="px-3 py-2 text-sm text-primary" onclick={loadNextPage}>{$_('search.loadMore')}</button>{/if}
   <div class="relative flex flex-col flex-1 min-h-0">
-  {#if newAboveKeys.size > 0 && !isSearchMode}
-    <div class="absolute left-1/2 -translate-x-1/2 top-2 z-20">
-      <button type="button" class="rounded-full bg-primary px-3 py-1.5 text-sm text-primary-foreground shadow-md focus-visible:ring-2 focus-visible:ring-primary" onclick={showNewestMail}>
-        ↑ {$_('messageList.newAbove', { values: { count: newAboveKeys.size } })}
+  {#if pendingIndexCount > 0 && !isSearchMode}
+    <div class="shrink-0 px-2 py-1.5" role="status">
+      <button type="button" class="w-full rounded-full border border-primary bg-primary px-3 py-1.5 text-xs font-medium leading-snug text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" onclick={showNewestMail}>
+        {$_('messageList.pendingIndexChanges', { values: { count: pendingIndexCount } })}
       </button>
     </div>
   {/if}
@@ -3324,7 +3336,7 @@
         <p class="text-sm text-destructive">{visibleError}</p>
         <button
           class="mt-2 text-sm text-primary hover:underline"
-          onclick={() => isSearchMode ? refreshActiveSearch() : loadConversations()}
+          onclick={() => isSearchMode ? refreshActiveSearch() : loadConversations(undefined, 'replace')}
         >
           {$_('messageList.tryAgain')}
         </button>
@@ -3591,7 +3603,7 @@
       {/each}
       {/key}
 
-      {#if conversations.length < totalCount}
+      {#if (frozen?.latest.length ?? conversations.length) < totalCount}
         {#if loading}<div class="flex justify-center py-4 text-sm text-muted-foreground"><Icon icon="mdi:loading" class="mr-2 h-4 w-4 animate-spin" />{$_('common.loading')}</div>{/if}
       {/if}
     {:else}
@@ -3624,7 +3636,7 @@
       {/each}
 
       <!-- Load more button for pagination -->
-      {#if conversations.length < totalCount}
+      {#if (frozen?.latest.length ?? conversations.length) < totalCount}
         {#if loading}<div class="flex justify-center py-4 text-sm text-muted-foreground"><Icon icon="mdi:loading" class="mr-2 h-4 w-4 animate-spin" />{$_('common.loading')}</div>{/if}
       {/if}
     {/if}

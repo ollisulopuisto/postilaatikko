@@ -1458,6 +1458,7 @@
 
   // Handle compose button click (new message)
   function handleCompose() {
+    messageListRef?.releaseFrozenOrder?.()
     // Use the selected account, or the first account if none selected
     const accountId = resolveAccountId(selectedAccountId)
     if (!accountId) return
@@ -1476,6 +1477,7 @@
 
   // Handle edit draft (opens composer with existing draft)
   async function handleEditDraft(draftId: string) {
+    messageListRef?.releaseFrozenOrder?.()
     // Use conversation's account ID, fall back to selected account or first account
     const accountId = resolveAccountId(selectedConversationAccountId) || resolveAccountId(selectedAccountId)
     if (!accountId) return
@@ -1502,6 +1504,7 @@
 
   // Handle compose to a specific email address (from mailto: links in emails)
   function handleComposeToAddress(toAddress: string) {
+    messageListRef?.releaseFrozenOrder?.()
     // Use conversation's account ID, or selected account, or first account
     const accountId = resolveAccountId(selectedConversationAccountId) || resolveAccountId(selectedAccountId)
     if (!accountId) return
@@ -1533,6 +1536,7 @@
   }
 
   function handleMailtoData(data: MailtoData, rawMailtoURL?: string) {
+    messageListRef?.releaseFrozenOrder?.()
     // Use selected account or first account (resolve 'unified' to real account)
     const accountId = resolveAccountId(selectedAccountId)
     if (!accountId) {
@@ -1568,6 +1572,7 @@
 
   // Handle reply/reply-all/forward - calls backend API
   async function handleReply(mode: 'reply' | 'reply-all' | 'forward', messageId: string, imagesLoaded?: boolean) {
+    messageListRef?.releaseFrozenOrder?.()
     // Use conversation's account ID (important for unified inbox), fall back to selected account or first account
     const accountId = resolveAccountId(selectedConversationAccountId) || resolveAccountId(selectedAccountId)
     if (!accountId) return
@@ -2508,7 +2513,8 @@
       await readLaterQueue.load()
       const inQueue = !readLaterQueue.has(accountId, conversationId)
       const result = await readLaterQueue.setWithUndo(accountId, conversationId, inQueue)
-      if (result?.changed) addToast({ type: 'success', message: $_(inQueue ? 'readLater.added' : 'readLater.removed'), actions: result.operationId ? [{ label: $_('common.undo'), onClick: () => { void undoLaterChange(result).catch(() => addToast({ type: 'error', message: $_('toast.undoFailed') })) } }] : undefined })
+      if (result?.changed) addToast({ type: 'success', message: $_(inQueue ? 'readLater.added' : 'readLater.removed'), actions: result.operationId ? [{ label: $_('common.undo'), onClick: () => { void undoLaterChange(result).then(() => messageListRef?.handleActionComplete(false)).catch(() => addToast({ type: 'error', message: $_('toast.undoFailed') })) } }] : undefined })
+      messageListRef?.handleActionComplete(false)
     } catch (err) { addToast({ type: 'error', message: `${$_('readLater.failed')}: ${String(err)}` }) }
   }
 
@@ -2840,6 +2846,7 @@
         folderType={allMailSearchActive ? 'search' : selectedFolderType}
         accountId={selectedConversationAccountId}
         onReply={handleReply}
+        onReplyStart={() => messageListRef?.releaseFrozenOrder?.()}
         onComposeToAddress={handleComposeToAddress}
         onEditDraft={handleEditDraft}
         onActionComplete={(autoSelectNext) => messageListRef?.handleActionComplete(autoSelectNext)}
@@ -2889,7 +2896,7 @@
 <UpdateAvailableNotice hidden={showTermsDialog || showOAuthMissingDialog || showWhatsNewDialog || showCertDialog || showFlatpakFsDialog} />
 
 <!-- Toast notifications -->
-<SnoozeDialog bind:open={snoozeDialog.open} targets={snoozeDialog.targets} />
+<SnoozeDialog bind:open={snoozeDialog.open} targets={snoozeDialog.targets} onDone={(autoSelectNext) => messageListRef?.handleActionComplete(autoSelectNext)} />
 <ToastContainer />
 
 <!-- Spellcheck right-click suggestion menu (composer) -->

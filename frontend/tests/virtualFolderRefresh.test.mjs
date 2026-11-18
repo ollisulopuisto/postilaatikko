@@ -44,6 +44,7 @@ function integrationHarness(overrides = {}) {
   }
   const dependencies = {
     Math, refreshVirtualView, isExpectedSearchCancellation,
+    releaseFrozenOrder: () => {},
     SyncVirtualFolder: async view => calls.push(['sync', view]),
     String,
     loadConversations: async count => calls.push(['load', count]),

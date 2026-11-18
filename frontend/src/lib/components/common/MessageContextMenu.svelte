@@ -205,10 +205,11 @@
         try {
           const result = await readLaterQueue.setWithUndo(ref.accountId, ref.conversationId, inQueue)
           if (result?.changed) toasts.success($_(`${kind}.${inQueue ? 'added' : 'removed'}`), result.operationId ? [{
-            label: $_('common.undo'), onClick: () => { void undoLaterChange(result).catch(() => toasts.error($_('toast.undoFailed'))) },
+            label: $_('common.undo'), onClick: () => { void undoLaterChange(result).then(() => onActionComplete?.(false)).catch(() => toasts.error($_('toast.undoFailed'))) },
           }] : undefined)
         } catch { failures += 1 }
       }
+      onActionComplete?.(false)
       if (failures > 0) toasts.error($_(`${kind}.failed`))
     } catch (err) { toasts.error(`${$_(`${kind}.failed`)}: ${String(err)}`) }
   }
@@ -600,7 +601,7 @@
   </ContextMenuContent>
 </ContextMenuPrimitive.Root>
 
-<SnoozeDialog bind:open={showSnoozeDialog} targets={snoozeTargets} onDone={() => onActionComplete?.(true)} />
+<SnoozeDialog bind:open={showSnoozeDialog} targets={snoozeTargets} onDone={(autoSelectNext) => onActionComplete?.(autoSelectNext)} />
 
 <!-- Permanent Delete Confirmation Dialog -->
 <ConfirmDialog

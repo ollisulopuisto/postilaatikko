@@ -147,6 +147,7 @@ test('the single Search close control runs one reset and restores normal-list st
 
   const { outputText } = ts.transpileModule(`
     let allMailSearch = true, virtualIssues = '', virtualQueryCursor = ''
+    const releaseFrozenOrder = () => {}
     const CancelMailSearch = () => Promise.resolve()
     const virtualSearchSession = 'test'
     let searchQuery = 'needle'
