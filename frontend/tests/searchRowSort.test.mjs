@@ -33,7 +33,12 @@ function sortSearchRowsDate(rows, direction) {
 function sortSearchRows(rows, direction) {
   return rows
     .map((row) => ({ row, ts: Date.parse(row.latestDate) }))
-    .sort((a, b) => direction * (a.ts - b.ts))
+    .sort((a, b) => {
+      const aBad = Number.isNaN(a.ts)
+      const bBad = Number.isNaN(b.ts)
+      if (aBad || bBad) return aBad === bBad ? 0 : aBad ? 1 : -1
+      return direction * (a.ts - b.ts)
+    })
     .map(({ row }) => row)
 }
 
@@ -93,6 +98,20 @@ test('sortSearchRows matches Date.getTime() ordering for mixed-precision sets', 
     const actual = sortSearchRows(rows, direction).map((r) => r.id)
     assert.deepEqual(actual, expected)
   }
+})
+
+test('sortSearchRows pins unparseable dates last in both directions', () => {
+  // Date.parse returns NaN on malformed input; NaN in a numeric comparator
+  // would order the row inconsistently, so bad rows always sort last.
+  const rows = [
+    { latestDate: 'not-a-date', id: 'bad' },
+    { latestDate: '2026-11-18T12:00:05Z', id: 'mid' },
+    { latestDate: '', id: 'empty' },
+    { latestDate: '2026-11-18T12:00:06Z', id: 'new' },
+    { latestDate: '2026-11-18T12:00:04Z', id: 'old' },
+  ]
+  assert.deepEqual(sortSearchRows(rows, -1).map((r) => r.id), ['new', 'mid', 'old', 'bad', 'empty'])
+  assert.deepEqual(sortSearchRows(rows, 1).map((r) => r.id), ['old', 'mid', 'new', 'bad', 'empty'])
 })
 
 test('sortSearchRows is stable for equal dates', () => {
