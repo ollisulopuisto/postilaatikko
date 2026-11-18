@@ -15,11 +15,11 @@ test('quiet toast has no numeric countdown and its edge progress is silent', () 
 test('Undo and Send now keep the existing dispatch/cancel paths and lock during dispatch', () => {
   assert.match(toast, /onclick=\{onSendNow\}/)
   assert.match(toast, /onclick=\{onUndo\}/)
-  assert.equal((toast.match(/disabled=\{dispatching\}/g) || []).length, 2)
+  assert.equal((toast.match(/disabled=\{dispatching\}/g) || []).length, 3)
   assert.match(app, /onSendNow=\{\(\) => void pendingDispatch\(pendingSends\[0\]\)\}/)
   assert.match(app, /onUndo=\{\(\) => void pendingCancel\(pendingSends\[0\]\)\}/)
   assert.match(app, /await CancelPendingSend\(ps.id\)/)
-  assert.match(app, /if \(ps.draftId\) await handleEditDraft\(ps.draftId\)/)
+  assert.match(app, /if \(ps.draftId\) await handleEditDraft\(ps.draftId, \{ accountId: ps.accountId, focusRecipients: editRecipients \}\)/)
 })
 test('queued notification no longer instructs the user to click a countdown', async () => {
   const en = JSON.parse(await read('../src/lib/i18n/locales/en.json'))
@@ -105,4 +105,22 @@ test('manual recovery has a persistent localized action-needed status', async ()
     const locale=JSON.parse(await read(`../src/lib/i18n/locales/${code}.json`))
     assert.ok(locale.pendingSend.recoveryRequired)
   }
+})
+
+test('undo bar shows reply mode and recipients and can reopen the draft at the To field', async () => {
+  const composer = await read('../src/lib/components/composer/Composer.svelte')
+  const en = JSON.parse(await read('../src/lib/i18n/locales/en.json'))
+  assert.match(toast, /data-pending-send-recipients/)
+  assert.match(toast, /onclick=\{onEditRecipients\}/)
+  assert.match(app, /summary=\{pendingSummary\(pendingSends\[0\]\)\}/)
+  assert.match(app, /pendingCancel\(pendingSends\[0\], true\)/)
+  assert.match(composer, /if \(focusRecipients\) \{\s+toInputRef\?\.focus\(\)/)
+  assert.match(composer, /initialMessage\.reply_mode/)
+  for (const k of ['reply', 'replyAll', 'to', 'cc', 'bcc', 'editRecipients']) assert.ok(en.pendingSend[k], k)
+})
+
+test('editing a draft without an explicit account keeps the conversation account fallback', async () => {
+  assert.match(app, /const accountId = \(options\.accountId \? resolveAccountId\(options\.accountId\) : undefined\) \|\| resolveAccountId\(selectedConversationAccountId\) \|\| resolveAccountId\(selectedAccountId\)/)
+  const composer = await read('../src/lib/components/composer/Composer.svelte')
+  assert.match(composer, /reply_mode: initialMessage\?\.reply_mode \|\| ''/)
 })

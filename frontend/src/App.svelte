@@ -485,6 +485,7 @@
   let composerAccountId = $state<string | null>(null)
   let composerInitialMessage = $state<smtp.ComposeMessage | null>(null)
   let composerDraftId = $state<string | null>(null)
+  let composerFocusRecipients = $state(false)
   let composerImagesLoaded = $state(false)
 
   // Mirror composer visibility into the keyboard store so the viewer can
@@ -862,16 +863,26 @@
     }
   }
 
-  async function pendingCancel(ps: PendingSendItem) {
+  async function pendingCancel(ps: PendingSendItem, editRecipients = false) {
     try {
       await CancelPendingSend(ps.id)
       pendingRemove(ps.id)
       addToast({ type: 'info', message: $_('pendingSend.cancelled') })
-      if (ps.draftId) await handleEditDraft(ps.draftId)
+      if (ps.draftId) await handleEditDraft(ps.draftId, { accountId: ps.accountId, focusRecipients: editRecipients })
     } catch {
       pendingRemove(ps.id)
       addToast({ type: 'error', message: $_('pendingSend.alreadySending') })
     }
+  }
+
+  // Recipient summary for the undo bar, read from the queued payload so the
+  // user can see who a reply-all is about to reach before the countdown ends.
+  function pendingSummary(ps: PendingSendItem): { mode: string; to: string; cc: string; bcc: string } {
+    let payload: smtp.ComposeMessage | null = null
+    try { payload = new smtp.ComposeMessage(JSON.parse(ps.payload)) } catch { /* unreadable payload: show no summary */ }
+    const join = (list?: { name?: string; address: string }[]) =>
+      (list || []).map(a => a.name ? `${a.name} <${a.address}>` : a.address).filter(Boolean).join(', ')
+    return { mode: payload?.reply_mode || '', to: join(payload?.to), cc: join(payload?.cc), bcc: join(payload?.bcc) }
   }
 
   function syncMailboxActionEvents() {
@@ -1476,10 +1487,10 @@
   }
 
   // Handle edit draft (opens composer with existing draft)
-  async function handleEditDraft(draftId: string) {
+  async function handleEditDraft(draftId: string, options: { accountId?: string; focusRecipients?: boolean } = {}) {
     messageListRef?.releaseFrozenOrder?.()
     // Use conversation's account ID, fall back to selected account or first account
-    const accountId = resolveAccountId(selectedConversationAccountId) || resolveAccountId(selectedAccountId)
+    const accountId = (options.accountId ? resolveAccountId(options.accountId) : undefined) || resolveAccountId(selectedConversationAccountId) || resolveAccountId(selectedAccountId)
     if (!accountId) return
 
     try {
@@ -1492,6 +1503,7 @@
       composerAccountId = accountId
       composerInitialMessage = draft.message || null
       composerDraftId = draft.draftId
+      composerFocusRecipients = options.focusRecipients ?? false
       showComposer = true
     } catch (err) {
       console.error('Failed to load draft:', err)
@@ -1607,6 +1619,7 @@
 
   // Close composer
   function closeComposer() {
+    composerFocusRecipients = false
     showComposer = false
     composerAccountId = null
     composerInitialMessage = null
@@ -2877,6 +2890,7 @@
           accountId={composerAccountId}
           initialMessage={composerInitialMessage}
           draftId={composerDraftId}
+          focusRecipients={composerFocusRecipients}
           imagesLoaded={composerImagesLoaded}
           onClose={closeComposer}
           onSent={closeComposer}
@@ -2919,8 +2933,10 @@
     now={pendingNow}
     dispatching={!!pendingSends[0].dispatching}
     manualRecovery={!!pendingSends[0].manualRecovery}
+    summary={pendingSummary(pendingSends[0])}
     onSendNow={() => void pendingDispatch(pendingSends[0])}
     onUndo={() => void pendingCancel(pendingSends[0])}
+    onEditRecipients={pendingSends[0].draftId ? () => void pendingCancel(pendingSends[0], true) : undefined}
   />
 {/if}
 
