@@ -17,13 +17,15 @@ import (
 
 // NewMailInfo contains information about newly arrived mail
 type NewMailInfo struct {
-	AccountID   string `json:"accountId"`
-	AccountName string `json:"accountName"`
-	FolderID    string `json:"folderId"`
-	Subject     string `json:"subject"`
-	FromName    string `json:"fromName"`
-	FromEmail   string `json:"fromEmail"`
-	Count       int    `json:"count"` // Number of new messages
+	// ReceivedSince is the local sync start, not a sender-controlled message date.
+	ReceivedSince time.Time `json:"-"`
+	AccountID     string    `json:"accountId"`
+	AccountName   string    `json:"accountName"`
+	FolderID      string    `json:"folderId"`
+	Subject       string    `json:"subject"`
+	FromName      string    `json:"fromName"`
+	FromEmail     string    `json:"fromEmail"`
+	Count         int       `json:"count"` // Number of new messages
 }
 
 // NewMailCallback is called when new mail arrives
@@ -341,11 +343,12 @@ func (s *Scheduler) syncAccountInbox(parent context.Context, acc *account.Accoun
 	if _, apiErr := s.engine.GmailClient(ctx, acc.ID); apiErr == nil {
 		previousInbox, _ := s.folderStore.GetByType(acc.ID, folder.TypeInbox)
 
+		notificationStart := time.Now().UTC()
 		touched, err := s.engine.SyncGmailAccount(ctx, acc.ID)
 		if err == nil && previousInbox != nil && s.newMailCallback != nil {
 			fresh, _ := s.folderStore.Get(previousInbox.ID)
 			if fresh != nil && fresh.TotalCount > previousInbox.TotalCount {
-				s.newMailCallback(NewMailInfo{AccountID: acc.ID, AccountName: acc.Name, FolderID: fresh.ID, Count: fresh.TotalCount - previousInbox.TotalCount})
+				s.newMailCallback(NewMailInfo{AccountID: acc.ID, AccountName: acc.Name, FolderID: fresh.ID, Count: fresh.TotalCount - previousInbox.TotalCount, ReceivedSince: notificationStart})
 			}
 		}
 
@@ -384,6 +387,7 @@ func (s *Scheduler) syncAccountInbox(parent context.Context, acc *account.Accoun
 
 	// Get current message count before sync
 	previousCount := inbox.TotalCount
+	notificationStart := time.Now().UTC()
 
 	// Sync messages (use account's sync period setting)
 	if err := s.engine.SyncMessages(ctx, acc.ID, inbox.ID, acc.SyncPeriodDays, false); err != nil {
@@ -425,10 +429,11 @@ func (s *Scheduler) syncAccountInbox(parent context.Context, acc *account.Accoun
 		// Notify about new mail
 		if s.newMailCallback != nil {
 			s.newMailCallback(NewMailInfo{
-				AccountID:   acc.ID,
-				AccountName: acc.Name,
-				FolderID:    inbox.ID,
-				Count:       newCount,
+				AccountID:     acc.ID,
+				AccountName:   acc.Name,
+				FolderID:      inbox.ID,
+				Count:         newCount,
+				ReceivedSince: notificationStart,
 			})
 		}
 	}
@@ -641,6 +646,7 @@ func (s *Scheduler) SyncAccountInboxBlocking(accountID string) (*NewMailInfo, er
 
 	// Get current message count before sync
 	previousCount := inbox.TotalCount
+	notificationStart := time.Now().UTC()
 
 	// Sync messages (use account's sync period setting)
 	// IDLE-triggered inbox sync (new mail + cross-client deletions) — use the
@@ -664,10 +670,11 @@ func (s *Scheduler) SyncAccountInboxBlocking(accountID string) (*NewMailInfo, er
 	if updatedInbox != nil && updatedInbox.TotalCount > previousCount {
 		newCount := updatedInbox.TotalCount - previousCount
 		return &NewMailInfo{
-			AccountID:   acc.ID,
-			AccountName: acc.Name,
-			FolderID:    inbox.ID,
-			Count:       newCount,
+			AccountID:     acc.ID,
+			AccountName:   acc.Name,
+			FolderID:      inbox.ID,
+			Count:         newCount,
+			ReceivedSince: notificationStart,
 		}, nil
 	}
 

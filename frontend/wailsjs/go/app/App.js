@@ -398,6 +398,10 @@ export function DeleteQuickReply(arg1) {
   return window['go']['app']['App']['DeleteQuickReply'](arg1);
 }
 
+export function DeleteEmailTemplate(arg1) {
+  return window['go']['app']['App']['DeleteEmailTemplate'](arg1);
+}
+
 export function DeleteSMIMECertificate(arg1) {
   return window['go']['app']['App']['DeleteSMIMECertificate'](arg1);
 }
@@ -901,6 +905,10 @@ export function GetRunBackground() {
   return window['go']['app']['App']['GetRunBackground']();
 }
 
+export function GetSmartNotificationSettings() {
+  return window['go']['app']['App']['GetSmartNotificationSettings']();
+}
+
 export function GetSMIMECertificateForEmail(arg1, arg2) {
   return window['go']['app']['App']['GetSMIMECertificateForEmail'](arg1, arg2);
 }
@@ -1211,6 +1219,10 @@ export function ListPendingSends() {
 
 export function ListQuickReplies() {
   return window['go']['app']['App']['ListQuickReplies']();
+}
+
+export function ListEmailTemplates() {
+  return window['go']['app']['App']['ListEmailTemplates']();
 }
 
 export function ListSMIMECertificates(arg1) {
@@ -1549,6 +1561,10 @@ export function SaveQuickReply(arg1) {
   return window['go']['app']['App']['SaveQuickReply'](arg1);
 }
 
+export function SaveEmailTemplate(arg1) {
+  return window['go']['app']['App']['SaveEmailTemplate'](arg1);
+}
+
 export function SaveSendLaterConfig(arg1) {
   return window['go']['app']['App']['SaveSendLaterConfig'](arg1);
 }
@@ -1735,6 +1751,10 @@ export function SetReplyLaterMembership(arg1, arg2) {
 
 export function SetRunBackground(arg1) {
   return window['go']['app']['App']['SetRunBackground'](arg1);
+}
+
+export function SaveSmartNotificationSettings(arg1) {
+  return window['go']['app']['App']['SaveSmartNotificationSettings'](arg1);
 }
 
 export function SetSMIMEEncryptPolicy(arg1, arg2) {

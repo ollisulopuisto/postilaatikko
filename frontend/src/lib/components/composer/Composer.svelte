@@ -6,7 +6,7 @@
   import { createComposerEditor } from './composerEditor'
   import PlainTextEditor from './PlainTextEditor.svelte'
   // @ts-ignore - Wails generated imports
-  import { smtp, account, app } from '../../../../wailsjs/go/models'
+  import { smtp, account, app, settings } from '../../../../wailsjs/go/models'
   // @ts-ignore - Wails runtime for events
   import { EventsOn, EventsOff } from '../../../../wailsjs/runtime/runtime.js'
   import { type ComposerApi, COMPOSER_API_KEY, createMainWindowApi } from '$lib/composerApi'
@@ -33,6 +33,7 @@
   import { DraftHistoryController } from './draftHistory'
   import EditorToolbar from './EditorToolbar.svelte'
   import QuickReplies from './QuickReplies.svelte'
+  import EmailTemplates from './EmailTemplates.svelte'
   import ComposerAttachmentList from './ComposerAttachmentList.svelte'
   import SendLaterDialog from './SendLaterDialog.svelte'
   import { applyListMode, NO_REPEAT, type ListMode, type RepeatRule } from '$lib/scheduledRepeat'
@@ -1201,6 +1202,14 @@
       editor?.chain().focus().insertContent(plainTextToHtml(text)).run()
     }
     scheduleDraftSave()
+  }
+
+  function insertEmailTemplate(template: settings.EmailTemplate) {
+    if (!subject.trim() && template.subject.trim()) subject = template.subject
+    if (template.body) insertQuickReply(template.body)
+    // Subject-only templates must be durable edits too. Body callbacks may
+    // already record this state; the history controller deduplicates it.
+    historyEdit('template')
   }
 
   // Append signature for the current identity based on compose mode
@@ -2833,6 +2842,9 @@
         {#if !isCompact}{$_('composer.attachFiles')}{/if}
       </button>
       <QuickReplies onInsert={insertQuickReply} compact={isCompact} />
+      {#if !isDetached}
+        <EmailTemplates onInsert={insertEmailTemplate} compact={isCompact} />
+      {/if}
       {#if isCompact}
         <button
           onclick={() => showFormatting = !showFormatting}

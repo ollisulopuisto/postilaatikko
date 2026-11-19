@@ -228,6 +228,8 @@ export function DeletePermanently(arg1:Array<string>):Promise<void>;
 
 export function DeleteQuickReply(arg1:string):Promise<void>;
 
+export function DeleteEmailTemplate(arg1:string):Promise<void>;
+
 export function DeleteSMIMECertificate(arg1:string):Promise<void>;
 
 export function DeleteSenderCert(arg1:string):Promise<void>;
@@ -475,6 +477,8 @@ export function GetReplyLaterQueue():Promise<Array<replylater.Ref>>;
 
 export function GetRunBackground():Promise<boolean>;
 
+export function GetSmartNotificationSettings():Promise<settings.SmartNotificationSettings>;
+
 export function GetSMIMECertificateForEmail(arg1:string,arg2:string):Promise<smime.Certificate>;
 
 export function GetSMIMEEncryptPolicy(arg1:string):Promise<string>;
@@ -626,6 +630,8 @@ export function ListPGPSenderKeys():Promise<Array<pgp.SenderKey>>;
 export function ListPendingSends():Promise<Array<app.PendingSend>>;
 
 export function ListQuickReplies():Promise<Array<settings.QuickReply>>;
+
+export function ListEmailTemplates():Promise<Array<settings.EmailTemplate>>;
 
 export function ListSMIMECertificates(arg1:string):Promise<Array<smime.Certificate>>;
 
@@ -793,6 +799,8 @@ export function SavePendingOAuthTokens(arg1:string):Promise<void>;
 
 export function SaveQuickReply(arg1:settings.QuickReply):Promise<settings.QuickReply>;
 
+export function SaveEmailTemplate(arg1:settings.EmailTemplate):Promise<settings.EmailTemplate>;
+
 export function SaveSendLaterConfig(arg1:scheduledsend.ClientConfig):Promise<void>;
 
 export function SaveUIState(arg1:appstate.UIState):Promise<void>;
@@ -886,6 +894,8 @@ export function SetReadReceiptResponsePolicy(arg1:string):Promise<void>;
 export function SetReplyLaterMembership(arg1:replylater.Ref,arg2:boolean):Promise<void>;
 
 export function SetRunBackground(arg1:boolean):Promise<void>;
+
+export function SaveSmartNotificationSettings(arg1:settings.SmartNotificationSettings):Promise<void>;
 
 export function SetSMIMEEncryptPolicy(arg1:string,arg2:string):Promise<void>;
 
