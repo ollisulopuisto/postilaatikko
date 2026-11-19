@@ -182,6 +182,7 @@ func OpenSyncRuntime(dataDirectory string, credentials IMAPConfigSource) (*SyncR
 	scheduler := mailSync.NewScheduler(engine, accounts, folders)
 	runtime.pool, runtime.scheduler, runtime.folders, runtime.syncEngine = pool, scheduler, folders, engine
 	runtime.events = mailboxevents.NewBroker(mailboxevents.Options{})
+	engine.SetFolderCatalogChangedHandler(func(accountID string) { runtime.publishChange(v1.EventFoldersChanged, accountID, "") })
 	// PERF-SC-004: a completed provider sync invalidates that folder's cached
 	// reads for every connected desktop client. Failed syncs change nothing,
 	// so they publish nothing.
@@ -784,9 +785,7 @@ func (r *SyncRuntime) runTriageMaintenance(ctx context.Context) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 	for {
-		r.triageMutationMu.Lock()
-		_, expireErr := r.triage.ExpireSnoozes(time.Now())
-		r.triageMutationMu.Unlock()
+		expireErr := r.expireSnoozes(time.Now())
 		if expireErr != nil {
 			log.Warn().Err(expireErr).Msg("Failed to expire due Snoozes")
 		}
@@ -872,7 +871,7 @@ func (r *SyncRuntime) refreshAllVirtualFolderCaches() error {
 	}
 	log := logging.WithComponent("alwayson.virtualfolder")
 	for _, view := range views {
-		if err := r.refreshVirtualFolderCache(view.ID); err != nil {
+		if err := r.RefreshVirtualFolderCache(view.ID); err != nil {
 			log.Warn().Err(err).Str("virtualFolderID", view.ID).Msg("Failed to refresh virtual-folder cache")
 		}
 	}
@@ -1009,4 +1008,21 @@ func (r *SyncRuntime) stopFilterWorker() {
 		<-filterDone
 	}
 	r.cancelFilterWorker()
+}
+
+// CloseEventStreams ends streaming requests before HTTP graceful shutdown.
+func (r *SyncRuntime) CloseEventStreams() {
+	if r != nil && r.events != nil {
+		_ = r.events.Close()
+	}
+}
+
+func (r *SyncRuntime) expireSnoozes(now time.Time) error {
+	r.triageMutationMu.Lock()
+	n, err := r.triage.ExpireSnoozes(now)
+	r.triageMutationMu.Unlock()
+	if err == nil && n > 0 {
+		r.publishChange(v1.EventTriageChanged, "", "")
+	}
+	return err
 }

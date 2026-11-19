@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 - Top-tab Unread no longer repeats its active state in a removable filter chip. List-local filters keep their chips.
+- Add authenticated mailbox-change event streaming for helper clients, including action, draft, triage, filter and background-update invalidations. Desktop adoption is separate; provider syncs may still invalidate unchanged folders.
+
 - Add an authenticated read-only workspace bootstrap API that combines mailbox catalogs, unread counts and an optional first conversation page. Capability discovery remains separate; desktop adoption follows later.
 
 - Fix a background reconnect storm: when a server accepted the login but refused or dropped IMAP IDLE immediately, the app reconnected with no delay or retry limit, pinning a CPU core and churning memory. Fast-failing cycles now back off like failed connections and give up after the configured retries; long-lived connections that drop still reconnect at once.

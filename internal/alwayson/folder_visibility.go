@@ -3,6 +3,7 @@ package alwayson
 import (
 	"context"
 	"fmt"
+	v1 "github.com/hkdb/aerion/internal/automation/v1"
 )
 
 // SetFolderVisibility changes the helper-owned local preference. Refresh is
@@ -17,6 +18,7 @@ func (r *SyncRuntime) SetFolderVisibility(ctx context.Context, accountID string,
 	if err := r.syncEngine.SetFolderVisibility(ctx, accountID, ids, hidden); err != nil {
 		return err
 	}
+	r.publishChange(v1.EventFoldersChanged, accountID, "")
 	if refresh {
 		acc, err := r.accounts.Get(accountID)
 		if err != nil {

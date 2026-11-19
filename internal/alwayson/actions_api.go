@@ -372,6 +372,8 @@ func (o *mailboxActionOperations) loadActionMessages(ids []string) ([]*message.M
 }
 
 func (o *mailboxActionOperations) setFlags(ids []string, kind string, enabled bool) error {
+	defer o.runtime.publishChange(v1.EventMailboxChanged, "", "")
+
 	messages, err := o.loadActionMessages(ids)
 	if err != nil {
 		return err
@@ -528,6 +530,19 @@ func (o *mailboxActionOperations) restoreGroupFolder(group v1.ActionProviderGrou
 }
 
 func (o *mailboxActionOperations) moveToFolder(messages []*message.Message, destination *folder.Folder) error {
+	// Even a failed provider batch may have persisted a partial move. Refresh
+	// all source scopes and the real destination, including cross-account moves.
+	defer func() {
+		for _, m := range messages {
+			if m != nil {
+				o.runtime.publishChange(v1.EventMailboxChanged, m.AccountID, m.FolderID)
+			}
+		}
+		if destination != nil {
+			o.runtime.publishChange(v1.EventMailboxChanged, destination.AccountID, destination.ID)
+		}
+	}()
+
 	if o.moveToFolderFunc != nil {
 		return o.moveToFolderFunc(messages, destination)
 	}

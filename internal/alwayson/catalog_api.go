@@ -534,6 +534,7 @@ func (r *SyncRuntime) SyncFolders(ctx context.Context, accountID string) error {
 
 // SetFolderSubscription applies provider subscription state and updates the helper cache.
 func (r *SyncRuntime) SetFolderSubscription(ctx context.Context, accountID, folderID string, subscribed bool) error {
+	defer r.publishChange(v1.EventFoldersChanged, accountID, "")
 	if r == nil || r.syncEngine == nil || r.folders == nil || r.accounts == nil {
 		return errors.New("always-on runtime is not open")
 	}
@@ -587,6 +588,7 @@ func (r *SyncRuntime) SetFolderSubscription(ctx context.Context, accountID, fold
 
 // SetAllFolderSubscriptions applies the provider-specific bulk subscription behavior.
 func (r *SyncRuntime) SetAllFolderSubscriptions(ctx context.Context, accountID string, subscribed bool) error {
+	defer r.publishChange(v1.EventFoldersChanged, accountID, "")
 	if r == nil || r.syncEngine == nil || r.folders == nil || r.accounts == nil {
 		return errors.New("always-on runtime is not open")
 	}

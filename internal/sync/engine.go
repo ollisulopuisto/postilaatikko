@@ -93,18 +93,19 @@ type NewMessageHandler func(accountID, folderID string, msg *message.Message)
 
 // Engine handles synchronization between IMAP server and local storage
 type Engine struct {
-	pool              *imapPkg.Pool
-	accountStore      *account.Store
-	folderStore       *folder.Store
-	messageStore      *message.Store
-	attachmentStore   *message.AttachmentStore
-	attachExtractor   *email.AttachmentExtractor
-	sanitizer         *email.Sanitizer
-	log               zerolog.Logger
-	progressCallback  ProgressCallback
-	newMessageHandler NewMessageHandler
-	smimeVerifier     *smime.Verifier
-	pgpVerifier       *pgp.Verifier
+	folderCatalogChanged func(string)
+	pool                 *imapPkg.Pool
+	accountStore         *account.Store
+	folderStore          *folder.Store
+	messageStore         *message.Store
+	attachmentStore      *message.AttachmentStore
+	attachExtractor      *email.AttachmentExtractor
+	sanitizer            *email.Sanitizer
+	log                  zerolog.Logger
+	progressCallback     ProgressCallback
+	newMessageHandler    NewMessageHandler
+	smimeVerifier        *smime.Verifier
+	pgpVerifier          *pgp.Verifier
 
 	// Per-folder counter driving the periodic full flag sweep for large
 	// mailboxes on the CONDSTORE fast-path (see runFlagSync / condstore.go).
@@ -209,4 +210,9 @@ func (e *Engine) emitProgress(accountID, folderID string, fetched, total int, ph
 			Phase:     phase,
 		})
 	}
+}
+
+// SetFolderCatalogChangedHandler installs a pre-start nonblocking catalog invalidation hook.
+func (e *Engine) SetFolderCatalogChangedHandler(handler func(string)) {
+	e.folderCatalogChanged = handler
 }

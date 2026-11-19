@@ -478,6 +478,7 @@ func serve(ctx context.Context, store *scheduledsend.Store, transport scheduleds
 	cancel()
 	shutdownContext, done := context.WithTimeout(context.Background(), 5*time.Second)
 	defer done()
+	syncRuntime.CloseEventStreams()
 	shutdownErr := errors.Join(server.Shutdown(shutdownContext), apiServer.Stop(shutdownContext))
 	if !workerStopped {
 		select {

@@ -93,3 +93,17 @@ Baseline: `2026-11-19-performance-baseline.md`; bootstrap:
 - Numeric cursors do not encode broker lifetimes. Every nonzero-cursor reconnect now conservatively requests a full resync before replay, including an empty restarted broker and overlapping sequence values. This trades extra reconnect reads for correctness without introducing a second cursor protocol.
 - SSE renews a 30-second write deadline before each write and uses ResponseController.Flush through middleware wrappers. The ordinary HTTP request timeout is disabled only on a private client copy for streaming; cancellation remains context-owned.
 - Grant lookup errors and missing authenticated client IDs end streams rather than leaving them unverifiable.
+
+## Review correction: invalidation coverage and idle limits
+
+Publishing is attached to the lower-level move/flag/filter, triage undo/expiry,
+sent-draft cleanup, background saved-view and folder-catalog paths, plus
+Gmail push completion. Source and actual destination identities are invalidated
+even for uncertain partial moves. Streams close before HTTP graceful shutdown.
+
+A scheduled provider sync can conservatively invalidate a folder even when its
+contents did not change. Saved-view cache maintenance can do likewise. SSE
+adoption alone therefore does not guarantee idle-read savings; client debounce,
+provider cadence and change-aware publishing require separate measurements.
+The earlier suggestion that SSE automatically replaces all idle polling traffic
+is withdrawn. Desktop adoption and live-mailbox idle performance are unverified.

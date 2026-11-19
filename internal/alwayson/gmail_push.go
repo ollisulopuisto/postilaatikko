@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -253,6 +254,7 @@ func (r *SyncRuntime) handleGmailPush(ctx context.Context, message *pubsub.Messa
 		message.Nack()
 		return
 	}
+	r.publishChange(v1.EventMailboxChanged, matched.ID, "")
 	message.Ack()
 }
 

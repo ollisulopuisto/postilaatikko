@@ -44,6 +44,13 @@ var errFolderStatusUnprocessed = errors.New("mailbox status was not processed")
 
 // SyncFolders synchronizes the folder list for an account
 func (e *Engine) SyncFolders(ctx context.Context, accountID string) error {
+	// A provider error may occur after some local catalog rows changed.
+	defer func() {
+		if e.folderCatalogChanged != nil {
+			e.folderCatalogChanged(accountID)
+		}
+	}()
+
 	if c, err := e.GmailClient(ctx, accountID); err == nil {
 		return e.syncGmailFolders(ctx, accountID, c)
 	} else if !errors.Is(err, gmail.ErrNotCapable) {

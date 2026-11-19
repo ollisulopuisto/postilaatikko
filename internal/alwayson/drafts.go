@@ -497,7 +497,7 @@ func (r *SyncRuntime) Send(ctx context.Context, req v1.SendRequest, key, hash st
 		return nil, fmt.Errorf("delivery result could not be persisted; query the same idempotency key: %w", persistErr)
 	}
 	if state == v1.OperationSent && req.DraftID != "" {
-		if err := r.drafts.DeleteIfRevision(req.DraftID, req.Revision); err != nil {
+		if err := r.DeleteDraft(req.DraftID, req.AccountID, req.Revision); err != nil {
 			code = "sent_draft_cleanup_failed"
 			_, _ = r.db.Exec(`UPDATE send_api_idempotency SET code = ? WHERE idempotency_key = ?`, code, key)
 		}
