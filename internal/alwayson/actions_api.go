@@ -116,6 +116,19 @@ func (o *mailboxActionOperations) PlanActionGroups(ctx context.Context, req v1.A
 }
 
 func (o *mailboxActionOperations) ExecuteActionGroup(ctx context.Context, req v1.ActionRequest, group v1.ActionProviderGroup) error {
+	err := o.executeActionGroup(ctx, req, group)
+	if err == nil {
+		// Invalidate the source folder and, for moves, the destination so
+		// connected clients re-read both (PERF-SC-004).
+		o.runtime.publishChange(v1.EventMailboxChanged, group.AccountID, group.SourceFolderID)
+		if req.Action == v1.ActionMove && req.Destination != "" && req.Destination != group.SourceFolderID {
+			o.runtime.publishChange(v1.EventMailboxChanged, group.AccountID, req.Destination)
+		}
+	}
+	return err
+}
+
+func (o *mailboxActionOperations) executeActionGroup(ctx context.Context, req v1.ActionRequest, group v1.ActionProviderGroup) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -359,6 +372,8 @@ func (o *mailboxActionOperations) loadActionMessages(ids []string) ([]*message.M
 }
 
 func (o *mailboxActionOperations) setFlags(ids []string, kind string, enabled bool) error {
+	defer o.runtime.publishChange(v1.EventMailboxChanged, "", "")
+
 	messages, err := o.loadActionMessages(ids)
 	if err != nil {
 		return err
@@ -515,6 +530,19 @@ func (o *mailboxActionOperations) restoreGroupFolder(group v1.ActionProviderGrou
 }
 
 func (o *mailboxActionOperations) moveToFolder(messages []*message.Message, destination *folder.Folder) error {
+	// Even a failed provider batch may have persisted a partial move. Refresh
+	// all source scopes and the real destination, including cross-account moves.
+	defer func() {
+		for _, m := range messages {
+			if m != nil {
+				o.runtime.publishChange(v1.EventMailboxChanged, m.AccountID, m.FolderID)
+			}
+		}
+		if destination != nil {
+			o.runtime.publishChange(v1.EventMailboxChanged, destination.AccountID, destination.ID)
+		}
+	}()
+
 	if o.moveToFolderFunc != nil {
 		return o.moveToFolderFunc(messages, destination)
 	}

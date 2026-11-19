@@ -3,6 +3,7 @@ package alwayson
 import (
 	"context"
 	"errors"
+	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"time"
 
 	"github.com/hkdb/aerion/internal/folder"
@@ -147,6 +148,13 @@ func (r *SyncRuntime) runFilterJob(ctx context.Context, job *mailfilter.FilterJo
 			return
 		}
 	}
+	// Filters can use a provider mover that bypasses the action wrapper.
+	defer func() {
+		r.publishChange(v1.EventMailboxChanged, job.SourceAccountID, job.SourceFolderID)
+		if destination != nil {
+			r.publishChange(v1.EventMailboxChanged, destination.AccountID, destination.ID)
+		}
+	}()
 	if job.Actions.MarkRead {
 		if err := ops.MarkAsRead([]string{job.MessageID}); err != nil {
 			r.markFilterJobUnknown(job, err)

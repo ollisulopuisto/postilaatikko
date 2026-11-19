@@ -138,6 +138,25 @@ func (o *mailboxActionOperations) actionExpectedLocation(req v1.ActionRequest, m
 }
 
 func (o *mailboxActionOperations) UndoAction(ctx context.Context, action v1.ActionKind, payload []byte) error {
+	err := o.undoAction(ctx, action, payload)
+	if err == nil {
+		// Invalidate every folder the restored messages touch so clients
+		// converge back to the pre-action state (PERF-SC-004).
+		if refs, refErr := o.ActionUndoAffectedRefs(ctx, payload); refErr == nil {
+			seen := map[string]bool{}
+			for _, ref := range refs {
+				key := ref.AccountID + "/" + ref.FolderID
+				if !seen[key] {
+					seen[key] = true
+					o.runtime.publishChange(v1.EventMailboxChanged, ref.AccountID, ref.FolderID)
+				}
+			}
+		}
+	}
+	return err
+}
+
+func (o *mailboxActionOperations) undoAction(ctx context.Context, action v1.ActionKind, payload []byte) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}

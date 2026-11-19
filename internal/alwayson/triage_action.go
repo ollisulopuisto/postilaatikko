@@ -32,6 +32,14 @@ type triageActionUndoSnapshotEntry struct {
 }
 
 func (r *SyncRuntime) ApplyTriageMutation(ctx context.Context, request v1.TriageMutationRequest, reserve func([]byte) error) (bool, []byte, error) {
+	applied, snapshot, err := r.applyTriageMutation(ctx, request, reserve)
+	if err == nil && applied {
+		r.publishChange(v1.EventTriageChanged, request.AccountID, "")
+	}
+	return applied, snapshot, err
+}
+
+func (r *SyncRuntime) applyTriageMutation(ctx context.Context, request v1.TriageMutationRequest, reserve func([]byte) error) (bool, []byte, error) {
 	if r == nil || r.replyLater == nil || r.triage == nil {
 		return false, nil, errors.New("always-on triage stores are not open")
 	}
@@ -240,7 +248,13 @@ func (o *mailboxActionOperations) ActionUndoTriageRefs(ctx context.Context, payl
 	return []v1.AffectedTriageRef{ref}, nil
 }
 
-func (o *mailboxActionOperations) undoTriageAction(ctx context.Context, action v1.ActionKind, payload []byte) error {
+func (o *mailboxActionOperations) undoTriageAction(ctx context.Context, action v1.ActionKind, payload []byte) (retErr error) {
+	defer func() {
+		if retErr == nil {
+			o.runtime.publishChange(v1.EventTriageChanged, "", "")
+		}
+	}()
+
 	r := o.runtime
 	if r == nil || r.replyLater == nil || r.triage == nil {
 		return errors.New("always-on triage stores are not open")

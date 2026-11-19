@@ -302,7 +302,11 @@ func (r *SyncRuntime) CreateVirtualFolder(vf *virtualfolder.VirtualFolder) error
 	if err := r.virtualFolders.Create(vf); err != nil {
 		return err
 	}
-	return r.refreshVirtualFolderCache(vf.ID)
+	err := r.refreshVirtualFolderCache(vf.ID)
+	if err == nil {
+		r.publishChange(v1.EventViewsChanged, "", "")
+	}
+	return err
 }
 
 func (r *SyncRuntime) UpdateVirtualFolder(vf *virtualfolder.VirtualFolder) error {
@@ -312,28 +316,44 @@ func (r *SyncRuntime) UpdateVirtualFolder(vf *virtualfolder.VirtualFolder) error
 	if err := r.virtualFolders.Update(vf); err != nil {
 		return err
 	}
-	return r.refreshVirtualFolderCache(vf.ID)
+	err := r.refreshVirtualFolderCache(vf.ID)
+	if err == nil {
+		r.publishChange(v1.EventViewsChanged, "", "")
+	}
+	return err
 }
 
 func (r *SyncRuntime) DeleteVirtualFolder(id string) error {
 	if r == nil || r.virtualFolders == nil {
 		return errors.New("always-on runtime is not open")
 	}
-	return r.virtualFolders.Delete(id)
+	if err := r.virtualFolders.Delete(id); err != nil {
+		return err
+	}
+	r.publishChange(v1.EventViewsChanged, "", "")
+	return nil
 }
 
 func (r *SyncRuntime) ReorderVirtualFolders(ids []string) error {
 	if r == nil || r.virtualFolders == nil {
 		return errors.New("always-on runtime is not open")
 	}
-	return r.virtualFolders.Reorder(ids)
+	if err := r.virtualFolders.Reorder(ids); err != nil {
+		return err
+	}
+	r.publishChange(v1.EventViewsChanged, "", "")
+	return nil
 }
 
 func (r *SyncRuntime) RefreshVirtualFolderCache(id string) error {
 	if r == nil || r.virtualFolders == nil || r.messages == nil {
 		return errors.New("always-on runtime is not open")
 	}
-	return r.refreshVirtualFolderCache(id)
+	err := r.refreshVirtualFolderCache(id)
+	if err == nil {
+		r.publishChange(v1.EventViewsChanged, "", "")
+	}
+	return err
 }
 
 func (r *SyncRuntime) GetCachedVirtualFolderView(ctx context.Context, id string) (*v1.CachedVirtualFolderView, error) {
@@ -505,11 +525,16 @@ func (r *SyncRuntime) SyncFolders(ctx context.Context, accountID string) error {
 	if account == nil {
 		return fmt.Errorf("account not found: %s", accountID)
 	}
-	return r.syncEngine.SyncFolders(ctx, accountID)
+	err = r.syncEngine.SyncFolders(ctx, accountID)
+	if err == nil {
+		r.publishChange(v1.EventFoldersChanged, accountID, "")
+	}
+	return err
 }
 
 // SetFolderSubscription applies provider subscription state and updates the helper cache.
 func (r *SyncRuntime) SetFolderSubscription(ctx context.Context, accountID, folderID string, subscribed bool) error {
+	defer r.publishChange(v1.EventFoldersChanged, accountID, "")
 	if r == nil || r.syncEngine == nil || r.folders == nil || r.accounts == nil {
 		return errors.New("always-on runtime is not open")
 	}
@@ -563,6 +588,7 @@ func (r *SyncRuntime) SetFolderSubscription(ctx context.Context, accountID, fold
 
 // SetAllFolderSubscriptions applies the provider-specific bulk subscription behavior.
 func (r *SyncRuntime) SetAllFolderSubscriptions(ctx context.Context, accountID string, subscribed bool) error {
+	defer r.publishChange(v1.EventFoldersChanged, accountID, "")
 	if r == nil || r.syncEngine == nil || r.folders == nil || r.accounts == nil {
 		return errors.New("always-on runtime is not open")
 	}
@@ -689,6 +715,12 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 		grantClientID:      grantClientIDFromContext,
 		fingerprint:        r.accountMutationFingerprint,
 	}
+	// Typed nil guard: a nil *mailboxevents.Broker assigned to the interface
+	// field would read non-nil and mount the stream with no broker.
+	if r.events != nil {
+		deps.events = r.events
+		deps.grantChecker = r.grantChecker
+	}
 	// The remote contacts surface shares this authenticated /v1 router; without
 	// this mount every desktop contacts call in remote service mode 404s.
 	if r.contacts != nil {
@@ -752,6 +784,8 @@ type mailboxRouteDeps struct {
 	contacts           v1.ContactsOperations
 	contactsLedger     v1.ContactsMutationLedger
 	calendar           v1.CalendarReadOperations
+	events             v1.MailboxEventSource
+	grantChecker       v1.GrantRevocationChecker
 }
 
 // mountMailboxV1Routes mounts the entire mailbox v1 route surface. Every
@@ -784,6 +818,11 @@ func mountMailboxV1Routes(mux v1.RouteMux, d *mailboxRouteDeps) {
 	v1.NewActionsHandlerWithReceiptStore(d.actions, d.receipts, d.keyDigest).MountRoutes(mux, requireCap)
 	v1.MountActionUndoRoutes(mux, d.undoStore, d.undoOps, d.keyDigest, requireCap)
 	v1.MountActionEventRoutes(mux, d.eventStore, d.grantClientID, requireCap)
+	// The event stream mounts when the runtime has a broker; coalescing it
+	// would buffer the stream, so it is classified non-coalescible.
+	if d.events != nil {
+		v1.MountEventsRoute(mux, d.events, d.grantChecker, d.grantClientID, requireCap)
+	}
 	if d.contacts != nil {
 		v1.MountContactsRoutes(mux, d.contacts, d.contactsLedger, d.fingerprint, requireCap)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/hkdb/aerion/internal/database"
 	"github.com/hkdb/aerion/internal/folder"
+	"github.com/hkdb/aerion/internal/mailboxevents"
 	"github.com/hkdb/aerion/internal/mailfilter"
 	"github.com/hkdb/aerion/internal/mailmove"
 	"github.com/hkdb/aerion/internal/message"
@@ -49,6 +50,13 @@ func TestHiddenDestinationPausesQueuedJobAndShowResumes(t *testing.T) {
 	}
 	moves := 0
 	r := &SyncRuntime{messages: messages, rules: rules, folders: folders, filterJobs: jobs, filterOp: mailmove.FilterOperation{Messages: messages, Move: func(context.Context, string, *message.Message, *folder.Folder) error { moves++; return nil }}}
+	r.events = mailboxevents.NewBroker(mailboxevents.Options{})
+	defer r.CloseEventStreams()
+	_, events, _, cancel, subscribeErr := r.events.Subscribe(0)
+	if subscribeErr != nil {
+		t.Fatal(subscribeErr)
+	}
+	defer cancel()
 	job, err := jobs.ClaimNext()
 	if err != nil || job == nil {
 		t.Fatalf("claim %+v %v", job, err)
@@ -76,6 +84,18 @@ func TestHiddenDestinationPausesQueuedJobAndShowResumes(t *testing.T) {
 	r.runFilterJob(context.Background(), resumed)
 	if moves != 1 {
 		t.Fatalf("provider calls after Show %d", moves)
+	}
+	got := map[string]bool{}
+	for len(got) < 2 {
+		select {
+		case e := <-events:
+			got[e.AccountID+":"+e.FolderID] = true
+		case <-time.After(time.Second):
+			t.Fatalf("filter missing invalidation: %v", got)
+		}
+	}
+	if !got["a:source"] || !got["b:destination"] {
+		t.Fatal(got)
 	}
 	stored, err := rules.Get(rule.ID)
 	if err != nil || !stored.Enabled {

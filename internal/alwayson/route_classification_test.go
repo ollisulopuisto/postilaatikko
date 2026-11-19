@@ -41,6 +41,7 @@ func (stubCatalog) GetIdentities(string) ([]*account.Identity, error)          {
 // production where the runtimes exist.
 type stubContacts struct{ v1.ContactsOperations }
 type stubCalendar struct{ v1.CalendarReadOperations }
+type stubEvents struct{ v1.MailboxEventSource }
 
 // mountAllV1Routes mounts the same route surface as
 // SyncRuntime.MailboxReadAPIHandler through the same mountMailboxV1Routes
@@ -58,6 +59,7 @@ func mountAllV1Routes(mux *recordingMux) {
 		grantClientID: func(*http.Request) string { return "client" },
 		contacts:      stubContacts{},
 		calendar:      stubCalendar{},
+		events:        stubEvents{},
 	})
 }
 
@@ -155,6 +157,10 @@ var classifiedRoutes = []routeClassification{
 	post("POST /v1/conversations/count", true),
 	post("POST /v1/conversations/search", true),
 	post("POST /v1/workspace/bootstrap", true),
+	// The event stream is a long-lived SSE response: coalescing it would
+	// buffer the stream and merge distinct subscribers, so it never
+	// coalesces.
+	get("GET /v1/events", false),
 	post("/v1/search", true),
 	// Thread and body reads: thread rendering is read-only (see the comment
 	// on coalescibleRead); body fetches can hit providers and cache bodies,

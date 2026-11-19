@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -11,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -745,6 +747,83 @@ func (e *HTTPError) Error() string {
 func IsHTTPNotFound(err error) bool {
 	var httpErr *HTTPError
 	return errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusNotFound
+}
+
+// SubscribeEvents streams mailbox change events from GET /v1/events
+// (PERF-SC-004), invoking onEvent for each one until the server closes the
+// stream, the context is cancelled, or onEvent returns an error. lastEventID
+// resumes after a previously seen sequence (Last-Event-ID); the server
+// replays what it retained and marks unrecoverable gaps with
+// v1.EventResync, on which the caller must re-read state (e.g. via
+// BootstrapWorkspace). Reconnect policy belongs to the caller: on a nil or
+// retryable error return, reconnect with the last sequence seen.
+func (c *Client) SubscribeEvents(ctx context.Context, lastEventID uint64, onEvent func(v1.MailboxEvent) error) error {
+	endpoint := strings.TrimRight(c.endpoint, "/") + "/v1/events"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.token)
+	req.Header.Set("Accept", "text/event-stream")
+	if lastEventID > 0 {
+		req.Header.Set("Last-Event-ID", strconv.FormatUint(lastEventID, 10))
+	}
+	streamClient := *c.httpClient
+	streamClient.Timeout = 0 // context owns stream lifetime; transport limits still apply
+	resp, err := streamClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		var errResp v1.ErrorResponse
+		if jsonErr := json.Unmarshal(body, &errResp); jsonErr == nil && errResp.Error.Code != "" {
+			return fmt.Errorf("api error (%s): %s: %w", errResp.Error.Code, errResp.Error.Message, v1.NewFault(errResp.Error.Code, errResp.Error.Message, errResp.Error.Retryable, nil))
+		}
+		return &HTTPError{StatusCode: resp.StatusCode, Body: string(body)}
+	}
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1<<20)
+	var data strings.Builder
+	dispatch := func() error {
+		if data.Len() == 0 {
+			return nil
+		}
+		var ev v1.MailboxEvent
+		if err := json.Unmarshal([]byte(data.String()), &ev); err != nil {
+			data.Reset()
+			return fmt.Errorf("decode event: %w", err)
+		}
+		data.Reset()
+		return onEvent(ev)
+	}
+	for scanner.Scan() {
+		line := scanner.Text()
+		switch {
+		case line == "":
+			if err := dispatch(); err != nil {
+				return err
+			}
+		case strings.HasPrefix(line, ":"):
+			// Heartbeat comment; ignore.
+		case strings.HasPrefix(line, "data: "):
+			if data.Len() > 0 {
+				data.WriteByte(10)
+			}
+			data.WriteString(strings.TrimPrefix(line, "data: "))
+		default:
+			// id:/event:/retry: lines: the sequence travels inside the data
+			// payload, so only data lines need parsing.
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return err
+	}
+	return nil
 }
 
 // BootstrapWorkspace fetches the one-request startup snapshot
