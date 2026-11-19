@@ -1966,4 +1966,15 @@ var migrations = []Migration{
 	  updated_at TEXT NOT NULL
 	);
 	`},
+	{Version: 84, SQL: `
+	-- PERF-SC-005 keyset conversation pagination.
+	-- Phase 1 walks one folder newest-first, deduplicating threads in Go; this
+	-- covering index lets the scan seek to the cursor position instead of
+	-- grouping and sorting the whole folder per page.
+	CREATE INDEX IF NOT EXISTS idx_messages_folder_date_conv
+	  ON messages(folder_id, date DESC, COALESCE(thread_id, id));
+	-- Phase 2 loads aggregates for only the page's conversations.
+	CREATE INDEX IF NOT EXISTS idx_messages_account_conv
+	  ON messages(account_id, COALESCE(thread_id, id));
+	`},
 }

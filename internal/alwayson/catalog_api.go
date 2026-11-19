@@ -60,6 +60,37 @@ func (o *catalogReadOperations) ListConversationsByFolder(folderID string, offse
 	return o.messages.ListConversationsByFolder(folderID, offset, limit, sortOrder, filter)
 }
 
+// Keyset conversation pagination (PERF-SC-005). The store seeks the page
+// cursor through idx_messages_folder_date_conv, so unfiltered newest-first
+// pages no longer group and sort the full folder per request.
+
+// ListConversationsByFolderKeyset returns a keyset page for an eligible physical folder, retaining legacy fallbacks.
+func (o *catalogReadOperations) ListConversationsByFolderKeyset(folderID, cursor string, limit int) ([]*message.Conversation, string, error) {
+	return o.messages.ListConversationsByFolderKeyset(folderID, cursor, limit)
+}
+
+// ListConversationsUnifiedInboxKeyset returns a keyset page across enabled account inboxes.
+func (o *catalogReadOperations) ListConversationsUnifiedInboxKeyset(cursor string, limit int) ([]*message.Conversation, string, error) {
+	folderIDs, err := resolveSpecialFolderIDs(o.accounts, o.folders, folder.TypeInbox)
+	if err != nil {
+		return nil, "", err
+	}
+	return o.messages.ListConversationsByFolderIDsKeyset(folderIDs, cursor, limit, "newest", false)
+}
+
+// ListConversationsUnifiedFolderKeyset returns a keyset page across a supported unified folder type.
+func (o *catalogReadOperations) ListConversationsUnifiedFolderKeyset(folderType, cursor string, limit int) ([]*message.Conversation, string, error) {
+	typeValue, err := parseUnifiedFolderType(folderType)
+	if err != nil {
+		return nil, "", err
+	}
+	folderIDs, err := resolveSpecialFolderIDs(o.accounts, o.folders, typeValue)
+	if err != nil {
+		return nil, "", err
+	}
+	return o.messages.ListConversationsByFolderIDsKeyset(folderIDs, cursor, limit, "newest", false)
+}
+
 func (o *catalogReadOperations) CountConversationsByFolder(accountID, folderID, filter string) (int, error) {
 	f, err := o.folders.Get(folderID)
 	if err != nil {
@@ -702,7 +733,7 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 		conversationList:   operations,
 		conversationCount:  operations,
 		conversationSearch: operations,
-		bootstrap:          workspaceBootstrapOperations{ConversationListOperations: operations, catalog: operations, unreadCounts: r},
+		bootstrap:          workspaceBootstrapOperations{ConversationListOperations: operations, ConversationListKeysetOperations: operations, catalog: operations, unreadCounts: r},
 		search:             readOperations,
 		messageRead:        readOperations,
 		actionTarget:       mailboxActions,
@@ -836,6 +867,7 @@ func mountMailboxV1Routes(mux v1.RouteMux, d *mailboxRouteDeps) {
 // list and catalog reads come from catalogReadOperations, saved-view unread
 // counts from the runtime itself (as in MountVirtualFolderUnreadCountRoute).
 type workspaceBootstrapOperations struct {
+	v1.ConversationListKeysetOperations
 	v1.ConversationListOperations
 	catalog      v1.CatalogOperations
 	unreadCounts v1.VirtualFolderUnreadCountOperations
