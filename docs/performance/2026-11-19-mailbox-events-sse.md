@@ -86,3 +86,10 @@ connector change.
 
 Baseline: `2026-11-19-performance-baseline.md`; bootstrap:
 `2026-11-19-workspace-bootstrap.md`.
+
+## Review corrections
+
+- Burst coalescing emits a leading invalidation and a bounded trailing invalidation for suppressed writes. One timer and at most 1024 dirty keys are retained; Close stops the timer.
+- Numeric cursors do not encode broker lifetimes. Every nonzero-cursor reconnect now conservatively requests a full resync before replay, including an empty restarted broker and overlapping sequence values. This trades extra reconnect reads for correctness without introducing a second cursor protocol.
+- SSE renews a 30-second write deadline before each write and uses ResponseController.Flush through middleware wrappers. The ordinary HTTP request timeout is disabled only on a private client copy for streaming; cancellation remains context-owned.
+- Grant lookup errors and missing authenticated client IDs end streams rather than leaving them unverifiable.

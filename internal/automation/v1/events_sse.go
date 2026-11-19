@@ -36,10 +36,15 @@ func MountEventsRoute(mux RouteMux, source MailboxEventSource, checker GrantRevo
 		if !requireCap(w, r, CapabilityMailRead) {
 			return
 		}
-		flusher, ok := w.(http.Flusher)
-		if !ok {
-			writeHeaderError(w, r, http.StatusInternalServerError, CodeInternal, "Streaming unsupported", false)
-			return
+		controller := http.NewResponseController(w)
+		// Renew a bounded deadline before each write. Flush alone does not renew
+		// http.Server.WriteTimeout; Unwrap-aware control also preserves timing middleware.
+		renewDeadline := func() error {
+			err := controller.SetWriteDeadline(time.Now().Add(30 * time.Second))
+			if errors.Is(err, http.ErrNotSupported) {
+				return nil
+			}
+			return err
 		}
 		var afterSeq uint64
 		if lastID := r.Header.Get("Last-Event-ID"); lastID != "" {
@@ -64,12 +69,20 @@ func MountEventsRoute(mux RouteMux, source MailboxEventSource, checker GrantRevo
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
+		if err := renewDeadline(); err != nil {
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 		// Flush the headers at once: a subscriber with no replay and no live
 		// traffic would otherwise see the connect hang until the first event.
-		flusher.Flush()
+		if err := controller.Flush(); err != nil {
+			return
+		}
 
 		writeEvent := func(ev MailboxEvent) error {
+			if err := renewDeadline(); err != nil {
+				return err
+			}
 			data, err := json.Marshal(ev)
 			if err != nil {
 				return err
@@ -82,8 +95,7 @@ func MountEventsRoute(mux RouteMux, source MailboxEventSource, checker GrantRevo
 			if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", ev.Type, data); err != nil {
 				return err
 			}
-			flusher.Flush()
-			return nil
+			return controller.Flush()
 		}
 
 		if resync {
@@ -102,6 +114,9 @@ func MountEventsRoute(mux RouteMux, source MailboxEventSource, checker GrantRevo
 		var revalidate <-chan time.Time
 		var clientID string
 		if checker != nil && grantID != nil {
+			if grantID(r) == "" {
+				return
+			}
 			if id := grantID(r); id != "" {
 				clientID = id
 				t := time.NewTicker(eventsRevocationInterval)
@@ -125,13 +140,18 @@ func MountEventsRoute(mux RouteMux, source MailboxEventSource, checker GrantRevo
 					return
 				}
 			case <-heartbeat.C:
+				if err := renewDeadline(); err != nil {
+					return
+				}
 				if _, err := fmt.Fprint(w, ": heartbeat\n\n"); err != nil {
 					return
 				}
-				flusher.Flush()
+				if err := controller.Flush(); err != nil {
+					return
+				}
 			case <-revalidate:
 				gone, err := checker.GrantRevoked(clientID)
-				if err == nil && gone {
+				if err != nil || gone {
 					return
 				}
 			}

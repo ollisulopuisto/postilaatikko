@@ -90,3 +90,26 @@ func TestSubscribeEventsStopsOnContextCancel(t *testing.T) {
 		t.Fatal("SubscribeEvents did not stop on context cancel")
 	}
 }
+
+func TestSubscriptionOutlivesOrdinaryRequestTimeout(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		for i := 0; i < 10; i++ {
+			fmt.Fprint(w, ": heartbeat\n\n")
+			w.(http.Flusher).Flush()
+			select {
+			case <-r.Context().Done():
+				return
+			case <-time.After(10 * time.Millisecond):
+			}
+		}
+		fmt.Fprint(w, "data: {\"sequence\":1,\"type\":\"mailbox.changed\"}\n\n")
+	}))
+	defer srv.Close()
+	api := client.New(client.Config{Endpoint: srv.URL, Timeout: 20 * time.Millisecond})
+	count := 0
+	err := api.SubscribeEvents(context.Background(), 0, func(v1.MailboxEvent) error { count++; return nil })
+	if err != nil || count != 1 {
+		t.Fatalf("count=%d error=%v", count, err)
+	}
+}

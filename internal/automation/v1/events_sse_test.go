@@ -258,3 +258,55 @@ func TestEventsStreamEndsOnSourceClose(t *testing.T) {
 type grantRevocationFunc func(string) (bool, error)
 
 func (f grantRevocationFunc) GrantRevoked(clientID string) (bool, error) { return f(clientID) }
+
+type unwrapEventWriter struct{ http.ResponseWriter }
+
+func (w unwrapEventWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+func TestEventsWithUnwrapWriterAndServerDeadline(t *testing.T) {
+	old := eventsHeartbeatInterval
+	eventsHeartbeatInterval = 5 * time.Millisecond
+	defer func() { eventsHeartbeatInterval = old }()
+	src := &stubSource{}
+	mux := http.NewServeMux()
+	MountEventsRoute(mux, src, nil, nil, allowAll)
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { mux.ServeHTTP(unwrapEventWriter{w}, r) }))
+	srv.Config.WriteTimeout = 15 * time.Millisecond
+	srv.Start()
+	defer srv.Close()
+	resp, err := srv.Client().Get(srv.URL + "/v1/events")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("status=%d", resp.StatusCode)
+	}
+	time.Sleep(40 * time.Millisecond)
+	src.broadcast(MailboxEvent{Sequence: 1, Type: EventMailboxChanged})
+	_, ev := readSSEEvent(t, bufio.NewScanner(resp.Body))
+	if ev.Sequence != 1 {
+		t.Fatalf("event=%+v", ev)
+	}
+}
+
+func TestEventsRevalidationFailsClosed(t *testing.T) {
+	old := eventsRevocationInterval
+	eventsRevocationInterval = 5 * time.Millisecond
+	defer func() { eventsRevocationInterval = old }()
+	for _, id := range []string{"client-1", ""} {
+		checker := grantRevocationFunc(func(string) (bool, error) { return false, io.ErrUnexpectedEOF })
+		srv := newEventsServer(t, &stubSource{}, checker, func(*http.Request) string { return id })
+		resp, err := srv.Client().Get(srv.URL + "/v1/events")
+		if err != nil {
+			t.Fatal(err)
+		}
+		done := make(chan struct{})
+		go func() { io.Copy(io.Discard, resp.Body); close(done) }()
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Fatal("stream remained open without verifiable grant")
+		}
+		resp.Body.Close()
+	}
+}

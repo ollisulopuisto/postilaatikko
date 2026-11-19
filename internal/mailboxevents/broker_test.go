@@ -48,6 +48,7 @@ func TestPublishCoalescesBursts(t *testing.T) {
 	now := time.Now()
 	clock := &now
 	b := NewBroker(Options{CoalesceWindow: time.Second}.TestClock(func() time.Time { return *clock }))
+	defer b.Close()
 	for i := 0; i < 500; i++ {
 		if err := b.Publish(v1.EventMailboxChanged, "acc1", "inbox"); err != nil {
 			t.Fatal(err)
@@ -87,8 +88,8 @@ func TestSubscribeReplaysAndDetectsGap(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cancel()
-	if resync {
-		t.Fatal("unexpected resync: event 6 is retained")
+	if !resync {
+		t.Fatal("reconnect must resync because numeric cursors have no broker lifetime")
 	}
 	if len(replay) != 1 || replay[0].Sequence != 6 {
 		t.Fatalf("replay = %+v, want [seq 6]", replay)
@@ -203,5 +204,38 @@ func TestLiveDeliveryAndClose(t *testing.T) {
 	}
 	if _, _, _, _, err := b.Subscribe(0); err != ErrClosed {
 		t.Fatalf("subscribe after close = %v, want ErrClosed", err)
+	}
+}
+
+func TestSuppressedMutationHasTrailingInvalidation(t *testing.T) {
+	b := NewBroker(Options{CoalesceWindow: 20 * time.Millisecond})
+	defer b.Close()
+	_, ch, _, cancel, _ := b.Subscribe(0)
+	defer cancel()
+	b.Publish(v1.EventDraftsChanged, "a", "")
+	<-ch // subscriber has already refreshed the first mutation
+	b.Publish(v1.EventDraftsChanged, "a", "")
+	select {
+	case ev := <-ch:
+		if ev.Sequence != 2 {
+			t.Fatalf("trailing event: %+v", ev)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("later mutation was silently lost")
+	}
+}
+
+func TestReconnectAlwaysResyncsAcrossBrokerLifetimes(t *testing.T) {
+	for _, n := range []int{0, 5, 150} {
+		b := NewBroker(Options{CoalesceWindow: time.Nanosecond})
+		for i := 0; i < n; i++ {
+			b.Publish(v1.EventMailboxChanged, "a", "")
+		}
+		_, _, resync, cancel, err := b.Subscribe(100)
+		if err != nil || !resync {
+			t.Fatalf("replacement broker with %d events: resync=%v err=%v", n, resync, err)
+		}
+		cancel()
+		b.Close()
 	}
 }

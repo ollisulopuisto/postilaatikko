@@ -768,7 +768,9 @@ func (c *Client) SubscribeEvents(ctx context.Context, lastEventID uint64, onEven
 	if lastEventID > 0 {
 		req.Header.Set("Last-Event-ID", strconv.FormatUint(lastEventID, 10))
 	}
-	resp, err := c.httpClient.Do(req)
+	streamClient := *c.httpClient
+	streamClient.Timeout = 0 // context owns stream lifetime; transport limits still apply
+	resp, err := streamClient.Do(req)
 	if err != nil {
 		return err
 	}

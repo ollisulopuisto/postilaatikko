@@ -5,7 +5,7 @@
 //
 //   - a strictly monotonic sequence per broker lifetime;
 //   - burst coalescing: repeated changes to the same type/account/folder
-//     within the coalesce window publish once;
+//     within the coalesce window publish a leading and trailing invalidation;
 //   - bounded memory: a fixed-size replay ring, a bounded subscriber count,
 //     and a bounded per-subscriber queue whose overflow degrades to a
 //     resync signal instead of growth.
@@ -71,6 +71,8 @@ type Broker struct {
 	head           int // index of oldest retained event; count==0 when empty
 	count          int
 	lastPub        map[string]time.Time
+	pending        map[string]v1.MailboxEvent
+	flushTimer     *time.Timer
 	subs           map[uint64]*subscriber
 	nextSub        uint64
 	closed         bool
@@ -85,6 +87,7 @@ type Broker struct {
 func NewBroker(opts Options) *Broker {
 	b := &Broker{
 		lastPub:        make(map[string]time.Time),
+		pending:        make(map[string]v1.MailboxEvent),
 		subs:           make(map[uint64]*subscriber),
 		ringCap:        opts.RingCapacity,
 		maxSubs:        opts.MaxSubscribers,
@@ -112,8 +115,8 @@ func NewBroker(opts Options) *Broker {
 }
 
 // Publish records one change. Bursts of the same type/account/folder within
-// the coalesce window collapse into the first event: the earlier event still
-// tells subscribers to re-read that folder, and the sequence stays gapless.
+// the coalesce window emit a leading event and one bounded trailing event,
+// so writes after a subscriber refresh cannot be lost.
 func (b *Broker) Publish(eventType, accountID, folderID string) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -123,6 +126,20 @@ func (b *Broker) Publish(eventType, accountID, folderID string) error {
 	now := b.now()
 	key := eventType + "\x00" + accountID + "\x00" + folderID
 	if last, ok := b.lastPub[key]; ok && now.Sub(last) < b.coalesceWindow {
+		if len(b.pending) >= maxCoalesceKeys {
+			b.flushPendingLocked()
+		}
+		b.pending[key] = v1.MailboxEvent{Type: eventType, AccountID: accountID, FolderID: folderID}
+		if b.flushTimer == nil {
+			b.flushTimer = time.AfterFunc(b.coalesceWindow, func() {
+				b.mu.Lock()
+				defer b.mu.Unlock()
+				b.flushTimer = nil
+				if !b.closed {
+					b.flushPendingLocked()
+				}
+			})
+		}
 		return nil
 	}
 	if len(b.lastPub) >= maxCoalesceKeys {
@@ -130,8 +147,24 @@ func (b *Broker) Publish(eventType, accountID, folderID string) error {
 	}
 	b.lastPub[key] = now
 
+	delete(b.pending, key) // this immediate event covers any earlier suppressed write
+	b.emitLocked(v1.MailboxEvent{Type: eventType, AccountID: accountID, FolderID: folderID}, now)
+	return nil
+}
+
+func (b *Broker) flushPendingLocked() {
+	now := b.now()
+	for key, ev := range b.pending {
+		b.emitLocked(ev, now)
+		b.lastPub[key] = now
+		delete(b.pending, key)
+	}
+}
+
+func (b *Broker) emitLocked(ev v1.MailboxEvent, now time.Time) {
 	b.seq++
-	ev := v1.MailboxEvent{Sequence: b.seq, Type: eventType, AccountID: accountID, FolderID: folderID, At: now.UTC()}
+	ev.Sequence = b.seq
+	ev.At = now.UTC()
 	if b.count < b.ringCap {
 		b.ring[(b.head+b.count)%b.ringCap] = ev
 		b.count++
@@ -156,7 +189,6 @@ func (b *Broker) Publish(eventType, accountID, folderID string) error {
 			sub.ch <- v1.MailboxEvent{Type: v1.EventResync, At: now.UTC()}
 		}
 	}
-	return nil
 }
 
 // Subscribe implements v1.MailboxEventSource.
@@ -175,7 +207,9 @@ func (b *Broker) Subscribe(afterSeq uint64) ([]v1.MailboxEvent, <-chan v1.Mailbo
 	b.subs[id] = sub
 
 	var replay []v1.MailboxEvent
-	resync := false
+	// Numeric cursors do not identify a broker lifetime. Conservatively
+	// resync on every reconnect, including overlapping post-restart sequences.
+	resync := afterSeq > 0
 	if afterSeq > 0 {
 		oldest := b.oldestSeqLocked()
 		if b.count > 0 && oldest > afterSeq+1 {
@@ -227,6 +261,10 @@ func (b *Broker) Close() error {
 		return nil
 	}
 	b.closed = true
+	if b.flushTimer != nil {
+		b.flushTimer.Stop()
+	}
+	clear(b.pending)
 	for id, sub := range b.subs {
 		close(sub.ch)
 		delete(b.subs, id)
