@@ -27,7 +27,7 @@ func TestEventsThroughProductionTimingMiddleware(t *testing.T) {
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
-		server.Stop(ctx)
+		_ = server.Stop(ctx)
 	}()
 	req, _ := http.NewRequest("GET", server.URL()+"/v1/events", nil)
 	req.Header.Set("Authorization", "Bearer "+grant.Token)

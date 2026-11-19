@@ -212,9 +212,13 @@ func TestSuppressedMutationHasTrailingInvalidation(t *testing.T) {
 	defer b.Close()
 	_, ch, _, cancel, _ := b.Subscribe(0)
 	defer cancel()
-	b.Publish(v1.EventDraftsChanged, "a", "")
+	if err := b.Publish(v1.EventDraftsChanged, "a", ""); err != nil {
+		t.Fatal(err)
+	}
 	<-ch // subscriber has already refreshed the first mutation
-	b.Publish(v1.EventDraftsChanged, "a", "")
+	if err := b.Publish(v1.EventDraftsChanged, "a", ""); err != nil {
+		t.Fatal(err)
+	}
 	select {
 	case ev := <-ch:
 		if ev.Sequence != 2 {
@@ -229,7 +233,9 @@ func TestReconnectAlwaysResyncsAcrossBrokerLifetimes(t *testing.T) {
 	for _, n := range []int{0, 5, 150} {
 		b := NewBroker(Options{CoalesceWindow: time.Nanosecond})
 		for i := 0; i < n; i++ {
-			b.Publish(v1.EventMailboxChanged, "a", "")
+			if err := b.Publish(v1.EventMailboxChanged, "a", ""); err != nil {
+				t.Fatal(err)
+			}
 		}
 		_, _, resync, cancel, err := b.Subscribe(100)
 		if err != nil || !resync {

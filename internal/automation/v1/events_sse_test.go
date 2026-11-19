@@ -301,7 +301,7 @@ func TestEventsRevalidationFailsClosed(t *testing.T) {
 			t.Fatal(err)
 		}
 		done := make(chan struct{})
-		go func() { io.Copy(io.Discard, resp.Body); close(done) }()
+		go func() { _, _ = io.Copy(io.Discard, resp.Body); close(done) }()
 		select {
 		case <-done:
 		case <-time.After(time.Second):
