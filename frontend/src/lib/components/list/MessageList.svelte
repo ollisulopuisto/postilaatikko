@@ -21,7 +21,7 @@
   import { mailRowKey, captureScrollAnchor, anchoredScrollTop, newRowsBeforeAnchor, extendAnchorWindow } from './scrollAnchor'
   import { folderDependencies } from '$lib/sidebar/folderVisibility'
   import { dayGroupFor } from '$lib/components/list/dayGroup'
-  import { app as searchModels } from '../../../../wailsjs/go/models'
+  import { app as searchModels, mailservice } from '../../../../wailsjs/go/models'
 
   import { onMount, onDestroy, tick, untrack } from 'svelte'
   import OnlineViewCount from './OnlineViewCount.svelte'
@@ -1132,7 +1132,7 @@
             }
           }).catch((cacheError: unknown) => console.warn('Virtual folder cache view failed:', cacheError))
         }
-        const response = await SearchMail(new searchModels.MailSearchRequest({sessionId: virtualSearchSession, query: '', accountIds: [], virtualFolderId: folderId!, filter: filterMode, cursor: currentOffset === 0 ? '' : virtualCursor, limit: Math.min(limit, 100)}))
+        const response = await SearchMail(new mailservice.MailSearchRequest({sessionId: virtualSearchSession, query: '', accountIds: [], virtualFolderId: folderId!, filter: filterMode, cursor: currentOffset === 0 ? '' : virtualCursor, limit: Math.min(limit, 100)}))
         if (generation !== loadGeneration || isSearchMode) return
         virtualCursor = response.cursor || ''
         virtualWarnings = (response.issues || []).filter(item => item.warning).map(item => `${item.accountName}: ${item.message}`).join(' · ')
@@ -1141,7 +1141,7 @@
         if (currentOffset === 0 && lastLoadedFolderId === folderId && virtualCursor) {
           items = await extendAnchorWindow(items, viewportAnchorKey(), row => mailRowKey(row, accountId), async () => {
             if (!virtualCursor || generation !== loadGeneration || isSearchMode) return []
-            const page = await SearchMail(new searchModels.MailSearchRequest({sessionId: virtualSearchSession, query: '', accountIds: [], virtualFolderId: folderId!, filter: filterMode, cursor: virtualCursor, limit: 100}))
+            const page = await SearchMail(new mailservice.MailSearchRequest({sessionId: virtualSearchSession, query: '', accountIds: [], virtualFolderId: folderId!, filter: filterMode, cursor: virtualCursor, limit: 100}))
             virtualCursor = page.cursor || ''
             return page.conversations || []
           })
@@ -1463,7 +1463,7 @@
       let count = 0
 
       if (allMailSearch || isVirtualFolderView) {
-        const response = await SearchMail(new searchModels.MailSearchRequest({sessionId: virtualSearchSession, query, accountIds: allMailSearch && searchAccountScope ? [searchAccountScope] : [], virtualFolderId: allMailSearch ? '' : folderId!, filter: filterMode, cursor: '', limit: PAGE_SIZE}))
+        const response = await SearchMail(new mailservice.MailSearchRequest({sessionId: virtualSearchSession, query, accountIds: allMailSearch && searchAccountScope ? [searchAccountScope] : [], virtualFolderId: allMailSearch ? '' : folderId!, filter: filterMode, cursor: '', limit: PAGE_SIZE}))
         results = response.conversations || []
         if (generation !== localSearchGeneration || query !== searchQuery.trim()) return
         virtualQueryCursor = response.cursor || ''
@@ -1526,7 +1526,7 @@
       let results: any[] = []
       if (allMailSearch || isVirtualFolderView) {
         if (!virtualQueryCursor) return
-        const response = await SearchMail(new searchModels.MailSearchRequest({ sessionId: virtualSearchSession, query, accountIds: allMailSearch && searchAccountScope ? [searchAccountScope] : [], virtualFolderId: allMailSearch ? '' : folderId!, filter: filterMode, cursor: virtualQueryCursor, limit: PAGE_SIZE }))
+        const response = await SearchMail(new mailservice.MailSearchRequest({ sessionId: virtualSearchSession, query, accountIds: allMailSearch && searchAccountScope ? [searchAccountScope] : [], virtualFolderId: allMailSearch ? '' : folderId!, filter: filterMode, cursor: virtualQueryCursor, limit: PAGE_SIZE }))
         if (generation !== localSearchGeneration || query !== searchQuery.trim()) return
         results = response.conversations || []
         virtualQueryCursor = response.cursor || ''

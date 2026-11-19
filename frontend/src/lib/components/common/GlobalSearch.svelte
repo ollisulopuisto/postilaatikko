@@ -4,7 +4,7 @@
   import Icon from '@iconify/svelte'
   import * as Dialog from '$lib/components/ui/dialog'
   import { SearchMail, CancelMailSearch } from '../../../../wailsjs/go/app/App'
-  import { app, type message } from '../../../../wailsjs/go/models'
+  import { mailservice, type message } from '../../../../wailsjs/go/models'
   import SearchOperators from './SearchOperators.svelte'
   let { open = $bindable(false), query = $bindable(''), onSubmit }: { open: boolean; query?: string; onSubmit: (query: string) => void } = $props()
   let input = $state<HTMLInputElement>()
@@ -28,7 +28,7 @@
       if (!text) return
       busy = true
       try {
-        const page = await SearchMail(new app.MailSearchRequest({sessionId: session, query: text, accountIds: [], folderIds: [], virtualFolderId: '', cursor: '', limit: 8}))
+        const page = await SearchMail(new mailservice.MailSearchRequest({sessionId: session, query: text, accountIds: [], folderIds: [], virtualFolderId: '', cursor: '', limit: 8}))
         if (current !== generation) return
         results = page.conversations || []; more = !!page.cursor
         if (import.meta.env.DEV) console.debug('[search timing]', {phase: 'modal-first-page', query: text, milliseconds: Math.round(performance.now() - typedAt), count: results.length})

@@ -42,16 +42,20 @@ export function AddSpellcheckCustomWord(arg1) {
   return window['go']['app']['App']['AddSpellcheckCustomWord'](arg1);
 }
 
+export function ApplyFilterRuleToExisting(arg1) {
+  return window['go']['app']['App']['ApplyFilterRuleToExisting'](arg1);
+}
+
 export function Archive(arg1) {
   return window['go']['app']['App']['Archive'](arg1);
 }
 
-export function ArchiveWithUndo(arg1) {
-  return window['go']['app']['App']['ArchiveWithUndo'](arg1);
-}
-
 export function ArchiveAndMarkReadWithUndo(arg1) {
   return window['go']['app']['App']['ArchiveAndMarkReadWithUndo'](arg1);
+}
+
+export function ArchiveWithUndo(arg1) {
+  return window['go']['app']['App']['ArchiveWithUndo'](arg1);
 }
 
 export function BroadcastThemeChange(arg1) {
@@ -230,8 +234,16 @@ export function CancelPendingSend(arg1) {
   return window['go']['app']['App']['CancelPendingSend'](arg1);
 }
 
+export function CancelQuitAppRequest() {
+  return window['go']['app']['App']['CancelQuitAppRequest']();
+}
+
 export function CancelVirtualFolderOnlineCount(arg1) {
   return window['go']['app']['App']['CancelVirtualFolderOnlineCount'](arg1);
+}
+
+export function ChangeLaterWithUndo(arg1, arg2, arg3) {
+  return window['go']['app']['App']['ChangeLaterWithUndo'](arg1, arg2, arg3);
 }
 
 export function ChangeReadLater(arg1, arg2, arg3) {
@@ -284,6 +296,10 @@ export function CompleteOAuthAccountSetup(arg1, arg2, arg3, arg4, arg5) {
 
 export function CompletePendingSend(arg1) {
   return window['go']['app']['App']['CompletePendingSend'](arg1);
+}
+
+export function ConfigureRemoteMailboxService(arg1, arg2) {
+  return window['go']['app']['App']['ConfigureRemoteMailboxService'](arg1, arg2);
 }
 
 export function Contacts_CancelSourceAuthorization() {
@@ -358,6 +374,10 @@ export function CreateVirtualFolder(arg1) {
   return window['go']['app']['App']['CreateVirtualFolder'](arg1);
 }
 
+export function DeleteComposerDraft(arg1, arg2, arg3) {
+  return window['go']['app']['App']['DeleteComposerDraft'](arg1, arg2, arg3);
+}
+
 export function DeleteContact(arg1) {
   return window['go']['app']['App']['DeleteContact'](arg1);
 }
@@ -368,6 +388,10 @@ export function DeleteContactSource(arg1) {
 
 export function DeleteDraft(arg1) {
   return window['go']['app']['App']['DeleteDraft'](arg1);
+}
+
+export function DeleteEmailTemplate(arg1) {
+  return window['go']['app']['App']['DeleteEmailTemplate'](arg1);
 }
 
 export function DeleteFilterRule(arg1) {
@@ -398,10 +422,6 @@ export function DeleteQuickReply(arg1) {
   return window['go']['app']['App']['DeleteQuickReply'](arg1);
 }
 
-export function DeleteEmailTemplate(arg1) {
-  return window['go']['app']['App']['DeleteEmailTemplate'](arg1);
-}
-
 export function DeleteSMIMECertificate(arg1) {
   return window['go']['app']['App']['DeleteSMIMECertificate'](arg1);
 }
@@ -412,6 +432,10 @@ export function DeleteSenderCert(arg1) {
 
 export function DeleteVirtualFolder(arg1) {
   return window['go']['app']['App']['DeleteVirtualFolder'](arg1);
+}
+
+export function DisconnectRemoteMailboxService() {
+  return window['go']['app']['App']['DisconnectRemoteMailboxService']();
 }
 
 export function DiscoverCardDAVAddressbooks(arg1, arg2, arg3) {
@@ -426,8 +450,20 @@ export function DiscoverOAuthProvider(arg1) {
   return window['go']['app']['App']['DiscoverOAuthProvider'](arg1);
 }
 
+export function DismissFilterSuggestion(arg1) {
+  return window['go']['app']['App']['DismissFilterSuggestion'](arg1);
+}
+
+export function DispatchRemotePendingSend(arg1) {
+  return window['go']['app']['App']['DispatchRemotePendingSend'](arg1);
+}
+
 export function DownloadAttachment(arg1, arg2) {
   return window['go']['app']['App']['DownloadAttachment'](arg1, arg2);
+}
+
+export function DownloadAttachmentForAccount(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['App']['DownloadAttachmentForAccount'](arg1, arg2, arg3, arg4);
 }
 
 export function DownloadEncryptedAttachment(arg1, arg2, arg3) {
@@ -462,6 +498,22 @@ export function EmptyUnifiedTrash() {
   return window['go']['app']['App']['EmptyUnifiedTrash']();
 }
 
+export function EnableMailboxServiceAccountManagement() {
+  return window['go']['app']['App']['EnableMailboxServiceAccountManagement']();
+}
+
+export function EnableMailboxServiceDraftAccess() {
+  return window['go']['app']['App']['EnableMailboxServiceDraftAccess']();
+}
+
+export function EnableMailboxServiceSending() {
+  return window['go']['app']['App']['EnableMailboxServiceSending']();
+}
+
+export function EnableMailboxServiceWrites() {
+  return window['go']['app']['App']['EnableMailboxServiceWrites']();
+}
+
 export function ExpirePendingSends() {
   return window['go']['app']['App']['ExpirePendingSends']();
 }
@@ -472,10 +524,6 @@ export function FetchMessageBody(arg1) {
 
 export function FetchMessageBodyForAccount(arg1, arg2) {
   return window['go']['app']['App']['FetchMessageBodyForAccount'](arg1, arg2);
-}
-
-export function PrefetchMessageBodies(arg1, arg2, arg3) {
-  return window['go']['app']['App']['PrefetchMessageBodies'](arg1, arg2, arg3);
 }
 
 export function FetchServerMessage(arg1, arg2, arg3) {
@@ -526,10 +574,6 @@ export function GetAlwaysLoadImages() {
   return window['go']['app']['App']['GetAlwaysLoadImages']();
 }
 
-export function GetStripTrackingParams() {
-  return window['go']['app']['App']['GetStripTrackingParams']();
-}
-
 export function GetAlwaysShowMessageCheckbox() {
   return window['go']['app']['App']['GetAlwaysShowMessageCheckbox']();
 }
@@ -546,10 +590,6 @@ export function GetAttachments(arg1) {
   return window['go']['app']['App']['GetAttachments'](arg1);
 }
 
-export function GetMessageAttachments(arg1, arg2) {
-  return window['go']['app']['App']['GetMessageAttachments'](arg1, arg2);
-}
-
 export function GetAutoCheckUpdates() {
   return window['go']['app']['App']['GetAutoCheckUpdates']();
 }
@@ -562,12 +602,28 @@ export function GetAutostart() {
   return window['go']['app']['App']['GetAutostart']();
 }
 
+export function GetComposerDraft(arg1, arg2) {
+  return window['go']['app']['App']['GetComposerDraft'](arg1, arg2);
+}
+
+export function GetComposerDraftForEdit(arg1, arg2) {
+  return window['go']['app']['App']['GetComposerDraftForEdit'](arg1, arg2);
+}
+
 export function GetComposerFormat() {
   return window['go']['app']['App']['GetComposerFormat']();
 }
 
 export function GetComposerMode() {
   return window['go']['app']['App']['GetComposerMode']();
+}
+
+export function GetComposerOriginalMessage(arg1, arg2) {
+  return window['go']['app']['App']['GetComposerOriginalMessage'](arg1, arg2);
+}
+
+export function GetComposerSendReceipt(arg1) {
+  return window['go']['app']['App']['GetComposerSendReceipt'](arg1);
 }
 
 export function GetConfiguredOAuthProviders() {
@@ -650,28 +706,8 @@ export function GetFTSIndexStatusAll() {
   return window['go']['app']['App']['GetFTSIndexStatusAll']();
 }
 
-export function DismissFilterSuggestion(arg1) {
-  return window['go']['app']['App']['DismissFilterSuggestion'](arg1);
-}
-
-export function MarkFilterSuggestionCreated(arg1) {
-  return window['go']['app']['App']['MarkFilterSuggestionCreated'](arg1);
-}
-
 export function GetFilterRules() {
   return window['go']['app']['App']['GetFilterRules']();
-}
-
-export function PreviewFilterRule(arg1) {
-  return window['go']['app']['App']['PreviewFilterRule'](arg1);
-}
-
-export function ApplyFilterRuleToExisting(arg1) {
-  return window['go']['app']['App']['ApplyFilterRuleToExisting'](arg1);
-}
-
-export function GetMessageListID(arg1) {
-  return window['go']['app']['App']['GetMessageListID'](arg1);
 }
 
 export function GetFolderContentPolicy(arg1, arg2) {
@@ -738,6 +774,18 @@ export function GetMacOSContactsStatus() {
   return window['go']['app']['App']['GetMacOSContactsStatus']();
 }
 
+export function GetMailboxServiceEndpoint() {
+  return window['go']['app']['App']['GetMailboxServiceEndpoint']();
+}
+
+export function GetMailboxServiceLifecycleStatus() {
+  return window['go']['app']['App']['GetMailboxServiceLifecycleStatus']();
+}
+
+export function GetMailboxServiceStatus() {
+  return window['go']['app']['App']['GetMailboxServiceStatus']();
+}
+
 export function GetMailtoMode() {
   return window['go']['app']['App']['GetMailtoMode']();
 }
@@ -750,52 +798,8 @@ export function GetMessage(arg1) {
   return window['go']['app']['App']['GetMessage'](arg1);
 }
 
-export function GetMailboxServiceStatus() {
-  return window['go']['app']['App']['GetMailboxServiceStatus']();
-}
-
-export function GetMailboxServiceEndpoint() {
-  return window['go']['app']['App']['GetMailboxServiceEndpoint']();
-}
-
-export function ConfigureRemoteMailboxService(arg1, arg2) {
-  return window['go']['app']['App']['ConfigureRemoteMailboxService'](arg1, arg2);
-}
-
-export function DisconnectRemoteMailboxService() {
-  return window['go']['app']['App']['DisconnectRemoteMailboxService']();
-}
-
-export function GetMailboxServiceLifecycleStatus() {
-  return window['go']['app']['App']['GetMailboxServiceLifecycleStatus']();
-}
-
-export function InstallMailboxService() {
-  return window['go']['app']['App']['InstallMailboxService']();
-}
-
-export function StartMailboxService() {
-  return window['go']['app']['App']['StartMailboxService']();
-}
-
-export function StopMailboxService() {
-  return window['go']['app']['App']['StopMailboxService']();
-}
-
-export function EnableMailboxServiceWrites() {
-  return window['go']['app']['App']['EnableMailboxServiceWrites']();
-}
-
-export function EnableMailboxServiceAccountManagement() {
-  return window['go']['app']['App']['EnableMailboxServiceAccountManagement']();
-}
-
-export function EnableMailboxServiceDraftAccess() {
-  return window['go']['app']['App']['EnableMailboxServiceDraftAccess']();
-}
-
-export function EnableMailboxServiceSending() {
-  return window['go']['app']['App']['EnableMailboxServiceSending']();
+export function GetMessageAttachments(arg1, arg2) {
+  return window['go']['app']['App']['GetMessageAttachments'](arg1, arg2);
 }
 
 export function GetMessageCount(arg1, arg2) {
@@ -804,6 +808,10 @@ export function GetMessageCount(arg1, arg2) {
 
 export function GetMessageListDensity() {
   return window['go']['app']['App']['GetMessageListDensity']();
+}
+
+export function GetMessageListID(arg1) {
+  return window['go']['app']['App']['GetMessageListID'](arg1);
 }
 
 export function GetMessageListSortOrder() {
@@ -850,6 +858,10 @@ export function GetOpenReaderInTabPreference() {
   return window['go']['app']['App']['GetOpenReaderInTabPreference']();
 }
 
+export function GetOriginalMessage(arg1) {
+  return window['go']['app']['App']['GetOriginalMessage'](arg1);
+}
+
 export function GetPGPEncryptPolicy(arg1) {
   return window['go']['app']['App']['GetPGPEncryptPolicy'](arg1);
 }
@@ -870,6 +882,10 @@ export function GetPendingMailto() {
   return window['go']['app']['App']['GetPendingMailto']();
 }
 
+export function GetQueueFolderCounts() {
+  return window['go']['app']['App']['GetQueueFolderCounts']();
+}
+
 export function GetReadLaterCount() {
   return window['go']['app']['App']['GetReadLaterCount']();
 }
@@ -878,9 +894,6 @@ export function GetReadLaterQueue() {
   return window['go']['app']['App']['GetReadLaterQueue']();
 }
 
-export function GetQueueFolderCounts() {
-  return window['go']['app']['App']['GetQueueFolderCounts']();
-}
 export function GetReadReceiptResponsePolicy() {
   return window['go']['app']['App']['GetReadReceiptResponsePolicy']();
 }
@@ -903,10 +916,6 @@ export function GetReplyLaterQueue() {
 
 export function GetRunBackground() {
   return window['go']['app']['App']['GetRunBackground']();
-}
-
-export function GetSmartNotificationSettings() {
-  return window['go']['app']['App']['GetSmartNotificationSettings']();
 }
 
 export function GetSMIMECertificateForEmail(arg1, arg2) {
@@ -965,6 +974,10 @@ export function GetSkippedUpdateVersion() {
   return window['go']['app']['App']['GetSkippedUpdateVersion']();
 }
 
+export function GetSmartNotificationSettings() {
+  return window['go']['app']['App']['GetSmartNotificationSettings']();
+}
+
 export function GetSnoozedConversations() {
   return window['go']['app']['App']['GetSnoozedConversations']();
 }
@@ -999,6 +1012,10 @@ export function GetStartHidden() {
 
 export function GetStartHiddenActive() {
   return window['go']['app']['App']['GetStartHiddenActive']();
+}
+
+export function GetStripTrackingParams() {
+  return window['go']['app']['App']['GetStripTrackingParams']();
 }
 
 export function GetSystemTheme() {
@@ -1081,6 +1098,10 @@ export function GetWindowDecorationStatus() {
   return window['go']['app']['App']['GetWindowDecorationStatus']();
 }
 
+export function HandleOpenURL(arg1) {
+  return window['go']['app']['App']['HandleOpenURL'](arg1);
+}
+
 export function HasPGPKey(arg1) {
   return window['go']['app']['App']['HasPGPKey'](arg1);
 }
@@ -1129,6 +1150,10 @@ export function InitiateShutdown() {
   return window['go']['app']['App']['InitiateShutdown']();
 }
 
+export function InstallMailboxService() {
+  return window['go']['app']['App']['InstallMailboxService']();
+}
+
 export function IsExtensionEnabled(arg1) {
   return window['go']['app']['App']['IsExtensionEnabled'](arg1);
 }
@@ -1165,10 +1190,6 @@ export function IsRemoteServiceMode() {
   return window['go']['app']['App']['IsRemoteServiceMode']();
 }
 
-export function SendMessageWithRequestID(arg1, arg2, arg3) {
-  return window['go']['app']['App']['SendMessageWithRequestID'](arg1, arg2, arg3);
-}
-
 export function IsReplyLater(arg1, arg2) {
   return window['go']['app']['App']['IsReplyLater'](arg1, arg2);
 }
@@ -1191,6 +1212,10 @@ export function ListContacts(arg1) {
 
 export function ListDrafts(arg1) {
   return window['go']['app']['App']['ListDrafts'](arg1);
+}
+
+export function ListEmailTemplates() {
+  return window['go']['app']['App']['ListEmailTemplates']();
 }
 
 export function ListEnabledExtensions() {
@@ -1219,10 +1244,6 @@ export function ListPendingSends() {
 
 export function ListQuickReplies() {
   return window['go']['app']['App']['ListQuickReplies']();
-}
-
-export function ListEmailTemplates() {
-  return window['go']['app']['App']['ListEmailTemplates']();
 }
 
 export function ListSMIMECertificates(arg1) {
@@ -1283,6 +1304,10 @@ export function MarkAsSpamWithUndo(arg1) {
 
 export function MarkAsUnread(arg1) {
   return window['go']['app']['App']['MarkAsUnread'](arg1);
+}
+
+export function MarkFilterSuggestionCreated(arg1) {
+  return window['go']['app']['App']['MarkFilterSuggestionCreated'](arg1);
 }
 
 export function MoveDraftHistory(arg1, arg2) {
@@ -1357,10 +1382,6 @@ export function OpenURL(arg1) {
   return window['go']['app']['App']['OpenURL'](arg1);
 }
 
-export function ResolveLinkViaCloudflareDNS(arg1) {
-  return window['go']['app']['App']['ResolveLinkViaCloudflareDNS'](arg1);
-}
-
 export function PickAttachmentFiles() {
   return window['go']['app']['App']['PickAttachmentFiles']();
 }
@@ -1381,16 +1402,28 @@ export function PickSMIMECertificateFile() {
   return window['go']['app']['App']['PickSMIMECertificateFile']();
 }
 
+export function PrefetchMessageBodies(arg1, arg2, arg3) {
+  return window['go']['app']['App']['PrefetchMessageBodies'](arg1, arg2, arg3);
+}
+
 export function Preflight() {
   return window['go']['app']['App']['Preflight']();
+}
+
+export function PrepareComposerReply(arg1, arg2, arg3) {
+  return window['go']['app']['App']['PrepareComposerReply'](arg1, arg2, arg3);
+}
+
+export function PrepareComposerSend(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['App']['PrepareComposerSend'](arg1, arg2, arg3, arg4);
 }
 
 export function PrepareReply(arg1, arg2) {
   return window['go']['app']['App']['PrepareReply'](arg1, arg2);
 }
 
-export function PrepareComposerReply(arg1, arg2, arg3) {
-  return window['go']['app']['App']['PrepareComposerReply'](arg1, arg2, arg3);
+export function PreviewFilterRule(arg1) {
+  return window['go']['app']['App']['PreviewFilterRule'](arg1);
 }
 
 export function ProcessPGPMessage(arg1) {
@@ -1411,14 +1444,6 @@ export function QueuePendingSend(arg1, arg2, arg3) {
 
 export function QuitApp() {
   return window['go']['app']['App']['QuitApp']();
-}
-
-export function RequestQuitApp() {
-  return window['go']['app']['App']['RequestQuitApp']();
-}
-
-export function CancelQuitAppRequest() {
-  return window['go']['app']['App']['CancelQuitAppRequest']();
 }
 
 export function ReadFileAsAttachment(arg1) {
@@ -1497,8 +1522,16 @@ export function ReorderVirtualFolders(arg1) {
   return window['go']['app']['App']['ReorderVirtualFolders'](arg1);
 }
 
+export function RepairMessageAttachments(arg1, arg2) {
+  return window['go']['app']['App']['RepairMessageAttachments'](arg1, arg2);
+}
+
 export function RequestMacOSContactsAccess() {
   return window['go']['app']['App']['RequestMacOSContactsAccess']();
+}
+
+export function RequestQuitApp() {
+  return window['go']['app']['App']['RequestQuitApp']();
 }
 
 export function RequestUndoFromMenu() {
@@ -1517,8 +1550,20 @@ export function RescheduleMessage(arg1, arg2) {
   return window['go']['app']['App']['RescheduleMessage'](arg1, arg2);
 }
 
+export function ResolveLinkViaCloudflareDNS(arg1) {
+  return window['go']['app']['App']['ResolveLinkViaCloudflareDNS'](arg1);
+}
+
 export function ResolveMailActionTarget(arg1) {
   return window['go']['app']['App']['ResolveMailActionTarget'](arg1);
+}
+
+export function RestoreLaterMembership(arg1, arg2, arg3) {
+  return window['go']['app']['App']['RestoreLaterMembership'](arg1, arg2, arg3);
+}
+
+export function RestoreMessageAttachmentRepair(arg1, arg2, arg3) {
+  return window['go']['app']['App']['RestoreMessageAttachmentRepair'](arg1, arg2, arg3);
 }
 
 export function RunEditMenuCommand(arg1) {
@@ -1527,6 +1572,10 @@ export function RunEditMenuCommand(arg1) {
 
 export function SaveAllAttachments(arg1) {
   return window['go']['app']['App']['SaveAllAttachments'](arg1);
+}
+
+export function SaveAllAttachmentsForAccount(arg1, arg2) {
+  return window['go']['app']['App']['SaveAllAttachmentsForAccount'](arg1, arg2);
 }
 
 export function SaveAllEncryptedAttachments(arg1) {
@@ -1541,12 +1590,16 @@ export function SaveAttachmentAsForAccount(arg1, arg2, arg3) {
   return window['go']['app']['App']['SaveAttachmentAsForAccount'](arg1, arg2, arg3);
 }
 
-export function SaveAllAttachmentsForAccount(arg1, arg2) {
-  return window['go']['app']['App']['SaveAllAttachmentsForAccount'](arg1, arg2);
+export function SaveComposerDraft(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['app']['App']['SaveComposerDraft'](arg1, arg2, arg3, arg4, arg5);
 }
 
 export function SaveDraft(arg1, arg2, arg3) {
   return window['go']['app']['App']['SaveDraft'](arg1, arg2, arg3);
+}
+
+export function SaveEmailTemplate(arg1) {
+  return window['go']['app']['App']['SaveEmailTemplate'](arg1);
 }
 
 export function SaveEncryptedAttachmentAs(arg1, arg2) {
@@ -1561,12 +1614,12 @@ export function SaveQuickReply(arg1) {
   return window['go']['app']['App']['SaveQuickReply'](arg1);
 }
 
-export function SaveEmailTemplate(arg1) {
-  return window['go']['app']['App']['SaveEmailTemplate'](arg1);
-}
-
 export function SaveSendLaterConfig(arg1) {
   return window['go']['app']['App']['SaveSendLaterConfig'](arg1);
+}
+
+export function SaveSmartNotificationSettings(arg1) {
+  return window['go']['app']['App']['SaveSmartNotificationSettings'](arg1);
 }
 
 export function SaveUIState(arg1) {
@@ -1613,6 +1666,14 @@ export function SendMessageWithDraftGuard(arg1, arg2, arg3) {
   return window['go']['app']['App']['SendMessageWithDraftGuard'](arg1, arg2, arg3);
 }
 
+export function SendMessageWithRequestID(arg1, arg2, arg3) {
+  return window['go']['app']['App']['SendMessageWithRequestID'](arg1, arg2, arg3);
+}
+
+export function SendPreparedComposerMessage(arg1, arg2) {
+  return window['go']['app']['App']['SendPreparedComposerMessage'](arg1, arg2);
+}
+
 export function SendReadReceipt(arg1, arg2) {
   return window['go']['app']['App']['SendReadReceipt'](arg1, arg2);
 }
@@ -1631,10 +1692,6 @@ export function SetAddressbookEnabled(arg1, arg2) {
 
 export function SetAlwaysLoadImages(arg1) {
   return window['go']['app']['App']['SetAlwaysLoadImages'](arg1);
-}
-
-export function SetStripTrackingParams(arg1) {
-  return window['go']['app']['App']['SetStripTrackingParams'](arg1);
 }
 
 export function SetAlwaysShowMessageCheckbox(arg1) {
@@ -1687,6 +1744,10 @@ export function SetExtensionEnabled(arg1, arg2) {
 
 export function SetFolderContentPolicy(arg1, arg2, arg3) {
   return window['go']['app']['App']['SetFolderContentPolicy'](arg1, arg2, arg3);
+}
+
+export function SetFolderVisibility(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['App']['SetFolderVisibility'](arg1, arg2, arg3, arg4);
 }
 
 export function SetLanguage(arg1) {
@@ -1753,10 +1814,6 @@ export function SetRunBackground(arg1) {
   return window['go']['app']['App']['SetRunBackground'](arg1);
 }
 
-export function SaveSmartNotificationSettings(arg1) {
-  return window['go']['app']['App']['SaveSmartNotificationSettings'](arg1);
-}
-
 export function SetSMIMEEncryptPolicy(arg1, arg2) {
   return window['go']['app']['App']['SetSMIMEEncryptPolicy'](arg1, arg2);
 }
@@ -1797,6 +1854,10 @@ export function SetStartHidden(arg1) {
   return window['go']['app']['App']['SetStartHidden'](arg1);
 }
 
+export function SetStripTrackingParams(arg1) {
+  return window['go']['app']['App']['SetStripTrackingParams'](arg1);
+}
+
 export function SetTermsAccepted(arg1) {
   return window['go']['app']['App']['SetTermsAccepted'](arg1);
 }
@@ -1829,12 +1890,24 @@ export function StartCustomOAuthFlow(arg1, arg2, arg3, arg4, arg5, arg6) {
   return window['go']['app']['App']['StartCustomOAuthFlow'](arg1, arg2, arg3, arg4, arg5, arg6);
 }
 
+export function StartMailboxService() {
+  return window['go']['app']['App']['StartMailboxService']();
+}
+
 export function StartOAuthFlow(arg1) {
   return window['go']['app']['App']['StartOAuthFlow'](arg1);
 }
 
 export function StartVirtualFolderOnlineCount(arg1, arg2) {
   return window['go']['app']['App']['StartVirtualFolderOnlineCount'](arg1, arg2);
+}
+
+export function Startup(arg1) {
+  return window['go']['app']['App']['Startup'](arg1);
+}
+
+export function StopMailboxService() {
+  return window['go']['app']['App']['StopMailboxService']();
 }
 
 export function SubscribeAllFolders(arg1) {
@@ -1867,6 +1940,10 @@ export function SyncFolder(arg1, arg2) {
 
 export function SyncFolders(arg1) {
   return window['go']['app']['App']['SyncFolders'](arg1);
+}
+
+export function SyncMailboxActionEvents() {
+  return window['go']['app']['App']['SyncMailboxActionEvents']();
 }
 
 export function SyncPendingDrafts(arg1) {
@@ -1911,10 +1988,6 @@ export function Undo() {
 
 export function UndoLatestWithResult() {
   return window['go']['app']['App']['UndoLatestWithResult']();
-}
-
-export function SyncMailboxActionEvents() {
-  return window['go']['app']['App']['SyncMailboxActionEvents']();
 }
 
 export function UndoOperation(arg1) {
@@ -1963,13 +2036,4 @@ export function UpdateScheduledMessage(arg1, arg2) {
 
 export function UpdateVirtualFolder(arg1) {
   return window['go']['app']['App']['UpdateVirtualFolder'](arg1);
-}
-
-export function DispatchRemotePendingSend(arg1) {
-  return window['go']['app']['App']['DispatchRemotePendingSend'](arg1);
-}
-
-export function SetFolderVisibility(a,b,c,d) { return window["go"]["app"]["App"]["SetFolderVisibility"](a,b,c,d); }
-export function ChangeLaterWithUndo(arg1, arg2, arg3) {
- return window['go']['app']['App']['ChangeLaterWithUndo'](arg1,arg2,arg3);
 }

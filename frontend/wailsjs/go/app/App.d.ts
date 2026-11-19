@@ -12,8 +12,8 @@ import {drafthistory} from '../models';
 import {message} from '../models';
 import {folder} from '../models';
 import {contact} from '../models';
-import {context} from '../models';
 import {smtp} from '../models';
+import {context} from '../models';
 import {imap} from '../models';
 import {settings} from '../models';
 import {pgp} from '../models';
@@ -29,6 +29,7 @@ import {sync} from '../models';
 import {draft} from '../models';
 import {operations} from '../models';
 import {macoscontacts} from '../models';
+import {mailservice} from '../models';
 
 export function AcceptCertificate(arg1:string,arg2:certificate.CertificateInfo,arg3:boolean):Promise<void>;
 
@@ -50,11 +51,13 @@ export function AddReplyLater(arg1:string,arg2:string):Promise<boolean>;
 
 export function AddSpellcheckCustomWord(arg1:string):Promise<void>;
 
+export function ApplyFilterRuleToExisting(arg1:string):Promise<number>;
+
 export function Archive(arg1:Array<string>):Promise<void>;
 
-export function ArchiveWithUndo(arg1:Array<string>):Promise<app.UndoableActionResult>;
-
 export function ArchiveAndMarkReadWithUndo(arg1:Array<string>):Promise<app.UndoableActionResult>;
+
+export function ArchiveWithUndo(arg1:Array<string>):Promise<app.UndoableActionResult>;
 
 export function BroadcastThemeChange(arg1:string):Promise<void>;
 
@@ -144,7 +147,11 @@ export function CancelOAuthFlow():Promise<void>;
 
 export function CancelPendingSend(arg1:string):Promise<void>;
 
+export function CancelQuitAppRequest():Promise<void>;
+
 export function CancelVirtualFolderOnlineCount(arg1:string):Promise<void>;
+
+export function ChangeLaterWithUndo(arg1:string,arg2:string,arg3:boolean):Promise<app.TriageChangeResult>;
 
 export function ChangeReadLater(arg1:string,arg2:string,arg3:boolean):Promise<boolean>;
 
@@ -171,6 +178,8 @@ export function CompleteCustomOAuthAccountSetup(arg1:account.AccountConfig):Prom
 export function CompleteOAuthAccountSetup(arg1:string,arg2:string,arg3:string,arg4:string,arg5:string):Promise<account.Account>;
 
 export function CompletePendingSend(arg1:string):Promise<void>;
+
+export function ConfigureRemoteMailboxService(arg1:string,arg2:string):Promise<app.MailboxServiceStatus>;
 
 export function Contacts_CancelSourceAuthorization():Promise<void>;
 
@@ -208,11 +217,15 @@ export function CreateIdentity(arg1:string,arg2:account.IdentityConfig):Promise<
 
 export function CreateVirtualFolder(arg1:virtualfolder.VirtualFolder):Promise<void>;
 
+export function DeleteComposerDraft(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function DeleteContact(arg1:string):Promise<void>;
 
 export function DeleteContactSource(arg1:string):Promise<void>;
 
 export function DeleteDraft(arg1:string):Promise<void>;
+
+export function DeleteEmailTemplate(arg1:string):Promise<void>;
 
 export function DeleteFilterRule(arg1:string):Promise<void>;
 
@@ -228,13 +241,13 @@ export function DeletePermanently(arg1:Array<string>):Promise<void>;
 
 export function DeleteQuickReply(arg1:string):Promise<void>;
 
-export function DeleteEmailTemplate(arg1:string):Promise<void>;
-
 export function DeleteSMIMECertificate(arg1:string):Promise<void>;
 
 export function DeleteSenderCert(arg1:string):Promise<void>;
 
 export function DeleteVirtualFolder(arg1:string):Promise<void>;
+
+export function DisconnectRemoteMailboxService():Promise<app.MailboxServiceStatus>;
 
 export function DiscoverCardDAVAddressbooks(arg1:string,arg2:string,arg3:string):Promise<Array<carddav.AddressbookInfo>>;
 
@@ -242,7 +255,13 @@ export function DiscoverCardDAVAddressbooksOAuth(arg1:string,arg2:string):Promis
 
 export function DiscoverOAuthProvider(arg1:string):Promise<app.OIDCDiscoveryResult>;
 
+export function DismissFilterSuggestion(arg1:string):Promise<void>;
+
+export function DispatchRemotePendingSend(arg1:string):Promise<boolean>;
+
 export function DownloadAttachment(arg1:string,arg2:string):Promise<string>;
+
+export function DownloadAttachmentForAccount(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
 
 export function DownloadEncryptedAttachment(arg1:string,arg2:string,arg3:string):Promise<string>;
 
@@ -260,12 +279,19 @@ export function EmptyTrash(arg1:string,arg2:string):Promise<void>;
 
 export function EmptyUnifiedTrash():Promise<void>;
 
+export function EnableMailboxServiceAccountManagement():Promise<app.MailboxServiceStatus>;
+
+export function EnableMailboxServiceDraftAccess():Promise<app.MailboxServiceStatus>;
+
+export function EnableMailboxServiceSending():Promise<app.MailboxServiceStatus>;
+
+export function EnableMailboxServiceWrites():Promise<app.MailboxServiceStatus>;
+
 export function ExpirePendingSends():Promise<void>;
 
 export function FetchMessageBody(arg1:string):Promise<message.Message>;
-export function FetchMessageBodyForAccount(arg1:string,arg2:string):Promise<message.Message>;
 
-export function PrefetchMessageBodies(arg1:string,arg2:string,arg3:Array<string>):Promise<void>;
+export function FetchMessageBodyForAccount(arg1:string,arg2:string):Promise<message.Message>;
 
 export function FetchServerMessage(arg1:string,arg2:string,arg3:number):Promise<message.Message>;
 
@@ -291,8 +317,6 @@ export function GetAllAccountIdentities():Promise<Array<app.AccountIdentityGroup
 
 export function GetAlwaysLoadImages():Promise<boolean>;
 
-export function GetStripTrackingParams():Promise<boolean>;
-
 export function GetAlwaysShowMessageCheckbox():Promise<boolean>;
 
 export function GetAppInfo():Promise<app.AppInfo>;
@@ -301,17 +325,23 @@ export function GetAttachment(arg1:string):Promise<message.Attachment>;
 
 export function GetAttachments(arg1:string):Promise<Array<message.Attachment>>;
 
-export function GetMessageAttachments(arg1:string,arg2:string):Promise<Array<message.Attachment>>;
-
 export function GetAutoCheckUpdates():Promise<boolean>;
 
 export function GetAutoDetectedFolders(arg1:string):Promise<Record<string, string>>;
 
 export function GetAutostart():Promise<boolean>;
 
+export function GetComposerDraft(arg1:string,arg2:string):Promise<smtp.ComposeMessage>;
+
+export function GetComposerDraftForEdit(arg1:string,arg2:string):Promise<app.DraftEditResult>;
+
 export function GetComposerFormat():Promise<string>;
 
 export function GetComposerMode():Promise<string>;
+
+export function GetComposerOriginalMessage(arg1:string,arg2:string):Promise<message.Message>;
+
+export function GetComposerSendReceipt(arg1:string):Promise<v1.SendReceiptLookup>;
 
 export function GetConfiguredOAuthProviders():Promise<Array<string>>;
 
@@ -353,17 +383,7 @@ export function GetFTSIndexStatus(arg1:string):Promise<message.FTSIndexStatus>;
 
 export function GetFTSIndexStatusAll():Promise<Record<string, message.FTSIndexStatus>>;
 
-export function DismissFilterSuggestion(arg1:string):Promise<void>;
-
-export function MarkFilterSuggestionCreated(arg1:string):Promise<void>;
-
 export function GetFilterRules():Promise<Array<mailfilter.Rule>>;
-
-export function PreviewFilterRule(arg1:mailfilter.Rule):Promise<number>;
-
-export function ApplyFilterRuleToExisting(arg1:string):Promise<number>;
-
-export function GetMessageListID(arg1:string):Promise<string>;
 
 export function GetFolderContentPolicy(arg1:string,arg2:string):Promise<app.FolderContentPolicy>;
 
@@ -397,36 +417,25 @@ export function GetLinkedAccountsForContactSync():Promise<Array<app.LinkedAccoun
 
 export function GetMacOSContactsStatus():Promise<string>;
 
-export function GetMailtoMode():Promise<string>;
-
-export function GetMailboxServiceStatus():Promise<{connected:boolean; writeAuthorized:boolean; accountManagementAuthorized:boolean; draftAccessAuthorized:boolean; sendAuthorized:boolean; apiVersion?:string; capabilities?:string[]; errorCode?:string; message?:string}>;
 export function GetMailboxServiceEndpoint():Promise<string>;
-export function ConfigureRemoteMailboxService(arg1:string,arg2:string):Promise<{connected:boolean; writeAuthorized:boolean; accountManagementAuthorized:boolean; draftAccessAuthorized:boolean; sendAuthorized:boolean; apiVersion?:string; capabilities?:string[]; errorCode?:string; message?:string}>;
-export function DisconnectRemoteMailboxService():Promise<{connected:boolean; writeAuthorized:boolean; accountManagementAuthorized:boolean; draftAccessAuthorized:boolean; sendAuthorized:boolean; apiVersion?:string; capabilities?:string[]; errorCode?:string; message?:string}>;
 
-export function GetMailboxServiceLifecycleStatus():Promise<{supported:boolean; helperAvailable:boolean; installed:boolean; running:boolean}>;
+export function GetMailboxServiceLifecycleStatus():Promise<app.MailboxServiceLifecycleStatus>;
 
-export function InstallMailboxService():Promise<{supported:boolean; helperAvailable:boolean; installed:boolean; running:boolean}>;
+export function GetMailboxServiceStatus():Promise<app.MailboxServiceStatus>;
 
-export function StartMailboxService():Promise<{supported:boolean; helperAvailable:boolean; installed:boolean; running:boolean}>;
-
-export function StopMailboxService():Promise<{supported:boolean; helperAvailable:boolean; installed:boolean; running:boolean}>;
-
-export function EnableMailboxServiceWrites():Promise<{connected:boolean; writeAuthorized:boolean; accountManagementAuthorized:boolean; draftAccessAuthorized:boolean; sendAuthorized:boolean; apiVersion?:string; capabilities?:string[]; errorCode?:string; message?:string}>;
-
-export function EnableMailboxServiceAccountManagement():Promise<{connected:boolean; writeAuthorized:boolean; accountManagementAuthorized:boolean; draftAccessAuthorized:boolean; sendAuthorized:boolean; apiVersion?:string; capabilities?:string[]; errorCode?:string; message?:string}>;
-
-export function EnableMailboxServiceDraftAccess():Promise<{connected:boolean; writeAuthorized:boolean; accountManagementAuthorized:boolean; draftAccessAuthorized:boolean; sendAuthorized:boolean; apiVersion?:string; capabilities?:string[]; errorCode?:string; message?:string}>;
-
-export function EnableMailboxServiceSending():Promise<{connected:boolean; writeAuthorized:boolean; accountManagementAuthorized:boolean; draftAccessAuthorized:boolean; sendAuthorized:boolean; apiVersion?:string; capabilities?:string[]; errorCode?:string; message?:string}>;
+export function GetMailtoMode():Promise<string>;
 
 export function GetMarkAsReadDelay():Promise<number>;
 
 export function GetMessage(arg1:string):Promise<message.Message>;
 
+export function GetMessageAttachments(arg1:string,arg2:string):Promise<Array<message.Attachment>>;
+
 export function GetMessageCount(arg1:string,arg2:string):Promise<number>;
 
 export function GetMessageListDensity():Promise<string>;
+
+export function GetMessageListID(arg1:string):Promise<string>;
 
 export function GetMessageListSortOrder():Promise<string>;
 
@@ -450,6 +459,8 @@ export function GetOAuthWarningDisabled():Promise<boolean>;
 
 export function GetOpenReaderInTabPreference():Promise<boolean>;
 
+export function GetOriginalMessage(arg1:string):Promise<message.Message>;
+
 export function GetPGPEncryptPolicy(arg1:string):Promise<string>;
 
 export function GetPGPKeyForEmail(arg1:string,arg2:string):Promise<pgp.Key>;
@@ -460,11 +471,12 @@ export function GetPGPSignPolicy(arg1:string):Promise<string>;
 
 export function GetPendingMailto():Promise<app.MailtoData>;
 
+export function GetQueueFolderCounts():Promise<app.QueueFolderCounts>;
+
 export function GetReadLaterCount():Promise<number>;
 
 export function GetReadLaterQueue():Promise<Array<triage.Ref>>;
 
-export function GetQueueFolderCounts():Promise<app.QueueFolderCounts>;
 export function GetReadReceiptResponsePolicy():Promise<string>;
 
 export function GetReaderIdentityEmails():Promise<Array<string>>;
@@ -476,8 +488,6 @@ export function GetReplyLaterCount():Promise<number>;
 export function GetReplyLaterQueue():Promise<Array<replylater.Ref>>;
 
 export function GetRunBackground():Promise<boolean>;
-
-export function GetSmartNotificationSettings():Promise<settings.SmartNotificationSettings>;
 
 export function GetSMIMECertificateForEmail(arg1:string,arg2:string):Promise<smime.Certificate>;
 
@@ -507,6 +517,8 @@ export function GetShowViewerCircles():Promise<boolean>;
 
 export function GetSkippedUpdateVersion():Promise<string>;
 
+export function GetSmartNotificationSettings():Promise<settings.SmartNotificationSettings>;
+
 export function GetSnoozedConversations():Promise<Array<triage.Ref>>;
 
 export function GetSnoozedCount():Promise<number>;
@@ -524,6 +536,8 @@ export function GetSpellcheckLanguages():Promise<Array<string>>;
 export function GetStartHidden():Promise<boolean>;
 
 export function GetStartHiddenActive():Promise<boolean>;
+
+export function GetStripTrackingParams():Promise<boolean>;
 
 export function GetSystemTheme():Promise<string>;
 
@@ -565,6 +579,8 @@ export function GetVirtualFolders():Promise<Array<virtualfolder.VirtualFolder>>;
 
 export function GetWindowDecorationStatus():Promise<platform.WindowDecorationStatus>;
 
+export function HandleOpenURL(arg1:string):Promise<void>;
+
 export function HasPGPKey(arg1:string):Promise<boolean>;
 
 export function HasSMIMECertificate(arg1:string):Promise<boolean>;
@@ -589,6 +605,8 @@ export function InitializeSendLaterClient():Promise<string>;
 
 export function InitiateShutdown():Promise<void>;
 
+export function InstallMailboxService():Promise<app.MailboxServiceLifecycleStatus>;
+
 export function IsExtensionEnabled(arg1:string):Promise<boolean>;
 
 export function IsFTSIndexComplete(arg1:string):Promise<boolean>;
@@ -605,6 +623,8 @@ export function IsReadLater(arg1:string,arg2:string):Promise<boolean>;
 
 export function IsReady():Promise<boolean>;
 
+export function IsRemoteServiceMode():Promise<boolean>;
+
 export function IsReplyLater(arg1:string,arg2:string):Promise<boolean>;
 
 export function LinkAccountContactSource(arg1:string,arg2:string,arg3:number):Promise<carddav.Source>;
@@ -616,6 +636,8 @@ export function ListAuthContextsForProvider(arg1:string):Promise<Array<app.AuthC
 export function ListContacts(arg1:number):Promise<Array<contact.Contact>>;
 
 export function ListDrafts(arg1:string):Promise<Array<draft.Draft>>;
+
+export function ListEmailTemplates():Promise<Array<settings.EmailTemplate>>;
 
 export function ListEnabledExtensions():Promise<Array<string>>;
 
@@ -630,8 +652,6 @@ export function ListPGPSenderKeys():Promise<Array<pgp.SenderKey>>;
 export function ListPendingSends():Promise<Array<app.PendingSend>>;
 
 export function ListQuickReplies():Promise<Array<settings.QuickReply>>;
-
-export function ListEmailTemplates():Promise<Array<settings.EmailTemplate>>;
 
 export function ListSMIMECertificates(arg1:string):Promise<Array<smime.Certificate>>;
 
@@ -662,6 +682,8 @@ export function MarkAsSpam(arg1:Array<string>):Promise<boolean>;
 export function MarkAsSpamWithUndo(arg1:Array<string>):Promise<app.SpamUndoResult>;
 
 export function MarkAsUnread(arg1:Array<string>):Promise<void>;
+
+export function MarkFilterSuggestionCreated(arg1:string):Promise<void>;
 
 export function MoveDraftHistory(arg1:string,arg2:string):Promise<void>;
 
@@ -699,8 +721,6 @@ export function OpenReaderWindow(arg1:string,arg2:string,arg3:string,arg4:string
 
 export function OpenURL(arg1:string):Promise<void>;
 
-export function ResolveLinkViaCloudflareDNS(arg1:string):Promise<app.LinkChainResult>;
-
 export function PickAttachmentFiles():Promise<Array<app.ComposerAttachment>>;
 
 export function PickPGPKeyFile():Promise<string>;
@@ -711,9 +731,17 @@ export function PickRecipientPGPKeyFile():Promise<string>;
 
 export function PickSMIMECertificateFile():Promise<string>;
 
+export function PrefetchMessageBodies(arg1:string,arg2:string,arg3:Array<string>):Promise<void>;
+
 export function Preflight():Promise<void>;
 
+export function PrepareComposerReply(arg1:string,arg2:string,arg3:string):Promise<smtp.ComposeMessage>;
+
+export function PrepareComposerSend(arg1:string,arg2:smtp.ComposeMessage,arg3:string,arg4:string):Promise<v1.SendRequest>;
+
 export function PrepareReply(arg1:string,arg2:string):Promise<smtp.ComposeMessage>;
+
+export function PreviewFilterRule(arg1:mailfilter.Rule):Promise<number>;
 
 export function ProcessPGPMessage(arg1:string):Promise<app.PGPViewResult>;
 
@@ -724,10 +752,6 @@ export function PutDraftAttachmentBlob(arg1:string,arg2:string,arg3:string):Prom
 export function QueuePendingSend(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function QuitApp():Promise<void>;
-
-export function RequestQuitApp():Promise<void>;
-
-export function CancelQuitAppRequest():Promise<void>;
 
 export function ReadFileAsAttachment(arg1:string):Promise<app.ComposerAttachment>;
 
@@ -767,7 +791,11 @@ export function ReorderFilterRules(arg1:Array<string>):Promise<void>;
 
 export function ReorderVirtualFolders(arg1:Array<string>):Promise<void>;
 
+export function RepairMessageAttachments(arg1:string,arg2:string):Promise<string>;
+
 export function RequestMacOSContactsAccess():Promise<string>;
+
+export function RequestQuitApp():Promise<void>;
 
 export function RequestUndoFromMenu():Promise<void>;
 
@@ -777,11 +805,19 @@ export function RequestWhatsNewFromMenu():Promise<void>;
 
 export function RescheduleMessage(arg1:string,arg2:string):Promise<app.ScheduleResult>;
 
+export function ResolveLinkViaCloudflareDNS(arg1:string):Promise<app.LinkChainResult>;
+
 export function ResolveMailActionTarget(arg1:operations.Target):Promise<Array<string>>;
+
+export function RestoreLaterMembership(arg1:triage.Ref,arg2:triage.LaterState,arg3:triage.LaterState):Promise<void>;
+
+export function RestoreMessageAttachmentRepair(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function RunEditMenuCommand(arg1:string):Promise<void>;
 
 export function SaveAllAttachments(arg1:string):Promise<string>;
+
+export function SaveAllAttachmentsForAccount(arg1:string,arg2:string):Promise<string>;
 
 export function SaveAllEncryptedAttachments(arg1:string):Promise<string>;
 
@@ -789,9 +825,11 @@ export function SaveAttachmentAs(arg1:string):Promise<string>;
 
 export function SaveAttachmentAsForAccount(arg1:string,arg2:string,arg3:string):Promise<string>;
 
-export function SaveAllAttachmentsForAccount(arg1:string,arg2:string):Promise<string>;
+export function SaveComposerDraft(arg1:string,arg2:smtp.ComposeMessage,arg3:string,arg4:string,arg5:string):Promise<app.DraftResult>;
 
 export function SaveDraft(arg1:string,arg2:smtp.ComposeMessage,arg3:string):Promise<app.DraftResult>;
+
+export function SaveEmailTemplate(arg1:settings.EmailTemplate):Promise<settings.EmailTemplate>;
 
 export function SaveEncryptedAttachmentAs(arg1:string,arg2:string):Promise<string>;
 
@@ -799,9 +837,9 @@ export function SavePendingOAuthTokens(arg1:string):Promise<void>;
 
 export function SaveQuickReply(arg1:settings.QuickReply):Promise<settings.QuickReply>;
 
-export function SaveEmailTemplate(arg1:settings.EmailTemplate):Promise<settings.EmailTemplate>;
-
 export function SaveSendLaterConfig(arg1:scheduledsend.ClientConfig):Promise<void>;
+
+export function SaveSmartNotificationSettings(arg1:settings.SmartNotificationSettings):Promise<void>;
 
 export function SaveUIState(arg1:appstate.UIState):Promise<void>;
 
@@ -813,7 +851,7 @@ export function SearchConversations(arg1:string,arg2:string,arg3:string,arg4:num
 
 export function SearchMacOSContacts(arg1:string,arg2:number):Promise<macoscontacts.Result>;
 
-export function SearchMail(arg1:app.MailSearchRequest):Promise<app.MailSearchPage>;
+export function SearchMail(arg1:mailservice.MailSearchRequest):Promise<mailservice.MailSearchPage>;
 
 export function SearchUnifiedFolder(arg1:string,arg2:string,arg3:number,arg4:number,arg5:string):Promise<Array<message.ConversationSearchResult>>;
 
@@ -825,6 +863,10 @@ export function SendMessage(arg1:string,arg2:smtp.ComposeMessage):Promise<void>;
 
 export function SendMessageWithDraftGuard(arg1:string,arg2:smtp.ComposeMessage,arg3:string):Promise<void>;
 
+export function SendMessageWithRequestID(arg1:string,arg2:smtp.ComposeMessage,arg3:string):Promise<void>;
+
+export function SendPreparedComposerMessage(arg1:v1.SendRequest,arg2:string):Promise<v1.SendResponse>;
+
 export function SendReadReceipt(arg1:string,arg2:string):Promise<void>;
 
 export function SetAccentBarUnread(arg1:boolean):Promise<void>;
@@ -834,8 +876,6 @@ export function SetAccountEnabled(arg1:string,arg2:boolean):Promise<void>;
 export function SetAddressbookEnabled(arg1:string,arg2:boolean):Promise<void>;
 
 export function SetAlwaysLoadImages(arg1:boolean):Promise<void>;
-
-export function SetStripTrackingParams(arg1:boolean):Promise<void>;
 
 export function SetAlwaysShowMessageCheckbox(arg1:boolean):Promise<void>;
 
@@ -862,6 +902,8 @@ export function SetDefaultSMIMECertificate(arg1:string,arg2:string):Promise<void
 export function SetExtensionEnabled(arg1:string,arg2:boolean):Promise<void>;
 
 export function SetFolderContentPolicy(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function SetFolderVisibility(arg1:string,arg2:Array<string>,arg3:boolean,arg4:boolean):Promise<void>;
 
 export function SetLanguage(arg1:string):Promise<void>;
 
@@ -895,8 +937,6 @@ export function SetReplyLaterMembership(arg1:replylater.Ref,arg2:boolean):Promis
 
 export function SetRunBackground(arg1:boolean):Promise<void>;
 
-export function SaveSmartNotificationSettings(arg1:settings.SmartNotificationSettings):Promise<void>;
-
 export function SetSMIMEEncryptPolicy(arg1:string,arg2:string):Promise<void>;
 
 export function SetSMIMESignPolicy(arg1:string,arg2:string):Promise<void>;
@@ -917,6 +957,8 @@ export function SetSpellcheckLanguages(arg1:Array<string>):Promise<void>;
 
 export function SetStartHidden(arg1:boolean):Promise<void>;
 
+export function SetStripTrackingParams(arg1:boolean):Promise<void>;
+
 export function SetTermsAccepted(arg1:boolean):Promise<void>;
 
 export function SetThemeMode(arg1:string):Promise<void>;
@@ -933,9 +975,15 @@ export function StartContactsOnlyOAuthFlow(arg1:string):Promise<void>;
 
 export function StartCustomOAuthFlow(arg1:string,arg2:string,arg3:string,arg4:Array<string>,arg5:string,arg6:string):Promise<void>;
 
+export function StartMailboxService():Promise<app.MailboxServiceLifecycleStatus>;
+
 export function StartOAuthFlow(arg1:string):Promise<void>;
 
 export function StartVirtualFolderOnlineCount(arg1:string,arg2:string):Promise<void>;
+
+export function Startup(arg1:context.Context):Promise<void>;
+
+export function StopMailboxService():Promise<app.MailboxServiceLifecycleStatus>;
 
 export function SubscribeAllFolders(arg1:string):Promise<void>;
 
@@ -952,6 +1000,8 @@ export function SyncContactSource(arg1:string):Promise<void>;
 export function SyncFolder(arg1:string,arg2:string):Promise<void>;
 
 export function SyncFolders(arg1:string):Promise<void>;
+
+export function SyncMailboxActionEvents():Promise<void>;
 
 export function SyncPendingDrafts(arg1:string):Promise<void>;
 
@@ -974,8 +1024,6 @@ export function TrashWithUndo(arg1:Array<string>):Promise<app.TrashUndoResult>;
 export function Undo():Promise<string>;
 
 export function UndoLatestWithResult():Promise<app.UndoLatestResult>;
-
-export function SyncMailboxActionEvents():Promise<void>;
 
 export function UndoOperation(arg1:string):Promise<string>;
 
@@ -1000,12 +1048,3 @@ export function UpdateLocalFlags(arg1:Array<string>,arg2:any,arg3:any):Promise<v
 export function UpdateScheduledMessage(arg1:string,arg2:string):Promise<app.ScheduleResult>;
 
 export function UpdateVirtualFolder(arg1:virtualfolder.VirtualFolder):Promise<void>;
-
-export function IsRemoteServiceMode():Promise<boolean>;
-
-export function SendMessageWithRequestID(arg1:string,arg2:smtp.ComposeMessage,arg3:string):Promise<void>;
-
-export function DispatchRemotePendingSend(arg1:string):Promise<boolean>;
-
-export function SetFolderVisibility(accountId:string, folderIds:string[], hidden:boolean, refresh:boolean):Promise<void>;
-export function ChangeLaterWithUndo(arg1:string,arg2:string,arg3:boolean):Promise<app.TriageChangeResult>;
