@@ -657,6 +657,10 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 	readOperations := &mailboxReadOperations{runtime: r}
 	mailboxActions := &mailboxActionOperations{runtime: r}
 	mux := http.NewServeMux()
+	// Route inventory note: every Mount* call below is enumerated and
+	// classified for read coalescing (PERF-SC-002) in
+	// route_classification_test.go; a new route fails that test until it is
+	// classified.
 	v1.MountCatalogRoutes(mux, operations, automation.RequireGrantCapability)
 	v1.MountVirtualFolderCacheRoute(mux, r, automation.RequireGrantCapability)
 	v1.MountVirtualFolderUnreadCountRoute(mux, r, automation.RequireGrantCapability)

@@ -34,7 +34,7 @@ type FolderMutationOperations interface {
 }
 
 // MountFolderMutationRoutes mounts authenticated provider-folder operations.
-func MountFolderMutationRoutes(mux *http.ServeMux, ops FolderMutationOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func MountFolderMutationRoutes(mux RouteMux, ops FolderMutationOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	mux.HandleFunc("/v1/folders/sync", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailWrite) {
 			return

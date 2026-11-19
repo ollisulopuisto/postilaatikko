@@ -20,7 +20,7 @@ type MessageHeaderPage struct {
 
 // MountMessageHeaderRoutes mounts the account-qualified header list route.
 // The enclosing automation server must authenticate the request.
-func MountMessageHeaderRoutes(mux *http.ServeMux, ops MessageHeaderOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func MountMessageHeaderRoutes(mux RouteMux, ops MessageHeaderOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	mux.HandleFunc("/v1/messages/headers", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailRead) {
 			return

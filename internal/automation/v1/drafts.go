@@ -94,7 +94,7 @@ func NewDraftsHandler(operations DraftOperations, fingerprint func([]byte) []byt
 	return &DraftsHandler{operations: operations, fingerprint: fingerprint}
 }
 
-func (h *DraftsHandler) MountRoutes(mux *http.ServeMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func (h *DraftsHandler) MountRoutes(mux RouteMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	mux.HandleFunc("GET /v1/drafts", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityDraftRead) {
 			return

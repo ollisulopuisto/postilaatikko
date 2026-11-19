@@ -27,7 +27,7 @@ type ReplyLaterHTTPOperations interface {
 }
 
 // MountReplyLaterRoutes mounts authenticated Reply Later queue operations.
-func MountReplyLaterRoutes(mux *http.ServeMux, ops ReplyLaterHTTPOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func MountReplyLaterRoutes(mux RouteMux, ops ReplyLaterHTTPOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	mux.HandleFunc("/v1/reply-later", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailRead) {
 			return

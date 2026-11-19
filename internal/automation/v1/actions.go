@@ -215,7 +215,7 @@ func NewActionsHandlerWithReceiptStore(ops ActionOperations, store ActionReceipt
 }
 
 // MountRoutes mounts the action endpoints onto a standard ServeMux.
-func (h *ActionsHandler) MountRoutes(mux *http.ServeMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func (h *ActionsHandler) MountRoutes(mux RouteMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	mux.HandleFunc("/v1/actions", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailWrite) {
 			return

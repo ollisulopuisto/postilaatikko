@@ -254,7 +254,7 @@ func NewAccountMutationHandler(operations AccountMutationOperations, ledger Acco
 }
 
 // MountRoutes mounts all account mutation endpoints; reads remain under mail.read.
-func (h *AccountMutationHandler) MountRoutes(mux *http.ServeMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func (h *AccountMutationHandler) MountRoutes(mux RouteMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	mux.HandleFunc("POST /v1/accounts/{accountID}/oauth", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityAccountManage) {
 			return

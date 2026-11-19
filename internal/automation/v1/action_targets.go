@@ -15,7 +15,7 @@ type ResolvedActionTarget struct {
 
 // MountActionTargetRoute validates a caller's explicit target against helper
 // state and returns the account-qualified references for a subsequent action.
-func MountActionTargetRoute(mux *http.ServeMux, lookup operations.MessageLookup, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func MountActionTargetRoute(mux RouteMux, lookup operations.MessageLookup, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	mux.HandleFunc("/v1/actions/resolve", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailRead) {
 			return

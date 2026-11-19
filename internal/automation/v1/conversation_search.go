@@ -31,7 +31,7 @@ type ConversationSearchOperations interface {
 }
 
 // MountConversationSearchRoute mounts bounded unified-folder header search.
-func MountConversationSearchRoute(mux *http.ServeMux, ops ConversationSearchOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func MountConversationSearchRoute(mux RouteMux, ops ConversationSearchOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	mux.HandleFunc("POST /v1/conversations/search", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailRead) {
 			return

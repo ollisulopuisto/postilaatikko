@@ -57,7 +57,7 @@ func NewTriageMutationsHandler(ops TriageMutationOperations, receipts ActionRece
 }
 
 // MountRoutes mounts all triage mutation paths with mail.write authorization.
-func (h *TriageMutationsHandler) MountRoutes(mux *http.ServeMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func (h *TriageMutationsHandler) MountRoutes(mux RouteMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	mux.HandleFunc("/v1/reply-later/mutations", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailWrite) {
 			return

@@ -59,7 +59,7 @@ type cachedViewFlight struct {
 var cachedViewFlights sync.Map // virtualFolderID -> *cachedViewFlight
 
 // MountVirtualFolderCacheRoute mounts the authenticated cached-result read.
-func MountVirtualFolderCacheRoute(mux *http.ServeMux, ops CachedVirtualFolderOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func MountVirtualFolderCacheRoute(mux RouteMux, ops CachedVirtualFolderOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	mux.HandleFunc("GET /v1/views/{virtualFolderID}/cache", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailRead) {
 			return

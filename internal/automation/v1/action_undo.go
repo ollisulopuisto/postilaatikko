@@ -86,7 +86,7 @@ type ActionUndoOperations interface {
 }
 
 // MountActionUndoRoutes mounts authenticated durable undo endpoints.
-func MountActionUndoRoutes(mux *http.ServeMux, store ActionUndoStore, operations ActionUndoOperations, keyDigest func(string) string, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func MountActionUndoRoutes(mux RouteMux, store ActionUndoStore, operations ActionUndoOperations, keyDigest func(string) string, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	if keyDigest == nil {
 		keyDigest = func(key string) string {
 			digest := sha256.Sum256([]byte(key))

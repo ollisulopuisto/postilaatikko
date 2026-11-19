@@ -35,7 +35,7 @@ type ActionEventStore interface {
 }
 
 // MountActionEventRoutes mounts bounded action-event recovery routes.
-func MountActionEventRoutes(mux *http.ServeMux, store ActionEventStore, clientID func(*http.Request) string, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func MountActionEventRoutes(mux RouteMux, store ActionEventStore, clientID func(*http.Request) string, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	mux.HandleFunc("/v1/action-events", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailRead) {
 			return

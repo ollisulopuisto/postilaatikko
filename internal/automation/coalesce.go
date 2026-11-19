@@ -58,7 +58,14 @@ func defaultReadCoalescerConfig() readCoalescerConfig {
 // read-only operations whose responses depend solely on the request and the
 // caller's authorization qualify. Keep this list in sync with the routes in
 // internal/automation/v1: adding a route here that mutates state, streams, or
-// personalizes per client identity breaks those semantics.
+// personalizes per client identity breaks those semantics. The route
+// classification test in internal/alwayson fails when a mounted route has no
+// explicit classification.
+//
+// /v1/threads/read is eligible despite its name: "read" means rendering a
+// thread. ReadHandler.handleThreadRead only resolves the thread and loads
+// messages/attachments (mailboxReadOperations.GetThread performs no writes
+// and never marks mail read); marking read happens through /v1/actions.
 func coalescibleRead(method, path string) bool {
 	switch method {
 	case http.MethodGet:
@@ -76,6 +83,13 @@ func coalescibleRead(method, path string) bool {
 		}
 	}
 	return false
+}
+
+// CoalescibleRead reports whether the read coalescer merges requests for a
+// method/path pair. Exported for the route classification drift test in
+// internal/alwayson.
+func CoalescibleRead(method, path string) bool {
+	return coalescibleRead(method, path)
 }
 
 type coalesceResult struct {

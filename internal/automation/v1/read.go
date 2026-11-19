@@ -89,31 +89,31 @@ func NewReadHandler(ops ReadOperations) *ReadHandler {
 // MountCatalogRoutes mounts only the account, folder, and saved-view routes.
 // The enclosing automation server must authenticate the request and apply its
 // loopback, Host, and Origin protections.
-func MountCatalogRoutes(mux *http.ServeMux, ops CatalogOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func MountCatalogRoutes(mux RouteMux, ops CatalogOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	handler := &ReadHandler{catalog: ops}
 	handler.mountCatalogRoutes(mux, requireCap)
 }
 
 // MountSearchRoute mounts only the authenticated search operation.
-func MountSearchRoute(mux *http.ServeMux, ops SearchOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func MountSearchRoute(mux RouteMux, ops SearchOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	(&ReadHandler{search: ops}).mountSearchRoute(mux, requireCap)
 }
 
 // MountThreadBodyRoutes mounts thread and body reads without requiring
 // attachment operations to be implemented by the same backend.
-func MountThreadBodyRoutes(mux *http.ServeMux, ops MessageReadOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func MountThreadBodyRoutes(mux RouteMux, ops MessageReadOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	(&ReadHandler{messages: ops}).mountThreadBodyRoutes(mux, requireCap)
 }
 
 // MountRoutes mounts read API endpoints onto a standard http.ServeMux.
-func (h *ReadHandler) MountRoutes(mux *http.ServeMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func (h *ReadHandler) MountRoutes(mux RouteMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	h.mountCatalogRoutes(mux, requireCap)
 	h.mountSearchRoute(mux, requireCap)
 	h.mountThreadBodyRoutes(mux, requireCap)
 	h.mountAttachmentRoutes(mux, requireCap)
 }
 
-func (h *ReadHandler) mountSearchRoute(mux *http.ServeMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func (h *ReadHandler) mountSearchRoute(mux RouteMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	mux.HandleFunc("/v1/search", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailRead) {
 			return
@@ -126,7 +126,7 @@ func (h *ReadHandler) mountSearchRoute(mux *http.ServeMux, requireCap func(http.
 	})
 }
 
-func (h *ReadHandler) mountThreadBodyRoutes(mux *http.ServeMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func (h *ReadHandler) mountThreadBodyRoutes(mux RouteMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	mux.HandleFunc("GET /v1/messages/{messageID}/header", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailRead) {
 			return
@@ -169,7 +169,7 @@ func (h *ReadHandler) mountThreadBodyRoutes(mux *http.ServeMux, requireCap func(
 	})
 }
 
-func (h *ReadHandler) mountAttachmentRoutes(mux *http.ServeMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func (h *ReadHandler) mountAttachmentRoutes(mux RouteMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	mux.HandleFunc("/v1/messages/attachments/list", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityAttachmentRead) {
 			return
@@ -193,7 +193,7 @@ func (h *ReadHandler) mountAttachmentRoutes(mux *http.ServeMux, requireCap func(
 	})
 }
 
-func (h *ReadHandler) mountCatalogRoutes(mux *http.ServeMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func (h *ReadHandler) mountCatalogRoutes(mux RouteMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	if identities, ok := h.catalog.(IdentityCatalogOperations); ok {
 		mux.HandleFunc("GET /v1/accounts/{accountID}/identities", func(w http.ResponseWriter, r *http.Request) {
 			if !requireCap(w, r, CapabilityMailRead) {

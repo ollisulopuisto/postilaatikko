@@ -8,7 +8,7 @@ type VirtualFolderUnreadCountOperations interface {
 }
 
 // MountVirtualFolderUnreadCountRoute mounts the authenticated sidebar-count read.
-func MountVirtualFolderUnreadCountRoute(mux *http.ServeMux, ops VirtualFolderUnreadCountOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func MountVirtualFolderUnreadCountRoute(mux RouteMux, ops VirtualFolderUnreadCountOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	mux.HandleFunc("GET /v1/views/unread-counts", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailRead) {
 			return
