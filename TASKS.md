@@ -576,3 +576,9 @@ README review follow-up: qualify checksum instructions because tagged releases d
 | ID | Effort | Task | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
 | UX-FROZEN-INDEX-001 | Medium | Supersede selection-only row pinning with a per-view frozen order and card snapshot. Passive reading, navigation and arrivals never reorder it. Deliberate set/context actions and the pending-change pill reconcile it. | Instinct / `feat/frozen-message-index` / `/tmp/postilaatikko-index` | Review; pure failing-first regressions pass; full frontend suite 1086 pass/10 opt-in skips; full-App categories/priority/plain browser regression passes; lint, type/shortcut checks and build pass. One existing viewerRef Svelte warning and bundle-size warnings remain. Action audit in docs/decisions/2026-11-18-frozen-index.md. |
+
+## Search bindings namespace repair (2026-11-19)
+
+| ID | Effort | Task | Owner / branch / worktree | Status |
+| --- | --- | --- | --- | --- |
+| BUGFIX-SEARCH-BINDINGS-001 | Medium | Repair search broken in test DMGs by MailSearchRequest moving behind a Go type alias; surface real list-load errors; guard binding drift. | Instinct / `fix/search-bindings-namespace` / sandbox | Review; PR #276. Drift test fails on stale bindings / passes on regenerated; new listLoadError and updated searchFailure browser tests fail pre-fix / pass post-fix (local Chromium); npm run check, eslint, version check green. golangci-lint and macOS build not run locally (CI). |

@@ -437,6 +437,7 @@
     "failedToSendReceipt": "Lukukuittauksen lähetys epäonnistui",
     "failedToLoadSource": "Viestin lähdekoodin lataaminen epäonnistui",
     "failedToLoadMessages": "Viestien lataaminen epäonnistui.",
+    "failedToLoadMessagesWithReason": "Viestien lataaminen epäonnistui: {message}",
     "noContent": "Sisältöä ei ole saatavilla",
     "downloadingContent": "Ladataan viestin sisältöä...",
     "copy": "Kopioi",
