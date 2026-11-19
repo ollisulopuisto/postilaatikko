@@ -54,6 +54,7 @@
   import MessageList from './lib/components/list/MessageList.svelte'
   import ConversationViewer from './lib/components/viewer/ConversationViewer.svelte'
   import Composer from './lib/components/composer/Composer.svelte'
+  import FilterDialog, { type FilterSuggestion } from './lib/components/common/FilterDialog.svelte'
   import ToastContainer from './lib/components/ui/toast/ToastContainer.svelte'
   import SpellSuggestionMenu from './lib/spellcheck/SpellSuggestionMenu.svelte'
   import TermsDialog from './lib/components/TermsDialog.svelte'
@@ -106,7 +107,7 @@
   import { runMessageMutation } from '$lib/components/list/mutationInFlight'
   import { messageAnimations } from '$lib/stores/messageAnimations.svelte'
   // @ts-ignore - wailsjs path
-  import { PrepareComposerReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, ClearDraftHistory, SendMessageWithDraftGuard, DispatchRemotePendingSend, CancelPendingSend, CompletePendingSend, ListPendingSends, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, ArchiveAndMarkReadWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ResolveMailActionTarget, GetMessage, UndoOperation, UndoLatestWithResult, SyncMailboxActionEvents, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, RequestQuitApp, CancelQuitAppRequest, OpenComposerWindow, OpenMailWindow, OpenReaderWindow, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
+  import { PrepareComposerReply, GetPendingMailto, GetDraftForEdit, DeleteDraft, ClearDraftHistory, SendMessageWithDraftGuard, DispatchRemotePendingSend, CancelPendingSend, CompletePendingSend, DismissFilterSuggestion, MarkFilterSuggestionCreated, ListPendingSends, MarkAsRead, MarkAsUnread, Star, Unstar, ArchiveWithUndo, ArchiveAndMarkReadWithUndo, MarkAsSpamWithUndo, MarkAsNotSpamWithUndo, ResolveMailActionTarget, GetMessage, UndoOperation, UndoLatestWithResult, SyncMailboxActionEvents, GetTermsAccepted, SetTermsAccepted, RefreshWindowConstraints, AcceptCertificate, GetStartHiddenActive, CloseWindow, QuitApp, RequestQuitApp, CancelQuitAppRequest, OpenComposerWindow, OpenMailWindow, OpenReaderWindow, GetSystemTheme, NotifyStartupComplete, GetOAuthBuildStatus, GetOAuthWarningDisabled, SetOAuthWarningDisabled, GetLastSeenVersion, SetLastSeenVersion, GetAppInfo, GetWindowDecorationStatus } from '../wailsjs/go/app/App.js'
   // @ts-ignore - wailsjs path
   import { smtp, folder, certificate, operations } from '../wailsjs/go/models'
   // @ts-ignore - wailsjs runtime
@@ -741,6 +742,10 @@
   // never auto-sends: the backend expires leftover rows at startup.
   type PendingSendItem = { id: string; accountId: string; draftId: string; payload: string; dispatchAt: string; dispatching?: boolean; manualRecovery?: boolean }
   let pendingSends = $state<PendingSendItem[]>([])
+  // A reviewed filter suggestion from repeated manual moves. Nothing is created
+  // until the user confirms in the filter dialog.
+  let filterSuggestion = $state<FilterSuggestion | null>(null)
+  let showSuggestedFilterDialog = $state(false)
   let pendingTick: ReturnType<typeof setInterval> | undefined
   let pendingNow = $state(Date.now())
   const pendingSendDispatches = new Map<string, Promise<boolean>>()
@@ -932,6 +937,18 @@
       if (!pendingSends.some(p => p.id === ps.id)) pendingSends = [...pendingSends, ps]
     })
     EventsOn('pending-send:cancelled', (id: string) => pendingRemove(id))
+    EventsOn('filters:suggestionAvailable', (suggestion: FilterSuggestion) => {
+      if (!suggestion?.key || showSuggestedFilterDialog) return
+      addToast({
+        type: 'info',
+        message: $_('filters.suggestionAvailable'),
+        duration: 12000,
+        actions: [
+          { label: $_('filters.suggestionReview'), onClick: () => { filterSuggestion = suggestion; showSuggestedFilterDialog = true } },
+          { label: $_('filters.suggestionDismiss'), onClick: () => { void DismissFilterSuggestion(suggestion.key).catch(() => {}) } },
+        ],
+      })
+    })
     EventsOn('pending-send:warning', (message: string) => addToast({ type: 'error', message }))
     EventsOn('notification:clicked', (data: { accountId: string; folderId: string; threadId: string }) => {
       // Find folder info for display
@@ -2926,6 +2943,13 @@
   <ShortcutsDialog />
 {/if}
 <UndoHistoryPanel bind:open={showUndoHistory} />
+{#if showSuggestedFilterDialog && filterSuggestion}
+  <FilterDialog
+    bind:open={showSuggestedFilterDialog}
+    suggestion={filterSuggestion}
+    onSaved={() => { if (filterSuggestion) void MarkFilterSuggestionCreated(filterSuggestion.key).catch(() => {}) }}
+  />
+{/if}
 
 <!-- Command palette (Cmd+P / Ctrl+P, Alfred style quick launcher). -->
 {#if pendingSends.length > 0}

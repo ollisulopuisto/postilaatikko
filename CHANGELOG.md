@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- After you move similar mail to the same folder in two separate actions, Postilaatikko offers to create a filter from the shared sender, recipient or subject words. You review and edit it in the filter dialog first; nothing is created automatically, and dismissing the offer suppresses it. Only the sender, To/Cc and subject of mail you move are kept locally (last 1000 messages), never bodies, and your own addresses are never used as a match. Adds a local database migration (83).
+
+
 - Notification rules match the sender-provided From header, not authenticated identity. They only control alerts, never hide or move mail; a forged From can match either a notify or mute rule.
 
 - Add local sender/domain notification controls. Unknown or incomplete arrival batches keep alerts; notification clicks follow the displayed message. Existing rule scope is fixed, so remove and re-add a rule to change sender/domain matching.

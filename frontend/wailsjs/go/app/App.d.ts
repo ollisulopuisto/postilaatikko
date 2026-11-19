@@ -353,6 +353,10 @@ export function GetFTSIndexStatus(arg1:string):Promise<message.FTSIndexStatus>;
 
 export function GetFTSIndexStatusAll():Promise<Record<string, message.FTSIndexStatus>>;
 
+export function DismissFilterSuggestion(arg1:string):Promise<void>;
+
+export function MarkFilterSuggestionCreated(arg1:string):Promise<void>;
+
 export function GetFilterRules():Promise<Array<mailfilter.Rule>>;
 
 export function PreviewFilterRule(arg1:mailfilter.Rule):Promise<number>;

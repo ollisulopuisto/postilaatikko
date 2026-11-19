@@ -380,7 +380,7 @@ func TestFilterMigration82PreservesVersion81RulesJobsAndVisibility(t *testing.T)
 	if err := db.QueryRow(`SELECT hidden FROM folders WHERE id='destination'`).Scan(&hidden); err != nil || hidden != 1 {
 		t.Fatalf("visibility lost: %d %v", hidden, err)
 	}
-	if err := db.QueryRow(`SELECT MAX(version) FROM migrations`).Scan(&version); err != nil || version != 82 {
+	if err := db.QueryRow(`SELECT MAX(version) FROM migrations`).Scan(&version); err != nil || version < 82 {
 		t.Fatalf("migration 82 skipped: %d %v", version, err)
 	}
 	assertDatabaseIntegrity(t, db)
