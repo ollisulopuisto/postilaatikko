@@ -93,12 +93,19 @@ func TestIdleCycleFailureAppliesReconnectBackoff(t *testing.T) {
 	cfg.MaxReconnectBackoff = 100 * time.Millisecond
 	cfg.MaxReconnectAttempts = 3
 	c := newIdleConnection("a", "a", cfg, server.credentials)
+	started := time.Now()
 	c.Start(context.Background(), make(chan MailEvent, 1))
 	select {
 	case <-c.doneCh:
 	case <-time.After(5 * time.Second):
 		c.Stop()
 		t.Fatalf("IDLE loop never gave up after %d fast-failing cycles (still reconnecting with no backoff)", cfg.MaxReconnectAttempts)
+	}
+	// Backoff must actually delay retries: attempts 1 and 2 wait
+	// ReconnectBackoff (20ms) and its doubling (40ms) before the third
+	// failure exhausts the budget, so giving up takes at least 60ms.
+	if elapsed := time.Since(started); elapsed < 60*time.Millisecond {
+		t.Fatalf("retries ran without backoff: gave up after %v, want at least 60ms of retry delay", elapsed)
 	}
 	if got := server.accepts.Load(); got > 10 {
 		t.Fatalf("reconnect storm: %d connections accepted for %d allowed attempts", got, cfg.MaxReconnectAttempts)
