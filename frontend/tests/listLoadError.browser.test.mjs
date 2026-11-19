@@ -12,7 +12,7 @@ mkdirSync(captureDir,{recursive:true})
 // The banner must carry the underlying error message.
 test('a failing folder load surfaces the underlying error detail',{skip:!browserModule,timeout:60000},async()=>{
   const root=fileURLToPath(new URL('..',import.meta.url))
-  const server=await createServer({root,plugins:[{name:'list-load-error-fixture',resolveId(id){if(id==='/list-mount.js')return id},load(id){if(id==='/list-mount.js')return `export {mount} from 'svelte'`}}],server:{host:'127.0.0.1',port:5195,strictPort:true},logLevel:'error'})
+  const server=await createServer({root,plugins:[{name:'list-load-error-fixture',resolveId(id){if(id==='/list-mount.js')return id},load(id){if(id==='/list-mount.js')return `export {mount} from 'svelte'`}}],server:{host:'127.0.0.1',port:5199,strictPort:true},logLevel:'error'})
   await server.listen()
   const {chromium}=await import(browserModule)
   const browser=await chromium.launch({executablePath:process.env.POSTI_CHROMIUM_BUNDLED?undefined:'/usr/bin/google-chrome-stable',headless:true,args:['--no-sandbox']})
@@ -20,7 +20,7 @@ test('a failing folder load surfaces the underlying error detail',{skip:!browser
     const page=await browser.newPage({viewport:{width:1280,height:900}})
     const errors=[];page.on('pageerror',e=>errors.push(e.message))
     await page.route('**/list-load-error-fixture',r=>r.fulfill({contentType:'text/html',body:'<html class="dark" data-theme="dark"><body style="margin:0"><div id="fixture"></div></body></html>'}))
-    await page.goto('http://127.0.0.1:5195/list-load-error-fixture')
+    await page.goto('http://127.0.0.1:5199/list-load-error-fixture')
     await page.evaluate(async()=>{
       await import('/src/app.css')
       window.calls=[]
