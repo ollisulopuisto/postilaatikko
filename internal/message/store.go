@@ -415,27 +415,28 @@ func (s *Store) ListVirtualArchivedConversations(allMailFolderIDs []string, offs
 	return s.listConversationsByFolderIDs(allMailFolderIDs, offset, limit, sortOrder, filter, true)
 }
 
-// buildConversationListQuery constructs the unified conversation list query
-// for n folder placeholders. Extracted so query plans can be profiled in
-// tests against the exact production SQL (PERF-SC-005).
-func buildConversationListQuery(nFolders int, sortOrder, filter string, excludeInboxCopies bool) string {
-	// Determine sort direction
-	orderClause := "ORDER BY latest_date DESC, account_id ASC, conv_thread_id ASC"
-	if sortOrder == "oldest" {
-		orderClause = "ORDER BY latest_date ASC, account_id ASC, conv_thread_id ASC"
+// conversationVisibilityClauses returns the shared per-message predicates
+// for the conversation list: Gmail duplicate suppression and, for the
+// Archive variant, exclusion of messages still present in an Inbox folder.
+// RFC Message-ID is persisted for each IMAP mailbox copy and is the stable
+// identity shared by Gmail's Inbox and All Mail labels.
+func conversationVisibilityClauses(excludeInboxCopies bool) string {
+	if !excludeInboxCopies {
+		return preferNativeGmailCopy
 	}
+	return ` AND m.message_id IS NOT NULL AND NOT EXISTS (
+		SELECT 1 FROM messages inbox_m JOIN folders inbox_f ON inbox_f.id = inbox_m.folder_id
+		WHERE inbox_m.account_id = m.account_id AND inbox_f.folder_type = 'inbox'
+		AND inbox_m.message_id = m.message_id
+	)` + preferNativeGmailCopy
+}
 
+// buildConversationAggregateQuery builds the shared SELECT ... FROM ... WHERE
+// prefix of the conversation list query for n folder placeholders (PERF-SC-005).
+// Callers append their own grouping/ordering so the offset path, the keyset
+// page loader, and plan profiling all share one projection.
+func buildConversationAggregateQuery(nFolders int, excludeInboxCopies bool) string {
 	placeholders := strings.TrimRight(strings.Repeat("?,", nFolders), ",")
-	archiveClause := ""
-	if excludeInboxCopies {
-		// RFC Message-ID is persisted for each IMAP mailbox copy and is the
-		// stable identity shared by Gmail's Inbox and All Mail labels.
-		archiveClause = ` AND m.message_id IS NOT NULL AND NOT EXISTS (
-			SELECT 1 FROM messages inbox_m JOIN folders inbox_f ON inbox_f.id = inbox_m.folder_id
-			WHERE inbox_m.account_id = m.account_id AND inbox_f.folder_type = 'inbox'
-			AND inbox_m.message_id = m.message_id
-		)`
-	}
 	return fmt.Sprintf(`
 		SELECT 
 			COALESCE(m.thread_id, m.id) as conv_thread_id,
@@ -457,12 +458,24 @@ func buildConversationListQuery(nFolders int, sortOrder, filter string, excludeI
 		FROM messages m
 		INNER JOIN folders f ON m.folder_id = f.id
 		INNER JOIN accounts a ON f.account_id = a.id AND a.enabled = 1
-		WHERE m.folder_id IN (%s)%s`+preferNativeGmailCopy+`
-		GROUP BY COALESCE(m.thread_id, m.id), a.id`+
-		filterHavingClause(filter, "m.")+`
-		`+orderClause+`
+		WHERE m.folder_id IN (%s)`, placeholders) + conversationVisibilityClauses(excludeInboxCopies)
+}
+
+// buildConversationListQuery constructs the unified conversation list query
+// for n folder placeholders. Extracted so query plans can be profiled in
+// tests against the exact production SQL (PERF-SC-005).
+func buildConversationListQuery(nFolders int, sortOrder, filter string, excludeInboxCopies bool) string {
+	// Determine sort direction
+	orderClause := "ORDER BY latest_date DESC, account_id ASC, conv_thread_id ASC"
+	if sortOrder == "oldest" {
+		orderClause = "ORDER BY latest_date ASC, account_id ASC, conv_thread_id ASC"
+	}
+	return buildConversationAggregateQuery(nFolders, excludeInboxCopies) + `
+		GROUP BY COALESCE(m.thread_id, m.id), a.id` +
+		filterHavingClause(filter, "m.") + `
+		` + orderClause + `
 		LIMIT ? OFFSET ?
-	`, placeholders, archiveClause)
+	`
 }
 
 func (s *Store) listConversationsByFolderIDs(folderIDs []string, offset, limit int, sortOrder, filter string, excludeInboxCopies bool) ([]*Conversation, error) {

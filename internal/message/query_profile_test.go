@@ -16,6 +16,14 @@ import (
 // message in Sent.
 func seedProfileStore(t *testing.T, totalMessages int) *Store {
 	t.Helper()
+	return seedProfileStoreOpts(t, totalMessages, false)
+}
+
+// seedProfileStoreOpts seeds the profile fixture; dropKeysetIndexes removes
+// the PERF-SC-005 indexes first so write-cost comparisons run against the
+// pre-migration-84 schema.
+func seedProfileStoreOpts(t *testing.T, totalMessages int, dropKeysetIndexes bool) *Store {
+	t.Helper()
 	db, err := database.Open(filepath.Join(t.TempDir(), "profile.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -23,6 +31,13 @@ func seedProfileStore(t *testing.T, totalMessages int) *Store {
 	t.Cleanup(func() { db.Close() })
 	if err := db.Migrate(); err != nil {
 		t.Fatal(err)
+	}
+	if dropKeysetIndexes {
+		for _, idx := range []string{"idx_messages_folder_date_conv", "idx_messages_account_conv"} {
+			if _, err := db.Exec("DROP INDEX " + idx); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}
 	if _, err := db.Exec(`INSERT INTO accounts (id, name, email, imap_host, smtp_host, username) VALUES ('acc-1', 'Bench', 'bench@example.com', 'imap.example.com', 'smtp.example.com', 'bench')`); err != nil {
 		t.Fatal(err)
@@ -104,6 +119,45 @@ func TestConversationListQueryProfile(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Logf("offset %6d: %6d conversations in %v", offset, len(convs), time.Since(start))
+		t.Logf("offset path  page at offset %5d: %6d conversations in %v", offset, len(convs), time.Since(start))
 	}
+
+	// Keyset path: walk to the same positions by cursor.
+	cursor := ""
+	pageSize := 50
+	targets := map[int]bool{0: true, 24: true, 49: true, 74: true} // 50 per page: 0, 1200, 2450, 3700
+	for page := 0; page < 100; page++ {
+		start := time.Now()
+		convs, next, err := store.ListConversationsByFolderIDsKeyset(folders, cursor, pageSize, "newest", false)
+		elapsed := time.Since(start)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if targets[page] {
+			t.Logf("keyset path  page %4d (rows %5d+): %6d conversations in %v", page, page*pageSize, len(convs), elapsed)
+		}
+		if next == "" {
+			break
+		}
+		cursor = next
+	}
+}
+
+// TestConversationListIndexWriteCost measures the insert cost of the
+// PERF-SC-005 indexes by timing fixture seeding with and without them.
+//
+//	PERF_PROFILE=1 go test ./internal/message/ -run IndexWriteCost -v
+func TestConversationListIndexWriteCost(t *testing.T) {
+	if os.Getenv("PERF_PROFILE") != "1" {
+		t.Skip("set PERF_PROFILE=1 to run index write-cost profiling")
+	}
+	const total = 20000
+	start := time.Now()
+	seedProfileStoreOpts(t, total, true)
+	without := time.Since(start)
+	start = time.Now()
+	seedProfileStoreOpts(t, total, false)
+	with := time.Since(start)
+	t.Logf("seeding %d messages: without PERF-SC-005 indexes %v, with %v (delta %v, %.1f%%)",
+		total, without, with, with-without, 100*float64(with-without)/float64(without))
 }
