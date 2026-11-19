@@ -12,7 +12,7 @@ const captureDir=process.env.POSTI_BROWSER_CAPTURE_DIR||join(tmpdir(),'posti-men
 mkdirSync(captureDir,{recursive:true})
 
 test('native menu dispatch: stale selections, busy controls, modal isolation, focused rows and edit focus', {skip:!browserModule,timeout:60000},async()=>{
-  const server=await createServer({root:fileURLToPath(new URL('..',import.meta.url)),server:{host:'127.0.0.1',port:5188,strictPort:true,fs:{allow:[fileURLToPath(new URL('../..',import.meta.url)),fileURLToPath(new URL('../node_modules',import.meta.url)),realpathSync(fileURLToPath(new URL('../node_modules',import.meta.url)))]}},logLevel:'error'})
+  const server=await createServer({cacheDir:join(captureDir,'vite-cache-native-menu'),root:fileURLToPath(new URL('..',import.meta.url)),server:{host:'127.0.0.1',port:5188,strictPort:true,fs:{allow:[fileURLToPath(new URL('../..',import.meta.url)),fileURLToPath(new URL('../node_modules',import.meta.url)),realpathSync(fileURLToPath(new URL('../node_modules',import.meta.url)))]}},logLevel:'error'})
   await server.listen()
   const {chromium}=await import(browserModule)
   const browser=await chromium.launch({executablePath:process.env.POSTI_CHROMIUM_BUNDLED?undefined:process.env.CHROME_BIN||'/usr/bin/google-chrome-stable',headless:true,args:['--no-sandbox']})
@@ -75,13 +75,13 @@ test('native menu dispatch: stale selections, busy controls, modal isolation, fo
 })
 
 test('real App native menus reuse navigation and isolate Calendar, Contacts and composer', {skip:!browserModule,timeout:90000},async()=>{
-  const server=await createServer({root:fileURLToPath(new URL('..',import.meta.url)),server:{host:'127.0.0.1',port:5189,strictPort:true,fs:{allow:[fileURLToPath(new URL('../..',import.meta.url)),fileURLToPath(new URL('../node_modules',import.meta.url)),realpathSync(fileURLToPath(new URL('../node_modules',import.meta.url)))]}},logLevel:'error'})
+  const server=await createServer({cacheDir:join(captureDir,'vite-cache-native-menu'),root:fileURLToPath(new URL('..',import.meta.url)),server:{host:'127.0.0.1',port:5189,strictPort:true,fs:{allow:[fileURLToPath(new URL('../..',import.meta.url)),fileURLToPath(new URL('../node_modules',import.meta.url)),realpathSync(fileURLToPath(new URL('../node_modules',import.meta.url)))]}},logLevel:'error'})
   await server.listen()
   const {chromium}=await import(browserModule)
   const browser=await chromium.launch({executablePath:process.env.POSTI_CHROMIUM_BUNDLED?undefined:process.env.CHROME_BIN||'/usr/bin/google-chrome-stable',headless:true,args:['--no-sandbox']})
   try {
     const page=await browser.newPage({viewport:{width:1280,height:900}})
-    const errors=[];page.on('pageerror',error=>errors.push(error.message))
+    const errors=[];page.on('pageerror',error=>errors.push(error.message));page.on('requestfailed',request=>errors.push(`${request.url()}: ${request.failure()?.errorText}`));page.on('console',message=>{if(message.type()==='error')errors.push(message.text())})
     await page.addInitScript(()=>{
       localStorage.setItem('postilaatikko:context-pane-auto-hide','false')
       window.listeners=new Map();window.states=[];window.backendCalls=[]
