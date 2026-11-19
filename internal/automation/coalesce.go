@@ -21,9 +21,10 @@ import (
 //   - Only an allowlist of read-only routes is eligible. Mutations (send,
 //     move, delete, undo, folder/filter/draft/triage mutations, ...) are
 //     never coalesced, so their idempotency behavior is unchanged.
-//   - Flight identity covers the method, path, raw query, request body, and
-//     the Authorization header, so results are never shared across clients
-//     with different credentials.
+//   - Flight identity covers the method, path, raw query, request body,
+//     the Authorization header, and the caller's X-Request-Id (the response
+//     envelope echoes it), so results are never shared across clients with
+//     different credentials or correlation IDs.
 //   - Execution runs on a context detached from any single caller's
 //     cancellation: a cancelled waiter never cancels work another waiter
 //     still needs. When the last waiter leaves, execution is cancelled so
@@ -100,10 +101,17 @@ type coalesceResult struct {
 }
 
 type coalesceFlight struct {
-	done       chan struct{}
-	result     coalesceResult
-	waiters    int
+	done    chan struct{}
+	result  coalesceResult
+	pattern string // inner router's route pattern, propagated for timing logs
+	waiters int
+	// finished is set when the execution completed (normally, with an
+	// overflow, or via panic recovery) and the result is final. abandoned is
+	// set when the last waiter left: execution is cancelled and the flight is
+	// unregistered so a retry starts fresh instead of inheriting a cancelled
+	// context.
 	finished   bool
+	abandoned  bool
 	execCancel context.CancelFunc
 }
 
@@ -152,10 +160,16 @@ func (c *readCoalescer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		body = read
 	}
 
-	key := coalesceKey(r.Method, r.URL.Path, r.URL.RawQuery, r.Header.Get("Authorization"), body)
+	key := coalesceKey(r.Method, r.URL.Path, r.URL.RawQuery, r.Header.Get("Authorization"), r.Header.Get("X-Request-Id"), body)
 
 	c.mu.Lock()
 	flight := c.flights[key]
+	if flight != nil && flight.abandoned {
+		// Defensive: abandoned flights are unregistered when the last waiter
+		// leaves, so this only guards a future regression. A cancelled
+		// execution must never gain new waiters.
+		flight = nil
+	}
 	if flight == nil {
 		if len(c.flights) >= c.config.MaxInFlight {
 			c.mu.Unlock()
@@ -179,12 +193,27 @@ func (c *readCoalescer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case <-flight.done:
 		c.mu.Lock()
 		flight.waiters--
+		pattern := flight.pattern
 		c.mu.Unlock()
+		if pattern != "" {
+			// Propagate the inner router's pattern so the timing middleware
+			// (which logs this request after ServeHTTP returns) sees the real
+			// endpoint instead of the "/v1/" mount. Safe: the worker finished
+			// before done closed, and each waiter mutates only its own request.
+			r.Pattern = pattern
+		}
 		writeCoalesceResult(w, flight.result)
 	case <-r.Context().Done():
 		c.mu.Lock()
 		flight.waiters--
 		if flight.waiters == 0 && !flight.finished {
+			// Last waiter gone: cancel execution and unregister atomically so
+			// a retry of the same request starts a fresh flight instead of
+			// joining a cancelled one.
+			flight.abandoned = true
+			if c.flights[key] == flight {
+				delete(c.flights, key)
+			}
 			flight.execCancel()
 		}
 		c.mu.Unlock()
@@ -192,9 +221,11 @@ func (c *readCoalescer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// execute runs the underlying handler once and publishes the result. The
-// flight is removed from the map before waiters are released so no new
-// request can join a completed execution.
+// execute runs the underlying handler once and publishes the result. A
+// panicking handler is recovered here: without coalescing the HTTP server
+// recovers panics in the request goroutine, but the worker goroutine has no
+// such protection and a panic would terminate the whole helper. A panic
+// becomes a 500 for every waiter, exactly like any other failed execution.
 func (c *readCoalescer) execute(key string, flight *coalesceFlight, execCtx context.Context, r *http.Request, body []byte) {
 	execReq := r.Clone(execCtx)
 	if body != nil {
@@ -205,23 +236,49 @@ func (c *readCoalescer) execute(key string, flight *coalesceFlight, execCtx cont
 		status: http.StatusOK,
 		limit:  c.config.MaxResponseBody,
 	}
+	defer func() {
+		if p := recover(); p != nil {
+			// http.ErrAbortHandler is also absorbed: it is a per-connection
+			// abort signal that has no meaning for the other waiters sharing
+			// this execution, and re-panicking would kill the process.
+			c.finish(key, flight, coalesceResult{
+				status: http.StatusInternalServerError,
+				header: make(http.Header),
+				body:   []byte(`{"error":"read execution failed"}`),
+			}, execReq.Pattern)
+		}
+	}()
 	c.next.ServeHTTP(recorder, execReq)
-
-	c.mu.Lock()
-	flight.result = coalesceResult{
+	c.finish(key, flight, coalesceResult{
 		status:   recorder.status,
 		header:   recorder.header,
 		body:     recorder.buf.Bytes(),
 		overflow: recorder.overflow,
-	}
-	flight.finished = true
-	delete(c.flights, key)
-	flight.execCancel()
-	close(flight.done)
-	c.mu.Unlock()
+	}, execReq.Pattern)
 }
 
-func coalesceKey(method, path, rawQuery, authorization string, body []byte) string {
+// finish publishes the execution result and releases waiters. The flight is
+// removed from the map before waiters are released so no new request can
+// join a completed execution; the removal only happens when the map still
+// references this flight, so an abandoned flight cannot delete its
+// replacement.
+func (c *readCoalescer) finish(key string, flight *coalesceFlight, result coalesceResult, pattern string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if flight.finished {
+		return
+	}
+	flight.result = result
+	flight.pattern = pattern
+	flight.finished = true
+	if c.flights[key] == flight {
+		delete(c.flights, key)
+	}
+	flight.execCancel()
+	close(flight.done)
+}
+
+func coalesceKey(method, path, rawQuery, authorization, requestID string, body []byte) string {
 	sum := sha256.New()
 	sum.Write([]byte(method))
 	sum.Write([]byte{0})
@@ -230,6 +287,10 @@ func coalesceKey(method, path, rawQuery, authorization string, body []byte) stri
 	sum.Write([]byte(rawQuery))
 	sum.Write([]byte{0})
 	sum.Write([]byte(authorization))
+	sum.Write([]byte{0})
+	// The API envelope echoes the caller's X-Request-Id; requests with
+	// different correlation IDs must not share a serialized response.
+	sum.Write([]byte(requestID))
 	sum.Write([]byte{0})
 	var length [8]byte
 	binary.BigEndian.PutUint64(length[:], uint64(len(body)))

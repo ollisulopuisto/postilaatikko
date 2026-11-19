@@ -250,3 +250,131 @@ func TestReadCoalescerResponseOverflow(t *testing.T) {
 		}
 	}
 }
+
+func TestReadCoalescerHandlerPanicBecomes500AndServerSurvives(t *testing.T) {
+	var executions atomic.Int32
+	var shouldPanic atomic.Bool
+	shouldPanic.Store(true)
+	h := newReadCoalescer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		executions.Add(1)
+		if shouldPanic.Load() {
+			time.Sleep(20 * time.Millisecond) // let the other waiters join first
+			panic("boom")
+		}
+		_, _ = io.WriteString(w, "recovered")
+	}), readCoalescerConfig{MaxInFlight: 4, MaxRequestBody: 1 << 20, MaxResponseBody: 1 << 20})
+
+	recorders := runConcurrent(t, h, 3, func(i int) (*http.Request, context.CancelFunc) {
+		return postConversationReq(t, context.Background(), `{"p":1}`, "Bearer tok")
+	})
+	for i, rec := range recorders {
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("waiter %d: code %d, want 500 after handler panic", i, rec.Code)
+		}
+	}
+
+	// The flight is fully cleaned up: a later identical request starts a
+	// fresh execution and succeeds.
+	shouldPanic.Store(false)
+	req, cancel := postConversationReq(t, context.Background(), `{"p":1}`, "Bearer tok")
+	defer cancel()
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || rec.Body.String() != "recovered" {
+		t.Fatalf("post-panic request: code %d body %q", rec.Code, rec.Body.String())
+	}
+	if got := executions.Load(); got != 2 {
+		t.Fatalf("executions = %d, want 2 (panicking flight plus fresh retry)", got)
+	}
+}
+
+func TestReadCoalescerErrAbortHandlerPanicIsAbsorbed(t *testing.T) {
+	h := newReadCoalescer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		panic(http.ErrAbortHandler)
+	}), readCoalescerConfig{MaxInFlight: 4, MaxRequestBody: 1 << 20, MaxResponseBody: 1 << 20})
+	recorders := runConcurrent(t, h, 2, func(i int) (*http.Request, context.CancelFunc) {
+		return postConversationReq(t, context.Background(), `{"a":1}`, "Bearer tok")
+	})
+	for i, rec := range recorders {
+		if rec.Code != http.StatusInternalServerError {
+			t.Fatalf("waiter %d: code %d, want 500 for absorbed ErrAbortHandler", i, rec.Code)
+		}
+	}
+}
+
+func TestReadCoalescerRetryAfterAbandonStartsFreshFlight(t *testing.T) {
+	var executions atomic.Int32
+	entered := make(chan struct{})
+	cancelled := make(chan struct{})
+	holdCleanup := make(chan struct{})
+	h := newReadCoalescer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if executions.Add(1) == 1 {
+			close(entered)
+			<-r.Context().Done()
+			close(cancelled)
+			<-holdCleanup // keep the cancelled flight unfinished while the retry arrives
+			_, _ = io.WriteString(w, "stale")
+			return
+		}
+		_, _ = io.WriteString(w, "fresh")
+	}), readCoalescerConfig{MaxInFlight: 4, MaxRequestBody: 1 << 20, MaxResponseBody: 1 << 20})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	req1, _ := postConversationReq(t, ctx, `{"r":1}`, "Bearer tok")
+	rec1 := httptest.NewRecorder()
+	go func() { h.ServeHTTP(rec1, req1) }()
+	<-entered
+	cancel()
+	<-cancelled // the coalescer abandoned and cancelled the flight
+
+	// A retry while the cancelled handler is still unwinding must execute
+	// fresh, not join the abandoned flight.
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel2()
+	req2, _ := postConversationReq(t, ctx2, `{"r":1}`, "Bearer tok")
+	rec2 := httptest.NewRecorder()
+	h.ServeHTTP(rec2, req2)
+	close(holdCleanup)
+	if rec2.Body.String() != "fresh" {
+		t.Fatalf("retry body = %q, want fresh (retry must not join an abandoned flight)", rec2.Body.String())
+	}
+	if got := executions.Load(); got != 2 {
+		t.Fatalf("executions = %d, want 2", got)
+	}
+}
+
+func TestReadCoalescerSeparatesRequestIDs(t *testing.T) {
+	var executions atomic.Int32
+	h := newReadCoalescer(countingHandler(t, &executions, 20*time.Millisecond, `{}`), readCoalescerConfig{
+		MaxInFlight: 8, MaxRequestBody: 1 << 20, MaxResponseBody: 1 << 20,
+	})
+	recorders := runConcurrent(t, h, 2, func(i int) (*http.Request, context.CancelFunc) {
+		req, cancel := postConversationReq(t, context.Background(), `{"q":1}`, "Bearer tok")
+		req.Header.Set("X-Request-Id", fmt.Sprintf("req-%d", i))
+		return req, cancel
+	})
+	if got := executions.Load(); got != 2 {
+		t.Fatalf("executions = %d, want 2 (X-Request-Id partitions flights)", got)
+	}
+	for i, rec := range recorders {
+		if rec.Code != http.StatusOK {
+			t.Fatalf("waiter %d: code %d", i, rec.Code)
+		}
+	}
+}
+
+func TestReadCoalescerPropagatesRoutePattern(t *testing.T) {
+	inner := http.NewServeMux()
+	inner.HandleFunc("POST /v1/conversations", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, "{}")
+	})
+	h := newReadCoalescer(inner, readCoalescerConfig{MaxInFlight: 4, MaxRequestBody: 1 << 20, MaxResponseBody: 1 << 20})
+
+	req, cancel := postConversationReq(t, context.Background(), `{"s":1}`, "Bearer tok")
+	defer cancel()
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if req.Pattern != "POST /v1/conversations" {
+		t.Fatalf("outer request pattern = %q, want the inner router's pattern", req.Pattern)
+	}
+}
