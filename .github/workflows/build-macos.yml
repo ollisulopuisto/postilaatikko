@@ -26,6 +26,9 @@ on:
 permissions:
   contents: read
 
+env:
+  BUILD_ID: ${{ github.run_id }}.${{ github.run_attempt }}+${{ github.sha }}
+
 # Automatic builds replace older automatic builds. Each manual hotfix keeps its
 # own group so a subsequent main push cannot cancel it.
 concurrency:
