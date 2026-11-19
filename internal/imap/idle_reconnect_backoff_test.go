@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -17,6 +18,17 @@ import (
 type idleRejectingServer struct {
 	listener net.Listener
 	accepts  atomic.Int32
+	mu       sync.Mutex
+	acceptAt []time.Time
+}
+
+// acceptTimes returns the timestamp of every accepted connection, so tests
+// can assert the spacing between retries directly instead of inferring the
+// backoff from total elapsed time.
+func (s *idleRejectingServer) acceptTimes() []time.Time {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]time.Time(nil), s.acceptAt...)
 }
 
 func newIdleRejectingServer(t *testing.T) *idleRejectingServer {
@@ -34,6 +46,9 @@ func newIdleRejectingServer(t *testing.T) *idleRejectingServer {
 				return
 			}
 			s.accepts.Add(1)
+			s.mu.Lock()
+			s.acceptAt = append(s.acceptAt, time.Now())
+			s.mu.Unlock()
 			go func(conn net.Conn) {
 				defer conn.Close()
 				_, _ = fmt.Fprint(conn, "* OK test IMAP server\r\n")
@@ -109,5 +124,21 @@ func TestIdleCycleFailureAppliesReconnectBackoff(t *testing.T) {
 	}
 	if got := server.accepts.Load(); got > 10 {
 		t.Fatalf("reconnect storm: %d connections accepted for %d allowed attempts", got, cfg.MaxReconnectAttempts)
+	}
+	// Every retry must wait at least ReconnectBackoff (20ms), and the
+	// exponential growth must push the second retry past 30ms — asserted on
+	// accept-to-accept spacing, not just total elapsed time, so a regression
+	// to immediate retries fails even when the loop still gives up.
+	times := server.acceptTimes()
+	if len(times) < 3 {
+		t.Fatalf("expected at least 3 connection attempts before giving up, got %d", len(times))
+	}
+	for i := 1; i < len(times); i++ {
+		if gap := times[i].Sub(times[i-1]); gap < 15*time.Millisecond {
+			t.Fatalf("retry %d ran without backoff: %v between accepts, want at least ~%v", i, gap, cfg.ReconnectBackoff)
+		}
+	}
+	if gap := times[2].Sub(times[1]); gap < 30*time.Millisecond {
+		t.Fatalf("backoff did not grow between retries: second gap %v, want ~%v", gap, 2*cfg.ReconnectBackoff)
 	}
 }
