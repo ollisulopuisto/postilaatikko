@@ -91,7 +91,13 @@ test('real App native menus reuse navigation and isolate Calendar, Contacts and 
       window.go={app:{App:backend,ComposerApp:backend,ReaderApp:{GetConfig:async()=>({accountId:'demo',folderId:'inbox',folderName:'Inbox',folderType:'inbox',threadId:'thread1',threadAccountId:'demo',threadFolderId:'inbox'}),Call:(operation,args)=>backend[operation](...args)}}}
     })
     await page.goto('http://127.0.0.1:5189',{waitUntil:'domcontentloaded'})
-    await page.locator('[data-mail-row-key]').waitFor({state:'attached',timeout:5000})
+    // Cold Vite module transforms on hosted runners can outlast five seconds.
+    // Wait for the actual row, retaining a bounded startup deadline and errors.
+    await page.locator('[data-mail-row-key]').waitFor({state:'attached',timeout:30000}).catch(async error=>{
+      console.error('Native-menu startup errors:',errors,'backend calls:',await page.evaluate(()=>window.backendCalls))
+      await page.screenshot({path:join(captureDir,'postilaatikko-native-menu-startup-failure.png')})
+      throw error
+    })
     await page.mouse.move(25,300)
     await page.waitForTimeout(250)
     const enabled=id=>page.evaluate(id=>window.states.at(-1)?.enabled.includes(id),id)
