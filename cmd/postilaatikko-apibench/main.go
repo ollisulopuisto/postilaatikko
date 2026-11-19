@@ -443,6 +443,37 @@ func run(args []string) error {
 			},
 		},
 		{
+			// PERF-SC-003: the same first-paint sections through the
+			// mailbox snapshot plus the same capability discovery as the waterfall.
+			// Older helpers without the snapshot fail this measurement explicitly.
+			name: "startup_bootstrap",
+			run: func(ctx context.Context) error {
+				if _, err := api.GetCapabilities(ctx); err != nil {
+					return err
+				}
+				resp, err := api.BootstrapWorkspace(ctx, v1.WorkspaceBootstrapRequest{
+					FoldersAccountID: firstAccount,
+					InitialPage: &v1.ConversationListRequest{
+						Scope: folderScope,
+						Page:  v1.PageRequest{Limit: *pageSize},
+					},
+				})
+				if client.IsHTTPNotFound(err) {
+					return errors.New("helper does not expose /v1/workspace/bootstrap")
+				}
+				if err != nil {
+					return err
+				}
+				if len(resp.Errors) != 0 {
+					return fmt.Errorf("bootstrap section errors: %v", resp.Errors)
+				}
+				if resp.InitialPage == nil {
+					return errors.New("bootstrap returned no initial page")
+				}
+				return nil
+			},
+		},
+		{
 			name: "folder_page_first",
 			run: func(ctx context.Context) error {
 				page, err := api.ListConversations(ctx, v1.ConversationListRequest{

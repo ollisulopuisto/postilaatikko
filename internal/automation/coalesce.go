@@ -79,7 +79,7 @@ func coalescibleRead(method, path string) bool {
 	case http.MethodPost:
 		switch path {
 		case "/v1/conversations", "/v1/conversations/count", "/v1/conversations/search",
-			"/v1/search", "/v1/threads/read":
+			"/v1/search", "/v1/threads/read", "/v1/workspace/bootstrap":
 			return true
 		}
 	}
