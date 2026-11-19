@@ -201,3 +201,16 @@ func TestWorkspaceBootstrapFoldersScopedToRequestedAccount(t *testing.T) {
 		t.Fatalf("folders = %+v, want only acc2's", resp.Folders)
 	}
 }
+
+func TestBootstrapInitialPageIsOptional(t *testing.T) {
+	for _, body := range []string{`{}`, `{"initialPage":null}`} {
+		status, resp := bootstrapRequest(t, newBootstrapServer(goodBootstrapOps(), true), body)
+		if status != http.StatusOK || resp.InitialPage != nil || len(resp.Errors) != 0 {
+			t.Fatalf("catalog-only body %s: status=%d response=%+v", body, status, resp)
+		}
+	}
+	_, resp := bootstrapRequest(t, newBootstrapServer(goodBootstrapOps(), true), `{"initialPage":{}}`)
+	if resp.Errors["initialPage"] == "" {
+		t.Fatal("explicit invalid page must report its section error")
+	}
+}

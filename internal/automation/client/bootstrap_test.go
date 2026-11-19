@@ -22,7 +22,7 @@ func TestBootstrapWorkspaceParsesResponse(t *testing.T) {
 
 	api := client.New(client.Config{Endpoint: server.URL, Token: "test-token"})
 	resp, err := api.BootstrapWorkspace(context.Background(), v1.WorkspaceBootstrapRequest{
-		InitialPage: v1.ConversationListRequest{Page: v1.PageRequest{Limit: 10}},
+		InitialPage: &v1.ConversationListRequest{Page: v1.PageRequest{Limit: 10}},
 	})
 	if err != nil {
 		t.Fatalf("BootstrapWorkspace: %v", err)

@@ -32,7 +32,7 @@ type WorkspaceBootstrapRequest struct {
 	FoldersAccountID string `json:"foldersAccountId,omitempty"`
 	// InitialPage describes the first conversation page: scope, sort,
 	// filter, and bounded page size.
-	InitialPage ConversationListRequest `json:"initialPage"`
+	InitialPage *ConversationListRequest `json:"initialPage,omitempty"`
 }
 
 // WorkspaceBootstrapResponse carries the mailbox sections needed for first
@@ -138,11 +138,13 @@ func MountWorkspaceBootstrapRoute(mux RouteMux, ops WorkspaceBootstrapOperations
 			resp.UnreadCounts = counts
 		}
 
-		page, reqErr := executeConversationList(ops, req.InitialPage)
-		if reqErr != nil {
-			sectionErr("initialPage", reqErr)
-		} else {
-			resp.InitialPage = &page
+		if req.InitialPage != nil {
+			page, reqErr := executeConversationList(ops, *req.InitialPage)
+			if reqErr != nil {
+				sectionErr("initialPage", reqErr)
+			} else {
+				resp.InitialPage = &page
+			}
 		}
 
 		writeAPIResponse(w, r, http.StatusOK, resp)

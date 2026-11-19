@@ -450,7 +450,7 @@ func run(args []string) error {
 			name: "startup_bootstrap",
 			run: func(ctx context.Context) error {
 				resp, err := api.BootstrapWorkspace(ctx, v1.WorkspaceBootstrapRequest{
-					InitialPage: v1.ConversationListRequest{
+					InitialPage: &v1.ConversationListRequest{
 						Scope: folderScope,
 						Page:  v1.PageRequest{Limit: *pageSize},
 					},
