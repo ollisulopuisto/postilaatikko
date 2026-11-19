@@ -2,11 +2,12 @@ package message
 
 import (
 	"context"
-	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -152,6 +153,37 @@ func (s *Store) ListConversationsByFolderIDsKeyset(folderIDs []string, cursor st
 	return page, next, nil
 }
 
+// ListConversationsByFolderKeyset preserves the physical-folder projection.
+// Sent/Drafts and disabled accounts keep the established offset path because
+// its recipient projection and cached-mail semantics differ from unified lists.
+func (s *Store) ListConversationsByFolderKeyset(folderID, cursor string, limit int) ([]*Conversation, string, error) {
+	if limit <= 0 {
+		return []*Conversation{}, "", nil
+	}
+	var kind string
+	var enabled bool
+	err := s.db.QueryRow(`SELECT f.folder_type,a.enabled FROM folders f JOIN accounts a ON a.id=f.account_id WHERE f.id=?`, folderID).Scan(&kind, &enabled)
+	if err != nil {
+		return nil, "", err
+	}
+	if kind == "sent" || kind == "drafts" || !enabled {
+		if cursor != "" {
+			return nil, "", fmt.Errorf("physical folder requires a new pagination session")
+		}
+		rows, err := s.ListConversationsByFolder(folderID, 0, limit+1, "newest", "")
+		if err != nil {
+			return nil, "", err
+		}
+		next := ""
+		if len(rows) > limit {
+			rows = rows[:limit]
+			next = strconv.Itoa(limit)
+		}
+		return rows, next, nil
+	}
+	return s.ListConversationsByFolderIDsKeyset([]string{folderID}, cursor, limit, "newest", false)
+}
+
 // enabledFolderAccounts resolves folder ids to their account, skipping
 // folders on disabled accounts or folders that no longer exist.
 func (s *Store) enabledFolderAccounts(ctx context.Context, folderIDs []string) (map[string]string, error) {
@@ -181,135 +213,73 @@ func (s *Store) enabledFolderAccounts(ctx context.Context, folderIDs []string) (
 	return out, rows.Err()
 }
 
-// folderKeyIter lazily walks one folder's messages in latest-first (or
-// oldest-first) order, exposing the first-seen key of each thread.
-type folderKeyIter struct {
-	rows    *sql.Rows
-	account string
-	folder  string
-	peeked  *conversationKey
-	err     error
-	done    bool
-}
-
-// collectPageKeys performs phase 1: a k-way merge over per-folder index
-// scans, deduplicating threads, returning up to limit keys plus whether at
-// least one more conversation exists beyond the page.
+// collectPageKeys materializes at most limit+1 distinct candidates per folder,
+// closing each result before requesting another pooled connection. A candidate
+// must be the latest visible message of its conversation in the entire scope,
+// not merely the latest message below the cursor.
 func (s *Store) collectPageKeys(ctx context.Context, folderIDs []string, folderAccount map[string]string, cur conversationCursor, limit int, sortOrder string, excludeInboxCopies bool) ([]conversationKey, bool, error) {
-	newest := sortOrder != "oldest"
-	iters := make([]*folderKeyIter, 0, len(folderIDs))
+	candidates := make(map[string]conversationKey)
+	scope := strings.TrimRight(strings.Repeat("?,", len(folderIDs)), ",")
+	if scope == "" {
+		return nil, false, nil
+	}
 	for _, fid := range folderIDs {
 		account, ok := folderAccount[fid]
 		if !ok {
 			continue
 		}
-		it, err := s.newFolderKeyIter(ctx, fid, account, cur, newest, excludeInboxCopies)
+		args := []interface{}{fid}
+		bound := ""
+		if cur.Date != "" {
+			bound = " AND m.date <= ? AND (m.date < ? OR (m.date = ? AND (? > ? OR (? = ? AND COALESCE(m.thread_id,m.id)>?))))"
+			date, err := time.Parse(time.RFC3339Nano, cur.Date)
+			if err != nil {
+				return nil, false, fmt.Errorf("malformed cursor date: %w", err)
+			}
+			args = append(args, date, date, date, account, cur.Account, account, cur.Account, cur.Thread)
+		}
+		for _, id := range folderIDs {
+			args = append(args, id)
+		}
+		args = append(args, limit+1)
+		visibleNewer := regexp.MustCompile(`\bm\.`).ReplaceAllString(conversationVisibilityClauses(excludeInboxCopies), "newer.")
+		query := `SELECT DISTINCT COALESCE(m.thread_id,m.id),m.date FROM messages m INDEXED BY idx_messages_folder_date_conv
+   WHERE m.folder_id=?` + bound + conversationVisibilityClauses(excludeInboxCopies) + `
+   AND NOT EXISTS(SELECT 1 FROM messages newer INDEXED BY idx_messages_account_conv WHERE newer.account_id=m.account_id
+    AND COALESCE(newer.thread_id,newer.id)=COALESCE(m.thread_id,m.id)
+    AND newer.folder_id IN (` + scope + `) AND newer.date>m.date` + visibleNewer + `)
+   ORDER BY m.date DESC,COALESCE(m.thread_id,m.id) ASC LIMIT ?`
+		rows, err := s.db.QueryContext(ctx, query, args...)
 		if err != nil {
 			return nil, false, err
 		}
-		iters = append(iters, it)
-	}
-	defer func() {
-		for _, it := range iters {
-			if it.rows != nil {
-				it.rows.Close()
+		for rows.Next() {
+			k := conversationKey{account: account, folder: fid}
+			if err := rows.Scan(&k.thread, &k.date); err != nil {
+				rows.Close()
+				return nil, false, err
 			}
-		}
-	}()
-
-	seen := make(map[string]bool)
-	keys := make([]conversationKey, 0, limit+1)
-	hasMore := false
-	for {
-		best := -1
-		for i, it := range iters {
-			k := it.peek()
-			if k == nil {
+			if cur.Date != "" && !keyAfterCursor(k, cur, true) {
 				continue
 			}
-			if best == -1 || keyLess(*k, *iters[best].peek(), newest) {
-				best = i
-			}
+			candidates[k.account+"\x00"+k.thread] = k
 		}
-		if best == -1 {
-			break
-		}
-		k := iters[best].peek()
-		iters[best].advance()
-		dedupeKey := k.account + "\x00" + k.thread
-		if seen[dedupeKey] {
-			continue
-		}
-		seen[dedupeKey] = true
-		if cur.Date != "" && !keyAfterCursor(*k, cur, newest) {
-			continue
-		}
-		if len(keys) == limit {
-			hasMore = true
-			break
-		}
-		keys = append(keys, *k)
-	}
-	for _, it := range iters {
-		if it.err != nil {
-			return nil, false, fmt.Errorf("failed to walk conversation keys: %w", it.err)
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return nil, false, err
 		}
 	}
-	return keys, hasMore, nil
-}
-
-func (s *Store) newFolderKeyIter(ctx context.Context, folderID, account string, cur conversationCursor, newest bool, excludeInboxCopies bool) (*folderKeyIter, error) {
-	dateBound := ""
-	order := "ORDER BY m.date DESC, COALESCE(m.thread_id, m.id) ASC"
-	args := []interface{}{folderID}
-	if cur.Date != "" {
-		if newest {
-			dateBound = " AND m.date <= ?"
-		} else {
-			dateBound = " AND m.date >= ?"
-		}
-		args = append(args, cur.Date)
+	keys := make([]conversationKey, 0, len(candidates))
+	for _, k := range candidates {
+		keys = append(keys, k)
 	}
-	if !newest {
-		order = "ORDER BY m.date ASC, COALESCE(m.thread_id, m.id) ASC"
+	sort.Slice(keys, func(i, j int) bool { return keyLess(keys[i], keys[j], true) })
+	more := len(keys) > limit
+	if more {
+		keys = keys[:limit]
 	}
-	query := `SELECT COALESCE(m.thread_id, m.id), m.date
-		FROM messages m
-		WHERE m.folder_id = ?` + dateBound + conversationVisibilityClauses(excludeInboxCopies) + `
-		` + order
-	rows, err := s.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to walk conversation keys: %w", err)
-	}
-	return &folderKeyIter{rows: rows, account: account, folder: folderID}, nil
-}
-
-func (it *folderKeyIter) peek() *conversationKey {
-	if it.peeked == nil && !it.done {
-		it.advance()
-	}
-	return it.peeked
-}
-
-func (it *folderKeyIter) advance() {
-	if it.done {
-		it.peeked = nil
-		return
-	}
-	if it.rows.Next() {
-		var thread, date string
-		if err := it.rows.Scan(&thread, &date); err != nil {
-			it.err = err
-			it.done = true
-			it.peeked = nil
-			return
-		}
-		it.peeked = &conversationKey{date: date, account: it.account, thread: thread, folder: it.folder}
-		return
-	}
-	it.err = it.rows.Err()
-	it.done = true
-	it.peeked = nil
+	return keys, more, nil
 }
 
 // keyLess orders page candidates: newest first by date, then account and

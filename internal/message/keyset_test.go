@@ -214,3 +214,63 @@ func TestKeysetArchiveVariantHidesInboxCopies(t *testing.T) {
 		t.Fatalf("archive keyset page = %v, want only thread-arch", conversationIDs(got))
 	}
 }
+
+func TestKeysetInterleavedLongThreadsDoNotRepeat(t *testing.T) {
+	s, folders := seedKeysetMailbox(t, 3)
+	// A spans the cursor: A newest, B next, A old, C last.
+	for thread, date := range map[string]string{"thread-000": "2026-11-01T12:00:00Z", "thread-001": "2026-11-01T11:00:00Z", "thread-002": "2026-11-01T09:00:00Z"} {
+		if _, err := s.db.Exec(`UPDATE messages SET date=? WHERE thread_id=?`, date, thread); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.db.Exec(`UPDATE messages SET date='2026-11-01T10:00:00Z' WHERE id=(SELECT id FROM messages WHERE thread_id='thread-000' LIMIT 1)`); err != nil {
+		t.Fatal(err)
+	}
+	got := walkKeysetPages(t, s, folders, 2, "newest", false)
+	if len(got) != 3 {
+		t.Fatalf("got %d rows, want 3 unique conversations: %v", len(got), conversationIDs(got))
+	}
+}
+
+func TestKeysetDoesNotHoldOneConnectionPerFolder(t *testing.T) {
+	s, folders := seedKeysetMailbox(t, 4)
+	s.db.SetMaxOpenConns(1)
+	defer s.db.SetMaxOpenConns(12)
+	start := time.Now()
+	_, _, err := s.ListConversationsByFolderIDsKeyset(folders, "", 2, "newest", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if time.Since(start) > time.Second {
+		t.Fatal("pooled connection starvation")
+	}
+}
+
+func TestPhysicalFolderKeysetPreservesLegacySemantics(t *testing.T) {
+	for _, kind := range []string{"sent", "drafts", "inbox"} {
+		s, _, fid := newBodyFailedTestStore(t)
+		s.db.Exec(`UPDATE folders SET folder_type=? WHERE id=?`, kind, fid)
+		if kind == "inbox" {
+			s.db.Exec(`UPDATE accounts SET enabled=0`)
+		}
+		m := &Message{AccountID: "acct-1", FolderID: fid, UID: 1, MessageID: "<test@example.test>", ThreadID: "one", Subject: "hi", FromEmail: "me@example.test", Date: time.Now()}
+		if err := s.Create(m); err != nil {
+			t.Fatal(err)
+		}
+		s.db.Exec(`UPDATE messages SET to_list='[{"name":"Bob","email":"bob@example.test"}]'`)
+		want, err := s.ListConversationsByFolder(fid, 0, 10, "newest", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, _, err := s.ListConversationsByFolderKeyset(fid, "", 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != len(want) || len(got) != 1 {
+			t.Fatalf("%s rows: got %d want %d", kind, len(got), len(want))
+		}
+		if fmt.Sprint(got[0].Participants) != fmt.Sprint(want[0].Participants) {
+			t.Fatalf("%s participants mismatch: got %v want %v", kind, got[0].Participants, want[0].Participants)
+		}
+	}
+}

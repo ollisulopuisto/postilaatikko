@@ -65,7 +65,7 @@ func (o *catalogReadOperations) ListConversationsByFolder(folderID string, offse
 // pages no longer group and sort the full folder per request.
 
 func (o *catalogReadOperations) ListConversationsByFolderKeyset(folderID, cursor string, limit int) ([]*message.Conversation, string, error) {
-	return o.messages.ListConversationsByFolderIDsKeyset([]string{folderID}, cursor, limit, "newest", false)
+	return o.messages.ListConversationsByFolderKeyset(folderID, cursor, limit)
 }
 
 func (o *catalogReadOperations) ListConversationsUnifiedInboxKeyset(cursor string, limit int) ([]*message.Conversation, string, error) {

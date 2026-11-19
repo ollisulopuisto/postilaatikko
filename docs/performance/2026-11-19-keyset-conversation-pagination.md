@@ -130,3 +130,11 @@ production traces.
 - `internal/automation/v1/conversation_list.go` — handler dispatch and
   `ConversationListKeysetOperations`.
 - `internal/alwayson/catalog_api.go` — keyset operation wrappers.
+
+## Review corrections and replacement measurements
+
+The original iterator query incorrectly admitted an older message from an already-served conversation and held one pooled connection per folder. Replaced it with at most limit+1 materialized distinct candidates per folder, closing each result before the next query. NOT EXISTS rejects any candidate with a newer visible message in the full selected scope. Explicit index selection keeps the date seek and account/conversation probe indexed. Cursor dates bind as time.Time, matching stored timestamps.
+
+Replacement measurement, same 20k-message fixture: offset first/25%/50%/75% = 114.7/119.4/120.9/123.1 ms. Corrected keyset = 5.0/4.9/4.8/5.1 ms. The earlier 3-4 ms numbers describe the flawed query and are superseded by these. No macOS or live-mailbox gains claimed.
+
+Physical Sent/Drafts and disabled-account folders intentionally retain the established offset implementation and numeric continuation cursors, preserving recipients and cached disabled-account mail. Unified lists continue excluding disabled accounts. Tests cover interleaved long threads, a one-connection pool with four selected folders, and physical-folder projection parity.
