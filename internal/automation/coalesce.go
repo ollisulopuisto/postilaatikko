@@ -290,6 +290,9 @@ func coalesceKey(method, path, rawQuery, authorization, requestID string, body [
 	sum.Write([]byte{0})
 	// The API envelope echoes the caller's X-Request-Id; requests with
 	// different correlation IDs must not share a serialized response.
+	// Current callers (internal/automation/client) send no X-Request-Id,
+	// so identical desktop reads still share one execution; that property
+	// is guarded by client.TestClientSendsNoRequestID.
 	sum.Write([]byte(requestID))
 	sum.Write([]byte{0})
 	var length [8]byte
