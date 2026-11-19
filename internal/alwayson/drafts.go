@@ -60,6 +60,14 @@ func (r *SyncRuntime) GetDraft(id, accountID string) (*v1.DraftDocument, error) 
 }
 
 func (r *SyncRuntime) SaveDraft(id string, mutation v1.DraftMutation) (*v1.DraftDocument, error) {
+	doc, err := r.saveDraft(id, mutation)
+	if err == nil {
+		r.publishChange(v1.EventDraftsChanged, mutation.AccountID, "")
+	}
+	return doc, err
+}
+
+func (r *SyncRuntime) saveDraft(id string, mutation v1.DraftMutation) (*v1.DraftDocument, error) {
 	if r == nil || r.drafts == nil || r.accounts == nil {
 		return nil, errors.New("draft service is unavailable")
 	}
@@ -206,7 +214,11 @@ func (r *SyncRuntime) DeleteDraft(id, accountID, revision string) error {
 	if item.StorageVersion != revision {
 		return draft.ErrDraftRevisionConflict
 	}
-	return r.drafts.DeleteIfRevision(id, revision)
+	err = r.drafts.DeleteIfRevision(id, revision)
+	if err == nil {
+		r.publishChange(v1.EventDraftsChanged, accountID, "")
+	}
+	return err
 }
 
 func (r *SyncRuntime) PrepareReply(req v1.ReplyPreparationRequest) (*smtp.ComposeMessage, error) {

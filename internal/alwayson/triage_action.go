@@ -32,6 +32,14 @@ type triageActionUndoSnapshotEntry struct {
 }
 
 func (r *SyncRuntime) ApplyTriageMutation(ctx context.Context, request v1.TriageMutationRequest, reserve func([]byte) error) (bool, []byte, error) {
+	applied, snapshot, err := r.applyTriageMutation(ctx, request, reserve)
+	if err == nil && applied {
+		r.publishChange(v1.EventTriageChanged, request.AccountID, "")
+	}
+	return applied, snapshot, err
+}
+
+func (r *SyncRuntime) applyTriageMutation(ctx context.Context, request v1.TriageMutationRequest, reserve func([]byte) error) (bool, []byte, error) {
 	if r == nil || r.replyLater == nil || r.triage == nil {
 		return false, nil, errors.New("always-on triage stores are not open")
 	}

@@ -17,10 +17,35 @@ func (r *SyncRuntime) NewMailboxAPIServer(config automation.ServerConfig) (*auto
 		return nil, errors.New("always-on API manages its own v1 handler")
 	}
 
+	// Long-lived event streams revalidate against the same token store the
+	// authenticating middleware uses, so a revoked grant stops receiving
+	// events within the stream's revalidation interval (PERF-SC-004).
+	r.grantChecker = tokenStoreGrantChecker{store: config.TokenStore}
+
 	handler, err := r.MailboxReadAPIHandler()
 	if err != nil {
 		return nil, err
 	}
 	config.V1Handler = handler
 	return automation.NewServer(config), nil
+}
+
+// tokenStoreGrantChecker adapts the automation token store to the events
+// route's revocation check.
+type tokenStoreGrantChecker struct {
+	store automation.TokenStore
+}
+
+// GrantRevoked reports whether the grant for clientID is revoked or gone.
+func (c tokenStoreGrantChecker) GrantRevoked(clientID string) (bool, error) {
+	grants, err := c.store.ListClients()
+	if err != nil {
+		return false, err
+	}
+	for _, grant := range grants {
+		if grant.ClientID == clientID {
+			return grant.Revoked, nil
+		}
+	}
+	return true, nil
 }

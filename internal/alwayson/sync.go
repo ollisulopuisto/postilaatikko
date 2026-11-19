@@ -22,6 +22,7 @@ import (
 	"github.com/hkdb/aerion/internal/folder"
 	"github.com/hkdb/aerion/internal/imap"
 	"github.com/hkdb/aerion/internal/logging"
+	"github.com/hkdb/aerion/internal/mailboxevents"
 	"github.com/hkdb/aerion/internal/mailfilter"
 	"github.com/hkdb/aerion/internal/mailmove"
 	"github.com/hkdb/aerion/internal/mailservice"
@@ -52,6 +53,8 @@ type SyncRuntime struct {
 	drafts                      *draft.Store
 	pool                        *imap.Pool
 	scheduler                   *mailSync.Scheduler
+	events                      *mailboxevents.Broker
+	grantChecker                v1.GrantRevocationChecker
 	mailService                 *mailservice.Service
 	syncEngine                  *mailSync.Engine
 	replyContent                *replycontent.Service
@@ -178,6 +181,15 @@ func OpenSyncRuntime(dataDirectory string, credentials IMAPConfigSource) (*SyncR
 	engine := mailSync.NewEngine(pool, accounts, folders, messages, attachments)
 	scheduler := mailSync.NewScheduler(engine, accounts, folders)
 	runtime.pool, runtime.scheduler, runtime.folders, runtime.syncEngine = pool, scheduler, folders, engine
+	runtime.events = mailboxevents.NewBroker(mailboxevents.Options{})
+	// PERF-SC-004: a completed provider sync invalidates that folder's cached
+	// reads for every connected desktop client. Failed syncs change nothing,
+	// so they publish nothing.
+	scheduler.SetSyncCompletedCallback(func(accountID, folderID string, err error) {
+		if err == nil {
+			runtime.publishChange(v1.EventMailboxChanged, accountID, folderID)
+		}
+	})
 	runtime.mailService = mailservice.New(mailservice.Options{Accounts: accounts, Folders: folders, Messages: messages, ReplyLater: replyLater, Triage: triageStore, VirtualFolders: virtualFolders, Sync: engine, ReplyContent: runtime.replyContent})
 	runtime.filterJobs = mailfilter.NewJobStore(db)
 	runtime.rules, runtime.folders = mailfilter.NewStore(db), folders
@@ -196,8 +208,21 @@ func OpenSyncRuntime(dataDirectory string, credentials IMAPConfigSource) (*SyncR
 		return err
 	}}
 	router := mailfilter.NewAutomaticRouter(runtime.rules, folders, func(rule *mailfilter.Rule, _ *folder.Folder, msg *message.Message) { runtime.enqueueFilter(rule, msg) })
-	engine.SetNewMessageHandler(func(_ string, _ string, msg *message.Message) { router.Route(msg) })
+	engine.SetNewMessageHandler(func(accountID string, folderID string, msg *message.Message) {
+		router.Route(msg)
+		runtime.publishChange(v1.EventMailboxChanged, accountID, folderID)
+	})
 	return runtime, nil
+}
+
+// publishChange fans one mailbox invalidation event out to connected event
+// stream subscribers (PERF-SC-004). It never blocks and drops to a resync
+// signal under overload, so mutating paths stay fast.
+func (r *SyncRuntime) publishChange(eventType, accountID, folderID string) {
+	if r == nil || r.events == nil {
+		return
+	}
+	_ = r.events.Publish(eventType, accountID, folderID)
 }
 
 // SetImmediateSendHandler wires helper-local delivery and sender validation before Start.
@@ -662,10 +687,17 @@ func (r *SyncRuntime) SetReplyLaterMembership(ctx context.Context, accountID, co
 			return false, err
 		}
 	}
+	var changed bool
+	var err error
 	if inQueue {
-		return r.replyLater.Add(ref)
+		changed, err = r.replyLater.Add(ref)
+	} else {
+		changed, err = r.replyLater.Remove(ref)
 	}
-	return r.replyLater.Remove(ref)
+	if err == nil && changed {
+		r.publishChange(v1.EventTriageChanged, accountID, "")
+	}
+	return changed, err
 }
 
 // GetReadLaterQueue lists helper-owned Read Later membership.
@@ -874,6 +906,11 @@ func (r *SyncRuntime) Close() error {
 	}
 	var closeErr error
 	r.closeOnce.Do(func() {
+		// End every event stream first so SSE clients see a prompt close
+		// during helper shutdown instead of hanging until the listener dies.
+		if r.events != nil {
+			_ = r.events.Close()
+		}
 		r.ctxMu.RLock()
 		cancel, started := r.cancel, r.started
 		maintenanceCancel := r.maintenanceCancel

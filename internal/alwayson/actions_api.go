@@ -116,6 +116,19 @@ func (o *mailboxActionOperations) PlanActionGroups(ctx context.Context, req v1.A
 }
 
 func (o *mailboxActionOperations) ExecuteActionGroup(ctx context.Context, req v1.ActionRequest, group v1.ActionProviderGroup) error {
+	err := o.executeActionGroup(ctx, req, group)
+	if err == nil {
+		// Invalidate the source folder and, for moves, the destination so
+		// connected clients re-read both (PERF-SC-004).
+		o.runtime.publishChange(v1.EventMailboxChanged, group.AccountID, group.SourceFolderID)
+		if req.Action == v1.ActionMove && req.Destination != "" && req.Destination != group.SourceFolderID {
+			o.runtime.publishChange(v1.EventMailboxChanged, group.AccountID, req.Destination)
+		}
+	}
+	return err
+}
+
+func (o *mailboxActionOperations) executeActionGroup(ctx context.Context, req v1.ActionRequest, group v1.ActionProviderGroup) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
