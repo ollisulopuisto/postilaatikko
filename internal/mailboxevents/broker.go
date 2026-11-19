@@ -165,10 +165,11 @@ func (b *Broker) emitLocked(ev v1.MailboxEvent, now time.Time) {
 	b.seq++
 	ev.Sequence = b.seq
 	ev.At = now.UTC()
-	if b.count < b.ringCap {
+	switch {
+	case b.count < b.ringCap:
 		b.ring[(b.head+b.count)%b.ringCap] = ev
 		b.count++
-	} else {
+	default:
 		b.ring[b.head] = ev
 		b.head = (b.head + 1) % b.ringCap
 	}

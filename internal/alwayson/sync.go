@@ -690,9 +690,10 @@ func (r *SyncRuntime) SetReplyLaterMembership(ctx context.Context, accountID, co
 	}
 	var changed bool
 	var err error
-	if inQueue {
+	switch inQueue {
+	case true:
 		changed, err = r.replyLater.Add(ref)
-	} else {
+	case false:
 		changed, err = r.replyLater.Remove(ref)
 	}
 	if err == nil && changed {
