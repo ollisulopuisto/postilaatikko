@@ -733,7 +733,7 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 		conversationList:   operations,
 		conversationCount:  operations,
 		conversationSearch: operations,
-		bootstrap:          workspaceBootstrapOperations{ConversationListOperations: operations, catalog: operations, unreadCounts: r},
+		bootstrap:          workspaceBootstrapOperations{ConversationListOperations: operations, ConversationListKeysetOperations: operations, catalog: operations, unreadCounts: r},
 		search:             readOperations,
 		messageRead:        readOperations,
 		actionTarget:       mailboxActions,
@@ -867,6 +867,7 @@ func mountMailboxV1Routes(mux v1.RouteMux, d *mailboxRouteDeps) {
 // list and catalog reads come from catalogReadOperations, saved-view unread
 // counts from the runtime itself (as in MountVirtualFolderUnreadCountRoute).
 type workspaceBootstrapOperations struct {
+	v1.ConversationListKeysetOperations
 	v1.ConversationListOperations
 	catalog      v1.CatalogOperations
 	unreadCounts v1.VirtualFolderUnreadCountOperations

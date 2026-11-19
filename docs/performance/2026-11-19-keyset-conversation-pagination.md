@@ -139,13 +139,22 @@ Replacement measurement, same 20k-message fixture: offset first/25%/50%/75% = 11
 
 Physical Sent/Drafts and disabled-account folders intentionally retain the established offset implementation and numeric continuation cursors, preserving recipients and cached disabled-account mail. Unified lists continue excluding disabled accounts. Tests cover interleaved long threads, a one-connection pool with four selected folders, and physical-folder projection parity.
 
-## Coverage limits verified in review
+## Desktop and bootstrap adoption verified in review
 
-The benchmark calls the store keyset implementation directly. The HTTP v1
-conversation endpoint selects keyset only for an empty or k1-prefixed cursor
-and an eligible unfiltered newest-first scope. The desktop list service still
-starts with numeric cursor "0", which intentionally preserves offset semantics.
-The workspace bootstrap operations currently expose only the offset interface.
-Neither desktop list loading nor workspace bootstrap receives this measured
-keyset improvement yet. Adopting keyset there needs separate integration tests
-and performance measurements; no desktop or bootstrap speedup is claimed.
+The desktop's offset-zero first window now sends an empty cursor and follows
+returned k1 cursors within that bounded window. Arbitrary nonzero windows
+retain numeric offsets to preserve random-access semantics. No persistent
+cursor cache or cross-refresh cursor reuse is added. Filtered/oldest/unsupported
+scopes still use the existing fallback. The bootstrap adapter now preserves the
+keyset interface, so its eligible initial page uses the same path.
+
+Failing-first tests capture desktop HTTP requests (empty first cursor, numeric
+nonzero cursor), verify bootstrap adapter forwarding, and exercise bootstrap
+handler dispatch. All app, alwayson, v1 and message tests pass locally.
+
+Synthetic API harness after adoption, 20k messages, 15 iterations, 40ms injected
+RTT: startup waterfall six calls p50 247.2ms; bootstrap plus capability discovery
+two calls 85.3ms; first folder page one call 44.3ms. These are API workloads,
+not desktop paint timings or live provider/macOS gains. Nonzero random-access
+desktop windows still pay offset costs; improving them needs an explicit cursor
+session contract rather than guessing a cursor from an offset.

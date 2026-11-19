@@ -214,3 +214,26 @@ func TestBootstrapInitialPageIsOptional(t *testing.T) {
 		t.Fatal("explicit invalid page must report its section error")
 	}
 }
+
+type keysetBootstrapProbe struct {
+	*stubBootstrapOps
+	calls int
+}
+
+func (p *keysetBootstrapProbe) ListConversationsUnifiedInboxKeyset(string, int) ([]*message.Conversation, string, error) {
+	p.calls++
+	return []*message.Conversation{{ThreadID: "keyset"}}, "", nil
+}
+func (p *keysetBootstrapProbe) ListConversationsByFolderKeyset(string, string, int) ([]*message.Conversation, string, error) {
+	panic("unexpected folder")
+}
+func (p *keysetBootstrapProbe) ListConversationsUnifiedFolderKeyset(string, string, int) ([]*message.Conversation, string, error) {
+	panic("unexpected unified folder")
+}
+func TestBootstrapInitialPageUsesKeyset(t *testing.T) {
+	ops := &keysetBootstrapProbe{stubBootstrapOps: goodBootstrapOps()}
+	status, resp := bootstrapRequest(t, newBootstrapServer(ops, true), `{"initialPage":{"scope":{"kind":"all_inboxes"},"page":{"limit":50}}}`)
+	if status != 200 || ops.calls != 1 || resp.InitialPage == nil || len(resp.InitialPage.Items) != 1 || resp.InitialPage.Items[0].ThreadID != "keyset" {
+		t.Fatalf("status %d calls %d response %+v", status, ops.calls, resp)
+	}
+}

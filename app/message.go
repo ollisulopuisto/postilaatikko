@@ -290,6 +290,11 @@ func (a *App) listServiceConversations(scope views.Scope, offset, limit int, sor
 	items := make([]*message.Conversation, 0, min(limit, v1.MaximumPageSize))
 	remaining := limit
 	cursor := strconv.Itoa(offset)
+	// Empty cursor opts the first bounded window into helper keyset paging.
+	// Arbitrary nonzero windows keep legacy random-access offset semantics.
+	if offset == 0 {
+		cursor = ""
+	}
 	seenCursors := map[string]struct{}{cursor: {}}
 	for remaining > 0 {
 		pageLimit := min(remaining, v1.MaximumPageSize)
