@@ -4,6 +4,7 @@
   import Switch from '$lib/components/ui/switch/Switch.svelte'
   import { accountStore } from '$lib/stores/accounts.svelte'
   import { _ } from '$lib/i18n'
+  import SmartNotifications from './SmartNotifications.svelte'
   import {
     getInboxDisplayMode,
     getInboxCardGrouping,
@@ -104,6 +105,8 @@
         {/each}
       </div>
     </section>
+
+    <SmartNotifications />
 
     <section class="mt-7 border-t border-border pt-5" aria-labelledby="inbox-card-settings-title">
       <p id="inbox-card-settings-title" class="mb-3 text-sm text-muted-foreground">{$_('inbox.cardSettings')}</p>

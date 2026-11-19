@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- Notification rules match the sender-provided From header, not authenticated identity. They only control alerts, never hide or move mail; a forged From can match either a notify or mute rule.
+
+- Add local sender/domain notification controls. Unknown or incomplete arrival batches keep alerts; notification clicks follow the displayed message. Existing rule scope is fixed, so remove and re-add a rule to change sender/domain matching.
 - Limit saved email templates to 100 entries and bound each name, subject and body so normal edits do not rewrite an unbounded collection.
 
 - Keep subject-only email template insertion in composer undo/redo history without losing the preceding edit.

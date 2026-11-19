@@ -125,23 +125,80 @@ func snoozedViewHavingClause(filter string) string {
 	}
 }
 
+// NotificationTarget keeps a notification's displayed headers and click target
+// on the same stored message without reading its body.
+type NotificationTarget struct {
+	Subject   string
+	FromName  string
+	FromEmail string
+	ThreadID  string
+}
+
+// NotificationTarget resolves display headers and the click conversation from
+// one account- and folder-scoped message without reading its body.
+func (s *Store) NotificationTarget(messageID, accountID, folderID string) (*NotificationTarget, error) {
+	target := &NotificationTarget{}
+	err := s.db.QueryRow(`SELECT subject, from_name, from_email, COALESCE(NULLIF(thread_id, ''), id)
+ FROM messages WHERE id = ? AND account_id = ? AND folder_id = ?`, messageID, accountID, folderID).Scan(&target.Subject, &target.FromName, &target.FromEmail, &target.ThreadID)
+	if err != nil {
+		return nil, fmt.Errorf("resolve notification target: %w", err)
+	}
+	return target, nil
+}
+
 // ListByFolder returns message headers for a folder with pagination
 func (s *Store) ListByFolder(folderID string, offset, limit int) ([]*MessageHeader, error) {
+	return s.listByFolderSince(folderID, offset, limit, time.Time{})
+}
+
+// ListByFolderReceivedSince reads locally received headers, never message bodies.
+// Unlike the message Date, ReceivedAt is set locally when sync stores the mail.
+func (s *Store) ListByFolderReceivedSince(folderID string, since time.Time, limit int) ([]*MessageHeader, error) {
+	return s.listByFolderSince(folderID, 0, limit, since)
+}
+
+func (s *Store) listByFolderSince(folderID string, offset, limit int, since time.Time) ([]*MessageHeader, error) {
+	where := "folder_id = ?"
+	args := []any{folderID}
+	if !since.IsZero() {
+		where += " AND received_at >= ?"
+		args = append(args, since)
+	}
+	args = append(args, limit, offset)
 	query := `
 		SELECT id, account_id, folder_id, uid, subject, from_name, from_email,
 		       date, snippet, is_read, is_starred, has_attachments
 		FROM messages
-		WHERE folder_id = ?
+		WHERE ` + where + `
 		ORDER BY date DESC, id DESC
 		LIMIT ? OFFSET ?
 	`
 
-	rows, err := s.db.Query(query, folderID, limit, offset)
+	// Receive-time lookups have no schema/index change in this rescue PR. Keep
+	// background notifications cheap even in a large folder; timeout means the
+	// caller allows the alert rather than guessing from a partial result.
+	ctx := context.Background()
+	if !since.IsZero() {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 100*time.Millisecond)
+		defer cancel()
+	}
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query messages: %w", err)
 	}
 	defer rows.Close()
 
+	return scanFolderHeaders(rows)
+}
+
+type headerRows interface {
+	Next() bool
+	Scan(...any) error
+	Err() error
+}
+
+func scanFolderHeaders(rows headerRows) ([]*MessageHeader, error) {
 	var messages []*MessageHeader
 	for rows.Next() {
 		m := &MessageHeader{}
@@ -170,6 +227,9 @@ func (s *Store) ListByFolder(folderID string, offset, limit int) ([]*MessageHead
 		messages = append(messages, m)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate message headers: %w", err)
+	}
 	return messages, nil
 }
 
