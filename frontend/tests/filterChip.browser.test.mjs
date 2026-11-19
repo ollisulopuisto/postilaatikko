@@ -46,12 +46,17 @@ test('triage-tab unread shows no filter chip; list-origin and other filters keep
       return calls.length?calls[calls.length-1].args[5]:null
     })
 
+    await page.locator('.message-list-scroll').waitFor()
+    const allListTop=await page.locator('.message-list-scroll').evaluate(el=>el.getBoundingClientRect().top)
+
     // 1. Triage-tab unread: the filter applies (backend asked for unread) but
     // no redundant chip row renders.
     await page.getByRole('button',{name:'Triage unread',exact:true}).click()
     await page.waitForFunction(()=>window.calls.some(c=>c.name==='GetConversations'&&c.args[5]==='unread'))
     assert.equal(await lastListFilter(),'unread','triage unread must still filter the list')
     assert.equal(await chipRow.count(),0,'triage-tab unread must not render the filter chip row')
+
+    assert.equal(await page.locator('.message-list-scroll').evaluate(el=>el.getBoundingClientRect().top),allListTop,'All to top-tab Unread must not shift the list vertically')
 
     // 2. Clearing removes the filter.
     await page.getByRole('button',{name:'Clear fixture',exact:true}).click()
