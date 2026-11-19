@@ -575,3 +575,9 @@ README review follow-up: qualify checksum instructions because tagged releases d
 | ID | Effort | Task | Owner / branch / worktree | Status |
 | --- | --- | --- | --- | --- |
 | UX-FROZEN-INDEX-001 | Medium | Supersede selection-only row pinning with a per-view frozen order and card snapshot. Passive reading, navigation and arrivals never reorder it. Deliberate set/context actions and the pending-change pill reconcile it. | Instinct / `feat/frozen-message-index` / `/tmp/postilaatikko-index` | Review; pure failing-first regressions pass; full frontend suite 1086 pass/10 opt-in skips; full-App categories/priority/plain browser regression passes; lint, type/shortcut checks and build pass. One existing viewerRef Svelte warning and bundle-size warnings remain. Action audit in docs/decisions/2026-11-18-frozen-index.md. |
+
+## IDLE reconnect backoff (2026-11-19)
+
+| ID | Effort | Task | Owner / branch / worktree | Status |
+| --- | --- | --- | --- | --- |
+| BUGFIX-IDLE-BACKOFF-001 | Small | Back off and bound IMAP IDLE reconnects after fast cycle failures; a server rejecting or instantly dropping IDLE caused a zero-backoff reconnect storm. | Instinct / `fix/idle-reconnect-backoff` / sandbox | Review; PR #277, implementation `26c7230`. Failing-first regression `TestIdleCycleFailureAppliesReconnectBackoff` fails pre-fix (loop never gives up) and passes post-fix; full internal/imap suite, go vet and gofmt green locally. golangci-lint and macOS build not run locally (CI). |
