@@ -295,3 +295,35 @@ func TestKeysetRejectsMalformedDateBeforeFolderLookup(t *testing.T) {
 		t.Fatalf("invalid date must be a classified cursor error, got %v", err)
 	}
 }
+
+func TestKeysetExcludesActiveSnoozes(t *testing.T) {
+	s, folders := seedKeysetMailbox(t, 8)
+	if _, err := s.db.Exec(`INSERT INTO snoozed_conversations(account_id,conversation_id,wake_at) VALUES(?,?,?)`, "acct-1", "thread-000", time.Now().Add(time.Hour).UTC().Format(time.RFC3339Nano)); err != nil {
+		t.Fatal(err)
+	}
+	got := walkKeysetPages(t, s, folders, 2, "newest", false)
+	want, err := s.ListConversationsByFolderIDs(folders, 0, 100, "newest", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(conversationIDs(got)) != fmt.Sprint(conversationIDs(want)) {
+		t.Fatalf("keyset %v offset %v", conversationIDs(got), conversationIDs(want))
+	}
+}
+func TestKeysetFractionalSecondPageBoundary(t *testing.T) {
+	s, a, f := newBodyFailedTestStore(t)
+	base := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	for i, d := range []time.Duration{0, 500 * time.Millisecond, 100 * time.Millisecond} {
+		if err := s.Create(&Message{ID: fmt.Sprint(i), AccountID: a, FolderID: f, UID: uint32(i + 1), ThreadID: fmt.Sprint(i), Subject: "fraction", Date: base.Add(d)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := walkKeysetPages(t, s, []string{f}, 1, "newest", false)
+	want, err := s.ListConversationsByFolderIDs([]string{f}, 0, 100, "newest", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(conversationIDs(got)) != fmt.Sprint(conversationIDs(want)) {
+		t.Fatalf("keyset %v offset %v", conversationIDs(got), conversationIDs(want))
+	}
+}

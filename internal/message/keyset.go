@@ -247,7 +247,7 @@ func (s *Store) collectPageKeys(ctx context.Context, folderIDs []string, folderA
 		args = append(args, limit+1)
 		visibleNewer := regexp.MustCompile(`\bm\.`).ReplaceAllString(conversationVisibilityClauses(excludeInboxCopies), "newer.")
 		query := `SELECT DISTINCT COALESCE(m.thread_id,m.id),m.date FROM messages m INDEXED BY idx_messages_folder_date_conv
-   WHERE m.folder_id=?` + bound + conversationVisibilityClauses(excludeInboxCopies) + `
+   WHERE m.folder_id=?` + bound + conversationVisibilityClauses(excludeInboxCopies) + filterWhereClause("", "m.") + `
    AND NOT EXISTS(SELECT 1 FROM messages newer INDEXED BY idx_messages_account_conv WHERE newer.account_id=m.account_id
     AND COALESCE(newer.thread_id,newer.id)=COALESCE(m.thread_id,m.id)
     AND newer.folder_id IN (` + scope + `) AND newer.date>m.date` + visibleNewer + `)
@@ -288,11 +288,12 @@ func (s *Store) collectPageKeys(ctx context.Context, folderIDs []string, folderA
 // keyLess orders page candidates: newest first by date, then account and
 // thread ascending, matching the offset path's ORDER BY tie-breakers.
 func keyLess(a, b conversationKey, newest bool) bool {
-	if a.date != b.date {
+	ad, bd := parseTimeString(a.date), parseTimeString(b.date)
+	if !ad.Equal(bd) {
 		if newest {
-			return a.date > b.date
+			return ad.After(bd)
 		}
-		return a.date < b.date
+		return ad.Before(bd)
 	}
 	if a.account != b.account {
 		return a.account < b.account
@@ -302,11 +303,12 @@ func keyLess(a, b conversationKey, newest bool) bool {
 
 // keyAfterCursor reports whether k sorts strictly after the cursor position.
 func keyAfterCursor(k conversationKey, cur conversationCursor, newest bool) bool {
-	if k.date != cur.Date {
+	kd, cd := parseTimeString(k.date), parseTimeString(cur.Date)
+	if !kd.Equal(cd) {
 		if newest {
-			return k.date < cur.Date
+			return kd.Before(cd)
 		}
-		return k.date > cur.Date
+		return kd.After(cd)
 	}
 	if k.account != cur.Account {
 		return k.account > cur.Account
@@ -335,7 +337,7 @@ func (s *Store) loadConversationAggregates(ctx context.Context, keys []conversat
 		threadPlaceholders := strings.TrimRight(strings.Repeat("?,", len(threads)), ",")
 		query := buildConversationAggregateQuery(len(folders), excludeInboxCopies) +
 			` AND m.account_id = ? AND COALESCE(m.thread_id, m.id) IN (` + threadPlaceholders + `)
-		GROUP BY COALESCE(m.thread_id, m.id), a.id`
+		GROUP BY COALESCE(m.thread_id, m.id), a.id` + filterHavingClause("", "m.")
 		// account_id is the first predicate after the folder IN list.
 		// Placeholder order: folder IN list, then account, then thread IN list.
 		args := make([]interface{}, 0, 1+len(folders)+len(threads))
