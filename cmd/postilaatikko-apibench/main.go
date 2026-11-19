@@ -444,12 +444,15 @@ func run(args []string) error {
 		},
 		{
 			// PERF-SC-003: the same first-paint sections through the
-			// one-request bootstrap snapshot. The scenario falls back to the
-			// waterfall when the helper lacks the route, which older helpers
-			// require; on this build the bootstrap path runs.
+			// mailbox snapshot plus the same capability discovery as the waterfall.
+			// Older helpers without the snapshot fail this measurement explicitly.
 			name: "startup_bootstrap",
 			run: func(ctx context.Context) error {
+				if _, err := api.GetCapabilities(ctx); err != nil {
+					return err
+				}
 				resp, err := api.BootstrapWorkspace(ctx, v1.WorkspaceBootstrapRequest{
+					FoldersAccountID: firstAccount,
 					InitialPage: &v1.ConversationListRequest{
 						Scope: folderScope,
 						Page:  v1.PageRequest{Limit: *pageSize},

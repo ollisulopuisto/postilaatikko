@@ -1,7 +1,7 @@
 # PERF-SC-003: one-request workspace bootstrap snapshot
 
 2026-11-19 — replaces the desktop client's startup request waterfall with a
-single round trip.
+single mailbox round trip, plus separate capability discovery.
 
 ## Problem
 
@@ -14,7 +14,7 @@ cheap, but on any link with latency each one pays a full round trip. At a
 ## Change
 
 New endpoint `POST /v1/workspace/bootstrap` (read-only, capability
-`mail.read`) returns every first-paint section in one response:
+`mail.read`) returns the mailbox sections in one response (capability discovery stays separate):
 
 - `accounts`, `folders`, `views`, `unreadCounts` — always present (empty
   lists/maps when empty);
@@ -49,12 +49,16 @@ merge):
 
 | scenario | requests/iteration | localhost p50 | 40 ms RTT p50 |
 | --- | --- | --- | --- |
-| `startup_waterfall` | 6 | 56.9 ms | 298.1 ms |
-| `startup_bootstrap` | 1 | 56.7 ms | **96.2 ms** |
+| `startup_waterfall` | 6 | 57.2 ms | 299.1 ms |
+| `startup_bootstrap` | 2 | 55.8 ms | **136.5 ms** |
 
-First-paint startup is 3.1× faster on a 40 ms link and identical on
-localhost, where the conversation-page query dominates either way. Reports:
-`/tmp/after-003-20k.json`, `/tmp/after-003-rtt40.json` (bench machine);
+Equivalent synthetic startup API work is 2.2x faster on a 40 ms link and similar on
+localhost, where the conversation-page query dominates either way. Both scenarios
+read capabilities and the same account folder scope. Desktop adoption has not
+landed, so this is not measured desktop first-paint performance. The earlier
+six-to-one 3.1x claim was withdrawn because it omitted capability discovery
+and queried a different folder scope. Corrected reports:
+`/tmp/after-003-corrected-local.json`, `/tmp/after-003-corrected-rtt40.json` (bench machine);
 baseline: `2026-11-19-performance-baseline.md`.
 
 ## Tests

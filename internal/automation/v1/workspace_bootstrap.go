@@ -9,7 +9,7 @@ import (
 // otherwise costs six sequential round trips: capabilities, accounts,
 // folders, views, unread counts, and the first conversation page. This route
 // returns the five mailbox sections in one request so a high-RTT link pays
-// the latency once.
+// the latency once for mailbox sections, plus separate capability discovery.
 //
 // Snapshot semantics: the sections are separate sequential reads against the
 // service layer, exactly as the individual routes perform them today. There
@@ -85,22 +85,24 @@ func MountWorkspaceBootstrapRoute(mux RouteMux, ops WorkspaceBootstrapOperations
 		}
 
 		accounts, err := ops.GetAccounts()
-		if err != nil {
+		switch {
+		case err != nil:
 			sectionErr("accounts", &requestError{message: "Failed to load accounts"})
-		} else {
+		default:
 			for _, acc := range accounts {
 				resp.Accounts = append(resp.Accounts, accountSummaryFrom(acc))
 			}
 		}
 
 		accountIDs := []string{}
-		if req.FoldersAccountID != "" {
+		switch {
+		case req.FoldersAccountID != "":
 			accountIDs = append(accountIDs, req.FoldersAccountID)
-		} else if resp.Errors != nil {
+		case err != nil:
 			// The account list failed; without it there is no bounded way to
 			// enumerate folder queries, so the section is skipped explicitly.
 			sectionErr("folders", &requestError{message: "Skipped: accounts unavailable"})
-		} else {
+		default:
 			for _, acc := range resp.Accounts {
 				accountIDs = append(accountIDs, acc.ID)
 			}
@@ -123,26 +125,29 @@ func MountWorkspaceBootstrapRoute(mux RouteMux, ops WorkspaceBootstrapOperations
 		}
 
 		virtualFolders, err := ops.GetVirtualFolders()
-		if err != nil {
+		switch {
+		case err != nil:
 			sectionErr("views", &requestError{message: "Failed to load virtual views"})
-		} else {
+		default:
 			for _, vf := range virtualFolders {
 				resp.Views = append(resp.Views, viewSummaryFrom(vf))
 			}
 		}
 
 		counts, err := ops.GetVirtualFolderUnreadCounts()
-		if err != nil {
+		switch {
+		case err != nil:
 			sectionErr("unreadCounts", &requestError{message: "Could not load virtual-folder unread counts"})
-		} else if counts != nil {
+		case counts != nil:
 			resp.UnreadCounts = counts
 		}
 
 		if req.InitialPage != nil {
 			page, reqErr := executeConversationList(ops, *req.InitialPage)
-			if reqErr != nil {
+			switch {
+			case reqErr != nil:
 				sectionErr("initialPage", reqErr)
-			} else {
+			default:
 				resp.InitialPage = &page
 			}
 		}
