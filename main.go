@@ -19,6 +19,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/linux"
+	"github.com/wailsapp/wails/v2/pkg/options/mac"
 )
 
 //go:embed all:frontend/dist
@@ -94,6 +95,9 @@ func main() {
 		if strings.HasPrefix(strings.ToLower(arg), "mailto:") {
 			mailtoData = app.ParseMailtoURL(arg)
 			rawMailtoArg = arg
+			if mailtoData != nil {
+				mailtoData.Raw = arg
+			}
 			break
 		}
 	}
@@ -189,6 +193,11 @@ func runMainMode(mailtoData *app.MailtoData, rawMailtoArg string) {
 			application,
 			dummyComposerApp, // For binding generation
 			app.NewReaderApp(app.ReaderConfig{}),
+		},
+		// macOS hands mailto: links to the app as an Apple Event (the Info.plist
+		// URL scheme registers it), so argv never carries them.
+		Mac: &mac.Options{
+			OnUrlOpen: application.HandleOpenURL,
 		},
 		Linux: &linux.Options{
 			WebviewGpuPolicy: linux.WebviewGpuPolicyOnDemand,

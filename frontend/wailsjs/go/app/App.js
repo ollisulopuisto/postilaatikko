@@ -398,6 +398,10 @@ export function DeleteQuickReply(arg1) {
   return window['go']['app']['App']['DeleteQuickReply'](arg1);
 }
 
+export function DeleteEmailTemplate(arg1) {
+  return window['go']['app']['App']['DeleteEmailTemplate'](arg1);
+}
+
 export function DeleteSMIMECertificate(arg1) {
   return window['go']['app']['App']['DeleteSMIMECertificate'](arg1);
 }
@@ -1209,6 +1213,10 @@ export function ListQuickReplies() {
   return window['go']['app']['App']['ListQuickReplies']();
 }
 
+export function ListEmailTemplates() {
+  return window['go']['app']['App']['ListEmailTemplates']();
+}
+
 export function ListSMIMECertificates(arg1) {
   return window['go']['app']['App']['ListSMIMECertificates'](arg1);
 }
@@ -1543,6 +1551,10 @@ export function SavePendingOAuthTokens(arg1) {
 
 export function SaveQuickReply(arg1) {
   return window['go']['app']['App']['SaveQuickReply'](arg1);
+}
+
+export function SaveEmailTemplate(arg1) {
+  return window['go']['app']['App']['SaveEmailTemplate'](arg1);
 }
 
 export function SaveSendLaterConfig(arg1) {

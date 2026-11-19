@@ -5,6 +5,11 @@
 - Notification rules match the sender-provided From header, not authenticated identity. They only control alerts, never hide or move mail; a forged From can match either a notify or mute rule.
 
 - Add local sender/domain notification controls. Unknown or incomplete arrival batches keep alerts; notification clicks follow the displayed message. Existing rule scope is fixed, so remove and re-add a rule to change sender/domain matching.
+- Limit saved email templates to 100 entries and bound each name, subject and body so normal edits do not rewrite an unbounded collection.
+
+- Keep subject-only email template insertion in composer undo/redo history without losing the preceding edit.
+
+- Save reusable subject/body email templates for the main-window composer. Insert without replacing an existing subject, sender or recipients; detached composer support is not included yet.
 - Undo-send bar now shows whether the message is a Reply or Reply All and lists To, Cc and Bcc, with an Edit recipients button that reopens the draft with focus on To. A draft remembers its reply mode, so a reply-all stays labelled reply-all after recipients are edited.
 
 - Keep message index order and inbox cards stable while reading. Pending arrivals/changes wait behind a re-sort pill; deliberate mail/context actions reconcile the list.

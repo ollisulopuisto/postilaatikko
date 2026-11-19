@@ -309,6 +309,21 @@ func (a *App) SaveSmartNotificationSettings(prefs settings.SmartNotificationSett
 	return a.settingsStore.SaveSmartNotificationSettings(prefs)
 }
 
+// ListEmailTemplates returns locally saved full-message templates.
+func (a *App) ListEmailTemplates() ([]settings.EmailTemplate, error) {
+	return a.settingsStore.ListEmailTemplates()
+}
+
+// SaveEmailTemplate creates or updates a locally saved full-message template.
+func (a *App) SaveEmailTemplate(template settings.EmailTemplate) (settings.EmailTemplate, error) {
+	return a.settingsStore.SaveEmailTemplate(template)
+}
+
+// DeleteEmailTemplate removes a locally saved full-message template.
+func (a *App) DeleteEmailTemplate(id string) error {
+	return a.settingsStore.DeleteEmailTemplate(id)
+}
+
 // GetLanguage returns the saved language preference (locale code)
 // Returns empty string if not set (frontend defaults to English)
 func (a *App) GetLanguage() (string, error) {

@@ -765,6 +765,7 @@ export namespace app {
 	    bcc: string[];
 	    subject: string;
 	    body: string;
+	    raw?: string;
 
 	    static createFrom(source: any = {}) {
 	        return new MailtoData(source);
@@ -777,6 +778,7 @@ export namespace app {
 	        this.bcc = source["bcc"];
 	        this.subject = source["subject"];
 	        this.body = source["body"];
+	        this.raw = source["raw"];
 	    }
 	}
 	export class OAuthBuildStatus {
@@ -3807,6 +3809,25 @@ export namespace settings {
 	        if (a.slice && a.map) return (a as any[]).map(elem => this.convertValues(elem, classs));
 	        if (typeof a === "object") return new classs(a);
 	        return a;
+	    }
+	}
+
+	export class EmailTemplate {
+	    id: string;
+	    name: string;
+	    subject: string;
+	    body: string;
+
+	    static createFrom(source: any = {}) {
+	        return new EmailTemplate(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.subject = source["subject"];
+	        this.body = source["body"];
 	    }
 	}
 
