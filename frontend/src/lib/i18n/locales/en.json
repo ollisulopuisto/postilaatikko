@@ -872,6 +872,7 @@
     "deleteAccount": "Delete account"
   },
   "settingsAbout": {
+    "build": "Build {build}",
     "version": "Version {version}",
     "github": "GitHub",
     "privacyPolicy": "Privacy Policy",

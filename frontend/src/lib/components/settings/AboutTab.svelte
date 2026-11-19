@@ -19,6 +19,7 @@
   interface AppInfo {
     name: string
     version: string
+    build?: string
     description: string
     website: string
     license: string
@@ -110,6 +111,11 @@
         <p class="text-sm text-muted-foreground">
           {$_('settingsAbout.version', { values: { version: appInfo.version } })}
         </p>
+        {#if appInfo.build}
+          <p class="text-xs text-muted-foreground" data-testid="about-build">
+            {$_('settingsAbout.build', { values: { build: appInfo.build } })}
+          </p>
+        {/if}
       </div>
     </div>
 

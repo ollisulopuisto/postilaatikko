@@ -143,6 +143,9 @@ jobs:
           retention-days: 14
 
   draft-release:
+    concurrency:
+      group: postilaatikko-draft-dmg
+      cancel-in-progress: false
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.draft_release }}
     permissions:
       contents: write
@@ -185,6 +188,13 @@ jobs:
           TAG="v${VERSION}-test.${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}"
           echo "TEST_TAG=$TAG" >> "$GITHUB_ENV"
           echo "BASE_VERSION=$VERSION" >> "$GITHUB_ENV"
+      - name: Require a fresh version and identify this build
+        run: |
+          set -euo pipefail
+          # Include drafts: a previously packaged version must not be reused.
+          gh api --paginate "repos/$GH_REPO/releases?per_page=100" --jq '.[].tag_name' > "$RUNNER_TEMP/release-tags.txt"
+          python3 scripts/check_new_dmg_version.py "$BASE_VERSION" < "$RUNNER_TEMP/release-tags.txt"
+          echo "BUILD_ID=${TEST_TAG#v}+${BUILD_SHA:0:12}" >> "$GITHUB_ENV"
       - name: Set up Go
         uses: actions/setup-go@v6
         with:

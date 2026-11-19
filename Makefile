@@ -64,10 +64,15 @@ all: build
 
 ## Build Targets
 
+# BUILD_ID identifies one specific build in the About dialog (app.Build,
+# injected at link time). Defaults to the commit; CI overrides it with the
+# per-build tag so every DMG reports a unique build.
+BUILD_ID ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+
 # Build production binary
 build:
 	@echo "Building Postilaatikko..."
-	wails build -tags $(BUILD_TAGS)
+	wails build -tags $(BUILD_TAGS) -ldflags "-X github.com/hkdb/aerion/app.Build=$(BUILD_ID)"
 ifeq ($(UNAME_S),Darwin)
 	@echo "Building the Send Later helper..."
 	go build -trimpath -ldflags="-s -w" -o build/bin/postilaatikko.app/Contents/MacOS/postilaatikko-helper ./cmd/postilaatikko-helper
