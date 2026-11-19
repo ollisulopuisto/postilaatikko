@@ -443,6 +443,34 @@ func run(args []string) error {
 			},
 		},
 		{
+			// PERF-SC-003: the same first-paint sections through the
+			// one-request bootstrap snapshot. The scenario falls back to the
+			// waterfall when the helper lacks the route, which older helpers
+			// require; on this build the bootstrap path runs.
+			name: "startup_bootstrap",
+			run: func(ctx context.Context) error {
+				resp, err := api.BootstrapWorkspace(ctx, v1.WorkspaceBootstrapRequest{
+					InitialPage: v1.ConversationListRequest{
+						Scope: folderScope,
+						Page:  v1.PageRequest{Limit: *pageSize},
+					},
+				})
+				if client.IsHTTPNotFound(err) {
+					return errors.New("helper does not expose /v1/workspace/bootstrap")
+				}
+				if err != nil {
+					return err
+				}
+				if len(resp.Errors) != 0 {
+					return fmt.Errorf("bootstrap section errors: %v", resp.Errors)
+				}
+				if resp.InitialPage == nil {
+					return errors.New("bootstrap returned no initial page")
+				}
+				return nil
+			},
+		},
+		{
 			name: "folder_page_first",
 			run: func(ctx context.Context) error {
 				page, err := api.ListConversations(ctx, v1.ConversationListRequest{

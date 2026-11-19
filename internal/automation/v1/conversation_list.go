@@ -54,36 +54,52 @@ func handleConversationList(w http.ResponseWriter, r *http.Request, ops Conversa
 		writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, "Malformed request body", false)
 		return
 	}
-	if err := req.Scope.Validate(); err != nil {
-		writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, "Invalid conversation scope", false)
+	page, reqErr := executeConversationList(ops, req)
+	if reqErr != nil {
+		writeHeaderError(w, r, reqErr.status, reqErr.code, reqErr.message, reqErr.retryable)
 		return
 	}
+	writeAPIResponse(w, r, http.StatusOK, page)
+}
+
+// requestError carries one transport-shaped failure so shared read logic can
+// be used by both individual routes and aggregate handlers.
+type requestError struct {
+	status    int
+	code      ErrorCode
+	message   string
+	retryable bool
+}
+
+// executeConversationList runs the validated, bounded conversation-page read
+// behind POST /v1/conversations. The workspace bootstrap snapshot reuses it
+// so both paths apply identical scope validation, defaults, bounds, and
+// body-stripping rules.
+func executeConversationList(ops ConversationListOperations, req ConversationListRequest) (ConversationListPage, *requestError) {
+	if err := req.Scope.Validate(); err != nil {
+		return ConversationListPage{}, &requestError{http.StatusBadRequest, CodeInvalidRequest, "Invalid conversation scope", false}
+	}
 	if req.Scope.Kind != views.ScopeFolder && req.Scope.Kind != views.ScopeAllInboxes && req.Scope.Kind != views.ScopeUnifiedFolder {
-		writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, "Conversation lists support folder, unified_folder, and all_inboxes scopes", false)
-		return
+		return ConversationListPage{}, &requestError{http.StatusBadRequest, CodeInvalidRequest, "Conversation lists support folder, unified_folder, and all_inboxes scopes", false}
 	}
 	if req.SortOrder == "" {
 		req.SortOrder = "newest"
 	}
 	if req.SortOrder != "newest" && req.SortOrder != "oldest" {
-		writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, "sortOrder must be newest or oldest", false)
-		return
+		return ConversationListPage{}, &requestError{http.StatusBadRequest, CodeInvalidRequest, "sortOrder must be newest or oldest", false}
 	}
 	if !validConversationListFilter(req.Filter) {
-		writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, "Unsupported conversation filter", false)
-		return
+		return ConversationListPage{}, &requestError{http.StatusBadRequest, CodeInvalidRequest, "Unsupported conversation filter", false}
 	}
 	pageRequest, err := req.Page.Normalized()
 	if err != nil {
-		writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, err.Error(), false)
-		return
+		return ConversationListPage{}, &requestError{http.StatusBadRequest, CodeInvalidRequest, err.Error(), false}
 	}
 	offset := 0
 	if pageRequest.Cursor != "" {
 		offset, err = strconv.Atoi(pageRequest.Cursor)
 		if err != nil || offset < 0 || offset > MaximumMessageOffset {
-			writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, "cursor is invalid or exceeds the maximum offset", false)
-			return
+			return ConversationListPage{}, &requestError{http.StatusBadRequest, CodeInvalidRequest, "cursor is invalid or exceeds the maximum offset", false}
 		}
 	}
 
@@ -92,12 +108,10 @@ func handleConversationList(w http.ResponseWriter, r *http.Request, ops Conversa
 	if req.Scope.Kind == views.ScopeFolder {
 		f, err := ops.GetFolder(req.Scope.FolderID)
 		if err != nil {
-			writeHeaderError(w, r, http.StatusInternalServerError, CodeInternal, "Failed to load folder", true)
-			return
+			return ConversationListPage{}, &requestError{http.StatusInternalServerError, CodeInternal, "Failed to load folder", true}
 		}
 		if f == nil || f.AccountID != req.Scope.AccountID {
-			writeHeaderError(w, r, http.StatusNotFound, CodeNotFound, "Folder not found for account", false)
-			return
+			return ConversationListPage{}, &requestError{http.StatusNotFound, CodeNotFound, "Folder not found for account", false}
 		}
 		items, listErr = ops.ListConversationsByFolder(req.Scope.FolderID, offset, pageRequest.Limit+1, req.SortOrder, req.Filter)
 	} else if req.Scope.Kind == views.ScopeAllInboxes {
@@ -106,8 +120,7 @@ func handleConversationList(w http.ResponseWriter, r *http.Request, ops Conversa
 		items, listErr = ops.ListConversationsUnifiedFolder(req.Scope.FolderType, offset, pageRequest.Limit+1, req.SortOrder, req.Filter)
 	}
 	if listErr != nil {
-		writeHeaderError(w, r, http.StatusInternalServerError, CodeInternal, "Failed to load conversations", true)
-		return
+		return ConversationListPage{}, &requestError{http.StatusInternalServerError, CodeInternal, "Failed to load conversations", true}
 	}
 
 	page := ConversationListPage{Items: items, Complete: true}
@@ -130,7 +143,7 @@ func handleConversationList(w http.ResponseWriter, r *http.Request, ops Conversa
 	if page.Items == nil {
 		page.Items = []*message.Conversation{}
 	}
-	writeAPIResponse(w, r, http.StatusOK, page)
+	return page, nil
 }
 
 func validConversationListFilter(filter string) bool {

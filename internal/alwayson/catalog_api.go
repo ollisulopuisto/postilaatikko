@@ -676,6 +676,7 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 		conversationList:   operations,
 		conversationCount:  operations,
 		conversationSearch: operations,
+		bootstrap:          workspaceBootstrapOperations{ConversationListOperations: operations, catalog: operations, unreadCounts: r},
 		search:             readOperations,
 		messageRead:        readOperations,
 		actionTarget:       mailboxActions,
@@ -736,6 +737,7 @@ type mailboxRouteDeps struct {
 	conversationList   v1.ConversationListOperations
 	conversationCount  v1.ConversationCountOperations
 	conversationSearch v1.ConversationSearchOperations
+	bootstrap          v1.WorkspaceBootstrapOperations
 	search             v1.SearchOperations
 	messageRead        v1.MessageReadOperations
 	actionTarget       operations.MessageLookup
@@ -775,6 +777,7 @@ func mountMailboxV1Routes(mux v1.RouteMux, d *mailboxRouteDeps) {
 	v1.MountConversationListRoute(mux, d.conversationList, requireCap)
 	v1.MountConversationCountRoute(mux, d.conversationCount, requireCap)
 	v1.MountConversationSearchRoute(mux, d.conversationSearch, requireCap)
+	v1.MountWorkspaceBootstrapRoute(mux, d.bootstrap, requireCap)
 	v1.MountSearchRoute(mux, d.search, requireCap)
 	v1.MountThreadBodyRoutes(mux, d.messageRead, requireCap)
 	v1.MountActionTargetRoute(mux, d.actionTarget, requireCap)
@@ -787,6 +790,32 @@ func mountMailboxV1Routes(mux v1.RouteMux, d *mailboxRouteDeps) {
 	if d.calendar != nil {
 		v1.MountCalendarReadRoutes(mux, d.calendar, requireCap)
 	}
+}
+
+// workspaceBootstrapOperations adapts the runtime's read services to the
+// composed interface behind POST /v1/workspace/bootstrap: the conversation
+// list and catalog reads come from catalogReadOperations, saved-view unread
+// counts from the runtime itself (as in MountVirtualFolderUnreadCountRoute).
+type workspaceBootstrapOperations struct {
+	v1.ConversationListOperations
+	catalog      v1.CatalogOperations
+	unreadCounts v1.VirtualFolderUnreadCountOperations
+}
+
+func (w workspaceBootstrapOperations) GetAccounts() ([]*account.Account, error) {
+	return w.catalog.GetAccounts()
+}
+
+func (w workspaceBootstrapOperations) GetFolders(accountID string) ([]*folder.Folder, error) {
+	return w.catalog.GetFolders(accountID)
+}
+
+func (w workspaceBootstrapOperations) GetVirtualFolders() ([]*virtualfolder.VirtualFolder, error) {
+	return w.catalog.GetVirtualFolders()
+}
+
+func (w workspaceBootstrapOperations) GetVirtualFolderUnreadCounts() (map[string]int, error) {
+	return w.unreadCounts.GetVirtualFolderUnreadCounts()
 }
 
 // PreviewFilterRule counts stored messages without changing mail or saving the rule.

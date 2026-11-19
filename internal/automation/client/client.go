@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -115,7 +116,7 @@ func (c *Client) doRequestWithHeaders(ctx context.Context, method, path string, 
 		if jsonErr := json.Unmarshal(respBytes, &errResp); jsonErr == nil && errResp.Error.Code != "" {
 			return nil, fmt.Errorf("api error (%s): %s: %w", errResp.Error.Code, errResp.Error.Message, v1.NewFault(errResp.Error.Code, errResp.Error.Message, errResp.Error.Retryable, nil))
 		}
-		return nil, fmt.Errorf("api error (http %d): %s", resp.StatusCode, string(respBytes))
+		return nil, &HTTPError{StatusCode: resp.StatusCode, Body: string(respBytes)}
 	}
 
 	return respBytes, nil
@@ -721,6 +722,42 @@ func (c *Client) ListConversations(ctx context.Context, req v1.ConversationListR
 		return nil, err
 	}
 	var resp v1.Response[v1.ConversationListPage]
+	if err := json.Unmarshal(bytes, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.Data, nil
+}
+
+// HTTPError reports a non-2xx response that carried no API error envelope,
+// such as a missing route on an older helper.
+type HTTPError struct {
+	StatusCode int
+	Body       string
+}
+
+func (e *HTTPError) Error() string {
+	return fmt.Sprintf("api error (http %d): %s", e.StatusCode, e.Body)
+}
+
+// IsHTTPNotFound reports whether err is an HTTP 404 without an API envelope,
+// the shape a missing route produces. Callers offering features newer than
+// the connected helper use it to fall back to older request sequences.
+func IsHTTPNotFound(err error) bool {
+	var httpErr *HTTPError
+	return errors.As(err, &httpErr) && httpErr.StatusCode == http.StatusNotFound
+}
+
+// BootstrapWorkspace fetches the one-request startup snapshot
+// (PERF-SC-003): accounts, folders, views, unread counts, and the first
+// conversation page. Callers running against an older helper without the
+// route should fall back to the individual reads when IsHTTPNotFound
+// reports the missing route.
+func (c *Client) BootstrapWorkspace(ctx context.Context, req v1.WorkspaceBootstrapRequest) (*v1.WorkspaceBootstrapResponse, error) {
+	bytes, err := c.doRequest(ctx, http.MethodPost, "/v1/workspace/bootstrap", req, "")
+	if err != nil {
+		return nil, err
+	}
+	var resp v1.Response[v1.WorkspaceBootstrapResponse]
 	if err := json.Unmarshal(bytes, &resp); err != nil {
 		return nil, err
 	}

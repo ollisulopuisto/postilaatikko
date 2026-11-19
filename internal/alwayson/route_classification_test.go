@@ -154,6 +154,7 @@ var classifiedRoutes = []routeClassification{
 	post("/v1/conversations", true),
 	post("POST /v1/conversations/count", true),
 	post("POST /v1/conversations/search", true),
+	post("POST /v1/workspace/bootstrap", true),
 	post("/v1/search", true),
 	// Thread and body reads: thread rendering is read-only (see the comment
 	// on coalescibleRead); body fetches can hit providers and cache bodies,

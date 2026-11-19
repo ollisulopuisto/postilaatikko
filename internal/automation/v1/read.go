@@ -401,17 +401,23 @@ func (h *ReadHandler) handleFolders(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		for _, f := range folders {
-			allFolders = append(allFolders, FolderSummary{
-				ID: f.ID, AccountID: f.AccountID, Name: f.Name, Path: f.Path,
-				Type: string(f.Type), ParentID: f.ParentID, UIDValidity: f.UIDValidity,
-				UIDNext: f.UIDNext, HighestModSeq: f.HighestModSeq, FlagsSyncModSeq: f.FlagsSyncModSeq,
-				Subscribed: f.Subscribed, Hidden: f.Hidden,
-				TotalCount: f.TotalCount, UnreadCount: f.UnreadCount, LastSync: f.LastSync,
-			})
+			allFolders = append(allFolders, folderSummaryFrom(f))
 		}
 	}
 
 	h.writeResponse(w, r, http.StatusOK, allFolders, nil)
+}
+
+// folderSummaryFrom maps stored folder metadata to its safe wire form. Shared
+// by the folders route and the workspace bootstrap snapshot.
+func folderSummaryFrom(f *folder.Folder) FolderSummary {
+	return FolderSummary{
+		ID: f.ID, AccountID: f.AccountID, Name: f.Name, Path: f.Path,
+		Type: string(f.Type), ParentID: f.ParentID, UIDValidity: f.UIDValidity,
+		UIDNext: f.UIDNext, HighestModSeq: f.HighestModSeq, FlagsSyncModSeq: f.FlagsSyncModSeq,
+		Subscribed: f.Subscribed, Hidden: f.Hidden,
+		TotalCount: f.TotalCount, UnreadCount: f.UnreadCount, LastSync: f.LastSync,
+	}
 }
 
 // ViewSummary contains saved virtual view metadata.
@@ -439,23 +445,29 @@ func (h *ReadHandler) handleViews(w http.ResponseWriter, r *http.Request) {
 
 	views := make([]ViewSummary, 0, len(vfs))
 	for _, vf := range vfs {
-		views = append(views, ViewSummary{
-			ID:          vf.ID,
-			Name:        vf.Name,
-			OrderIndex:  vf.OrderIndex,
-			FolderIDs:   vf.FolderIDs,
-			FolderMode:  vf.FolderMode,
-			ReadStatus:  vf.ReadStatus,
-			ReplyStatus: vf.ReplyStatus,
-			StarStatus:  vf.StarStatus,
-			DateWindow:  vf.DateWindow,
-			SearchQuery: vf.SearchQuery,
-			CreatedAt:   vf.CreatedAt,
-			UpdatedAt:   vf.UpdatedAt,
-		})
+		views = append(views, viewSummaryFrom(vf))
 	}
 
 	h.writeResponse(w, r, http.StatusOK, views, nil)
+}
+
+// viewSummaryFrom maps a stored virtual folder to its wire form. Shared by
+// the views route and the workspace bootstrap snapshot.
+func viewSummaryFrom(vf *virtualfolder.VirtualFolder) ViewSummary {
+	return ViewSummary{
+		ID:          vf.ID,
+		Name:        vf.Name,
+		OrderIndex:  vf.OrderIndex,
+		FolderIDs:   vf.FolderIDs,
+		FolderMode:  vf.FolderMode,
+		ReadStatus:  vf.ReadStatus,
+		ReplyStatus: vf.ReplyStatus,
+		StarStatus:  vf.StarStatus,
+		DateWindow:  vf.DateWindow,
+		SearchQuery: vf.SearchQuery,
+		CreatedAt:   vf.CreatedAt,
+		UpdatedAt:   vf.UpdatedAt,
+	}
 }
 
 func (h *ReadHandler) handleSearch(w http.ResponseWriter, r *http.Request) {
