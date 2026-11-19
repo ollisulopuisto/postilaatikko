@@ -437,6 +437,7 @@
     "failedToSendReceipt": "Failed to send read receipt",
     "failedToLoadSource": "Failed to load message source",
     "failedToLoadMessages": "Failed to load messages.",
+    "failedToLoadMessagesWithReason": "Failed to load messages: {message}",
     "noContent": "No content available",
     "downloadingContent": "Downloading message content...",
     "copy": "Copy",

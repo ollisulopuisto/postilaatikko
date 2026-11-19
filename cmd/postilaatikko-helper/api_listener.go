@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"strings"
 
 	"github.com/hkdb/aerion/internal/automation"
@@ -52,6 +53,9 @@ func (c apiListenerConfig) serverConfig() automation.ServerConfig {
 		TLSCertFile:  c.cert,
 		TLSKeyFile:   c.key,
 		AllowedHosts: append([]string(nil), c.allowedHost...),
+		// Opt-in per-request timing lines for profiling sessions; off by
+		// default so production listeners carry no per-request log overhead.
+		RequestTiming: os.Getenv("ETERNOMAIL_API_TIMING") == "1",
 	}
 }
 

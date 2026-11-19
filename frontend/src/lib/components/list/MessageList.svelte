@@ -21,7 +21,7 @@
   import { mailRowKey, captureScrollAnchor, anchoredScrollTop, newRowsBeforeAnchor, extendAnchorWindow } from './scrollAnchor'
   import { folderDependencies } from '$lib/sidebar/folderVisibility'
   import { dayGroupFor } from '$lib/components/list/dayGroup'
-  import { app as searchModels } from '../../../../wailsjs/go/models'
+  import { app as searchModels, mailservice } from '../../../../wailsjs/go/models'
 
   import { onMount, onDestroy, tick, untrack } from 'svelte'
   import OnlineViewCount from './OnlineViewCount.svelte'
@@ -1073,6 +1073,13 @@
   // A bound backend call can occasionally stall while SQLite is recovering a
   // lock after a hot reload. Never leave the message pane in a permanent
   // loading state: surface a retryable error instead.
+  // Surface the underlying cause next to the generic text: a wedged backend,
+  // a timeout and a bad query used to be indistinguishable in the banner.
+  const loadFailureText = (err: unknown) =>
+    $_('viewer.failedToLoadMessagesWithReason', {
+      values: { message: (err as Error)?.message ?? String(err) },
+    })
+
   async function withLoadTimeout<T>(operation: Promise<T>, label: string, timeoutMs = 12_000): Promise<T> {
     let timeoutID: ReturnType<typeof setTimeout> | undefined
     try {
@@ -1132,7 +1139,7 @@
             }
           }).catch((cacheError: unknown) => console.warn('Virtual folder cache view failed:', cacheError))
         }
-        const response = await SearchMail(new searchModels.MailSearchRequest({sessionId: virtualSearchSession, query: '', accountIds: [], virtualFolderId: folderId!, filter: filterMode, cursor: currentOffset === 0 ? '' : virtualCursor, limit: Math.min(limit, 100)}))
+        const response = await SearchMail(new mailservice.MailSearchRequest({sessionId: virtualSearchSession, query: '', accountIds: [], virtualFolderId: folderId!, filter: filterMode, cursor: currentOffset === 0 ? '' : virtualCursor, limit: Math.min(limit, 100)}))
         if (generation !== loadGeneration || isSearchMode) return
         virtualCursor = response.cursor || ''
         virtualWarnings = (response.issues || []).filter(item => item.warning).map(item => `${item.accountName}: ${item.message}`).join(' · ')
@@ -1141,7 +1148,7 @@
         if (currentOffset === 0 && lastLoadedFolderId === folderId && virtualCursor) {
           items = await extendAnchorWindow(items, viewportAnchorKey(), row => mailRowKey(row, accountId), async () => {
             if (!virtualCursor || generation !== loadGeneration || isSearchMode) return []
-            const page = await SearchMail(new searchModels.MailSearchRequest({sessionId: virtualSearchSession, query: '', accountIds: [], virtualFolderId: folderId!, filter: filterMode, cursor: virtualCursor, limit: 100}))
+            const page = await SearchMail(new mailservice.MailSearchRequest({sessionId: virtualSearchSession, query: '', accountIds: [], virtualFolderId: folderId!, filter: filterMode, cursor: virtualCursor, limit: 100}))
             virtualCursor = page.cursor || ''
             return page.conversations || []
           })
@@ -1262,7 +1269,7 @@
       }
       if (isExpectedSearchCancellation(err)) return
       console.error('Failed to load messages:', err)
-      listError = $_('viewer.failedToLoadMessages')
+      listError = loadFailureText(err)
     } finally {
       loading = false
       if (deferredLoad) {
@@ -1343,7 +1350,7 @@
 
     } catch (err) {
       console.error('Failed to sync folder:', err)
-      listError = $_('viewer.failedToLoadMessages')
+      listError = loadFailureText(err)
     } finally {
       manualSyncing = false
     }
@@ -1382,7 +1389,7 @@
       await loadConversations(undefined, 'replace')
     } catch (err) {
       console.error('Failed to force re-sync folder:', err)
-      listError = $_('viewer.failedToLoadMessages')
+      listError = loadFailureText(err)
     }
   }
 
@@ -1463,7 +1470,7 @@
       let count = 0
 
       if (allMailSearch || isVirtualFolderView) {
-        const response = await SearchMail(new searchModels.MailSearchRequest({sessionId: virtualSearchSession, query, accountIds: allMailSearch && searchAccountScope ? [searchAccountScope] : [], virtualFolderId: allMailSearch ? '' : folderId!, filter: filterMode, cursor: '', limit: PAGE_SIZE}))
+        const response = await SearchMail(new mailservice.MailSearchRequest({sessionId: virtualSearchSession, query, accountIds: allMailSearch && searchAccountScope ? [searchAccountScope] : [], virtualFolderId: allMailSearch ? '' : folderId!, filter: filterMode, cursor: '', limit: PAGE_SIZE}))
         results = response.conversations || []
         if (generation !== localSearchGeneration || query !== searchQuery.trim()) return
         virtualQueryCursor = response.cursor || ''
@@ -1501,7 +1508,7 @@
       }
       if (isExpectedSearchCancellation(err)) return
       console.error('Search failed:', err)
-      localSearchError = $_('viewer.failedToLoadMessages')
+      localSearchError = loadFailureText(err)
     } finally {
       if (generation === localSearchGeneration) isSearching = false
     }
@@ -1526,7 +1533,7 @@
       let results: any[] = []
       if (allMailSearch || isVirtualFolderView) {
         if (!virtualQueryCursor) return
-        const response = await SearchMail(new searchModels.MailSearchRequest({ sessionId: virtualSearchSession, query, accountIds: allMailSearch && searchAccountScope ? [searchAccountScope] : [], virtualFolderId: allMailSearch ? '' : folderId!, filter: filterMode, cursor: virtualQueryCursor, limit: PAGE_SIZE }))
+        const response = await SearchMail(new mailservice.MailSearchRequest({ sessionId: virtualSearchSession, query, accountIds: allMailSearch && searchAccountScope ? [searchAccountScope] : [], virtualFolderId: allMailSearch ? '' : folderId!, filter: filterMode, cursor: virtualQueryCursor, limit: PAGE_SIZE }))
         if (generation !== localSearchGeneration || query !== searchQuery.trim()) return
         results = response.conversations || []
         virtualQueryCursor = response.cursor || ''
@@ -1549,7 +1556,7 @@
       if (generation !== localSearchGeneration || query !== searchQuery.trim()) return
       if (isExpectedSearchCancellation(err)) return
       console.error('Load more search results failed:', err)
-      localSearchError = $_('viewer.failedToLoadMessages')
+      localSearchError = loadFailureText(err)
     } finally {
       if (generation === localSearchGeneration) isSearching = false
     }
@@ -1676,7 +1683,7 @@
         return
       }
       console.error('Server search failed:', err)
-      serverSearchError = $_('viewer.failedToLoadMessages')
+      serverSearchError = loadFailureText(err)
     } finally {
       if (serverSearchRequestState.accepts(requestGeneration, query)) isServerSearching = false
     }
@@ -1920,7 +1927,7 @@
         return
       }
       console.error('Failed to fetch server message:', err)
-      serverSearchError = $_('viewer.failedToLoadMessages')
+      serverSearchError = loadFailureText(err)
     }
   }
 
