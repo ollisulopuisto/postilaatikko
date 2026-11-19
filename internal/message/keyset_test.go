@@ -219,11 +219,17 @@ func TestKeysetInterleavedLongThreadsDoNotRepeat(t *testing.T) {
 	s, folders := seedKeysetMailbox(t, 3)
 	// A spans the cursor: A newest, B next, A old, C last.
 	for thread, date := range map[string]string{"thread-000": "2026-11-01T12:00:00Z", "thread-001": "2026-11-01T11:00:00Z", "thread-002": "2026-11-01T09:00:00Z"} {
-		if _, err := s.db.Exec(`UPDATE messages SET date=? WHERE thread_id=?`, date, thread); err != nil {
+		if _, err := s.db.Exec(`UPDATE messages SET date=? WHERE thread_id=?`, func() time.Time {
+			v, e := time.Parse(time.RFC3339, date)
+			if e != nil {
+				t.Fatal(e)
+			}
+			return v
+		}(), thread); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := s.db.Exec(`UPDATE messages SET date='2026-11-01T10:00:00Z' WHERE id=(SELECT id FROM messages WHERE thread_id='thread-000' LIMIT 1)`); err != nil {
+	if _, err := s.db.Exec(`UPDATE messages SET date=? WHERE id=(SELECT id FROM messages WHERE thread_id='thread-000' LIMIT 1)`, time.Date(2026, 11, 1, 10, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatal(err)
 	}
 	got := walkKeysetPages(t, s, folders, 2, "newest", false)
