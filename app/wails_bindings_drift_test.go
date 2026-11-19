@@ -85,7 +85,8 @@ func parseWailsModelClasses(content string) map[string]map[string]bool {
 // unwrapped, struct types are recorded under the package Wails derives from
 // the reflected type name.
 func collectBoundStructTypes(bound reflect.Type, out map[string]map[string]bool) {
-	record := func(t reflect.Type) {
+	var record func(t reflect.Type)
+	record = func(t reflect.Type) {
 		for t.Kind() == reflect.Pointer || t.Kind() == reflect.Slice {
 			t = t.Elem()
 		}
@@ -101,7 +102,31 @@ func collectBoundStructTypes(bound reflect.Type, out map[string]map[string]bool)
 		if out[pkg] == nil {
 			out[pkg] = map[string]bool{}
 		}
+		if out[pkg][t.Name()] {
+			return
+		}
 		out[pkg][t.Name()] = true
+		// The generator emits every model reachable through a bound method,
+		// including structs referenced only from another model's fields, so
+		// the drift check must follow exported fields too — an aliased
+		// struct nested inside a bound model moves namespaces just the same.
+		// Named-map/slice element types unwrap at the next record call.
+		for i := 0; i < t.NumField(); i++ {
+			f := t.Field(i)
+			if !f.IsExported() {
+				continue
+			}
+			ft := f.Type
+			for ft.Kind() == reflect.Pointer || ft.Kind() == reflect.Slice || ft.Kind() == reflect.Map {
+				if ft.Kind() == reflect.Map {
+					record(ft.Key())
+					ft = ft.Elem()
+					continue
+				}
+				ft = ft.Elem()
+			}
+			record(ft)
+		}
 	}
 	for i := 0; i < bound.NumMethod(); i++ {
 		m := bound.Method(i)
