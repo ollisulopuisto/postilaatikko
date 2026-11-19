@@ -22,7 +22,7 @@ type ConversationCountOperations interface {
 }
 
 // MountConversationCountRoute mounts the authenticated exact-count operation.
-func MountConversationCountRoute(mux *http.ServeMux, ops ConversationCountOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func MountConversationCountRoute(mux RouteMux, ops ConversationCountOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	mux.HandleFunc("POST /v1/conversations/count", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailRead) {
 			return

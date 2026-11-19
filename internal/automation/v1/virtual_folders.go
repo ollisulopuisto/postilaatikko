@@ -27,7 +27,7 @@ type VirtualFolderMutationOperations interface {
 }
 
 // MountVirtualFolderMutationRoutes mounts authenticated persisted-view operations.
-func MountVirtualFolderMutationRoutes(mux *http.ServeMux, ops VirtualFolderMutationOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func MountVirtualFolderMutationRoutes(mux RouteMux, ops VirtualFolderMutationOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	mux.HandleFunc("/v1/views/mutations", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailWrite) {
 			return

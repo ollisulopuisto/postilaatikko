@@ -20,7 +20,7 @@ type FilterJobInspectionOperations interface {
 }
 
 // MountFilterJobRoutes mounts read-only inspection of uncertain filter moves.
-func MountFilterJobRoutes(mux *http.ServeMux, ops FilterJobInspectionOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func MountFilterJobRoutes(mux RouteMux, ops FilterJobInspectionOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	mux.HandleFunc("/v1/filter-jobs", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailRead) {
 			return

@@ -46,6 +46,11 @@ type ServerConfig struct {
 	// through ETERNOMAIL_API_TIMING=1 for profiling sessions. Timing lines
 	// never contain mailbox contents, tokens, or query strings.
 	RequestTiming bool
+	// DisableReadCoalescing turns off singleflight merging of concurrent
+	// identical read-only /v1/ requests (PERF-SC-002). Coalescing is on by
+	// default; it never applies to mutations and keys flights by method,
+	// path, query, body, and Authorization header.
+	DisableReadCoalescing bool
 }
 
 // Server hosts the authenticated automation API.
@@ -75,7 +80,11 @@ func NewServer(config ServerConfig) *Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/capabilities", s.handleCapabilities)
 	if config.V1Handler != nil {
-		mux.Handle("/v1/", config.V1Handler)
+		v1 := config.V1Handler
+		if !config.DisableReadCoalescing {
+			v1 = newReadCoalescer(v1, defaultReadCoalescerConfig())
+		}
+		mux.Handle("/v1/", v1)
 	}
 
 	handler := s.wrapMiddleware(mux)

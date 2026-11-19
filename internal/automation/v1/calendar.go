@@ -49,7 +49,7 @@ type CalendarReadOperations interface {
 
 // MountCalendarReadRoutes requires an independent Calendar grant. It deliberately
 // exposes no credential or arbitrary extension-method endpoint.
-func MountCalendarReadRoutes(mux *http.ServeMux, ops CalendarReadOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func MountCalendarReadRoutes(mux RouteMux, ops CalendarReadOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	route := func(pattern string, operation func(context.Context, *http.Request) (any, error)) {
 		mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 			if !requireCap(w, r, CapabilityCalendarRead) {

@@ -27,7 +27,7 @@ type FilterRuleOperations interface {
 }
 
 // MountFilterRuleRoutes mounts read and mutation routes for automatic filters.
-func MountFilterRuleRoutes(mux *http.ServeMux, ops FilterRuleOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func MountFilterRuleRoutes(mux RouteMux, ops FilterRuleOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	mux.HandleFunc("/v1/filters/evaluate", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailRead) {
 			return

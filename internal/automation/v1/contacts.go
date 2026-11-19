@@ -246,7 +246,7 @@ type contactsRouteHandler struct {
 // requireCap mirrors automation.RequireGrantCapability. ledger may be nil, in
 // which case mutation routes reject requests (mutations are never run without
 // idempotency protection).
-func MountContactsRoutes(mux *http.ServeMux, ops ContactsOperations, ledger ContactsMutationLedger, fingerprint func([]byte) []byte, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func MountContactsRoutes(mux RouteMux, ops ContactsOperations, ledger ContactsMutationLedger, fingerprint func([]byte) []byte, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	h := &contactsRouteHandler{ops: ops, ledger: ledger, fingerprint: fingerprint}
 
 	read := func(fn http.HandlerFunc) http.HandlerFunc {

@@ -35,7 +35,7 @@ type ConversationListOperations interface {
 }
 
 // MountConversationListRoute mounts the authenticated conversation-list route.
-func MountConversationListRoute(mux *http.ServeMux, ops ConversationListOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func MountConversationListRoute(mux RouteMux, ops ConversationListOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	mux.HandleFunc("/v1/conversations", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailRead) {
 			return

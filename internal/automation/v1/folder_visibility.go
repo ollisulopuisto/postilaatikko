@@ -21,7 +21,7 @@ type FolderVisibilityOperations interface {
 }
 
 // MountFolderVisibilityRoutes exposes account-validated folder visibility with mail-write authorization.
-func MountFolderVisibilityRoutes(mux *http.ServeMux, ops FolderVisibilityOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func MountFolderVisibilityRoutes(mux RouteMux, ops FolderVisibilityOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	mux.HandleFunc("/v1/folders/visibility", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailWrite) {
 			return

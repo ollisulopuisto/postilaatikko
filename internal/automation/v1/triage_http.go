@@ -37,7 +37,7 @@ type TriageOperations interface {
 }
 
 // MountTriageRoutes mounts authenticated Read Later and Snooze operations.
-func MountTriageRoutes(mux *http.ServeMux, ops TriageOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+func MountTriageRoutes(mux RouteMux, ops TriageOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	mux.HandleFunc("/v1/triage/read-later", func(w http.ResponseWriter, r *http.Request) {
 		if !requireCap(w, r, CapabilityMailRead) {
 			return

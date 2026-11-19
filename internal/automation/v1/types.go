@@ -4,6 +4,7 @@ package v1
 
 import (
 	"fmt"
+	"net/http"
 
 	"github.com/hkdb/aerion/internal/email/replycontent"
 	"github.com/hkdb/aerion/internal/views"
@@ -257,3 +258,12 @@ const (
 	// OperationUnknown means provider acceptance cannot be safely determined.
 	OperationUnknown OperationState = "outcome_unknown"
 )
+
+// RouteMux is the subset of *http.ServeMux used when mounting routes.
+// Production mounts pass a real *http.ServeMux; tests substitute a recording
+// implementation to enumerate every registered pattern (see the route
+// classification test in internal/alwayson, which guards the read-coalescing
+// allowlist against drift).
+type RouteMux interface {
+	HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request))
+}
