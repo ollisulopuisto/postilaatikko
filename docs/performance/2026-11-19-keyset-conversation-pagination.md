@@ -138,3 +138,14 @@ The original iterator query incorrectly admitted an older message from an alread
 Replacement measurement, same 20k-message fixture: offset first/25%/50%/75% = 114.7/119.4/120.9/123.1 ms. Corrected keyset = 5.0/4.9/4.8/5.1 ms. The earlier 3-4 ms numbers describe the flawed query and are superseded by these. No macOS or live-mailbox gains claimed.
 
 Physical Sent/Drafts and disabled-account folders intentionally retain the established offset implementation and numeric continuation cursors, preserving recipients and cached disabled-account mail. Unified lists continue excluding disabled accounts. Tests cover interleaved long threads, a one-connection pool with four selected folders, and physical-folder projection parity.
+
+## Coverage limits verified in review
+
+The benchmark calls the store keyset implementation directly. The HTTP v1
+conversation endpoint selects keyset only for an empty or k1-prefixed cursor
+and an eligible unfiltered newest-first scope. The desktop list service still
+starts with numeric cursor "0", which intentionally preserves offset semantics.
+The workspace bootstrap operations currently expose only the offset interface.
+Neither desktop list loading nor workspace bootstrap receives this measured
+keyset improvement yet. Adopting keyset there needs separate integration tests
+and performance measurements; no desktop or bootstrap speedup is claimed.

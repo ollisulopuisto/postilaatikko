@@ -64,10 +64,12 @@ func (o *catalogReadOperations) ListConversationsByFolder(folderID string, offse
 // cursor through idx_messages_folder_date_conv, so unfiltered newest-first
 // pages no longer group and sort the full folder per request.
 
+// ListConversationsByFolderKeyset returns a keyset page for an eligible physical folder, retaining legacy fallbacks.
 func (o *catalogReadOperations) ListConversationsByFolderKeyset(folderID, cursor string, limit int) ([]*message.Conversation, string, error) {
 	return o.messages.ListConversationsByFolderKeyset(folderID, cursor, limit)
 }
 
+// ListConversationsUnifiedInboxKeyset returns a keyset page across enabled account inboxes.
 func (o *catalogReadOperations) ListConversationsUnifiedInboxKeyset(cursor string, limit int) ([]*message.Conversation, string, error) {
 	folderIDs, err := resolveSpecialFolderIDs(o.accounts, o.folders, folder.TypeInbox)
 	if err != nil {
@@ -76,6 +78,7 @@ func (o *catalogReadOperations) ListConversationsUnifiedInboxKeyset(cursor strin
 	return o.messages.ListConversationsByFolderIDsKeyset(folderIDs, cursor, limit, "newest", false)
 }
 
+// ListConversationsUnifiedFolderKeyset returns a keyset page across a supported unified folder type.
 func (o *catalogReadOperations) ListConversationsUnifiedFolderKeyset(folderType, cursor string, limit int) ([]*message.Conversation, string, error) {
 	typeValue, err := parseUnifiedFolderType(folderType)
 	if err != nil {
