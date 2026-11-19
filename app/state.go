@@ -28,10 +28,17 @@ func (a *App) SaveUIState(state *appstate.UIState) error {
 // truth for the running app, About dialog, CLI --version and update checker.
 var Version = "development"
 
+// Build identifies one specific build of the app. Release and test DMG
+// builds inject it at link time (-ldflags "-X .../app.Build=<id>"), so the
+// About dialog can tell two builds apart even when they share VERSION. Plain
+// `go build` leaves it empty and the About dialog hides the build line.
+var Build = ""
+
 // AppInfo contains application metadata
 type AppInfo struct {
 	Name        string `json:"name"`
 	Version     string `json:"version"`
+	Build       string `json:"build"`
 	Description string `json:"description"`
 	Website     string `json:"website"`
 	License     string `json:"license"`
@@ -42,6 +49,7 @@ func (a *App) GetAppInfo() AppInfo {
 	return AppInfo{
 		Name:        "Postilaatikko",
 		Version:     Version,
+		Build:       Build,
 		Description: "A personal desktop email client for multiple accounts",
 		Website:     "https://github.com/ollisulopuisto/postilaatikko",
 		License:     "Apache 2.0",

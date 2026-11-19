@@ -872,6 +872,7 @@
     "deleteAccount": "Poista tili"
   },
   "settingsAbout": {
+    "build": "Koontiversio {build}",
     "version": "Versio {version}",
     "github": "GitHub",
     "privacyPolicy": "Tietosuojakäytäntö",

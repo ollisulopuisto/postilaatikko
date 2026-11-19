@@ -354,6 +354,7 @@ export namespace app {
 	export class AppInfo {
 	    name: string;
 	    version: string;
+	    build: string;
 	    description: string;
 	    website: string;
 	    license: string;
@@ -366,6 +367,7 @@ export namespace app {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.version = source["version"];
+	        this.build = source["build"];
 	        this.description = source["description"];
 	        this.website = source["website"];
 	        this.license = source["license"];
