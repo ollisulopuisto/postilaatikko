@@ -33,41 +33,32 @@ func (stubCatalog) GetFolders(string) ([]*folder.Folder, error)                {
 func (stubCatalog) GetVirtualFolders() ([]*virtualfolder.VirtualFolder, error) { return nil, nil }
 func (stubCatalog) GetIdentities(string) ([]*account.Identity, error)          { return nil, nil }
 
-// mountAllV1Routes mirrors the mount sequence in
-// SyncRuntime.MailboxReadAPIHandler (catalog_api.go). Keep them in sync: the
-// point of this test is that a newly mounted route fails classification until
-// a human decides whether the read coalescer may merge it. Attachment routes
-// (/v1/messages/attachments/*) are deliberately absent: MailboxReadAPIHandler
-// mounts thread/body reads via MountThreadBodyRoutes only; the attachment
-// routes live behind ReadHandler.MountRoutes, which this assembly never
-// calls.
+// stubContacts and stubCalendar satisfy the conditional mount dependencies
+// for enumeration without implementing the full interfaces: the embedded
+// nil interface promotes every method, and enumeration never invokes them.
+// They stand in for production's non-nil contacts/calendar runtimes so the
+// conditionally mounted routes appear in the enumeration, matching
+// production where the runtimes exist.
+type stubContacts struct{ v1.ContactsOperations }
+type stubCalendar struct{ v1.CalendarReadOperations }
+
+// mountAllV1Routes mounts the same route surface as
+// SyncRuntime.MailboxReadAPIHandler through the same mountMailboxV1Routes
+// function, so the enumeration cannot drift from production (a Devin
+// finding on PERF-SC-002: a hand-mirrored list stayed green when production
+// added a mount call). The point of this test is that a newly mounted route
+// fails classification until a human decides whether the read coalescer may
+// merge it. Attachment routes (/v1/messages/attachments/*) are deliberately
+// absent: MailboxReadAPIHandler mounts thread/body reads via
+// MountThreadBodyRoutes only; the attachment routes live behind
+// ReadHandler.MountRoutes, which this assembly never calls.
 func mountAllV1Routes(mux *recordingMux) {
-	requireCap := func(http.ResponseWriter, *http.Request, v1.Capability) bool { return true }
-	v1.MountCatalogRoutes(mux, stubCatalog{}, requireCap)
-	v1.MountVirtualFolderCacheRoute(mux, nil, requireCap)
-	v1.MountVirtualFolderUnreadCountRoute(mux, nil, requireCap)
-	v1.NewAccountMutationHandler(nil, nil).MountRoutes(mux, requireCap)
-	v1.MountFolderMutationRoutes(mux, nil, requireCap)
-	v1.MountFolderVisibilityRoutes(mux, nil, requireCap)
-	v1.MountVirtualFolderMutationRoutes(mux, nil, requireCap)
-	v1.MountFilterRuleRoutes(mux, nil, requireCap)
-	v1.MountFilterJobRoutes(mux, nil, requireCap)
-	v1.NewDraftsHandler(nil, nil).MountRoutes(mux, requireCap)
-	v1.MountReplyLaterRoutes(mux, nil, requireCap)
-	v1.MountTriageRoutes(mux, nil, requireCap)
-	v1.NewTriageMutationsHandler(nil, nil, nil).MountRoutes(mux, requireCap)
-	v1.MountMessageHeaderRoutes(mux, nil, requireCap)
-	v1.MountConversationListRoute(mux, nil, requireCap)
-	v1.MountConversationCountRoute(mux, nil, requireCap)
-	v1.MountConversationSearchRoute(mux, nil, requireCap)
-	v1.MountSearchRoute(mux, nil, requireCap)
-	v1.MountThreadBodyRoutes(mux, nil, requireCap)
-	v1.MountActionTargetRoute(mux, nil, requireCap)
-	v1.NewActionsHandlerWithReceiptStore(nil, nil, nil).MountRoutes(mux, requireCap)
-	v1.MountActionUndoRoutes(mux, nil, nil, nil, requireCap)
-	v1.MountActionEventRoutes(mux, nil, func(*http.Request) string { return "client" }, requireCap)
-	v1.MountContactsRoutes(mux, nil, nil, nil, requireCap)
-	v1.MountCalendarReadRoutes(mux, nil, requireCap)
+	mountMailboxV1Routes(mux, &mailboxRouteDeps{
+		catalog:       stubCatalog{},
+		grantClientID: func(*http.Request) string { return "client" },
+		contacts:      stubContacts{},
+		calendar:      stubCalendar{},
+	})
 }
 
 // routeClassification is the explicit coalescing decision for one mounted

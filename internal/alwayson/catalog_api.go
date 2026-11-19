@@ -17,6 +17,7 @@ import (
 	"github.com/hkdb/aerion/internal/logging"
 	"github.com/hkdb/aerion/internal/mailfilter"
 	"github.com/hkdb/aerion/internal/message"
+	"github.com/hkdb/aerion/internal/operations"
 	syncengine "github.com/hkdb/aerion/internal/sync"
 	"github.com/hkdb/aerion/internal/virtualfolder"
 )
@@ -656,56 +657,136 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 	}
 	readOperations := &mailboxReadOperations{runtime: r}
 	mailboxActions := &mailboxActionOperations{runtime: r}
-	mux := http.NewServeMux()
-	// Route inventory note: every Mount* call below is enumerated and
-	// classified for read coalescing (PERF-SC-002) in
-	// route_classification_test.go; a new route fails that test until it is
-	// classified.
-	v1.MountCatalogRoutes(mux, operations, automation.RequireGrantCapability)
-	v1.MountVirtualFolderCacheRoute(mux, r, automation.RequireGrantCapability)
-	v1.MountVirtualFolderUnreadCountRoute(mux, r, automation.RequireGrantCapability)
-	v1.NewAccountMutationHandler(r, newAccountMutationLedger(r.db), r.accountMutationFingerprint).MountRoutes(mux, automation.RequireGrantCapability)
-	v1.MountFolderMutationRoutes(mux, r, automation.RequireGrantCapability)
-	v1.MountFolderVisibilityRoutes(mux, r, automation.RequireGrantCapability)
-	v1.MountVirtualFolderMutationRoutes(mux, r, automation.RequireGrantCapability)
-	v1.MountFilterRuleRoutes(mux, r, automation.RequireGrantCapability)
-	v1.MountFilterJobRoutes(mux, r, automation.RequireGrantCapability)
-	v1.NewDraftsHandler(r, r.accountMutationFingerprint).MountRoutes(mux, automation.RequireGrantCapability)
-	v1.MountReplyLaterRoutes(mux, r, automation.RequireGrantCapability)
-	v1.MountTriageRoutes(mux, r, automation.RequireGrantCapability)
-	v1.NewTriageMutationsHandler(r, actionReceipts,
-		func(key string) string { return actionReceipts.digestKey(key, r.accountMutationFingerprint) },
-	).MountRoutes(mux, automation.RequireGrantCapability)
-	v1.MountMessageHeaderRoutes(mux, operations, automation.RequireGrantCapability)
-	v1.MountConversationListRoute(mux, operations, automation.RequireGrantCapability)
-	v1.MountConversationCountRoute(mux, operations, automation.RequireGrantCapability)
-	v1.MountConversationSearchRoute(mux, operations, automation.RequireGrantCapability)
-	v1.MountSearchRoute(mux, readOperations, automation.RequireGrantCapability)
-	v1.MountThreadBodyRoutes(mux, readOperations, automation.RequireGrantCapability)
-	v1.MountActionTargetRoute(mux, mailboxActions, automation.RequireGrantCapability)
-	v1.NewActionsHandlerWithReceiptStore(mailboxActions, actionReceipts,
-		func(key string) string { return actionReceipts.digestKey(key, r.accountMutationFingerprint) },
-	).MountRoutes(mux, automation.RequireGrantCapability)
-	v1.MountActionUndoRoutes(mux, actionReceipts, mailboxActions,
-		func(key string) string { return actionReceipts.digestKey(key, r.accountMutationFingerprint) },
-		automation.RequireGrantCapability,
-	)
-	v1.MountActionEventRoutes(mux, actionReceipts, func(request *http.Request) string {
-		grant := automation.GetClientGrant(request.Context())
-		if grant == nil {
-			return ""
-		}
-		return grant.ClientID
-	}, automation.RequireGrantCapability)
+	deps := &mailboxRouteDeps{
+		catalog:            operations,
+		cache:              r,
+		unreadCounts:       r,
+		accountMutations:   r,
+		accountLedger:      newAccountMutationLedger(r.db),
+		folders:            r,
+		folderVisibility:   r,
+		virtualFolders:     r,
+		filterRules:        r,
+		filterJobs:         r,
+		drafts:             r,
+		replyLater:         r,
+		triage:             r,
+		triageMutations:    r,
+		headers:            operations,
+		conversationList:   operations,
+		conversationCount:  operations,
+		conversationSearch: operations,
+		search:             readOperations,
+		messageRead:        readOperations,
+		actionTarget:       mailboxActions,
+		actions:            mailboxActions,
+		receipts:           actionReceipts,
+		undoStore:          actionReceipts,
+		undoOps:            mailboxActions,
+		eventStore:         actionReceipts,
+		keyDigest:          func(key string) string { return actionReceipts.digestKey(key, r.accountMutationFingerprint) },
+		grantClientID:      grantClientIDFromContext,
+		fingerprint:        r.accountMutationFingerprint,
+	}
 	// The remote contacts surface shares this authenticated /v1 router; without
 	// this mount every desktop contacts call in remote service mode 404s.
 	if r.contacts != nil {
-		v1.MountContactsRoutes(mux, &contactsOperations{runtime: r.contacts}, newContactsMutationLedger(r.db), r.accountMutationFingerprint, automation.RequireGrantCapability)
+		deps.contacts = &contactsOperations{runtime: r.contacts}
+		deps.contactsLedger = newContactsMutationLedger(r.db)
 	}
 	if r.calendar != nil {
-		v1.MountCalendarReadRoutes(mux, r.calendar, automation.RequireGrantCapability)
+		deps.calendar = r.calendar
 	}
+	mux := http.NewServeMux()
+	mountMailboxV1Routes(mux, deps)
 	return mux, nil
+}
+
+// grantClientIDFromContext reads the authenticated client ID the automation
+// middleware stored on the request context.
+func grantClientIDFromContext(request *http.Request) string {
+	grant := automation.GetClientGrant(request.Context())
+	if grant == nil {
+		return ""
+	}
+	return grant.ClientID
+}
+
+// mailboxRouteDeps carries every operation the mailbox v1 route surface
+// needs. MailboxReadAPIHandler fills it from the live runtime; the
+// route-classification test fills it with stubs. Both mount through
+// mountMailboxV1Routes, so a route added in one place is mounted in the
+// other by construction and cannot leave the classification mirror stale.
+type mailboxRouteDeps struct {
+	catalog            v1.CatalogOperations
+	cache              v1.CachedVirtualFolderOperations
+	unreadCounts       v1.VirtualFolderUnreadCountOperations
+	accountMutations   v1.AccountMutationOperations
+	accountLedger      v1.AccountMutationLedger
+	folders            v1.FolderMutationOperations
+	folderVisibility   v1.FolderVisibilityOperations
+	virtualFolders     v1.VirtualFolderMutationOperations
+	filterRules        v1.FilterRuleOperations
+	filterJobs         v1.FilterJobInspectionOperations
+	drafts             v1.DraftOperations
+	replyLater         v1.ReplyLaterHTTPOperations
+	triage             v1.TriageOperations
+	triageMutations    v1.TriageMutationOperations
+	headers            v1.MessageHeaderOperations
+	conversationList   v1.ConversationListOperations
+	conversationCount  v1.ConversationCountOperations
+	conversationSearch v1.ConversationSearchOperations
+	search             v1.SearchOperations
+	messageRead        v1.MessageReadOperations
+	actionTarget       operations.MessageLookup
+	actions            v1.ActionOperations
+	receipts           v1.ActionReceiptStore
+	undoStore          v1.ActionUndoStore
+	undoOps            v1.ActionUndoOperations
+	eventStore         v1.ActionEventStore
+	keyDigest          func(string) string
+	grantClientID      func(*http.Request) string
+	fingerprint        func([]byte) []byte
+	contacts           v1.ContactsOperations
+	contactsLedger     v1.ContactsMutationLedger
+	calendar           v1.CalendarReadOperations
+}
+
+// mountMailboxV1Routes mounts the entire mailbox v1 route surface. Every
+// route here is classified for read coalescing (PERF-SC-002) in
+// route_classification_test.go, which mounts through this same function; a
+// new route fails that test until it is classified.
+func mountMailboxV1Routes(mux v1.RouteMux, d *mailboxRouteDeps) {
+	requireCap := automation.RequireGrantCapability
+	v1.MountCatalogRoutes(mux, d.catalog, requireCap)
+	v1.MountVirtualFolderCacheRoute(mux, d.cache, requireCap)
+	v1.MountVirtualFolderUnreadCountRoute(mux, d.unreadCounts, requireCap)
+	v1.NewAccountMutationHandler(d.accountMutations, d.accountLedger, d.fingerprint).MountRoutes(mux, requireCap)
+	v1.MountFolderMutationRoutes(mux, d.folders, requireCap)
+	v1.MountFolderVisibilityRoutes(mux, d.folderVisibility, requireCap)
+	v1.MountVirtualFolderMutationRoutes(mux, d.virtualFolders, requireCap)
+	v1.MountFilterRuleRoutes(mux, d.filterRules, requireCap)
+	v1.MountFilterJobRoutes(mux, d.filterJobs, requireCap)
+	v1.NewDraftsHandler(d.drafts, d.fingerprint).MountRoutes(mux, requireCap)
+	v1.MountReplyLaterRoutes(mux, d.replyLater, requireCap)
+	v1.MountTriageRoutes(mux, d.triage, requireCap)
+	v1.NewTriageMutationsHandler(d.triageMutations, d.receipts, d.keyDigest).MountRoutes(mux, requireCap)
+	v1.MountMessageHeaderRoutes(mux, d.headers, requireCap)
+	v1.MountConversationListRoute(mux, d.conversationList, requireCap)
+	v1.MountConversationCountRoute(mux, d.conversationCount, requireCap)
+	v1.MountConversationSearchRoute(mux, d.conversationSearch, requireCap)
+	v1.MountSearchRoute(mux, d.search, requireCap)
+	v1.MountThreadBodyRoutes(mux, d.messageRead, requireCap)
+	v1.MountActionTargetRoute(mux, d.actionTarget, requireCap)
+	v1.NewActionsHandlerWithReceiptStore(d.actions, d.receipts, d.keyDigest).MountRoutes(mux, requireCap)
+	v1.MountActionUndoRoutes(mux, d.undoStore, d.undoOps, d.keyDigest, requireCap)
+	v1.MountActionEventRoutes(mux, d.eventStore, d.grantClientID, requireCap)
+	if d.contacts != nil {
+		v1.MountContactsRoutes(mux, d.contacts, d.contactsLedger, d.fingerprint, requireCap)
+	}
+	if d.calendar != nil {
+		v1.MountCalendarReadRoutes(mux, d.calendar, requireCap)
+	}
 }
 
 // PreviewFilterRule counts stored messages without changing mail or saving the rule.
