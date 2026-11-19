@@ -25,7 +25,7 @@ test('a throwing search call shows an error and never freezes the search UI',{sk
       await import('/src/app.css')
       window.calls=[]
       window.runtime=new Proxy({EventsOnMultiple:()=>()=>{}},{get:(target,key)=>target[key]||(()=>Promise.resolve())})
-      window.go={app:{App:new Proxy({},{get:(_,name)=>(...args)=>{
+      window.go={app:{App:new Proxy({},{get:(_,name)=>(..._args)=>{
         window.calls.push({name,at:performance.now()})
         if(name==='SearchMail')throw new TypeError("undefined is not a constructor (evaluating 'new MailSearchRequest()')")
         if(name==='GetFTSIndexStatus')return Promise.resolve({complete:true,totalMessages:0,indexedMessages:0})

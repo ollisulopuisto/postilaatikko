@@ -86,7 +86,7 @@ func parseWailsModelClasses(content string) map[string]map[string]bool {
 // the reflected type name.
 func collectBoundStructTypes(bound reflect.Type, out map[string]map[string]bool) {
 	record := func(t reflect.Type) {
-		for t.Kind() == reflect.Ptr || t.Kind() == reflect.Slice {
+		for t.Kind() == reflect.Pointer || t.Kind() == reflect.Slice {
 			t = t.Elem()
 		}
 		if t.Kind() != reflect.Struct || t.Name() == "" {
