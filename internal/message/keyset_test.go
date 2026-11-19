@@ -255,15 +255,21 @@ func TestKeysetDoesNotHoldOneConnectionPerFolder(t *testing.T) {
 func TestPhysicalFolderKeysetPreservesLegacySemantics(t *testing.T) {
 	for _, kind := range []string{"sent", "drafts", "inbox"} {
 		s, _, fid := newBodyFailedTestStore(t)
-		s.db.Exec(`UPDATE folders SET folder_type=? WHERE id=?`, kind, fid)
+		if _, err := s.db.Exec(`UPDATE folders SET folder_type=? WHERE id=?`, kind, fid); err != nil {
+			t.Fatal(err)
+		}
 		if kind == "inbox" {
-			s.db.Exec(`UPDATE accounts SET enabled=0`)
+			if _, err := s.db.Exec(`UPDATE accounts SET enabled=0`); err != nil {
+				t.Fatal(err)
+			}
 		}
 		m := &Message{AccountID: "acct-1", FolderID: fid, UID: 1, MessageID: "<test@example.test>", ThreadID: "one", Subject: "hi", FromEmail: "me@example.test", Date: time.Now()}
 		if err := s.Create(m); err != nil {
 			t.Fatal(err)
 		}
-		s.db.Exec(`UPDATE messages SET to_list='[{"name":"Bob","email":"bob@example.test"}]'`)
+		if _, err := s.db.Exec(`UPDATE messages SET to_list='[{"name":"Bob","email":"bob@example.test"}]'`); err != nil {
+			t.Fatal(err)
+		}
 		want, err := s.ListConversationsByFolder(fid, 0, 10, "newest", "")
 		if err != nil {
 			t.Fatal(err)
