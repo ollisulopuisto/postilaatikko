@@ -415,20 +415,17 @@ func (s *Store) ListVirtualArchivedConversations(allMailFolderIDs []string, offs
 	return s.listConversationsByFolderIDs(allMailFolderIDs, offset, limit, sortOrder, filter, true)
 }
 
-func (s *Store) listConversationsByFolderIDs(folderIDs []string, offset, limit int, sortOrder, filter string, excludeInboxCopies bool) ([]*Conversation, error) {
-	if len(folderIDs) == 0 {
-		return []*Conversation{}, nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
-
+// buildConversationListQuery constructs the unified conversation list query
+// for n folder placeholders. Extracted so query plans can be profiled in
+// tests against the exact production SQL (PERF-SC-005).
+func buildConversationListQuery(nFolders int, sortOrder, filter string, excludeInboxCopies bool) string {
 	// Determine sort direction
 	orderClause := "ORDER BY latest_date DESC, account_id ASC, conv_thread_id ASC"
 	if sortOrder == "oldest" {
 		orderClause = "ORDER BY latest_date ASC, account_id ASC, conv_thread_id ASC"
 	}
 
-	placeholders := strings.TrimRight(strings.Repeat("?,", len(folderIDs)), ",")
+	placeholders := strings.TrimRight(strings.Repeat("?,", nFolders), ",")
 	archiveClause := ""
 	if excludeInboxCopies {
 		// RFC Message-ID is persisted for each IMAP mailbox copy and is the
@@ -439,7 +436,7 @@ func (s *Store) listConversationsByFolderIDs(folderIDs []string, offset, limit i
 			AND inbox_m.message_id = m.message_id
 		)`
 	}
-	query := fmt.Sprintf(`
+	return fmt.Sprintf(`
 		SELECT 
 			COALESCE(m.thread_id, m.id) as conv_thread_id,
 			MIN(m.subject) as subject,
@@ -466,6 +463,16 @@ func (s *Store) listConversationsByFolderIDs(folderIDs []string, offset, limit i
 		`+orderClause+`
 		LIMIT ? OFFSET ?
 	`, placeholders, archiveClause)
+}
+
+func (s *Store) listConversationsByFolderIDs(folderIDs []string, offset, limit int, sortOrder, filter string, excludeInboxCopies bool) ([]*Conversation, error) {
+	if len(folderIDs) == 0 {
+		return []*Conversation{}, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+
+	query := buildConversationListQuery(len(folderIDs), sortOrder, filter, excludeInboxCopies)
 
 	args := make([]any, 0, len(folderIDs)+2)
 	for _, id := range folderIDs {
