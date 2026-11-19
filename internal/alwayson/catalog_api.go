@@ -60,6 +60,34 @@ func (o *catalogReadOperations) ListConversationsByFolder(folderID string, offse
 	return o.messages.ListConversationsByFolder(folderID, offset, limit, sortOrder, filter)
 }
 
+// Keyset conversation pagination (PERF-SC-005). The store seeks the page
+// cursor through idx_messages_folder_date_conv, so unfiltered newest-first
+// pages no longer group and sort the full folder per request.
+
+func (o *catalogReadOperations) ListConversationsByFolderKeyset(folderID, cursor string, limit int) ([]*message.Conversation, string, error) {
+	return o.messages.ListConversationsByFolderIDsKeyset([]string{folderID}, cursor, limit, "newest", false)
+}
+
+func (o *catalogReadOperations) ListConversationsUnifiedInboxKeyset(cursor string, limit int) ([]*message.Conversation, string, error) {
+	folderIDs, err := resolveSpecialFolderIDs(o.accounts, o.folders, folder.TypeInbox)
+	if err != nil {
+		return nil, "", err
+	}
+	return o.messages.ListConversationsByFolderIDsKeyset(folderIDs, cursor, limit, "newest", false)
+}
+
+func (o *catalogReadOperations) ListConversationsUnifiedFolderKeyset(folderType, cursor string, limit int) ([]*message.Conversation, string, error) {
+	typeValue, err := parseUnifiedFolderType(folderType)
+	if err != nil {
+		return nil, "", err
+	}
+	folderIDs, err := resolveSpecialFolderIDs(o.accounts, o.folders, typeValue)
+	if err != nil {
+		return nil, "", err
+	}
+	return o.messages.ListConversationsByFolderIDsKeyset(folderIDs, cursor, limit, "newest", false)
+}
+
 func (o *catalogReadOperations) CountConversationsByFolder(accountID, folderID, filter string) (int, error) {
 	f, err := o.folders.Get(folderID)
 	if err != nil {

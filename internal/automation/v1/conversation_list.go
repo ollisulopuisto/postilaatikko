@@ -34,6 +34,16 @@ type ConversationListOperations interface {
 	ListConversationsUnifiedFolder(folderType string, offset, limit int, sortOrder, filter string) ([]*message.Conversation, error)
 }
 
+// ConversationListKeysetOperations is implemented by operation sets that can
+// serve keyset-paginated conversation pages (PERF-SC-005). The handler uses
+// it for unfiltered newest-first lists, where each page costs O(page) instead
+// of O(folder); offset pagination remains for every other combination.
+type ConversationListKeysetOperations interface {
+	ListConversationsByFolderKeyset(folderID, cursor string, limit int) ([]*message.Conversation, string, error)
+	ListConversationsUnifiedInboxKeyset(cursor string, limit int) ([]*message.Conversation, string, error)
+	ListConversationsUnifiedFolderKeyset(folderType, cursor string, limit int) ([]*message.Conversation, string, error)
+}
+
 // MountConversationListRoute mounts the authenticated conversation-list route.
 func MountConversationListRoute(mux RouteMux, ops ConversationListOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	mux.HandleFunc("/v1/conversations", func(w http.ResponseWriter, r *http.Request) {
@@ -95,6 +105,25 @@ func executeConversationList(ops ConversationListOperations, req ConversationLis
 	if err != nil {
 		return ConversationListPage{}, &requestError{http.StatusBadRequest, CodeInvalidRequest, err.Error(), false}
 	}
+	// Keyset path (PERF-SC-005): unfiltered newest-first lists paginate by
+	// opaque keyset cursor. Legacy numeric cursors keep offset semantics, so
+	// existing clients are unaffected; a keyset cursor never enters the
+	// offset path.
+	keysetCursor := pageRequest.Cursor
+	useKeyset := req.Filter == "" && req.SortOrder == "newest" &&
+		(keysetCursor == "" || strings.HasPrefix(keysetCursor, message.KeysetCursorPrefix))
+	if useKeyset {
+		if kop, ok := ops.(ConversationListKeysetOperations); ok {
+			page, keysetHandled, reqErr := executeConversationListKeyset(kop, ops, req, keysetCursor, pageRequest.Limit)
+			if reqErr != nil {
+				return ConversationListPage{}, reqErr
+			}
+			if keysetHandled {
+				return page, nil
+			}
+		}
+	}
+
 	offset := 0
 	if pageRequest.Cursor != "" {
 		offset, err = strconv.Atoi(pageRequest.Cursor)
@@ -144,6 +173,74 @@ func executeConversationList(ops ConversationListOperations, req ConversationLis
 		page.Items = []*message.Conversation{}
 	}
 	return page, nil
+}
+
+// executeConversationListKeyset runs the keyset-paginated conversation read.
+// keysetHandled reports whether the scope is served by the keyset path;
+// unified archive and read-later scopes merge several sources per page and
+// stay on the offset path for now.
+func executeConversationListKeyset(kop ConversationListKeysetOperations, ops ConversationListOperations, req ConversationListRequest, cursor string, limit int) (ConversationListPage, bool, *requestError) {
+	var items []*message.Conversation
+	var next string
+	var listErr error
+	switch req.Scope.Kind {
+	case views.ScopeFolder:
+		f, err := ops.GetFolder(req.Scope.FolderID)
+		if err != nil {
+			return ConversationListPage{}, false, &requestError{http.StatusInternalServerError, CodeInternal, "Failed to load folder", true}
+		}
+		if f == nil || f.AccountID != req.Scope.AccountID {
+			return ConversationListPage{}, false, &requestError{http.StatusNotFound, CodeNotFound, "Folder not found for account", false}
+		}
+		items, next, listErr = kop.ListConversationsByFolderKeyset(req.Scope.FolderID, cursor, limit)
+	case views.ScopeAllInboxes:
+		items, next, listErr = kop.ListConversationsUnifiedInboxKeyset(cursor, limit)
+	case views.ScopeUnifiedFolder:
+		if !keysetUnifiedFolderType(req.Scope.FolderType) {
+			return ConversationListPage{}, false, nil
+		}
+		items, next, listErr = kop.ListConversationsUnifiedFolderKeyset(req.Scope.FolderType, cursor, limit)
+	default:
+		return ConversationListPage{}, false, nil
+	}
+	if listErr != nil {
+		status := http.StatusInternalServerError
+		code := ErrorCode(CodeInternal)
+		if strings.Contains(listErr.Error(), "keyset cursor") {
+			status = http.StatusBadRequest
+			code = CodeInvalidRequest
+		}
+		return ConversationListPage{}, false, &requestError{status, code, "Failed to load conversations", status == http.StatusInternalServerError}
+	}
+	page := ConversationListPage{Items: items, Complete: next == "", NextCursor: next}
+	for _, item := range page.Items {
+		if item == nil {
+			continue
+		}
+		if req.Scope.Kind == views.ScopeFolder {
+			item.AccountID = req.Scope.AccountID
+			item.FolderID = req.Scope.FolderID
+		}
+		// The list contract never returns fetched message bodies.
+		item.Messages = nil
+	}
+	if page.Items == nil {
+		page.Items = []*message.Conversation{}
+	}
+	return page, true, nil
+}
+
+// keysetUnifiedFolderType reports which unified folder types the keyset path
+// serves: the ones backed by one physical folder list. Archive merges a
+// physical and a virtual listing per page, and the read-later queues have
+// their own indexed store paths; all three stay on offset pagination.
+func keysetUnifiedFolderType(folderType string) bool {
+	switch folderType {
+	case "drafts", "sent", "trash", "starred", "spam":
+		return true
+	default:
+		return false
+	}
 }
 
 func validConversationListFilter(filter string) bool {
