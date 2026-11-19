@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- The message list now names the real cause when loading fails (backend error, timeout, bad query) instead of only "Failed to load messages.", so a wedged backend is distinguishable from an empty or failing folder.
+
 - Fix all-mail and saved-view search failing in test DMGs with "undefined is not a constructor": the search request struct moved behind a Go type alias, so release builds generated bindings under a different namespace than the window code constructs. Search now uses the namespace the binding generator emits, the checked-in bindings are regenerated to match Go, and a new drift test plus a browser regression test keep a moved binding from shipping again.
 
 - After you move similar mail to the same folder in two separate actions, Postilaatikko offers to create a filter from the shared sender, recipient or subject words. You review and edit it in the filter dialog first; nothing is created automatically, and dismissing the offer suppresses it. Only the sender, To/Cc and subject of mail you move are kept locally (last 1000 messages), never bodies, and your own addresses are never used as a match. Adds a local database migration (83).

@@ -57,7 +57,8 @@ test('a throwing search call shows an error and never freezes the search UI',{sk
     // Submitting routes to the list workspace, which shows its own error state.
     await search.press('Enter')
     await page.getByRole('heading',{name:'Search: is:unread later',exact:true}).waitFor()
-    await page.getByText('Failed to load messages.',{exact:true}).waitFor()
+    // The list workspace surfaces the underlying cause, not only generic text.
+    await page.getByText('Failed to load messages: undefined is not a constructor',{exact:false}).waitFor()
     // The list still accepts commands: a filter change issues a fresh attempt.
     const attempts=()=>page.evaluate(()=>window.calls.filter(c=>c.name==='SearchMail').length)
     const prior=await attempts()

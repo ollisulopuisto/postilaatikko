@@ -1073,6 +1073,13 @@
   // A bound backend call can occasionally stall while SQLite is recovering a
   // lock after a hot reload. Never leave the message pane in a permanent
   // loading state: surface a retryable error instead.
+  // Surface the underlying cause next to the generic text: a wedged backend,
+  // a timeout and a bad query used to be indistinguishable in the banner.
+  const loadFailureText = (err: unknown) =>
+    $_('viewer.failedToLoadMessagesWithReason', {
+      values: { message: (err as Error)?.message ?? String(err) },
+    })
+
   async function withLoadTimeout<T>(operation: Promise<T>, label: string, timeoutMs = 12_000): Promise<T> {
     let timeoutID: ReturnType<typeof setTimeout> | undefined
     try {
@@ -1262,7 +1269,7 @@
       }
       if (isExpectedSearchCancellation(err)) return
       console.error('Failed to load messages:', err)
-      listError = $_('viewer.failedToLoadMessages')
+      listError = loadFailureText(err)
     } finally {
       loading = false
       if (deferredLoad) {
@@ -1343,7 +1350,7 @@
 
     } catch (err) {
       console.error('Failed to sync folder:', err)
-      listError = $_('viewer.failedToLoadMessages')
+      listError = loadFailureText(err)
     } finally {
       manualSyncing = false
     }
@@ -1382,7 +1389,7 @@
       await loadConversations(undefined, 'replace')
     } catch (err) {
       console.error('Failed to force re-sync folder:', err)
-      listError = $_('viewer.failedToLoadMessages')
+      listError = loadFailureText(err)
     }
   }
 
@@ -1501,7 +1508,7 @@
       }
       if (isExpectedSearchCancellation(err)) return
       console.error('Search failed:', err)
-      localSearchError = $_('viewer.failedToLoadMessages')
+      localSearchError = loadFailureText(err)
     } finally {
       if (generation === localSearchGeneration) isSearching = false
     }
@@ -1549,7 +1556,7 @@
       if (generation !== localSearchGeneration || query !== searchQuery.trim()) return
       if (isExpectedSearchCancellation(err)) return
       console.error('Load more search results failed:', err)
-      localSearchError = $_('viewer.failedToLoadMessages')
+      localSearchError = loadFailureText(err)
     } finally {
       if (generation === localSearchGeneration) isSearching = false
     }
@@ -1676,7 +1683,7 @@
         return
       }
       console.error('Server search failed:', err)
-      serverSearchError = $_('viewer.failedToLoadMessages')
+      serverSearchError = loadFailureText(err)
     } finally {
       if (serverSearchRequestState.accepts(requestGeneration, query)) isServerSearching = false
     }
@@ -1920,7 +1927,7 @@
         return
       }
       console.error('Failed to fetch server message:', err)
-      serverSearchError = $_('viewer.failedToLoadMessages')
+      serverSearchError = loadFailureText(err)
     }
   }
 
