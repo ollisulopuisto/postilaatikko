@@ -2,6 +2,7 @@ package message
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -284,5 +285,13 @@ func TestPhysicalFolderKeysetPreservesLegacySemantics(t *testing.T) {
 		if fmt.Sprint(got[0].Participants) != fmt.Sprint(want[0].Participants) {
 			t.Fatalf("%s participants mismatch: got %v want %v", kind, got[0].Participants, want[0].Participants)
 		}
+	}
+}
+
+func TestKeysetRejectsMalformedDateBeforeFolderLookup(t *testing.T) {
+	s, _, _ := newBodyFailedTestStore(t)
+	_, _, err := s.ListConversationsByFolderIDsKeyset(nil, EncodeConversationCursor("not-a-date", "a", "t", "newest"), 10, "newest", false)
+	if err == nil || !strings.Contains(err.Error(), "keyset cursor") {
+		t.Fatalf("invalid date must be a classified cursor error, got %v", err)
 	}
 }

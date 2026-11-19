@@ -74,6 +74,9 @@ func decodeConversationCursor(cursor string) (conversationCursor, error) {
 	if c.Date == "" || c.Thread == "" || (c.Order != "newest" && c.Order != "oldest") {
 		return c, fmt.Errorf("incomplete keyset cursor")
 	}
+	if _, err := time.Parse(time.RFC3339Nano, c.Date); err != nil {
+		return c, fmt.Errorf("malformed keyset cursor date: %w", err)
+	}
 	return c, nil
 }
 
@@ -234,7 +237,7 @@ func (s *Store) collectPageKeys(ctx context.Context, folderIDs []string, folderA
 			bound = " AND m.date <= ? AND (m.date < ? OR (m.date = ? AND (? > ? OR (? = ? AND COALESCE(m.thread_id,m.id)>?))))"
 			date, err := time.Parse(time.RFC3339Nano, cur.Date)
 			if err != nil {
-				return nil, false, fmt.Errorf("malformed cursor date: %w", err)
+				return nil, false, fmt.Errorf("malformed keyset cursor date: %w", err)
 			}
 			args = append(args, date, date, date, account, cur.Account, account, cur.Account, cur.Thread)
 		}
