@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Fix a background reconnect storm: when a server accepted the login but refused or dropped IMAP IDLE immediately, the app reconnected with no delay or retry limit, pinning a CPU core and churning memory. Fast-failing cycles now back off like failed connections and give up after the configured retries; long-lived connections that drop still reconnect at once.
+
 - The message list now names the real cause when loading fails (backend error, timeout, bad query) instead of only "Failed to load messages.", so a wedged backend is distinguishable from an empty or failing folder.
 
 - Fix all-mail and saved-view search failing in test DMGs with "undefined is not a constructor": the search request struct moved behind a Go type alias, so release builds generated bindings under a different namespace than the window code constructs. Search now uses the namespace the binding generator emits, the checked-in bindings are regenerated to match Go, and a new drift test plus a browser regression test keep a moved binding from shipping again.

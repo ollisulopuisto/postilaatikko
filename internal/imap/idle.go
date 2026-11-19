@@ -55,12 +55,12 @@ func DefaultIdleConfig() IdleConfig {
 
 // IdleConnection manages an IDLE connection for a single account
 type IdleConnection struct {
-	accountID      string
-	accountName    string
-	config         IdleConfig
+	accountID   string
+	accountName string
+	config      IdleConfig
 	// activities keeps an armed IDLE watch out of App Nap (macOS);
 	// nil = no-op. Timely new-mail notifications are the default.
-	activities *platform.ActivityManager
+	activities     *platform.ActivityManager
 	getCredentials func(accountID string) (*ClientConfig, error)
 	isConnected    func() bool // optional: wait for connectivity before reconnecting
 	log            zerolog.Logger
@@ -224,23 +224,62 @@ func (ic *IdleConnection) run(ctx context.Context) {
 			}
 		}
 
-		// Reset backoff on successful connection
-		backoff = min(ic.config.ReconnectBackoff, ic.config.MaxReconnectBackoff)
-		attempts = 0
+		// The retry budget resets only once a cycle proves the connection
+		// stable — see the cycle-failure path below.
+		connectedAt := time.Now()
 
 		// Run IDLE cycle
-		if err := ic.idleCycle(ctx); err != nil {
-			ic.log.Warn().Err(err).Msg("IDLE cycle failed")
-			// Close the connection so we reconnect on next iteration
-			ic.mu.Lock()
-			if ic.client != nil {
-				ic.client.Close()
-				ic.client = nil
-			}
-			ic.mu.Unlock()
+		cycleErr := ic.idleCycle(ctx)
+		if cycleErr == nil {
+			// Clean cycle (restart timeout, stop, cancel): reconnect at once.
+			backoff = min(ic.config.ReconnectBackoff, ic.config.MaxReconnectBackoff)
+			attempts = 0
+			continue
+		}
+		ic.log.Warn().Err(cycleErr).Msg("IDLE cycle failed")
+		// Close the connection so we reconnect on next iteration
+		ic.mu.Lock()
+		if ic.client != nil {
+			ic.client.Close()
+			ic.client = nil
+		}
+		ic.mu.Unlock()
+		if time.Since(connectedAt) >= minStableIdleCycle {
+			// A long-lived connection dropped (server timeout, network flap):
+			// reconnect at once with a fresh budget.
+			backoff = min(ic.config.ReconnectBackoff, ic.config.MaxReconnectBackoff)
+			attempts = 0
+			continue
+		}
+		// Fast cycle failures (server rejects IDLE, dead on arrival) must
+		// consume the retry budget like failed connects — otherwise the loop
+		// reconnects with zero backoff forever and pins a core.
+		attempts++
+		if attempts >= ic.config.MaxReconnectAttempts {
+			ic.log.Error().
+				Err(cycleErr).
+				Int("attempts", attempts).
+				Msg("Max reconnection attempts reached, giving up")
+			return
+		}
+		ic.log.Warn().
+			Dur("backoff", backoff).
+			Int("attempt", attempts).
+			Msg("IDLE cycle failed fast, retrying with backoff")
+		select {
+		case <-time.After(backoff):
+			backoff = nextReconnectBackoff(backoff, ic.config.MaxReconnectBackoff)
+		case <-ctx.Done():
+			return
+		case <-ic.stopCh:
+			return
 		}
 	}
 }
+
+// minStableIdleCycle is how long an IDLE session must survive for its end to
+// count as a healthy connection dropping rather than a failed cycle.
+const minStableIdleCycle = time.Minute
 
 // ensureConnected ensures we have a valid connection with unilateral data handler
 func (ic *IdleConnection) ensureConnected(ctx context.Context) error {
