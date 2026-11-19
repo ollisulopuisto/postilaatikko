@@ -39,6 +39,9 @@ type Config struct {
 	Endpoint string
 	Token    string
 	Timeout  time.Duration
+	// Transport optionally overrides the HTTP round tripper, for example to
+	// inject latency or count requests in benchmarks. Nil uses the default.
+	Transport http.RoundTripper
 }
 
 // New creates an automation Client.
@@ -56,7 +59,8 @@ func New(cfg Config) *Client {
 		endpoint: endpoint,
 		token:    cfg.Token,
 		httpClient: &http.Client{
-			Timeout: timeout,
+			Timeout:   timeout,
+			Transport: cfg.Transport,
 		},
 	}
 }

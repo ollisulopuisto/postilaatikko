@@ -40,6 +40,12 @@ type ServerConfig struct {
 	AllowedHosts []string
 	TokenStore   TokenStore
 	V1Handler    http.Handler
+	// RequestTiming enables one structured timing log line per API request
+	// (route, status, duration, bytes). It is off by default so production
+	// listeners carry no per-request logging overhead; the helper enables it
+	// through ETERNOMAIL_API_TIMING=1 for profiling sessions. Timing lines
+	// never contain mailbox contents, tokens, or query strings.
+	RequestTiming bool
 }
 
 // Server hosts the authenticated automation API.
@@ -248,6 +254,15 @@ func (s *Server) wrapMiddleware(next http.Handler) http.Handler {
 		reqID := generateRequestID()
 		w.Header().Set("X-Request-Id", reqID)
 
+		if s.config.RequestTiming {
+			recorder := &requestTimingWriter{ResponseWriter: w}
+			start := time.Now()
+			defer func() {
+				logRequestTiming(reqID, r, recorder, time.Since(start))
+			}()
+			w = recorder
+		}
+
 		// Defense-in-depth HTTP security headers: prevent MIME sniffing, frame embedding, content injection, and sensitive data caching
 		applySecurityHeaders(w)
 
@@ -298,8 +313,65 @@ func (s *Server) wrapMiddleware(next http.Handler) http.Handler {
 		ctx := context.WithValue(r.Context(), clientGrantKey, grant)
 		ctx = context.WithValue(ctx, requestIDKey, reqID)
 
-		next.ServeHTTP(w, r.WithContext(ctx))
+		// Rebind r so the deferred timing log sees the route pattern the
+		// mux sets on the request it serves (WithContext returns a copy).
+		r = r.WithContext(ctx)
+		next.ServeHTTP(w, r)
 	})
+}
+
+// requestTimingWriter records the response status code and byte count for
+// request timing logs. Unwrap lets http.ResponseController reach the
+// underlying writer for streaming behaviours.
+type requestTimingWriter struct {
+	http.ResponseWriter
+	status int
+	bytes  int
+}
+
+func (w *requestTimingWriter) WriteHeader(status int) {
+	if w.status == 0 {
+		w.status = status
+	}
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *requestTimingWriter) Write(p []byte) (int, error) {
+	if w.status == 0 {
+		w.status = http.StatusOK
+	}
+	n, err := w.ResponseWriter.Write(p)
+	w.bytes += n
+	return n, err
+}
+
+func (w *requestTimingWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+// logRequestTiming emits one structured timing line per API request. The line
+// deliberately carries only transport metadata: no mailbox contents, no
+// tokens, no query strings, no client identity beyond the request ID. The
+// route is the ServeMux pattern (e.g. "GET /v1/messages/{messageID}/header")
+// so record identifiers never appear in logs. Requests rejected before
+// routing have no pattern; they log a constant, never the raw path, because
+// unauthenticated callers could otherwise embed identifiers in it.
+func logRequestTiming(reqID string, r *http.Request, recorder *requestTimingWriter, elapsed time.Duration) {
+	route := r.Pattern
+	if route == "" {
+		route = "(unrouted)"
+	}
+	status := recorder.status
+	if status == 0 {
+		status = http.StatusOK
+	}
+	logger := logging.WithComponent("automation")
+	logger.Info().
+		Str("request_id", reqID).
+		Str("method", r.Method).
+		Str("route", route).
+		Int("status", status).
+		Int("response_bytes", recorder.bytes).
+		Int64("duration_ms", elapsed.Milliseconds()).
+		Msg("api request timing")
 }
 
 // handleCapabilities handles GET /v1/capabilities.
