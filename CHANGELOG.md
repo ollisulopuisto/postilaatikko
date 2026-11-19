@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Top-tab Unread no longer repeats its active state in a removable filter chip. List-local filters keep their chips.
+
 - Fix a background reconnect storm: when a server accepted the login but refused or dropped IMAP IDLE immediately, the app reconnected with no delay or retry limit, pinning a CPU core and churning memory. Fast-failing cycles now back off like failed connections and give up after the configured retries; long-lived connections that drop still reconnect at once.
 
 - The message list now names the real cause when loading fails (backend error, timeout, bad query) instead of only "Failed to load messages.", so a wedged backend is distinguishable from an empty or failing folder.

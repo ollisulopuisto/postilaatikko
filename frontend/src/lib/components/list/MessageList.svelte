@@ -230,6 +230,11 @@
   // Filter state
   let filterMode = $state<string>('')  // '' | 'unread' | 'readLater' | 'replyLater' | 'starred' | 'attachments'
 
+  // The top triage tab already displays Unread. List-local filters still
+  // need their removable chip because they have no selected top tab.
+  let filterViaTriage = $state(false)
+  const showFilterChip = $derived(Boolean(filterMode) && !(filterMode === 'unread' && filterViaTriage))
+
   type InboxDisplayGroup = {
     id: string
     label: string
@@ -887,6 +892,7 @@
     prevFolderId = currentFolder
     releaseFrozenOrder()
     filterMode = ''
+    filterViaTriage = false
     loadGeneration++ // Invalidate any in-flight loads from the previous folder (#200)
     offset = 0
     virtualWarnings = ''; virtualCursor = ''; virtualIssues = ''; virtualQueryCursor = ''
@@ -2146,6 +2152,7 @@
   function setFilter(mode: string) {
     releaseFrozenOrder()
     filterMode = mode
+    filterViaTriage = false
     loadGeneration++
     virtualCursor = ''; virtualQueryCursor = ''; virtualIssues = ''
     conversations = []
@@ -2166,6 +2173,7 @@
 
   export function setQuickFilter(mode: '' | 'unread' | 'readLater' | 'replyLater') {
     setFilter(mode)
+    filterViaTriage = mode !== ''
   }
 
   // Calculate total unread count
@@ -3240,8 +3248,8 @@
     </div>
   {/if}
 
-  <!-- Active filter chip -->
-  {#if filterMode}
+  <!-- Active filter chip (top-tab Unread already has a selected tab) -->
+  {#if showFilterChip}
     <div class="flex items-center gap-2 px-4 py-1.5 border-b border-border bg-muted/30">
       <span class="text-xs text-muted-foreground">{$_('messageList.filterLabel')}:</span>
       <button

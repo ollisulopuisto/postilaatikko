@@ -595,3 +595,8 @@ README review follow-up: qualify checksum instructions because tagged releases d
 - Status: Review. Owner: Instinct. Branch: `agent/build-versioning`.
 - Bump base to 2026.11.19.1, show tag/run/attempt plus commit in About, and reject another draft DMG with a base version already packaged. No new workflows or build runs added.
 - Verification: failing-first Go and release-guard tests, About browser regression (present/absent build), frontend check/lint and version metadata checks. Native macOS packaging will be verified by the next requested DMG, not run by this PR.
+## Hide redundant top-tab Unread chip (2026-11-19)
+
+- Status: Review. Owner: Instinct. Branch: `agent/unread-tab-no-chip`.
+- Track triage-tab origin separately from list-local filter mode. Top-tab Unread stays applied without an extra removable chip; list-local Unread and other filters keep their chips. Folder changes reset the origin.
+- Verification: browser regression fails before the fix and passes after; covers backend unread argument, clear, keyboard filter, Later, return to Unread, and unchanged list top between All and top-tab Unread. Frontend check/lint and unit suite pass. Screenshot inspected.
