@@ -10,7 +10,7 @@ const captureDir=process.env.POSTI_BROWSER_CAPTURE_DIR||join(tmpdir(),'posti-att
 mkdirSync(captureDir,{recursive:true})
 test('real attachment component: counts, chips, one line, expansion, routing and encrypted multiplicity',{skip:!browserModule,timeout:60000},async()=>{
   const root=fileURLToPath(new URL('..',import.meta.url))
-  const server=await createServer({root,plugins:[{name:'attachment-fixture',resolveId(id){if(id==='/attachment-mount.js')return id},load(id){if(id==='/attachment-mount.js')return `export {mount,unmount} from 'svelte'`}}],server:{host:'127.0.0.1',port:5192,strictPort:true,fs:{allow:[root,realpathSync(join(root,'node_modules'))]}},logLevel:'error'})
+  const server=await createServer({cacheDir:fileURLToPath(new URL(`../node_modules/.vite-test/${process.pid}/attachmentLayout`,import.meta.url)),root,plugins:[{name:'attachment-fixture',resolveId(id){if(id==='/attachment-mount.js')return id},load(id){if(id==='/attachment-mount.js')return `export {mount,unmount} from 'svelte'`}}],server:{host:'127.0.0.1',port:5192,strictPort:true,fs:{allow:[root,realpathSync(join(root,'node_modules'))]}},logLevel:'error'})
   await server.listen()
   const {chromium}=await import(browserModule)
   const browser=await chromium.launch({executablePath:process.env.POSTI_CHROMIUM_BUNDLED?undefined:'/usr/bin/google-chrome-stable',headless:true,args:['--no-sandbox']})

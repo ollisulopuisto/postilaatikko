@@ -12,7 +12,7 @@ mkdirSync(captureDir,{recursive:true})
 // The banner must carry the underlying error message.
 test('a failing folder load surfaces the underlying error detail',{skip:!browserModule,timeout:60000},async()=>{
   const root=fileURLToPath(new URL('..',import.meta.url))
-  const server=await createServer({root,plugins:[{name:'list-load-error-fixture',resolveId(id){if(id==='/list-mount.js')return id},load(id){if(id==='/list-mount.js')return `export {mount} from 'svelte'`}}],server:{host:'127.0.0.1',port:5199,strictPort:true},logLevel:'error'})
+  const server=await createServer({cacheDir:fileURLToPath(new URL(`../node_modules/.vite-test/${process.pid}/listLoadError`,import.meta.url)),root,plugins:[{name:'list-load-error-fixture',resolveId(id){if(id==='/list-mount.js')return id},load(id){if(id==='/list-mount.js')return `export {mount} from 'svelte'`}}],server:{host:'127.0.0.1',port:5199,strictPort:true},logLevel:'error'})
   await server.listen()
   const {chromium}=await import(browserModule)
   const browser=await chromium.launch({executablePath:process.env.POSTI_CHROMIUM_BUNDLED?undefined:'/usr/bin/google-chrome-stable',headless:true,args:['--no-sandbox']})

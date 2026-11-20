@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 - About offers Retry when app information cannot be loaded, without restarting the update checker.
+- Full email templates are now available in detached compose windows. Templates remain saved on this computer through the parent app; insertion keeps recipients and existing draft content.
 
 - If quitting fails while checking pending mail or closing the app, show a localized error instead of silently leaving the app open. Pending-send and uncertain-delivery safety checks are unchanged.
 
