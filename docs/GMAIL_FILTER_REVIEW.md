@@ -1,0 +1,25 @@
+# Native Gmail filter review
+
+This UI is a separate provider-native workflow in Filters settings. It does not translate local substring conditions, copy local priority, or apply a new rule to historical mail.
+
+## Entry and limits
+
+Stop a single-account local rule with no folder scope or move destination, then choose its Gmail review action. Backend validation requires an enabled local Google account, standalone execution, no helper connector, and no outstanding automatic jobs. Desktop credentials are never used for a helper-owned rule.
+
+The selected account requests Gmail settings consent only through the explicit authorization button. Existing granted scopes and account identity remain verified by the consent prerequisite.
+
+## Review
+
+Write an explicit Gmail query and choose supported label actions: mark read, archive or Trash, and selected account user labels. System labels cannot be supplied through the user-label list. Archive and Trash cannot both be chosen.
+
+Preview reads one provider page, at most 51 message IDs. The UI shows at most 50 plus a truncation marker, never the provider's approximate total. The preview is read-only and is not a guarantee about future delivery. Editing the query/actions invalidates the displayed preview.
+
+Review binds a fingerprint to the exact account, stopped source snapshot and native criteria/actions. The transactional preparation step freezes this source and checks the frozen fingerprint again. The next screen shows the frozen query/actions and requires a separate Publish to Gmail click.
+
+## Recovery
+
+The durable journal owns the one-create-attempt boundary. A create error reloads that state before any further action is offered. Attempted/unknown results expose read-only Check Gmail result, never another create. Closing/reopening the dialog recovers its account-qualified journal entry. Only an unattempted prepared review may be cancelled to release its local source. A verified publication keeps the source guard; reverse transfer and provider-filter removal are not implemented.
+
+## Verification
+
+Backend tests cover bounded provider requests, no writes during preview/review, stale fingerprints, selected-account user labels, preview failure without reservation, restart readback, and canonical fingerprint persistence with empty/duplicate label lists. The actual browser fixture covers selected consent, failed preview, preview invalidation, final review, cancellation, uncertain create, reopen and read-only recovery, including English and Finnish narrow layout captures. Live Google consent/provider matching and native macOS execution still require acceptance testing.

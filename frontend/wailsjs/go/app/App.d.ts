@@ -1053,3 +1053,17 @@ export function GetFilterExecutionTarget():Promise<app.FilterExecutionTarget>;
 export function SaveFilterRuleToTarget(arg1:string,arg2:string,arg3:mailfilter.Rule,arg4:mailfilter.Rule|null):Promise<void>;
 
 export function AuthorizeGmailFilters(arg1:string):Promise<void>;
+
+export function GetNativeGmailContext(arg1:string):Promise<app.NativeGmailContext>;
+
+export function PreviewNativeGmailFilter(arg1:app.NativeGmailDraft):Promise<app.NativeGmailPreview>;
+
+export function PrepareNativeGmailFilter(arg1:app.NativeGmailDraft,arg2:string):Promise<app.NativeGmailPublicationStatus>;
+
+export function PublishNativeGmailFilter(arg1:string,arg2:string):Promise<app.NativeGmailPublicationStatus>;
+
+export function ReconcileNativeGmailFilter(arg1:string):Promise<app.NativeGmailPublicationStatus>;
+
+export function CancelNativeGmailFilter(arg1:string):Promise<void>;
+
+export function GetNativeGmailPublication(arg1:string):Promise<app.NativeGmailPublicationStatus>;

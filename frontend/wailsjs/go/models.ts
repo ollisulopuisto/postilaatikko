@@ -318,6 +318,85 @@ export namespace account {
 }
 
 export namespace app {
+	export class NativeGmailLabel {
+		id: string;
+		name: string;
+		static createFrom(source: any = {}) { return new NativeGmailLabel(source); }
+		constructor(source: any = {}) {
+			if (typeof source === "string") source = JSON.parse(source);
+			this.id = source["id"];
+			this.name = source["name"];
+		}
+	}
+	export class NativeGmailContext {
+		accountId: string;
+		email: string;
+		consentRequired: boolean;
+		labels: NativeGmailLabel[];
+		static createFrom(source: any = {}) { return new NativeGmailContext(source); }
+		constructor(source: any = {}) {
+			if (typeof source === "string") source = JSON.parse(source);
+			this.accountId = source["accountId"];
+			this.email = source["email"];
+			this.consentRequired = source["consentRequired"];
+			this.labels = source["labels"];
+		}
+	}
+	export class NativeGmailDraft {
+		ruleId: string;
+		query: string;
+		markRead: boolean;
+		archive: boolean;
+		trash: boolean;
+		labelIds: string[];
+		static createFrom(source: any = {}) { return new NativeGmailDraft(source); }
+		constructor(source: any = {}) {
+			if (typeof source === "string") source = JSON.parse(source);
+			this.ruleId = source["ruleId"];
+			this.query = source["query"];
+			this.markRead = source["markRead"];
+			this.archive = source["archive"];
+			this.trash = source["trash"];
+			this.labelIds = source["labelIds"];
+		}
+	}
+	export class NativeGmailPreview {
+		found: number;
+		truncated: boolean;
+		fingerprint: string;
+		static createFrom(source: any = {}) { return new NativeGmailPreview(source); }
+		constructor(source: any = {}) {
+			if (typeof source === "string") source = JSON.parse(source);
+			this.found = source["found"];
+			this.truncated = source["truncated"];
+			this.fingerprint = source["fingerprint"];
+		}
+	}
+	export class NativeGmailPublicationStatus {
+		ruleId: string;
+		accountId: string;
+		query: string;
+		addLabelIds: string[];
+		removeLabelIds: string[];
+		id: string;
+		state: string;
+		providerId: string;
+		fingerprint: string;
+		static createFrom(source: any = {}) { return new NativeGmailPublicationStatus(source); }
+		constructor(source: any = {}) {
+			if (typeof source === "string") source = JSON.parse(source);
+			this.ruleId = source["ruleId"];
+			this.accountId = source["accountId"];
+			this.query = source["query"];
+			this.addLabelIds = source["addLabelIds"];
+			this.removeLabelIds = source["removeLabelIds"];
+			this.id = source["id"];
+			this.state = source["state"];
+			this.providerId = source["providerId"];
+			this.fingerprint = source["fingerprint"];
+		}
+	}
+
 	export class FilterExecutionTarget {
 	    target: string;
 	    endpoint: string;

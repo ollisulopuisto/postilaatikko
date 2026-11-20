@@ -1,0 +1,95 @@
+import {test} from 'node:test'
+import assert from 'node:assert/strict'
+import {createServer} from 'vite'
+import {realpathSync,mkdirSync} from 'node:fs'
+import {fileURLToPath} from 'node:url'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
+const browserModule=process.env.POSTI_PLAYWRIGHT_PATH
+const captureDir=process.env.POSTI_BROWSER_CAPTURE_DIR||join(tmpdir(),'posti-native-filter-captures')
+mkdirSync(captureDir,{recursive:true})
+test('native Gmail review: selected consent, preview invalidation, explicit publish, uncertain recovery and reopen',{skip:!browserModule,timeout:60000},async()=>{
+  const root=fileURLToPath(new URL('..',import.meta.url))
+  const server=await createServer({cacheDir:fileURLToPath(new URL(`../node_modules/.vite-test/${process.pid}/nativeGmail`,import.meta.url)),root,plugins:[{name:'native-fixture',resolveId(id){if(id==='/native-mount.js')return id},load(id){if(id==='/native-mount.js')return `export {mount,unmount} from 'svelte'`}}],server:{host:'127.0.0.1',port:5198,strictPort:true,fs:{allow:[root,realpathSync(join(root,'node_modules'))]}},logLevel:'error'})
+  await server.listen()
+  const {chromium}=await import(browserModule)
+  const browser=await chromium.launch({executablePath:process.env.POSTI_CHROMIUM_BUNDLED?undefined:'/usr/bin/google-chrome-stable',headless:true,args:['--no-sandbox']})
+  try{
+    const page=await browser.newPage({viewport:{width:1024,height:1000}})
+    const errors=[];page.on('pageerror',error=>errors.push(error.message))
+    await page.route('**/native-fixture',route=>route.fulfill({contentType:'text/html',body:'<html data-theme="dark"><body style="background:#18191d"><div id="fixture"></div></body></html>'}))
+    await page.goto('http://127.0.0.1:5198/native-fixture')
+    await page.evaluate(async()=>{
+      await import('/src/app.css'); await import('/src/lib/iconify-offline.ts');window.calls=[];window.consent=true;window.plan={};window.failCreate=true
+      window.go={app:{App:new Proxy({},{get:(_,name)=>(...args)=>{
+        window.calls.push([name,args])
+        switch(name){
+          case 'GetNativeGmailPublication':return Promise.resolve(window.plan)
+          case 'GetNativeGmailContext':return Promise.resolve({accountId:'work',email:'me@example.com',consentRequired:window.consent,labels:[{id:'user-label',name:'Reading'}]})
+          case 'AuthorizeGmailFilters':window.consent=false;return Promise.resolve()
+          case 'PreviewNativeGmailFilter':return window.previewFails?Promise.reject(new Error('preview unavailable')):Promise.resolve({found:50,truncated:true,fingerprint:JSON.stringify(args[0])})
+          case 'PrepareNativeGmailFilter':window.plan={id:'plan',ruleId:'source',accountId:'work',state:'prepared',fingerprint:args[1],query:args[0].query,addLabelIds:args[0].labelIds,removeLabelIds:['UNREAD']};return Promise.resolve(window.plan)
+          case 'PublishNativeGmailFilter':window.plan={...window.plan,state:'unknown'};return Promise.reject(new Error('create timed out'))
+          case 'ReconcileNativeGmailFilter':window.plan={...window.plan,state:'published',providerId:'gmail-id'};return Promise.resolve(window.plan)
+          case 'CancelNativeGmailFilter':window.plan={};return Promise.resolve()
+          default:return Promise.resolve([])
+        }
+      }})}}
+      const {mount,unmount}=await import('/native-mount.js')
+      window.show=async(locale='en')=>{
+        if(window.component)await unmount(window.component)
+        await (await import('/src/lib/i18n/index.ts')).initI18n(locale)
+        await new Promise(resolve=>setTimeout(resolve,100))
+        const Component=(await import('/src/lib/components/common/NativeGmailFilterDialog.svelte')).default
+        window.component=mount(Component,{target:document.querySelector('#fixture'),props:{open:true,ruleId:'source'}})
+      }
+      await window.show()
+    })
+    await page.getByRole('button',{name:'Authorize selected Gmail account'}).click()
+    await page.getByLabel('Gmail search query').fill('from:newsletter@example.com')
+    assert.deepEqual(await page.evaluate(()=>window.calls.find(([n])=>n==='AuthorizeGmailFilters')[1]),['work'])
+    await page.getByLabel('Mark read',{exact:true}).check()
+    await page.getByLabel('Reading',{exact:true}).check()
+    const review=page.getByRole('button',{name:'Review exact Gmail rule'})
+    assert.equal(await review.isDisabled(),true)
+    await page.evaluate(()=>{window.previewFails=true})
+    await page.getByRole('button',{name:'Preview existing mail'}).click()
+    await page.getByRole('alert').filter({hasText:'preview unavailable'}).waitFor()
+    assert.equal(await review.isDisabled(),true)
+    await page.evaluate(()=>{window.previewFails=false})
+    await page.getByRole('button',{name:'Preview existing mail'}).click()
+    await page.getByText('50+ matching messages found (sample)',{exact:true}).waitFor()
+    assert.equal(await review.isEnabled(),true)
+    await page.screenshot({path:join(captureDir,'native-gmail-preview-en.png'),fullPage:true})
+    await page.getByLabel('Gmail search query').fill('from:changed@example.com')
+    assert.equal(await review.isDisabled(),true,'query changes invalidate preview')
+    await page.getByRole('button',{name:'Preview existing mail'}).click()
+    await review.click()
+    await page.getByText('Final review: exact frozen Gmail rule',{exact:true}).waitFor()
+    assert.equal(await page.evaluate(()=>window.calls.filter(([n])=>n==='PublishNativeGmailFilter').length),0,'review never publishes')
+    await page.getByRole('button',{name:'Cancel review and release source'}).click()
+    await page.getByLabel('Gmail search query').waitFor()
+    await page.getByRole('button',{name:'Preview existing mail'}).click()
+    await review.click()
+    await page.getByRole('button',{name:'Publish to Gmail',exact:true}).waitFor()
+    await page.screenshot({path:join(captureDir,'native-gmail-final-review-en.png'),fullPage:true})
+    await page.getByRole('button',{name:'Publish to Gmail',exact:true}).click()
+    await page.getByRole('button',{name:'Check Gmail result'}).waitFor()
+    assert.equal(await page.getByRole('button',{name:'Publish to Gmail',exact:true}).count(),0,'unknown result cannot create again')
+    await page.screenshot({path:join(captureDir,'native-gmail-unknown-en.png'),fullPage:true})
+    await page.evaluate(()=>window.show())
+    await page.getByRole('button',{name:'Check Gmail result'}).waitFor()
+    assert.equal(await page.getByRole('button',{name:'Publish to Gmail',exact:true}).count(),0,'reopened unknown result cannot create again')
+    await page.getByRole('button',{name:'Check Gmail result'}).click()
+    await page.getByText('Gmail filter verified: gmail-id',{exact:true}).waitFor()
+    assert.equal(await page.evaluate(()=>window.calls.filter(([n])=>n==='PublishNativeGmailFilter').length),1)
+    for(const locale of ['en','fi']){
+      await page.setViewportSize({width:320,height:860})
+      await page.evaluate(locale=>window.show(locale),locale)
+      await page.waitForTimeout(500)
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'no horizontal overflow')
+      await page.screenshot({path:join(captureDir,`native-gmail-published-${locale}-320.png`),fullPage:true})
+    }
+    assert.deepEqual(errors,[])
+  }finally{await browser.close();await server.close()}
+})
