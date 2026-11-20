@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hkdb/aerion/internal/gmail"
-	"github.com/hkdb/aerion/internal/oauth2"
+	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
+	"github.com/ollisulopuisto/postilaatikko/internal/oauth2"
 )
 
 func filterConsentFixture(t *testing.T) *App {
