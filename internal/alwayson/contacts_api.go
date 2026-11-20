@@ -1,6 +1,7 @@
 package alwayson
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -47,8 +48,7 @@ type contactsRuntime struct {
 	syncer       *carddav.Syncer
 	scheduler    *carddav.Scheduler
 
-	tokenMu        sync.Mutex // serializes standalone source token refresh + source delete/authorize
-	accountTokenMu sync.Mutex // serializes account OAuth token refresh
+	tokenMu sync.Mutex // serializes standalone source token refresh + source delete/authorize
 }
 
 func newContactsRuntime(db *database.DB, dataDir string, accounts *account.Store, oauthMgr *oauth2.Manager) (*contactsRuntime, error) {
@@ -150,8 +150,11 @@ func (r *contactsRuntime) getStandaloneSourceToken(sourceID string) (string, err
 // account, refreshing via the custom or named provider when needed. Mirrors
 // the helper's scheduled-send token handling.
 func (r *contactsRuntime) getAccountAccessToken(accountID string) (string, error) {
-	r.accountTokenMu.Lock()
-	defer r.accountTokenMu.Unlock()
+	release, err := credentials.LockOAuthRefresh(context.Background(), accountID)
+	if err != nil {
+		return "", err
+	}
+	defer release()
 
 	tokens, err := r.creds.GetOAuthTokens(accountID)
 	if err != nil {
