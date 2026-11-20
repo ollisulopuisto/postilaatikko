@@ -724,6 +724,7 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 		folderVisibility:   r,
 		virtualFolders:     r,
 		filterRules:        r,
+		gmailPublications:  r,
 		filterJobs:         r,
 		drafts:             r,
 		replyLater:         r,
@@ -791,6 +792,7 @@ type mailboxRouteDeps struct {
 	folderVisibility   v1.FolderVisibilityOperations
 	virtualFolders     v1.VirtualFolderMutationOperations
 	filterRules        v1.FilterRuleOperations
+	gmailPublications  v1.GmailPublicationOperations
 	filterJobs         v1.FilterJobInspectionOperations
 	drafts             v1.DraftOperations
 	replyLater         v1.ReplyLaterHTTPOperations
@@ -833,6 +835,7 @@ func mountMailboxV1Routes(mux v1.RouteMux, d *mailboxRouteDeps) {
 	v1.MountFolderVisibilityRoutes(mux, d.folderVisibility, requireCap)
 	v1.MountVirtualFolderMutationRoutes(mux, d.virtualFolders, requireCap)
 	v1.MountFilterRuleRoutes(mux, d.filterRules, requireCap)
+	v1.MountGmailPublicationRoutes(mux, d.gmailPublications, requireCap)
 	v1.MountFilterJobRoutes(mux, d.filterJobs, requireCap)
 	v1.NewDraftsHandler(d.drafts, d.fingerprint).MountRoutes(mux, requireCap)
 	v1.MountReplyLaterRoutes(mux, d.replyLater, requireCap)

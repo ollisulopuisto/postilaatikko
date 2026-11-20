@@ -507,6 +507,20 @@ func (c *Client) MutateFilterRule(ctx context.Context, req v1.FilterRuleMutation
 	return err
 }
 
+// GmailPublication performs one explicit account-owning helper operation.
+// The transport never retries this POST. Unknown creates use reconcile instead.
+func (c *Client) GmailPublication(ctx context.Context, req v1.GmailPublicationRequest) (v1.GmailPublicationReply, error) {
+	data, err := c.doRequest(ctx, http.MethodPost, "/v1/filters/gmail", req, "")
+	if err != nil {
+		return v1.GmailPublicationReply{}, err
+	}
+	var response v1.Response[v1.GmailPublicationReply]
+	if err = json.Unmarshal(data, &response); err != nil {
+		return v1.GmailPublicationReply{}, err
+	}
+	return response.Data, nil
+}
+
 // GetUncertainFilterJobs lists one bounded page of automatic moves for inspection.
 func (c *Client) GetUncertainFilterJobs(ctx context.Context, limit int, cursor string) (v1.FilterJobPage, error) {
 	query := url.Values{}

@@ -62,6 +62,7 @@ type SyncRuntime struct {
 	virtualFolders              *virtualfolder.Store
 	replyLater                  *replylater.Store
 	gmailTriage                 GmailTriageLabeler
+	gmailFilterTokens           mailSync.GmailTokenSource
 	triage                      *triage.Store
 	schemaOwner                 *syncowner.Lock
 	filterOp                    mailmove.FilterOperation
@@ -252,6 +253,21 @@ func (r *SyncRuntime) SetGmailTokenSource(source mailSync.GmailTokenSource) erro
 		return errors.New("cannot configure Gmail credentials after runtime start")
 	}
 	r.syncEngine.SetGmailTokenSource(source)
+	return nil
+}
+
+// SetGmailFilterTokenSource installs a helper-local settings-grant token source.
+// It is distinct from ordinary Gmail search access and never leaves the helper.
+func (r *SyncRuntime) SetGmailFilterTokenSource(source mailSync.GmailTokenSource) error {
+	if r == nil || r.rules == nil {
+		return errors.New("helper filter owner unavailable")
+	}
+	r.ctxMu.Lock()
+	defer r.ctxMu.Unlock()
+	if r.started {
+		return errors.New("cannot configure Gmail filter credentials after start")
+	}
+	r.gmailFilterTokens = source
 	return nil
 }
 

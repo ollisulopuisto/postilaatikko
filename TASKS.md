@@ -66,6 +66,10 @@
 
 - GMAIL-FILTER-006: Review. Instinct, `agent/gmail-filter-owner`, `/tmp/pl-gmail-filter-owner`. Durable email/OAuth-project binding in preview and source snapshot, authenticated Gmail profile checks, identity-token pinning per operation and frozen email display. Changed/missing owners fail closed, including reopened records. Old unbound plans do not publish. App/mailfilter/Gmail suites and affected vet pass; actual EN/FI browser recovery pixels checked. No live Google/native Mac.
 
+## Helper-owned Gmail publication
+
+- GMAIL-FILTER-007: Review. Instinct, `agent/gmail-filter-helper`, `/tmp/pl-gmail-filter-helper`. Helper-owned native publication API with capability checks, helper-only settings token source, verified owner and journal recovery. Consent exchange and desktop routing remain separate unfinished follow-up. Do not enable desktop fallback. Full helper/alwayson/automation/scheduledsend suites, affected dependencies, vet and version consistency pass. Race compilation blocked by missing native libraries, not claimed passed. No live provider or Mac acceptance.
+
 ## Status and effort
 
 - **Easy:** contained UI, copy, localization, or isolated behavior change.
