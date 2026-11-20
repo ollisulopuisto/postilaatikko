@@ -9,6 +9,8 @@
 - Settings Images now shows retryable allowlist load failures and visible removal errors instead of false empty lists or silent failures. The privacy switch stays usable in narrow windows.
 
 - Contact-source load failures show a retryable warning instead of looking like an empty list. The last good list is retained, and source controls wrap in narrow windows.
+- Add a durable Gmail filter publication recovery core (not connected to the UI yet): one create attempt, restart reconciliation without replay, account-qualified label-only drafts, and guards against local re-enabling or queued jobs while publication is unresolved. Additive migration 85 does not publish any rules.
+
 - Add explicit selected-account Gmail filter consent, isolated from pending mail login. Wrong identity, missing permissions, changed grants and remote workspace credentials are rejected; no filter publication or automatic consent is enabled. Ordinary login scopes remain unchanged.
 
 - Add bounded Gmail-native filter transport and explicit incremental settings-permission primitives. Ambiguous filter writes are not retried. App consent wiring and publishing UI are separate follow-ups; ordinary mail login permissions are unchanged.

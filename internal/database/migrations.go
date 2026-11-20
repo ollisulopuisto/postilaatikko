@@ -1977,4 +1977,18 @@ var migrations = []Migration{
 	CREATE INDEX IF NOT EXISTS idx_messages_account_conv
 	  ON messages(account_id, COALESCE(thread_id, id));
 	`},
+	{Version: 85, SQL: `
+ CREATE TABLE gmail_filter_publications (
+  id TEXT PRIMARY KEY,
+  rule_id TEXT NOT NULL UNIQUE,
+  account_id TEXT NOT NULL,
+  state TEXT NOT NULL CHECK(state IN ('prepared','attempted','unknown','published')),
+  source_json TEXT NOT NULL,
+  filter_json TEXT NOT NULL,
+  baseline_ids TEXT NOT NULL,
+  provider_id TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+ );
+ CREATE INDEX idx_gmail_filter_publications_account ON gmail_filter_publications(account_id,updated_at,id);
+ `},
 }
