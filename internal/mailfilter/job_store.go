@@ -95,6 +95,14 @@ func (s *JobStore) EnqueueBatch(rule *Rule, destinationFolderID string, messages
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
+	var published int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM gmail_filter_publications WHERE rule_id=?`, rule.ID).Scan(&published); err != nil {
+		return err
+	}
+	if published != 0 {
+		return fmt.Errorf("rule execution is guarded by a Gmail publication; reconcile before applying locally")
+	}
+
 	if applyExisting {
 		for _, msg := range messages {
 			var processing int
