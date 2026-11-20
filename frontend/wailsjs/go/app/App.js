@@ -2044,3 +2044,31 @@ export function SaveFilterRuleToTarget(arg1, arg2, arg3, arg4) { return window['
 export function AuthorizeGmailFilters(arg1) {
   return window['go']['app']['App']['AuthorizeGmailFilters'](arg1);
 }
+
+export function GetNativeGmailContext(arg1) {
+  return window['go']['app']['App']['GetNativeGmailContext'](arg1);
+}
+
+export function PreviewNativeGmailFilter(arg1) {
+  return window['go']['app']['App']['PreviewNativeGmailFilter'](arg1);
+}
+
+export function PrepareNativeGmailFilter(arg1, arg2) {
+  return window['go']['app']['App']['PrepareNativeGmailFilter'](arg1, arg2);
+}
+
+export function PublishNativeGmailFilter(arg1, arg2) {
+  return window['go']['app']['App']['PublishNativeGmailFilter'](arg1, arg2);
+}
+
+export function ReconcileNativeGmailFilter(arg1) {
+  return window['go']['app']['App']['ReconcileNativeGmailFilter'](arg1);
+}
+
+export function CancelNativeGmailFilter(arg1) {
+  return window['go']['app']['App']['CancelNativeGmailFilter'](arg1);
+}
+
+export function GetNativeGmailPublication(arg1) {
+  return window['go']['app']['App']['GetNativeGmailPublication'](arg1);
+}
