@@ -139,7 +139,7 @@ func (s *Store) Update(rule *Rule) error {
 	result, err := s.db.Exec(`
 		UPDATE mail_filter_rules
 		SET name = ?, enabled = ?, order_index = ?, account_id = ?, account_ids = ?, folder_ids = ?, from_contains = ?, to_contains = ?, subject_contains = ?, list_id_contains = ?, dest_folder_id = ?, action_mark_read = ?, action_archive = ?, action_trash = ?, updated_at = ?
-		WHERE id = ? AND (? = 0 OR NOT EXISTS(SELECT 1 FROM gmail_filter_publications p WHERE p.rule_id=mail_filter_rules.id))
+		WHERE id = ? AND NOT EXISTS(SELECT 1 FROM gmail_filter_publications p WHERE p.rule_id=mail_filter_rules.id)
 	`,
 		rule.Name,
 		boolToInt(rule.Enabled),
@@ -157,7 +157,6 @@ func (s *Store) Update(rule *Rule) error {
 		boolToInt(rule.ActionTrash),
 		rule.UpdatedAt,
 		rule.ID,
-		boolToInt(rule.Enabled),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update filter rule: %w", err)
@@ -210,7 +209,7 @@ func (s *Store) Reorder(ids []string) error {
 		}
 	}()
 	for index, id := range ids {
-		result, err := tx.Exec(`UPDATE mail_filter_rules SET order_index = ?, updated_at = ? WHERE id = ?`, index, time.Now().UTC(), id)
+		result, err := tx.Exec(`UPDATE mail_filter_rules SET order_index = ?, updated_at = ? WHERE id = ? AND NOT EXISTS(SELECT 1 FROM gmail_filter_publications p WHERE p.rule_id=mail_filter_rules.id)`, index, time.Now().UTC(), id)
 		if err != nil {
 			return fmt.Errorf("failed to reorder filter rule %s: %w", id, err)
 		}
