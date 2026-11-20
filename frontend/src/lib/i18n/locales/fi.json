@@ -1219,6 +1219,7 @@
     "berConversionConfirm": "Muunna ja tuo"
   },
   "contactSource": {
+    "loadFailed": "Yhteystietolähteiden päivitys epäonnistui. Luettelo voi olla vanhentunut. Yritä uudelleen ennen lähteiden muuttamista.",
     "separateConsent": "Yhteystiedot vaatii erillisen sisäänkirjautumisen. Tallentaminen avaa Google Yhteystietojen valtuutuksen valitulle tilille.",
     "authorizeContacts": "Valtuuta yhteystiedot",
     "authorized": "Yhteystiedot valtuutettu.",
