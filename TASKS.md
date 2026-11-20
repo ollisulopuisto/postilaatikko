@@ -31,6 +31,9 @@
 ## Image allowlist failure recovery
 
 - UI-ERROR-AUDIT-004: Review. Instinct, `agent/UI-ERROR-AUDIT-004`, `/tmp/pl-image-errors`. Settings Images failures are visible; load retry preserves prior entries and does not repeat removal. Failed first-load no longer claims an empty allowlist. Privacy switch remains full width at 320 px. Failing-first browser flow passes with EN/FI 320/390/1024 captures inspected; frontend suite 1107 pass, 20 browser-gated skips, check/lint/build pass. Regression joins the existing CI browser batch with bundled Chromium and isolated cache. No provider/privacy-default or allowlist policy changes; no native Mac/live mailbox test.
+## Palette active-view translation
+
+- UI-ERROR-AUDIT-006: Review. Instinct, `agent/UI-ERROR-AUDIT-006`, `/tmp/pl-palette-active`. Added missing EN/FI active-view translations. Regression failed before and passes after; actual palette rendered in EN/FI and pixels inspected. No native Mac run. No folder-palette feature changes pending owner decision.
 
 ## Status and effort
 

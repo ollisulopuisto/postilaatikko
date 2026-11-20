@@ -115,6 +115,7 @@
     "removeWord": "Poista sana"
   },
   "common": {
+    "active": "aktiivinen",
     "save": "Tallenna",
     "cancel": "Peruuta",
     "close": "Sulje",

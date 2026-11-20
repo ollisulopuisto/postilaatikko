@@ -115,6 +115,7 @@
     "removeWord": "Remove word"
   },
   "common": {
+    "active": "active",
     "save": "Save",
     "cancel": "Cancel",
     "close": "Close",
