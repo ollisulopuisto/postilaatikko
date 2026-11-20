@@ -1475,6 +1475,8 @@
     "messages": "Messages"
   },
   "images": {
+    "loadFailed": "Could not load the image allowlist. The list may be out of date. Try again.",
+    "removeFailed": "Could not remove this entry. Try its remove button again.",
     "addresses": "Addresses",
     "domains": "Domains",
     "noAddresses": "No addresses in the allowlist. Use \"Always Load > For sender\" in the email viewer to add addresses.",
