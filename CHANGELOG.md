@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Filter editors show the current Mac/helper workspace, connection and write state. Saves stay bound to that workspace, read the saved configuration back, and never fall back from a remote helper. Cross-machine transfer and Gmail publishing remain unavailable in this slice.
+
 - About offers Retry when app information cannot be loaded, without restarting the update checker.
 - The command palette now labels the active view in English and Finnish instead of showing the untranslated common.active key.
 

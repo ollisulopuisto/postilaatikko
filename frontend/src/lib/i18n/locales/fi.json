@@ -1772,6 +1772,15 @@
     }
   },
   "filters": {
+    "executionTarget": "Missä tämä suodatin suoritetaan?",
+    "targetLocal": "Tämä Mac",
+    "targetHelper": "Studio-apuri",
+    "targetGmailPending": "julkaisu tulossa",
+    "transferUnavailable": "Suoritus pysyy nykyisessä sähköpostityötilassa. Siirtoa koneiden välillä ei voi tehdä tästä.",
+    "targetUnavailable": "Valittu palvelu ei ole yhteydessä tai siltä puuttuu kirjoitusoikeus. Yhdistä uudelleen asetuksissa ennen tallennusta.",
+    "targetReady": "Valmis tallentamaan tähän työtilaan. Tallennettu suodatin luetaan takaisin tarkistusta varten.",
+    "verifiedHelper": "Tallennettu ja tarkistettu Studiolla.",
+    "verifiedLocal": "Tallennettu ja tarkistettu tällä Macilla.",
     "title": "Suodattimet",
     "createMenu": "Luo suodatin...",
     "createTitle": "Luo suodatin",

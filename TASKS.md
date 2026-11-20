@@ -35,6 +35,10 @@
 
 - UI-ERROR-AUDIT-006: Review. Instinct, `agent/UI-ERROR-AUDIT-006`, `/tmp/pl-palette-active`. Added missing EN/FI active-view translations. Regression failed before and passes after; actual palette rendered in EN/FI and pixels inspected. No native Mac run. No folder-palette feature changes pending owner decision.
 
+## Explicit filter execution target
+
+- FILTER-TARGET-001: Review. Instinct, `agent/filter-helper-target`, `/tmp/pl-filter-helper-target`. Explicit configured helper/local ownership, no silent fallback or automatic copy/transfer, conflict check and verified read-back. Sketch approved. First slice shows current workspace ownership and blocks transfer; no independent cross-host catalog or Gmail publication yet. Frontend 1109 pass/20 browser-gated skips, check/lint/build; actual browser workflow plus EN/FI 320/390/1024 px inspected, local SQLite and fake-HTTP read-back tests pass. App tests use CGO disabled with a temporary uncommitted Linux startup stub. Native macOS and real Studio not run. Preflight conflict detection is not atomic compare-and-swap.
+
 ## Status and effort
 
 - **Easy:** contained UI, copy, localization, or isolated behavior change.
