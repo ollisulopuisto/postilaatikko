@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 - Settings Images now shows retryable allowlist load failures and visible removal errors instead of false empty lists or silent failures. The privacy switch stays usable in narrow windows.
+- About offers Retry when app information cannot be loaded, without restarting the update checker.
 - The command palette now labels the active view in English and Finnish instead of showing the untranslated common.active key.
 
 - Full email templates are now available in detached compose windows. Templates remain saved on this computer through the parent app; insertion keeps recipients and existing draft content.
