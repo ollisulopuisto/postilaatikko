@@ -79,6 +79,10 @@
 
 - GMAIL-FILTER-005: Review. Instinct, `agent/gmail-filter-ui`, `/tmp/pl-gmail-filter-ui`. Explicit standalone account-native query/label action review, bounded provider preview, payload fingerprint and durable recovery. Helper-owner paths remain blocked until helper consent/publication APIs exist; never use desktop credentials for helper rules. Ordinary filter editor semantics unchanged. App/mailfilter/Gmail/OAuth/credentials/database/automation suites, vet, binding drift, frontend check/lint/build, and actual browser review/reopen recovery test pass. Browser pixels checked EN/FI, including 320 px; Mac/live Google still unrun.
 
+## Gmail publication owner hardening
+
+- GMAIL-FILTER-006: Review. Instinct, `agent/gmail-filter-owner`, `/tmp/pl-gmail-filter-owner`. Durable email/OAuth-project binding in preview and source snapshot, authenticated Gmail profile checks, identity-token pinning per operation and frozen email display. Changed/missing owners fail closed, including reopened records. Old unbound plans do not publish. App/mailfilter/Gmail suites and affected vet pass; actual EN/FI browser recovery pixels checked. No live Google/native Mac.
+
 ## Status and effort
 
 - **Easy:** contained UI, copy, localization, or isolated behavior change.

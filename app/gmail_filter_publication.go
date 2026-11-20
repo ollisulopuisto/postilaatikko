@@ -2,7 +2,9 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
 	"github.com/ollisulopuisto/postilaatikko/internal/mailfilter"
@@ -10,18 +12,74 @@ import (
 
 type accountFilterProvider struct {
 	accountID string
+	binding   string
+	email     string
+	app       *App
 	client    *gmail.Client
 }
 
-func (p accountFilterProvider) AccountID() string { return p.accountID }
+func (p accountFilterProvider) AccountID() string    { return p.accountID }
+func (p accountFilterProvider) OwnerBinding() string { return p.binding }
+func gmailOwnerBinding(email, clientID string) string {
+	data, _ := json.Marshal([]string{strings.ToLower(strings.TrimSpace(email)), clientID})
+	return string(data)
+}
+
+// snapshotClient pins one token across identity verification and the following
+// operation. Account/credential replacement cannot switch the write's mailbox.
+func (p accountFilterProvider) snapshotClient(ctx context.Context) (*gmail.Client, error) {
+	if err := p.app.requireStandaloneFilterOwner(); err != nil {
+		return nil, err
+	}
+	email, previous, cfg, err := p.app.prepareGmailFilterConsent(p.accountID)
+	if err != nil {
+		return nil, err
+	}
+	previous.Clear()
+	if gmailOwnerBinding(email, cfg.ClientID) != p.binding {
+		return nil, fmt.Errorf("Gmail account or OAuth project changed")
+	}
+	tokens, err := p.app.gmailTokensFor(p.accountID, gmail.ScopesCoverFilters, false)
+	if err != nil {
+		return nil, err
+	}
+	defer tokens.Clear()
+	token := tokens.AccessToken
+	client := gmail.NewClient(func(_ context.Context, force bool) (string, error) {
+		if force {
+			return "", fmt.Errorf("verified publication token expired; no write retry")
+		}
+		return token, nil
+	})
+	actual, err := client.ProfileEmail(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !strings.EqualFold(strings.TrimSpace(actual), strings.TrimSpace(p.email)) {
+		return nil, fmt.Errorf("authenticated Gmail identity does not match reviewed account")
+	}
+	return client, nil
+}
 func (p accountFilterProvider) ListFilters(ctx context.Context) ([]gmail.Filter, error) {
-	return p.client.ListFilters(ctx)
+	client, err := p.snapshotClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return client.ListFilters(ctx)
 }
 func (p accountFilterProvider) CreateFilter(ctx context.Context, f gmail.Filter) (*gmail.Filter, error) {
-	return p.client.CreateFilter(ctx, f)
+	client, err := p.snapshotClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return client.CreateFilter(ctx, f)
 }
 func (p accountFilterProvider) GetFilter(ctx context.Context, id string) (*gmail.Filter, error) {
-	return p.client.GetFilter(ctx, id)
+	client, err := p.snapshotClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return client.GetFilter(ctx, id)
 }
 
 // requireStandaloneFilterOwner requires positive local executor ownership when
@@ -57,7 +115,7 @@ func (a *App) gmailFilterProvider(accountID string) (accountFilterProvider, erro
 	if err := a.requireStandaloneFilterOwner(); err != nil {
 		return accountFilterProvider{}, err
 	}
-	email, tokens, _, err := a.prepareGmailFilterConsent(accountID)
+	email, tokens, cfg, err := a.prepareGmailFilterConsent(accountID)
 	if err != nil {
 		return accountFilterProvider{}, err
 	}
@@ -79,7 +137,7 @@ func (a *App) gmailFilterProvider(accountID string) (accountFilterProvider, erro
 		defer tokens.Clear()
 		return tokens.AccessToken, nil
 	})
-	return accountFilterProvider{accountID: accountID, client: client}, nil
+	return accountFilterProvider{accountID: accountID, binding: gmailOwnerBinding(email, cfg.ClientID), email: email, app: a, client: client}, nil
 }
 
 // prepareLocalGmailPublication is internal until the UI can supply an explicitly
@@ -103,7 +161,7 @@ func (a *App) prepareLocalGmailPublication(ctx context.Context, ruleID, accountI
 	for _, label := range labels {
 		allowed = append(allowed, label.ID)
 	}
-	return a.filterStore.PrepareGmailPublication(ruleID, accountID, draft, catalog, allowed)
+	return a.filterStore.PrepareGmailPublication(ruleID, accountID, draft, catalog, allowed, provider.OwnerBinding())
 }
 
 // publishLocalGmailPublication excludes direct in-flight app filtering, then
@@ -122,6 +180,9 @@ func (a *App) publishLocalGmailPublication(ctx context.Context, id string) (*mai
 	if err != nil {
 		return nil, err
 	}
+	if plan.OwnerBinding == "" {
+		return nil, fmt.Errorf("publication predates owner verification; cancel and review again")
+	}
 	return a.filterStore.PublishGmailFilter(ctx, id, provider)
 }
 func (a *App) reconcileLocalGmailPublication(ctx context.Context, id string) (*mailfilter.GmailPublication, error) {
@@ -137,6 +198,9 @@ func (a *App) reconcileLocalGmailPublication(ctx context.Context, id string) (*m
 	provider, err := a.gmailFilterProvider(plan.AccountID)
 	if err != nil {
 		return nil, err
+	}
+	if plan.OwnerBinding == "" {
+		return nil, fmt.Errorf("publication lacks durable owner verification; inspect manually")
 	}
 	return a.filterStore.ReconcileGmailPublication(ctx, id, provider)
 }

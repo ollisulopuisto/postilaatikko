@@ -104,9 +104,11 @@ func TestGmailFilterConsentRejectsUnownedContext(t *testing.T) {
 	if _, _, _, err := a.prepareGmailFilterConsent("missing"); err == nil {
 		t.Fatal("missing account accepted")
 	}
-	a.mailboxService = &mailboxServiceConnector{endpoint: "https://studio.example.test:8029"}
-	if _, _, _, err := a.prepareGmailFilterConsent("mail"); err == nil {
-		t.Fatal("remote account used local credentials")
+	for _, endpoint := range []string{"", "http://127.0.0.1:8029", "https://studio.example.test:8029"} {
+		a.mailboxService = &mailboxServiceConnector{endpoint: endpoint}
+		if _, _, _, err := a.prepareGmailFilterConsent("mail"); err == nil {
+			t.Fatal("helper-owned account used desktop credentials", endpoint)
+		}
 	}
 }
 func TestGmailFilterConsentDoesNotConsumeMailCallback(t *testing.T) {

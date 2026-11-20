@@ -88,7 +88,7 @@
     </Dialog.Header>
     {#if error}<p role="alert" class="native-gmail-error text-sm break-words">{error}</p>{/if}
     {#if busy}<p role="status" class="text-sm text-muted-foreground">{$_('gmailFilters.working')}</p>{/if}
-    {#if context}<p class="text-sm break-all">{context.email}</p>{/if}
+    {#if context}<p class="text-sm break-all">{plan?.accountEmail || preview?.accountEmail || context.email}</p>{/if}
     {#if plan?.id}
       <section class="flex flex-col gap-3 rounded-md border border-border p-3">
         <h3 class="font-medium">{$_('gmailFilters.finalReview')}</h3>

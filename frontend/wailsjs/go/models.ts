@@ -361,18 +361,21 @@ export namespace app {
 		}
 	}
 	export class NativeGmailPreview {
+		accountEmail: string;
 		found: number;
 		truncated: boolean;
 		fingerprint: string;
 		static createFrom(source: any = {}) { return new NativeGmailPreview(source); }
 		constructor(source: any = {}) {
 			if (typeof source === "string") source = JSON.parse(source);
+			this.accountEmail = source["accountEmail"];
 			this.found = source["found"];
 			this.truncated = source["truncated"];
 			this.fingerprint = source["fingerprint"];
 		}
 	}
 	export class NativeGmailPublicationStatus {
+		accountEmail: string;
 		ruleId: string;
 		accountId: string;
 		query: string;
@@ -385,6 +388,7 @@ export namespace app {
 		static createFrom(source: any = {}) { return new NativeGmailPublicationStatus(source); }
 		constructor(source: any = {}) {
 			if (typeof source === "string") source = JSON.parse(source);
+			this.accountEmail = source["accountEmail"];
 			this.ruleId = source["ruleId"];
 			this.accountId = source["accountId"];
 			this.query = source["query"];
