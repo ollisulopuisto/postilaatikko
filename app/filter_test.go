@@ -366,6 +366,32 @@ func newFilterFixture(t *testing.T, rejectAppend bool) *filterFixture {
 		runtimeEventEmitter: func(string, ...interface{}) {},
 		filterStore:         mailfilter.NewStore(db),
 	}
+
+	// Moves return before provider reconciliation and count updates finish.
+	// Join their tracked work before closing SQLite/removing its WAL directory.
+	t.Cleanup(func() {
+		cancel()
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			app.moveMutationMu.Lock()
+			flights := len(app.moveMutationFlights)
+			app.moveMutationMu.Unlock()
+			app.moveSyncMu.Lock()
+			delayed := len(app.moveSyncTimers) + len(app.moveSyncWaiters)
+			app.moveSyncMu.Unlock()
+			app.syncMu.Lock()
+			syncing := len(app.syncContexts)
+			app.syncMu.Unlock()
+			if flights == 0 && delayed == 0 && syncing == 0 {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Errorf("filter fixture did not settle: moves=%d delayed=%d syncs=%d", flights, delayed, syncing)
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	})
 	app.filterRouter = mailfilter.NewAutomaticRouter(app.filterStore, folderStore, func(rule *mailfilter.Rule, destination *folder.Folder, msg *message.Message) {
 		go app.applyMatchedFilterRule(rule, msg)
 	})
