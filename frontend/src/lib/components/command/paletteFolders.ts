@@ -32,8 +32,14 @@ export function matchPaletteFolders(accounts: AccountEntry[], catalog: Record<st
         walk(tree.children || [])
       }
     }
-    if (catalog[acc.account.id]) entries.push(...catalog[acc.account.id])
-    else walk(acc.folders || [])
+    const collect = () => {
+      if (catalog[acc.account.id]) {
+        entries.push(...catalog[acc.account.id])
+        return
+      }
+      walk(acc.folders || [])
+    }
+    collect()
     const byId = new Map(entries.map(f => [f.id, f]))
     const hidden = (folder: FolderEntry) => {
       const visited = new Set<string>()
