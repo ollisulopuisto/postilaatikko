@@ -226,7 +226,7 @@ func GoogleFilterManagementProvider(email string, grantedScopes []string) (Provi
 	if strings.TrimSpace(email) == "" || len(grantedScopes) == 0 {
 		return ProviderConfig{}, fmt.Errorf("known account identity and existing grant required")
 	}
-	p := GoogleProvider()
+	p := overlayResolvedCreds(GoogleProvider(), "google-mail")
 	p.LoginHint = email
 	p.IncrementalConsent = true
 	p.Scopes = nil
