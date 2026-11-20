@@ -29,25 +29,30 @@ var global struct {
 
 var handshake struct {
 	sync.Mutex
-	run func()
+	run func() error
 }
 
 // SetDesktopHandshake registers the read-only helper activation request once
 // desktop service initialization has completed. Existing captures also join.
-func SetDesktopHandshake(run func()) {
+func SetDesktopHandshake(run func() error) {
 	handshake.Lock()
 	handshake.run = run
 	handshake.Unlock()
-	if Active() != nil {
-		requestHelper()
+	if session := Active(); session != nil {
+		requestHelper(session)
 	}
 }
-func requestHelper() {
+func requestHelper(session *Session) {
 	handshake.Lock()
 	run := handshake.run
 	handshake.Unlock()
 	if run != nil {
-		go run()
+		go func() {
+			if err := run(); err != nil && session != nil {
+				// Raw errors can contain URLs, tokens or account identifiers.
+				session.Write(map[string]any{"event": "helper_capture_status", "active": false, "reason": "activation_failed"})
+			}
+		}()
 	}
 }
 
@@ -143,7 +148,7 @@ func start(root, id, process string, duration, cpuDuration time.Duration) (*Sess
 	s := &Session{ID: id, Dir: dir, file: file, done: make(chan struct{}), cpuStop: make(chan struct{}), cpuDone: make(chan struct{})}
 	global.session = s
 	if process == "desktop" {
-		requestHelper()
+		requestHelper(s)
 	}
 	s.Write(map[string]any{"event": "session_started", "process": process, "duration_seconds": int(duration.Seconds()), "cpu_seconds": int(cpuDuration.Seconds()), "scope": "local Go process; no mailbox bodies, tokens or query strings are logged; profiles remain local", "helper": "requested only over authenticated loopback API; updated helper required"})
 	s.snapshot("start")
@@ -279,6 +284,9 @@ func (s *Session) Close() {
 		close(s.done)
 	})
 }
+
+// Active returns the current capture, including one still finalizing profiles.
+// It returns nil only after all files have closed.
 func Active() *Session {
 	global.Lock()
 	defer global.Unlock()
@@ -308,6 +316,8 @@ func Loopback(host string) bool {
 // over the existing authenticated literal-loopback connection.
 type Transport struct{ Base http.RoundTripper }
 
+// RoundTrip records response-header latency, not response-body transfer or decoding.
+// It never reads or logs the body and only marks authenticated local requests.
 func (t Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	base := t.Base
 	if base == nil {
@@ -329,7 +339,7 @@ func (t Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if resp != nil {
 		status = resp.StatusCode
 	}
-	s.Write(map[string]any{"event": "desktop_api_timing", "method": req.Method, "status": status, "duration_ms": time.Since(started).Milliseconds(), "transport_error": err != nil, "local_helper": Loopback(req.URL.Host)})
+	s.Write(map[string]any{"event": "desktop_api_timing", "latency_scope": "response_headers", "method": req.Method, "status": status, "duration_ms": time.Since(started).Milliseconds(), "transport_error": err != nil, "local_helper": Loopback(req.URL.Host)})
 	if resp != nil && clone.Header.Get(Header) != "" {
 		s.Write(map[string]any{"event": "helper_capture_status", "active": resp.Header.Get(Header) == s.ID})
 	}

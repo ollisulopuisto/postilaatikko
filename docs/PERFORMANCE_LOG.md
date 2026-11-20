@@ -31,6 +31,15 @@ file I/O failure is also reported to stderr, separately from the capture file.
 The helper stops on its own five-minute deadline even if the desktop exits,
 and finalizes active profiles on normal helper shutdown.
 No running-app restart is required once both binaries support this feature.
+A failed authorization/bootstrap or capabilities request records
+`helper_capture_status` with `active: false` and `reason: activation_failed`.
+The status deliberately omits private error text. A successful request to an old
+helper can instead report `active: false` because it did not acknowledge capture.
+
+Desktop `desktop_api_timing` events have `latency_scope: response_headers`.
+Their duration ends when response headers arrive, before the caller reads or
+decodes the body. Body transfer and body-read errors are not measured by this
+transport, so these timings must not be read as complete request latency.
 
 Directories are private (0700) and files are private (0600). Existing symlinked
 diagnostics directories are rejected. JSON logs are capped at 8 MiB per process;

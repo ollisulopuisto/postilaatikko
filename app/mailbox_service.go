@@ -1540,3 +1540,14 @@ func (c *mailboxServiceConnector) evaluateFilterRule(ctx context.Context, req v1
 	}
 	return client.EvaluateFilterRule(ctx, req, result)
 }
+
+// performanceCaptureHandshake propagates bootstrap and request failures to the
+// capture coordinator, which records a fixed status without private error text.
+func (c *mailboxServiceConnector) performanceCaptureHandshake(ctx context.Context) error {
+	client, err := c.getClient()
+	if err != nil {
+		return err
+	}
+	_, err = c.getCapabilities(ctx, client)
+	return err
+}

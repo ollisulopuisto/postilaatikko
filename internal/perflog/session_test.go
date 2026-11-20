@@ -3,6 +3,7 @@ package perflog
 import (
 	"bytes"
 	"compress/gzip"
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -97,6 +98,9 @@ func TestTransportOnlyMarksAuthenticatedLiteralLoopbackAndRedactsLogs(t *testing
 	}
 	s.Close()
 	log, _ := os.ReadFile(filepath.Join(s.Dir, "performance.jsonl"))
+	if !bytes.Contains(log, []byte(`"latency_scope":"response_headers"`)) {
+		t.Fatal("header latency is not distinguished from full request time")
+	}
 	for _, secret := range []string{"notlogged", "Bearer private", "example.test", "/v1/accounts"} {
 		if bytes.Contains(log, []byte(secret)) {
 			t.Fatal("private data logged", secret)
@@ -182,7 +186,7 @@ func TestHandshakeAfterDesktopReadyAndOnNextSession(t *testing.T) {
 	s := testSession(t)
 	defer s.Close()
 	ready := make(chan struct{}, 4)
-	SetDesktopHandshake(func() { ready <- struct{}{} })
+	SetDesktopHandshake(func() error { ready <- struct{}{}; return nil })
 	select {
 	case <-ready:
 	case <-time.After(time.Second):
@@ -240,5 +244,31 @@ func TestIOFailureReportsOnceOutsideFailedFile(t *testing.T) {
 	s.Close()
 	if count != 1 {
 		t.Fatalf("I/O failure reports = %d", count)
+	}
+}
+
+func TestHandshakeFailureRecordedWithoutPrivateError(t *testing.T) {
+	SetDesktopHandshake(nil)
+	defer SetDesktopHandshake(nil)
+	session := testSession(t)
+	SetDesktopHandshake(func() error { return errors.New("private-token https://private.example/account") })
+	deadline := time.Now().Add(time.Second)
+	var log []byte
+	for time.Now().Before(deadline) {
+		var err error
+		log, err = os.ReadFile(filepath.Join(session.Dir, "performance.jsonl"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if bytes.Contains(log, []byte("activation_failed")) {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if !bytes.Contains(log, []byte(`"active":false`)) || !bytes.Contains(log, []byte("activation_failed")) {
+		t.Fatalf("silent handshake failure: %s", log)
+	}
+	if bytes.Contains(log, []byte("private-token")) || bytes.Contains(log, []byte("private.example")) {
+		t.Fatal("private error was logged")
 	}
 }

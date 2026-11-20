@@ -738,12 +738,10 @@ func (a *App) Startup(ctx context.Context) {
 		}
 	}
 	connector := a.mailboxService
-	perflog.SetDesktopHandshake(func() {
+	perflog.SetDesktopHandshake(func() error {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		if client, err := connector.getClient(); err == nil {
-			_, _ = connector.getCapabilities(ctx, client)
-		}
+		return connector.performanceCaptureHandshake(ctx)
 	})
 
 	// A restart never auto-sends: expire any leftover undo-send queue rows;
