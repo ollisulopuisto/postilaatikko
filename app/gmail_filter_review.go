@@ -42,13 +42,15 @@ type NativeGmailDraft struct {
 // NativeGmailPreview is a bounded historical sample, not an exact count or a
 // guarantee about future incoming-mail matching. No old mail is changed.
 type NativeGmailPreview struct {
-	Found       int    `json:"found"`
-	Truncated   bool   `json:"truncated"`
-	Fingerprint string `json:"fingerprint"`
+	AccountEmail string `json:"accountEmail"`
+	Found        int    `json:"found"`
+	Truncated    bool   `json:"truncated"`
+	Fingerprint  string `json:"fingerprint"`
 }
 
 // NativeGmailPublicationStatus keeps the reviewed attempt recoverable in UI.
 type NativeGmailPublicationStatus struct {
+	AccountEmail   string   `json:"accountEmail"`
 	RuleID         string   `json:"ruleId"`
 	AccountID      string   `json:"accountId"`
 	Query          string   `json:"query"`
@@ -161,14 +163,19 @@ func validateNativeUserLabels(ctx context.Context, provider accountFilterProvide
 	}
 	return nil
 }
-func nativeGmailFingerprint(rule *mailfilter.Rule, accountID string, f gmail.Filter) string {
+func nativeGmailFingerprint(rule *mailfilter.Rule, accountID string, f gmail.Filter, binding ...string) string {
+	owner := ""
+	if len(binding) > 0 {
+		owner = binding[0]
+	}
 	source := *rule
 	source.CreatedAt, source.UpdatedAt = source.CreatedAt.UTC(), source.UpdatedAt.UTC()
 	data, err := json.Marshal(struct {
-		Source    mailfilter.Rule
-		AccountID string
-		Filter    gmail.Filter
-	}{source, accountID, f})
+		Source       mailfilter.Rule
+		OwnerBinding string
+		AccountID    string
+		Filter       gmail.Filter
+	}{source, owner, accountID, f})
 	if err != nil {
 		return "" // Invalid source timestamps cannot acquire a review fingerprint.
 	}
@@ -210,14 +217,21 @@ func (a *App) PreviewNativeGmailFilter(draft NativeGmailDraft) (NativeGmailPrevi
 	if err != nil {
 		return result, err
 	}
-	result.Fingerprint = nativeGmailFingerprint(rule, accountID, f)
+	result.AccountEmail = provider.email
+	result.Fingerprint = nativeGmailFingerprint(rule, accountID, f, provider.OwnerBinding())
 	if result.Fingerprint == "" {
 		return result, fmt.Errorf("source could not be fingerprinted")
 	}
 	return result, nil
 }
 func publicationStatus(p *mailfilter.GmailPublication) NativeGmailPublicationStatus {
-	return NativeGmailPublicationStatus{RuleID: p.RuleID, AccountID: p.AccountID, Query: p.Filter.Criteria.Query, AddLabelIDs: p.Filter.Action.AddLabelIDs, RemoveLabelIDs: p.Filter.Action.RemoveLabelIDs, ID: p.ID, State: p.State, ProviderID: p.ProviderID, Fingerprint: nativeGmailFingerprint(&p.Source, p.AccountID, p.Filter)}
+	var owner []string
+	_ = json.Unmarshal([]byte(p.OwnerBinding), &owner)
+	email := ""
+	if len(owner) == 2 {
+		email = owner[0]
+	}
+	return NativeGmailPublicationStatus{AccountEmail: email, RuleID: p.RuleID, AccountID: p.AccountID, Query: p.Filter.Criteria.Query, AddLabelIDs: p.Filter.Action.AddLabelIDs, RemoveLabelIDs: p.Filter.Action.RemoveLabelIDs, ID: p.ID, State: p.State, ProviderID: p.ProviderID, Fingerprint: nativeGmailFingerprint(&p.Source, p.AccountID, p.Filter, p.OwnerBinding)}
 }
 
 // PrepareNativeGmailFilter freezes the exact previewed payload for final review.
@@ -232,12 +246,12 @@ func (a *App) PrepareNativeGmailFilter(draft NativeGmailDraft, fingerprint strin
 	if err != nil {
 		return result, err
 	}
-	if fingerprint == "" || fingerprint != nativeGmailFingerprint(rule, accountID, f) {
-		return result, fmt.Errorf("review changed; preview again")
-	}
 	provider, err := a.gmailFilterProvider(accountID)
 	if err != nil {
 		return result, err
+	}
+	if fingerprint == "" || fingerprint != nativeGmailFingerprint(rule, accountID, f, provider.OwnerBinding()) {
+		return result, fmt.Errorf("review or account changed; preview again")
 	}
 	if err := validateNativeUserLabels(a.helperCommandContext(), provider, draft.LabelIDs); err != nil {
 		return result, err

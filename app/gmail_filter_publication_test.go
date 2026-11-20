@@ -56,6 +56,8 @@ func TestNativePublicationBoundClientAndExecutionGuard(t *testing.T) {
 		}
 		body := ""
 		switch {
+		case strings.HasSuffix(req.URL.Path, "/profile"):
+			body = `{"emailAddress":"user@example.com"}`
 		case req.Method == "GET" && strings.HasSuffix(req.URL.Path, "/labels"):
 			body = `{"labels":[{"id":"UNREAD"}]}`
 		case req.Method == "GET" && strings.HasSuffix(req.URL.Path, "/settings/filters"):

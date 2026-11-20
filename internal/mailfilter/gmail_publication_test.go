@@ -9,15 +9,17 @@ import (
 )
 
 type fakeNativeProvider struct {
-	account   string
-	filters   []gmail.Filter
-	writes    int
-	uncertain bool
-	drop      bool
-	readErr   bool
+	ownerBinding string
+	account      string
+	filters      []gmail.Filter
+	writes       int
+	uncertain    bool
+	drop         bool
+	readErr      bool
 }
 
-func (p *fakeNativeProvider) AccountID() string { return p.account }
+func (p *fakeNativeProvider) OwnerBinding() string { return p.ownerBinding }
+func (p *fakeNativeProvider) AccountID() string    { return p.account }
 func (p *fakeNativeProvider) ListFilters(context.Context) ([]gmail.Filter, error) {
 	if p.readErr {
 		return nil, errors.New("offline")

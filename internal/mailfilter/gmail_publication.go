@@ -22,14 +22,15 @@ type NativeFilterProvider interface {
 // GmailPublication is durable recovery state. Attempted and unknown records
 // must be reconciled, never replayed, even after a process restart.
 type GmailPublication struct {
-	ID          string       `json:"id"`
-	RuleID      string       `json:"ruleId"`
-	AccountID   string       `json:"accountId"`
-	State       string       `json:"state"`
-	ProviderID  string       `json:"providerId"`
-	Source      Rule         `json:"source"`
-	Filter      gmail.Filter `json:"filter"`
-	BaselineIDs []string     `json:"baselineIds"`
+	OwnerBinding string       `json:"ownerBinding,omitempty"`
+	ID           string       `json:"id"`
+	RuleID       string       `json:"ruleId"`
+	AccountID    string       `json:"accountId"`
+	State        string       `json:"state"`
+	ProviderID   string       `json:"providerId"`
+	Source       Rule         `json:"source"`
+	Filter       gmail.Filter `json:"filter"`
+	BaselineIDs  []string     `json:"baselineIds"`
 }
 
 func canonicalNativeFilter(f gmail.Filter) gmail.Filter {
@@ -56,7 +57,19 @@ func sameNativeFilter(a, b gmail.Filter) bool {
 // the caller. It does not translate local substring criteria, request consent,
 // stop a running executor, or contact Gmail. The source must already be stopped.
 // allowedLabelIDs must be the selected account's freshly fetched label catalog.
-func (s *Store) PrepareGmailPublication(ruleID, accountID string, draft gmail.Filter, baseline []gmail.Filter, allowedLabelIDs []string) (*GmailPublication, error) {
+// An optional non-secret owner binding is stored in the source snapshot envelope.
+// Bound records require a matching provider OwnerBinding on publish/reconcile.
+func (s *Store) PrepareGmailPublication(ruleID, accountID string, draft gmail.Filter, baseline []gmail.Filter, allowedLabelIDs []string, ownerBinding ...string) (*GmailPublication, error) {
+	binding := ""
+	if len(ownerBinding) > 1 {
+		return nil, fmt.Errorf("one owner binding required")
+	}
+	if len(ownerBinding) == 1 {
+		binding = ownerBinding[0]
+		if binding == "" || len(binding) > 2048 {
+			return nil, fmt.Errorf("invalid owner binding")
+		}
+	}
 	if draft.ID != "" || draft.Criteria == (gmail.FilterCriteria{}) || draft.Action.Forward != "" {
 		return nil, fmt.Errorf("new provider-native criteria and label-only actions required")
 	}
@@ -92,14 +105,17 @@ func (s *Store) PrepareGmailPublication(ruleID, accountID string, draft gmail.Fi
 	if source == nil || source.Enabled || len(source.ScopeAccountIDs()) != 1 || source.ScopeAccountIDs()[0] != accountID || len(source.FolderIDs) != 0 || source.DestFolderID != "" {
 		return nil, fmt.Errorf("stopped single-account rule without folder/move scope required")
 	}
-	p := &GmailPublication{ID: uuid.NewString(), RuleID: ruleID, AccountID: accountID, State: "prepared", Source: *source, Filter: draft}
+	p := &GmailPublication{OwnerBinding: binding, ID: uuid.NewString(), RuleID: ruleID, AccountID: accountID, State: "prepared", Source: *source, Filter: draft}
 	for _, f := range baseline {
 		if f.ID == "" {
 			return nil, fmt.Errorf("provider catalog has missing identity")
 		}
 		p.BaselineIDs = append(p.BaselineIDs, f.ID)
 	}
-	src, err := json.Marshal(p.Source)
+	src, err := json.Marshal(struct {
+		Rule
+		NativeOwnerBinding string `json:"nativeOwnerBinding,omitempty"`
+	}{p.Source, p.OwnerBinding})
 	if err != nil {
 		return nil, err
 	}
@@ -143,6 +159,13 @@ func (s *Store) GetGmailPublication(id string) (*GmailPublication, error) {
 	if err = json.Unmarshal([]byte(src), &p.Source); err != nil {
 		return nil, err
 	}
+	var binding struct {
+		NativeOwnerBinding string `json:"nativeOwnerBinding"`
+	}
+	if err = json.Unmarshal([]byte(src), &binding); err != nil {
+		return nil, err
+	}
+	p.OwnerBinding = binding.NativeOwnerBinding
 	if err = json.Unmarshal([]byte(payload), &p.Filter); err != nil {
 		return nil, err
 	}
@@ -162,6 +185,12 @@ func (s *Store) PublishGmailFilter(ctx context.Context, id string, provider Nati
 	p, err := s.GetGmailPublication(id)
 	if err != nil {
 		return nil, err
+	}
+	if p.OwnerBinding != "" {
+		bound, ok := provider.(interface{ OwnerBinding() string })
+		if !ok || bound.OwnerBinding() != p.OwnerBinding {
+			return nil, fmt.Errorf("provider owner changed; publication blocked")
+		}
 	}
 	if provider.AccountID() != p.AccountID {
 		return nil, fmt.Errorf("provider account mismatch")
@@ -231,6 +260,12 @@ func (s *Store) ReconcileGmailPublication(ctx context.Context, id string, provid
 	p, err := s.GetGmailPublication(id)
 	if err != nil {
 		return nil, err
+	}
+	if p.OwnerBinding != "" {
+		bound, ok := provider.(interface{ OwnerBinding() string })
+		if !ok || bound.OwnerBinding() != p.OwnerBinding {
+			return nil, fmt.Errorf("provider owner changed; publication blocked")
+		}
 	}
 	if provider.AccountID() != p.AccountID {
 		return nil, fmt.Errorf("provider account mismatch")
