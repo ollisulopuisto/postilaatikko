@@ -292,6 +292,10 @@ func run(args []string) error {
 			_ = syncRuntime.Close()
 			return err
 		}
+		if err := syncRuntime.SetGmailFilterTokenSource(transport.GmailFilterTokenSource); err != nil {
+			_ = syncRuntime.Close()
+			return err
+		}
 		if err := syncRuntime.SetGmailTriageLabeler(transport.SetGmailTriageLabel); err != nil {
 			_ = syncRuntime.Close()
 			return err

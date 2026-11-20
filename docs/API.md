@@ -114,6 +114,11 @@ The helper mounts provider-aware search and account-qualified thread/body reads:
 For encrypted drafts, the desktop encrypts the draft body and attachments locally and sends only `encrypted`, `encryptedBody`, `pgpEncrypted`, `pgpEncryptedBody`, and `attachmentsData` with compose metadata. The helper stores the opaque ciphertext and revision without private-key access. Immediate-send RFC822 preparation, signing, and encryption also remain on the desktop before delivery through the helper.
 
 ### 5. Mail Mutations
+- `POST /v1/filters/gmail` operates only on helper-owned Gmail accounts. All operations require `mail.read`. `prepare`, `publish`, `cancel`, and `reconcile` additionally require both `mail.write` and `account.manage`. Reconciliation never writes to Gmail, but can update the local journal.
+  - `context`, `preview`, `prepare` take `accountId` and the stopped source `ruleId`; native drafts use only an explicit Gmail `filter.criteria.query` and supported label actions. `prepare` takes the preview `fingerprint`. Existing jobs block preparation.
+  - `status`, `publish`, `reconcile`, `cancel` take `accountId` and publication `id`; `publish` also takes its frozen `fingerprint`. Unknown creates must use `reconcile`, never another publish. Only unattempted preparation can cancel.
+  - Context returns `consentRequired` without initiating consent. An existing helper-local Google settings grant is required for provider reads/writes. No token or credential can be supplied in this request. Consent exchange and desktop routing are not yet implemented.
+  - Preview is at most one 51-ID page, displayed as up to 50 plus truncation. No historical mail mutation. This provider-native query is not a translation of local substring conditions or priority.
 - `POST /v1/filters/mutations` (Requires `mail.write`)
   - Request body uses `operation` with `rule` for `create`/`update`, `id` for `delete`, or `ids` for `reorder`.
   - Reorder requires every existing rule ID exactly once, in the requested visible order. Partial lists, unknown IDs and duplicates are rejected without changing any priorities, even when no Gmail publication owns a rule. Reload the rules after success: stored priorities can be sparse around frozen Gmail-owned rules and are not list positions.
