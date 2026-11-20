@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/hkdb/aerion/internal/gmail"
-	"github.com/hkdb/aerion/internal/mailfilter"
+	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
+	"github.com/ollisulopuisto/postilaatikko/internal/mailfilter"
 )
 
 type accountFilterProvider struct {
