@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Settings Extensions now distinguishes a failed catalog load from no installed extensions, offers Retry, and keeps localized toggle errors visible. Extension controls wrap in narrow windows.
+
 - Full email templates are now available in detached compose windows. Templates remain saved on this computer through the parent app; insertion keeps recipients and existing draft content.
 
 - If quitting fails while checking pending mail or closing the app, show a localized error instead of silently leaving the app open. Pending-send and uncertain-delivery safety checks are unchanged.

@@ -2,7 +2,6 @@
   import { onMount } from 'svelte'
   import Icon from '@iconify/svelte'
   import { Button } from '$lib/components/ui/button'
-  import { addToast } from '$lib/stores/toast'
   import { refreshExtensionRegistry, openExtensionSettings } from '$lib/stores/extensionRegistry.svelte'
   import { _ } from '$lib/i18n'
   // @ts-ignore - wailsjs bindings
@@ -12,6 +11,8 @@
 
   let extensions = $state<app.ExtensionInfo[]>([])
   let loading = $state(true)
+  let loadError = $state(false)
+  let toggleErrorName = $state('')
   let togglingId = $state<string | null>(null)
 
   onMount(async () => {
@@ -20,18 +21,21 @@
 
   async function load() {
     loading = true
+    loadError = false
     try {
       extensions = await ListExtensions() || []
     } catch (err) {
       console.error('Failed to load extensions:', err)
-      addToast({ type: 'error', message: 'Failed to load extensions' })
+      loadError = true
     } finally {
       loading = false
     }
   }
 
   async function toggle(ext: app.ExtensionInfo) {
+    if (togglingId !== null) return
     togglingId = ext.id
+    toggleErrorName = ''
     const next = !ext.enabled
     try {
       await SetExtensionEnabled(ext.id, next)
@@ -40,7 +44,7 @@
       await load()
     } catch (err) {
       console.error('Failed to toggle extension:', err)
-      addToast({ type: 'error', message: `Failed to ${next ? 'enable' : 'disable'} ${ext.name}` })
+      toggleErrorName = ext.name
     } finally {
       togglingId = null
     }
@@ -53,19 +57,31 @@
     <p class="text-sm text-muted-foreground mt-1">{$_('settings.extensionsCoreDescription')}</p>
   </header>
 
+  {#if loadError}
+    <div role="alert" class="space-y-2 rounded-md border border-destructive p-3 text-sm text-foreground">
+      <p>{$_('settings.extensionsLoadFailed')}</p>
+      <Button size="sm" variant="outline" disabled={loading} onclick={load}>{$_('common.retry')}</Button>
+    </div>
+  {/if}
+  {#if toggleErrorName}
+    <div role="alert" class="rounded-md border border-destructive p-3 text-sm text-foreground">
+      {$_('settings.extensionsToggleFailed', { values: { name: toggleErrorName } })}
+    </div>
+  {/if}
+
   {#if loading}
     <div class="flex items-center justify-center py-6">
       <Icon icon="mdi:loading" class="w-5 h-5 animate-spin text-muted-foreground" />
     </div>
-  {:else if extensions.length === 0}
+  {:else if extensions.length === 0 && !loadError}
     <p class="text-sm text-muted-foreground">{$_('settings.extensionsNone')}</p>
   {:else}
     <ul class="space-y-3">
       {#each extensions as ext (ext.id)}
         <li class="border border-border rounded-md p-4 bg-card">
-          <div class="flex items-start justify-between gap-4">
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2">
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div class="flex-1 min-w-0 basis-40">
+              <div class="flex flex-wrap items-center gap-2">
                 <h3 class="font-medium">{ext.name}</h3>
                 <span class="text-xs text-muted-foreground">
                   {$_('settings.extensionsVersion')} {ext.version}
@@ -96,16 +112,16 @@
                   variant="outline"
                   size="sm"
                   onclick={() => openExtensionSettings(ext.id)}
-                  title="Edit extension settings"
+                  title={$_('settings.extensionsEditSettings')}
                 >
                   <Icon icon="mdi:cog" class="w-4 h-4 mr-1" />
-                  Edit
+                  {$_('common.edit')}
                 </Button>
               {/if}
               <Button
                 variant={ext.enabled ? 'outline' : 'default'}
                 size="sm"
-                disabled={togglingId === ext.id}
+                disabled={togglingId !== null}
                 onclick={() => toggle(ext)}
               >
                 {#if togglingId === ext.id}

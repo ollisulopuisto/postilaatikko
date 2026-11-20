@@ -28,6 +28,10 @@
 
 - UI-ERROR-AUDIT-001: Review. Show a localized error if pending-queue loading or native quit fails. Error toasts wrap rather than hide recovery guidance. Queue/delivery semantics are unchanged; no forced shutdown or automatic retry. Handler regressions and EN/FI browser checks at 320/390/1024 px pass. Native macOS quit remains unverified.
 
+## Extension catalog error recovery
+
+- UI-ERROR-AUDIT-005: Review. Instinct, `agent/UI-ERROR-AUDIT-005`, `/tmp/pl-extension-errors`. Failed catalog load is not a false empty state; explicit Retry retains prior entries, and retrying a post-toggle refresh never repeats the toggle. Toggle errors and edit labels localized; controls wrap at narrow widths. Failing-first browser test passes, EN/FI 320/390/1024 pixels inspected; 1108 frontend tests pass, 21 browser-gated skipped; check/lint/build pass. Browser regression joins the existing CI batch with isolated cache and bundled Chromium. Extension lifecycle/registry permission and live native behavior unchanged or unverified.
+
 ## Status and effort
 
 - **Easy:** contained UI, copy, localization, or isolated behavior change.
