@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -41,6 +42,7 @@ import (
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/notification"
 	"github.com/hkdb/aerion/internal/oauth2"
+	"github.com/hkdb/aerion/internal/perflog"
 	"github.com/hkdb/aerion/internal/pgp"
 	"github.com/hkdb/aerion/internal/platform"
 	"github.com/hkdb/aerion/internal/replylater"
@@ -697,6 +699,14 @@ func (a *App) Startup(ctx context.Context) {
 	// that could delay the rest of Startup.
 	if a.SingleInstanceLock != nil {
 		a.SingleInstanceLock.SetOnShow(func(data string) {
+			if data == "perf-log" {
+				if session, err := perflog.Start(); err == nil {
+					fmt.Fprintln(os.Stderr, "Performance diagnostics (local only):", session.Dir)
+				} else {
+					fmt.Fprintln(os.Stderr, "Could not start performance log:", err)
+				}
+				return
+			}
 			if strings.HasPrefix(data, "mailto:") {
 				a.handleExternalMailto(data)
 				return
@@ -727,6 +737,12 @@ func (a *App) Startup(ctx context.Context) {
 			log.Warn().Err(err).Msg("Desktop mailbox service credential bootstrap is unavailable")
 		}
 	}
+	connector := a.mailboxService
+	perflog.SetDesktopHandshake(func() error {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		return connector.performanceCaptureHandshake(ctx)
+	})
 
 	// A restart never auto-sends: expire any leftover undo-send queue rows;
 	// their drafts simply reappear in the Drafts folder.
@@ -1270,6 +1286,9 @@ func (a *App) InitiateShutdown() {
 
 // Shutdown is called when the app is closing
 func (a *App) Shutdown(ctx context.Context) {
+	if session := perflog.Active(); session != nil {
+		defer session.Close()
+	}
 	a.shutdownOnce.Do(func() { a.shutdown(ctx) })
 }
 

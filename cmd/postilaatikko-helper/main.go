@@ -25,6 +25,7 @@ import (
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/database"
 	"github.com/hkdb/aerion/internal/logging"
+	"github.com/hkdb/aerion/internal/perflog"
 	"github.com/hkdb/aerion/internal/scheduledsend"
 	"github.com/hkdb/aerion/internal/servicebootstrap"
 )
@@ -60,7 +61,7 @@ func run(args []string) error {
 		return err
 	}
 	if command == "api-client" {
-		if err := logging.Init(logging.Config{Level: "warn", Console: true}); err != nil {
+		if err := logging.Init(logging.Config{Level: helperLogLevel(), Console: true}); err != nil {
 			return err
 		}
 		return runAPIClientCommand(args[1:], dataDefault)
@@ -128,7 +129,7 @@ func run(args []string) error {
 			return err
 		}
 	}
-	if err := logging.Init(logging.Config{Level: "warn", Console: true}); err != nil {
+	if err := logging.Init(logging.Config{Level: helperLogLevel(), Console: true}); err != nil {
 		return err
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -426,6 +427,7 @@ func validateListener(address, cert, key string, allowedHosts []string) error {
 }
 
 func serve(ctx context.Context, store *scheduledsend.Store, transport scheduledsend.Transport, syncRuntime *alwayson.SyncRuntime, address, cert, key string, allowedHosts []string, withSync bool, apiConfig apiListenerConfig) (result error) {
+	defer finishPerformanceCapture()
 	if syncRuntime == nil {
 		return errors.New("mailbox runtime is required to serve the authenticated API")
 	}
@@ -528,4 +530,20 @@ func helperHandler(store *scheduledsend.Store, syncEnabled bool, allowedHosts []
 	})
 	mux.Handle("/v1/commands", store.Handler(allowedHosts...))
 	return scheduledsend.ProtectBrowserRequests(mux, allowedHosts...)
+}
+
+// helperLogLevel keeps ordinary operation quiet, but enables opted-in timings.
+func helperLogLevel() string {
+	if os.Getenv("ETERNOMAIL_API_TIMING") == "1" {
+		return "info"
+	}
+	return "warn"
+}
+
+// Capture can start through a request long after serve begins. Resolve it only
+// at shutdown, after service requests stop, including early error exits.
+func finishPerformanceCapture() {
+	if session := perflog.Active(); session != nil {
+		session.Close()
+	}
 }

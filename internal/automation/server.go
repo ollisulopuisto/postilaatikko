@@ -16,6 +16,7 @@ import (
 
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/logging"
+	"github.com/hkdb/aerion/internal/perflog"
 )
 
 const (
@@ -315,6 +316,29 @@ func (s *Server) wrapMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		// Explicit desktop performance sessions are local-only and authenticated.
+		// Their file writer is independent of normal helper Warn-level logging.
+		var perfSession *perflog.Session
+		if NewTokenAuthorizer(grant).RequireCapability(r.Context(), string(v1.CapabilityMailRead)) == nil {
+			perfSession = perflog.JoinRequest(r)
+		}
+		if session := perfSession; session != nil {
+			w.Header().Set(perflog.Header, session.ID)
+			recorder := &requestTimingWriter{ResponseWriter: w}
+			w = recorder
+			started := time.Now()
+			defer func() {
+				status := recorder.status
+				if status == 0 {
+					status = http.StatusOK
+				}
+				route := r.Pattern
+				if route == "" {
+					route = "(unrouted)"
+				}
+				session.Write(map[string]any{"event": "helper_api_timing", "method": r.Method, "route": route, "status": status, "response_bytes": recorder.bytes, "duration_ms": time.Since(started).Milliseconds()})
+			}()
+		}
 		// 5. Enforce MaxRequestBodyBytes
 		r.Body = http.MaxBytesReader(w, r.Body, MaxRequestBodyBytes)
 

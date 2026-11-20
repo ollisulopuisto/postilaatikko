@@ -138,7 +138,7 @@ func (l *windowsSingleInstanceLock) handleConnection(conn net.Conn) {
 
 	cmd := scanner.Text()
 	// Command allowlist: only accept "show" or "mailto:..." — reject everything else
-	if cmd != "show" && !strings.HasPrefix(cmd, "mailto:") {
+	if cmd != "show" && cmd != "perf-log" && !strings.HasPrefix(cmd, "mailto:") {
 		log.Warn().Str("cmd", cmd).Msg("Rejected unknown command from second instance")
 		return
 	}
