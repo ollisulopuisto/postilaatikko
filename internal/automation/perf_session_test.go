@@ -31,7 +31,7 @@ func TestAuthenticatedLocalPerformanceSessionWritesDespiteWarnLevel(t *testing.T
 	if err := server.Start(); err != nil {
 		t.Fatal(err)
 	}
-	defer server.Stop(context.Background())
+	defer func() { _ = server.Stop(context.Background()) }()
 	id := time.Now().UTC().Format("20060102T150405Z") + "-0123456789abcdef"
 	send := func(token string) *http.Response {
 		t.Helper()
@@ -87,7 +87,7 @@ func TestRemoteHostCannotStartPerformanceCapture(t *testing.T) {
 	if err := server.Start(); err != nil {
 		t.Fatal(err)
 	}
-	defer server.Stop(context.Background())
+	defer func() { _ = server.Stop(context.Background()) }()
 	req, _ := http.NewRequest("GET", server.URL()+"/v1/capabilities", nil)
 	req.Host = "remote.example"
 	req.Header.Set("Authorization", "Bearer "+grant.Token)
