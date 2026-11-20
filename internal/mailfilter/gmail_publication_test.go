@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/hkdb/aerion/internal/gmail"
+	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
 )
 
 type fakeNativeProvider struct {

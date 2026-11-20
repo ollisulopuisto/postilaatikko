@@ -6,9 +6,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/hkdb/aerion/internal/database"
-	"github.com/hkdb/aerion/internal/gmail"
-	"github.com/hkdb/aerion/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
 )
 
 func TestPreparedGmailPublicationGuardsAndCancel(t *testing.T) {
