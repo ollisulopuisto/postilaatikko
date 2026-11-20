@@ -185,3 +185,21 @@ func (a *App) reconcileLocalGmailPublication(ctx context.Context, id string) (*m
 	}
 	return a.filterStore.ReconcileGmailPublication(ctx, id, provider)
 }
+
+// PrepareFilterCreate verifies identity before the journal consumes its attempt.
+func (p accountFilterProvider) PrepareFilterCreate(ctx context.Context) (mailfilter.NativeFilterProvider, error) {
+	client, err := p.snapshotClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return pinnedAccountFilterCreate{accountFilterProvider: p, pinned: client}, nil
+}
+
+type pinnedAccountFilterCreate struct {
+	accountFilterProvider
+	pinned *gmail.Client
+}
+
+func (p pinnedAccountFilterCreate) CreateFilter(ctx context.Context, f gmail.Filter) (*gmail.Filter, error) {
+	return p.pinned.CreateFilter(ctx, f)
+}
