@@ -385,3 +385,24 @@ func TestFilterMigration82PreservesVersion81RulesJobsAndVisibility(t *testing.T)
 	}
 	assertDatabaseIntegrity(t, db)
 }
+
+func TestUpgrade84PreservesFilterStateForGmailPublicationJournal(t *testing.T) {
+	db := openUnmigratedTestDB(t)
+	applyMigrationsThrough(t, db, 84)
+	if _, err := db.Exec(`INSERT INTO mail_filter_rules(id,name,enabled,order_index,account_id,account_ids,folder_ids,from_contains,to_contains,subject_contains,dest_folder_id,created_at,updated_at) VALUES('existing','Keep',1,0,'','[]','[]','["sender"]','[]','[]','',datetime('now'),datetime('now'))`); err != nil {
+		t.Fatal(err)
+	}
+	before := querySignature(t, db, `SELECT * FROM mail_filter_rules WHERE id='existing'`)
+	if err := db.Migrate(); err != nil {
+		t.Fatal(err)
+	}
+	after := querySignature(t, db, `SELECT * FROM mail_filter_rules WHERE id='existing'`)
+	if !reflect.DeepEqual(before, after) {
+		t.Fatal("existing filter changed during journal migration")
+	}
+	var records int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM gmail_filter_publications`).Scan(&records); err != nil || records != 0 {
+		t.Fatal("migration created publication state", records, err)
+	}
+	assertDatabaseIntegrity(t, db)
+}
