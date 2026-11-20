@@ -51,3 +51,29 @@ func TestFlatpakDoesNotMigrateHostAutostartSilently(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestDisabledLegacyLoginEntriesRemainDisabled(t *testing.T) {
+	for _, entry := range []string{"[Desktop Entry]\nHidden=true\n", "[Desktop Entry]\nX-GNOME-Autostart-enabled=false\n", "[Desktop Entry]\nHidden=false\nX-GNOME-Autostart-enabled=false\n"} {
+		t.Run(entry, func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			m := &linuxAutostartManager{}
+			dir, _ := m.autostartDir()
+			if err := os.MkdirAll(dir, 0700); err != nil {
+				t.Fatal(err)
+			}
+			old := filepath.Join(dir, legacyDesktopIDs[0]+".desktop")
+			if err := os.WriteFile(old, []byte(entry), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := MigrateLegacyAutostart(m); err != nil {
+				t.Fatal(err)
+			}
+			if m.IsEnabled() {
+				t.Fatal("disabled startup became enabled")
+			}
+			if b, err := os.ReadFile(old); err != nil || string(b) != entry {
+				t.Fatal("disabled legacy entry changed", err)
+			}
+		})
+	}
+}

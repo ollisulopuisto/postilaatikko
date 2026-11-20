@@ -720,6 +720,7 @@ func (a *App) Startup(ctx context.Context) {
 	// the time Startup runs, local mode has a.paths, a.db, and a.credStore;
 	// remote mode has only device-owned state.
 	log := logging.WithComponent("app")
+	a.initializeDesktopAutostart()
 	if a.remoteServiceMode {
 		a.startRemoteWorkspace(ctx)
 		return
@@ -1078,12 +1079,6 @@ func (a *App) Startup(ctx context.Context) {
 			})
 		}
 	}()
-
-	// Initialize autostart manager
-	a.autostartMgr = platform.NewAutostartManager()
-	if err := platform.MigrateLegacyAutostart(a.autostartMgr); err != nil {
-		log.Warn().Err(err).Msg("Could not migrate legacy login startup")
-	}
 
 	log.Info().
 		Dur("duration", time.Since(startedAt)).
@@ -1593,5 +1588,15 @@ func isAllowedProtocol(rawURL string) bool {
 		return target != "" || parsed.RawQuery != ""
 	default:
 		return false
+	}
+}
+
+// Device-owned login configuration applies to local and remote desktops alike.
+func (a *App) initializeDesktopAutostart() {
+	if a.autostartMgr == nil {
+		a.autostartMgr = platform.NewAutostartManager()
+	}
+	if err := platform.MigrateLegacyAutostart(a.autostartMgr); err != nil {
+		logging.WithComponent("app").Warn().Err(err).Msg("Could not migrate legacy login startup")
 	}
 }

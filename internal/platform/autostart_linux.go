@@ -251,8 +251,49 @@ func (m *linuxAutostartManager) migrateLegacy() error {
 	if err != nil {
 		return err
 	}
-	if hasLegacyAutostart(dir, ".desktop") {
+	if enabledLegacyDesktop(dir) {
 		return m.xdgEnable()
 	}
 	return nil
+}
+
+// Desktop environments keep disabled entries on disk. Existence alone is not
+// permission to enable startup during an identity migration.
+func enabledLegacyDesktop(dir string) bool {
+	for _, id := range legacyDesktopIDs {
+		path := filepath.Join(dir, id+".desktop")
+		info, err := os.Lstat(path)
+		if err != nil || !info.Mode().IsRegular() {
+			continue
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		disabled := false
+		section := ""
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "[") {
+				section = line
+				continue
+			}
+			if section != "[Desktop Entry]" {
+				continue
+			}
+			key, value, ok := strings.Cut(line, "=")
+			if !ok {
+				continue
+			}
+			key = strings.TrimSpace(key)
+			value = strings.TrimSpace(value)
+			if (key == "Hidden" && strings.EqualFold(value, "true")) || (key == "X-GNOME-Autostart-enabled" && strings.EqualFold(value, "false")) {
+				disabled = true
+			}
+		}
+		if !disabled {
+			return true
+		}
+	}
+	return false
 }

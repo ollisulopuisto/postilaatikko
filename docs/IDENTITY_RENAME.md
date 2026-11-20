@@ -27,7 +27,8 @@ The Linux installer provides an `eterno-mail` command symlink for older launch
 scripts. The macOS and Windows executable names really change; custom scripts
 that point into the app bundle or at the old `.exe` must be updated. Existing
 native login entries are migrated to the new executable on application startup,
-only when a legacy entry already exists. Enable/Disable removes old entries to
+only when an enabled legacy entry already exists, for local and remote desktops.
+Linux Hidden or explicitly disabled entries are left disabled. Enable/Disable removes old entries to
 avoid duplicate login launches. A currently loaded macOS login job can remain
 loaded until logout; quit the old app before installing and verify login startup
 after the next login. The app does not run launchctl or kill an old process.
@@ -55,6 +56,8 @@ For separate bundle installs, on the host, before starting the new app:
 3. Run `python3 scripts/migrate-flatpak-data.py` from this checkout. It verifies
    neither ID is listed by `flatpak ps`, refuses an existing new profile and
    symlinked old profile, copies the old profile, and leaves the original intact.
+   Cached attachment references inside copied mailbox databases are rebased to
+   the new profile; user-selected external paths and original databases stay unchanged.
    If the copy fails, inspect the retained partial destination before retrying.
    Do not run either application during the copy. This is a host operation, not
    an operation the new sandbox can perform automatically.
