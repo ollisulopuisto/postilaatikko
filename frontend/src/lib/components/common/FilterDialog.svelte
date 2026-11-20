@@ -20,18 +20,10 @@
   import { toasts } from '$lib/stores/toast'
   import { _ } from '$lib/i18n'
   import { dialogGuardOpen, dialogGuardClose } from '$lib/stores/dialogGuard'
+  import FilterExecutionTarget from './FilterExecutionTarget.svelte'
   import FolderPickerDialog from './FolderPickerDialog.svelte'
 
-  export interface FilterSuggestion {
-    key: string
-    accountId: string
-    sourceFolderId: string
-    destFolderId: string
-    destAccountId: string
-    fromContains: string[]
-    toContains: string[]
-    subjectContains: string[]
-  }
+  import type { FilterSuggestion } from './filterSuggestion'
 
   interface Props {
     open: boolean
@@ -363,19 +355,7 @@
     </Dialog.Header>
 
     <fieldset disabled={initializing || saving} class="flex flex-col gap-4 py-2 max-h-[calc(90vh-180px)] overflow-y-auto pr-1">
-      <div class="flex flex-col gap-2 rounded-lg border border-border p-3">
-        <Label>{$_('filters.executionTarget')}</Label>
-        <label class="flex items-center gap-2"><input type="radio" name="filter-target" value="local" bind:group={selectedTarget} disabled={executionTarget?.target !== 'local'} />{$_('filters.targetLocal')}</label>
-        <label class="flex items-center gap-2"><input type="radio" name="filter-target" value="helper" bind:group={selectedTarget} disabled={executionTarget?.target !== 'helper'} />{$_('filters.targetHelper')}</label>
-        <label class="flex items-center gap-2 text-muted-foreground"><input type="radio" name="filter-target" disabled />Gmail ({$_('filters.targetGmailPending')})</label>
-        {#if executionTarget?.endpoint}<p class="text-xs text-muted-foreground break-all">{executionTarget.endpoint}</p>{/if}
-        <p class="text-xs text-muted-foreground">{$_('filters.transferUnavailable')}</p>
-        {#if executionTarget && (!executionTarget.ready || !executionTarget.writeAuthorized)}
-          <p role="alert" class="filter-target-warning text-xs">{$_('filters.targetUnavailable')}</p>
-        {:else if executionTarget}
-          <p class="text-xs text-muted-foreground">{$_('filters.targetReady')}</p>
-        {/if}
-      </div>
+      <FilterExecutionTarget {executionTarget} bind:selectedTarget />
       <!-- Scope -->
       <div class="flex flex-col gap-2">
         <Label>{$_('filters.scope')}</Label>
@@ -509,8 +489,3 @@
   excludeFolderId=""
   onSelect={handleFolderSelected}
 />
-
-<style>
-  .filter-target-warning { color: #92400e; }
-  :global([data-theme="dark"]) .filter-target-warning { color: #fde68a; }
-</style>
