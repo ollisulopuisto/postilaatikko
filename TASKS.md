@@ -28,6 +28,10 @@
 
 - UI-ERROR-AUDIT-001: Review. Show a localized error if pending-queue loading or native quit fails. Error toasts wrap rather than hide recovery guidance. Queue/delivery semantics are unchanged; no forced shutdown or automatic retry. Handler regressions and EN/FI browser checks at 320/390/1024 px pass. Native macOS quit remains unverified.
 
+## Extension catalog error recovery
+
+- UI-ERROR-AUDIT-005: Review. Instinct, `agent/UI-ERROR-AUDIT-005`, `/tmp/pl-extension-errors`. Failed catalog load is not a false empty state; explicit Retry retains prior entries, and retrying a post-toggle refresh never repeats the toggle. Toggle errors and edit labels localized; controls wrap at narrow widths. Failing-first browser test passes, EN/FI 320/390/1024 pixels inspected; 1108 frontend tests pass, 21 browser-gated skipped; check/lint/build pass. Browser regression joins the existing CI batch with isolated cache and bundled Chromium. Extension lifecycle/registry permission and live native behavior unchanged or unverified.
+
 ## Image allowlist failure recovery
 
 - UI-ERROR-AUDIT-004: Review. Instinct, `agent/UI-ERROR-AUDIT-004`, `/tmp/pl-image-errors`. Settings Images failures are visible; load retry preserves prior entries and does not repeat removal. Failed first-load no longer claims an empty allowlist. Privacy switch remains full width at 320 px. Failing-first browser flow passes with EN/FI 320/390/1024 captures inspected; frontend suite 1107 pass, 20 browser-gated skips, check/lint/build pass. Regression joins the existing CI browser batch with bundled Chromium and isolated cache. No provider/privacy-default or allowlist policy changes; no native Mac/live mailbox test.

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Settings Extensions now distinguishes a failed catalog load from no installed extensions, offers Retry, and keeps localized toggle errors visible. Extension controls wrap in narrow windows.
+
 - Settings Images now shows retryable allowlist load failures and visible removal errors instead of false empty lists or silent failures. The privacy switch stays usable in narrow windows.
 
 - Contact-source load failures show a retryable warning instead of looking like an empty list. The last good list is retained, and source controls wrap in narrow windows.
