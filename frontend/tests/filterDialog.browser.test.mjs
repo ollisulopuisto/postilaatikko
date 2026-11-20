@@ -24,6 +24,14 @@ test('filter editor: prefill, literal subjects, duplicate names, explicit applic
       window.go={app:{App:new Proxy({},{get:(_,name)=>(...args)=>{
         window.calls.push([name,args])
         switch(name){
+          case 'GetFilterExecutionTarget':return Promise.resolve(window.target||{target:'local',endpoint:'',ready:true,writeAuthorized:true,errorCode:''})
+          case 'SaveFilterRuleToTarget':{
+            const prior=window.existing.find(rule=>rule.id===args[2].id)
+            if(!prior){window.saved.push(args[2]);window.existing.push(args[2])}
+            if(prior&&JSON.stringify(prior)!==JSON.stringify(args[2]))return Promise.reject(new Error('rule changed on target'))
+            if(window.saveFails)return Promise.reject(new Error('saved but read-back failed'))
+            return Promise.resolve()
+          }
           case 'GetAccounts':return Promise.resolve([{id:'a',name:'Work',email:'me@example.com'}])
           case 'GetMessage':return Promise.resolve({fromEmail:'sender@example.com',toList:'[{"email":"me@example.com"}]',subject:'Hello, world'})
           case 'GetMessageListID':return Promise.resolve('news.example.com')
@@ -66,6 +74,47 @@ test('filter editor: prefill, literal subjects, duplicate names, explicit applic
     const saved=await page.evaluate(()=>window.saved.at(-1))
     assert.deepEqual(saved.subjectContains,['Hello, world'])
     assert.ok(saved.id&&saved.id!=='older')
+    await page.evaluate(()=>{window.target={target:'helper',endpoint:'https://studio.example.test:8029',ready:true,writeAuthorized:true,errorCode:''};return window.show()})
+    await page.getByText('Studio helper',{exact:true}).waitFor()
+    assert.equal(await page.getByLabel('This Mac',{exact:true}).isDisabled(),true)
+    await page.getByLabel('Move to folder',{exact:true}).uncheck()
+    await page.getByText('Mark read',{exact:true}).click()
+    await page.waitForTimeout(500)
+    await page.screenshot({path:join(captureDir,'filter-target-helper.png'),fullPage:true})
+    await page.evaluate(()=>{window.saveFails=true})
+    await dialog.getByRole('button',{name:'Create filter',exact:true}).click()
+    await page.waitForTimeout(80)
+    assert.equal(await dialog.isVisible(),true,'unverified save keeps editor open')
+    assert.equal(await page.evaluate(()=>window.calls.filter(([name])=>name==='CreateFilterRule').length),0,'no legacy fallback')
+    const persistedWrites=await page.evaluate(()=>window.saved.length)
+    await page.evaluate(()=>{window.saveFails=false})
+    await dialog.getByRole('button',{name:'Create filter',exact:true}).click()
+    await page.waitForTimeout(80)
+    assert.equal(await page.evaluate(()=>window.saved.length),persistedWrites,'verified retry does not create a second rule')
+    assert.equal(await dialog.isVisible(),false,'persisted save can be verified on retry')
+    assert.deepEqual(await page.evaluate(()=>window.calls.filter(([name])=>name==='SaveFilterRuleToTarget').at(-1)[1].slice(0,2)),['helper','https://studio.example.test:8029'])
+    await page.evaluate(()=>{window.target={target:'helper',endpoint:'https://studio.example.test:8029',ready:false,writeAuthorized:false,errorCode:'remote_unavailable'};return window.show()})
+    await page.getByText('The selected service is offline or needs write access. Reconnect in Settings before saving.').waitFor()
+    assert.equal(await dialog.getByRole('button',{name:'Create filter',exact:true}).isDisabled(),true)
+    await page.screenshot({path:join(captureDir,'filter-target-offline.png'),fullPage:true})
+    for(const locale of ['en','fi']) {
+      for(const width of [390,320]) {
+        await page.setViewportSize({width,height:900})
+        await page.evaluate(locale=>window.show(false,locale),locale)
+        await page.waitForTimeout(600)
+        assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'no horizontal overflow')
+        await page.screenshot({path:join(captureDir,`filter-target-offline-${locale}-${width}.png`),fullPage:true})
+        await page.locator('fieldset').evaluate(el=>{el.scrollTop=el.scrollHeight})
+        await page.screenshot({path:join(captureDir,`filter-target-offline-${locale}-${width}-bottom.png`),fullPage:true})
+      }
+    }
+    await page.setViewportSize({width:1024,height:1100})
+
+    await page.evaluate(async()=>{document.documentElement.dataset.theme='light';await window.show(false,'en')})
+    await page.waitForTimeout(600)
+    await page.screenshot({path:join(captureDir,'filter-target-offline-light.png'),fullPage:true})
+    await page.evaluate(()=>{document.documentElement.dataset.theme='dark';window.target=null})
+
     await page.evaluate(()=>window.show())
     await page.waitForTimeout(550)
     assert.equal(await page.locator('input[type=checkbox]').last().isChecked(),false)

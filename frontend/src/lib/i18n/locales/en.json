@@ -1783,6 +1783,15 @@
     }
   },
   "filters": {
+    "executionTarget": "Where should this rule run?",
+    "targetLocal": "This Mac",
+    "targetHelper": "Studio helper",
+    "targetGmailPending": "publishing comes next",
+    "transferUnavailable": "Execution stays in the current mailbox workspace. Transfer between machines is not supported here.",
+    "targetUnavailable": "The selected service is offline or needs write access. Reconnect in Settings before saving.",
+    "targetReady": "Ready to save in this workspace. The saved rule will be read back before confirmation.",
+    "verifiedHelper": "Saved and verified on Studio.",
+    "verifiedLocal": "Saved and verified on this Mac.",
     "title": "Filters",
     "createMenu": "Create filter...",
     "createTitle": "Create filter",

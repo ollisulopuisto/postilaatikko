@@ -256,9 +256,26 @@ func TestMarkAsReadReconcilesProviderConfirmedPartialSuccess(t *testing.T) {
 	if err := a.MarkAsRead([]string{"m1", "m2"}); err == nil {
 		t.Fatal("MarkAsRead hid the partial provider failure")
 	}
-	var readChanged bool
-	for len(events) > 0 {
-		item := <-events
+	var readChanged, countsChanged bool
+	deadline := time.NewTimer(3 * time.Second)
+	defer deadline.Stop()
+	// MarkAsRead updates folder counts asynchronously. Keep the database open
+	// until that writer finishes instead of racing TempDir cleanup with SQLite.
+	for !readChanged || !countsChanged {
+		var item emitted
+		select {
+		case item = <-events:
+		case <-deadline.C:
+			t.Fatal("partial read events did not finish before cleanup")
+		}
+		if item.name == "folders:countsChanged" {
+			counts, ok := item.payload.(map[string]int)
+			if !ok || counts["f"] != 1 {
+				t.Fatalf("unexpected partial read folder counts: %v", item.payload)
+			}
+			countsChanged = true
+			continue
+		}
 		if item.name != "messages:readChanged" {
 			continue
 		}

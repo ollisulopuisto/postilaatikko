@@ -9,8 +9,8 @@
     GetAccounts,
     GetMessage,
     GetMessageListID,
-    CreateFilterRule,
-    UpdateFilterRule,
+    GetFilterExecutionTarget,
+    SaveFilterRuleToTarget,
     PreviewFilterRule,
     ApplyFilterRuleToExisting,
     GetFolderTree,
@@ -20,18 +20,10 @@
   import { toasts } from '$lib/stores/toast'
   import { _ } from '$lib/i18n'
   import { dialogGuardOpen, dialogGuardClose } from '$lib/stores/dialogGuard'
+  import FilterExecutionTarget from './FilterExecutionTarget.svelte'
   import FolderPickerDialog from './FolderPickerDialog.svelte'
 
-  export interface FilterSuggestion {
-    key: string
-    accountId: string
-    sourceFolderId: string
-    destFolderId: string
-    destAccountId: string
-    fromContains: string[]
-    toContains: string[]
-    subjectContains: string[]
-  }
+  import type { FilterSuggestion } from './filterSuggestion'
 
   interface Props {
     open: boolean
@@ -53,6 +45,8 @@
   let accounts = $state<account.Account[]>([])
 
   // Form state
+  let executionTarget = $state<{target: string; endpoint: string; ready: boolean; writeAuthorized: boolean; errorCode: string} | null>(null)
+  let selectedTarget = $state('local')
   let name = $state('')
   let scopeAll = $state(true)
   let scopeAccountIds = $state<string[]>([])
@@ -228,6 +222,10 @@
   $effect(() => {
     if (!open) { previewCount = null; return }
     void (async () => {
+      try {
+        executionTarget = await GetFilterExecutionTarget()
+        selectedTarget = executionTarget.target
+      } catch { initFailed = true; error = $_('filters.targetUnavailable') }
       await loadAccounts()
       if (!alive) return
       if (rule && rule.id) {
@@ -281,7 +279,7 @@
     (useListId && splitPatterns(listIdValue).length > 0)
   )
   const hasAction = $derived(actionMarkRead || (actionMove && Boolean(destFolderId)) || actionArchive || actionTrash)
-  const canSave = $derived(name.trim().length > 0 && hasCriteria && hasAction && (scopeAll || scopeAccountIds.length > 0) && !saving && !initializing && !initFailed && !error && (!applyToExisting || (!previewLoading && previewCount !== null && previewCount <= 500)))
+  const canSave = $derived(name.trim().length > 0 && hasCriteria && hasAction && (scopeAll || scopeAccountIds.length > 0) && executionTarget?.ready && executionTarget?.writeAuthorized && selectedTarget === executionTarget.target && !saving && !initializing && !initFailed && !error && (!applyToExisting || (!previewLoading && previewCount !== null && previewCount <= 500)))
 
   function schedulePreview() {
     ++previewGeneration
@@ -317,13 +315,9 @@
   })
 
   async function saveRule(built: mailfilter.Rule) {
-    if (editMode) {
-      await UpdateFilterRule(built)
-      toasts.success($_('filters.updated'))
-      return
-    }
-    await CreateFilterRule(built)
-    toasts.success($_('filters.created'))
+    if (!executionTarget || selectedTarget !== executionTarget.target) throw new Error($_('filters.transferUnavailable'))
+    await SaveFilterRuleToTarget(selectedTarget, executionTarget.endpoint, built, editMode ? rule : null)
+    toasts.success($_(selectedTarget === 'helper' ? 'filters.verifiedHelper' : 'filters.verifiedLocal'))
   }
 
   async function handleSave() {
@@ -361,6 +355,7 @@
     </Dialog.Header>
 
     <fieldset disabled={initializing || saving} class="flex flex-col gap-4 py-2 max-h-[calc(90vh-180px)] overflow-y-auto pr-1">
+      <FilterExecutionTarget {executionTarget} bind:selectedTarget />
       <!-- Scope -->
       <div class="flex flex-col gap-2">
         <Label>{$_('filters.scope')}</Label>
