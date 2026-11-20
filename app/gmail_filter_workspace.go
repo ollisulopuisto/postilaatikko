@@ -40,6 +40,7 @@ type NativeGmailWorkspace struct {
 	Endpoint string `json:"endpoint"`
 }
 
+// GetNativeGmailWorkspace captures the configured owner for later review actions.
 func (a *App) GetNativeGmailWorkspace() (NativeGmailWorkspace, error) {
 	_, workspace, err := a.captureNativeGmailWorkspace()
 	return workspace, err
