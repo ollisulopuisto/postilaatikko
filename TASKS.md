@@ -31,6 +31,9 @@
 ## About error recovery
 
 - UI-ERROR-AUDIT-002: Review. App-info loading has a visible Retry route independent of update-check initialization. Failing-first browser test covers temporary failure and recovery, with 320/390/700 px controls. Frontend check/lint/build and 1107 tests pass; 19 browser-gated tests skipped in the plain suite. Native settings-window behavior is not verified.
+## Palette active-view translation
+
+- UI-ERROR-AUDIT-006: Review. Instinct, `agent/UI-ERROR-AUDIT-006`, `/tmp/pl-palette-active`. Added missing EN/FI active-view translations. Regression failed before and passes after; actual palette rendered in EN/FI and pixels inspected. No native Mac run. No folder-palette feature changes pending owner decision.
 
 ## Status and effort
 
