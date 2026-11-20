@@ -14,6 +14,7 @@
 
   let expanded = $state(false)
   let newestFirst = $derived([...$toasts].reverse())
+  let hasError = $derived($toasts.some(toast => toast.type === 'error'))
   let stacked = $derived(!expanded && $toasts.length > MAX_VISIBLE)
   let fullCards = $derived(stacked ? newestFirst.slice(0, MAX_VISIBLE - 1) : newestFirst)
   let hiddenBehind = $derived(Math.max(0, $toasts.length - MAX_VISIBLE))
@@ -28,7 +29,7 @@
 </script>
 
 <div
-  class="fixed bottom-4 inset-x-4 z-50 flex flex-col gap-2 max-w-[300px] ml-auto pointer-events-none {expanded
+  class="fixed bottom-4 inset-x-4 z-50 flex flex-col gap-2 max-w-[300px] ml-auto pointer-events-none {expanded || hasError
     ? 'max-h-[70vh] overflow-y-auto pointer-events-auto'
     : ''}"
 >

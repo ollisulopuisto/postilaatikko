@@ -48,6 +48,17 @@ test('quit failure recovery text stays readable in English and Finnish at narrow
           await page.screenshot({ path: join(process.env.POSTI_QUIT_SHOT_DIR, `quit-failure-${lang}-${width}.png`) })
         }
       }
+      await page.setViewportSize({ width: 320, height: 240 })
+      await page.evaluate(async () => {
+        const { addToast } = await import('/src/lib/stores/toast.ts')
+        addToast({ type: 'error', message: 'Long provider detail. '.repeat(100), duration: 60000 })
+      })
+      const stack = page.locator('.fixed.bottom-4')
+      const stackBox = await stack.boundingBox()
+      assert.ok(stackBox.y >= 0 && stackBox.y + stackBox.height <= 240, 'wrapped error stack stays inside a short window')
+      await stack.hover(); await page.mouse.wheel(0, 1000); await page.waitForTimeout(150)
+      assert.ok(await stack.evaluate(el => el.scrollTop > 0), 'long error details remain scrollable rather than covering the window')
+      if (process.env.POSTI_QUIT_SHOT_DIR) await page.screenshot({ path: join(process.env.POSTI_QUIT_SHOT_DIR, `quit-error-scroll-${lang}.png`) })
       assert.deepEqual(errors, [])
       await page.close()
     }
