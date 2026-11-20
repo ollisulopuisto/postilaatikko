@@ -36,18 +36,20 @@
   const lastChecked = $derived(getLastUpdateCheck())
   const availableUpdate = $derived(getAvailableUpdate())
 
-  onMount(async () => {
+  async function loadAppInfo() {
+    loading = true
     try {
-      const [info] = await Promise.all([
-        GetAppInfo(),
-        initializeUpdateChecker(),
-      ])
-      appInfo = info
+      appInfo = await GetAppInfo()
     } catch (err) {
       console.error('Failed to load app info:', err)
     } finally {
       loading = false
     }
+  }
+
+  onMount(() => {
+    void loadAppInfo()
+    void initializeUpdateChecker()
   })
 
   const PRIVACY_URL = 'https://github.com/wesleiaqui/eternomail/blob/main/docs/PRIVACY.md'
@@ -225,6 +227,7 @@
       </button>
     </div>
   {:else}
-    <p class="text-muted-foreground">{$_('settingsAbout.failedToLoad')}</p>
+    <p role="alert" class="text-muted-foreground">{$_('settingsAbout.failedToLoad')}</p>
+    <Button variant="outline" onclick={() => void loadAppInfo()}>{$_('common.retry')}</Button>
   {/if}
 </div>
