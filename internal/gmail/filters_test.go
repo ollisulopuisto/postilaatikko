@@ -27,9 +27,9 @@ func TestFiltersCRUD(t *testing.T) {
 		}
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/settings/filters":
-			json.NewEncoder(w).Encode(map[string]any{"filter": []Filter{filter}})
+			_ = json.NewEncoder(w).Encode(map[string]any{"filter": []Filter{filter}})
 		case r.Method == http.MethodGet && r.URL.Path == "/settings/filters/provider-id":
-			json.NewEncoder(w).Encode(filter)
+			_ = json.NewEncoder(w).Encode(filter)
 		case r.Method == http.MethodPost:
 			var got Filter
 			if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
@@ -38,7 +38,7 @@ func TestFiltersCRUD(t *testing.T) {
 			if got.ID != "" || got.Criteria.From != filter.Criteria.From {
 				t.Errorf("filter=%+v", got)
 			}
-			json.NewEncoder(w).Encode(filter)
+			_ = json.NewEncoder(w).Encode(filter)
 		case r.Method == http.MethodDelete:
 			w.WriteHeader(204)
 		default:
@@ -71,7 +71,11 @@ func TestCreateFilterUnknownOutcomeNeverRetries(t *testing.T) {
 	for _, status := range []int{200, 500, 503} {
 		t.Run(http.StatusText(status), func(t *testing.T) {
 			calls := 0
-			c := filterTestClient(t, func(w http.ResponseWriter, r *http.Request) { calls++; w.WriteHeader(status); w.Write([]byte("{")) })
+			c := filterTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				w.WriteHeader(status)
+				_, _ = w.Write([]byte("{"))
+			})
 			_, err := c.CreateFilter(context.Background(), Filter{Criteria: FilterCriteria{Query: "from:sender"}, Action: FilterAction{RemoveLabelIDs: []string{"INBOX"}}})
 			if !errors.Is(err, ErrFilterOutcomeUnknown) || calls != 1 {
 				t.Fatalf("calls=%d err=%v", calls, err)
@@ -103,7 +107,7 @@ func TestInvalidFilterIDNeverCallsProvider(t *testing.T) {
 func TestCreateFilterDefiniteScopeFailure(t *testing.T) {
 	c := filterTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(403)
-		w.Write([]byte(`{"error":{"errors":[{"reason":"insufficientPermissions"}]}}`))
+		_, _ = w.Write([]byte(`{"error":{"errors":[{"reason":"insufficientPermissions"}]}}`))
 	})
 	_, err := c.CreateFilter(context.Background(), Filter{Criteria: FilterCriteria{Query: "from:sender"}, Action: FilterAction{RemoveLabelIDs: []string{"INBOX"}}})
 	if !errors.Is(err, ErrInsufficientScope) || errors.Is(err, ErrFilterOutcomeUnknown) {
