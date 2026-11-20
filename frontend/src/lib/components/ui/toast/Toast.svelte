@@ -30,7 +30,7 @@
 >
   <Icon icon={icons[toast.type]} class="h-[18px] w-[18px] flex-shrink-0 {colors[toast.type]}" />
 
-  <p class="min-w-0 flex-1 truncate text-sm font-medium tracking-[-0.01em] text-white/85">{toast.message}</p>
+  <p class="min-w-0 flex-1 {toast.type === 'error' ? 'whitespace-normal break-words' : 'truncate'} text-sm font-medium tracking-[-0.01em] text-white/85">{toast.message}</p>
 
   {#if toast.actions && toast.actions.length > 0}
     <div class="flex shrink-0 items-center border-l border-white/[0.12] pl-3">
