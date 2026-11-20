@@ -110,7 +110,7 @@ func TestHelperRefreshCannotOverwriteConcurrentConsent(t *testing.T) {
 		t.Fatal(err)
 	}
 	accounts := account.NewStore(db)
-	acc, err := accounts.Create(&account.AccountConfig{Name: "Helper", Email: "helper@example.com", IMAPHost: "imap.gmail.com", SMTPHost: "smtp.gmail.com", Username: "helper@example.com", AuthType: account.AuthOAuth2})
+	acc, err := accounts.Create(&account.AccountConfig{Name: "Helper", DisplayName: "Helper", Email: "helper@example.com", IMAPHost: "imap.gmail.com", SMTPHost: "smtp.gmail.com", Username: "helper@example.com", AuthType: account.AuthOAuth2})
 	if err != nil {
 		t.Fatal(err)
 	}
