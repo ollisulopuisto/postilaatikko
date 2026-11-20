@@ -456,6 +456,35 @@ func (t *SMTPTransport) GmailTokenSource(ctx context.Context, accountID string, 
 	return tokens.AccessToken, nil
 }
 
+// GmailFilterTokenSource requires the helper's explicit Gmail settings grant.
+// Refresh uses canonical helper Mail storage and never exports a refresh token.
+func (t *SMTPTransport) GmailFilterTokenSource(ctx context.Context, accountID string, force bool) (string, error) {
+	acc, err := t.accounts.Get(accountID)
+	if err != nil {
+		return "", err
+	}
+	if acc == nil || !acc.Enabled || acc.AuthType != account.AuthOAuth2 || acc.IMAPHost != "imap.gmail.com" {
+		return "", gmail.ErrNotCapable
+	}
+	previous, err := t.creds.GetOAuthTokens(accountID)
+	if err != nil {
+		return "", err
+	}
+	defer previous.Clear()
+	if previous.Provider != "google" || !gmail.ScopesCoverFilters(previous.Scopes) {
+		return "", gmail.ErrReauthRequired
+	}
+	tokens, err := t.tokensWithForce(ctx, accountID, force)
+	if err != nil {
+		return "", err
+	}
+	defer tokens.Clear()
+	if tokens.Provider != "google" || !gmail.ScopesCoverFilters(tokens.Scopes) || tokens.AccessToken == "" {
+		return "", gmail.ErrReauthRequired
+	}
+	return tokens.AccessToken, nil
+}
+
 // SetGmailTriageLabel mirrors Reply Later's Gmail label behavior for helper API
 // operations. Accounts without Gmail modify scope keep app-local queue state.
 func (t *SMTPTransport) SetGmailTriageLabel(ctx context.Context, accountID, conversationID, queue string, enabled bool) error {
@@ -714,7 +743,13 @@ func (t *SMTPTransport) tokensWithForce(ctx context.Context, accountID string, f
 			return nil, err
 		}
 	}
-	tokens.AccessToken, tokens.RefreshToken = refreshed.AccessToken, refreshed.RefreshToken
+	tokens.AccessToken = refreshed.AccessToken
+	if refreshed.RefreshToken != "" {
+		tokens.RefreshToken = refreshed.RefreshToken
+	}
+	if strings.TrimSpace(refreshed.Scope) != "" {
+		tokens.Scopes = strings.Fields(refreshed.Scope)
+	}
 	tokens.ExpiresAt = time.Now().Add(time.Duration(refreshed.ExpiresIn) * time.Second)
 	if err := t.creds.SetOAuthTokens(accountID, tokens); err != nil {
 		return nil, err
