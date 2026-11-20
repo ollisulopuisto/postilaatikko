@@ -36,9 +36,8 @@ TMP_MANIFEST="$(mktemp "${MANIFEST}.XXXXXX")"
 trap 'rm -f "$TMP_MANIFEST"' EXIT
 
 awk -v tag="$TAG_NAME" -v commit="$COMMIT_HASH" '
-    /^[[:space:]]*tag:[[:space:]]/ {
-        sub(/tag:.*/, "tag: " tag)
-    }
+    # A single immutable commit avoids an old tag contradicting the pin.
+    /^[[:space:]]*tag:[[:space:]]/ { next }
     /^[[:space:]]*commit:[[:space:]]/ {
         sub(/commit:.*/, "commit: " commit)
     }

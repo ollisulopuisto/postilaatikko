@@ -81,6 +81,13 @@ Deployment operators must verify or replace it with the actual published remote
 before distributing it as an installation entry point. This rename does not
 claim control of that host or make an upstream repository current.
 
+The source-only Flatpak manifest is pinned to a reachable commit containing the
+renamed assets and compatibility fixes, rather than the old upstream release.
+`flathub/calculate-hashes.sh` replaces that immutable commit with the selected
+release tag's resolved commit. The developer source manifest still builds the
+local checkout. A full offline Flatpak build and its vendored dependency graph
+remain unverified here; no Flatpak release is published by this change.
+
 ## Verification limits
 
 Automated tests cover module compilation, old/new debug switches, non-overwriting
