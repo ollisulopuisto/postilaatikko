@@ -24,6 +24,10 @@ test('image allowlist failures stay visible, preserve data and support explicit 
       await(await import('/src/lib/i18n/index.ts')).initI18n('en');const {mount}=await import('/images-mount.js');const Component=(await import('/src/lib/components/settings/ImagesTab.svelte')).default
       mount(Component,{target:document.querySelector('#fixture'),props:{alwaysLoadImages:false,onAlwaysLoadImagesChange:value=>window.privacyChanges.push(value)}})
     })
+    // mount() schedules onMount effects after its initial render. Wait for the
+    // mocked load to start before timing error feedback; parallel cold Vite/App
+    // compilation can otherwise consume the entire 2.5s feedback budget.
+    await page.waitForFunction(()=>window.loadCalls>0,{},{timeout:10000})
     const alert=page.getByRole('alert');await alert.waitFor({timeout:2500})
     assert.equal(await page.getByText('No addresses in the allowlist. Use "Always Load > For sender" in the email viewer to add addresses.',{exact:true}).count(),0)
     assert.equal(await page.getByText('No domains in the allowlist. Use "Always Load > For domain" in the email viewer to add domains.',{exact:true}).count(),0)
