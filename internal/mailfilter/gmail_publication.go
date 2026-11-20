@@ -235,6 +235,16 @@ func (s *Store) PublishGmailFilter(ctx context.Context, id string, provider Nati
 	if !slices.Equal(ids, expected) {
 		return nil, fmt.Errorf("provider catalog changed; review again")
 	}
+	// Finish fallible identity/token preflight before consuming the create attempt.
+	// The returned provider must use that exact verified client for its write.
+	if preflight, ok := provider.(interface {
+		PrepareFilterCreate(context.Context) (NativeFilterProvider, error)
+	}); ok {
+		provider, err = preflight.PrepareFilterCreate(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
 	result, err := s.db.Exec(`UPDATE gmail_filter_publications SET state='attempted',updated_at=datetime('now') WHERE id=? AND state='prepared' AND NOT EXISTS(SELECT 1 FROM automatic_filter_jobs WHERE rule_id=?)`, id, p.RuleID)
 	if err != nil {
 		return nil, err

@@ -148,3 +148,52 @@ func TestNativePreviewFingerprintIncludesOAuthProject(t *testing.T) {
 		t.Fatal("changed project reserved local source", status, err)
 	}
 }
+
+func TestNativePublicationIdentityFailureBeforePostKeepsPlanCancellable(t *testing.T) {
+	a, rule := nativeReviewFixture(t)
+	oldLookup := oauth2.UserOverrideLookup
+	oauth2.UserOverrideLookup = func(string) (oauth2.ClientCredentials, bool) {
+		return oauth2.ClientCredentials{ClientID: "project"}, true
+	}
+	t.Cleanup(func() { oauth2.UserOverrideLookup = oldLookup })
+	old := http.DefaultTransport
+	defer func() { http.DefaultTransport = old }()
+	profiles, writes := 0, 0
+	fail := false
+	http.DefaultTransport = contactsRoundTrip(func(req *http.Request) (*http.Response, error) {
+		body := `{"filter":[]}`
+		status := 200
+		if strings.HasSuffix(req.URL.Path, "/profile") {
+			profiles++
+			body = `{"emailAddress":"user@example.com"}`
+			if fail && profiles > 1 {
+				status = 400
+				body = `{"error":{"message":"profile unavailable"}}`
+			}
+		}
+		if strings.HasSuffix(req.URL.Path, "/labels") {
+			body = `{"labels":[{"id":"UNREAD"}]}`
+		}
+		if req.Method == http.MethodPost {
+			writes++
+		}
+		return &http.Response{StatusCode: status, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body))}, nil
+	})
+	draft := gmail.Filter{Criteria: gmail.FilterCriteria{Query: "from:sender"}, Action: gmail.FilterAction{RemoveLabelIDs: []string{"UNREAD"}}}
+	plan, err := a.prepareLocalGmailPublication(context.Background(), rule.ID, "mail", draft)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profiles = 0
+	fail = true
+	if _, err = a.publishLocalGmailPublication(context.Background(), plan.ID); err == nil || writes != 0 {
+		t.Fatal("identity preflight submitted write", err, writes)
+	}
+	stored, err := a.filterStore.GetGmailPublication(plan.ID)
+	if err != nil || stored.State != "prepared" {
+		t.Fatal("preflight consumed attempt", err)
+	}
+	if err = a.filterStore.CancelGmailPublication(plan.ID); err != nil {
+		t.Fatal("source stranded", err)
+	}
+}
