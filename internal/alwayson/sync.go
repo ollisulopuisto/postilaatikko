@@ -63,6 +63,7 @@ type SyncRuntime struct {
 	replyLater                  *replylater.Store
 	gmailTriage                 GmailTriageLabeler
 	gmailFilterTokens           mailSync.GmailTokenSource
+	gmailConsent                helperGmailConsentSessions
 	triage                      *triage.Store
 	schemaOwner                 *syncowner.Lock
 	filterOp                    mailmove.FilterOperation
@@ -922,6 +923,7 @@ func (r *SyncRuntime) Close() error {
 	}
 	var closeErr error
 	r.closeOnce.Do(func() {
+		r.gmailConsent.close()
 		// End every event stream first so SSE clients see a prompt close
 		// during helper shutdown instead of hanging until the listener dies.
 		if r.events != nil {

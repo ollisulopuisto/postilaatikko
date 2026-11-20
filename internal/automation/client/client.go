@@ -529,6 +529,20 @@ func (c *Client) GmailPublication(ctx context.Context, req v1.GmailPublicationRe
 	return response.Data, nil
 }
 
+// GmailConsent advances one explicit helper-owned consent session. It never
+// sends a refresh token, verifier, secret or desktop OAuth token to the helper.
+func (c *Client) GmailConsent(ctx context.Context, req v1.GmailConsentRequest) (v1.GmailConsentReply, error) {
+	data, err := c.doRequest(ctx, http.MethodPost, "/v1/filters/gmail/consent", req, "")
+	if err != nil {
+		return v1.GmailConsentReply{}, err
+	}
+	var response v1.Response[v1.GmailConsentReply]
+	if err = json.Unmarshal(data, &response); err != nil {
+		return v1.GmailConsentReply{}, err
+	}
+	return response.Data, nil
+}
+
 // GetUncertainFilterJobs lists one bounded page of automatic moves for inspection.
 func (c *Client) GetUncertainFilterJobs(ctx context.Context, limit int, cursor string) (v1.FilterJobPage, error) {
 	query := url.Values{}

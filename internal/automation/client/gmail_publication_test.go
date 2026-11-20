@@ -45,3 +45,29 @@ func TestGmailPublicationClientNeverReplaysFailedCreate(t *testing.T) {
 		t.Fatal(result, calls, err)
 	}
 }
+
+func TestGmailConsentClientForwardsOnlyCallbackCodeAndNeverRetries(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.Method != "POST" || r.URL.Path != "/v1/filters/gmail/consent" {
+			t.Error("wrong consent route")
+		}
+		var req v1.GmailConsentRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Error(err)
+		}
+		if req.AccountID != "helper" || req.SessionID != "session" || req.Code != "one-code" || req.State != "state" {
+			t.Error("callback package changed")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(503)
+		_, _ = w.Write([]byte(`{"error":{"code":"internal","message":"consent completion unknown"}}`))
+	}))
+	defer server.Close()
+	api := client.New(client.Config{Endpoint: server.URL, Token: "api-grant"})
+	_, err := api.GmailConsent(context.Background(), v1.GmailConsentRequest{Operation: "complete", AccountID: "helper", SessionID: "session", Code: "one-code", State: "state"})
+	if err == nil || calls != 1 {
+		t.Fatal("consent callback replayed", calls, err)
+	}
+}
