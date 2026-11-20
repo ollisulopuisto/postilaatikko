@@ -238,3 +238,41 @@ func TestGmailRecoveryCannotOverwriteConcurrentKnownIdentity(t *testing.T) {
 		t.Fatal("authoritative ID overwritten", stored, err)
 	}
 }
+
+type heldCreateProvider struct {
+	*fakeNativeProvider
+	entered, release chan struct{}
+}
+
+func (p heldCreateProvider) CreateFilter(ctx context.Context, f gmail.Filter) (*gmail.Filter, error) {
+	close(p.entered)
+	<-p.release
+	return p.fakeNativeProvider.CreateFilter(ctx, f)
+}
+func TestLiveRecoveryWaitsForOneCreateResponse(t *testing.T) {
+	s, rule, draft, base := publicationFixture(t)
+	plan := preparePublication(t, s, rule, draft, base)
+	held := heldCreateProvider{base, make(chan struct{}), make(chan struct{})}
+	published := make(chan error, 1)
+	go func() { _, err := s.PublishGmailFilter(context.Background(), plan.ID, held); published <- err }()
+	<-held.entered
+	recovering := make(chan error, 1)
+	started := make(chan struct{})
+	go func() {
+		close(started)
+		_, err := NewStore(s.db).ReconcileGmailPublication(context.Background(), plan.ID, base)
+		recovering <- err
+	}()
+	<-started
+	close(held.release)
+	if err := <-published; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-recovering; err != nil {
+		t.Fatal(err)
+	}
+	stored, err := s.GetGmailPublication(plan.ID)
+	if err != nil || stored.ProviderID != "created" || stored.State != "published" || base.writes != 1 {
+		t.Fatal("live recovery changed write identity", stored, err)
+	}
+}
