@@ -58,3 +58,18 @@ func TestValidateGoogleFilterGrant(t *testing.T) {
 		})
 	}
 }
+
+func TestFilterConsentUsesResolvedMailCredentials(t *testing.T) {
+	old := UserOverrideLookup
+	defer func() { UserOverrideLookup = old }()
+	UserOverrideLookup = func(id string) (ClientCredentials, bool) {
+		if id != "google-mail" {
+			t.Fatal("wrong client slot", id)
+		}
+		return ClientCredentials{ClientID: "custom-mail-client", ClientSecret: "custom-mail-secret"}, true
+	}
+	provider, err := GoogleFilterManagementProvider("me@example.test", []string{"https://mail.google.com/"})
+	if err != nil || provider.ClientID != "custom-mail-client" || provider.ClientSecret != "custom-mail-secret" {
+		t.Fatal("selected Mail project not used", err)
+	}
+}
