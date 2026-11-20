@@ -28,6 +28,10 @@
 
 - UI-ERROR-AUDIT-001: Review. Show a localized error if pending-queue loading or native quit fails. Error toasts wrap rather than hide recovery guidance. Queue/delivery semantics are unchanged; no forced shutdown or automatic retry. Handler regressions and EN/FI browser checks at 320/390/1024 px pass. Native macOS quit remains unverified.
 
+## Palette active-view translation
+
+- UI-ERROR-AUDIT-006: Review. Instinct, `agent/UI-ERROR-AUDIT-006`, `/tmp/pl-palette-active`. Added missing EN/FI active-view translations. Regression failed before and passes after; actual palette rendered in EN/FI and pixels inspected. No native Mac run. No folder-palette feature changes pending owner decision.
+
 ## Status and effort
 
 - **Easy:** contained UI, copy, localization, or isolated behavior change.
