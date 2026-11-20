@@ -10,7 +10,7 @@
  */
 
 // @ts-ignore - Wails generated imports
-import { smtp, account, contact, app, smime, pgp } from '../../wailsjs/go/models'
+import { smtp, account, contact, app, smime, pgp, settings } from '../../wailsjs/go/models'
 import type { RepeatRule } from './scheduledRepeat'
 import { sendLaterBackend, type SendLaterConfig, type SendLaterSetup, type ScheduledJob, type ScheduleResult } from './scheduledSendApi'
 
@@ -19,6 +19,11 @@ import { sendLaterBackend, type SendLaterConfig, type SendLaterSetup, type Sched
  * Both App and ComposerApp implement these methods with the same signatures.
  */
 export interface ComposerApi {
+  /** Local templates are owned by the parent desktop, including detached windows. */
+  listEmailTemplates: () => Promise<settings.EmailTemplate[]>
+  saveEmailTemplate: (template: settings.EmailTemplate) => Promise<settings.EmailTemplate>
+  deleteEmailTemplate: (id: string) => Promise<void>
+
   /** Send a composed email */
   sendMessage: (accountId: string, message: smtp.ComposeMessage, draftId?: string) => Promise<void>
   queuePendingSend: (accountId: string, draftId: string, payload: string) => Promise<string>
@@ -142,6 +147,18 @@ export function createMainWindowApi(): ComposerApi {
   // Dynamic import to avoid bundling issues
   // These will be resolved at runtime based on which entry point is used
   return {
+    listEmailTemplates: async () => {
+      const { ListEmailTemplates } = await import('../../wailsjs/go/app/App.js')
+      return ListEmailTemplates()
+    },
+    saveEmailTemplate: async (template) => {
+      const { SaveEmailTemplate } = await import('../../wailsjs/go/app/App.js')
+      return SaveEmailTemplate(template)
+    },
+    deleteEmailTemplate: async (id) => {
+      const { DeleteEmailTemplate } = await import('../../wailsjs/go/app/App.js')
+      return DeleteEmailTemplate(id)
+    },
     sendMessage: async (accountId: string, message: smtp.ComposeMessage, draftId?: string) => {
       const { IsRemoteServiceMode, SendMessageWithRequestID } = await import('../../wailsjs/go/app/App.js')
       if (await IsRemoteServiceMode()) {
@@ -361,6 +378,18 @@ export function createMainWindowApi(): ComposerApi {
  */
 export function createComposerWindowApi(_accountId: string): ComposerApi {
   return {
+    listEmailTemplates: async () => {
+      const { ListEmailTemplates } = await import('../../wailsjs/go/app/ComposerApp.js')
+      return ListEmailTemplates()
+    },
+    saveEmailTemplate: async (template) => {
+      const { SaveEmailTemplate } = await import('../../wailsjs/go/app/ComposerApp.js')
+      return SaveEmailTemplate(template)
+    },
+    deleteEmailTemplate: async (id) => {
+      const { DeleteEmailTemplate } = await import('../../wailsjs/go/app/ComposerApp.js')
+      return DeleteEmailTemplate(id)
+    },
     sendMessage: async (accountId: string, message: smtp.ComposeMessage, draftId?: string) => {
       if (draftId) return sendLaterBackend(true).SendMessageWithDraftGuard(accountId, message, draftId)
       const { SendMessage } = await import('../../wailsjs/go/app/ComposerApp.js')

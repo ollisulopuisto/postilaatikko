@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Full email templates are now available in detached compose windows. Templates remain saved on this computer through the parent app; insertion keeps recipients and existing draft content.
+
 - Top-tab Unread no longer repeats its active state in a removable filter chip. List-local filters keep their chips.
 - Add authenticated mailbox-change event streaming for helper clients, including action, draft, triage, filter and background-update invalidations. Desktop adoption is separate; provider syncs may still invalidate unchanged folders.
 
