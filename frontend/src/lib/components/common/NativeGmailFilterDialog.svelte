@@ -97,6 +97,10 @@
     {#if busy}<p role="status" class="text-sm text-muted-foreground">{$_('gmailFilters.working')}</p>{/if}
     {#if owner}<p class="text-xs text-muted-foreground break-all">{owner.target === 'helper' ? `${$_('filters.targetHelper')}: ${owner.endpoint}` : $_('filters.targetLocal')}</p>{/if}
     {#if context}<p class="text-sm break-all">{plan?.accountEmail || preview?.accountEmail || context.email}</p>{/if}
+    {#if context?.consentRequired}
+      <p class="text-sm">{$_('gmailFilters.consent')}</p>
+      <Button disabled={busy} onclick={() => void run(consent)}>{$_('gmailFilters.authorize')}</Button>
+    {/if}
     {#if plan?.id}
       <section class="flex flex-col gap-3 rounded-md border border-border p-3">
         <h3 class="font-medium">{$_('gmailFilters.finalReview')}</h3>
@@ -117,16 +121,13 @@
       <div class="flex flex-wrap justify-end gap-2">
         {#if plan.state === 'prepared'}
           <Button disabled={busy} variant="outline" onclick={() => void run(cancelReview)}>{$_('gmailFilters.cancelReview')}</Button>
-          <Button disabled={busy} onclick={() => void run(publish)}>{$_('gmailFilters.publish')}</Button>
+          <Button disabled={busy || context?.consentRequired} onclick={() => void run(publish)}>{$_('gmailFilters.publish')}</Button>
         {:else if plan.state !== 'published'}
-          <Button disabled={busy} onclick={() => void run(recover)}>{$_('gmailFilters.checkResult')}</Button>
+          <Button disabled={busy || context?.consentRequired} onclick={() => void run(recover)}>{$_('gmailFilters.checkResult')}</Button>
         {/if}
         <Button variant="outline" disabled={busy} onclick={() => { open = false }}>{$_('common.close')}</Button>
       </div>
-    {:else if context?.consentRequired}
-      <p class="text-sm">{$_('gmailFilters.consent')}</p>
-      <Button disabled={busy} onclick={() => void run(consent)}>{$_('gmailFilters.authorize')}</Button>
-    {:else if context}
+    {:else if context && !context.consentRequired}
       <p class="rounded-md border border-border p-3 text-sm">{$_('gmailFilters.nativeSemantics')} {$_('gmailFilters.sourceStopped')}</p>
       <fieldset disabled={busy} class="flex flex-col gap-3">
         <label class="flex flex-col gap-1 text-sm">{$_('gmailFilters.query')}<textarea class="min-h-20 w-full rounded-md border border-border bg-background p-2" bind:value={query} maxlength="2048"></textarea></label>
@@ -147,7 +148,7 @@
         <Button variant="outline" disabled={busy || !query.trim()} onclick={() => void run(checkPreview)}>{$_('gmailFilters.preview')}</Button>
         <Button disabled={busy || !preview} onclick={() => void run(review)}>{$_('gmailFilters.review')}</Button>
       </div>
-    {:else if !busy}
+    {:else if !busy && !context}
       <Button variant="outline" onclick={() => void run(load)}>{$_('common.retry')}</Button>
     {/if}
   </Dialog.Content>
