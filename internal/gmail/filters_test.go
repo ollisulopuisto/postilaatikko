@@ -114,3 +114,27 @@ func TestCreateFilterDefiniteScopeFailure(t *testing.T) {
 		t.Fatalf("err=%v", err)
 	}
 }
+
+func TestCreateRejectsForwardingButReadRetainsIt(t *testing.T) {
+	calls := 0
+	c := filterTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.Method != http.MethodGet {
+			t.Fatal("forwarding write reached provider")
+		}
+		_ = json.NewEncoder(w).Encode(Filter{ID: "existing", Action: FilterAction{Forward: "verified@example.test"}})
+	})
+	for _, labels := range [][]string{nil, {"INBOX"}} {
+		_, err := c.CreateFilter(context.Background(), Filter{Criteria: FilterCriteria{Query: "from:sender"}, Action: FilterAction{Forward: "verified@example.test", RemoveLabelIDs: labels}})
+		if err == nil {
+			t.Fatal("forwarding create accepted")
+		}
+	}
+	if calls != 0 {
+		t.Fatal("rejected create contacted provider")
+	}
+	existing, err := c.GetFilter(context.Background(), "existing")
+	if err != nil || existing.Action.Forward != "verified@example.test" {
+		t.Fatal("existing forwarding lost", existing, err)
+	}
+}

@@ -92,7 +92,10 @@ func (c *Client) CreateFilter(ctx context.Context, filter Filter) (*Filter, erro
 	if filter.Criteria == (FilterCriteria{}) {
 		return nil, fmt.Errorf("Gmail filter criteria required")
 	}
-	if len(filter.Action.AddLabelIDs)+len(filter.Action.RemoveLabelIDs) == 0 && filter.Action.Forward == "" {
+	if filter.Action.Forward != "" {
+		return nil, fmt.Errorf("Gmail filter forwarding is not enabled")
+	}
+	if len(filter.Action.AddLabelIDs)+len(filter.Action.RemoveLabelIDs) == 0 {
 		return nil, fmt.Errorf("Gmail filter action required")
 	}
 	var result Filter
