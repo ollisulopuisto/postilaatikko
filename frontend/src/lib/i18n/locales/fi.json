@@ -1733,6 +1733,7 @@
     }
   },
   "pendingSend": {
+    "quitFailed": "Lopettaminen epäonnistui. Sovellus jäi auki. Tarkista odottavat viestit ja yritä lopettaa uudelleen. Älä lähetä viestiä uudelleen, jos lähetyksen tila on epäselvä.",
     "recoveryRequired": "Lähetys keskeytyi. Valitse Lähetä nyt tai Kumoa.",
     "queued": "Viesti odottaa lähetystä",
     "sending": "Lähetetään…",

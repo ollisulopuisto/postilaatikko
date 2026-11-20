@@ -861,6 +861,7 @@
       await QuitApp()
     } catch (err) {
       console.error('Could not finish quitting after pending sends:', err)
+      addToast({ type: 'error', message: $_('pendingSend.quitFailed'), duration: 10000 })
       isShuttingDown = false
       CancelQuitAppRequest()
     } finally {

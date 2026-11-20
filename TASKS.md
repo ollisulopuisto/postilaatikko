@@ -20,6 +20,10 @@
 - Checks: full Go tests and affected-package vet with CGO disabled and a temporary local startup-notification stub (not committed); frontend check, lint, build, all regression tests, filter-browser and native-menu-browser tests pass. Captures use synthetic mail.
 - No DMG publication in this change. Native macOS behavior and live IMAP/Gmail acceptance remain unverified locally.
 
+## Quit error visibility
+
+- UI-ERROR-AUDIT-001: Review. Show a localized error if pending-queue loading or native quit fails. Error toasts wrap rather than hide recovery guidance. Queue/delivery semantics are unchanged; no forced shutdown or automatic retry. Handler regressions and EN/FI browser checks at 320/390/1024 px pass. Native macOS quit remains unverified.
+
 ## Status and effort
 
 - **Easy:** contained UI, copy, localization, or isolated behavior change.

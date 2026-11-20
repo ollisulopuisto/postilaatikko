@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- If quitting fails while checking pending mail or closing the app, show a localized error instead of silently leaving the app open. Pending-send and uncertain-delivery safety checks are unchanged.
+
 - Top-tab Unread no longer repeats its active state in a removable filter chip. List-local filters keep their chips.
 - Add authenticated mailbox-change event streaming for helper clients, including action, draft, triage, filter and background-update invalidations. Desktop adoption is separate; provider syncs may still invalidate unchanged folders.
 
