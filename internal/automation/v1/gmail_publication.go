@@ -6,8 +6,8 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/hkdb/aerion/internal/gmail"
-	"github.com/hkdb/aerion/internal/mailfilter"
+	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
+	"github.com/ollisulopuisto/postilaatikko/internal/mailfilter"
 )
 
 // GmailPublicationRequest is an explicit account-owned native-filter operation.

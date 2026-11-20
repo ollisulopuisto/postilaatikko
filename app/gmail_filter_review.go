@@ -10,8 +10,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/hkdb/aerion/internal/gmail"
-	"github.com/hkdb/aerion/internal/mailfilter"
+	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
+	"github.com/ollisulopuisto/postilaatikko/internal/mailfilter"
 )
 
 // NativeGmailLabel is a non-secret, account-qualified provider label choice.
