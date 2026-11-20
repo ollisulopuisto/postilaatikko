@@ -17,6 +17,10 @@
   import { getIsDarkActive } from '$lib/stores/theme.svelte'
   import { CORE_COMMANDS, getCommand, getShortcut, type CommandDefinition, type CoreCommandId } from '$lib/keyboard/registry'
 
+  import { accountStore } from '$lib/stores/accounts.svelte'
+  import { matchPaletteFolders, type PaletteFolder } from './paletteFolders'
+
+  let { onFolderSelect }: { onFolderSelect?: (folder: PaletteFolder) => void } = $props()
   const mac = isMacPlatform()
 
   let query = $state('')
@@ -98,6 +102,15 @@
     })
   })
 
+  const folderItems = $derived(onFolderSelect ? matchPaletteFolders(accountStore.accounts, accountStore.folderCatalog, query).map((folder): PaletteItem => ({
+    id: `folder:${JSON.stringify([folder.accountId, folder.folderId])}`,
+    title: folder.name,
+    category: `${$_('commandPalette.folder')} · ${folder.context}`,
+    icon: 'mdi:folder-outline',
+    action: () => onFolderSelect?.(folder),
+  })) : [])
+  const results = $derived([...filteredCommands, ...folderItems, ...(query.trim() ? [searchFallbackItem()] : [])])
+
   // Reset selected index when query changes
   $effect(() => {
     // Touch query to trigger
@@ -107,8 +120,8 @@
 
   // Ensure selected index is in range
   $effect(() => {
-    if (selectedIndex >= filteredCommands.length) {
-      selectedIndex = Math.max(0, filteredCommands.length - 1)
+    if (selectedIndex >= results.length) {
+      selectedIndex = Math.max(0, results.length - 1)
     }
   })
 
@@ -132,35 +145,32 @@
 
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      if (filteredCommands.length > 0) {
-        selectedIndex = (selectedIndex + 1) % filteredCommands.length
+      if (results.length > 0) {
+        selectedIndex = (selectedIndex + 1) % results.length
       }
       return
     }
 
     if (e.key === 'ArrowUp') {
       e.preventDefault()
-      if (filteredCommands.length > 0) {
-        selectedIndex = (selectedIndex - 1 + filteredCommands.length) % filteredCommands.length
+      if (results.length > 0) {
+        selectedIndex = (selectedIndex - 1 + results.length) % results.length
       }
       return
     }
 
     if (e.key === 'Enter') {
       e.preventDefault()
-      if (filteredCommands.length > 0 && selectedIndex < filteredCommands.length) {
-        runCommand(filteredCommands[selectedIndex])
-      } else if (query.trim()) {
-        // Fallback: same runner as the "Search messages for" button, so it is recorded in recents.
-        runCommand(searchFallbackItem())
+      if (results.length > 0 && selectedIndex < results.length) {
+        runCommand(results[selectedIndex])
       }
     }
   }
 
   function searchFallbackItem(): PaletteItem {
     return {
-      id: 'app.search',
-      title: `${$_('shortcuts.action.search')}: "${query.trim()}"`,
+      id: 'search-fallback',
+      title: $_('commandPalette.searchMessages', { values: { query: query.trim() } }),
       category: $_('commandPalette.categories.mail'),
       icon: 'mdi:magnify',
       action: () => executeCommand('app.search'),
@@ -171,12 +181,13 @@
     // Repeatable commands (undo, star, theme) leave the palette open.
     const keepOpen = !!getCommand(cmd.id)?.keepOpen
     if (!keepOpen) closeCommandPalette()
-    recordRecentCommand(cmd.id)
+    if (cmd.id === 'search-fallback') recordRecentCommand('app.search')
+    if (cmd.id !== 'search-fallback' && !cmd.id.startsWith('folder:')) recordRecentCommand(cmd.id)
     cmd.action()
     if (keepOpen) {
       // The list may have re-ordered (recents). Follow the command by id, so
       // the next Enter repeats it instead of running whatever moved into its slot.
-      selectedIndex = Math.max(0, filteredCommands.findIndex(item => item.id === cmd.id))
+      selectedIndex = Math.max(0, results.findIndex(item => item.id === cmd.id))
     }
   }
 
@@ -212,7 +223,7 @@
           bind:this={inputEl}
           bind:value={query}
           type="text"
-          class="flex-1 bg-transparent border-none outline-none text-base placeholder:text-muted-foreground/60 text-foreground"
+          class="min-w-0 flex-1 bg-transparent border-none outline-none text-base placeholder:text-muted-foreground/60 text-foreground"
           placeholder={$_('commandPalette.placeholder')}
           aria-label={$_('commandPalette.placeholder')}
           autocomplete="off"
@@ -241,7 +252,7 @@
         role="listbox"
         aria-label={$_('commandPalette.title')}
       >
-        {#if filteredCommands.length === 0}
+        {#if results.length === 0}
           <div class="py-12 px-4 text-center">
             <Icon icon="mdi:clipboard-search-outline" class="w-8 h-8 text-muted-foreground/50 mx-auto mb-2" />
             <p class="text-sm text-muted-foreground">
@@ -260,7 +271,7 @@
           </div>
         {:else}
           <div class="space-y-0.5">
-            {#each filteredCommands as cmd, i (cmd.id)}
+            {#each results as cmd, i (cmd.id)}
               <!-- svelte-ignore a11y_click_events_have_key_events -->
               <div
                 tabindex="-1"

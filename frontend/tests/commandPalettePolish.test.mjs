@@ -58,7 +58,7 @@ test('recents are reactive, newest first, capped at eight, and only the palette 
 
 test('after a keep-open command the selection follows it by id', () => {
   const palette = readFileSync(new URL('../src/lib/components/command/CommandPalette.svelte', import.meta.url), 'utf8')
-  assert.match(palette, /selectedIndex = Math\.max\(0, filteredCommands\.findIndex\(item => item\.id === cmd\.id\)\)/)
+  assert.match(palette, /selectedIndex = Math\.max\(0, results\.findIndex\(item => item\.id === cmd\.id\)\)/)
 })
 
 test('Enter on an unmatched query goes through runCommand, so Search lands in recents', async () => {

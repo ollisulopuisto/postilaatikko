@@ -2976,7 +2976,11 @@
   />
 {/if}
 
-<CommandPalette />
+<CommandPalette onFolderSelect={(folder) => {
+  setActiveExtension('mail')
+  accountStore.selectFolder(folder.accountId, folder.folderId, folder.path, folder.name)
+  handleFolderSelect(folder.accountId, folder.folderId, folder.path, folder.name, folder.type)
+}} />
 
 <!-- Shutdown Overlay -->
 {#if isShuttingDown}
