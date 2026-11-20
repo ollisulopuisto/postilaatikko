@@ -9,8 +9,8 @@
     GetAccounts,
     GetMessage,
     GetMessageListID,
-    CreateFilterRule,
-    UpdateFilterRule,
+    GetFilterExecutionTarget,
+    SaveFilterRuleToTarget,
     PreviewFilterRule,
     ApplyFilterRuleToExisting,
     GetFolderTree,
@@ -53,6 +53,8 @@
   let accounts = $state<account.Account[]>([])
 
   // Form state
+  let executionTarget = $state<{target: string; endpoint: string; ready: boolean; writeAuthorized: boolean; errorCode: string} | null>(null)
+  let selectedTarget = $state('local')
   let name = $state('')
   let scopeAll = $state(true)
   let scopeAccountIds = $state<string[]>([])
@@ -228,6 +230,10 @@
   $effect(() => {
     if (!open) { previewCount = null; return }
     void (async () => {
+      try {
+        executionTarget = await GetFilterExecutionTarget()
+        selectedTarget = executionTarget.target
+      } catch { initFailed = true; error = $_('filters.targetUnavailable') }
       await loadAccounts()
       if (!alive) return
       if (rule && rule.id) {
@@ -281,7 +287,7 @@
     (useListId && splitPatterns(listIdValue).length > 0)
   )
   const hasAction = $derived(actionMarkRead || (actionMove && Boolean(destFolderId)) || actionArchive || actionTrash)
-  const canSave = $derived(name.trim().length > 0 && hasCriteria && hasAction && (scopeAll || scopeAccountIds.length > 0) && !saving && !initializing && !initFailed && !error && (!applyToExisting || (!previewLoading && previewCount !== null && previewCount <= 500)))
+  const canSave = $derived(name.trim().length > 0 && hasCriteria && hasAction && (scopeAll || scopeAccountIds.length > 0) && executionTarget?.ready && executionTarget?.writeAuthorized && selectedTarget === executionTarget.target && !saving && !initializing && !initFailed && !error && (!applyToExisting || (!previewLoading && previewCount !== null && previewCount <= 500)))
 
   function schedulePreview() {
     ++previewGeneration
@@ -317,13 +323,9 @@
   })
 
   async function saveRule(built: mailfilter.Rule) {
-    if (editMode) {
-      await UpdateFilterRule(built)
-      toasts.success($_('filters.updated'))
-      return
-    }
-    await CreateFilterRule(built)
-    toasts.success($_('filters.created'))
+    if (!executionTarget || selectedTarget !== executionTarget.target) throw new Error($_('filters.transferUnavailable'))
+    await SaveFilterRuleToTarget(selectedTarget, executionTarget.endpoint, built, editMode ? rule : null)
+    toasts.success($_(selectedTarget === 'helper' ? 'filters.verifiedHelper' : 'filters.verifiedLocal'))
   }
 
   async function handleSave() {
@@ -361,6 +363,19 @@
     </Dialog.Header>
 
     <fieldset disabled={initializing || saving} class="flex flex-col gap-4 py-2 max-h-[calc(90vh-180px)] overflow-y-auto pr-1">
+      <div class="flex flex-col gap-2 rounded-lg border border-border p-3">
+        <Label>{$_('filters.executionTarget')}</Label>
+        <label class="flex items-center gap-2"><input type="radio" name="filter-target" value="local" bind:group={selectedTarget} disabled={executionTarget?.target !== 'local'} />{$_('filters.targetLocal')}</label>
+        <label class="flex items-center gap-2"><input type="radio" name="filter-target" value="helper" bind:group={selectedTarget} disabled={executionTarget?.target !== 'helper'} />{$_('filters.targetHelper')}</label>
+        <label class="flex items-center gap-2 text-muted-foreground"><input type="radio" name="filter-target" disabled />Gmail ({$_('filters.targetGmailPending')})</label>
+        {#if executionTarget?.endpoint}<p class="text-xs text-muted-foreground break-all">{executionTarget.endpoint}</p>{/if}
+        <p class="text-xs text-muted-foreground">{$_('filters.transferUnavailable')}</p>
+        {#if executionTarget && (!executionTarget.ready || !executionTarget.writeAuthorized)}
+          <p role="alert" class="filter-target-warning text-xs">{$_('filters.targetUnavailable')}</p>
+        {:else if executionTarget}
+          <p class="text-xs text-muted-foreground">{$_('filters.targetReady')}</p>
+        {/if}
+      </div>
       <!-- Scope -->
       <div class="flex flex-col gap-2">
         <Label>{$_('filters.scope')}</Label>
@@ -494,3 +509,8 @@
   excludeFolderId=""
   onSelect={handleFolderSelected}
 />
+
+<style>
+  .filter-target-warning { color: #92400e; }
+  :global([data-theme="dark"]) .filter-target-warning { color: #fde68a; }
+</style>
