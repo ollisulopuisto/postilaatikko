@@ -205,3 +205,53 @@ func TestProductionMailboxHandlerMountsGmailConsent(t *testing.T) {
 		t.Fatal("helper consent route missing")
 	}
 }
+
+func TestHelperConsentRejectsInvalidationDuringExchange(t *testing.T) {
+	for _, mode := range []string{"expired", "closed", "cancelled", "new grant"} {
+		t.Run(mode, func(t *testing.T) {
+			r := helperConsentFixture(t)
+			reply, err := r.GmailConsent(context.Background(), "client", v1.GmailConsentRequest{Operation: "start", AccountID: "helper-google", RedirectURI: "http://127.0.0.1:12345/callback"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			parsed, _ := url.Parse(reply.AuthURL)
+			session := r.gmailConsent.pending[reply.SessionID]
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			old := http.DefaultTransport
+			http.DefaultTransport = helperNativeRoundTrip(func(req *http.Request) (*http.Response, error) {
+				body := `{"emailAddress":"helper@example.com"}`
+				if req.Method == http.MethodPost {
+					body = `{"access_token":"must-not-save","expires_in":3600,"scope":"https://mail.google.com/ openid ` + gmail.ScopeSettingsBasic + `"}`
+					switch mode {
+					case "expired":
+						session.expires = time.Now().Add(-time.Second)
+					case "closed":
+						r.gmailConsent.close()
+					case "cancelled":
+						cancel()
+					case "new grant":
+						tokens, e := r.contacts.creds.GetOAuthTokens("helper-google")
+						if e != nil {
+							t.Fatal(e)
+						}
+						tokens.RefreshToken = "replacement"
+						if e = r.contacts.creds.SetOAuthTokens("helper-google", tokens); e != nil {
+							t.Fatal(e)
+						}
+					}
+				}
+				return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body))}, nil
+			})
+			t.Cleanup(func() { http.DefaultTransport = old })
+			done, err := r.GmailConsent(ctx, "client", v1.GmailConsentRequest{Operation: "complete", AccountID: "helper-google", SessionID: reply.SessionID, Code: "code", State: parsed.Query().Get("state")})
+			if err == nil || done.Authorized {
+				t.Fatal("invalidated exchange authorized", mode)
+			}
+			stored, err := r.contacts.creds.GetOAuthTokens("helper-google")
+			if err != nil || stored.AccessToken != "helper-access" || gmail.ScopesCoverFilters(stored.Scopes) {
+				t.Fatal("invalidated exchange saved", err)
+			}
+		})
+	}
+}

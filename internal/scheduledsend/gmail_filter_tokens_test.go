@@ -97,3 +97,50 @@ func TestHelperGmailFilterTokenSourceRequiresAndPreservesGrant(t *testing.T) {
 		})
 	}
 }
+
+func TestHelperRefreshCannotOverwriteConcurrentConsent(t *testing.T) {
+	keyring.MockInit()
+	dir := t.TempDir()
+	db, err := database.Open(filepath.Join(dir, "mail.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err = db.Migrate(); err != nil {
+		t.Fatal(err)
+	}
+	accounts := account.NewStore(db)
+	acc, err := accounts.Create(&account.AccountConfig{Name: "Helper", Email: "helper@example.com", IMAPHost: "imap.gmail.com", SMTPHost: "smtp.gmail.com", Username: "helper@example.com", AuthType: account.AuthOAuth2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	creds, err := credentials.NewStore(db.DB, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := &credentials.OAuthTokens{Provider: "google", AccessToken: "expired", RefreshToken: "refresh", ExpiresAt: time.Now().Add(-time.Hour), Scopes: []string{"https://mail.google.com/"}}
+	if err = creds.SetOAuthTokens(acc.ID, original); err != nil {
+		t.Fatal(err)
+	}
+	old := http.DefaultTransport
+	defer func() { http.DefaultTransport = old }()
+	http.DefaultTransport = nativeFilterRefreshTransport(func(req *http.Request) (*http.Response, error) {
+		fresh := *original
+		fresh.AccessToken = "consented"
+		fresh.Scopes = append([]string(nil), original.Scopes...)
+		fresh.Scopes = append(fresh.Scopes, gmail.ScopeSettingsBasic)
+		fresh.ExpiresAt = time.Now().Add(time.Hour)
+		if e := creds.SetOAuthTokens(acc.ID, &fresh); e != nil {
+			t.Fatal(e)
+		}
+		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"access_token":"stale-refresh","expires_in":3600}`))}, nil
+	})
+	transport := &SMTPTransport{accounts: accounts, creds: creds, oauth: oauth2.NewManager()}
+	if _, err = transport.tokens(context.Background(), acc.ID); err == nil {
+		t.Fatal("stale refresh accepted")
+	}
+	stored, err := creds.GetOAuthTokens(acc.ID)
+	if err != nil || stored.AccessToken != "consented" || !gmail.ScopesCoverFilters(stored.Scopes) {
+		t.Fatal("concurrent consent overwritten", err)
+	}
+}

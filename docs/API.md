@@ -278,3 +278,5 @@ bounded header pages, provider-aware search, thread metadata, cached body reads,
 and explicit body fetch. Gmail Pub/Sub pull notifications and daily watch
 renewal are optional helper workers. Mail actions are idempotent; attachment
 reads are not yet available through the helper.
+
+Consent completion checks expiry, request cancellation and runtime shutdown again after token exchange/profile validation, before persistence. Mail credential snapshots and CAS persistence serialize against Store readers/writers. Helper Mail refresh paths also use CAS and refuse stale provider responses, so an older refresh cannot overwrite a newer settings grant. SQLite and the system keyring remain separate stores: persistence/readback errors are unverified, never reported as successful consent.

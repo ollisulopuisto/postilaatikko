@@ -68,7 +68,7 @@ func (f *ExternalLoopbackFlow) Exchange(ctx context.Context, code, state string)
 	f.state = ""
 	f.provider = ProviderConfig{}
 	f.mu.Unlock()
-	tokens, err := NewManager().exchangeCode(provider, code, verifier, redirect)
+	tokens, err := NewManager().exchangeCodeContext(ctx, provider, code, verifier, redirect)
 	if err != nil {
 		return nil, err
 	}
