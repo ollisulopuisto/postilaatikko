@@ -1850,8 +1850,13 @@
     "listIdCoverage": "List-ID preview and existing-mail application use captured headers only. Older messages may be missing until their headers are refreshed."
   },
   "gmailFilters": {
+    "forwardTo": "Forward matching new mail to",
+    "noForwarding": "Do not forward",
+    "forwardHelp": "Only addresses already verified in this Gmail account are listed. Add or verify addresses in Gmail settings. This does not change global automatic forwarding.",
+    "forwardWarning": "Matching new mail, including its content and attachments, will leave this mailbox. Existing mail is not forwarded.",
+    "forwardConfirm": "I want matching new mail forwarded to {address}.",
     "title": "Publish a native Gmail filter",
-    "description": "Review Gmail search and label actions for this stopped Postilaatikko source.",
+    "description": "Review Gmail search, label and forwarding actions for this stopped Postilaatikko source.",
     "working": "Working…",
     "finalReview": "Final review: exact frozen Gmail rule",
     "addLabels": "Add labels",

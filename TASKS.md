@@ -16,6 +16,11 @@
 - NEEDS-ME-001: Review. Instinct, `agent/needs-me-every-folder`, `/tmp/pl-needs-me`. Approved option 1: unread OR manual Later within the selected folder, with All folders aggregate across enabled accounts. Exclude mapped/system Spam, Sent, Drafts, Archive, Trash, All Mail and hidden folders/descendants. Existing profiles retain saved navigation; new profiles start All folders with Needs me selected.
 - No schema, provider migration, mailbox action, release or live Google run. Exclusions are fixed defaults in this slice, not a new preferences editor. Backend list/count/search share scope; online matching preserves provider pagination. Synthetic browser coverage checks actual App navigation EN/FI and 320/640 list layouts.
 - Validation: affected Go suites and vet including App pass with CGO disabled and an uncommitted Linux startup-only shim; frontend check/lint/build and 1111 tests pass with 25 browser-gated skips; actual Needs me browser 2/2 pass. No native macOS or live mailbox acceptance claim. Merge only after exact-head Devin and required CI gates.
+## Gmail filter forwarding
+
+- GMAIL-FORWARD-001: Review. Instinct, `agent/gmail-filter-forwarding`, `/tmp/pl-gmail-filter-forwarding`, based on `agent/gmail-filter-routing` (#304). Add automatic forwarding only as a reviewed Gmail filter action, never a manual Forward button or global forwarding switch.
+- Select only accepted existing forwarding addresses of the account owning the rule. No address creation, verification email or free text. Repeat the destination in frozen final review with a fresh unchecked confirmation. Destination is part of draft fingerprint, journal and recovery equality. Recheck accepted status with the identity-verified pinned client before consuming the single create attempt. Unknown outcomes are read-only recovery, never blind retry.
+- Backend Gmail/mailfilter/helper/API/App suites and vet pass; App uses CGO disabled and a temporary uncommitted Linux startup-only shim. Frontend check/lint/build and 1110 tests pass with 24 browser-gated skips; actual Gmail review browser passes, including forwarding confirmation, EN/FI 320 px and uncertain recovery. Native Mac and live Google consent/action remain unrun. No schema or DMG release.
 
 ## Create filter from message
 

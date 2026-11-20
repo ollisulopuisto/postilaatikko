@@ -23,14 +23,15 @@ type GmailPublicationRequest struct {
 
 // GmailPublicationReply contains non-secret context and durable attempt state.
 type GmailPublicationReply struct {
-	AccountID       string                       `json:"accountId"`
-	Email           string                       `json:"email"`
-	ConsentRequired bool                         `json:"consentRequired"`
-	Labels          []gmail.Label                `json:"labels,omitempty"`
-	Found           int                          `json:"found"`
-	Truncated       bool                         `json:"truncated"`
-	Fingerprint     string                       `json:"fingerprint,omitempty"`
-	Publication     *mailfilter.GmailPublication `json:"publication,omitempty"`
+	AccountID           string                       `json:"accountId"`
+	Email               string                       `json:"email"`
+	ConsentRequired     bool                         `json:"consentRequired"`
+	Labels              []gmail.Label                `json:"labels,omitempty"`
+	ForwardingAddresses []string                     `json:"forwardingAddresses,omitempty"`
+	Found               int                          `json:"found"`
+	Truncated           bool                         `json:"truncated"`
+	Fingerprint         string                       `json:"fingerprint,omitempty"`
+	Publication         *mailfilter.GmailPublication `json:"publication,omitempty"`
 }
 
 // GmailPublicationOperations executes only in the account-owning helper.

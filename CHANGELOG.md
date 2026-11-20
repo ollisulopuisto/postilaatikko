@@ -9,6 +9,8 @@
 - Settings Images now shows retryable allowlist load failures and visible removal errors instead of false empty lists or silent failures. The privacy switch stays usable in narrow windows.
 
 - Contact-source load failures show a retryable warning instead of looking like an empty list. The last good list is retained, and source controls wrap in narrow windows.
+- Gmail filter review can forward matching new mail to an address already verified on the selected Gmail account. The final review repeats the destination and requires an unchecked confirmation. Verified-address status is rechecked before the one create attempt; existing mail and account-wide automatic forwarding are unchanged.
+
 - Add an internal standalone Gmail-publication owner adapter and direct-filter drain boundary. Delayed local callbacks respect the durable publication guard. Helper-owned workspaces refuse local publication rather than using the wrong credentials. No UI enables publication yet.
 
 - Add a durable Gmail filter publication recovery core (not connected to the UI yet): one create attempt, restart reconciliation without replay, account-qualified label-only drafts, and guards against local re-enabling or queued jobs while publication is unresolved. Additive migration 85 does not publish any rules.

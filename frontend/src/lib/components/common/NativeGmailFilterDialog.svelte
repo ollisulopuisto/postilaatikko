@@ -17,14 +17,17 @@
   let archive = $state(false)
   let trash = $state(false)
   let labels = $state<string[]>([])
+  let forward = $state('')
+  let forwardingConfirmed = $state(false)
   let workspace = ''
   let owner = $state<app.NativeGmailWorkspace | null>(null)
   let alive = true
   onDestroy(() => { alive = false })
-  const draftKey = $derived(JSON.stringify([query, markRead, archive, trash, labels]))
-  $effect(() => { void draftKey; preview = null })
+  const draftKey = $derived(JSON.stringify([query, markRead, archive, trash, labels, forward]))
+  $effect(() => { void draftKey; preview = null; forwardingConfirmed = false })
+  $effect(() => { void plan?.id; forwardingConfirmed = false })
 
-  function draft() { return app.NativeGmailDraft.createFrom({ruleId, query, markRead, archive, trash, labelIds: [...labels]}) }
+  function draft() { return app.NativeGmailDraft.createFrom({ruleId, query, markRead, archive, trash, labelIds: [...labels], forward}) }
   async function run(action: () => Promise<void>) {
     if (busy) return
     busy = true
@@ -65,7 +68,7 @@
     if (alive) { plan = next || null; onChanged?.() }
   }
   async function publish() {
-    if (!plan || plan.state !== 'prepared') return
+    if (!plan || plan.state !== 'prepared' || (plan.forward && !forwardingConfirmed)) return
     try {
       const next = (await request('publish', {id: plan.id, fingerprint: plan.fingerprint})).publication
       if (alive) { plan = next || null; onChanged?.() }
@@ -107,6 +110,13 @@
         <p class="text-sm whitespace-pre-wrap break-words">{plan.query}</p>
         <p class="text-sm break-words">{$_('gmailFilters.addLabels')}: {(plan.addLabelIds || []).map(labelName).join(', ') || '−'}</p>
         <p class="text-sm break-words">{$_('gmailFilters.removeLabels')}: {(plan.removeLabelIds || []).map(labelName).join(', ') || '−'}</p>
+        {#if plan.forward}
+          <div class="rounded-md border border-amber-500 p-3 text-sm break-words [overflow-wrap:anywhere]">
+            <p>{$_('gmailFilters.forwardTo')}: <strong>{plan.forward}</strong></p>
+            <p class="mt-2">{$_('gmailFilters.forwardWarning')}</p>
+            {#if plan.state === 'prepared'}<label class="mt-3 flex items-start gap-2"><input type="checkbox" bind:checked={forwardingConfirmed} disabled={busy} />{$_('gmailFilters.forwardConfirm', {values:{address:plan.forward}})}</label>{/if}
+          </div>
+        {/if}
         <p class="text-xs text-muted-foreground">{$_('gmailFilters.nativeSemantics')}</p>
         <p class="text-xs text-muted-foreground">{$_('gmailFilters.sourceStopped')}</p>
         <p class="text-xs text-muted-foreground">{$_('gmailFilters.reserved')}</p>
@@ -121,7 +131,7 @@
       <div class="flex flex-wrap justify-end gap-2">
         {#if plan.state === 'prepared'}
           <Button disabled={busy} variant="outline" onclick={() => void run(cancelReview)}>{$_('gmailFilters.cancelReview')}</Button>
-          <Button disabled={busy || context?.consentRequired} onclick={() => void run(publish)}>{$_('gmailFilters.publish')}</Button>
+          <Button disabled={busy || context?.consentRequired || (!!plan.forward && !forwardingConfirmed)} onclick={() => void run(publish)}>{$_('gmailFilters.publish')}</Button>
         {:else if plan.state !== 'published'}
           <Button disabled={busy || context?.consentRequired} onclick={() => void run(recover)}>{$_('gmailFilters.checkResult')}</Button>
         {/if}
@@ -136,6 +146,14 @@
           <label class="flex items-center gap-2"><input type="checkbox" bind:checked={archive} />{$_('filters.actionArchive')}</label>
           <label class="flex items-center gap-2"><input type="checkbox" bind:checked={trash} />{$_('filters.actionTrash')}</label>
         </div>
+        <label class="flex flex-col gap-1 text-sm">{$_('gmailFilters.forwardTo')}
+          <select aria-label={$_('gmailFilters.forwardTo')} class="w-full rounded-md border border-border bg-background p-2" bind:value={forward}>
+            <option value="">{$_('gmailFilters.noForwarding')}</option>
+            {#each context.forwardingAddresses || [] as address (address)}<option value={address}>{address}</option>{/each}
+          </select>
+        </label>
+        <p class="text-xs text-muted-foreground">{$_('gmailFilters.forwardHelp')}</p>
+        {#if forward}<p class="rounded-md border border-amber-500 p-3 text-sm break-words">{$_('gmailFilters.forwardWarning')}</p>{/if}
         {#if context.labels.length}
           <div class="max-h-36 overflow-y-auto rounded-md border border-border p-2" aria-label={$_('gmailFilters.addLabels')}>
             {#each context.labels as label (label.id)}<label class="flex items-center gap-2 py-1 text-sm"><input type="checkbox" bind:group={labels} value={label.id} />{label.name}</label>{/each}

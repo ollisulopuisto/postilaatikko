@@ -1850,8 +1850,13 @@
     "listIdCoverage": "List-ID-esikatselu ja olemassa olevan postin suodatus käyttävät vain tallennettuja otsakkeita. Vanhempia viestejä voi puuttua, kunnes otsakkeet päivitetään."
   },
   "gmailFilters": {
+    "forwardTo": "Välitä uudet osuvat viestit osoitteeseen",
+    "noForwarding": "Älä välitä",
+    "forwardHelp": "Vain tällä Gmail-tilillä jo vahvistetut osoitteet näkyvät. Lisää tai vahvista osoite Gmailin asetuksissa. Tämä ei muuta tilin yleistä automaattista edelleenlähetystä.",
+    "forwardWarning": "Osuvat uudet viestit sisältöineen ja liitteineen lähetetään postilaatikon ulkopuolelle. Vanhoja viestejä ei välitetä.",
+    "forwardConfirm": "Haluan välittää osuvat uudet viestit osoitteeseen {address}.",
     "title": "Julkaise Gmailin oma suodatin",
-    "description": "Tarkista Gmail-haku ja tunnistetoiminnot pysäytetylle Postilaatikon suodattimelle.",
+    "description": "Tarkista Gmail-haku, tunnistetoiminnot ja edelleenlähetys pysäytetylle Postilaatikon suodattimelle.",
     "working": "Käsitellään…",
     "finalReview": "Lopputarkistus: lukittu Gmail-suodatin",
     "addLabels": "Lisättävät tunnisteet",

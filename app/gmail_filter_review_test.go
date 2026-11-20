@@ -72,6 +72,8 @@ func TestNativeGmailReviewBoundedPreviewAndFingerprint(t *testing.T) {
 		switch {
 		case strings.HasSuffix(req.URL.Path, "/profile"):
 			body = `{"emailAddress":"user@example.com"}`
+		case strings.HasSuffix(req.URL.Path, "/settings/forwardingAddresses"):
+			body = `{"forwardingAddresses":[{"forwardingEmail":"destination@example.test","verificationStatus":"accepted"},{"forwardingEmail":"pending@example.test","verificationStatus":"pending"}]}`
 		case strings.HasSuffix(req.URL.Path, "/labels"):
 			body = `{"labels":[{"id":"opaque-user-id","name":"Reading","type":"user"},{"id":"UNREAD","name":"Unread","type":"system"},{"id":"INBOX","name":"Inbox","type":"system"}]}`
 		case strings.HasSuffix(req.URL.Path, "/messages"):
@@ -92,21 +94,21 @@ func TestNativeGmailReviewBoundedPreviewAndFingerprint(t *testing.T) {
 	})
 	t.Cleanup(func() { http.DefaultTransport = oldTransport })
 	ctx, err := a.GetNativeGmailContext(r.ID)
-	if err != nil || ctx.AccountID != "mail" || len(ctx.Labels) != 1 {
+	if err != nil || ctx.AccountID != "mail" || len(ctx.Labels) != 1 || len(ctx.ForwardingAddresses) != 1 || ctx.ForwardingAddresses[0] != "destination@example.test" {
 		t.Fatal(ctx, err)
 	}
-	draft := NativeGmailDraft{RuleID: r.ID, Query: "from:sender", MarkRead: true, Archive: true, LabelIDs: []string{"opaque-user-id"}}
+	draft := NativeGmailDraft{Forward: "destination@example.test", RuleID: r.ID, Query: "from:sender", MarkRead: true, Archive: true, LabelIDs: []string{"opaque-user-id"}}
 	preview, err := a.PreviewNativeGmailFilter(draft)
 	if err != nil || preview.Found != 50 || !preview.Truncated {
 		t.Fatal(preview, err)
 	}
 	changed := draft
-	changed.Query = "from:other"
+	changed.Forward = "another@example.test"
 	if _, err = a.PrepareNativeGmailFilter(changed, preview.Fingerprint); err == nil {
 		t.Fatal("changed draft accepted")
 	}
 	plan, err := a.PrepareNativeGmailFilter(draft, preview.Fingerprint)
-	if err != nil || plan.Fingerprint != preview.Fingerprint || plan.State != "prepared" {
+	if err != nil || plan.Fingerprint != preview.Fingerprint || plan.State != "prepared" || plan.Forward != draft.Forward {
 		t.Fatal(plan, err)
 	}
 	recovered, err := a.GetNativeGmailPublication(r.ID)
@@ -145,6 +147,7 @@ func TestNativeGmailPreviewFailureNeverPrepares(t *testing.T) {
 func TestNativeGmailFingerprintSurvivesDurableCanonicalization(t *testing.T) {
 	for _, draft := range []NativeGmailDraft{
 		{Query: "from:sender", MarkRead: true},
+		{Query: "from:sender", Forward: "destination@example.test"},
 		{Query: "from:sender", Trash: true},
 		{Query: "from:sender", LabelIDs: []string{"b", "a", "b"}},
 	} {
@@ -155,7 +158,7 @@ func TestNativeGmailFingerprintSurvivesDurableCanonicalization(t *testing.T) {
 				t.Fatal(err)
 			}
 			before := nativeGmailFingerprint(r, "mail", f)
-			p, err := a.filterStore.PrepareGmailPublication(r.ID, "mail", f, nil, []string{"UNREAD", "TRASH", "a", "b"})
+			p, err := a.filterStore.PrepareGmailForwardingPublication(r.ID, "mail", f, nil, []string{"UNREAD", "TRASH", "a", "b"}, []gmail.ForwardingAddress{{Email: "destination@example.test", VerificationStatus: "accepted"}})
 			if err != nil {
 				t.Fatal(err)
 			}

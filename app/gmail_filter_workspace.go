@@ -112,7 +112,7 @@ func (a *App) NativeGmailReview(req NativeGmailReviewRequest) (NativeGmailReview
 	}
 	switch req.Operation {
 	case "context":
-		context := NativeGmailContext{AccountID: reply.AccountID, Email: reply.Email, ConsentRequired: reply.ConsentRequired, Labels: []NativeGmailLabel{}}
+		context := NativeGmailContext{AccountID: reply.AccountID, Email: reply.Email, ConsentRequired: reply.ConsentRequired, Labels: []NativeGmailLabel{}, ForwardingAddresses: reply.ForwardingAddresses}
 		for _, label := range reply.Labels {
 			context.Labels = append(context.Labels, NativeGmailLabel{ID: label.ID, Name: label.Name})
 		}

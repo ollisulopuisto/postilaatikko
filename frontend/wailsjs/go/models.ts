@@ -426,9 +426,11 @@ export namespace app {
 		email: string;
 		consentRequired: boolean;
 		labels: NativeGmailLabel[];
+		forwardingAddresses: string[];
 		static createFrom(source: any = {}) { return new NativeGmailContext(source); }
 		constructor(source: any = {}) {
 			if (typeof source === "string") source = JSON.parse(source);
+			this.forwardingAddresses = source["forwardingAddresses"];
 			this.accountId = source["accountId"];
 			this.email = source["email"];
 			this.consentRequired = source["consentRequired"];
@@ -442,9 +444,11 @@ export namespace app {
 		archive: boolean;
 		trash: boolean;
 		labelIds: string[];
+		forward: string;
 		static createFrom(source: any = {}) { return new NativeGmailDraft(source); }
 		constructor(source: any = {}) {
 			if (typeof source === "string") source = JSON.parse(source);
+			this.forward = source["forward"];
 			this.ruleId = source["ruleId"];
 			this.query = source["query"];
 			this.markRead = source["markRead"];
@@ -478,9 +482,11 @@ export namespace app {
 		state: string;
 		providerId: string;
 		fingerprint: string;
+		forward: string;
 		static createFrom(source: any = {}) { return new NativeGmailPublicationStatus(source); }
 		constructor(source: any = {}) {
 			if (typeof source === "string") source = JSON.parse(source);
+			this.forward = source["forward"];
 			this.accountEmail = source["accountEmail"];
 			this.ruleId = source["ruleId"];
 			this.accountId = source["accountId"];

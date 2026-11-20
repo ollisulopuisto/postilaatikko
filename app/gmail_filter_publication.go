@@ -144,6 +144,13 @@ func (a *App) prepareLocalGmailPublication(ctx context.Context, ruleID, accountI
 	for _, label := range labels {
 		allowed = append(allowed, label.ID)
 	}
+	if draft.Action.Forward != "" {
+		addresses, err := provider.client.ListForwardingAddresses(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return a.filterStore.PrepareGmailForwardingPublication(ruleID, accountID, draft, catalog, allowed, addresses, provider.OwnerBinding())
+	}
 	return a.filterStore.PrepareGmailPublication(ruleID, accountID, draft, catalog, allowed, provider.OwnerBinding())
 }
 
@@ -202,4 +209,8 @@ type pinnedAccountFilterCreate struct {
 
 func (p pinnedAccountFilterCreate) CreateFilter(ctx context.Context, f gmail.Filter) (*gmail.Filter, error) {
 	return p.pinned.CreateFilter(ctx, f)
+}
+
+func (p pinnedAccountFilterCreate) ListForwardingAddresses(ctx context.Context) ([]gmail.ForwardingAddress, error) {
+	return p.pinned.ListForwardingAddresses(ctx)
 }

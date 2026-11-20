@@ -65,6 +65,17 @@ func sameNativeFilter(a, b gmail.Filter) bool {
 // An optional non-secret owner binding is stored in the source snapshot envelope.
 // Bound records require a matching provider OwnerBinding on publish/reconcile.
 func (s *Store) PrepareGmailPublication(ruleID, accountID string, draft gmail.Filter, baseline []gmail.Filter, allowedLabelIDs []string, ownerBinding ...string) (*GmailPublication, error) {
+	return s.prepareGmailPublication(ruleID, accountID, draft, baseline, allowedLabelIDs, nil, ownerBinding...)
+}
+
+// PrepareGmailForwardingPublication requires the selected account's fresh forwarding catalog.
+func (s *Store) PrepareGmailForwardingPublication(ruleID, accountID string, draft gmail.Filter, baseline []gmail.Filter, allowedLabelIDs []string, addresses []gmail.ForwardingAddress, ownerBinding ...string) (*GmailPublication, error) {
+	return s.prepareGmailPublication(ruleID, accountID, draft, baseline, allowedLabelIDs, addresses, ownerBinding...)
+}
+func (s *Store) prepareGmailPublication(ruleID, accountID string, draft gmail.Filter, baseline []gmail.Filter, allowedLabelIDs []string, addresses []gmail.ForwardingAddress, ownerBinding ...string) (*GmailPublication, error) {
+	if err := gmail.ValidateForwardingDestination(draft.Action.Forward, addresses); err != nil {
+		return nil, err
+	}
 	binding := ""
 	if len(ownerBinding) > 1 {
 		return nil, fmt.Errorf("one owner binding required")
@@ -75,8 +86,8 @@ func (s *Store) PrepareGmailPublication(ruleID, accountID string, draft gmail.Fi
 			return nil, fmt.Errorf("invalid owner binding")
 		}
 	}
-	if draft.ID != "" || draft.Criteria == (gmail.FilterCriteria{}) || draft.Action.Forward != "" {
-		return nil, fmt.Errorf("new provider-native criteria and label-only actions required")
+	if draft.ID != "" || draft.Criteria == (gmail.FilterCriteria{}) {
+		return nil, fmt.Errorf("new provider-native criteria required")
 	}
 	if len(baseline) > 1000 {
 		return nil, fmt.Errorf("provider catalog exceeds limit")
@@ -87,8 +98,8 @@ func (s *Store) PrepareGmailPublication(ruleID, accountID string, draft gmail.Fi
 		return nil, fmt.Errorf("provider draft exceeds size limit")
 	}
 
-	if len(draft.Action.AddLabelIDs)+len(draft.Action.RemoveLabelIDs) == 0 {
-		return nil, fmt.Errorf("label action required")
+	if len(draft.Action.AddLabelIDs)+len(draft.Action.RemoveLabelIDs) == 0 && draft.Action.Forward == "" {
+		return nil, fmt.Errorf("label or forwarding action required")
 	}
 	for _, id := range append(slices.Clone(draft.Action.AddLabelIDs), draft.Action.RemoveLabelIDs...) {
 		if id == "" || !slices.Contains(allowedLabelIDs, id) {
@@ -238,6 +249,21 @@ func (s *Store) PublishGmailFilter(ctx context.Context, id string, provider Nati
 	}); ok {
 		provider, err = preflight.PrepareFilterCreate(ctx)
 		if err != nil {
+			return nil, err
+		}
+	}
+	if p.Filter.Action.Forward != "" {
+		catalog, ok := provider.(interface {
+			ListForwardingAddresses(context.Context) ([]gmail.ForwardingAddress, error)
+		})
+		if !ok {
+			return nil, fmt.Errorf("forwarding catalog verification unavailable")
+		}
+		addresses, err := catalog.ListForwardingAddresses(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if err := gmail.ValidateForwardingDestination(p.Filter.Action.Forward, addresses); err != nil {
 			return nil, err
 		}
 	}

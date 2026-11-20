@@ -112,8 +112,8 @@ func (p helperGmailProvider) GetFilter(ctx context.Context, id string) (*gmail.F
 }
 func helperNativeDraft(f gmail.Filter) (gmail.Filter, error) {
 	q := strings.TrimSpace(f.Criteria.Query)
-	if q == "" || len(q) > 2048 || strings.ContainsFunc(q, unicode.IsControl) || f.ID != "" || f.Criteria != (gmail.FilterCriteria{Query: f.Criteria.Query}) || f.Action.Forward != "" {
-		return f, fmt.Errorf("explicit Gmail query and label-only actions required")
+	if q == "" || len(q) > 2048 || strings.ContainsFunc(q, unicode.IsControl) || f.ID != "" || f.Criteria != (gmail.FilterCriteria{Query: f.Criteria.Query}) || (f.Action.Forward != "" && !gmail.ValidForwardingAddress(f.Action.Forward)) {
+		return f, fmt.Errorf("explicit Gmail query and valid actions required")
 	}
 	f.Criteria.Query = q
 	f.Action.AddLabelIDs = slices.Clone(f.Action.AddLabelIDs)
@@ -128,8 +128,8 @@ func helperNativeDraft(f gmail.Filter) (gmail.Filter, error) {
 	if len(f.Action.RemoveLabelIDs) == 0 {
 		f.Action.RemoveLabelIDs = nil
 	}
-	if len(f.Action.AddLabelIDs)+len(f.Action.RemoveLabelIDs) == 0 {
-		return f, fmt.Errorf("choose at least one label action")
+	if len(f.Action.AddLabelIDs)+len(f.Action.RemoveLabelIDs) == 0 && f.Action.Forward == "" {
+		return f, fmt.Errorf("choose at least one label or forwarding action")
 	}
 	if slices.Contains(f.Action.AddLabelIDs, "TRASH") && slices.Contains(f.Action.RemoveLabelIDs, "INBOX") {
 		return f, fmt.Errorf("choose archive or trash, not both")
@@ -280,6 +280,15 @@ func (r *SyncRuntime) GmailPublication(ctx context.Context, req v1.GmailPublicat
 		return result, err
 	}
 	if req.Operation == "context" {
+		addresses, err := c.ListForwardingAddresses(ctx)
+		if err != nil {
+			return result, err
+		}
+		for _, entry := range addresses {
+			if entry.VerificationStatus == "accepted" && gmail.ValidForwardingAddress(entry.Email) {
+				result.ForwardingAddresses = append(result.ForwardingAddresses, entry.Email)
+			}
+		}
 		for _, label := range labels {
 			if label.Type == "user" {
 				result.Labels = append(result.Labels, label)
@@ -290,6 +299,16 @@ func (r *SyncRuntime) GmailPublication(ctx context.Context, req v1.GmailPublicat
 	f, err := helperNativeDraft(req.Filter)
 	if err != nil {
 		return result, err
+	}
+	var addresses []gmail.ForwardingAddress
+	if f.Action.Forward != "" {
+		addresses, err = c.ListForwardingAddresses(ctx)
+		if err != nil {
+			return result, err
+		}
+		if err := gmail.ValidateForwardingDestination(f.Action.Forward, addresses); err != nil {
+			return result, err
+		}
 	}
 	allowed, err := helperAllowedLabels(f, labels)
 	if err != nil {
@@ -318,7 +337,7 @@ func (r *SyncRuntime) GmailPublication(ctx context.Context, req v1.GmailPublicat
 		if err != nil {
 			return result, err
 		}
-		plan, err := r.rules.PrepareGmailPublication(source.ID, req.AccountID, f, catalog, allowed, p.binding)
+		plan, err := r.rules.PrepareGmailForwardingPublication(source.ID, req.AccountID, f, catalog, allowed, addresses, p.binding)
 		if err != nil {
 			return result, err
 		}
@@ -351,4 +370,8 @@ type pinnedHelperFilterCreate struct {
 
 func (p pinnedHelperFilterCreate) CreateFilter(ctx context.Context, f gmail.Filter) (*gmail.Filter, error) {
 	return p.pinned.CreateFilter(ctx, f)
+}
+
+func (p pinnedHelperFilterCreate) ListForwardingAddresses(ctx context.Context) ([]gmail.ForwardingAddress, error) {
+	return p.pinned.ListForwardingAddresses(ctx)
 }

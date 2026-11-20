@@ -59,6 +59,7 @@ func TestHelperNativePublicationOneAttemptAndReadOnlyRecovery(t *testing.T) {
 	writes := 0
 	actual := "helper@example.com"
 	created := false
+	forwardingAccepted := true
 	oldTransport := http.DefaultTransport
 	http.DefaultTransport = helperNativeRoundTrip(func(req *http.Request) (*http.Response, error) {
 		if req.Header.Get("Authorization") != "Bearer helper-access" {
@@ -68,6 +69,11 @@ func TestHelperNativePublicationOneAttemptAndReadOnlyRecovery(t *testing.T) {
 		switch {
 		case strings.HasSuffix(req.URL.Path, "/profile"):
 			body = `{"emailAddress":"` + actual + `"}`
+		case strings.HasSuffix(req.URL.Path, "/settings/forwardingAddresses"):
+			body = `{"forwardingAddresses":[{"forwardingEmail":"pending@example.test","verificationStatus":"pending"}]}`
+			if forwardingAccepted {
+				body = `{"forwardingAddresses":[{"forwardingEmail":"destination@example.test","verificationStatus":"accepted"}]}`
+			}
 		case strings.HasSuffix(req.URL.Path, "/labels"):
 			body = `{"labels":[{"id":"UNREAD","type":"system"},{"id":"INBOX","type":"system"},{"id":"TRASH","type":"system"},{"id":"opaque-user","type":"user","name":"Reading"}]}`
 		case strings.HasSuffix(req.URL.Path, "/messages"):
@@ -86,7 +92,7 @@ func TestHelperNativePublicationOneAttemptAndReadOnlyRecovery(t *testing.T) {
 		case strings.HasSuffix(req.URL.Path, "/settings/filters"):
 			body = `{"filter":[]}`
 			if created {
-				body = `{"filter":[{"id":"provider-rule","criteria":{"query":"from:sender"},"action":{"removeLabelIds":["UNREAD"]}}]}`
+				body = `{"filter":[{"id":"provider-rule","criteria":{"query":"from:sender"},"action":{"forward":"destination@example.test","removeLabelIds":["UNREAD"]}}]}`
 			}
 		default:
 			t.Error("unexpected request", req.Method, req.URL.Path)
@@ -96,11 +102,11 @@ func TestHelperNativePublicationOneAttemptAndReadOnlyRecovery(t *testing.T) {
 	t.Cleanup(func() { http.DefaultTransport = oldTransport })
 	req := v1.GmailPublicationRequest{Operation: "context", AccountID: "helper-google", RuleID: "helper-rule"}
 	contextReply, err := r.GmailPublication(context.Background(), req)
-	if err != nil || contextReply.Email != "helper@example.com" || contextReply.ConsentRequired || len(contextReply.Labels) != 1 {
+	if err != nil || contextReply.Email != "helper@example.com" || contextReply.ConsentRequired || len(contextReply.Labels) != 1 || len(contextReply.ForwardingAddresses) != 1 || contextReply.ForwardingAddresses[0] != "destination@example.test" {
 		t.Fatal(contextReply, err)
 	}
 	req.Operation = "preview"
-	req.Filter = gmail.Filter{Criteria: gmail.FilterCriteria{Query: "from:sender"}, Action: gmail.FilterAction{RemoveLabelIDs: []string{"UNREAD"}}}
+	req.Filter = gmail.Filter{Criteria: gmail.FilterCriteria{Query: "from:sender"}, Action: gmail.FilterAction{Forward: "destination@example.test", RemoveLabelIDs: []string{"UNREAD"}}}
 	preview, err := r.GmailPublication(context.Background(), req)
 	if err != nil || preview.Found != 50 || !preview.Truncated || writes != 0 {
 		t.Fatal(preview, err)
@@ -121,6 +127,15 @@ func TestHelperNativePublicationOneAttemptAndReadOnlyRecovery(t *testing.T) {
 		t.Fatal("unreviewed helper write")
 	}
 	req.Fingerprint = plan.Fingerprint
+	forwardingAccepted = false
+	if _, err = r.GmailPublication(context.Background(), req); err == nil || writes != 0 {
+		t.Fatal("revoked forwarding submitted", writes, err)
+	}
+	saved, err := r.rules.GetGmailPublication(plan.Publication.ID)
+	if err != nil || saved.State != "prepared" {
+		t.Fatal(saved, err)
+	}
+	forwardingAccepted = true
 	if _, err = r.GmailPublication(context.Background(), req); err == nil || writes != 1 {
 		t.Fatal("unknown create not retained", writes, err)
 	}
@@ -180,7 +195,7 @@ func TestHelperNativeMissingConsentDoesNotContactProvider(t *testing.T) {
 func TestHelperNativeDraftRejectsImplicitConversionAndSystemLabelInjection(t *testing.T) {
 	for _, f := range []gmail.Filter{
 		{Criteria: gmail.FilterCriteria{From: "sender"}, Action: gmail.FilterAction{RemoveLabelIDs: []string{"UNREAD"}}},
-		{Criteria: gmail.FilterCriteria{Query: "sender"}, Action: gmail.FilterAction{Forward: "other@example.com"}},
+		{Criteria: gmail.FilterCriteria{Query: "sender"}, Action: gmail.FilterAction{Forward: "invalid address"}},
 		{Criteria: gmail.FilterCriteria{Query: "sender"}, Action: gmail.FilterAction{AddLabelIDs: []string{"TRASH"}, RemoveLabelIDs: []string{"INBOX"}}},
 		{Criteria: gmail.FilterCriteria{Query: "sender"}, Action: gmail.FilterAction{RemoveLabelIDs: []string{"user-label"}}},
 	} {

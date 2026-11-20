@@ -22,10 +22,11 @@ type NativeGmailLabel struct {
 
 // NativeGmailContext describes one eligible stopped source and its account.
 type NativeGmailContext struct {
-	AccountID       string             `json:"accountId"`
-	Email           string             `json:"email"`
-	ConsentRequired bool               `json:"consentRequired"`
-	Labels          []NativeGmailLabel `json:"labels"`
+	AccountID           string             `json:"accountId"`
+	Email               string             `json:"email"`
+	ConsentRequired     bool               `json:"consentRequired"`
+	Labels              []NativeGmailLabel `json:"labels"`
+	ForwardingAddresses []string           `json:"forwardingAddresses"`
 }
 
 // NativeGmailDraft is explicitly written in Gmail search syntax, never an
@@ -37,6 +38,7 @@ type NativeGmailDraft struct {
 	Archive  bool     `json:"archive"`
 	Trash    bool     `json:"trash"`
 	LabelIDs []string `json:"labelIds"`
+	Forward  string   `json:"forward"`
 }
 
 // NativeGmailPreview is a bounded historical sample, not an exact count or a
@@ -56,6 +58,7 @@ type NativeGmailPublicationStatus struct {
 	Query          string   `json:"query"`
 	AddLabelIDs    []string `json:"addLabelIds"`
 	RemoveLabelIDs []string `json:"removeLabelIds"`
+	Forward        string   `json:"forward"`
 
 	ID          string `json:"id"`
 	State       string `json:"state"`
@@ -98,13 +101,26 @@ func (a *App) GetNativeGmailContext(ruleID string) (NativeGmailContext, error) {
 	if err != nil {
 		return result, err
 	}
-	labels, err := provider.client.Labels(a.helperCommandContext())
+	client, err := provider.snapshotClient(a.helperCommandContext())
+	if err != nil {
+		return result, err
+	}
+	labels, err := client.Labels(a.helperCommandContext())
 	if err != nil {
 		return result, err
 	}
 	for _, label := range labels {
 		if label.Type == "user" {
 			result.Labels = append(result.Labels, NativeGmailLabel{ID: label.ID, Name: label.Name})
+		}
+	}
+	addresses, err := client.ListForwardingAddresses(a.helperCommandContext())
+	if err != nil {
+		return result, err
+	}
+	for _, entry := range addresses {
+		if entry.VerificationStatus == "accepted" && gmail.ValidForwardingAddress(entry.Email) {
+			result.ForwardingAddresses = append(result.ForwardingAddresses, entry.Email)
 		}
 	}
 	return result, nil
@@ -117,7 +133,10 @@ func nativeGmailPayload(draft NativeGmailDraft) (gmail.Filter, error) {
 	if draft.Archive && draft.Trash {
 		return gmail.Filter{}, fmt.Errorf("choose Archive or Trash, not both")
 	}
-	f := gmail.Filter{Criteria: gmail.FilterCriteria{Query: query}}
+	if draft.Forward != "" && !gmail.ValidForwardingAddress(draft.Forward) {
+		return gmail.Filter{}, fmt.Errorf("choose an existing Gmail forwarding address")
+	}
+	f := gmail.Filter{Criteria: gmail.FilterCriteria{Query: query}, Action: gmail.FilterAction{Forward: draft.Forward}}
 	for _, id := range draft.LabelIDs {
 		if id == "" || len(id) > 256 || strings.ContainsFunc(id, unicode.IsControl) {
 			return gmail.Filter{}, fmt.Errorf("choose valid provider user-label IDs")
@@ -137,8 +156,8 @@ func nativeGmailPayload(draft NativeGmailDraft) (gmail.Filter, error) {
 	}
 	slices.Sort(f.Action.AddLabelIDs)
 	slices.Sort(f.Action.RemoveLabelIDs)
-	if len(f.Action.AddLabelIDs)+len(f.Action.RemoveLabelIDs) == 0 {
-		return gmail.Filter{}, fmt.Errorf("choose at least one label action")
+	if len(f.Action.AddLabelIDs)+len(f.Action.RemoveLabelIDs) == 0 && f.Action.Forward == "" {
+		return gmail.Filter{}, fmt.Errorf("choose at least one label or forwarding action")
 	}
 	return f, nil
 }
@@ -213,6 +232,19 @@ func (a *App) PreviewNativeGmailFilter(draft NativeGmailDraft) (NativeGmailPrevi
 	if err := validateNativeUserLabels(a.helperCommandContext(), provider, draft.LabelIDs); err != nil {
 		return result, err
 	}
+	if f.Action.Forward != "" {
+		client, err := provider.snapshotClient(a.helperCommandContext())
+		if err != nil {
+			return result, err
+		}
+		addresses, err := client.ListForwardingAddresses(a.helperCommandContext())
+		if err != nil {
+			return result, err
+		}
+		if err := gmail.ValidateForwardingDestination(f.Action.Forward, addresses); err != nil {
+			return result, err
+		}
+	}
 	result.Found, result.Truncated, err = previewNativeGmail(a.helperCommandContext(), provider.client, f)
 	if err != nil {
 		return result, err
@@ -231,7 +263,7 @@ func publicationStatus(p *mailfilter.GmailPublication) NativeGmailPublicationSta
 	if len(owner) == 2 {
 		email = owner[0]
 	}
-	return NativeGmailPublicationStatus{AccountEmail: email, RuleID: p.RuleID, AccountID: p.AccountID, Query: p.Filter.Criteria.Query, AddLabelIDs: p.Filter.Action.AddLabelIDs, RemoveLabelIDs: p.Filter.Action.RemoveLabelIDs, ID: p.ID, State: p.State, ProviderID: p.ProviderID, Fingerprint: nativeGmailFingerprint(&p.Source, p.AccountID, p.Filter, p.OwnerBinding)}
+	return NativeGmailPublicationStatus{Forward: p.Filter.Action.Forward, AccountEmail: email, RuleID: p.RuleID, AccountID: p.AccountID, Query: p.Filter.Criteria.Query, AddLabelIDs: p.Filter.Action.AddLabelIDs, RemoveLabelIDs: p.Filter.Action.RemoveLabelIDs, ID: p.ID, State: p.State, ProviderID: p.ProviderID, Fingerprint: nativeGmailFingerprint(&p.Source, p.AccountID, p.Filter, p.OwnerBinding)}
 }
 
 // PrepareNativeGmailFilter freezes the exact previewed payload for final review.
