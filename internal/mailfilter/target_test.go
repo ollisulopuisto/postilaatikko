@@ -105,3 +105,60 @@ func TestSaveVerifiedRuleSQLiteRoundTrip(t *testing.T) {
 		t.Fatal("stale baseline accepted")
 	}
 }
+
+func TestVerifiedRetryAfterPersistedReadFailure(t *testing.T) {
+	s := &fakeTargetStore{failRead: 2}
+	r := &Rule{ID: "retry", Name: "name", ActionMarkRead: true}
+	if err := SaveVerifiedRule(context.Background(), s, r, nil); err == nil {
+		t.Fatal("read failure accepted")
+	}
+	if err := SaveVerifiedRule(context.Background(), s, r, nil); err != nil {
+		t.Fatal(err)
+	}
+	if s.writes != 1 {
+		t.Fatalf("retried write: %d", s.writes)
+	}
+}
+func TestHelperNormalizationReadback(t *testing.T) {
+	s := &normalizingTargetStore{}
+	r := &Rule{ID: "normal", Name: " name ", FromContains: []string{" sender ", " "}, SubjectContains: []string{" topic "}, ActionMarkRead: true}
+	if err := SaveVerifiedRule(context.Background(), s, r, nil); err != nil {
+		t.Fatal(err)
+	}
+	if r.Name != " name " || r.FromContains[0] != " sender " {
+		t.Fatal("caller mutated")
+	}
+}
+
+type normalizingTargetStore struct{ fakeTargetStore }
+
+func (s *normalizingTargetStore) Create(c context.Context, r *Rule) error {
+	clone := *r
+	clone.FromContains = cleanPatterns(r.FromContains)
+	clone.SubjectContains = cleanPatterns(r.SubjectContains)
+	return s.fakeTargetStore.Create(c, &clone)
+}
+
+func TestVerifiedUpdateRetryAndConflict(t *testing.T) {
+	before := &Rule{ID: "update", Name: "before", ActionMarkRead: true}
+	desired := &Rule{ID: "update", Name: "after", ActionMarkRead: true}
+	s := &fakeTargetStore{rules: []*Rule{before}, failRead: 2}
+	if err := SaveVerifiedRule(context.Background(), s, desired, before); err == nil {
+		t.Fatal("unverified update accepted")
+	}
+	if err := SaveVerifiedRule(context.Background(), s, desired, before); err != nil {
+		t.Fatal(err)
+	}
+	if s.writes != 1 {
+		t.Fatal("update repeated")
+	}
+	conflicting := *desired
+	conflicting.Name = "someone else's change"
+	s.rules = []*Rule{&conflicting}
+	if err := SaveVerifiedRule(context.Background(), s, desired, before); err == nil {
+		t.Fatal("conflicting update overwritten")
+	}
+	if s.writes != 1 {
+		t.Fatal("conflict wrote")
+	}
+}

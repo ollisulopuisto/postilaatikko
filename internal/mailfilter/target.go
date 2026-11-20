@@ -41,16 +41,28 @@ func SaveVerifiedRule(ctx context.Context, store TargetRuleStore, rule *Rule, ex
 			break
 		}
 	}
+
+	// Work on a copy: helper validation normalizes criteria on another host.
+	normalized := normalizedRuleConfiguration(rule)
+	rule = &normalized
+	if expected == nil && rule.OrderIndex == 0 {
+		rule.OrderIndex = len(before)
+		if existing != nil {
+			rule.OrderIndex = existing.OrderIndex
+		}
+	}
+	// A retry after an uncertain write can verify the desired state without
+	// writing again. Different existing content remains a hard conflict.
+	if existing != nil && SameRuleConfiguration(existing, rule) {
+		return nil
+	}
 	if expected == nil && existing != nil {
 		return fmt.Errorf("rule already exists on target; refresh before saving")
 	}
 	if expected != nil && (existing == nil || !SameRuleConfiguration(existing, expected)) {
 		return fmt.Errorf("rule changed on target; refresh before saving")
 	}
-	rule.Name = strings.TrimSpace(rule.Name)
-	if expected == nil && rule.OrderIndex == 0 {
-		rule.OrderIndex = len(before)
-	}
+
 	if expected == nil {
 		err = store.Create(ctx, rule)
 	}
@@ -78,16 +90,22 @@ func SameRuleConfiguration(a, b *Rule) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
-	left, right := *a, *b
+	left, right := normalizedRuleConfiguration(a), normalizedRuleConfiguration(b)
 	left.CreatedAt, left.UpdatedAt = right.CreatedAt, right.UpdatedAt
-	normalize := func(r *Rule) {
-		for _, v := range []*[]string{&r.AccountIDs, &r.FolderIDs, &r.FromContains, &r.ToContains, &r.SubjectContains, &r.ListIDContains} {
-			if len(*v) == 0 {
-				*v = nil
-			}
+	return reflect.DeepEqual(left, right)
+}
+
+func normalizedRuleConfiguration(rule *Rule) Rule {
+	r := *rule
+	r.Name = strings.TrimSpace(r.Name)
+	r.FromContains = cleanPatterns(r.FromContains)
+	r.ToContains = cleanPatterns(r.ToContains)
+	r.SubjectContains = cleanPatterns(r.SubjectContains)
+	r.ListIDContains = cleanPatterns(r.ListIDContains)
+	for _, values := range []*[]string{&r.AccountIDs, &r.FolderIDs} {
+		if len(*values) == 0 {
+			*values = nil
 		}
 	}
-	normalize(&left)
-	normalize(&right)
-	return reflect.DeepEqual(left, right)
+	return r
 }
