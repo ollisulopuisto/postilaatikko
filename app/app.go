@@ -265,6 +265,7 @@ type App struct {
 	triageStore         *triage.Store
 	replyContent        *replycontent.Service
 	virtualFolderStore  *virtualfolder.Store
+	filterExecutionMu   goSync.RWMutex
 	filterStore         *mailfilter.Store
 	moveFilterHistory   *mailfilter.MoveHistory
 	filterRouter        *mailfilter.AutomaticRouter
