@@ -70,6 +70,10 @@
 
 - GMAIL-FILTER-007: Review. Instinct, `agent/gmail-filter-helper`, `/tmp/pl-gmail-filter-helper`. Helper-owned native publication API with capability checks, helper-only settings token source, verified owner and journal recovery. Consent exchange and desktop routing remain separate unfinished follow-up. Do not enable desktop fallback. Full helper/alwayson/automation/scheduledsend suites, affected dependencies, vet and version consistency pass. Race compilation blocked by missing native libraries, not claimed passed. No live provider or Mac acceptance.
 
+## Helper Gmail consent
+
+- GMAIL-FILTER-008: Review. Instinct, `agent/gmail-filter-consent`, `/tmp/pl-gmail-filter-consent`. Expiring client/account-bound helper PKCE exchange, loopback code forwarding only, profile/scope verification and grant preservation. Full alwayson/automation/OAuth/scheduledsend/helper tests and affected vet pass. OAuth PKCE tests pass under race detector. Desktop routing remains separate until validation, no live Google or native acceptance.
+
 ## Status and effort
 
 - **Easy:** contained UI, copy, localization, or isolated behavior change.
