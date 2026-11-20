@@ -28,6 +28,9 @@
 
 - UI-ERROR-AUDIT-001: Review. Show a localized error if pending-queue loading or native quit fails. Error toasts wrap rather than hide recovery guidance. Queue/delivery semantics are unchanged; no forced shutdown or automatic retry. Handler regressions and EN/FI browser checks at 320/390/1024 px pass. Native macOS quit remains unverified.
 
+## Contact-source load errors
+
+- UI-ERROR-AUDIT-003: Review. Preserve the last good catalog, expose failed refresh and Retry, and distinguish first-load failure from no configured sources. Failing-first EN/FI browser coverage at 320/390/1024 px; source action controls wrap. No extension store, provider or OAuth behavior changed. Native macOS and live contacts unverified.
 ## About error recovery
 
 - UI-ERROR-AUDIT-002: Review. App-info loading has a visible Retry route independent of update-check initialization. Failing-first browser test covers temporary failure and recovery, with 320/390/700 px controls. Frontend check/lint/build and 1107 tests pass; 19 browser-gated tests skipped in the plain suite. Native settings-window behavior is not verified.
