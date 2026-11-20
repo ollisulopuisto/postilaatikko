@@ -4,7 +4,7 @@ This UI is a separate provider-native workflow in Filters settings. It does not 
 
 ## Entry and limits
 
-Stop a single-account local rule with no folder scope or move destination, then choose its Gmail review action. Backend validation requires an enabled local Google account, standalone execution, no helper connector, and no outstanding automatic jobs. Desktop credentials are never used for a helper-owned rule.
+Stop a single-account local rule with no folder scope or move destination, then choose its Gmail review action. Backend validation requires an enabled Google account on the captured execution owner and no outstanding automatic jobs. Explicit standalone execution uses local credentials; configured helper execution uses only helper credentials, without an offline fallback.
 
 The selected account requests Gmail settings consent only through the explicit authorization button. Existing granted scopes and account identity remain verified by the consent prerequisite.
 
@@ -30,7 +30,7 @@ The preview and prepared journal also bind the normalized Gmail account email an
 
 Before provider catalog reads, creation or reconciliation, the adapter verifies the authenticated Gmail profile. One token is pinned across that identity read and the following provider operation, so a credential replacement cannot switch the write's mailbox between those requests. A stale/expired pinned token fails rather than refreshing or retrying the write. No token is persisted in the publication journal.
 
-Old unbound prepared plans must be cancelled and reviewed again. An attempted old unbound plan needs manual inspection; it cannot be replayed or automatically reconciled against a guessed account. Every desktop mailbox-service connector also blocks desktop consent until helper-owned routes are available.
+Old unbound prepared plans must be cancelled and reviewed again. An attempted old unbound plan needs manual inspection; it cannot be replayed or automatically reconciled against a guessed account. A configured mailbox-service connector blocks standalone consent. Its selected helper instead owns the separate consent lifecycle described below.
 
 ## Configured helper workspace
 
