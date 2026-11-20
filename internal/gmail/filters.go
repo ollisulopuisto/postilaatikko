@@ -22,6 +22,8 @@ type Filter struct {
 	Criteria FilterCriteria `json:"criteria"`
 	Action   FilterAction   `json:"action"`
 }
+
+// FilterCriteria contains provider-native Gmail matching fields.
 type FilterCriteria struct {
 	From           string `json:"from,omitempty"`
 	To             string `json:"to,omitempty"`
@@ -33,6 +35,8 @@ type FilterCriteria struct {
 	Size           int64  `json:"size,omitempty"`
 	SizeComparison string `json:"sizeComparison,omitempty"`
 }
+
+// FilterAction contains provider-native Gmail label and forwarding actions.
 type FilterAction struct {
 	AddLabelIDs    []string `json:"addLabelIds,omitempty"`
 	RemoveLabelIDs []string `json:"removeLabelIds,omitempty"`
@@ -63,6 +67,8 @@ func (c *Client) ListFilters(ctx context.Context) ([]Filter, error) {
 	}
 	return response.Filters, nil
 }
+
+// GetFilter reads one exact provider filter identity.
 func (c *Client) GetFilter(ctx context.Context, id string) (*Filter, error) {
 	path, err := filterPath(id)
 	if err != nil {
@@ -77,6 +83,8 @@ func (c *Client) GetFilter(ctx context.Context, id string) (*Filter, error) {
 	}
 	return &result, nil
 }
+
+// CreateFilter makes one non-retried provider create attempt.
 func (c *Client) CreateFilter(ctx context.Context, filter Filter) (*Filter, error) {
 	if filter.ID != "" {
 		return nil, fmt.Errorf("new Gmail filter must not have an ID")
@@ -98,6 +106,8 @@ func (c *Client) CreateFilter(ctx context.Context, filter Filter) (*Filter, erro
 	}
 	return &result, nil
 }
+
+// DeleteFilter submits one non-retried provider deletion.
 func (c *Client) DeleteFilter(ctx context.Context, id string) error {
 	path, err := filterPath(id)
 	if err != nil {
