@@ -3457,6 +3457,11 @@
         <div class="flex flex-col items-center justify-center h-full text-muted-foreground">
           <Icon icon="mdi:magnify" class="w-12 h-12 mb-2" />
           <p>{$_('messageList.noResults', { values: { query: searchQuery } })}</p>
+          {#if virtualQueryCursor}
+            <button class="mt-3 rounded px-3 py-2 text-sm text-primary hover:underline" disabled={isSearching} onclick={() => loadMoreSearchResults()}>
+              {isSearching ? $_('common.loading') : $_('messageList.loadMore', {values:{remaining:1}})}
+            </button>
+          {/if}
           {#if !allMailSearch && !indexComplete}
             <p class="text-xs mt-1">{$_('messageList.indexBuilding')}</p>
           {/if}

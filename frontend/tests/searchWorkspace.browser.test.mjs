@@ -28,6 +28,7 @@ test('real search workspace: debounce, supersession, all-account row routing, sc
         window.calls.push({name,args,at:performance.now()})
         if(name==='SearchMail'){
           const req=args[0],delay=req.query==='slow'?750:35
+          if(req.filter==='needsMe'&&!req.cursor)return Promise.resolve({conversations:[],cursor:'older-page',issues:[]})
           return new Promise(resolve=>setTimeout(()=>resolve({conversations:[row(req.query,req.accountIds?.[0]||'b')],cursor:'',issues:[]}),delay))
         }
         if(name==='GetFTSIndexStatus')return Promise.resolve({complete:true,totalMessages:0,indexedMessages:0})
@@ -59,6 +60,12 @@ test('real search workspace: debounce, supersession, all-account row routing, sc
     await result.click()
     await page.getByText('b:folder-b:b-meeting',{exact:true}).waitFor()
     assert.equal(await page.evaluate(()=>window.calls.filter(c=>c.name==='CreateVirtualFolder').length),0,'temporary results never save a folder')
+    await page.getByRole('button',{name:'Needs me fixture filter',exact:true}).dispatchEvent('click')
+    await page.waitForFunction(()=>window.calls.some(c=>c.name==='SearchMail'&&c.args[0].filter==='needsMe'))
+    await page.getByText('Result: meeting',{exact:true}).waitFor({state:'hidden'})
+    await page.getByRole('button',{name:/Load.*more/}).click()
+    await page.getByText('Result: meeting',{exact:true}).waitFor()
+    assert.equal(await page.evaluate(()=>window.calls.filter(c=>c.name==='SearchMail').at(-1).args[0].cursor),'older-page')
     await page.getByRole('button',{name:'Unread fixture filter',exact:true}).dispatchEvent('click')
     await page.waitForTimeout(100)
     assert.equal(await page.evaluate(()=>window.calls.filter(c=>c.name==='SearchMail').at(-1).args[0].filter),'unread','global quick filter reaches provider request')
