@@ -1215,6 +1215,7 @@
     "berConversionConfirm": "Convert & Import"
   },
   "contactSource": {
+    "loadFailed": "Could not refresh contact sources. The list may be out of date. Retry before changing sources.",
     "separateConsent": "Contacts requires a separate sign-in. Saving opens Google Contacts authorization for the selected account.",
     "authorizeContacts": "Authorize Contacts",
     "authorized": "Contacts authorized.",

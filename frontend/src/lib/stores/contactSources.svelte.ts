@@ -23,6 +23,7 @@ function createContactSourcesStore() {
   let sources = $state<carddav.Source[]>([])
   let errors = $state<carddav.SourceError[]>([])
   let loading = $state(false)
+  let loadError = $state(false)
 
   async function load() {
     loading = true
@@ -31,9 +32,11 @@ function createContactSourcesStore() {
         GetContactSources(),
         GetContactSourceErrors(),
       ])
+      loadError = false
       sources = sourcesResult || []
       errors = errorsResult || []
     } catch (err) {
+      loadError = true
       console.error('Failed to load contact sources:', err)
     } finally {
       loading = false
@@ -153,6 +156,7 @@ function createContactSourcesStore() {
     get sources() { return sources },
     get errors() { return errors },
     get loading() { return loading },
+    get loadError() { return loadError },
     get hasErrors() { return errors.length > 0 },
 
     load,

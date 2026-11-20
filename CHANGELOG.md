@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Contact-source load failures show a retryable warning instead of looking like an empty list. The last good list is retained, and source controls wrap in narrow windows.
+
 - If quitting fails while checking pending mail or closing the app, show a localized error instead of silently leaving the app open. Pending-send and uncertain-delivery safety checks are unchanged.
 
 - Top-tab Unread no longer repeats its active state in a removable filter chip. List-local filters keep their chips.

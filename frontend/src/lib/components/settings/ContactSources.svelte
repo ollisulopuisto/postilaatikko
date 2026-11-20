@@ -144,11 +144,18 @@
     {$_('contactSource.title')}
   </h3>
 
+  {#if contactSourcesStore.loadError}
+    <div role="alert" class="rounded-lg border border-destructive/40 p-3 space-y-2">
+      <p class="text-sm text-foreground">{$_('contactSource.loadFailed')}</p>
+      <Button size="sm" variant="outline" disabled={contactSourcesStore.loading} onclick={() => void contactSourcesStore.refresh()}>{$_('common.retry')}</Button>
+    </div>
+  {/if}
+
   {#if contactSourcesStore.loading}
     <div class="flex items-center justify-center py-4">
       <Icon icon="mdi:loading" class="w-5 h-5 animate-spin text-muted-foreground" />
     </div>
-  {:else if contactSourcesStore.sources.length === 0}
+  {:else if contactSourcesStore.sources.length === 0 && !contactSourcesStore.loadError}
     <div class="text-sm text-muted-foreground py-4 text-center">
       <p class="mb-3">{$_('contactSource.noSources')}</p>
       <Button size="sm" onclick={openAdd}>
@@ -206,7 +213,7 @@
           {/if}
 
           <!-- Actions -->
-          <div class="flex items-center gap-2 pt-1">
+          <div class="flex flex-wrap items-center gap-2 pt-1">
             <Button
               size="sm"
               variant="ghost"
