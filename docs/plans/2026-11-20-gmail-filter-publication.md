@@ -10,7 +10,7 @@ The initial actions are label-only. Forwarding, unknown labels, opposing add/rem
 
 ## Execution ownership
 
-Preparation requires the source rule to be disabled and no durable automatic-filter jobs to remain, including pending, processing or outcome-unknown jobs. Recording the plan takes a durable guard. Local re-enabling, deletion and job enqueue are refused while that guard exists. Only an unattempted plan can be cancelled to release the source.
+Preparation requires the source rule to be disabled and no durable automatic-filter jobs to remain, including pending, processing or outcome-unknown jobs. Reading the source snapshot and recording the plan take one SQLite transaction and a durable guard. Local edits, reordering, re-enabling, deletion and job enqueue are refused while that guard exists. Only an unattempted plan can be cancelled to release the source.
 
 This is not yet proof that every runtime executor has stopped. Before exposing publication, app/service integration must acquire the account owner's filter-executor quiescence boundary, wait for direct in-flight actions, and then prepare the plan. A desktop must never prepare or publish against unrelated local credentials while its workspace is a remote helper.
 
