@@ -1597,6 +1597,7 @@ func (a *App) initializeDesktopAutostart() {
 		a.autostartMgr = platform.NewAutostartManager()
 	}
 	if err := platform.MigrateLegacyAutostart(a.autostartMgr); err != nil {
-		logging.WithComponent("app").Warn().Err(err).Msg("Could not migrate legacy login startup")
+		log := logging.WithComponent("app")
+		log.Warn().Err(err).Msg("Could not migrate legacy login startup")
 	}
 }
