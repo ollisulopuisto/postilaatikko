@@ -182,6 +182,21 @@ func helperAllowedLabels(f gmail.Filter, labels []gmail.Label) ([]string, error)
 // It requires an already granted settings scope. Consent exchange is separate;
 // this method never reads desktop credentials or starts consent implicitly.
 func (r *SyncRuntime) GmailPublication(ctx context.Context, req v1.GmailPublicationRequest) (v1.GmailPublicationReply, error) {
+	if r == nil || r.rules == nil {
+		return v1.GmailPublicationReply{}, fmt.Errorf("helper filter store unavailable")
+	}
+	// Read-only review discovery resolves the selected source on this owner,
+	// not from a potentially unrelated desktop account store.
+	if req.AccountID == "" && (req.Operation == "context" || (req.Operation == "status" && req.ID == "")) {
+		source, err := r.rules.Get(req.RuleID)
+		if err != nil {
+			return v1.GmailPublicationReply{}, err
+		}
+		if source == nil || len(source.ScopeAccountIDs()) != 1 {
+			return v1.GmailPublicationReply{}, fmt.Errorf("one source account required")
+		}
+		req.AccountID = source.ScopeAccountIDs()[0]
+	}
 	result := v1.GmailPublicationReply{AccountID: req.AccountID}
 	p, granted, err := r.gmailPublicationOwner(req.AccountID)
 	if err != nil {
@@ -190,11 +205,30 @@ func (r *SyncRuntime) GmailPublication(ctx context.Context, req v1.GmailPublicat
 	result.Email = p.email
 	result.ConsentRequired = !granted
 	if req.Operation == "status" || req.Operation == "publish" || req.Operation == "reconcile" || req.Operation == "cancel" {
+		if req.Operation == "status" && req.ID == "" {
+			ids, err := r.rules.ListGmailPublicationIDs(req.AccountID)
+			if err != nil {
+				return result, err
+			}
+			for _, id := range ids {
+				plan, err := r.rules.GetGmailPublication(id)
+				if err != nil {
+					return result, err
+				}
+				if plan.RuleID == req.RuleID {
+					req.ID = id
+					break
+				}
+			}
+			if req.ID == "" {
+				return result, nil
+			}
+		}
 		plan, err := r.rules.GetGmailPublication(req.ID)
 		if err != nil {
 			return result, err
 		}
-		if plan.AccountID != req.AccountID {
+		if plan.AccountID != req.AccountID || (req.RuleID != "" && plan.RuleID != req.RuleID) {
 			return result, fmt.Errorf("publication account mismatch")
 		}
 		result.Publication = plan
@@ -299,4 +333,22 @@ func (r *SyncRuntime) GmailPublication(ctx context.Context, req v1.GmailPublicat
 		return result, fmt.Errorf("unknown helper Gmail operation")
 	}
 	return result, nil
+}
+
+// PrepareFilterCreate verifies and pins the helper token before journal claim.
+func (p helperGmailProvider) PrepareFilterCreate(ctx context.Context) (mailfilter.NativeFilterProvider, error) {
+	client, err := p.client(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return pinnedHelperFilterCreate{helperGmailProvider: p, pinned: client}, nil
+}
+
+type pinnedHelperFilterCreate struct {
+	helperGmailProvider
+	pinned *gmail.Client
+}
+
+func (p pinnedHelperFilterCreate) CreateFilter(ctx context.Context, f gmail.Filter) (*gmail.Filter, error) {
+	return p.pinned.CreateFilter(ctx, f)
 }
