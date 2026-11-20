@@ -318,6 +318,23 @@ export namespace account {
 }
 
 export namespace app {
+	export class FilterExecutionTarget {
+	    target: string;
+	    endpoint: string;
+	    ready: boolean;
+	    writeAuthorized: boolean;
+	    errorCode: string;
+
+	    static createFrom(source: any = {}) { return new FilterExecutionTarget(source); }
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.target = source["target"];
+	        this.endpoint = source["endpoint"];
+	        this.ready = source["ready"];
+	        this.writeAuthorized = source["writeAuthorized"];
+	        this.errorCode = source["errorCode"];
+	    }
+	}
 	
 	export class AccountIdentityGroup {
 	    account?: account.Account;
