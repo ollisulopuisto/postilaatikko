@@ -113,22 +113,22 @@ func (s *Service) Search(parent context.Context, req MailSearchRequest) (*MailSe
 		return nil, errors.New("virtual folder service is not ready")
 	}
 	switch req.Filter {
-	case "", "unread", "replyLater", "readLater":
+	case "", "unread", "needsMe", "replyLater", "readLater":
 	default:
 		return nil, fmt.Errorf("unsupported online filter")
 	}
 	queued := map[string]bool{}
-	if req.Filter == "replyLater" || req.Filter == "readLater" {
+	if req.Filter == "replyLater" || req.Filter == "readLater" || req.Filter == "needsMe" {
 		if s.syncTriageQueues != nil {
 			s.syncTriageQueues("reply-later")
 		}
 	}
-	if req.Filter == "readLater" || req.Filter == "replyLater" {
+	if req.Filter == "readLater" || req.Filter == "replyLater" || req.Filter == "needsMe" {
 		if s.syncTriageQueues != nil {
 			s.syncTriageQueues("read-later")
 		}
 	}
-	if req.Filter == "replyLater" || req.Filter == "readLater" {
+	if req.Filter == "replyLater" || req.Filter == "readLater" || req.Filter == "needsMe" {
 		if s.replyLaterStore == nil {
 			return nil, fmt.Errorf("Reply Later queue is not ready")
 		}
@@ -140,7 +140,7 @@ func (s *Service) Search(parent context.Context, req MailSearchRequest) (*MailSe
 			queued[ref.AccountID+"\x00"+ref.ConversationID] = true
 		}
 	}
-	if req.Filter == "readLater" || req.Filter == "replyLater" {
+	if req.Filter == "readLater" || req.Filter == "replyLater" || req.Filter == "needsMe" {
 		refs, err := s.triageStore.ListReadLater()
 		if err != nil {
 			return nil, err
@@ -152,6 +152,9 @@ func (s *Service) Search(parent context.Context, req MailSearchRequest) (*MailSe
 	matchesFilter := func(conv *message.Conversation) bool {
 		if req.Filter == "unread" {
 			return conv.UnreadCount > 0
+		}
+		if req.Filter == "needsMe" {
+			return conv.UnreadCount > 0 || queued[conv.AccountID+"\x00"+conv.ThreadID]
 		}
 		return (req.Filter != "replyLater" && req.Filter != "readLater") || queued[conv.AccountID+"\x00"+conv.ThreadID]
 	}

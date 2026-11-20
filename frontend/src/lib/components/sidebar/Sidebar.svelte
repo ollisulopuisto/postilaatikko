@@ -200,7 +200,7 @@
   // Hold queue counts only while a queue folder filter is showing.
   $effect(() => {
     if (!(showAllFolders || treeMode)) return
-    if (listFilter !== 'readLater' && listFilter !== 'replyLater') return
+    if (listFilter !== 'needsMe' && listFilter !== 'readLater' && listFilter !== 'replyLater') return
     return folderQueueCounts.acquire()
   })
   $effect(() => {
@@ -273,6 +273,7 @@
   $effect(() => {
     void getUIStateVersion()
     const entries: NavigationEntry[] = [
+      { id: 'triage', kind: 'system', folderType: 'triage', name: $_('triage.allFolders') },
       { id: 'inboxes', kind: 'inboxes', name: $_('navigation.allInboxes'), ...folderCounts(item => item.type === 'inbox') },
       { id: 'readLater', kind: 'system', folderType: 'readLater', name: $_('readLater.title'), count: readLaterQueue.ready ? readLaterQueue.count : undefined },
       { id: 'snoozed', kind: 'system', folderType: 'snoozed', name: $_('sidebar.snoozed'), count: snoozedCount },
@@ -415,7 +416,7 @@
   }
 
   function selectPrimaryFolder(type: string) {
-    const label = type === 'replyLater' ? 'replyLater.title' : type === 'readLater' ? 'readLater.title' : type === 'snoozed' ? 'sidebar.snoozed' : [...primaryFolders, ...secondaryFolders].find(item => item.type === type)?.label || type
+    const label = type === 'triage' ? 'triage.allFolders' : type === 'replyLater' ? 'replyLater.title' : type === 'readLater' ? 'readLater.title' : type === 'snoozed' ? 'sidebar.snoozed' : [...primaryFolders, ...secondaryFolders].find(item => item.type === type)?.label || type
     onUnifiedSpecialFolderSelect?.(type, label)
   }
 

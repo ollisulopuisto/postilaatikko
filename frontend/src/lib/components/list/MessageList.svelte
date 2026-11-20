@@ -6,7 +6,7 @@
   // Keyed "accountId:folderId" ("unified:inbox" for the unified view).
   const sessionListState = new Map<
     string,
-    { loadedCount: number; scrollTop: number; selectedThreadId: string | null; focusedRowIdentity: string | null; conversations: unknown[]; totalCount: number }
+    { loadedCount: number; scrollTop: number; selectedThreadId: string | null; focusedRowIdentity: string | null; conversations: unknown[]; totalCount: number; filter: string }
   >()
   const MAX_CACHED_FOLDER_LISTS = 8
   const MAX_CACHED_FOLDER_ROWS = 50
@@ -83,6 +83,7 @@
     isFlashing?: boolean
     showFolderToggle?: boolean
     onToggleSidebar?: () => void
+    triageFilter?: '' | 'unread' | 'needsMe' | 'readLater' | 'replyLater'
     showQuickFilters?: boolean
   }
 
@@ -106,6 +107,7 @@
     isFlashing = false,
     showFolderToggle = false,
     onToggleSidebar,
+    triageFilter,
     showQuickFilters = true,
   }: Props = $props()
 
@@ -228,12 +230,12 @@
   let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
   // Filter state
-  let filterMode = $state<string>('')  // '' | 'unread' | 'readLater' | 'replyLater' | 'starred' | 'attachments'
+  let filterMode = $state<string>('')  // '' | 'unread' | 'needsMe' | 'readLater' | 'replyLater' | 'starred' | 'attachments'
 
   // The top triage tab already displays Unread. List-local filters still
   // need their removable chip because they have no selected top tab.
   let filterViaTriage = $state(false)
-  const showFilterChip = $derived(Boolean(filterMode) && !(filterMode === 'unread' && filterViaTriage))
+  const showFilterChip = $derived(Boolean(filterMode) && !(['unread', 'needsMe'].includes(filterMode) && filterViaTriage))
 
   type InboxDisplayGroup = {
     id: string
@@ -511,6 +513,7 @@
   const filterLabel = $derived((() => {
     switch (filterMode) {
       case 'unread': return $_('messageList.filterUnread')
+      case 'needsMe': return $_('triage.needsMe')
       case 'replyLater': return $_('messageList.filterReplyLater')
       case 'readLater': return $_('messageList.filterReadLater')
       case 'starred': return $_('messageList.filterStarred')
@@ -522,6 +525,7 @@
   const filterOptions = $derived([
     { value: '', label: $_('messageList.filterAll') },
     { value: 'unread', label: $_('messageList.filterUnread'), separator: true },
+    { value: 'needsMe', label: $_('triage.needsMe') },
     { value: 'readLater', label: $_('messageList.filterReadLater') },
     { value: 'starred', label: $_('messageList.filterStarred') },
     { value: 'attachments', label: $_('messageList.filterAttachments') },
@@ -557,6 +561,7 @@
   function isUnifiedSpecialFolder(acctId: string, fldId: string): boolean {
     const acct = accountStore.accounts.find(a => a.account.id === acctId)
     if (!acct) return false
+    if (folderId === 'triage') return true // aggregate scope reloads after any account folder update
     const configuredPath = (() => {
       const account: any = acct.account
       switch (folderId) {
@@ -708,17 +713,17 @@
     })
 
     stopReplyLaterListener = EventsOn('replyLater:changed', () => {
-      if (['readLater', 'replyLater'].includes(filterMode) || (isUnifiedView && ['readLater', 'replyLater'].includes(folderId || ''))) scheduleReload()
+      if (['needsMe', 'readLater', 'replyLater'].includes(filterMode) || (isUnifiedView && ['readLater', 'replyLater'].includes(folderId || ''))) scheduleReload()
     })
     EventsOn('replyLater:refresh', () => {
-      if (['readLater', 'replyLater'].includes(filterMode) || (isUnifiedView && ['readLater', 'replyLater'].includes(folderId || ''))) scheduleReload()
+      if (['needsMe', 'readLater', 'replyLater'].includes(filterMode) || (isUnifiedView && ['readLater', 'replyLater'].includes(folderId || ''))) scheduleReload()
     })
 
     EventsOn('readLater:changed', () => {
-      if (['readLater', 'replyLater'].includes(filterMode) || (isUnifiedView && ['readLater', 'replyLater'].includes(folderId || ''))) scheduleReload()
+      if (['needsMe', 'readLater', 'replyLater'].includes(filterMode) || (isUnifiedView && ['readLater', 'replyLater'].includes(folderId || ''))) scheduleReload()
     })
     EventsOn('readLater:refresh', () => {
-      if (['readLater', 'replyLater'].includes(filterMode) || (isUnifiedView && ['readLater', 'replyLater'].includes(folderId || ''))) scheduleReload()
+      if (['needsMe', 'readLater', 'replyLater'].includes(filterMode) || (isUnifiedView && ['readLater', 'replyLater'].includes(folderId || ''))) scheduleReload()
     })
     EventsOn('snooze:changed', () => scheduleReload())
     EventsOn('snooze:refresh', () => scheduleReload())
@@ -860,6 +865,7 @@
       focusedRowIdentity,
       conversations: conversations.slice(0, MAX_CACHED_FOLDER_ROWS),
       totalCount,
+      filter: filterMode,
     })
     while (sessionListState.size > MAX_CACHED_FOLDER_LISTS) {
       const oldestKey = sessionListState.keys().next().value
@@ -891,8 +897,8 @@
     prevAccountId = currentAccount
     prevFolderId = currentFolder
     releaseFrozenOrder()
-    filterMode = ''
-    filterViaTriage = false
+    filterMode = triageFilter || ''
+    filterViaTriage = !!triageFilter
     loadGeneration++ // Invalidate any in-flight loads from the previous folder (#200)
     offset = 0
     virtualWarnings = ''; virtualCursor = ''; virtualIssues = ''; virtualQueryCursor = ''
@@ -916,7 +922,8 @@
     serverSearchRequestState.cancel()
     // Show only this folder's own small, session-only header cache while its
     // index reloads. Never leave the previous folder's rows under the new name.
-    const remembered = sessionListState.get(`${currentAccount}:${currentFolder}`)
+    const cached = sessionListState.get(`${currentAccount}:${currentFolder}`)
+    const remembered = cached?.filter === filterMode ? cached : undefined
     if (remembered) {
       sessionListState.delete(`${currentAccount}:${currentFolder}`)
       sessionListState.set(`${currentAccount}:${currentFolder}`, remembered)
@@ -2171,10 +2178,15 @@
     loadConversations(undefined, 'replace')
   }
 
-  export function setQuickFilter(mode: '' | 'unread' | 'readLater' | 'replyLater') {
+  export function setQuickFilter(mode: '' | 'unread' | 'needsMe' | 'readLater' | 'replyLater') {
     setFilter(mode)
     filterViaTriage = mode !== ''
   }
+
+  $effect(() => {
+    const mode = triageFilter
+    if (mode !== undefined) untrack(() => { if (filterMode !== mode || !filterViaTriage) setQuickFilter(mode) })
+  })
 
   // Calculate total unread count
   const unreadCount = $derived(
@@ -2971,8 +2983,8 @@
   {/if}
   {#if !showSearch}
   <!-- Header -->
-  <div class="spark-list-header flex items-center justify-between px-4 py-3 border-b border-border">
-    <div class="flex items-center gap-2">
+  <div class="spark-list-header flex flex-wrap items-center justify-between gap-y-1 px-4 py-3 border-b border-border">
+    <div class="flex min-w-0 flex-1 items-center gap-2 overflow-hidden" class:basis-full={folderId === 'triage'}>
       {#if showFolderToggle}
         <button
           class="p-1.5 -ml-1 rounded-md hover:bg-muted transition-colors"
@@ -2998,14 +3010,14 @@
           </button>
         {:else}
           <div class="min-w-0">
-            <h2 class="font-semibold text-foreground whitespace-nowrap">{folderName}</h2>
+            <h2 class="truncate font-semibold text-foreground" title={folderName}>{folderName}</h2>
           </div>
         {/if}
         <span class="spark-list-unread text-sm text-muted-foreground whitespace-nowrap">
           {$_('messageList.unread', { values: { count: unreadCount } })}
         </span>
     </div>
-    <div class="flex items-center gap-1">
+    <div class="flex shrink-0 items-center gap-1">
       {#if isVirtualFolderView && !isSearchMode}
         <button
           class="p-2 rounded-md hover:bg-muted transition-colors disabled:opacity-50"
@@ -3141,6 +3153,8 @@
     </div>
   </div>
   {/if}
+
+  {#if folderId === 'triage'}<p class="border-b border-border px-3 py-2 text-xs text-muted-foreground">{$_('triage.defaultScope')}</p>{/if}
 
   {#if folderId && showQuickFilters && !allMailSearch}
     <div class="flex items-center gap-2 overflow-x-auto border-b border-border px-3 py-2" aria-label={$_('messageList.quickFilters')}>

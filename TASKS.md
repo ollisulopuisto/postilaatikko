@@ -11,6 +11,12 @@
 5. Update `ROADMAP.md` when product scope, priority, or durable decisions change. Do not rewrite its priorities just to claim a task.
 6. A task may be split into smaller tasks when investigation reveals separate backend, UI, and migration work. Record dependencies before another model claims a dependent task.
 
+## Needs me in every folder
+
+- NEEDS-ME-001: Review. Instinct, `agent/needs-me-every-folder`, `/tmp/pl-needs-me`. Approved option 1: unread OR manual Later within the selected folder, with All folders aggregate across enabled accounts. Exclude mapped/system Spam, Sent, Drafts, Archive, Trash, All Mail and hidden folders/descendants. Existing profiles retain saved navigation; new profiles start All folders with Needs me selected.
+- No schema, provider migration, mailbox action, release or live Google run. Exclusions are fixed defaults in this slice, not a new preferences editor. Backend list/count/search share scope; online matching preserves provider pagination. Synthetic browser coverage checks actual App navigation EN/FI and 320/640 list layouts.
+- Validation: affected Go suites and vet including App pass with CGO disabled and an uncommitted Linux startup-only shim; frontend check/lint/build and 1111 tests pass with 25 browser-gated skips; actual Needs me browser 2/2 pass. No native macOS or live mailbox acceptance claim. Merge only after exact-head Devin and required CI gates.
+
 ## Create filter from message
 
 - Status: Review. Owner: Instinct. Branch: `agent/create-filter-ui`.

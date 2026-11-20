@@ -19,6 +19,7 @@ import (
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/operations"
 	syncengine "github.com/hkdb/aerion/internal/sync"
+	"github.com/hkdb/aerion/internal/triage"
 	"github.com/hkdb/aerion/internal/virtualfolder"
 )
 
@@ -111,6 +112,17 @@ func (o *catalogReadOperations) ListConversationsUnifiedInbox(offset, limit int,
 }
 
 func (o *catalogReadOperations) ListConversationsUnifiedFolder(folderType string, offset, limit int, sortOrder, filter string) ([]*message.Conversation, error) {
+	if folderType == "triage" {
+		items, err := triage.DefaultFolderScope(o.accounts, o.folders)
+		if err != nil {
+			return nil, err
+		}
+		ids := make([]string, 0, len(items))
+		for _, item := range items {
+			ids = append(ids, item.ID)
+		}
+		return o.messages.ListConversationsByFolderIDs(ids, offset, limit, sortOrder, filter)
+	}
 	if folderType == "readLater" || folderType == "replyLater" {
 		return o.messages.ListReadLaterConversations(offset, limit, sortOrder, filter)
 	}
@@ -162,6 +174,17 @@ func (o *catalogReadOperations) ListConversationsUnifiedFolder(folderType string
 }
 
 func (o *catalogReadOperations) CountConversationsUnifiedFolder(folderType, filter string) (int, error) {
+	if folderType == "triage" {
+		items, err := triage.DefaultFolderScope(o.accounts, o.folders)
+		if err != nil {
+			return 0, err
+		}
+		ids := make([]string, 0, len(items))
+		for _, item := range items {
+			ids = append(ids, item.ID)
+		}
+		return o.messages.CountConversationsByFolderIDs(ids, filter)
+	}
 	if folderType == "readLater" || folderType == "replyLater" {
 		return o.messages.CountReadLaterConversations(filter)
 	}
@@ -189,6 +212,17 @@ func (o *catalogReadOperations) CountConversationsUnifiedFolder(folderType, filt
 }
 
 func (o *catalogReadOperations) SearchConversationsUnifiedFolder(folderType, query string, offset, limit int, filter string) ([]*message.ConversationSearchResult, int, error) {
+	if folderType == "triage" {
+		items, err := triage.DefaultFolderScope(o.accounts, o.folders)
+		if err != nil {
+			return nil, 0, err
+		}
+		ids := make([]string, 0, len(items))
+		for _, item := range items {
+			ids = append(ids, item.ID)
+		}
+		return o.messages.SearchConversationsByFolderIDs(ids, query, offset, limit, filter)
+	}
 	if folderType == "readLater" || folderType == "replyLater" {
 		folderIDs := []string{}
 		accounts, err := o.accounts.List()

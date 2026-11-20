@@ -4,7 +4,7 @@ export interface MessageVisit {
   scope: MailScope
   workspaceId: string
   selectionSource: 'unified' | 'account' | null
-  triageStatus: 'all' | 'unread' | 'readLater' | 'replyLater'
+  triageStatus: 'all' | 'unread' | 'needsMe' | 'readLater' | 'replyLater'
 }
 export interface MessageHistory { entries: MessageVisit[]; index: number }
 export const emptyMessageHistory = (): MessageHistory => ({ entries: [], index: -1 })
