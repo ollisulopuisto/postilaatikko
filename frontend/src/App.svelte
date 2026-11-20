@@ -153,10 +153,10 @@
   let contextPaneRevealed = $state(true)
   let contextPaneHideTimer: ReturnType<typeof setTimeout> | null = null
   const CONTEXT_PANE_AUTO_HIDE_KEY = 'postilaatikko:context-pane-auto-hide'
-  let triageStatus = $state<'all' | 'unread' | 'readLater' | 'replyLater'>('all')
+  let triageStatus = $state<'all' | 'unread' | 'needsMe' | 'readLater' | 'replyLater'>('all')
   // Quick-filter applied to the folder list while the Kaikki kansiot panel is
   // open; the same four buttons then prune folders instead of messages.
-  let folderListFilter = $state<'' | 'unread' | 'readLater' | 'replyLater'>('')
+  let folderListFilter = $state<'' | 'unread' | 'needsMe' | 'readLater' | 'replyLater'>('')
   const maxMailWorkspaceTabs = 8
   let mailWorkspaceTabs = $state<MailWorkspaceTab[]>([])
   let mailWindowTabInstances: Record<string, MailWindowApp | null> = {}
@@ -241,6 +241,7 @@
   function restoredFolderName(accountId: string, folderType: string | null | undefined, folderId: string | null | undefined, storedName: string | undefined): string {
     if (accountId !== 'unified') return storedName || 'Inbox'
     const keys: Record<string, string> = {
+      triage: 'triage.allFolders',
       inbox: 'navigation.allInboxes',
       starred: 'sidebar.starred',
       drafts: 'sidebar.drafts',
@@ -371,22 +372,23 @@
     }
   }
 
-  function selectTriageFilter(mode: '' | 'unread' | 'readLater' | 'replyLater') {
+  function selectTriageFilter(mode: '' | 'unread' | 'needsMe' | 'readLater' | 'replyLater') {
     contextPaneMode = 'messages'
-    triageStatus = mode === 'unread' ? 'unread' : mode === 'readLater' ? 'readLater' : mode === 'replyLater' ? 'replyLater' : 'all'
+    triageStatus = mode || 'all'
     messageListRef?.setQuickFilter(mode)
   }
 
   // While the folder panel is open, the quick-filter buttons prune the folder
   // list; otherwise they filter the message list as before.
-  function triageButtonActive(status: 'all' | 'unread' | 'readLater' | 'replyLater'): boolean {
+  function triageButtonActive(status: 'all' | 'unread' | 'needsMe' | 'readLater' | 'replyLater'): boolean {
     if (contextPaneMode === 'folders') return folderListFilter === (status === 'all' ? '' : status)
     return triageStatus === status
   }
 
-  function triageButtonClick(mode: '' | 'unread' | 'readLater' | 'replyLater') {
+  function triageButtonClick(mode: '' | 'unread' | 'needsMe' | 'readLater' | 'replyLater') {
     if (contextPaneMode === 'folders') {
       folderListFilter = mode
+      triageStatus = mode || 'all'
       return
     }
     selectTriageFilter(mode)
@@ -457,6 +459,7 @@
       selectedFolderId = scope.folderId
       selectedFolderName = scope.folderName || 'Inbox'
       selectedFolderType = scope.folderType
+      if (scope.folderType === 'triage') triageStatus = 'needsMe'
       selectedThreadId = null
       selectedConversationAccountId = null
       selectedConversationFolderId = null
@@ -1159,6 +1162,7 @@
       if (accountExists && !accountStore.folderCatalog[uiState.selectedAccountId]?.some(f => f.id === uiState.selectedFolderId && f.hidden)) {
         selectedAccountId = uiState.selectedAccountId
         selectedFolderId = uiState.selectedFolderId
+        if (uiState.selectedAccountId === 'unified' && uiState.selectedFolderType === 'triage') triageStatus = 'needsMe'
         selectedFolderName = restoredFolderName(uiState.selectedAccountId, uiState.selectedFolderType, uiState.selectedFolderId, uiState.selectedFolderName)
         selectedFolderType = uiState.selectedFolderType
 
@@ -1170,6 +1174,8 @@
         }
       }
     }
+
+    if (!selectedFolderId) handleUnifiedSpecialFolderSelect('triage', 'triage.allFolders')
 
     recordMessageVisit()
 
@@ -1424,6 +1430,7 @@
   // Top-level special folders are synthetic aggregate views; child rows keep
   // selecting their real account/folder pair.
   function handleUnifiedSpecialFolderSelect(folderType: string, displayName: string) {
+    if (folderType === 'triage') triageStatus = 'needsMe'
     returnToPrimaryContextForFolderNavigation()
     contextPaneMode = 'messages'
     clearInlineAttachmentCache()
@@ -2720,8 +2727,9 @@
         </button>
       {/if}
       <div class="flex min-h-10 shrink-0 items-center gap-1 overflow-hidden border-b border-border px-2 py-1" aria-label={$_('messageList.quickFilters')}>
-        <div class="flex shrink-0 items-center gap-1" role="group" aria-label={$_('messageList.quickFilters')}>
+        <div class="flex min-w-0 items-center gap-1 overflow-x-auto" role="group" aria-label={$_('messageList.quickFilters')}>
           <button type="button" class="flex h-8 shrink-0 px-2 text-xs items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageButtonActive('all') ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.all')} title={$_('triage.all')} aria-pressed={triageButtonActive('all')} onclick={() => triageButtonClick('')}>{$_('triage.all')}</button>
+          <button type="button" class="flex h-8 shrink-0 px-2 text-xs items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageButtonActive('needsMe') ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.needsMe')} title={$_('triage.needsMe')} aria-pressed={triageButtonActive('needsMe')} onclick={() => triageButtonClick('needsMe')}>{$_('triage.needsMe')}</button>
           <button type="button" class="flex h-8 shrink-0 px-2 text-xs items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageButtonActive('unread') ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.unread')} title={$_('triage.unread')} aria-pressed={triageButtonActive('unread')} onclick={() => triageButtonClick('unread')}>{$_('triage.unread')}</button>
           <button type="button" class="flex h-8 shrink-0 px-2 text-xs items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageButtonActive('readLater') ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.readLater')} title={$_('triage.readLater')} aria-pressed={triageButtonActive('readLater')} onclick={() => triageButtonClick('readLater')}>{$_('triage.readLater')}</button>
         </div>
@@ -2791,8 +2799,9 @@
         </button>
       {/if}
       <div class="flex min-h-10 shrink-0 items-center gap-1 overflow-hidden border-b border-border px-2 py-1" aria-label={$_('messageList.quickFilters')}>
-        <div class="flex shrink-0 items-center gap-1" role="group" aria-label={$_('messageList.quickFilters')}>
+        <div class="flex min-w-0 items-center gap-1 overflow-x-auto" role="group" aria-label={$_('messageList.quickFilters')}>
           <button type="button" class="flex h-8 shrink-0 px-2 text-xs items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageStatus === 'all' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.all')} title={$_('triage.all')} aria-pressed={triageStatus === 'all'} onclick={() => selectTriageFilter('')}>{$_('triage.all')}</button>
+          <button type="button" class="flex h-8 shrink-0 px-2 text-xs items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageStatus === 'needsMe' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.needsMe')} title={$_('triage.needsMe')} aria-pressed={triageStatus === 'needsMe'} onclick={() => selectTriageFilter('needsMe')}>{$_('triage.needsMe')}</button>
           <button type="button" class="flex h-8 shrink-0 px-2 text-xs items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageStatus === 'unread' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.unread')} title={$_('triage.unread')} aria-pressed={triageStatus === 'unread'} onclick={() => selectTriageFilter('unread')}>{$_('triage.unread')}</button>
           <button type="button" class="flex h-8 shrink-0 px-2 text-xs items-center justify-center rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {triageStatus === 'readLater' ? 'border-primary bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}" aria-label={$_('triage.readLater')} title={$_('triage.readLater')} aria-pressed={triageStatus === 'readLater'} onclick={() => selectTriageFilter('readLater')}>{$_('triage.readLater')}</button>
         </div>
@@ -2803,9 +2812,10 @@
           onAllMailSearchChange={active => allMailSearchActive = active}
           onWidenSearch={submitAllMail}
           bind:this={messageListRef}
+          triageFilter={triageStatus === 'all' ? '' : triageStatus}
           accountId={selectedAccountId}
           folderId={selectedFolderId}
-          folderName={selectedFolderName}
+          folderName={selectedAccountId === 'unified' && selectedFolderType === 'triage' ? $_('triage.allFolders') : selectedFolderName}
           folderType={selectedFolderType || 'inbox'}
           readerSelection={selectedThreadId ? { threadId: selectedThreadId, accountId: selectedConversationAccountId || selectedAccountId || '', folderId: selectedConversationFolderId || selectedFolderId || '' } : null}
           onConversationSelect={handleConversationSelect}
@@ -2887,7 +2897,7 @@
         showBackButton={getLayoutMode() === 'narrow'}
         onBack={() => { focusMode = 'off'; focusedMessageIdInFocus = null; hideViewer() }}
         isViewerVisible={activeMailWorkspace === 'primary' && getActiveExtension() === 'mail' && (focusMode !== 'off' || getLayoutMode() !== 'narrow' || getResponsiveView() === 'viewer')}
-        deferMarkAsReadUntilLeave={triageStatus === 'unread' || (selectedFolderType === 'virtual' && virtualFoldersStore.folders.find(item => item.id === selectedFolderId)?.readStatus === 'unread')}
+        deferMarkAsReadUntilLeave={(triageStatus === 'unread' || triageStatus === 'needsMe') || (selectedFolderType === 'virtual' && virtualFoldersStore.folders.find(item => item.id === selectedFolderId)?.readStatus === 'unread')}
         inFocusMode={focusMode !== 'off'}
         focusModeKind={focusMode === 'off' ? null : focusMode}
         focusedMessageIdInFocus={focusedMessageIdInFocus}
@@ -2897,7 +2907,7 @@
       {:else}
         {#each mailWorkspaceTabs.filter(tab => tab.kind === 'reader') as tab (tab.id)}
           <div class="flex w-full flex-1 min-w-0 min-h-0 overflow-hidden" style:display={activeMailWorkspace === tab.id ? 'flex' : 'none'}>
-            <MailWindowApp bind:this={mailWindowTabInstances[tab.id]} config={tab.scope} embedded readerTab deferMarkAsReadUntilLeave={triageStatus === 'unread' || (tab.scope.folderType === 'virtual' && virtualFoldersStore.folders.find(item => item.id === tab.scope.folderId)?.readStatus === 'unread')} onCloseTab={() => closeWorkspaceTab(tab.id)} active={activeMailWorkspace === tab.id} mailActive={getActiveExtension()==='mail'} onScopeChange={scope => updateWorkspaceScope(tab.id, scope)} onNewTab={openWorkspaceTab} onOpenInTab={openReaderScope} />
+            <MailWindowApp bind:this={mailWindowTabInstances[tab.id]} config={tab.scope} embedded readerTab deferMarkAsReadUntilLeave={(triageStatus === 'unread' || triageStatus === 'needsMe') || (tab.scope.folderType === 'virtual' && virtualFoldersStore.folders.find(item => item.id === tab.scope.folderId)?.readStatus === 'unread')} onCloseTab={() => closeWorkspaceTab(tab.id)} active={activeMailWorkspace === tab.id} mailActive={getActiveExtension()==='mail'} onScopeChange={scope => updateWorkspaceScope(tab.id, scope)} onNewTab={openWorkspaceTab} onOpenInTab={openReaderScope} />
           </div>
         {/each}
       {/if}

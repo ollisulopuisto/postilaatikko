@@ -8,6 +8,7 @@ import (
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/folder"
 	"github.com/hkdb/aerion/internal/message"
+	"github.com/hkdb/aerion/internal/triage"
 	"github.com/hkdb/aerion/internal/views"
 )
 
@@ -15,6 +16,9 @@ import (
 // unified navigation type. GetSpecialFolder is deliberately the single source
 // of truth: it honors an account's configured path before folder_type.
 func (a *App) unifiedSpecialFolders(folderType string) ([]*folder.Folder, error) {
+	if folderType == "triage" {
+		return triage.DefaultFolderScope(a.accountStore, a.folderStore)
+	}
 	if folderType == "replyLater" || folderType == "readLater" || folderType == "snoozed" {
 		accounts, err := a.accountStore.List()
 		if err != nil {
@@ -244,7 +248,7 @@ func (a *App) GetSearchCountUnifiedFolder(folderType, query, filterValue string)
 }
 
 func isRemoteUnifiedFolderType(folderType string) bool {
-	if folderType == "readLater" || folderType == "replyLater" {
+	if folderType == "triage" || folderType == "readLater" || folderType == "replyLater" {
 		return true
 	}
 	switch folder.Type(folderType) {

@@ -83,3 +83,10 @@ test('default groupings place system folders in primary and secondary cards', ()
   assert.deepEqual(secondary?.entries, ['archive', 'spam', 'snoozed'])
   assert.deepEqual(virtual?.entries, ['inboxes'])
 })
+
+
+test('new profiles expose All folders without overriding saved favorite order',()=>{
+  const entries=[{id:'triage',kind:'system',folderType:'triage',name:'All folders'},{id:'inboxes',kind:'inboxes',name:'Inbox'}]
+  assert.deepEqual(normalizeCards('',entries).quick,['triage','inboxes'])
+  assert.deepEqual(normalizeCards(JSON.stringify({quick:['inboxes']}),entries).quick,['inboxes'])
+})

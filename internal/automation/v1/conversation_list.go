@@ -249,6 +249,7 @@ func validConversationListFilter(filter string) bool {
 	}
 	allowed := map[string]bool{
 		"unread":      true,
+		"needsMe":     true,
 		"starred":     true,
 		"attachments": true,
 		"readLater":   true,

@@ -2,7 +2,7 @@
 // is open, the three quick-filter buttons (all / unread / later) prune the folder tree instead of the message list. Pure logic lives
 // here so it is testable without mounting Svelte components.
 
-export type FolderListFilter = '' | 'unread' | 'readLater' | 'replyLater'
+export type FolderListFilter = '' | 'unread' | 'needsMe' | 'readLater' | 'replyLater'
 
 // accountId -> folderId -> queued conversation count, per queue.
 export type QueueFolderCounts = Record<string, Record<string, number>>
@@ -25,6 +25,7 @@ export interface FilterableTree {
 export function folderMatches(f: FilterableFolder, accountId: string, filter: FolderListFilter, queueCounts: QueueCountsByFilter = {}): boolean {
   if (!filter) return true
   if (filter === 'unread') return (f.unreadCount ?? 0) > 0
+  if (filter === 'needsMe' && (f.unreadCount ?? 0) > 0) return true
   return (queueCounts.readLater?.[accountId]?.[f.id] ?? 0) > 0 || (queueCounts.replyLater?.[accountId]?.[f.id] ?? 0) > 0
 }
 

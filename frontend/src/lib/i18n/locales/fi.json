@@ -63,6 +63,9 @@
     "incomplete": "Palvelimen laskenta on kesken"
   },
   "triage": {
+    "defaultScope": "Kaikki käytössä olevat tilit. Ei roskapostia, lähetettyjä, luonnoksia, arkistoa, roskakoria, Kaikki viestit -kansiota eikä piilotettuja kansioita. Torkutetut palaavat määräaikana.",
+    "allFolders": "Kaikki kansiot",
+    "needsMe": "Odottaa minua",
     "all": "Kaikki",
     "unread": "Lukemattomat",
     "readLater": "Myöhemmin",

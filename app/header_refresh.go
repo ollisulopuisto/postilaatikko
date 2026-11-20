@@ -75,6 +75,10 @@ func (a *App) RefreshViewHeaders(accountID, folderID string) error {
 	if accountID == "unified" && folderID == "replyLater" {
 		return nil
 	}
+	if accountID == "unified" && folderID == "triage" {
+		return a.refreshTriageViewHeaders(a.RefreshViewHeaders)
+	}
+
 	if accountID == "unified" {
 		accounts, err := a.accountStore.List()
 		if err != nil {
@@ -135,5 +139,18 @@ func (a *App) RefreshViewHeaders(accountID, folderID string) error {
 		a.refreshLast[key] = time.Now()
 		a.refreshMu.Unlock()
 	}()
+	return nil
+}
+
+func (a *App) refreshTriageViewHeaders(refresh func(string, string) error) error {
+	sources, err := a.unifiedSpecialFolders("triage")
+	if err != nil {
+		return err
+	}
+	for _, source := range sources {
+		if err := refresh(source.AccountID, source.ID); err != nil {
+			return err
+		}
+	}
 	return nil
 }

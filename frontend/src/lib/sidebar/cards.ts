@@ -35,7 +35,7 @@ export function normalizeCards(raw: string, entries: NavigationEntry[]): Navigat
   // A missing quick list means the layout predates favorites: seed the rail
   // with the primary destinations. An explicitly saved (even empty) list is
   // respected so a user who removed every favorite keeps the rail empty.
-  const fallback = ['inboxes', 'starred', 'drafts', 'sent']
+  const fallback = ['triage', 'inboxes', 'starred', 'drafts', 'sent']
     .filter(id => valid.has(id))
     .concat(entries.filter(e => e.kind === 'folder').map(e => e.id))
   const quick = [...new Set(Array.isArray(saved.quick) ? saved.quick.filter(id => valid.has(id)) : fallback)].slice(0, 10)

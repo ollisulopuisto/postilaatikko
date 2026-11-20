@@ -63,6 +63,9 @@
     "incomplete": "Online count incomplete"
   },
   "triage": {
+    "defaultScope": "All enabled accounts. Excludes Spam, Sent, Drafts, Archive, Trash, All Mail and hidden folders. Snoozed mail returns when due.",
+    "allFolders": "All folders",
+    "needsMe": "Needs me",
     "all": "All",
     "unread": "Unread",
     "readLater": "Later",

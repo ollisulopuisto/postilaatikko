@@ -16,6 +16,10 @@ The mail workspace uses three columns: a thin, persistent favorites/queue rail; 
 
 The goal is a strong personal email client for one person using multiple accounts. Keep Gmail API support advancing where it improves Gmail, while preserving IMAP and other existing provider paths. Spark and Gmail remain interaction references; the accepted conversation/navigation design also borrows selected ideas from Spike, HEY, Shortwave, Unibox, MailMate and Superhuman. Keep the focus on one person's mail and workflows.
 
+### Needs me (2026-11-20)
+
+Needs me is unread OR the manual Later mark, available within every selected folder. All folders is the default aggregate across enabled accounts, excluding Spam, Sent, Drafts, Archive, Trash, All Mail and hidden folders. Snoozed conversations stay out until due, and reading never removes Later. Existing saved navigation is preserved. A configurable exclusion editor is not part of this first slice.
+
 ### Provider direction (updated 2026-11-03)
 
 Keep IMAP support. The app now feels faster, so the earlier CPU/memory concern is not a reason to remove a working provider path. Pause IMAP retirement, provider migration, and Gmail-only setup changes. Continue measured performance work only when it helps diagnose a reproduced issue. Gmail-native features such as server search, labels, history refresh, and filters can continue incrementally for Gmail accounts, with IMAP retained for supported accounts and fallback paths. Revisit provider retirement only after new evidence and an explicit product decision. The Gmail-only transition queue in TASKS.md is deferred, not active.

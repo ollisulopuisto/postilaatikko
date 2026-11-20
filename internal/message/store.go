@@ -54,6 +54,10 @@ func filterHavingClause(filter, prefix string) string {
 	}
 	var clause string
 	switch filter {
+	case "needsMe":
+		unread := fmt.Sprintf("SUM(CASE WHEN %sis_read = 0 THEN 1 ELSE 0 END) > 0", prefix)
+		later := strings.TrimPrefix(filterHavingClause("readLater", prefix), " HAVING ")
+		clause = "(" + unread + " OR (" + later + "))"
 	case "unread":
 		clause = fmt.Sprintf("SUM(CASE WHEN %sis_read = 0 THEN 1 ELSE 0 END) > 0", prefix)
 	case "starred":
@@ -85,6 +89,9 @@ func filterWhereClause(filter, prefix string) string {
 	}
 	var clause string
 	switch filter {
+	case "needsMe":
+		later := strings.TrimPrefix(filterWhereClause("readLater", prefix), " AND ")
+		clause = fmt.Sprintf(" AND (%sis_read = 0 OR (%s))", prefix, later)
 	case "unread":
 		clause = fmt.Sprintf(" AND %sis_read = 0", prefix)
 	case "starred":
@@ -112,6 +119,9 @@ func snoozedViewHavingClause(filter string) string {
 		return " HAVING " + strings.Join(clauses, " AND ")
 	}
 	switch filter {
+	case "needsMe":
+		later := strings.TrimPrefix(snoozedViewHavingClause("readLater"), " HAVING ")
+		return " HAVING (SUM(CASE WHEN m.is_read=0 THEN 1 ELSE 0 END)>0 OR (" + later + "))"
 	case "unread":
 		return " HAVING SUM(CASE WHEN m.is_read=0 THEN 1 ELSE 0 END)>0"
 	case "starred":

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Needs me shows unread conversations or manually marked Later conversations in the selected folder. An All folders destination excludes Spam, Sent, Drafts, Archive, Trash, All Mail and hidden folders across enabled accounts. Reading keeps Later marks; snoozed mail returns when due.
+
 - Settings Extensions now distinguishes a failed catalog load from no installed extensions, offers Retry, and keeps localized toggle errors visible. Extension controls wrap in narrow windows.
 
 - Settings Images now shows retryable allowlist load failures and visible removal errors instead of false empty lists or silent failures. The privacy switch stays usable in narrow windows.

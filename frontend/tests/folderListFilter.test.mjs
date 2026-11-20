@@ -132,3 +132,11 @@ test('the queue-counts endpoint is wired end to end', async () => {
   const go = await read('../../app/queue_folder_counts.go')
   assert.match(go, /func \(a \*App\) GetQueueFolderCounts/)
 })
+
+test('Needs me is the union of unread and Later folders without leaking account identity',()=>{
+  assert.equal(folderMatches({id:'plain',unreadCount:1},'a1','needsMe',queueCounts),true)
+  assert.equal(folderMatches({id:'f1',unreadCount:0},'a1','needsMe',queueCounts),true)
+  assert.equal(folderMatches({id:'f2',unreadCount:0},'a1','needsMe',queueCounts),true)
+  assert.equal(folderMatches({id:'f1',unreadCount:0},'other','needsMe',queueCounts),false)
+  assert.equal(folderMatches({id:'plain',unreadCount:0},'a1','needsMe',queueCounts),false)
+})
