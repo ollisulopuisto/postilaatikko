@@ -146,7 +146,7 @@ func TestGmailPublicationPreflightGuards(t *testing.T) {
 				p.account = "account2"
 			case "source changed":
 				r.Name = "Changed"
-				if err := s.Update(r); err != nil {
+				if _, err := s.db.Exec(`UPDATE mail_filter_rules SET name=? WHERE id=?`, r.Name, r.ID); err != nil {
 					t.Fatal(err)
 				}
 			case "provider changed":
