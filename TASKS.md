@@ -657,3 +657,7 @@ README review follow-up: qualify checksum instructions because tagged releases d
 - Status: Review. Owner: Instinct. Branch: `agent/unread-tab-no-chip`.
 - Track triage-tab origin separately from list-local filter mode. Top-tab Unread stays applied without an extra removable chip; list-local Unread and other filters keep their chips. Folder changes reset the origin.
 - Verification: browser regression fails before the fix and passes after; covers backend unread argument, clear, keyboard filter, Later, return to Unread, and unchanged list top between All and top-tab Unread. Frontend check/lint and unit suite pass. Screenshot inspected.
+
+## Workspace-pinned Gmail review
+
+- GMAIL-FILTER-009: Review. Instinct, `agent/gmail-filter-routing`, `/tmp/pl-gmail-filter-routing`. Route the approved dialog through the captured execution owner and client, including helper-owned consent code forwarding and durable status discovery. No local fallback, no create or callback replay. Local fixtures only; live Google/Studio and native macOS acceptance remain outstanding.
