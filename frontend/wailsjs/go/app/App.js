@@ -2040,3 +2040,7 @@ export function UpdateVirtualFolder(arg1) {
 
 export function GetFilterExecutionTarget() { return window['go']['app']['App']['GetFilterExecutionTarget'](); }
 export function SaveFilterRuleToTarget(arg1, arg2, arg3, arg4) { return window['go']['app']['App']['SaveFilterRuleToTarget'](arg1, arg2, arg3, arg4); }
+
+export function AuthorizeGmailFilters(arg1) {
+  return window['go']['app']['App']['AuthorizeGmailFilters'](arg1);
+}

@@ -1051,3 +1051,5 @@ export function UpdateVirtualFolder(arg1:virtualfolder.VirtualFolder):Promise<vo
 
 export function GetFilterExecutionTarget():Promise<app.FilterExecutionTarget>;
 export function SaveFilterRuleToTarget(arg1:string,arg2:string,arg3:mailfilter.Rule,arg4:mailfilter.Rule|null):Promise<void>;
+
+export function AuthorizeGmailFilters(arg1:string):Promise<void>;
