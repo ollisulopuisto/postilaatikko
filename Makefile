@@ -218,6 +218,7 @@ install-linux: build
 # Uninstall Postilaatikko from Linux
 uninstall-linux:
 	@echo "Uninstalling Postilaatikko from $(DESTDIR)$(PREFIX)..."
+	@if [ -L "$(DESTDIR)$(PREFIX)/bin/eterno-mail" ] && [ "$$(readlink "$(DESTDIR)$(PREFIX)/bin/eterno-mail")" = postilaatikko ]; then rm -f "$(DESTDIR)$(PREFIX)/bin/eterno-mail"; fi
 	rm -f "$(DESTDIR)$(PREFIX)/bin/postilaatikko"
 	rm -f "$(DESTDIR)$(PREFIX)/bin/aerion"
 	rm -f "$(DESTDIR)$(PREFIX)/share/icons/hicolor/256x256/apps/io.github.ollisulopuisto.postilaatikko.png"

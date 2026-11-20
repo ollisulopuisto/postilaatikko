@@ -16,7 +16,6 @@ import (
 	"github.com/ollisulopuisto/postilaatikko/internal/perflog"
 	"github.com/ollisulopuisto/postilaatikko/internal/platform"
 	"github.com/ollisulopuisto/postilaatikko/internal/settings"
-	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/linux"
@@ -194,7 +193,7 @@ func runMainMode(mailtoData *app.MailtoData, rawMailtoArg string) {
 	dummyComposerApp := app.NewComposerApp(app.ComposerConfig{}, DebugMode)
 
 	// Create application with options
-	err = wails.Run(&options.App{
+	err = runWails(&options.App{
 		Title:                    "Postilaatikko",
 		Width:                    1280,
 		Height:                   800,
@@ -296,7 +295,7 @@ func runComposerMode() {
 
 	nativeMenus := nativemenu.NewComposer()
 	// Run Wails application for composer window
-	err := wails.Run(&options.App{
+	err := runWails(&options.App{
 		Title:                    title,
 		Width:                    800,
 		Height:                   600,
@@ -384,7 +383,7 @@ func runReaderMode() {
 		width = 1280
 	}
 	nativeMenus := nativemenu.New()
-	err := wails.Run(&options.App{
+	err := runWails(&options.App{
 		Menu:  nativeMenus.Menu(),
 		Title: "Postilaatikko", Width: width, Height: 800, MinWidth: 480, MinHeight: 400,
 		AssetServer:      &assetserver.Options{Handler: &composerAssetHandler{assets: assets, entry: entry}},

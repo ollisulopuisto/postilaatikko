@@ -93,7 +93,7 @@ remove_file() {
     local file="$1"
     local description="$2"
 
-    if [[ -f "$file" ]]; then
+    if [[ -f "$file" || -L "$file" ]]; then
         echo ""
         read -p "Remove $description at $file? (y/N): " confirm
         case $confirm in

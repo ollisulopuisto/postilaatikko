@@ -17,7 +17,9 @@
 
 Existing native user-data/cache paths, `aerion.db`, credential/keychain service
 names, OAuth selections, contact source IDs, crypto derivation inputs and saved
-browser-storage keys stay unchanged. These are data contracts, not branding.
+browser-storage keys stay unchanged. Windows explicitly keeps the old WebView2
+profile at `%APPDATA%/eterno-mail.exe` for the main and detached windows; it does
+not silently start a new profile when that path cannot be resolved. These are data contracts, not branding.
 Changing them blindly would make existing accounts, encrypted values or UI
 preferences disappear. Native app data is not copied or deleted by this rename.
 The macOS bundle identifier stays `com.wails.postilaatikko` to preserve its OS
@@ -28,7 +30,8 @@ scripts. The macOS and Windows executable names really change; custom scripts
 that point into the app bundle or at the old `.exe` must be updated. Existing
 native login entries are migrated to the new executable on application startup,
 only when an enabled legacy entry already exists, for local and remote desktops.
-Linux Hidden or explicitly disabled entries are left disabled. Enable/Disable removes old entries to
+Linux Hidden entries and Windows Task Manager StartupApproved disablement are
+left disabled. Unknown Windows approval data prevents automatic migration. Enable/Disable removes old entries to
 avoid duplicate login launches. A currently loaded macOS login job can remain
 loaded until logout; quit the old app before installing and verify login startup
 after the next login. The app does not run launchctl or kill an old process.
