@@ -80,7 +80,12 @@ func (s *Store) PrepareGmailPublication(ruleID, accountID string, draft gmail.Fi
 			return nil, fmt.Errorf("conflicting label action")
 		}
 	}
-	source, err := s.Get(ruleID)
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	source, err := scanRule(tx.QueryRow(`SELECT `+ruleColumns+` FROM mail_filter_rules WHERE id=?`, ruleID))
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +113,7 @@ func (s *Store) PrepareGmailPublication(ruleID, accountID string, draft gmail.Fi
 	}
 	// One statement checks stopped ownership and outstanding jobs while taking
 	// the durable guard that Store.Update observes when enabling the rule.
-	result, err := s.db.Exec(`INSERT INTO gmail_filter_publications(id,rule_id,account_id,state,source_json,filter_json,baseline_ids)
+	result, err := tx.Exec(`INSERT INTO gmail_filter_publications(id,rule_id,account_id,state,source_json,filter_json,baseline_ids)
  SELECT ?,?,?,'prepared',?,?,? FROM mail_filter_rules r WHERE r.id=? AND r.enabled=0
  AND NOT EXISTS(SELECT 1 FROM automatic_filter_jobs j WHERE j.rule_id=r.id)`, p.ID, ruleID, accountID, string(src), string(payload), string(ids), ruleID)
 	if err != nil {
@@ -120,6 +125,9 @@ func (s *Store) PrepareGmailPublication(ruleID, accountID string, draft gmail.Fi
 	}
 	if n != 1 {
 		return nil, fmt.Errorf("source running or filter jobs require reconciliation")
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
 	}
 	return p, nil
 }

@@ -14,6 +14,13 @@ import (
 func TestPreparedGmailPublicationGuardsAndCancel(t *testing.T) {
 	s, r, f, p := publicationFixture(t)
 	plan := preparePublication(t, s, r, f, p)
+	r.Name = "edited"
+	if err := s.Update(r); err == nil {
+		t.Fatal("source editable while publication guarded")
+	}
+	if err := s.Reorder([]string{r.ID}); err == nil {
+		t.Fatal("guarded source reordered")
+	}
 	if err := s.Delete(r.ID); err == nil {
 		t.Fatal("guarded rule deletion reported success")
 	}
