@@ -224,6 +224,16 @@ func (s *Store) PublishGmailFilter(ctx context.Context, id string, provider Nati
 	if !slices.Equal(ids, expected) {
 		return nil, fmt.Errorf("provider catalog changed; review again")
 	}
+	// Finish fallible identity/token preflight before consuming the create attempt.
+	// The returned provider must use that exact verified client for its write.
+	if preflight, ok := provider.(interface {
+		PrepareFilterCreate(context.Context) (NativeFilterProvider, error)
+	}); ok {
+		provider, err = preflight.PrepareFilterCreate(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
 	result, err := s.db.Exec(`UPDATE gmail_filter_publications SET state='attempted',updated_at=datetime('now') WHERE id=? AND state='prepared' AND NOT EXISTS(SELECT 1 FROM automatic_filter_jobs WHERE rule_id=?)`, id, p.RuleID)
 	if err != nil {
 		return nil, err
@@ -242,8 +252,14 @@ func (s *Store) PublishGmailFilter(ctx context.Context, id string, provider Nati
 	}
 	// Unknown is durable before read-back. Any failure here leaves attempted,
 	// which is equally non-replayable and safe for subsequent reconciliation.
-	if _, err = s.db.Exec(`UPDATE gmail_filter_publications SET state='unknown',provider_id=?,updated_at=datetime('now') WHERE id=?`, providerID, id); err != nil {
+	result, err = s.db.Exec(`UPDATE gmail_filter_publications SET state='unknown',provider_id=?,updated_at=datetime('now') WHERE id=? AND state='attempted' AND provider_id=''`, providerID, id)
+	if err != nil {
 		return nil, err
+	}
+	if changed, e := result.RowsAffected(); e != nil {
+		return nil, e
+	} else if changed != 1 {
+		return nil, fmt.Errorf("publication resolved concurrently; inspect provider identities before continuing")
 	}
 	if writeErr != nil {
 		return nil, fmt.Errorf("publication outcome requires reconciliation: %w", writeErr)
@@ -297,8 +313,14 @@ func (s *Store) ReconcileGmailPublication(ctx context.Context, id string, provid
 	if len(candidates) != 1 || candidates[0].ID == "" || !sameNativeFilter(candidates[0], p.Filter) {
 		return nil, fmt.Errorf("Gmail publication not uniquely verified; do not retry create")
 	}
-	if _, err = s.db.Exec(`UPDATE gmail_filter_publications SET state='published',provider_id=?,updated_at=datetime('now') WHERE id=?`, candidates[0].ID, id); err != nil {
+	result, err := s.db.Exec(`UPDATE gmail_filter_publications SET state='published',provider_id=?,updated_at=datetime('now') WHERE id=? AND state=? AND provider_id=?`, candidates[0].ID, id, p.State, p.ProviderID)
+	if err != nil {
 		return nil, err
+	}
+	if changed, e := result.RowsAffected(); e != nil {
+		return nil, e
+	} else if changed != 1 {
+		return nil, fmt.Errorf("publication changed during recovery; reload its known provider identity")
 	}
 	return s.GetGmailPublication(id)
 }
