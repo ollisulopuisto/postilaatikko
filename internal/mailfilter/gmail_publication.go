@@ -6,10 +6,15 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/hkdb/aerion/internal/gmail"
 )
+
+// Serialize live publish/recovery operations across Store instances in this
+// process. SQL state/identity CAS still rejects stale cross-process updates.
+var gmailPublicationMu sync.Mutex
 
 // NativeFilterProvider is the provider-owned catalog, never a local rule store.
 type NativeFilterProvider interface {
@@ -156,6 +161,8 @@ func (s *Store) GetGmailPublication(id string) (*GmailPublication, error) {
 // The account-owning caller supplies a client bound to p.AccountID and its
 // explicit settings grant. This core is not exposed to the UI on its own.
 func (s *Store) PublishGmailFilter(ctx context.Context, id string, provider NativeFilterProvider) (*GmailPublication, error) {
+	gmailPublicationMu.Lock()
+	defer gmailPublicationMu.Unlock()
 	if provider == nil {
 		return nil, fmt.Errorf("provider required")
 	}
@@ -220,17 +227,29 @@ func (s *Store) PublishGmailFilter(ctx context.Context, id string, provider Nati
 	if changed, e := result.RowsAffected(); e != nil {
 		return nil, e
 	} else if changed != 1 {
+		// A nonempty create response is the authoritative identity of our one
+		// write. Preserve it durably but do not silently bless a conflicting result.
+		if providerID != "" {
+			if _, saveErr := s.db.Exec(`UPDATE gmail_filter_publications SET state='unknown',provider_id=?,updated_at=datetime('now') WHERE id=?`, providerID, id); saveErr != nil {
+				return nil, saveErr
+			}
+		}
 		return nil, fmt.Errorf("publication resolved concurrently; inspect provider identities before continuing")
 	}
 	if writeErr != nil {
 		return nil, fmt.Errorf("publication outcome requires reconciliation: %w", writeErr)
 	}
-	return s.ReconcileGmailPublication(ctx, id, provider)
+	return s.reconcileGmailPublication(ctx, id, provider)
 }
 
 // ReconcileGmailPublication reads only. No candidate, multiple candidates or a
 // changed known provider ID remain uncertain; none permits another create.
 func (s *Store) ReconcileGmailPublication(ctx context.Context, id string, provider NativeFilterProvider) (*GmailPublication, error) {
+	gmailPublicationMu.Lock()
+	defer gmailPublicationMu.Unlock()
+	return s.reconcileGmailPublication(ctx, id, provider)
+}
+func (s *Store) reconcileGmailPublication(ctx context.Context, id string, provider NativeFilterProvider) (*GmailPublication, error) {
 	if provider == nil {
 		return nil, fmt.Errorf("provider required")
 	}
