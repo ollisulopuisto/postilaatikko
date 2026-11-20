@@ -10,7 +10,7 @@ const browserModule = process.env.POSTI_PLAYWRIGHT_PATH
 // The backend event is Go JSON: criteria with no values arrive as null.
 test('suggested filter dialog opens from a serialized suggestion with null criteria', { skip: !browserModule, timeout: 60000 }, async () => {
   const root = fileURLToPath(new URL('..', import.meta.url))
-  const server = await createServer({
+  const server = await createServer({cacheDir:fileURLToPath(new URL(`../node_modules/.vite-test/${process.pid}/filterSuggestion`,import.meta.url)),
     root,
     plugins: [{ name: 'fixture', resolveId(id) { if (id === '/s-mount.js') return id }, load(id) { if (id === '/s-mount.js') return `export {mount} from 'svelte'` } }],
     server: { host: '127.0.0.1', port: 5195, strictPort: true, fs: { allow: [root, realpathSync(join(root, 'node_modules'))] } },

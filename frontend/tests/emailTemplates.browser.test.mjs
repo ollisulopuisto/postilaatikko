@@ -8,7 +8,7 @@ const browserModule=process.env.POSTI_PLAYWRIGHT_PATH
 const captures=process.env.POSTI_BROWSER_CAPTURE_DIR||'/tmp/posti-template-captures'
 for (const detached of [false, true]) test(`templates save, insert subject/body and release the dialog guard (${detached ? 'detached' : 'main'})`,{skip:!browserModule,timeout:60000},async()=>{
   const root=fileURLToPath(new URL('..',import.meta.url));mkdirSync(captures,{recursive:true})
-  const server=await createServer({root,plugins:[{name:'mount-helper',resolveId(id){if(id==='/rescue-mount.js')return id},load(id){if(id==='/rescue-mount.js')return `export {mount,unmount} from 'svelte'`}}],server:{host:'127.0.0.1',port:5196,strictPort:true,fs:{allow:[root,realpathSync(join(root,'node_modules'))]}},logLevel:'error'})
+  const server=await createServer({cacheDir:fileURLToPath(new URL(`../node_modules/.vite-test/${process.pid}/emailTemplates`,import.meta.url)),root,plugins:[{name:'mount-helper',resolveId(id){if(id==='/rescue-mount.js')return id},load(id){if(id==='/rescue-mount.js')return `export {mount,unmount} from 'svelte'`}}],server:{host:'127.0.0.1',port:5196,strictPort:true,fs:{allow:[root,realpathSync(join(root,'node_modules'))]}},logLevel:'error'})
   await server.listen();const{chromium}=await import(browserModule);const browser=await chromium.launch({executablePath:process.env.POSTI_CHROMIUM_BUNDLED?undefined:process.env.POSTI_CHROMIUM_PATH,headless:true,args:['--no-sandbox']})
   try{
     const page=await browser.newPage({viewport:{width:940,height:800}});const errors=[];page.on('pageerror',e=>errors.push(e.message))
