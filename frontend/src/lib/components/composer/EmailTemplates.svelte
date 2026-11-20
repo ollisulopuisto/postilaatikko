@@ -10,14 +10,15 @@
   import { _ } from '$lib/i18n'
   import { toasts } from '$lib/stores/toast'
   import { dialogGuardOpen, dialogGuardClose } from '$lib/stores/dialogGuard'
-  import { ListEmailTemplates, SaveEmailTemplate, DeleteEmailTemplate } from '$wailsjs/go/app/App.js'
+  import { createMainWindowApi, type ComposerApi } from '$lib/composerApi'
   import type { settings } from '$wailsjs/go/models'
 
   interface Props {
     onInsert: (template: settings.EmailTemplate) => void
     compact?: boolean
+    api?: Pick<ComposerApi, 'listEmailTemplates' | 'saveEmailTemplate' | 'deleteEmailTemplate'>
   }
-  let { onInsert, compact = false }: Props = $props()
+  let { onInsert, compact = false, api = createMainWindowApi() }: Props = $props()
 
   let templates = $state<settings.EmailTemplate[]>([])
   let menuOpen = $state(false)
@@ -30,7 +31,7 @@
 
   async function load() {
     try {
-      templates = (await ListEmailTemplates()) ?? []
+      templates = (await api.listEmailTemplates()) ?? []
     } catch (err) {
       console.error('Failed to load email templates:', err)
       toasts.error($_('composer.emailTemplatesLoadFailed'))
@@ -78,7 +79,7 @@
     if (saving) return
     saving = true
     try {
-      await SaveEmailTemplate({ id: editId, name: editName, subject: editSubject, body: editBody } as settings.EmailTemplate)
+      await api.saveEmailTemplate({ id: editId, name: editName, subject: editSubject, body: editBody } as settings.EmailTemplate)
       await load()
       resetForm()
     } catch (err) {
@@ -91,7 +92,7 @@
 
   async function remove(id: string) {
     try {
-      await DeleteEmailTemplate(id)
+      await api.deleteEmailTemplate(id)
       await load()
       if (editId === id) resetForm()
     } catch (err) {

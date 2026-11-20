@@ -20,6 +20,10 @@
 - Checks: full Go tests and affected-package vet with CGO disabled and a temporary local startup-notification stub (not committed); frontend check, lint, build, all regression tests, filter-browser and native-menu-browser tests pass. Captures use synthetic mail.
 - No DMG publication in this change. Native macOS behavior and live IMAP/Gmail acceptance remain unverified locally.
 
+## Detached email templates
+
+- P-020-DETACHED-001: Review. Instinct, `agent/P-020-detached-templates`, `/tmp/pl-template-detached`. Extend the existing full-email template feature to detached composers via the authenticated parent bridge. Keep template storage parent-owned and local; preserve insertion/undo, validation and recipient fields. No provider migration, schema, delivery or workflow changes. Failing-first Go routing/allowlist and detached-browser regressions now pass; parent-store integration rejects invalid writes, and main/detached EN/FI template manager captures inspected. Full Go suite, frontend 1102 tests (19 browser-gated skips), check, lint and build pass. Native detached macOS window remains unverified.
+
 ## Quit error visibility
 
 - UI-ERROR-AUDIT-001: Review. Show a localized error if pending-queue loading or native quit fails. Error toasts wrap rather than hide recovery guidance. Queue/delivery semantics are unchanged; no forced shutdown or automatic retry. Handler regressions and EN/FI browser checks at 320/390/1024 px pass. Native macOS quit remains unverified.

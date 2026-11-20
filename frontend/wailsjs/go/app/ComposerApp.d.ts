@@ -10,6 +10,7 @@ import {pgp} from '../models';
 import {smime} from '../models';
 import {scheduledsend} from '../models';
 import {platform} from '../models';
+import {settings} from '../models';
 import {draft} from '../models';
 import {contact} from '../models';
 
@@ -24,6 +25,8 @@ export function ClearDraftHistory(arg1:string):Promise<void>;
 export function CloseWindow():Promise<void>;
 
 export function DeleteDraft(arg1:string):Promise<void>;
+
+export function DeleteEmailTemplate(arg1:string):Promise<void>;
 
 export function DraftHistoryCheckout(arg1:string,arg2:string):Promise<void>;
 
@@ -89,6 +92,8 @@ export function InitializeSendLaterClient():Promise<string>;
 
 export function IsFlatpak():Promise<boolean>;
 
+export function ListEmailTemplates():Promise<Array<settings.EmailTemplate>>;
+
 export function ListScheduledMessages(arg1:string):Promise<Array<scheduledsend.ClientJob>>;
 
 export function LogFrontend(arg1:string,arg2:string):Promise<void>;
@@ -122,6 +127,8 @@ export function RefreshWindowConstraints():Promise<void>;
 export function RescheduleMessage(arg1:string,arg2:string):Promise<app.ScheduleResult>;
 
 export function SaveDraft(arg1:string,arg2:smtp.ComposeMessage,arg3:string):Promise<draft.Draft>;
+
+export function SaveEmailTemplate(arg1:settings.EmailTemplate):Promise<settings.EmailTemplate>;
 
 export function SaveSendLaterConfig(arg1:scheduledsend.ClientConfig):Promise<void>;
 
