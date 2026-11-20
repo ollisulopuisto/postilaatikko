@@ -334,3 +334,21 @@ func (r *SyncRuntime) GmailPublication(ctx context.Context, req v1.GmailPublicat
 	}
 	return result, nil
 }
+
+// PrepareFilterCreate verifies and pins the helper token before journal claim.
+func (p helperGmailProvider) PrepareFilterCreate(ctx context.Context) (mailfilter.NativeFilterProvider, error) {
+	client, err := p.client(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return pinnedHelperFilterCreate{helperGmailProvider: p, pinned: client}, nil
+}
+
+type pinnedHelperFilterCreate struct {
+	helperGmailProvider
+	pinned *gmail.Client
+}
+
+func (p pinnedHelperFilterCreate) CreateFilter(ctx context.Context, f gmail.Filter) (*gmail.Filter, error) {
+	return p.pinned.CreateFilter(ctx, f)
+}
