@@ -34,8 +34,8 @@ func (t *OAuthTokens) IsExpiringSoon(within time.Duration) bool {
 // SetOAuthTokens stores OAuth tokens for an account
 // Sensitive tokens go to keyring (with DB fallback), metadata goes to DB
 func (s *Store) SetOAuthTokens(accountID string, tokens *OAuthTokens) error {
-	s.oauthMu.Lock()
-	defer s.oauthMu.Unlock()
+	mailOAuthMu.Lock()
+	defer mailOAuthMu.Unlock()
 	return s.setOAuthTokens(accountID, tokens)
 }
 func (s *Store) setOAuthTokens(accountID string, tokens *OAuthTokens) error {
@@ -101,8 +101,8 @@ func (s *Store) setOAuthTokens(accountID string, tokens *OAuthTokens) error {
 // (e.g. "google-calendar"), which then breaks downstream provider routing in
 // the Auth Broker.
 func (s *Store) GetOAuthTokens(accountID string) (*OAuthTokens, error) {
-	s.oauthMu.Lock()
-	defer s.oauthMu.Unlock()
+	mailOAuthMu.Lock()
+	defer mailOAuthMu.Unlock()
 	return s.getOAuthTokens(accountID)
 }
 func (s *Store) getOAuthTokens(accountID string) (*OAuthTokens, error) {
@@ -161,8 +161,8 @@ func (s *Store) getOAuthTokens(accountID string) (*OAuthTokens, error) {
 
 // DeleteOAuthTokens removes all OAuth data for an account
 func (s *Store) DeleteOAuthTokens(accountID string) error {
-	s.oauthMu.Lock()
-	defer s.oauthMu.Unlock()
+	mailOAuthMu.Lock()
+	defer mailOAuthMu.Unlock()
 	// Enumerate before deleting metadata so extension keyring slots are removed too.
 	rows, err := s.db.Query("SELECT client_config_id FROM oauth_tokens WHERE account_id = ?", accountID)
 	if err != nil {
@@ -214,8 +214,8 @@ func (s *Store) DeleteOAuthTokens(accountID string) error {
 // DeleteOAuthMailTokens removes only the account's mail OAuth slot. Extension
 // OAuth credentials such as calendar or contacts grants remain untouched.
 func (s *Store) DeleteOAuthMailTokens(accountID string) error {
-	s.oauthMu.Lock()
-	defer s.oauthMu.Unlock()
+	mailOAuthMu.Lock()
+	defer mailOAuthMu.Unlock()
 	if accountID == "" {
 		return fmt.Errorf("account id is required")
 	}
@@ -239,8 +239,8 @@ func (s *Store) DeleteOAuthMailTokens(accountID string) error {
 // for the account's mail tokens. Per-extension slots have their own update path
 // in UpdateOAuthAccessTokenForClientConfig (oauth_clientconfig.go).
 func (s *Store) UpdateOAuthAccessToken(accountID, accessToken string, expiresAt time.Time) error {
-	s.oauthMu.Lock()
-	defer s.oauthMu.Unlock()
+	mailOAuthMu.Lock()
+	defer mailOAuthMu.Unlock()
 	// Store new access token
 	if err := s.setOAuthAccessToken(accountID, accessToken); err != nil {
 		return fmt.Errorf("failed to store access token: %w", err)
@@ -743,8 +743,8 @@ func (s *Store) CompareAndSwapOAuthTokens(accountID string, expected, replacemen
 	if expected == nil || replacement == nil {
 		return fmt.Errorf("OAuth snapshots required")
 	}
-	s.oauthMu.Lock()
-	defer s.oauthMu.Unlock()
+	mailOAuthMu.Lock()
+	defer mailOAuthMu.Unlock()
 	current, err := s.getOAuthTokens(accountID)
 	if err != nil {
 		return err

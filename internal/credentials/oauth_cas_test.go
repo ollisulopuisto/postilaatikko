@@ -14,7 +14,8 @@ func TestOAuthCompareAndSwapRefusesStaleGrant(t *testing.T) {
 	if err := store.SetOAuthTokens("cas", seed); err != nil {
 		t.Fatal(err)
 	}
-	expected, err := store.GetOAuthTokens("cas")
+	other := *store // production creates independent Store objects over the same database
+	expected, err := other.GetOAuthTokens("cas")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,7 +27,7 @@ func TestOAuthCompareAndSwapRefusesStaleGrant(t *testing.T) {
 	}
 	stale := *expected
 	stale.AccessToken = "stale-refresh"
-	if err = store.CompareAndSwapOAuthTokens("cas", expected, &stale); !errors.Is(err, ErrOAuthTokensChanged) {
+	if err = other.CompareAndSwapOAuthTokens("cas", expected, &stale); !errors.Is(err, ErrOAuthTokensChanged) {
 		t.Fatal("stale refresh accepted", err)
 	}
 	got, err := store.GetOAuthTokens("cas")
