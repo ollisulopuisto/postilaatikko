@@ -328,6 +328,9 @@ func (m *Manager) HasActiveSession() bool {
 
 // exchangeCode exchanges an authorization code for tokens
 func (m *Manager) exchangeCode(provider ProviderConfig, code, codeVerifier, redirectURI string) (*TokenResponse, error) {
+	return m.exchangeCodeContext(context.Background(), provider, code, codeVerifier, redirectURI)
+}
+func (m *Manager) exchangeCodeContext(ctx context.Context, provider ProviderConfig, code, codeVerifier, redirectURI string) (*TokenResponse, error) {
 	data := url.Values{
 		"grant_type":    {"authorization_code"},
 		"code":          {code},
@@ -341,7 +344,7 @@ func (m *Manager) exchangeCode(provider ProviderConfig, code, codeVerifier, redi
 		data.Set("client_secret", provider.ClientSecret)
 	}
 
-	req, err := http.NewRequest("POST", provider.TokenURL, strings.NewReader(data.Encode()))
+	req, err := http.NewRequestWithContext(ctx, "POST", provider.TokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}

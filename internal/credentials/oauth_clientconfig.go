@@ -37,6 +37,8 @@ import (
 // "keyring unavailable and no fallback" even when the encrypted columns
 // would have worked.
 func (s *Store) SetOAuthTokensForClientConfig(accountID, clientConfigID string, tokens *OAuthTokens) error {
+	s.oauthMu.Lock()
+	defer s.oauthMu.Unlock()
 	if tokens == nil {
 		return fmt.Errorf("tokens cannot be nil")
 	}
@@ -82,6 +84,8 @@ func (s *Store) SetOAuthTokensForClientConfig(accountID, clientConfigID string, 
 // the given client_config_id, returning ErrCredentialNotFound when no row
 // exists for that pair.
 func (s *Store) GetOAuthTokensForClientConfig(accountID, clientConfigID string) (*OAuthTokens, error) {
+	s.oauthMu.Lock()
+	defer s.oauthMu.Unlock()
 	var provider string
 	var expiresAt sql.NullTime
 	var scopesJSON sql.NullString
@@ -131,6 +135,8 @@ func (s *Store) GetOAuthTokensForClientConfig(accountID, clientConfigID string) 
 // token row and its keyring entries. Does not touch other rows for the same
 // account (e.g., deleting Calendar tokens leaves Mail tokens intact).
 func (s *Store) DeleteOAuthTokensForClientConfig(accountID, clientConfigID string) error {
+	s.oauthMu.Lock()
+	defer s.oauthMu.Unlock()
 	if s.keyringEnabled {
 		s.deleteKeyringEntry(accountID + ":" + clientConfigID + ":access_token")
 		s.deleteKeyringEntry(accountID + ":" + clientConfigID + ":refresh_token")
@@ -154,6 +160,11 @@ func (s *Store) DeleteOAuthTokensForClientConfig(accountID, clientConfigID strin
 // UpdateOAuthAccessTokenForClientConfig updates the access token and expiry
 // for a specific (account, client_config) pair after a token refresh.
 func (s *Store) UpdateOAuthAccessTokenForClientConfig(accountID, clientConfigID, accessToken string, expiresAt time.Time) error {
+	s.oauthMu.Lock()
+	defer s.oauthMu.Unlock()
+	return s.updateOAuthAccessTokenForClientConfig(accountID, clientConfigID, accessToken, expiresAt)
+}
+func (s *Store) updateOAuthAccessTokenForClientConfig(accountID, clientConfigID, accessToken string, expiresAt time.Time) error {
 	if err := s.setOAuthAccessTokenForClientConfig(accountID, clientConfigID, accessToken); err != nil {
 		return fmt.Errorf("failed to store access token: %w", err)
 	}
@@ -183,7 +194,9 @@ func (s *Store) UpdateOAuthAccessTokenForClientConfig(accountID, clientConfigID,
 // refresh token (Microsoft, custom OIDC) is not lost — mirrors the rotation
 // handling in app/compose.go's core mail refresh.
 func (s *Store) UpdateOAuthTokensForClientConfig(accountID, clientConfigID, accessToken, refreshToken string, expiresAt time.Time) error {
-	if err := s.UpdateOAuthAccessTokenForClientConfig(accountID, clientConfigID, accessToken, expiresAt); err != nil {
+	s.oauthMu.Lock()
+	defer s.oauthMu.Unlock()
+	if err := s.updateOAuthAccessTokenForClientConfig(accountID, clientConfigID, accessToken, expiresAt); err != nil {
 		return err
 	}
 	if refreshToken != "" {

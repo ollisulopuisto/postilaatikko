@@ -3,7 +3,9 @@ package credentials
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/hkdb/aerion/internal/oauth2"
@@ -32,6 +34,11 @@ func (t *OAuthTokens) IsExpiringSoon(within time.Duration) bool {
 // SetOAuthTokens stores OAuth tokens for an account
 // Sensitive tokens go to keyring (with DB fallback), metadata goes to DB
 func (s *Store) SetOAuthTokens(accountID string, tokens *OAuthTokens) error {
+	s.oauthMu.Lock()
+	defer s.oauthMu.Unlock()
+	return s.setOAuthTokens(accountID, tokens)
+}
+func (s *Store) setOAuthTokens(accountID string, tokens *OAuthTokens) error {
 	if tokens == nil {
 		return fmt.Errorf("tokens cannot be nil")
 	}
@@ -94,6 +101,11 @@ func (s *Store) SetOAuthTokens(accountID string, tokens *OAuthTokens) error {
 // (e.g. "google-calendar"), which then breaks downstream provider routing in
 // the Auth Broker.
 func (s *Store) GetOAuthTokens(accountID string) (*OAuthTokens, error) {
+	s.oauthMu.Lock()
+	defer s.oauthMu.Unlock()
+	return s.getOAuthTokens(accountID)
+}
+func (s *Store) getOAuthTokens(accountID string) (*OAuthTokens, error) {
 	// Get metadata from database
 	var provider string
 	var expiresAt sql.NullTime
@@ -149,6 +161,8 @@ func (s *Store) GetOAuthTokens(accountID string) (*OAuthTokens, error) {
 
 // DeleteOAuthTokens removes all OAuth data for an account
 func (s *Store) DeleteOAuthTokens(accountID string) error {
+	s.oauthMu.Lock()
+	defer s.oauthMu.Unlock()
 	// Enumerate before deleting metadata so extension keyring slots are removed too.
 	rows, err := s.db.Query("SELECT client_config_id FROM oauth_tokens WHERE account_id = ?", accountID)
 	if err != nil {
@@ -200,6 +214,8 @@ func (s *Store) DeleteOAuthTokens(accountID string) error {
 // DeleteOAuthMailTokens removes only the account's mail OAuth slot. Extension
 // OAuth credentials such as calendar or contacts grants remain untouched.
 func (s *Store) DeleteOAuthMailTokens(accountID string) error {
+	s.oauthMu.Lock()
+	defer s.oauthMu.Unlock()
 	if accountID == "" {
 		return fmt.Errorf("account id is required")
 	}
@@ -223,6 +239,8 @@ func (s *Store) DeleteOAuthMailTokens(accountID string) error {
 // for the account's mail tokens. Per-extension slots have their own update path
 // in UpdateOAuthAccessTokenForClientConfig (oauth_clientconfig.go).
 func (s *Store) UpdateOAuthAccessToken(accountID, accessToken string, expiresAt time.Time) error {
+	s.oauthMu.Lock()
+	defer s.oauthMu.Unlock()
 	// Store new access token
 	if err := s.setOAuthAccessToken(accountID, accessToken); err != nil {
 		return fmt.Errorf("failed to store access token: %w", err)
@@ -712,4 +730,28 @@ func (t *OAuthTokens) Clear() {
 	if t != nil {
 		*t = OAuthTokens{}
 	}
+}
+
+// ErrOAuthTokensChanged means the read snapshot is stale. Callers must not
+// overwrite the newer authorization or retry with the stale provider response.
+var ErrOAuthTokensChanged = errors.New("OAuth grant changed during operation")
+
+// CompareAndSwapOAuthTokens serializes a full Mail snapshot check and write
+// against other OAuth readers/writers on this Store. It does not make keyring
+// and SQLite transactional; persistence/readback errors remain unverified.
+func (s *Store) CompareAndSwapOAuthTokens(accountID string, expected, replacement *OAuthTokens) error {
+	if expected == nil || replacement == nil {
+		return fmt.Errorf("OAuth snapshots required")
+	}
+	s.oauthMu.Lock()
+	defer s.oauthMu.Unlock()
+	current, err := s.getOAuthTokens(accountID)
+	if err != nil {
+		return err
+	}
+	defer current.Clear()
+	if current.Provider != expected.Provider || current.AccessToken != expected.AccessToken || current.RefreshToken != expected.RefreshToken || !current.ExpiresAt.Equal(expected.ExpiresAt) || !slices.Equal(current.Scopes, expected.Scopes) {
+		return ErrOAuthTokensChanged
+	}
+	return s.setOAuthTokens(accountID, replacement)
 }

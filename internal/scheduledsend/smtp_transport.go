@@ -725,6 +725,9 @@ func (t *SMTPTransport) tokensWithForce(ctx context.Context, accountID string, f
 	if err != nil || (!force && !tokens.IsExpiringSoon(5*time.Minute)) {
 		return tokens, err
 	}
+	expected := *tokens
+	expected.Scopes = append([]string(nil), tokens.Scopes...)
+	defer expected.Clear()
 	var refreshed *oauth2.TokenResponse
 	if tokens.Provider == "custom" {
 		provider, ok, err := t.creds.GetCustomOAuthProvider(accountID)
@@ -751,7 +754,7 @@ func (t *SMTPTransport) tokensWithForce(ctx context.Context, accountID string, f
 		tokens.Scopes = strings.Fields(refreshed.Scope)
 	}
 	tokens.ExpiresAt = time.Now().Add(time.Duration(refreshed.ExpiresIn) * time.Second)
-	if err := t.creds.SetOAuthTokens(accountID, tokens); err != nil {
+	if err := t.creds.CompareAndSwapOAuthTokens(accountID, &expected, tokens); err != nil {
 		return nil, err
 	}
 	return tokens, ctx.Err()

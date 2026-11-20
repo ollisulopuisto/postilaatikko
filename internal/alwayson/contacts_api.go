@@ -160,6 +160,9 @@ func (r *contactsRuntime) getAccountAccessToken(accountID string) (string, error
 	if !tokens.IsExpiringSoon(5 * time.Minute) {
 		return tokens.AccessToken, nil
 	}
+	expected := *tokens
+	expected.Scopes = append([]string(nil), tokens.Scopes...)
+	defer expected.Clear()
 	var refreshed *oauth2.TokenResponse
 	if tokens.Provider == customOAuthProviderName {
 		provider, ok, err := r.creds.GetCustomOAuthProvider(accountID)
@@ -178,9 +181,15 @@ func (r *contactsRuntime) getAccountAccessToken(accountID string) (string, error
 			return "", err
 		}
 	}
-	tokens.AccessToken, tokens.RefreshToken = refreshed.AccessToken, refreshed.RefreshToken
+	tokens.AccessToken = refreshed.AccessToken
+	if refreshed.RefreshToken != "" {
+		tokens.RefreshToken = refreshed.RefreshToken
+	}
+	if strings.TrimSpace(refreshed.Scope) != "" {
+		tokens.Scopes = strings.Fields(refreshed.Scope)
+	}
 	tokens.ExpiresAt = time.Now().Add(time.Duration(refreshed.ExpiresIn) * time.Second)
-	if err := r.creds.SetOAuthTokens(accountID, tokens); err != nil {
+	if err := r.creds.CompareAndSwapOAuthTokens(accountID, &expected, tokens); err != nil {
 		return "", err
 	}
 	return tokens.AccessToken, nil
