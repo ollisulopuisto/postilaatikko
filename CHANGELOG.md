@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Add an internal standalone Gmail-publication owner adapter and direct-filter drain boundary. Delayed local callbacks respect the durable publication guard. Helper-owned workspaces refuse local publication rather than using the wrong credentials. No UI enables publication yet.
+
 - Add a durable Gmail filter publication recovery core (not connected to the UI yet): one create attempt, restart reconciliation without replay, account-qualified label-only drafts, and guards against local re-enabling or queued jobs while publication is unresolved. Additive migration 85 does not publish any rules.
 
 - Add explicit selected-account Gmail filter consent, isolated from pending mail login. Wrong identity, missing permissions, changed grants and remote workspace credentials are rejected; no filter publication or automatic consent is enabled. Ordinary login scopes remain unchanged.

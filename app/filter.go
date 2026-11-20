@@ -226,6 +226,18 @@ func (a *App) applyMatchedFilterRule(rule *mailfilter.Rule, msg *message.Message
 // a user's newly relocated message based on an old sync callback. Trash is
 // always a folder move, never the permanent-delete behavior of the UI command.
 func (a *App) applyFilterActions(rule *mailfilter.Rule, ids []string, snapshots ...*message.Message) (int, error) {
+	a.filterExecutionMu.RLock()
+	defer a.filterExecutionMu.RUnlock()
+	if rule != nil && a.filterStore != nil {
+		guarded, err := a.filterStore.HasGmailPublication(rule.ID)
+		if err != nil {
+			return 0, err
+		}
+		if guarded {
+			return 0, fmt.Errorf("local execution blocked by Gmail publication; reconcile its owner")
+		}
+	}
+
 	if rule == nil || len(ids) == 0 {
 		return 0, nil
 	}

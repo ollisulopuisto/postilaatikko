@@ -29,3 +29,9 @@ A successful or uncertain response becomes `unknown` until provider read-back ve
 - Native macOS and live Google acceptance. No live account has been authorized or changed by these tests.
 
 The stored journal contains rule configuration and provider IDs, never access or refresh tokens. Migration 85 is additive and starts with an empty journal.
+
+## Standalone adapter
+
+The app now has internal preparation, publication and recovery orchestration for standalone ownership. An exclusive filter-execution lease drains direct app filtering; delayed callbacks check the journal guard before acting. The provider adapter resolves the selected account's tokens and requires its explicit settings grant. Preparation loads the current provider filter and label catalogs before recording the plan. The source must already be disabled, so preparation does not silently stop an existing rule.
+
+Every mailbox-service connector, including localhost and an offline helper, blocks this local path. A failed health probe is not evidence that an independent executor has stopped. Helper-owned publication must execute on the helper through a guarded account-owner API, which remains to be implemented. The internal methods are not Wails-bound or called by UI until provider-native review is available.

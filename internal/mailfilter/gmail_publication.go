@@ -311,3 +311,10 @@ func (s *Store) ListGmailPublicationIDs(accountID string) ([]string, error) {
 	}
 	return ids, nil
 }
+
+// HasGmailPublication reports whether a rule's local execution is guarded.
+func (s *Store) HasGmailPublication(ruleID string) (bool, error) {
+	var count int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM gmail_filter_publications WHERE rule_id=?`, ruleID).Scan(&count)
+	return count > 0, err
+}
