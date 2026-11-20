@@ -13,6 +13,7 @@ import (
 
 	"github.com/hkdb/aerion/app"
 	"github.com/hkdb/aerion/internal/nativemenu"
+	"github.com/hkdb/aerion/internal/perflog"
 	"github.com/hkdb/aerion/internal/platform"
 	"github.com/hkdb/aerion/internal/settings"
 	"github.com/wailsapp/wails/v2"
@@ -46,6 +47,7 @@ func init() {
 
 // Command-line flags
 var (
+	perfLogMode         = flag.Bool("perf-log", false, "Save a private five-minute performance session automatically")
 	debugMode           = flag.Bool("debug", false, "Enable debug logging")
 	mailWindowMode      = flag.Bool("mail-window", false, "Open an independent mail window")
 	readerFolderName    = flag.String("reader-folder-name", "", "Initial mail folder name")
@@ -117,6 +119,9 @@ func main() {
 func runMainMode(mailtoData *app.MailtoData, rawMailtoArg string) {
 	// Determine activation message: pass raw mailto URL if present, otherwise just "show"
 	activateMsg := "show"
+	if *perfLogMode {
+		activateMsg = "perf-log"
+	}
 	if rawMailtoArg != "" {
 		activateMsg = rawMailtoArg
 	}
@@ -128,10 +133,23 @@ func runMainMode(mailtoData *app.MailtoData, rawMailtoArg string) {
 		println("Warning: single-instance check failed:", err.Error())
 	}
 	if !locked {
-		// Existing instance was activated
+		// Existing instance was activated. The same switch starts capture there.
+		if *perfLogMode {
+			root, _ := perflog.Root()
+			fmt.Fprintln(os.Stderr, "Performance capture requested from running app. Local sessions:", root)
+		}
 		return
 	}
 	defer lock.Unlock()
+	if *perfLogMode {
+		session, err := perflog.Start()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Could not start performance log:", err)
+			return
+		}
+		defer session.Close()
+		fmt.Fprintln(os.Stderr, "Performance diagnostics (local only):", session.Dir)
+	}
 	stopProfiler := startLocalProfiler()
 	defer stopProfiler()
 

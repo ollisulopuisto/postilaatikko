@@ -60,7 +60,7 @@ func run(args []string) error {
 		return err
 	}
 	if command == "api-client" {
-		if err := logging.Init(logging.Config{Level: "warn", Console: true}); err != nil {
+		if err := logging.Init(logging.Config{Level: helperLogLevel(), Console: true}); err != nil {
 			return err
 		}
 		return runAPIClientCommand(args[1:], dataDefault)
@@ -128,7 +128,7 @@ func run(args []string) error {
 			return err
 		}
 	}
-	if err := logging.Init(logging.Config{Level: "warn", Console: true}); err != nil {
+	if err := logging.Init(logging.Config{Level: helperLogLevel(), Console: true}); err != nil {
 		return err
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -528,4 +528,12 @@ func helperHandler(store *scheduledsend.Store, syncEnabled bool, allowedHosts []
 	})
 	mux.Handle("/v1/commands", store.Handler(allowedHosts...))
 	return scheduledsend.ProtectBrowserRequests(mux, allowedHosts...)
+}
+
+// helperLogLevel keeps ordinary operation quiet, but enables opted-in timings.
+func helperLogLevel() string {
+	if os.Getenv("ETERNOMAIL_API_TIMING") == "1" {
+		return "info"
+	}
+	return "warn"
 }

@@ -23,6 +23,7 @@ import (
 	"github.com/hkdb/aerion/internal/mailfilter"
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/operations"
+	"github.com/hkdb/aerion/internal/perflog"
 	"github.com/hkdb/aerion/internal/replylater"
 	"github.com/hkdb/aerion/internal/smtp"
 	"github.com/hkdb/aerion/internal/triage"
@@ -63,7 +64,14 @@ func New(cfg Config) *Client {
 		token:    cfg.Token,
 		httpClient: &http.Client{
 			Timeout:   timeout,
-			Transport: cfg.Transport,
+			Transport: perflog.Transport{Base: cfg.Transport},
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				req.Header.Del(perflog.Header)
+				if len(via) >= 10 {
+					return fmt.Errorf("too many redirects")
+				}
+				return nil
+			},
 		},
 	}
 }
