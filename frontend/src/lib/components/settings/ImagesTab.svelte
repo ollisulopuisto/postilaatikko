@@ -29,6 +29,10 @@
   // State
   let entries = $state<settings.AllowlistEntry[]>([])
   let loading = $state(true)
+  let hasLoaded = $state(false)
+  let loadError = $state(false)
+  let removeError = $state(false)
+  let removingId = $state<number | null>(null)
   let addressesCollapsed = $state(false)
   let domainsCollapsed = $state(false)
   let showAlwaysLoadImagesConfirm = $state(false)
@@ -47,26 +51,36 @@
   }
 
   async function loadData() {
+    loading = true
+    loadError = false
     try {
       entries = await GetImageAllowlist() ?? []
+      hasLoaded = true
+      return true
     } catch (err) {
       console.error('Failed to load image allowlist:', err)
+      loadError = true
+      return false
     } finally {
       loading = false
     }
   }
 
   async function handleRemove(id: number) {
+    if (removingId !== null) return
+    removingId = id
+    removeError = false
     try {
       await RemoveImageAllowlist(id)
-      await loadData()
       refreshImageAllowlist()
-      addToast({
-        type: 'success',
-        message: $_('images.removed'),
-      })
+      if (await loadData()) {
+        addToast({ type: 'success', message: $_('images.removed') })
+      }
     } catch (err) {
       console.error('Failed to remove allowlist entry:', err)
+      removeError = true
+    } finally {
+      removingId = null
     }
   }
 
@@ -74,6 +88,18 @@
     loadData()
   })
 </script>
+
+{#if loadError}
+  <div role="alert" class="mb-4 space-y-2 rounded-md border border-destructive p-3 text-sm text-foreground">
+    <p>{$_('images.loadFailed')}</p>
+    <Button size="sm" variant="outline" onclick={loadData} disabled={loading}>{$_('common.retry')}</Button>
+  </div>
+{/if}
+{#if removeError}
+  <div role="alert" class="mb-4 rounded-md border border-destructive p-3 text-sm text-foreground">
+    {$_('images.removeFailed')}
+  </div>
+{/if}
 
 {#if loading}
   <div class="flex items-center justify-center py-8">
@@ -83,8 +109,8 @@
   <div class="space-y-6">
     <!-- Always Load Remote Images Toggle -->
     <div class="space-y-2">
-      <div class="flex items-center justify-between">
-        <div class="space-y-0.5">
+      <div class="flex items-center justify-between gap-3">
+        <div class="space-y-0.5 min-w-0">
           <Label for="always-load-images">{$_('settingsGeneral.alwaysLoadImages')}</Label>
           <p class="text-xs text-muted-foreground">
             {$_('settingsGeneral.alwaysLoadImagesHelp')}
@@ -92,12 +118,14 @@
         </div>
         <Switch
           id="always-load-images"
+          class="shrink-0"
           bind:checked={alwaysLoadImages}
           onCheckedChange={handleAlwaysLoadImagesChange}
         />
       </div>
     </div>
 
+    {#if hasLoaded}
     <!-- Divider -->
     <div class="border-t border-border"></div>
 
@@ -122,7 +150,7 @@
               <div class="flex items-center gap-3 p-2 rounded-md border border-border">
                 <Icon icon="mdi:email-outline" class="w-4 h-4 text-muted-foreground flex-shrink-0" />
                 <span class="text-sm flex-1 truncate">{entry.value}</span>
-                <Button variant="ghost" size="sm" onclick={() => handleRemove(entry.id)} title={$_('images.removeButton')}>
+                <Button variant="ghost" size="sm" onclick={() => handleRemove(entry.id)} disabled={removingId !== null} title={$_('images.removeButton')}>
                   <Icon icon="mdi:close" class="w-3.5 h-3.5" />
                 </Button>
               </div>
@@ -153,7 +181,7 @@
               <div class="flex items-center gap-3 p-2 rounded-md border border-border">
                 <Icon icon="mdi:web" class="w-4 h-4 text-muted-foreground flex-shrink-0" />
                 <span class="text-sm flex-1 truncate">{entry.value}</span>
-                <Button variant="ghost" size="sm" onclick={() => handleRemove(entry.id)} title={$_('images.removeButton')}>
+                <Button variant="ghost" size="sm" onclick={() => handleRemove(entry.id)} disabled={removingId !== null} title={$_('images.removeButton')}>
                   <Icon icon="mdi:close" class="w-3.5 h-3.5" />
                 </Button>
               </div>
@@ -162,6 +190,7 @@
         {/if}
       {/if}
     </div>
+    {/if}
   </div>
 {/if}
 

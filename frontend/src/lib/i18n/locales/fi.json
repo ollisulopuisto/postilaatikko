@@ -1478,6 +1478,8 @@
     "messages": "Viestit"
   },
   "images": {
+    "loadFailed": "Kuvien sallittujen lähettäjien luetteloa ei voitu ladata. Luettelo voi olla vanhentunut. Yritä uudelleen.",
+    "removeFailed": "Merkintää ei voitu poistaa. Yritä uudelleen poistopainikkeella.",
     "addresses": "Osoitteet",
     "domains": "Verkkotunnukset",
     "noAddresses": "Sallittujen luettelossa ei ole osoitteita. Lisää osoitteita valitsemalla viestinäkymässä ”Lataa aina > Lähettäjälle”.",

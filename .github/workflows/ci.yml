@@ -78,7 +78,7 @@ jobs:
           # second and hide its results); the step still fails if either did.
           status=0
           POSTI_PLAYWRIGHT_PATH="$RUNNER_TEMP/posti-browser/node_modules/playwright/index.mjs" POSTI_CHROMIUM_BUNDLED=1 POSTI_FROZEN_SCREENSHOT_DIR="$RUNNER_TEMP" node --test --test-concurrency=2 tests/nativeMenu.browser.test.mjs tests/attachmentLayout.browser.test.mjs tests/searchWorkspace.browser.test.mjs tests/searchFailure.browser.test.mjs || status=1
-          POSTI_PLAYWRIGHT_PATH="$RUNNER_TEMP/posti-browser/node_modules/playwright/index.mjs" POSTI_CHROMIUM_BUNDLED=1 POSTI_FROZEN_SCREENSHOT_DIR="$RUNNER_TEMP" node --test --test-concurrency=2 tests/listLoadError.browser.test.mjs tests/frozenOrder.browser.test.mjs tests/smartNotifications.browser.test.mjs tests/emailTemplates.browser.test.mjs tests/aboutBuild.browser.test.mjs tests/filterChip.browser.test.mjs tests/extensionsFailure.browser.test.mjs tests/contactSourcesFailure.browser.test.mjs || status=1
+          POSTI_PLAYWRIGHT_PATH="$RUNNER_TEMP/posti-browser/node_modules/playwright/index.mjs" POSTI_CHROMIUM_BUNDLED=1 POSTI_FROZEN_SCREENSHOT_DIR="$RUNNER_TEMP" node --test --test-concurrency=2 tests/listLoadError.browser.test.mjs tests/frozenOrder.browser.test.mjs tests/smartNotifications.browser.test.mjs tests/emailTemplates.browser.test.mjs tests/aboutBuild.browser.test.mjs tests/filterChip.browser.test.mjs tests/extensionsFailure.browser.test.mjs tests/imagesFailure.browser.test.mjs tests/contactSourcesFailure.browser.test.mjs || status=1
           exit $status
       - name: Preserve frozen-index browser evidence
         if: always()
