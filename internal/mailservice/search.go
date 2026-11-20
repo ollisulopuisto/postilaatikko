@@ -118,6 +118,22 @@ func (s *Service) Search(parent context.Context, req MailSearchRequest) (*MailSe
 		return nil, fmt.Errorf("unsupported online filter")
 	}
 	queued := map[string]bool{}
+	snoozed := map[string]bool{}
+	if req.Filter == "needsMe" {
+		if s.triageStore == nil {
+			return nil, errors.New("triage queue is not ready")
+		}
+		refs, err := s.triageStore.ListSnoozed()
+		if err != nil {
+			return nil, fmt.Errorf("load snooze deadlines: %w", err)
+		}
+		now := time.Now()
+		for _, ref := range refs {
+			if ref.WakeAt.After(now) {
+				snoozed[ref.AccountID+"\x00"+ref.ConversationID] = true
+			}
+		}
+	}
 	if req.Filter == "replyLater" || req.Filter == "readLater" || req.Filter == "needsMe" {
 		if s.syncTriageQueues != nil {
 			s.syncTriageQueues("reply-later")
@@ -154,7 +170,8 @@ func (s *Service) Search(parent context.Context, req MailSearchRequest) (*MailSe
 			return conv.UnreadCount > 0
 		}
 		if req.Filter == "needsMe" {
-			return conv.UnreadCount > 0 || queued[conv.AccountID+"\x00"+conv.ThreadID]
+			key := conv.AccountID + "\x00" + conv.ThreadID
+			return !snoozed[key] && (conv.UnreadCount > 0 || queued[key])
 		}
 		return (req.Filter != "replyLater" && req.Filter != "readLater") || queued[conv.AccountID+"\x00"+conv.ThreadID]
 	}

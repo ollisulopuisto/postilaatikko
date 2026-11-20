@@ -13,6 +13,7 @@ import (
 	"github.com/hkdb/aerion/internal/mailservice"
 	"github.com/hkdb/aerion/internal/message"
 	"github.com/hkdb/aerion/internal/replylater"
+	"github.com/hkdb/aerion/internal/triage"
 	"github.com/hkdb/aerion/internal/views"
 )
 
@@ -310,6 +311,18 @@ func (o *mailboxReadOperations) messageInScope(msg *message.Message, scope views
 	case views.ScopeFolder:
 		return msg.AccountID == scope.AccountID && msg.FolderID == scope.FolderID, nil
 	case views.ScopeUnifiedFolder:
+		if scope.FolderType == "triage" {
+			folders, err := triage.DefaultFolderScope(o.runtime.accounts, o.runtime.folders)
+			if err != nil {
+				return false, err
+			}
+			for _, item := range folders {
+				if item.AccountID == msg.AccountID && item.ID == msg.FolderID {
+					return true, nil
+				}
+			}
+			return false, nil
+		}
 		if scope.FolderType == "readLater" || scope.FolderType == "replyLater" {
 			id := msg.ThreadID
 			if id == "" {
