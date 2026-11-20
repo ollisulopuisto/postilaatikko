@@ -52,13 +52,15 @@ func requestHelper() {
 }
 
 type Session struct {
-	mu        sync.Mutex
-	ID, Dir   string
-	file      *os.File
-	done      chan struct{}
-	closeOnce sync.Once
-	cpuStop   chan struct{}
-	cpuDone   chan struct{}
+	mu          sync.Mutex
+	ID, Dir     string
+	file        *os.File
+	done        chan struct{}
+	closeOnce   sync.Once
+	errorOnce   sync.Once
+	reportError func(error)
+	cpuStop     chan struct{}
+	cpuDone     chan struct{}
 }
 
 // Root is stable across releases and separate from mailbox data.
@@ -151,7 +153,7 @@ func start(root, id, process string, duration, cpuDuration time.Duration) (*Sess
 	}
 	if err != nil {
 		if cpu != nil {
-			_ = cpu.Close()
+			s.reportIO(cpu.Close())
 		}
 		s.Write(map[string]any{"event": "cpu_unavailable", "error": err.Error()})
 		close(s.cpuDone)
@@ -165,7 +167,7 @@ func start(root, id, process string, duration, cpuDuration time.Duration) (*Sess
 			case <-s.cpuStop:
 			}
 			pprof.StopCPUProfile()
-			_ = cpu.Close()
+			s.reportIO(cpu.Close())
 			s.Write(map[string]any{"event": "cpu_saved"})
 		}()
 	}
@@ -206,6 +208,19 @@ func privateRoot(root string) error {
 	}
 	return os.Chmod(root, 0700)
 }
+func (s *Session) reportIO(err error) {
+	if err == nil {
+		return
+	}
+	s.errorOnce.Do(func() {
+		if s.reportError != nil {
+			s.reportError(err)
+		} else {
+			fmt.Fprintln(os.Stderr, "Performance capture incomplete (local files):", err)
+		}
+	})
+}
+
 func (s *Session) create(name string) (*os.File, error) {
 	return os.OpenFile(filepath.Join(s.Dir, name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 }
@@ -213,6 +228,7 @@ func (s *Session) snapshot(phase string) {
 	for _, name := range []string{"heap", "goroutine"} {
 		f, err := s.create(name + "-" + phase + ".pprof")
 		if err != nil {
+			s.reportIO(err)
 			s.Write(map[string]any{"event": "snapshot_error", "profile": name})
 			continue
 		}
@@ -222,6 +238,8 @@ func (s *Session) snapshot(phase string) {
 		}
 		closeErr := f.Close()
 		if err != nil || closeErr != nil {
+			s.reportIO(err)
+			s.reportIO(closeErr)
 			s.Write(map[string]any{"event": "snapshot_error", "profile": name, "phase": phase})
 		}
 	}
@@ -234,11 +252,16 @@ func (s *Session) Write(fields map[string]any) {
 	if s.file == nil {
 		return
 	}
-	if info, err := s.file.Stat(); err != nil || info.Size() >= 8<<20 {
+	info, err := s.file.Stat()
+	if err != nil {
+		s.reportIO(err)
+		return
+	}
+	if info.Size() >= 8<<20 {
 		return
 	}
 	fields["time"] = time.Now().UTC().Format(time.RFC3339Nano)
-	_ = json.NewEncoder(s.file).Encode(fields)
+	s.reportIO(json.NewEncoder(s.file).Encode(fields))
 }
 
 // Close finishes profiles before closing the session log. It is idempotent.
@@ -249,8 +272,8 @@ func (s *Session) Close() {
 		s.snapshot("end")
 		s.Write(map[string]any{"event": "session_finished"})
 		s.mu.Lock()
-		_ = s.file.Sync()
-		_ = s.file.Close()
+		s.reportIO(s.file.Sync())
+		s.reportIO(s.file.Close())
 		s.file = nil
 		s.mu.Unlock()
 		close(s.done)

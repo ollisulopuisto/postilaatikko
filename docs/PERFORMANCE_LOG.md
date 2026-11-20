@@ -2,7 +2,8 @@
 
 Start the desktop executable with `--perf-log`. No environment variables,
 profiling server, curl request, helper restart, or upload is needed.
-For the current macOS bundle this is:
+Do not combine the switch with a mailto argument. That combination is rejected
+before starting or activating the app. For the current macOS bundle this is:
 
 ```sh
 /Applications/Postilaatikko.app/Contents/MacOS/eterno-mail --perf-log
@@ -25,8 +26,10 @@ Each process has its own `desktop/` or `helper/` directory. The path is printed
 to stderr when capture starts. The session runs for five minutes or until the
 app quits. CPU capture covers the first minute. Heap and goroutine profiles
 are saved at the start and end; `performance.jsonl` contains timings and capture
-status, including failures and whether the helper acknowledged capture.
-The helper stops on its own five-minute deadline even if the desktop exits.
+status, including failures and whether the helper acknowledged capture. The first
+file I/O failure is also reported to stderr, separately from the capture file.
+The helper stops on its own five-minute deadline even if the desktop exits,
+and finalizes active profiles on normal helper shutdown.
 No running-app restart is required once both binaries support this feature.
 
 Directories are private (0700) and files are private (0600). Existing symlinked

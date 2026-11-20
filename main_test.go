@@ -26,3 +26,15 @@ func TestDebugModeEnvVar(t *testing.T) {
 		t.Error("AERION_DEBUG env var not set correctly")
 	}
 }
+
+func TestPerfMailtoCombinationRejectedBeforeActivation(t *testing.T) {
+	for _, tt := range []struct {
+		perf    bool
+		mailto  string
+		wantErr bool
+	}{{true, "mailto:test@example.invalid", true}, {true, "", false}, {false, "mailto:test@example.invalid", false}} {
+		if err := validatePerfArguments(tt.perf, tt.mailto); (err != nil) != tt.wantErr {
+			t.Fatalf("combination %+v: %v", tt, err)
+		}
+	}
+}

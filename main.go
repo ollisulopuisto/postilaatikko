@@ -104,6 +104,10 @@ func main() {
 		}
 	}
 
+	if err := validatePerfArguments(*perfLogMode, rawMailtoArg); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return
+	}
 	if *readerMode || *mailWindowMode {
 		runReaderMode()
 		return
@@ -394,4 +398,13 @@ func runReaderMode() {
 		println("Error:", err.Error())
 		os.Exit(1)
 	}
+}
+
+// Reject before either fresh startup or IPC activation, so a mailto command
+// cannot hide a requested capture behind a misleading launcher success line.
+func validatePerfArguments(perf bool, mailto string) error {
+	if perf && mailto != "" {
+		return fmt.Errorf("--perf-log cannot be combined with a mailto argument; launch performance capture separately")
+	}
+	return nil
 }

@@ -25,6 +25,7 @@ import (
 	v1 "github.com/hkdb/aerion/internal/automation/v1"
 	"github.com/hkdb/aerion/internal/database"
 	"github.com/hkdb/aerion/internal/logging"
+	"github.com/hkdb/aerion/internal/perflog"
 	"github.com/hkdb/aerion/internal/scheduledsend"
 	"github.com/hkdb/aerion/internal/servicebootstrap"
 )
@@ -426,6 +427,7 @@ func validateListener(address, cert, key string, allowedHosts []string) error {
 }
 
 func serve(ctx context.Context, store *scheduledsend.Store, transport scheduledsend.Transport, syncRuntime *alwayson.SyncRuntime, address, cert, key string, allowedHosts []string, withSync bool, apiConfig apiListenerConfig) (result error) {
+	defer finishPerformanceCapture()
 	if syncRuntime == nil {
 		return errors.New("mailbox runtime is required to serve the authenticated API")
 	}
@@ -536,4 +538,12 @@ func helperLogLevel() string {
 		return "info"
 	}
 	return "warn"
+}
+
+// Capture can start through a request long after serve begins. Resolve it only
+// at shutdown, after service requests stop, including early error exits.
+func finishPerformanceCapture() {
+	if session := perflog.Active(); session != nil {
+		session.Close()
+	}
 }

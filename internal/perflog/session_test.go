@@ -222,3 +222,23 @@ func TestSessionDirectoryAndLogCap(t *testing.T) {
 		t.Fatal("JSON cap exceeded", err)
 	}
 }
+
+func TestIOFailureReportsOnceOutsideFailedFile(t *testing.T) {
+	s := testSession(t)
+	count := 0
+	s.reportError = func(err error) {
+		if err == nil {
+			t.Fatal("missing failure")
+		}
+		count++
+	}
+	if err := s.file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s.Write(map[string]any{"event": "failed"})
+	s.Write(map[string]any{"event": "failed again"})
+	s.Close()
+	if count != 1 {
+		t.Fatalf("I/O failure reports = %d", count)
+	}
+}
