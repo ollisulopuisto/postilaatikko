@@ -4,7 +4,7 @@
   import { Button } from '$lib/components/ui/button'
   import { _ } from '$lib/i18n'
   import { app } from '../../../../wailsjs/go/models'
-  import { GetNativeGmailContext, GetNativeGmailPublication, AuthorizeGmailFilters, PreviewNativeGmailFilter, PrepareNativeGmailFilter, PublishNativeGmailFilter, ReconcileNativeGmailFilter, CancelNativeGmailFilter } from '../../../../wailsjs/go/app/App'
+  import { GetNativeGmailWorkspace, NativeGmailReview, AuthorizeNativeGmailWorkspace } from '../../../../wailsjs/go/app/App'
 
   let { open = $bindable(true), ruleId, onChanged }: {open?: boolean; ruleId: string; onChanged?: () => void} = $props()
   let context = $state<app.NativeGmailContext | null>(null)
@@ -17,6 +17,8 @@
   let archive = $state(false)
   let trash = $state(false)
   let labels = $state<string[]>([])
+  let workspace = ''
+  let owner = $state<app.NativeGmailWorkspace | null>(null)
   let alive = true
   onDestroy(() => { alive = false })
   const draftKey = $derived(JSON.stringify([query, markRead, archive, trash, labels]))
@@ -30,48 +32,53 @@
     try { await action() } catch (err) { if (alive) error = String(err) }
     finally { if (alive) busy = false }
   }
+  async function request(operation: string, values: Partial<app.NativeGmailReviewRequest> = {}) {
+    if (!workspace) throw new Error('Gmail workspace unavailable; reopen review')
+    return NativeGmailReview(app.NativeGmailReviewRequest.createFrom({workspace, operation, ruleId, accountId: plan?.accountId || context?.accountId || '', ...values}))
+  }
   async function load() {
-    const status = await GetNativeGmailPublication(ruleId)
+    if (!workspace) { const selected = await GetNativeGmailWorkspace(); workspace = selected.key; if (alive) owner = selected }
+    const status = (await request('status')).publication
     if (!alive) return
     plan = status?.id ? status : null
-    const next = await GetNativeGmailContext(ruleId)
-    if (alive) context = next
+    const next = (await request('context')).context
+    if (alive) context = next || null
   }
   onMount(() => { void run(load) })
   async function consent() {
     if (!context) return
-    await AuthorizeGmailFilters(context.accountId)
+    await AuthorizeNativeGmailWorkspace(workspace, context.accountId)
     if (alive) await load()
   }
   async function checkPreview() {
-    const next = await PreviewNativeGmailFilter(draft())
-    if (alive) preview = next
+    const next = (await request('preview', {draft: draft()})).preview
+    if (alive) preview = next || null
   }
   async function review() {
     if (!preview) return
-    const next = await PrepareNativeGmailFilter(draft(), preview.fingerprint)
-    if (alive) plan = next
+    const next = (await request('prepare', {draft: draft(), fingerprint: preview.fingerprint})).publication
+    if (alive) plan = next || null
   }
   async function recover() {
     if (!plan) return
-    const next = await ReconcileNativeGmailFilter(plan.id)
-    if (alive) { plan = next; onChanged?.() }
+    const next = (await request('reconcile', {id: plan.id})).publication
+    if (alive) { plan = next || null; onChanged?.() }
   }
   async function publish() {
     if (!plan || plan.state !== 'prepared') return
     try {
-      const next = await PublishNativeGmailFilter(plan.id, plan.fingerprint)
-      if (alive) { plan = next; onChanged?.() }
+      const next = (await request('publish', {id: plan.id, fingerprint: plan.fingerprint})).publication
+      if (alive) { plan = next || null; onChanged?.() }
     } catch (err) {
       // The write may have happened. Reload the durable state before offering
       // any further action, never turn a create error into another create.
-      try { const status = await GetNativeGmailPublication(ruleId); if (alive) plan = status } catch { if (alive && plan) plan = {...plan, state: 'unknown'} }
+      try { const status = (await request('status')).publication; if (alive) plan = status || null } catch { if (alive && plan) plan = {...plan, state: 'unknown'} }
       throw err
     }
   }
   async function cancelReview() {
     if (!plan || plan.state !== 'prepared') return
-    await CancelNativeGmailFilter(plan.id)
+    await request('cancel', {id: plan.id})
     if (alive) { plan = null; preview = null; onChanged?.() }
   }
   function labelName(id: string) {
@@ -88,6 +95,7 @@
     </Dialog.Header>
     {#if error}<p role="alert" class="native-gmail-error text-sm break-words">{error}</p>{/if}
     {#if busy}<p role="status" class="text-sm text-muted-foreground">{$_('gmailFilters.working')}</p>{/if}
+    {#if owner}<p class="text-xs text-muted-foreground break-all">{owner.target === 'helper' ? `${$_('filters.targetHelper')}: ${owner.endpoint}` : $_('filters.targetLocal')}</p>{/if}
     {#if context}<p class="text-sm break-all">{plan?.accountEmail || preview?.accountEmail || context.email}</p>{/if}
     {#if plan?.id}
       <section class="flex flex-col gap-3 rounded-md border border-border p-3">

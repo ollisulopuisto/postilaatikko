@@ -1067,3 +1067,9 @@ export function ReconcileNativeGmailFilter(arg1:string):Promise<app.NativeGmailP
 export function CancelNativeGmailFilter(arg1:string):Promise<void>;
 
 export function GetNativeGmailPublication(arg1:string):Promise<app.NativeGmailPublicationStatus>;
+
+export function AuthorizeNativeGmailWorkspace(arg1:string,arg2:string):Promise<void>;
+
+export function GetNativeGmailWorkspace():Promise<app.NativeGmailWorkspace>;
+
+export function NativeGmailReview(arg1:app.NativeGmailReviewRequest):Promise<app.NativeGmailReviewReply>;

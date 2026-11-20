@@ -23,16 +23,20 @@ test('native Gmail review: selected consent, preview invalidation, explicit publ
       await import('/src/app.css'); await import('/src/lib/iconify-offline.ts');window.calls=[];window.consent=true;window.plan={};window.failCreate=true
       window.go={app:{App:new Proxy({},{get:(_,name)=>(...args)=>{
         window.calls.push([name,args])
-        switch(name){
-          case 'GetNativeGmailPublication':return Promise.resolve(window.plan)
-          case 'GetNativeGmailContext':return Promise.resolve({accountId:'work',email:'me@example.com',consentRequired:window.consent,labels:[{id:'user-label',name:'Reading'}]})
-          case 'AuthorizeGmailFilters':window.consent=false;return Promise.resolve()
-          case 'PreviewNativeGmailFilter':return window.previewFails?Promise.reject(new Error('preview unavailable')):Promise.resolve({accountEmail:'reviewed@example.com',found:50,truncated:true,fingerprint:JSON.stringify(args[0])})
-          case 'PrepareNativeGmailFilter':window.plan={id:'plan',ruleId:'source',accountId:'work',accountEmail:'reviewed@example.com',state:'prepared',fingerprint:args[1],query:args[0].query,addLabelIds:args[0].labelIds,removeLabelIds:['UNREAD']};return Promise.resolve(window.plan)
-          case 'PublishNativeGmailFilter':window.plan={...window.plan,state:'unknown'};return Promise.reject(new Error('create timed out'))
-          case 'ReconcileNativeGmailFilter':window.plan={...window.plan,state:'published',providerId:'gmail-id'};return Promise.resolve(window.plan)
-          case 'CancelNativeGmailFilter':window.plan={};return Promise.resolve()
-          default:return Promise.resolve([])
+        if(name==='GetNativeGmailWorkspace')return Promise.resolve({key:'helper-key',target:'helper',endpoint:'https://studio.example.test'})
+        if(name==='AuthorizeNativeGmailWorkspace'){window.consent=false;return Promise.resolve()}
+        if(name!=='NativeGmailReview')return Promise.reject(new Error('unexpected legacy local API: '+name))
+        const req=args[0]
+        if(req.workspace!=='helper-key')return Promise.reject(new Error('wrong workspace'))
+        switch(req.operation){
+          case 'status':return Promise.resolve({publication:window.plan})
+          case 'context':return Promise.resolve({context:{accountId:'work',email:'me@example.com',consentRequired:window.consent,labels:[{id:'user-label',name:'Reading'}]}})
+          case 'preview':return window.previewFails?Promise.reject(new Error('preview unavailable')):Promise.resolve({preview:{accountEmail:'reviewed@example.com',found:50,truncated:true,fingerprint:JSON.stringify(req.draft)}})
+          case 'prepare':window.plan={id:'plan',ruleId:'source',accountId:'work',accountEmail:'reviewed@example.com',state:'prepared',fingerprint:req.fingerprint,query:req.draft.query,addLabelIds:req.draft.labelIds,removeLabelIds:['UNREAD']};return Promise.resolve({publication:window.plan})
+          case 'publish':window.plan={...window.plan,state:'unknown'};return Promise.reject(new Error('create timed out'))
+          case 'reconcile':window.plan={...window.plan,state:'published',providerId:'gmail-id'};return Promise.resolve({publication:window.plan})
+          case 'cancel':window.plan={};return Promise.resolve({})
+          default:return Promise.reject(new Error('unexpected operation'))
         }
       }})}}
       const {mount,unmount}=await import('/native-mount.js')
@@ -46,8 +50,9 @@ test('native Gmail review: selected consent, preview invalidation, explicit publ
       await window.show()
     })
     await page.getByRole('button',{name:'Authorize selected Gmail account'}).click()
+    await page.getByText('Studio helper: https://studio.example.test',{exact:true}).waitFor()
     await page.getByLabel('Gmail search query').fill('from:newsletter@example.com')
-    assert.deepEqual(await page.evaluate(()=>window.calls.find(([n])=>n==='AuthorizeGmailFilters')[1]),['work'])
+    assert.deepEqual(await page.evaluate(()=>window.calls.find(([n])=>n==='AuthorizeNativeGmailWorkspace')[1]),['helper-key','work'])
     await page.getByLabel('Mark read',{exact:true}).check()
     await page.getByLabel('Reading',{exact:true}).check()
     const review=page.getByRole('button',{name:'Review exact Gmail rule'})
@@ -67,7 +72,7 @@ test('native Gmail review: selected consent, preview invalidation, explicit publ
     await review.click()
     await page.getByText('Final review: exact frozen Gmail rule',{exact:true}).waitFor()
     await page.getByText('reviewed@example.com',{exact:true}).waitFor()
-    assert.equal(await page.evaluate(()=>window.calls.filter(([n])=>n==='PublishNativeGmailFilter').length),0,'review never publishes')
+    assert.equal(await page.evaluate(()=>window.calls.filter(([n,args])=>n==='NativeGmailReview'&&args[0].operation==='publish').length),0,'review never publishes')
     await page.getByRole('button',{name:'Cancel review and release source'}).click()
     await page.getByLabel('Gmail search query').waitFor()
     await page.getByRole('button',{name:'Preview existing mail'}).click()
@@ -83,7 +88,7 @@ test('native Gmail review: selected consent, preview invalidation, explicit publ
     assert.equal(await page.getByRole('button',{name:'Publish to Gmail',exact:true}).count(),0,'reopened unknown result cannot create again')
     await page.getByRole('button',{name:'Check Gmail result'}).click()
     await page.getByText('Gmail filter verified: gmail-id',{exact:true}).waitFor()
-    assert.equal(await page.evaluate(()=>window.calls.filter(([n])=>n==='PublishNativeGmailFilter').length),1)
+    assert.equal(await page.evaluate(()=>window.calls.filter(([n,args])=>n==='NativeGmailReview'&&args[0].operation==='publish').length),1)
     for(const locale of ['en','fi']){
       await page.setViewportSize({width:320,height:860})
       await page.evaluate(locale=>window.show(locale),locale)

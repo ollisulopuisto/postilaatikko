@@ -31,3 +31,7 @@ The preview and prepared journal also bind the normalized Gmail account email an
 Before provider catalog reads, creation or reconciliation, the adapter verifies the authenticated Gmail profile. One token is pinned across that identity read and the following provider operation, so a credential replacement cannot switch the write's mailbox between those requests. A stale/expired pinned token fails rather than refreshing or retrying the write. No token is persisted in the publication journal.
 
 Old unbound prepared plans must be cancelled and reviewed again. An attempted old unbound plan needs manual inspection; it cannot be replayed or automatically reconciled against a guessed account. Every desktop mailbox-service connector also blocks desktop consent until helper-owned routes are available.
+
+## Configured helper workspace
+
+The same dialog now captures the execution owner and client before review and displays its endpoint. Helper context, consent, preview and durable recovery use only that helper. Connector, endpoint or credential replacement invalidates the open review. Standalone paths remain explicit and never serve as an offline fallback. See GMAIL_FILTER_HELPER.md for the shipped routing, consent and validation boundaries. Earlier standalone-only notes above describe the initial prerequisite, not the current helper support.

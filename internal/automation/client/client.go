@@ -507,10 +507,21 @@ func (c *Client) MutateFilterRule(ctx context.Context, req v1.FilterRuleMutation
 	return err
 }
 
+// gmailOwnerOperationClient keeps the pinned endpoint/credential/transport but
+// allows provider work beyond the connector's two-second health-read timeout.
+// Caller cancellation remains authoritative and no request is replayed.
+func (c *Client) gmailOwnerOperationClient() *Client {
+	copy := *c
+	httpClient := *c.httpClient
+	httpClient.Timeout = 30 * time.Second
+	copy.httpClient = &httpClient
+	return &copy
+}
+
 // GmailPublication performs one explicit account-owning helper operation.
 // The transport never retries this POST. Unknown creates use reconcile instead.
 func (c *Client) GmailPublication(ctx context.Context, req v1.GmailPublicationRequest) (v1.GmailPublicationReply, error) {
-	data, err := c.doRequest(ctx, http.MethodPost, "/v1/filters/gmail", req, "")
+	data, err := c.gmailOwnerOperationClient().doRequest(ctx, http.MethodPost, "/v1/filters/gmail", req, "")
 	if err != nil {
 		return v1.GmailPublicationReply{}, err
 	}
@@ -524,7 +535,7 @@ func (c *Client) GmailPublication(ctx context.Context, req v1.GmailPublicationRe
 // GmailConsent advances one explicit helper-owned consent session. It never
 // sends a refresh token, verifier, secret or desktop OAuth token to the helper.
 func (c *Client) GmailConsent(ctx context.Context, req v1.GmailConsentRequest) (v1.GmailConsentReply, error) {
-	data, err := c.doRequest(ctx, http.MethodPost, "/v1/filters/gmail/consent", req, "")
+	data, err := c.gmailOwnerOperationClient().doRequest(ctx, http.MethodPost, "/v1/filters/gmail/consent", req, "")
 	if err != nil {
 		return v1.GmailConsentReply{}, err
 	}
