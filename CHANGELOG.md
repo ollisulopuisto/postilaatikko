@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Add bounded Gmail-native filter transport and explicit incremental settings-permission primitives. Ambiguous filter writes are not retried. App consent wiring and publishing UI are separate follow-ups; ordinary mail login permissions are unchanged.
+
 - Filter editors show the current Mac/helper workspace, connection and write state. Saves stay bound to that workspace, read the saved configuration back, and never fall back from a remote helper. Cross-machine transfer and Gmail publishing remain unavailable in this slice.
 
 - About offers Retry when app information cannot be loaded, without restarting the update checker.
