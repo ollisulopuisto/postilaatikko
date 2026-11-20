@@ -275,3 +275,20 @@ func TestProductionMailboxHandlerMountsNativeGmailRoute(t *testing.T) {
 		t.Fatal("native Gmail ownership route missing")
 	}
 }
+
+func TestHelperNativeLostPreparationReplyRecoveredBySource(t *testing.T) {
+	r := helperNativeFixture(t)
+	draft := gmail.Filter{Criteria: gmail.FilterCriteria{Query: "from:sender"}, Action: gmail.FilterAction{RemoveLabelIDs: []string{"UNREAD"}}}
+	original, err := r.rules.PrepareGmailPublication("helper-rule", "helper-google", draft, nil, []string{"UNREAD"}, helperGmailBinding("helper@example.com", "helper-project"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Discard the prepare reply. Recover only from the original account/source.
+	reply, err := r.GmailPublication(context.Background(), v1.GmailPublicationRequest{Operation: "status", RuleID: "helper-rule", AccountID: "helper-google"})
+	if err != nil || reply.Publication == nil || reply.Publication.ID != original.ID || reply.Fingerprint == "" {
+		t.Fatal("lost reservation unrecoverable", reply, err)
+	}
+	if _, err = r.GmailPublication(context.Background(), v1.GmailPublicationRequest{Operation: "cancel", AccountID: "helper-google", ID: reply.Publication.ID}); err != nil {
+		t.Fatal("recovered reservation not cancellable", err)
+	}
+}
