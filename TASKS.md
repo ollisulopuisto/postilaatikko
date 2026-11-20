@@ -68,6 +68,10 @@
 
 - GMAIL-FILTER-003: Review. Instinct, `agent/gmail-filter-journal`, `/tmp/pl-gmail-filter-journal`. Durable single-attempt publication state, provider-native label-only payload, read-back/fingerprint reconciliation. No automatic literal-substring conversion, forwarding or UI activation. Migration 85, restart recovery, concurrent one-claim (20 repeats), wrong-account/changed-source/catalog, unsupported-draft, pending/processing/unknown-job, cancellation and local-execution guards pass. App/database/mailfilter/automation suites and affected-package vet pass; app tests use the temporary uncommitted Linux startup stub. The first race-instrumented suite attempt timed out during compilation; a narrowed concurrent-claim test then passed under the race detector. Full race-suite acceptance remains unverified. Account-owning app/service integration follows only with runtime executor quiescence and no outstanding jobs; no UI invokes this core yet.
 
+## Gmail publication local execution boundary
+
+- GMAIL-FILTER-004: Review. Instinct, `agent/gmail-filter-runtime`, `/tmp/pl-gmail-filter-runtime`. Quiesce direct local filtering, refuse helper-owned publication, account-bound Gmail adapter and recovery orchestration. App/mailfilter/automation suites and affected vet pass with temporary uncommitted Linux startup stub. Fake HTTP verifies selected-account token, one create/readback, direct execution draining and queued-callback guard; missing grants and every helper-owner configuration reject. No UI caller until provider-native review/preview is implemented. Native Mac/live Google unrun.
+
 ## Status and effort
 
 - **Easy:** contained UI, copy, localization, or isolated behavior change.
