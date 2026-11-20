@@ -1048,3 +1048,6 @@ export function UpdateLocalFlags(arg1:Array<string>,arg2:any,arg3:any):Promise<v
 export function UpdateScheduledMessage(arg1:string,arg2:string):Promise<app.ScheduleResult>;
 
 export function UpdateVirtualFolder(arg1:virtualfolder.VirtualFolder):Promise<void>;
+
+export function GetFilterExecutionTarget():Promise<{target:string;endpoint:string;ready:boolean;writeAuthorized:boolean;errorCode:string}>;
+export function SaveFilterRuleToTarget(arg1:string,arg2:string,arg3:mailfilter.Rule,arg4:mailfilter.Rule|null):Promise<void>;

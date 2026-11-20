@@ -55,6 +55,10 @@
 
 - PALETTE-FOLDER-001: Review. Instinct, `agent/palette-folder-jump`, `/tmp/pl-palette-folders`. Owner requested folder matching below commands, exact/prefix/substring ranking, account/path context, bounded results, existing sidebar navigation and unmatched search last. No network queries while typing. Failing-first matching regressions now pass; exact/prefix/substring, duplicates, hidden ancestry, empty query, cap and actual App callback tests. Actual EN/FI palette keyboard selection picks the correct account; screenshots inspected. Frontend 1112 pass, 20 browser-gated skips, check/lint/build pass. Native Mac not run.
 
+## Explicit filter execution target
+
+- FILTER-TARGET-001: Review. Instinct, `agent/filter-helper-target`, `/tmp/pl-filter-helper-target`. Explicit configured helper/local ownership, no silent fallback or automatic copy/transfer, conflict check and verified read-back. Sketch approved. First slice shows current workspace ownership and blocks transfer; no independent cross-host catalog or Gmail publication yet. Frontend 1109 pass/20 browser-gated skips, check/lint/build; actual browser workflow plus EN/FI 320/390/1024 px inspected, local SQLite and fake-HTTP read-back tests pass. App tests use CGO disabled with a temporary uncommitted Linux startup stub. Native macOS and real Studio not run. Preflight conflict detection is not atomic compare-and-swap.
+
 ## Status and effort
 
 - **Easy:** contained UI, copy, localization, or isolated behavior change.
