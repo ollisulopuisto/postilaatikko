@@ -26,6 +26,10 @@ export function DeleteDraft(arg1) {
   return window['go']['app']['ComposerApp']['DeleteDraft'](arg1);
 }
 
+export function DeleteEmailTemplate(arg1) {
+  return window['go']['app']['ComposerApp']['DeleteEmailTemplate'](arg1);
+}
+
 export function DraftHistoryCheckout(arg1, arg2) {
   return window['go']['app']['ComposerApp']['DraftHistoryCheckout'](arg1, arg2);
 }
@@ -154,6 +158,10 @@ export function IsFlatpak() {
   return window['go']['app']['ComposerApp']['IsFlatpak']();
 }
 
+export function ListEmailTemplates() {
+  return window['go']['app']['ComposerApp']['ListEmailTemplates']();
+}
+
 export function ListScheduledMessages(arg1) {
   return window['go']['app']['ComposerApp']['ListScheduledMessages'](arg1);
 }
@@ -220,6 +228,10 @@ export function RescheduleMessage(arg1, arg2) {
 
 export function SaveDraft(arg1, arg2, arg3) {
   return window['go']['app']['ComposerApp']['SaveDraft'](arg1, arg2, arg3);
+}
+
+export function SaveEmailTemplate(arg1) {
+  return window['go']['app']['ComposerApp']['SaveEmailTemplate'](arg1);
 }
 
 export function SaveSendLaterConfig(arg1) {

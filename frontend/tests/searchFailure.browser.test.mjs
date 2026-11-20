@@ -12,7 +12,7 @@ mkdirSync(captureDir,{recursive:true})
 // the UI responsive — no stuck spinner, no retry pile-up, no frozen list.
 test('a throwing search call shows an error and never freezes the search UI',{skip:!browserModule,timeout:60000},async()=>{
   const root=fileURLToPath(new URL('..',import.meta.url))
-  const server=await createServer({root,plugins:[{name:'search-failure-fixture',resolveId(id){if(id==='/search-mount.js')return id},load(id){if(id==='/search-mount.js')return `export {mount} from 'svelte'`}}],server:{host:'127.0.0.1',port:5194,strictPort:true},logLevel:'error'})
+  const server=await createServer({cacheDir:fileURLToPath(new URL(`../node_modules/.vite-test/${process.pid}/searchFailure`,import.meta.url)),root,plugins:[{name:'search-failure-fixture',resolveId(id){if(id==='/search-mount.js')return id},load(id){if(id==='/search-mount.js')return `export {mount} from 'svelte'`}}],server:{host:'127.0.0.1',port:5194,strictPort:true},logLevel:'error'})
   await server.listen()
   const {chromium}=await import(browserModule)
   const browser=await chromium.launch({executablePath:process.env.POSTI_CHROMIUM_BUNDLED?undefined:'/usr/bin/google-chrome-stable',headless:true,args:['--no-sandbox']})
