@@ -95,7 +95,7 @@ Section
     !insertmacro wails.associateFiles
     !insertmacro wails.associateCustomProtocols
 
-    ; Register as a Windows Mail client so Aerion appears in
+    ; Register as a Windows Mail client so Postilaatikko appears in
     ; Settings → Default Apps → Email (alongside Outlook/Thunderbird).
     SetRegView 64
     WriteRegStr HKLM "SOFTWARE\Clients\Mail\${INFO_PRODUCTNAME}" "" "${INFO_PRODUCTNAME}"

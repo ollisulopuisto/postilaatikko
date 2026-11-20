@@ -276,21 +276,21 @@
       function decorateTextLinks() {
         var decorated = 0;
         document.querySelectorAll('a[href]').forEach(function(link) {
-          if (decorated >= 12 || link.dataset.eternoFavicon || link.querySelector('img, svg')) return;
+          if (decorated >= 12 || link.dataset.postilaatikkoFavicon || link.querySelector('img, svg')) return;
           var url;
           try { url = new URL(link.href); } catch (_err) { return; }
           if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
           if (!link.textContent || !link.textContent.trim()) return;
 
           var icon = document.createElement('img');
-          icon.className = 'eterno-link-favicon';
+          icon.className = 'postilaatikko-link-favicon';
           icon.alt = '';
           icon.setAttribute('aria-hidden', 'true');
           icon.setAttribute('data-no-invert', '');
           icon.src = 'https://www.google.com/s2/favicons?domain=' + encodeURIComponent(url.hostname) + '&sz=32';
           icon.onerror = function() { icon.remove(); sendHeight(); };
           link.insertBefore(icon, link.firstChild);
-          link.dataset.eternoFavicon = 'true';
+          link.dataset.postilaatikkoFavicon = 'true';
           decorated++;
         });
       }
@@ -507,7 +507,7 @@
     /* HTML emails often use fixed-width tables that overflow a narrow reader
        pane. Shrink them to fit instead of forcing a horizontal scrollbar. */
     table { max-width: 100%; }
-    img.eterno-link-favicon { display: inline-block; width: 1em; height: 1em; min-width: 0; min-height: 0; margin: 0 0.26em 0 0; vertical-align: -0.14em; object-fit: contain; }
+    img.postilaatikko-link-favicon { display: inline-block; width: 1em; height: 1em; min-width: 0; min-height: 0; margin: 0 0.26em 0 0; vertical-align: -0.14em; object-fit: contain; }
     /* Ensure empty paragraphs (blank lines) render with visible height */
     p:empty { min-height: 1em; }
     p:has(> br:only-child) { min-height: 1em; }

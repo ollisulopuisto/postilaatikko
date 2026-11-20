@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hkdb/aerion/internal/database"
-	"github.com/hkdb/aerion/internal/message"
-	"github.com/hkdb/aerion/internal/virtualfolder"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/virtualfolder"
 )
 
 func TestGetCachedVirtualFolderViewHydratesServerCacheInOrder(t *testing.T) {

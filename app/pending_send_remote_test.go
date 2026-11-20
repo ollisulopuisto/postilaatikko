@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"github.com/hkdb/aerion/internal/pendingremote"
+	"github.com/ollisulopuisto/postilaatikko/internal/pendingremote"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
-	automationclient "github.com/hkdb/aerion/internal/automation/client"
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/database"
-	"github.com/hkdb/aerion/internal/platform"
-	"github.com/hkdb/aerion/internal/smtp"
+	automationclient "github.com/ollisulopuisto/postilaatikko/internal/automation/client"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/platform"
+	"github.com/ollisulopuisto/postilaatikko/internal/smtp"
 )
 
 func TestRemotePendingQueueWithoutMailboxDatabase(t *testing.T) {

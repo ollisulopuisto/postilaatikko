@@ -1,9 +1,9 @@
 package triage
 
 import (
-	"github.com/hkdb/aerion/internal/account"
-	"github.com/hkdb/aerion/internal/database"
-	"github.com/hkdb/aerion/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/account"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
 	"path/filepath"
 	"testing"
 )

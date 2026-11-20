@@ -9,14 +9,14 @@ import (
 
 	"github.com/rs/zerolog"
 
-	coreapi "github.com/hkdb/aerion/internal/core/api/v1"
-	"github.com/hkdb/aerion/internal/credentials"
-	"github.com/hkdb/aerion/internal/email"
-	"github.com/hkdb/aerion/internal/extensions/hostaccess"
-	"github.com/hkdb/aerion/internal/logging"
-	"github.com/hkdb/aerion/internal/notification"
-	"github.com/hkdb/aerion/internal/oauth2"
-	"github.com/hkdb/aerion/internal/platform"
+	coreapi "github.com/ollisulopuisto/postilaatikko/internal/core/api/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/credentials"
+	"github.com/ollisulopuisto/postilaatikko/internal/email"
+	"github.com/ollisulopuisto/postilaatikko/internal/extensions/hostaccess"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/notification"
+	"github.com/ollisulopuisto/postilaatikko/internal/oauth2"
+	"github.com/ollisulopuisto/postilaatikko/internal/platform"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -27,7 +27,7 @@ import (
 //
 // One coreImpl is constructed PER extension at App.Startup. The extensionID
 // field scopes Auth() to that specific extension so the Auth Broker can route
-// HTTPClient requests via the extension's own client config (or via Aerion
+// HTTPClient requests via the extension's own client config (or via Postilaatikko
 // core's mail OAuth, per the manifest's first_party_uses_core_for_scopes).
 //
 // Storage, Notifications, and Events are still Phase 1 stubs.
@@ -209,7 +209,7 @@ func (c *coreImpl) Extension(id string) (any, bool) {
 // extensionAuth bundles the calling extension's identity + manifest with the
 // shared Auth Broker. HTTPClient consults the manifest's
 // first_party_uses_core_for_scopes to decide whether each scope routes through
-// Aerion core's mail OAuth (<provider>-mail) or the extension's own client
+// Postilaatikko core's mail OAuth (<provider>-mail) or the extension's own client
 // config (<provider>-<extensionID>). Mixed-scope calls are rejected; the
 // extension must issue separate HTTPClient calls for each routing target.
 

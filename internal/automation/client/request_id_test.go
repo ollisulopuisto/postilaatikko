@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/hkdb/aerion/internal/automation/client"
+	"github.com/ollisulopuisto/postilaatikko/internal/automation/client"
 )
 
 // TestClientSendsNoRequestID guards PERF-SC-002 coalescing effectiveness:

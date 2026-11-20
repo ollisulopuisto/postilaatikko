@@ -7,15 +7,15 @@ import (
 	"fmt"
 
 	"github.com/godbus/dbus/v5"
-	"github.com/hkdb/aerion/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 )
 
 const (
-	portalDest      = "org.freedesktop.portal.Desktop"
-	portalPath      = "/org/freedesktop/portal/desktop"
-	settingsIface   = "org.freedesktop.portal.Settings"
-	appearanceNS    = "org.freedesktop.appearance"
-	colorSchemeKey  = "color-scheme"
+	portalDest     = "org.freedesktop.portal.Desktop"
+	portalPath     = "/org/freedesktop/portal/desktop"
+	settingsIface  = "org.freedesktop.portal.Settings"
+	appearanceNS   = "org.freedesktop.appearance"
+	colorSchemeKey = "color-scheme"
 )
 
 // LinuxThemeMonitor monitors system theme changes via the XDG Settings Portal

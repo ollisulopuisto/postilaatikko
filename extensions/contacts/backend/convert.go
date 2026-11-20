@@ -1,8 +1,8 @@
 package backend
 
 import (
-	"github.com/hkdb/aerion/internal/contact"
-	coreapi "github.com/hkdb/aerion/internal/core/api/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/contact"
+	coreapi "github.com/ollisulopuisto/postilaatikko/internal/core/api/v1"
 )
 
 // fromLocal converts a core contact.Contact into the API-surface Contact.
@@ -46,18 +46,18 @@ func fromRecord(rec *contact.Record) coreapi.Contact {
 	// `"emails": []` rather than `"emails": null`. Frontend `{#each contact.emails}`
 	// blocks iterate empty arrays fine; iterating null throws.
 	out := coreapi.Contact{
-		ID:        rec.ID,
-		Name:      rec.Fn,
-		Emails:    []string{},
-		Org:       rec.Org,
-		Title:     rec.Title,
-		Note:      rec.Note,
-		Bday:      rec.Bday,
-		Nickname:  rec.Nickname,
+		ID:             rec.ID,
+		Name:           rec.Fn,
+		Emails:         []string{},
+		Org:            rec.Org,
+		Title:          rec.Title,
+		Note:           rec.Note,
+		Bday:           rec.Bday,
+		Nickname:       rec.Nickname,
 		PhotoData:      rec.PhotoData,
 		PhotoMediaType: rec.PhotoMediaType,
 		PhotoURL:       rec.PhotoURL,
-		UpdatedAt: rec.UpdatedAt,
+		UpdatedAt:      rec.UpdatedAt,
 	}
 
 	// Source mapping: 'local' → 'aerion' (legacy compat for the detail-pane

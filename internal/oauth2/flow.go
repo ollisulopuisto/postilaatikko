@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hkdb/aerion/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 	"github.com/rs/zerolog"
 )
 

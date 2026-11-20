@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hkdb/aerion/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
 )
 
 func setupTestDB(t *testing.T) *database.DB {

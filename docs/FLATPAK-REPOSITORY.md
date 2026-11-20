@@ -1,13 +1,16 @@
+> Identity rename: this describes the new package layout, not a published remote.
+> Existing-install migration and legacy distribution caveats: [IDENTITY_RENAME.md](IDENTITY_RENAME.md).
+
 # Flatpak update repository
 
 Eterno Mail publishes release bundles on GitHub Releases and an OSTree update
 repository on GitHub Pages. Both distribution paths use the existing application
-ID `io.github.wesleiaqui.eternomail` and branch `master`.
+ID `io.github.ollisulopuisto.postilaatikko` and branch `master`.
 
 ## Published URLs
 
 - Repository: `https://app.weslleys.com/flatpak/repo/`
-- Remote descriptor: `https://app.weslleys.com/flatpak/eternomail.flatpakrepo`
+- Remote descriptor: `https://app.weslleys.com/flatpak/postilaatikko.flatpakrepo`
 - Project website: `https://app.weslleys.com/`
 
 The repository is unsigned. Transport is protected by HTTPS and OSTree verifies
@@ -57,8 +60,8 @@ For a per-user installation:
 ```bash
 flatpak remote-add --user --if-not-exists --from \
   eternomail-origin \
-  https://app.weslleys.com/flatpak/eternomail.flatpakrepo
-flatpak install --user eternomail-origin io.github.wesleiaqui.eternomail
+  https://app.weslleys.com/flatpak/postilaatikko.flatpakrepo
+flatpak install --user eternomail-origin io.github.ollisulopuisto.postilaatikko
 ```
 
 The equivalent command using the raw repository URL is:
@@ -80,7 +83,7 @@ disabled. For a system installation, repair it once with:
 sudo flatpak remote-modify --system \
   --url=https://app.weslleys.com/flatpak/repo/ \
   --enable --no-gpg-verify eternomail-origin
-sudo flatpak update --system io.github.wesleiaqui.eternomail
+sudo flatpak update --system io.github.ollisulopuisto.postilaatikko
 ```
 
 For a per-user installation, use:
@@ -89,13 +92,13 @@ For a per-user installation, use:
 flatpak remote-modify --user \
   --url=https://app.weslleys.com/flatpak/repo/ \
   --enable --no-gpg-verify eternomail-origin
-flatpak update --user io.github.wesleiaqui.eternomail
+flatpak update --user io.github.ollisulopuisto.postilaatikko
 ```
 
 After that one-time repair, normal updates are:
 
 ```bash
-flatpak update io.github.wesleiaqui.eternomail
+flatpak update io.github.ollisulopuisto.postilaatikko
 ```
 
 ## Pre-tag validation
@@ -123,7 +126,7 @@ architectures:
 ```bash
 curl --fail https://app.weslleys.com/flatpak/repo/summary >/dev/null
 flatpak remote-info --user eternomail-origin \
-  io.github.wesleiaqui.eternomail
+  io.github.ollisulopuisto.postilaatikko
 flatpak remote-ls --user --arch=x86_64 eternomail-origin
 flatpak remote-ls --user --arch=aarch64 eternomail-origin
 ```

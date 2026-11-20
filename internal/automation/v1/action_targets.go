@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/hkdb/aerion/internal/operations"
+	"github.com/ollisulopuisto/postilaatikko/internal/operations"
 )
 
 // ResolvedActionTarget contains helper-validated account-qualified message refs.

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	imapPkg "github.com/hkdb/aerion/internal/imap"
+	imapPkg "github.com/ollisulopuisto/postilaatikko/internal/imap"
 )
 
 func TestFetchFolderStatusParallelSkipsNonSelectableMailbox(t *testing.T) {

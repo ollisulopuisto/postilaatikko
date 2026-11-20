@@ -3,8 +3,8 @@ package alwayson
 import (
 	"context"
 
-	"github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
 )
 
 // contactsMutationLedger namespaces contact mutation idempotency keys inside

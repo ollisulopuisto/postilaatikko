@@ -3,8 +3,8 @@ package alwayson
 import (
 	"fmt"
 
-	"github.com/hkdb/aerion/internal/account"
-	"github.com/hkdb/aerion/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/account"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
 )
 
 func resolveSpecialFolder(accounts *account.Store, folders *folder.Store, accountID string, folderType folder.Type) (*folder.Folder, error) {

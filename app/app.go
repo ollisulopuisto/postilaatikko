@@ -15,44 +15,44 @@ import (
 	"sync/atomic"
 	"time"
 
-	extcalendarbe "github.com/hkdb/aerion/extensions/calendar/backend"
-	extcontactsbe "github.com/hkdb/aerion/extensions/contacts/backend"
-	"github.com/hkdb/aerion/internal/account"
-	"github.com/hkdb/aerion/internal/appstate"
-	"github.com/hkdb/aerion/internal/carddav"
-	"github.com/hkdb/aerion/internal/certificate"
-	"github.com/hkdb/aerion/internal/contact"
-	coreapi "github.com/hkdb/aerion/internal/core/api/v1"
-	"github.com/hkdb/aerion/internal/credentials"
-	"github.com/hkdb/aerion/internal/database"
-	"github.com/hkdb/aerion/internal/draft"
-	"github.com/hkdb/aerion/internal/email/replycontent"
-	extauth "github.com/hkdb/aerion/internal/extensions/auth"
-	extcompose "github.com/hkdb/aerion/internal/extensions/compose"
-	extmail "github.com/hkdb/aerion/internal/extensions/mail"
-	extui "github.com/hkdb/aerion/internal/extensions/ui"
-	"github.com/hkdb/aerion/internal/folder"
-	"github.com/hkdb/aerion/internal/imap"
-	"github.com/hkdb/aerion/internal/ipc"
-	"github.com/hkdb/aerion/internal/kit/davutil"
-	"github.com/hkdb/aerion/internal/logging"
-	"github.com/hkdb/aerion/internal/macoscontacts"
-	"github.com/hkdb/aerion/internal/mailfilter"
-	"github.com/hkdb/aerion/internal/mailservice"
-	"github.com/hkdb/aerion/internal/message"
-	"github.com/hkdb/aerion/internal/notification"
-	"github.com/hkdb/aerion/internal/oauth2"
-	"github.com/hkdb/aerion/internal/perflog"
-	"github.com/hkdb/aerion/internal/pgp"
-	"github.com/hkdb/aerion/internal/platform"
-	"github.com/hkdb/aerion/internal/replylater"
-	"github.com/hkdb/aerion/internal/settings"
-	"github.com/hkdb/aerion/internal/smime"
-	"github.com/hkdb/aerion/internal/sync"
-	"github.com/hkdb/aerion/internal/syncowner"
-	"github.com/hkdb/aerion/internal/triage"
-	"github.com/hkdb/aerion/internal/undo"
-	"github.com/hkdb/aerion/internal/virtualfolder"
+	extcalendarbe "github.com/ollisulopuisto/postilaatikko/extensions/calendar/backend"
+	extcontactsbe "github.com/ollisulopuisto/postilaatikko/extensions/contacts/backend"
+	"github.com/ollisulopuisto/postilaatikko/internal/account"
+	"github.com/ollisulopuisto/postilaatikko/internal/appstate"
+	"github.com/ollisulopuisto/postilaatikko/internal/carddav"
+	"github.com/ollisulopuisto/postilaatikko/internal/certificate"
+	"github.com/ollisulopuisto/postilaatikko/internal/contact"
+	coreapi "github.com/ollisulopuisto/postilaatikko/internal/core/api/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/credentials"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/draft"
+	"github.com/ollisulopuisto/postilaatikko/internal/email/replycontent"
+	extauth "github.com/ollisulopuisto/postilaatikko/internal/extensions/auth"
+	extcompose "github.com/ollisulopuisto/postilaatikko/internal/extensions/compose"
+	extmail "github.com/ollisulopuisto/postilaatikko/internal/extensions/mail"
+	extui "github.com/ollisulopuisto/postilaatikko/internal/extensions/ui"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/imap"
+	"github.com/ollisulopuisto/postilaatikko/internal/ipc"
+	"github.com/ollisulopuisto/postilaatikko/internal/kit/davutil"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/macoscontacts"
+	"github.com/ollisulopuisto/postilaatikko/internal/mailfilter"
+	"github.com/ollisulopuisto/postilaatikko/internal/mailservice"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/notification"
+	"github.com/ollisulopuisto/postilaatikko/internal/oauth2"
+	"github.com/ollisulopuisto/postilaatikko/internal/perflog"
+	"github.com/ollisulopuisto/postilaatikko/internal/pgp"
+	"github.com/ollisulopuisto/postilaatikko/internal/platform"
+	"github.com/ollisulopuisto/postilaatikko/internal/replylater"
+	"github.com/ollisulopuisto/postilaatikko/internal/settings"
+	"github.com/ollisulopuisto/postilaatikko/internal/smime"
+	"github.com/ollisulopuisto/postilaatikko/internal/sync"
+	"github.com/ollisulopuisto/postilaatikko/internal/syncowner"
+	"github.com/ollisulopuisto/postilaatikko/internal/triage"
+	"github.com/ollisulopuisto/postilaatikko/internal/undo"
+	"github.com/ollisulopuisto/postilaatikko/internal/virtualfolder"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -424,7 +424,7 @@ type App struct {
 	moveSyncTimers  map[string]*time.Timer
 	moveSyncWaiters map[string][]*undo.MoveCompletion
 
-	// Suppresses the IDLE echo of our own flag writes: when Aerion STOREs a flag
+	// Suppresses the IDLE echo of our own flag writes: when Postilaatikko STOREs a flag
 	// change it stamps the account here, so the incoming IDLE FETCH echo of that
 	// same change doesn't trigger a re-sync (only other clients' changes do).
 	ownFlagMu       goSync.Mutex
@@ -498,7 +498,7 @@ type StartupDialogInfo struct {
 // Other backends show the URL as selectable plain text and use the
 // ActionURL field to drive an "Open Docs" button.
 func StartupDialogInfoFor(err error) StartupDialogInfo {
-	const docsRollbackURL = "https://github.com/hkdb/aerion/blob/main/docs/SQL_ROLLBACK.md"
+	const docsRollbackURL = "https://github.com/ollisulopuisto/postilaatikko/blob/main/docs/SQL_ROLLBACK.md"
 
 	var schemaTooNew *database.ErrSchemaTooNew
 	if errors.As(err, &schemaTooNew) {
@@ -654,7 +654,7 @@ func (a *App) preflight() (startupErr error) {
 
 	// Wire user-picked slot aliases into the oauth2 resolver chain. When the
 	// user has chosen a non-default shipped option for a given config id
-	// (e.g., contacts settings → "Aerion mail client" reroutes google-contacts
+	// (e.g., contacts settings → "Postilaatikko mail client" reroutes google-contacts
 	// onto google-mail), the resolver consults this hook after the user-
 	// override step and before the provider chain.
 	oauth2.SlotAliasLookup = func(configID string) (string, bool) {
@@ -720,6 +720,7 @@ func (a *App) Startup(ctx context.Context) {
 	// the time Startup runs, local mode has a.paths, a.db, and a.credStore;
 	// remote mode has only device-owned state.
 	log := logging.WithComponent("app")
+	a.initializeDesktopAutostart()
 	if a.remoteServiceMode {
 		a.startRemoteWorkspace(ctx)
 		return
@@ -1079,12 +1080,9 @@ func (a *App) Startup(ctx context.Context) {
 		}
 	}()
 
-	// Initialize autostart manager
-	a.autostartMgr = platform.NewAutostartManager()
-
 	log.Info().
 		Dur("duration", time.Since(startedAt)).
-		Msg("Aerion started successfully")
+		Msg("Postilaatikko started successfully")
 }
 
 // startRemoteWorkspace initializes only device-owned state. Mailbox stores,
@@ -1590,5 +1588,16 @@ func isAllowedProtocol(rawURL string) bool {
 		return target != "" || parsed.RawQuery != ""
 	default:
 		return false
+	}
+}
+
+// Device-owned login configuration applies to local and remote desktops alike.
+func (a *App) initializeDesktopAutostart() {
+	if a.autostartMgr == nil {
+		a.autostartMgr = platform.NewAutostartManager()
+	}
+	if err := platform.MigrateLegacyAutostart(a.autostartMgr); err != nil {
+		log := logging.WithComponent("app")
+		log.Warn().Err(err).Msg("Could not migrate legacy login startup")
 	}
 }

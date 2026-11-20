@@ -41,9 +41,9 @@ if [[ "$(uname -s)" != "Linux" ]]; then
 fi
 
 # Check if binary exists
-if [[ ! -f "eterno-mail" ]]; then
-    print_error "eterno-mail binary not found in current directory"
-    echo "Please run this script from the directory containing the eterno-mail binary"
+if [[ ! -f "postilaatikko" ]]; then
+    print_error "postilaatikko binary not found in current directory"
+    echo "Please run this script from the directory containing the postilaatikko binary"
     exit 1
 fi
 
@@ -54,23 +54,23 @@ if [[ ! -f "postilaatikko-helper" ]]; then
 fi
 
 # Check if desktop file exists
-if [[ ! -f "io.github.wesleiaqui.eternomail.desktop" ]]; then
-    print_error "io.github.wesleiaqui.eternomail.desktop file not found in current directory"
+if [[ ! -f "io.github.ollisulopuisto.postilaatikko.desktop" ]]; then
+    print_error "io.github.ollisulopuisto.postilaatikko.desktop file not found in current directory"
     echo "Please ensure the desktop file is in the same directory as this script"
     exit 1
 fi
 
 # Check if icon exists
-if [[ ! -f "io.github.wesleiaqui.eternomail.png" ]]; then
-    print_error "io.github.wesleiaqui.eternomail.png icon not found in current directory"
+if [[ ! -f "io.github.ollisulopuisto.postilaatikko.png" ]]; then
+    print_error "io.github.ollisulopuisto.postilaatikko.png icon not found in current directory"
     echo "Please ensure the icon file is in the same directory as this script"
     exit 1
 fi
 
 echo ""
-print_info "Eterno Mail - Installation Script"
+print_info "Postilaatikko - Installation Script"
 echo ""
-echo "This script will install Eterno Mail on your system."
+echo "This script will install Postilaatikko on your system."
 echo ""
 echo "Choose installation type:"
 echo "  1) System-wide (requires sudo, installs to /usr/local)"
@@ -103,7 +103,7 @@ while true; do
 done
 
 echo ""
-print_info "Installing Eterno Mail ($INSTALL_TYPE)..."
+print_info "Installing Postilaatikko ($INSTALL_TYPE)..."
 echo ""
 
 # Function to run command with or without sudo
@@ -116,7 +116,7 @@ run_cmd() {
 }
 
 # Move legacy desktop entries out of the launcher search path.
-for legacy_desktop in aerion.desktop io.github.hkdb.EternoMail.desktop; do
+for legacy_desktop in aerion.desktop io.github.hkdb.EternoMail.desktop io.github.wesleiaqui.eternomail.desktop; do
     if [[ -f "$APPS_DIR/$legacy_desktop" ]]; then
         print_info "Found legacy $legacy_desktop, renaming it to a backup..."
         run_cmd mv "$APPS_DIR/$legacy_desktop" "$APPS_DIR/$legacy_desktop.backup"
@@ -131,7 +131,7 @@ run_cmd mkdir -p "$APPS_DIR"
 run_cmd mkdir -p "$ICONS_DIR"
 
 # Remove icons that belong to legacy desktop identifiers.
-for legacy_icon in aerion.png io.github.hkdb.EternoMail.png; do
+for legacy_icon in aerion.png io.github.hkdb.EternoMail.png io.github.wesleiaqui.eternomail.png; do
     if [[ -f "$ICONS_DIR/$legacy_icon" ]]; then
         run_cmd rm -f "$ICONS_DIR/$legacy_icon"
     fi
@@ -139,16 +139,18 @@ done
 
 # Install binary
 print_info "Installing binary to $BIN_DIR..."
-run_cmd install -Dm755 eterno-mail "$BIN_DIR/eterno-mail"
+run_cmd install -Dm755 postilaatikko "$BIN_DIR/postilaatikko"
 run_cmd install -Dm755 postilaatikko-helper "$BIN_DIR/postilaatikko-helper"
+# Compatibility for existing launch scripts, not a second binary.
+run_cmd ln -sfn postilaatikko "$BIN_DIR/eterno-mail"
 
 # Install desktop file
 print_info "Installing desktop file to $APPS_DIR..."
-run_cmd install -Dm644 io.github.wesleiaqui.eternomail.desktop "$APPS_DIR/io.github.wesleiaqui.eternomail.desktop"
+run_cmd install -Dm644 io.github.ollisulopuisto.postilaatikko.desktop "$APPS_DIR/io.github.ollisulopuisto.postilaatikko.desktop"
 
 # Install icon
 print_info "Installing icon to $ICONS_DIR..."
-run_cmd install -Dm644 io.github.wesleiaqui.eternomail.png "$ICONS_DIR/io.github.wesleiaqui.eternomail.png"
+run_cmd install -Dm644 io.github.ollisulopuisto.postilaatikko.png "$ICONS_DIR/io.github.ollisulopuisto.postilaatikko.png"
 
 # Update icon cache
 print_info "Updating icon cache..."
@@ -182,9 +184,9 @@ fi
 
 echo "You may need to log out and back in for the application to appear in your menu."
 echo ""
-echo "To set Eterno Mail as your default email client, run:"
-echo "  xdg-mime default io.github.wesleiaqui.eternomail.desktop x-scheme-handler/mailto"
+echo "To set Postilaatikko as your default email client, run:"
+echo "  xdg-mime default io.github.ollisulopuisto.postilaatikko.desktop x-scheme-handler/mailto"
 echo ""
-echo "To start Eterno Mail, run:"
-echo "  eterno-mail --dbus-notify"
+echo "To start Postilaatikko, run:"
+echo "  postilaatikko --dbus-notify"
 echo ""

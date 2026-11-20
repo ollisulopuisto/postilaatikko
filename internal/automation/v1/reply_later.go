@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/hkdb/aerion/internal/replylater"
+	"github.com/ollisulopuisto/postilaatikko/internal/replylater"
 )
 
 var (

@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/hkdb/aerion/internal/folder"
-	"github.com/hkdb/aerion/internal/mailfilter"
-	"github.com/hkdb/aerion/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/mailfilter"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
 )
 
 // FilterMessageReader reloads a locally cached message before an automatic

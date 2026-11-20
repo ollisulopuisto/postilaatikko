@@ -10,9 +10,9 @@ import (
 	"sync"
 	"testing"
 
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/message"
-	"github.com/hkdb/aerion/internal/operations"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/operations"
 )
 
 // failingMarkReadOperations wraps the standard mock with a MarkAsRead failure.

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hkdb/aerion/internal/views"
+	"github.com/ollisulopuisto/postilaatikko/internal/views"
 )
 
 type conversationCountOperationsFunc func(ConversationCountRequest) (int, error)

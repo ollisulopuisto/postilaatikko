@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hkdb/aerion/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
 )
 
 // refreshVirtualFolderHeadersInBackground refreshes only message headers for a

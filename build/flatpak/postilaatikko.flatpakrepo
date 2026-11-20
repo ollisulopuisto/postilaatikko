@@ -1,0 +1,8 @@
+[Flatpak Repo]
+Version=1
+Title=Postilaatikko
+Comment=Postilaatikko Flatpak repository descriptor (verify deployment before use)
+Description=Legacy distribution endpoint. See docs/IDENTITY_RENAME.md before publishing or installing.
+Url=https://app.weslleys.com/flatpak/repo/
+Homepage=https://app.weslleys.com/
+DefaultBranch=master

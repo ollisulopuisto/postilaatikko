@@ -9,9 +9,9 @@ if [ "$#" -ne 1 ]; then
 fi
 
 TAG_NAME="$1"
-REPO="https://github.com/wesleiaqui/EternoMail"
+REPO="https://github.com/ollisulopuisto/postilaatikko"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MANIFEST="$SCRIPT_DIR/io.github.wesleiaqui.eternomail.yml"
+MANIFEST="$SCRIPT_DIR/io.github.ollisulopuisto.postilaatikko.yml"
 
 if [ ! -f "$MANIFEST" ]; then
     echo "ERROR: Manifest file not found: $MANIFEST" >&2
@@ -36,9 +36,8 @@ TMP_MANIFEST="$(mktemp "${MANIFEST}.XXXXXX")"
 trap 'rm -f "$TMP_MANIFEST"' EXIT
 
 awk -v tag="$TAG_NAME" -v commit="$COMMIT_HASH" '
-    /^[[:space:]]*tag:[[:space:]]/ {
-        sub(/tag:.*/, "tag: " tag)
-    }
+    # A single immutable commit avoids an old tag contradicting the pin.
+    /^[[:space:]]*tag:[[:space:]]/ { next }
     /^[[:space:]]*commit:[[:space:]]/ {
         sub(/commit:.*/, "commit: " commit)
     }

@@ -1,8 +1,8 @@
 package app
 
 import (
-	"github.com/hkdb/aerion/internal/certificate"
-	"github.com/hkdb/aerion/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/certificate"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 )
 
 // ============================================================================

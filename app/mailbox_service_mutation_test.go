@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hkdb/aerion/internal/automation"
-	automationclient "github.com/hkdb/aerion/internal/automation/client"
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/database"
-	"github.com/hkdb/aerion/internal/folder"
-	"github.com/hkdb/aerion/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/automation"
+	automationclient "github.com/ollisulopuisto/postilaatikko/internal/automation/client"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
 )
 
 type testMailboxSecretStore struct {

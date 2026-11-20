@@ -1,9 +1,9 @@
 package app
 
 import (
-	"github.com/hkdb/aerion/internal/folder"
-	"github.com/hkdb/aerion/internal/gmail"
-	"github.com/hkdb/aerion/internal/virtualfolder"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
+	"github.com/ollisulopuisto/postilaatikko/internal/virtualfolder"
 	"strings"
 	"testing"
 	"time"

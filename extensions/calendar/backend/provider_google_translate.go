@@ -30,7 +30,7 @@ import (
 )
 
 // googleEvent is the JSON shape for one Calendar API event resource. Only
-// the fields Aerion reads/writes are modeled; the rest are ignored. JSON
+// the fields Postilaatikko reads/writes are modeled; the rest are ignored. JSON
 // tags use omitempty so PATCH payloads only carry the fields we actually
 // touched.
 // googleVisibilityToCanonical maps Google visibility → canonical visibility.
@@ -264,7 +264,7 @@ func translateGoogleEventToICS(ev googleEvent) (string, error) {
 	if ev.Reminders != nil && !ev.Reminders.UseDefault {
 		for _, r := range ev.Reminders.Overrides {
 			if r.Method != "popup" {
-				// Aerion's notifier is "popup"-shaped; email reminders
+				// Postilaatikko's notifier is "popup"-shaped; email reminders
 				// are out of scope for now. Round-trip preserves them
 				// only when Google echoes them back; we don't author them.
 				continue
@@ -283,7 +283,7 @@ func translateGoogleEventToICS(ev googleEvent) (string, error) {
 
 	// Organizer + Attendees from Google → ATTENDEE/ORGANIZER ICS lines.
 	// Emitted via the shared helper so the wire form matches what Phase A's
-	// parser would expect on read-back. Aerion's local DB then carries them
+	// parser would expect on read-back. Postilaatikko's local DB then carries them
 	// via store.go's attendees_json column.
 	var orgInput *OrganizerInput
 	if ev.Organizer != nil && ev.Organizer.Email != "" {

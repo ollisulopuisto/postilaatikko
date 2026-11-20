@@ -7,12 +7,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	automationclient "github.com/hkdb/aerion/internal/automation/client"
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/message"
-	"github.com/hkdb/aerion/internal/smtp"
-	"github.com/hkdb/aerion/internal/views"
-	"github.com/hkdb/aerion/internal/virtualfolder"
+	automationclient "github.com/ollisulopuisto/postilaatikko/internal/automation/client"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/smtp"
+	"github.com/ollisulopuisto/postilaatikko/internal/views"
+	"github.com/ollisulopuisto/postilaatikko/internal/virtualfolder"
 )
 
 func TestRemoteWorkspaceCoreReadsWithoutMailboxStores(t *testing.T) {

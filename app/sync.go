@@ -4,15 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/hkdb/aerion/internal/gmail"
+	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
 	"strings"
 	gosync "sync"
 	"time"
 
-	"github.com/hkdb/aerion/internal/certificate"
-	"github.com/hkdb/aerion/internal/folder"
-	"github.com/hkdb/aerion/internal/logging"
-	"github.com/hkdb/aerion/internal/syncowner"
+	"github.com/ollisulopuisto/postilaatikko/internal/certificate"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/syncowner"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 

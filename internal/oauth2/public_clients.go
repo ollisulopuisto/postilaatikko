@@ -1,7 +1,7 @@
 package oauth2
 
 // DefaultGoogleClientID, DefaultGoogleClientSecret and
-// DefaultMicrosoftClientID configure official Eterno Mail OAuth clients.
+// DefaultMicrosoftClientID configure official Postilaatikko OAuth clients.
 // Google labels the Desktop client value a "client_secret", but a distributed
 // desktop application cannot keep it confidential. It is not a server secret
 // and must not be treated as a password or protected by obfuscation.

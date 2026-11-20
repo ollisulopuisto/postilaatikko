@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hkdb/aerion/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 	"golang.org/x/net/publicsuffix"
 )
 

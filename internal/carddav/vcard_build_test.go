@@ -6,7 +6,7 @@ import (
 
 	"github.com/emersion/go-vcard"
 	"github.com/emersion/go-webdav/carddav"
-	"github.com/hkdb/aerion/internal/contact"
+	"github.com/ollisulopuisto/postilaatikko/internal/contact"
 )
 
 func TestBuildVCard_RoundTripPreservesUnknownProperties(t *testing.T) {
@@ -22,8 +22,8 @@ func TestBuildVCard_RoundTripPreservesUnknownProperties(t *testing.T) {
 	}, "\r\n")
 
 	rec := &contact.Record{
-		ID:  "abc-123",
-		Fn:  "New Name",
+		ID: "abc-123",
+		Fn: "New Name",
 		Emails: []contact.RecordEmail{
 			{Email: "new@example.com", EmailType: "work", IsPrimary: true},
 		},

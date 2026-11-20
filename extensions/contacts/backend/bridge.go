@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/hkdb/aerion/internal/carddav"
-	"github.com/hkdb/aerion/internal/contact"
-	coreapi "github.com/hkdb/aerion/internal/core/api/v1"
-	"github.com/hkdb/aerion/internal/database"
-	"github.com/hkdb/aerion/internal/platform"
+	"github.com/ollisulopuisto/postilaatikko/internal/carddav"
+	"github.com/ollisulopuisto/postilaatikko/internal/contact"
+	coreapi "github.com/ollisulopuisto/postilaatikko/internal/core/api/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/platform"
 )
 
 // ContactsBridge is the Wails-bindable surface for the Contacts extension. It's
@@ -30,7 +30,7 @@ import (
 // wrapper are all lazy-constructed inside `ensureInit`, gated by
 // `sync.Once`. The first enabled method call triggers init; subsequent
 // calls are fast. If the user disables the extension after it was
-// initialized, the in-memory state stays until the next Aerion launch
+// initialized, the in-memory state stays until the next Postilaatikko launch
 // (acceptable trade — matches VS Code / browser extension behavior).
 type ContactsBridge struct {
 	// Dependencies provided by the host at construction time. None of these
@@ -399,7 +399,7 @@ type ResizedContactPhoto struct {
 //	expectedEmail         — the picked identity's email; enforced on
 //	                        OAuth callback (mismatch = reject)
 //
-// Aerion's design forbids creating new accounts from inside the contacts
+// Postilaatikko's design forbids creating new accounts from inside the contacts
 // extension; all auth contexts MUST be one the user already set up in core
 // (Mail account add OR standalone contacts source add).
 func (b *ContactsBridge) Contacts_EnableWriteAccess(sourceID, authContextKind, authContextIdentifier, expectedEmail string) error {

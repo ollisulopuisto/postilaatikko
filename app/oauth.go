@@ -3,16 +3,16 @@ package app
 import (
 	"errors"
 	"fmt"
-	"github.com/hkdb/aerion/internal/gmail"
+	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
 	"time"
 
-	"github.com/hkdb/aerion/internal/account"
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/credentials"
-	"github.com/hkdb/aerion/internal/imap"
-	"github.com/hkdb/aerion/internal/logging"
-	"github.com/hkdb/aerion/internal/oauth2"
-	"github.com/hkdb/aerion/internal/platform"
+	"github.com/ollisulopuisto/postilaatikko/internal/account"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/credentials"
+	"github.com/ollisulopuisto/postilaatikko/internal/imap"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/oauth2"
+	"github.com/ollisulopuisto/postilaatikko/internal/platform"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -314,7 +314,7 @@ func (a *App) CompleteOAuthAccountSetup(provider, email, accountName, displayNam
 
 // StartCustomOAuthFlow initiates an OAuth2 authorization flow for a user-supplied
 // ("bring your own app") provider — used when adding a generic IMAP account with OAuth.
-// Aerion ships no credentials for custom providers, so the caller passes the
+// Postilaatikko ships no credentials for custom providers, so the caller passes the
 // authorization + token endpoints, scopes, and client credentials. Emits the same
 // oauth:started / oauth:success / oauth:error events as StartOAuthFlow, so the frontend
 // reuses its existing OAuth UI. On success, CompleteCustomOAuthAccountSetup persists the

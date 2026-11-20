@@ -6,7 +6,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/hkdb/aerion/internal/alwayson"
+	"github.com/ollisulopuisto/postilaatikko/internal/alwayson"
 )
 
 func installAgent(_ context.Context, _, _, _, _, _, _ string, _ []string, _ bool, _ apiListenerConfig, _ alwayson.GmailPushConfig) error {

@@ -9,7 +9,7 @@ func TestValidateDialogURL(t *testing.T) {
 		url     string
 		allowed bool
 	}{
-		{"https://github.com/hkdb/aerion/blob/main/docs/SQL_ROLLBACK.md", true},
+		{"https://github.com/ollisulopuisto/postilaatikko/blob/main/docs/SQL_ROLLBACK.md", true},
 		{"http://example.com/docs", true},
 		{"HTTP://example.com", true},
 		{"HTTPS://example.com/path?foo=bar", true},

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hkdb/aerion/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
 )
 
 func openCardDAVTestDB(t *testing.T) *database.DB {
@@ -234,7 +234,7 @@ func TestListContactsPaged_DefaultsLimit(t *testing.T) {
 		contacts[i] = &Contact{
 			ID:          string(rune('A'+i/26)) + string(rune('a'+i%26)),
 			Email:       string(rune('a'+i%26)) + "@x",
-			DisplayName: string(rune('A'+i%26)),
+			DisplayName: string(rune('A' + i%26)),
 		}
 	}
 	seedSource(t, s, "src1", "ab1", true, true, contacts)

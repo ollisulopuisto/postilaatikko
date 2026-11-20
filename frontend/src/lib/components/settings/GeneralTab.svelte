@@ -77,7 +77,7 @@
 
   // Title bar options
   const titleBarOptions = $derived([
-    { value: 'aerion', label: $_('settingsGeneral.titleBarEterno'), description: $_('settingsGeneral.titleBarEternoDesc') },
+    { value: 'aerion', label: $_('settingsGeneral.titleBarPostilaatikko'), description: $_('settingsGeneral.titleBarPostilaatikkoDesc') },
     { value: 'native', label: $_('settingsGeneral.titleBarNative'), description: $_('settingsGeneral.titleBarNativeDesc') },
     { value: 'disable', label: $_('settingsGeneral.titleBarDisable'), description: $_('settingsGeneral.titleBarDisableDesc') },
   ])

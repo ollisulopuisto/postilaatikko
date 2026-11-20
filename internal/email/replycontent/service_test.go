@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hkdb/aerion/internal/views"
+	"github.com/ollisulopuisto/postilaatikko/internal/views"
 )
 
 func ref(account, message string) views.MessageRef {

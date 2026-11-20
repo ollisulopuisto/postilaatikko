@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hkdb/aerion/internal/database"
-	"github.com/hkdb/aerion/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
 )
 
 var ErrCachedVirtualFolderNotFound = errors.New("virtual folder not found")

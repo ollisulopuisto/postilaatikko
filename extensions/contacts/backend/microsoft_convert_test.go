@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hkdb/aerion/internal/contact"
+	"github.com/ollisulopuisto/postilaatikko/internal/contact"
 	"github.com/rs/zerolog"
 )
 
@@ -182,8 +182,8 @@ func TestMicrosoftContactToRecord_RoundTripPhonesByBucket(t *testing.T) {
 
 func TestMicrosoftContactToRecord_AddressFromSlots(t *testing.T) {
 	c := &msContact{
-		DisplayName: "X",
-		HomeAddress: &msPhysicalAddress{Street: "1 Home", City: "HC", State: "CA"},
+		DisplayName:  "X",
+		HomeAddress:  &msPhysicalAddress{Street: "1 Home", City: "HC", State: "CA"},
 		OtherAddress: &msPhysicalAddress{Street: "3 Other", City: "OC"},
 	}
 	rec := microsoftContactToRecord(c)
@@ -223,9 +223,9 @@ func TestParseAddressbookFolderID(t *testing.T) {
 
 func TestMicrosoftBirthday_RoundTrip(t *testing.T) {
 	tests := []struct {
-		name    string
-		in      string
-		wantOut string // microsoftBirthdayFromString output
+		name     string
+		in       string
+		wantOut  string // microsoftBirthdayFromString output
 		wantBack string // microsoftBirthdayToString of that output
 	}{
 		{"full date", "1990-04-15", "1990-04-15T00:00:00Z", "1990-04-15"},

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hkdb/aerion/internal/crypto"
+	"github.com/ollisulopuisto/postilaatikko/internal/crypto"
 )
 
 // These identifiers are internal constants, never user-supplied SQL.

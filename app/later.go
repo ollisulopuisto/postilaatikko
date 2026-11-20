@@ -2,8 +2,8 @@ package app
 
 import (
 	"fmt"
-	"github.com/hkdb/aerion/internal/triage"
-	"github.com/hkdb/aerion/internal/undo"
+	"github.com/ollisulopuisto/postilaatikko/internal/triage"
+	"github.com/ollisulopuisto/postilaatikko/internal/undo"
 )
 
 // ChangeLaterWithUndo is one logical operation across both legacy memberships.

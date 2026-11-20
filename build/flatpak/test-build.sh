@@ -70,11 +70,11 @@ echo "Cleaning flatpak-builder cache..."
 rm -rf .flatpak-builder
 
 echo "Checking if shim binary release assets are available..."
-if ! wget -q --spider "https://github.com/wesleiaqui/eternomail/releases/download/${VERSION}/flathub-build-env-${VERSION}-linux-x86_64"; then
+if ! wget -q --spider "https://github.com/ollisulopuisto/postilaatikko/releases/download/${VERSION}/flathub-build-env-${VERSION}-linux-x86_64"; then
     echo ""
     echo "ERROR: Shim binary not found for ${VERSION}"
     echo "   Make sure the release exists at:"
-    echo "   https://github.com/wesleiaqui/eternomail/releases/tag/${VERSION}"
+    echo "   https://github.com/ollisulopuisto/postilaatikko/releases/tag/${VERSION}"
     echo ""
     exit 1
 fi
@@ -93,19 +93,19 @@ cd /workspace
 
 flatpak-builder --user --force-clean --repo=repo \
   --install-deps-from=flathub \
-  build-dir build/flatpak/flathub/io.github.wesleiaqui.eternomail.yml
+  build-dir build/flatpak/flathub/io.github.ollisulopuisto.postilaatikko.yml
 
 echo ""
 echo "Creating bundle..."
 mkdir -p build/bin
-flatpak build-bundle repo build/bin/Eterno-Mail-${VERSION}.flatpak io.github.wesleiaqui.eternomail
+flatpak build-bundle repo build/bin/Postilaatikko-${VERSION}.flatpak io.github.ollisulopuisto.postilaatikko
 
 echo ""
 echo "=========================================="
 echo "Build successful!"
 echo "=========================================="
-echo "Output: build/bin/Eterno-Mail-${VERSION}.flatpak"
-ls -lh build/bin/Eterno-Mail-${VERSION}.flatpak
+echo "Output: build/bin/Postilaatikko-${VERSION}.flatpak"
+ls -lh build/bin/Postilaatikko-${VERSION}.flatpak
 INNERSCRIPT
 
 chmod +x /tmp/flatpak-build-test-inner.sh
@@ -128,5 +128,5 @@ echo "Test completed!"
 echo "=========================================="
 echo ""
 echo "If successful, the flatpak bundle is at:"
-echo "  $REPO_DIR/build/bin/Eterno-Mail-${VERSION}.flatpak"
+echo "  $REPO_DIR/build/bin/Postilaatikko-${VERSION}.flatpak"
 echo ""

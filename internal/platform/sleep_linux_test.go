@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/godbus/dbus/v5"
-	"github.com/hkdb/aerion/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 )
 
 func TestConnectSleepWakeBusUsesSystemBus(t *testing.T) {

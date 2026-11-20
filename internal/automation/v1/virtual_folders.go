@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/hkdb/aerion/internal/virtualfolder"
+	"github.com/ollisulopuisto/postilaatikko/internal/virtualfolder"
 )
 
 // VirtualFolderMutationRequest describes one persisted view operation.

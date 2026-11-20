@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/hkdb/aerion/internal/automation"
+	"github.com/ollisulopuisto/postilaatikko/internal/automation"
 )
 
 type apiListenerConfig struct {
@@ -55,7 +55,7 @@ func (c apiListenerConfig) serverConfig() automation.ServerConfig {
 		AllowedHosts: append([]string(nil), c.allowedHost...),
 		// Opt-in per-request timing lines for profiling sessions; off by
 		// default so production listeners carry no per-request log overhead.
-		RequestTiming: os.Getenv("ETERNOMAIL_API_TIMING") == "1",
+		RequestTiming: (os.Getenv("POSTILAATIKKO_API_TIMING") == "1" || os.Getenv("ETERNOMAIL_API_TIMING") == "1"),
 	}
 }
 

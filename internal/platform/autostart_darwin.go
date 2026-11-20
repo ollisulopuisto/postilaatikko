@@ -5,17 +5,17 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/hkdb/aerion/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 )
 
 const (
-	launchAgentLabel = "io.github.wesleiaqui.eternomail"
+	launchAgentLabel = "io.github.ollisulopuisto.postilaatikko"
 	launchAgentPlist = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
 	<key>Label</key>
-	<string>io.github.wesleiaqui.eternomail</string>
+	<string>io.github.ollisulopuisto.postilaatikko</string>
 	<key>ProgramArguments</key>
 	<array>
 		<string>%s</string>
@@ -56,6 +56,9 @@ func (m *darwinAutostartManager) Enable() error {
 		return fmt.Errorf("failed to write Launch Agent plist: %w", err)
 	}
 
+	if err := removeLegacyAutostart(dir, ".plist"); err != nil {
+		return err
+	}
 	log.Info().Str("path", path).Msg("Autostart enabled")
 	return nil
 }
@@ -74,6 +77,9 @@ func (m *darwinAutostartManager) Disable() error {
 		return fmt.Errorf("failed to remove Launch Agent plist: %w", err)
 	}
 
+	if err := removeLegacyAutostart(dir, ".plist"); err != nil {
+		return err
+	}
 	log.Info().Str("path", path).Msg("Autostart disabled")
 	return nil
 }
@@ -103,7 +109,18 @@ func (m *darwinAutostartManager) launchAgentsDir() (string, error) {
 func (m *darwinAutostartManager) execCommand() string {
 	exe, err := os.Executable()
 	if err != nil {
-		return "aerion"
+		return "postilaatikko"
 	}
 	return exe
+}
+
+func (m *darwinAutostartManager) migrateLegacy() error {
+	dir, err := m.launchAgentsDir()
+	if err != nil {
+		return err
+	}
+	if hasLegacyAutostart(dir, ".plist") {
+		return m.Enable()
+	}
+	return nil
 }

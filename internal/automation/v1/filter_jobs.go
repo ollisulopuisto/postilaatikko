@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/hkdb/aerion/internal/mailfilter"
+	"github.com/ollisulopuisto/postilaatikko/internal/mailfilter"
 )
 
 // FilterJobPage is one bounded page of uncertain automatic filter moves.

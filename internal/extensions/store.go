@@ -1,4 +1,4 @@
-// Package extensions provides infrastructure for Aerion's first-party
+// Package extensions provides infrastructure for Postilaatikko's first-party
 // extension system. The per-extension Store opens an isolated SQLite file
 // per extension under <dataDir>/extensions/<name>/data.db and exposes a
 // scoped KV namespace alongside whatever extension-specific tables the
@@ -13,8 +13,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/hkdb/aerion/internal/database"
-	"github.com/hkdb/aerion/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 
 	"github.com/rs/zerolog"
 )

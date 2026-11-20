@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hkdb/aerion/internal/automation"
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/perflog"
+	"github.com/ollisulopuisto/postilaatikko/internal/automation"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/perflog"
 )
 
 func TestAuthenticatedLocalPerformanceSessionWritesDespiteWarnLevel(t *testing.T) {

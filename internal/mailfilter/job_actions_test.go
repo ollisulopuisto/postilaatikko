@@ -1,7 +1,7 @@
 package mailfilter
 
 import (
-	"github.com/hkdb/aerion/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
 	"testing"
 	"time"
 )

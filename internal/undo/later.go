@@ -1,6 +1,6 @@
 package undo
 
-import "github.com/hkdb/aerion/internal/triage"
+import "github.com/ollisulopuisto/postilaatikko/internal/triage"
 
 type LaterContext interface {
 	RestoreLaterMembership(triage.Ref, triage.LaterState, triage.LaterState) error

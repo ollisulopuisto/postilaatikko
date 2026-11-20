@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hkdb/aerion/internal/gmail"
+	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
 )
 
 func TestGmailStatusStartsUnknown(t *testing.T) {

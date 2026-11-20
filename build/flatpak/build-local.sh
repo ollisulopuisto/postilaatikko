@@ -1,12 +1,12 @@
 #!/bin/bash
-# Build Eterno Mail Flatpak locally (no Docker)
+# Build Postilaatikko Flatpak locally (no Docker)
 # This uses the hybrid approach - network access during build
 
 set -e
 
 cd "$(dirname "$0")/../.."
 
-echo "=== Eterno Mail Flatpak Local Builder ==="
+echo "=== Postilaatikko Flatpak Local Builder ==="
 echo ""
 
 # Check if flatpak-builder is installed
@@ -49,7 +49,7 @@ echo ""
 
 # Build the binary on the host first
 echo ""
-echo "Building Eterno Mail binary on host..."
+echo "Building Postilaatikko binary on host..."
 cd "$(dirname "$0")/../.."
 make build-linux
 
@@ -61,7 +61,7 @@ echo "This will take a few minutes..."
 echo ""
 
 flatpak-builder --force-clean --user --install-deps-from=flathub \
-    --repo=repo build-dir build/flatpak/io.github.wesleiaqui.eternomail-dev.yml
+    --repo=repo build-dir build/flatpak/io.github.ollisulopuisto.postilaatikko-dev.yml
 
 # Create bundle for distribution
 echo ""
@@ -70,9 +70,9 @@ mkdir -p build/bin
 
 # Get version from git tag, fallback to "dev" if no tag
 VERSION=$(git describe --tags --exact-match 2>/dev/null || echo "dev")
-BUNDLE_NAME="Eterno-Mail-${VERSION}.flatpak"
+BUNDLE_NAME="Postilaatikko-${VERSION}.flatpak"
 
-flatpak build-bundle repo "build/bin/${BUNDLE_NAME}" io.github.wesleiaqui.eternomail
+flatpak build-bundle repo "build/bin/${BUNDLE_NAME}" io.github.ollisulopuisto.postilaatikko
 
 echo ""
 echo "✅ Build complete!"
@@ -83,4 +83,4 @@ echo "To install locally:"
 echo "  flatpak install --user ${BUNDLE_NAME}"
 echo ""
 echo "To run:"
-echo "  flatpak run io.github.wesleiaqui.eternomail"
+echo "  flatpak run io.github.ollisulopuisto.postilaatikko"

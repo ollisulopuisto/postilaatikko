@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/hkdb/aerion/internal/triage"
+	"github.com/ollisulopuisto/postilaatikko/internal/triage"
 )
 
 // ReadLaterMutationRequest sets explicit Read Later membership.

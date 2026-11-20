@@ -5,13 +5,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hkdb/aerion/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
 )
 
 // mockLookup implements MessageLookup for testing.
 type mockLookup struct {
-	messages map[string]*message.Message   // local ID -> message
-	threads  map[string]map[string]bool    // accountID:threadID -> set of local IDs
+	messages map[string]*message.Message // local ID -> message
+	threads  map[string]map[string]bool  // accountID:threadID -> set of local IDs
 	failGet  bool
 }
 
@@ -113,7 +113,7 @@ func TestResolveMatchedMessagesTargetValid(t *testing.T) {
 		},
 	}
 	target := Target{
-		Kind:     TargetMatchedMessages,
+		Kind: TargetMatchedMessages,
 		Messages: []MessageRef{
 			{AccountID: "acct-a", MessageID: "m1"},
 			{AccountID: "acct-b", MessageID: "m3"},

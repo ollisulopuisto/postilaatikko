@@ -1,5 +1,5 @@
-export const UNDO_OPERATION_CREATED_EVENT = 'eterno-mail:undo-operation-created'
-export const UNDO_OPERATION_COMPLETED_EVENT = 'eterno-mail:undo-operation-completed'
+export const UNDO_OPERATION_CREATED_EVENT = 'postilaatikko:undo-operation-created'
+export const UNDO_OPERATION_COMPLETED_EVENT = 'postilaatikko:undo-operation-completed'
 
 export type UndoOperationCreatedDetail = {
   operationId: string

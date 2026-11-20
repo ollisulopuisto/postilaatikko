@@ -1,7 +1,7 @@
 package auth
 
 import (
-	"github.com/hkdb/aerion/internal/credentials"
+	"github.com/ollisulopuisto/postilaatikko/internal/credentials"
 	gokeyring "github.com/zalando/go-keyring"
 	"io"
 	"net/http"

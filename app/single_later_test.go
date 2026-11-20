@@ -2,10 +2,10 @@ package app
 
 import (
 	"context"
-	"github.com/hkdb/aerion/internal/account"
-	"github.com/hkdb/aerion/internal/database"
-	"github.com/hkdb/aerion/internal/triage"
-	"github.com/hkdb/aerion/internal/undo"
+	"github.com/ollisulopuisto/postilaatikko/internal/account"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/triage"
+	"github.com/ollisulopuisto/postilaatikko/internal/undo"
 	"path/filepath"
 	"testing"
 	"time"

@@ -160,7 +160,7 @@ func (a *API) CreateEvent(in EventInput) (string, error) {
 	// place attendee data ends up — EventDetail / EventComposerDialog
 	// read the JSON columns, not the parsed ICS, so attendees disappear
 	// from the UI even though the provider received them and sent
-	// invitations. (Bug: invitee got the email but Aerion's UI lost them.)
+	// invitations. (Bug: invitee got the email but Postilaatikko's UI lost them.)
 	ev.Attendees, ev.Organizer = attendeesFromInput(in)
 
 	provider := ProviderForSource(*src, ProviderDeps{Store: a.store, Secrets: a.secrets, Auth: a.auth})

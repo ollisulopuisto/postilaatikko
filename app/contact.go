@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hkdb/aerion/internal/account"
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/contact"
-	"github.com/hkdb/aerion/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/account"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/contact"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 )
 
 // ============================================================================

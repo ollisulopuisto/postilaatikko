@@ -4,8 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/hkdb/aerion/internal/appstate"
-	"github.com/hkdb/aerion/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/appstate"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
 )
 
 func TestContentPolicyStoreUsesDeviceDatabaseAndPurgesRemovedAccount(t *testing.T) {

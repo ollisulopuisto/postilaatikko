@@ -1,7 +1,7 @@
 package email
 
 import (
-	"github.com/hkdb/aerion/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
 	"os"
 	"path/filepath"
 	"testing"

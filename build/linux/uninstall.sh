@@ -41,9 +41,9 @@ if [[ "$(uname -s)" != "Linux" ]]; then
 fi
 
 echo ""
-print_info "Eterno Mail - Uninstall Script"
+print_info "Postilaatikko - Uninstall Script"
 echo ""
-echo "This script will uninstall Eterno Mail from your system."
+echo "This script will uninstall Postilaatikko from your system."
 echo ""
 echo "Choose installation type to uninstall:"
 echo "  1) System-wide (requires sudo, /usr/local or /usr/share)"
@@ -76,7 +76,7 @@ while true; do
 done
 
 echo ""
-print_info "Uninstalling Eterno Mail ($INSTALL_TYPE)..."
+print_info "Uninstalling Postilaatikko ($INSTALL_TYPE)..."
 echo ""
 
 # Function to run command with or without sudo
@@ -93,7 +93,7 @@ remove_file() {
     local file="$1"
     local description="$2"
 
-    if [[ -f "$file" ]]; then
+    if [[ -f "$file" || -L "$file" ]]; then
         echo ""
         read -p "Remove $description at $file? (y/N): " confirm
         case $confirm in
@@ -117,7 +117,7 @@ remove_file() {
 REMOVED_COUNT=0
 
 # Remove binary
-if remove_file "$BIN_DIR/eterno-mail" "binary"; then
+if remove_file "$BIN_DIR/postilaatikko" "binary"; then
     REMOVED_COUNT=$((REMOVED_COUNT + 1))
 fi
 
@@ -127,7 +127,7 @@ if remove_file "$BIN_DIR/postilaatikko-helper" "service helper"; then
 fi
 
 # Remove new desktop file
-if remove_file "$APPS_DIR/io.github.wesleiaqui.eternomail.desktop" "desktop file"; then
+if remove_file "$APPS_DIR/io.github.ollisulopuisto.postilaatikko.desktop" "desktop file"; then
     REMOVED_COUNT=$((REMOVED_COUNT + 1))
 fi
 
@@ -136,7 +136,15 @@ if remove_file "$APPS_DIR/aerion.desktop" "old desktop file"; then
     REMOVED_COUNT=$((REMOVED_COUNT + 1))
 fi
 
-# Remove legacy Eterno Mail desktop file if it exists
+# Remove previous desktop identity from the same installation prefix.
+remove_file "$APPS_DIR/io.github.wesleiaqui.eternomail.desktop" "legacy desktop file" || true
+remove_file "$ICONS_DIR/io.github.wesleiaqui.eternomail.png" "legacy icon" || true
+# Remove only our compatibility symlink, not an unrelated executable.
+if [[ -L "$BIN_DIR/eterno-mail" && "$(readlink "$BIN_DIR/eterno-mail")" == "postilaatikko" ]]; then
+    remove_file "$BIN_DIR/eterno-mail" "compatibility link" || true
+fi
+
+# Remove legacy Postilaatikko desktop file if it exists
 if remove_file "$APPS_DIR/io.github.hkdb.EternoMail.desktop" "legacy desktop file"; then
     REMOVED_COUNT=$((REMOVED_COUNT + 1))
 fi
@@ -146,13 +154,13 @@ if remove_file "$APPS_DIR/aerion.desktop.backup" "backup desktop file"; then
     REMOVED_COUNT=$((REMOVED_COUNT + 1))
 fi
 
-# Remove legacy Eterno Mail backup desktop file if it exists
+# Remove legacy Postilaatikko backup desktop file if it exists
 if remove_file "$APPS_DIR/io.github.hkdb.EternoMail.desktop.backup" "legacy backup desktop file"; then
     REMOVED_COUNT=$((REMOVED_COUNT + 1))
 fi
 
 # Remove icon
-if remove_file "$ICONS_DIR/io.github.wesleiaqui.eternomail.png" "icon"; then
+if remove_file "$ICONS_DIR/io.github.ollisulopuisto.postilaatikko.png" "icon"; then
     REMOVED_COUNT=$((REMOVED_COUNT + 1))
 fi
 
@@ -161,7 +169,7 @@ if remove_file "$ICONS_DIR/aerion.png" "old icon"; then
     REMOVED_COUNT=$((REMOVED_COUNT + 1))
 fi
 
-# Remove legacy Eterno Mail icon name if it exists
+# Remove legacy Postilaatikko icon name if it exists
 if remove_file "$ICONS_DIR/io.github.hkdb.EternoMail.png" "legacy icon"; then
     REMOVED_COUNT=$((REMOVED_COUNT + 1))
 fi
@@ -193,5 +201,5 @@ else
 fi
 
 echo ""
-echo "Thank you for trying Eterno Mail!"
+echo "Thank you for trying Postilaatikko!"
 echo ""

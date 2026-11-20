@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hkdb/aerion/internal/automation/client"
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/automation/client"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
 )
 
 func TestSubscribeEventsParsesStream(t *testing.T) {

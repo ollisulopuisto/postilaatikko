@@ -3,7 +3,7 @@ package backend
 import (
 	"testing"
 
-	"github.com/hkdb/aerion/internal/contact"
+	"github.com/ollisulopuisto/postilaatikko/internal/contact"
 )
 
 // Bug M-C step 2: sidecar persists email types + URL list across calls.
@@ -17,7 +17,7 @@ func TestMSSidecar_RoundTrip(t *testing.T) {
 
 	side := MSSidecar{
 		EmailTypes: map[string]string{
-			"alice@example.com":     "work",
+			"alice@example.com":      "work",
 			"alice@home.example.com": "home",
 		},
 		URLs: []MSSidecarURL{

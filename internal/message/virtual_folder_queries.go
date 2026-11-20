@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hkdb/aerion/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
 )
 
 // VirtualFolderCriteria holds the message-state and date criteria for one saved view.

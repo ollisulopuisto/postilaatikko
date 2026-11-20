@@ -15,8 +15,8 @@ import (
 
 	"github.com/emersion/go-webdav"
 
-	coreapi "github.com/hkdb/aerion/internal/core/api/v1"
-	"github.com/hkdb/aerion/internal/kit/davutil"
+	coreapi "github.com/ollisulopuisto/postilaatikko/internal/core/api/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/kit/davutil"
 )
 
 // ErrCalDAVOrganizerEmailRequired is returned by AddCalDAVSource when the
@@ -431,7 +431,7 @@ func (a *API) AddLocalSource(name string) (string, error) {
 }
 
 // DeleteCalendar removes a calendar. Only local-source calendars are
-// deletable from Aerion — CalDAV calendars belong to the remote server
+// deletable from Postilaatikko — CalDAV calendars belong to the remote server
 // and would be re-synced. CASCADE removes all events + overrides + alarms
 // belonging to the calendar.
 func (a *API) DeleteCalendar(calendarID string) error {
@@ -507,7 +507,7 @@ func (a *API) AddLocalCalendar(sourceID, displayName, color string) (string, err
 
 // --- Google Calendar source setup --------------------------------------------
 //
-// AddGoogleSource creates a calendar_sources row tied to an existing Aerion
+// AddGoogleSource creates a calendar_sources row tied to an existing Postilaatikko
 // mail account (AccountID identifies the Gmail account that holds the OAuth
 // grant). The frontend picker calls ListGoogleCalendarsForAccount first to
 // let the user pick which calendars to subscribe; AddGoogleSource then

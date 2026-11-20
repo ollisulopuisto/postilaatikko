@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/hkdb/aerion/internal/replylater"
-	"github.com/hkdb/aerion/internal/triage"
+	"github.com/ollisulopuisto/postilaatikko/internal/replylater"
+	"github.com/ollisulopuisto/postilaatikko/internal/triage"
 )
 
 // Durable command types stored in mailbox_undo_commands.type.

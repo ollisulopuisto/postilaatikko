@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/hkdb/aerion/internal/oauth2"
+	"github.com/ollisulopuisto/postilaatikko/internal/oauth2"
 	gokeyring "github.com/zalando/go-keyring"
 )
 

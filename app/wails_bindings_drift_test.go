@@ -93,7 +93,7 @@ func collectBoundStructTypes(bound reflect.Type, out map[string]map[string]bool)
 		if t.Kind() != reflect.Struct || t.Name() == "" {
 			return
 		}
-		if !strings.HasPrefix(t.PkgPath(), "github.com/hkdb/aerion") {
+		if !strings.HasPrefix(t.PkgPath(), "github.com/ollisulopuisto/postilaatikko") {
 			return
 		}
 		// Wails names the namespace from the reflected type string, so an

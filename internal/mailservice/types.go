@@ -1,7 +1,7 @@
 package mailservice
 
 import (
-	"github.com/hkdb/aerion/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
 )
 
 // MailSearchRequest identifies a bounded provider-aware conversation search.

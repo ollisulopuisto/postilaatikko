@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hkdb/aerion/internal/extensions"
+	"github.com/ollisulopuisto/postilaatikko/internal/extensions"
 )
 
 // migrations is the per-extension migration sequence for the Calendar
@@ -314,7 +314,7 @@ var migrations = []extensions.Migration{
 
 // Store wraps the per-extension DB for the Calendar extension. Lives in an
 // isolated SQLite file at <dataDir>/extensions/calendar/data.db, separate
-// from Aerion's main DB. No tables in this file are read or written by
+// from Postilaatikko's main DB. No tables in this file are read or written by
 // core code; cross-extension access (none exists yet for Calendar) flows
 // through coreapi only.
 type Store struct {
@@ -762,7 +762,7 @@ type Event struct {
 	RRuleText       string `json:"rruleText,omitempty"`
 	Transparency    string `json:"transparency,omitempty"` // "busy" (default) | "free"; iCal TRANSP
 	Visibility      string `json:"visibility,omitempty"`   // "public" (default) | "private" | "confidential"; iCal CLASS
-	ICSBlob         string `json:"-"` // not exposed to frontend; used by rrule_expand
+	ICSBlob         string `json:"-"`                      // not exposed to frontend; used by rrule_expand
 
 	// Attendees + Organizer. Populated by the ICS parser on read; written
 	// back into the JSON columns by UpsertEventTx. Types defined in
@@ -784,10 +784,10 @@ type Event struct {
 // events produce zero or more (depends on the window). RECURRENCE-ID
 // overrides replace the matching default-expanded instance.
 type EventInstance struct {
-	Event              // embed for field reuse; serialized flat in JSON
-	InstanceStartUnix  int64 `json:"instanceStartUnix"`
-	InstanceEndUnix    int64 `json:"instanceEndUnix"`
-	IsRecurrenceOverride bool `json:"isRecurrenceOverride,omitempty"`
+	Event                      // embed for field reuse; serialized flat in JSON
+	InstanceStartUnix    int64 `json:"instanceStartUnix"`
+	InstanceEndUnix      int64 `json:"instanceEndUnix"`
+	IsRecurrenceOverride bool  `json:"isRecurrenceOverride,omitempty"`
 }
 
 // EventOverride is one RECURRENCE-ID exception to a master recurring event.

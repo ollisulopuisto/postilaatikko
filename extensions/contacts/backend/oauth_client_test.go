@@ -5,8 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/hkdb/aerion/internal/carddav"
-	coreapi "github.com/hkdb/aerion/internal/core/api/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/carddav"
+	coreapi "github.com/ollisulopuisto/postilaatikko/internal/core/api/v1"
 )
 
 func TestGoogleLinkedSourceHTTPUsesSourceCredentials(t *testing.T) {

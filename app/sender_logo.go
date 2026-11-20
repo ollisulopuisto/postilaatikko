@@ -1,6 +1,6 @@
 package app
 
-import "github.com/hkdb/aerion/internal/senderlogo"
+import "github.com/ollisulopuisto/postilaatikko/internal/senderlogo"
 
 // GetSenderLogos returns cached, best-effort brand logos keyed by email-domain.
 // It is intentionally independent from contacts and account-profile photos.

@@ -1,6 +1,6 @@
 package app
 
-import "github.com/hkdb/aerion/internal/macoscontacts"
+import "github.com/ollisulopuisto/postilaatikko/internal/macoscontacts"
 
 // GetMacOSContactsStatus checks authorization without reading or prompting.
 func (a *App) GetMacOSContactsStatus() string { return macoscontacts.New().Status() }

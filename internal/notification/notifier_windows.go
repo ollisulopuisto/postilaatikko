@@ -9,12 +9,12 @@ import (
 	"time"
 
 	"git.sr.ht/~jackmordaunt/go-toast/v2/wintoast"
-	"github.com/hkdb/aerion/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 	"github.com/rs/zerolog"
 )
 
 const (
-	windowsAppID = "io.github.wesleiaqui.eternomail"
+	windowsAppID = "io.github.ollisulopuisto.postilaatikko"
 	windowsGUID  = "{8F2B5A4E-3C1D-4E6F-9A7B-2D8E1F0C3B5A}"
 )
 

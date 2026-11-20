@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build Eterno Mail Flatpak using Docker (hybrid approach: build binary on host in container, then package)
+# Build Postilaatikko Flatpak using Docker (hybrid approach: build binary on host in container, then package)
 
 set -e
 
@@ -10,7 +10,7 @@ fi
 
 cd "$(dirname "$0")/../.."
 
-echo "=== Eterno Mail Flatpak Docker Builder ==="
+echo "=== Postilaatikko Flatpak Docker Builder ==="
 echo ""
 
 # Check if Docker is installed
@@ -34,10 +34,10 @@ if ! docker info &> /dev/null; then
 fi
 
 echo "Building Docker image (this may take a few minutes on first run)..."
-docker build -t aerion-flatpak-builder -f build/flatpak/Dockerfile build/flatpak
+docker build -t postilaatikko-flatpak-builder -f build/flatpak/Dockerfile build/flatpak
 
 echo ""
-echo "Building Eterno Mail in Docker container..."
+echo "Building Postilaatikko in Docker container..."
 echo ""
 
 # Get version from git tag
@@ -49,7 +49,7 @@ docker run --rm \
     --env HOME=/tmp/build-home \
     -v "$(pwd):/workspace" \
     -w /workspace \
-    aerion-flatpak-builder \
+    postilaatikko-flatpak-builder \
     bash -c "
         test \"\$(id -u):\$(id -g)\" = \"\$(stat -c %u:%g /workspace)\" || exit 1
         test \"\$(id -u)\" != 0 || exit 1
@@ -58,26 +58,26 @@ docker run --rm \
         cd frontend && npm ci && cd ..
 
         echo ''
-        echo 'Building Eterno Mail binary...'
+        echo 'Building Postilaatikko binary...'
         make build-linux
 
         echo ''
         echo 'Packaging into Flatpak...'
-        flatpak-builder --force-clean --repo=repo build-dir build/flatpak/flathub/io.github.wesleiaqui.eternomail.yml
+        flatpak-builder --force-clean --repo=repo build-dir build/flatpak/flathub/io.github.ollisulopuisto.postilaatikko.yml
 
         echo ''
         echo 'Creating .flatpak bundle...'
         mkdir -p build/bin
-        flatpak build-bundle repo build/bin/Eterno-Mail-${VERSION}.flatpak io.github.wesleiaqui.eternomail
+        flatpak build-bundle repo build/bin/Postilaatikko-${VERSION}.flatpak io.github.ollisulopuisto.postilaatikko
     "
 
 echo ""
 echo "✅ Build complete!"
 echo ""
-echo "Flatpak bundle created: build/bin/Eterno-Mail-${VERSION}.flatpak"
+echo "Flatpak bundle created: build/bin/Postilaatikko-${VERSION}.flatpak"
 echo ""
 echo "To install locally:"
-echo "  flatpak install --user build/bin/Eterno-Mail-${VERSION}.flatpak"
+echo "  flatpak install --user build/bin/Postilaatikko-${VERSION}.flatpak"
 echo ""
 echo "To run:"
-echo "  flatpak run io.github.wesleiaqui.eternomail"
+echo "  flatpak run io.github.ollisulopuisto.postilaatikko"

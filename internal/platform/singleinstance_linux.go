@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hkdb/aerion/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 )
 
 // linuxSingleInstanceLock uses a Unix socket for single-instance detection.

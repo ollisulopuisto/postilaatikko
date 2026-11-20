@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/hkdb/aerion/internal/appstate"
-	"github.com/hkdb/aerion/internal/database"
-	"github.com/hkdb/aerion/internal/folder"
-	"github.com/hkdb/aerion/internal/ipc"
+	"github.com/ollisulopuisto/postilaatikko/internal/appstate"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/ipc"
 )
 
 func TestMailWindowAllowlist(t *testing.T) {

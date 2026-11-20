@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hkdb/aerion/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
 )
 
 func newTestStore(t *testing.T) (*Store, *database.DB) {

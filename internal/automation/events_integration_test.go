@@ -2,9 +2,9 @@ package automation_test
 
 import (
 	"context"
-	"github.com/hkdb/aerion/internal/automation"
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/mailboxevents"
+	"github.com/ollisulopuisto/postilaatikko/internal/automation"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/mailboxevents"
 	"net/http"
 	"testing"
 	"time"

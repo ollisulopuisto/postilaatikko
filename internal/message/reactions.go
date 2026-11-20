@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hkdb/aerion/internal/email/reactions"
+	"github.com/ollisulopuisto/postilaatikko/internal/email/reactions"
 )
 
 // EnrichReactions loads cached MIME metadata in bounded batches; legacy stored

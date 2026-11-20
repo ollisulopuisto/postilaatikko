@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/emersion/go-imap/v2"
-	"github.com/hkdb/aerion/internal/folder"
-	"github.com/hkdb/aerion/internal/gmail"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
 )
 
 func TestGmailFolderScope(t *testing.T) {

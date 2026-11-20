@@ -316,11 +316,11 @@
       collapsedInboxGroups = new Set()
       expandedInboxGroups = new Set()
     }
-    window.addEventListener('eterno-mail:inbox-display-change', handleInboxDisplayChange)
-    window.addEventListener('eterno-mail:inbox-card-preferences-change', handleInboxCardPreferencesChange)
+    window.addEventListener('postilaatikko:inbox-display-change', handleInboxDisplayChange)
+    window.addEventListener('postilaatikko:inbox-card-preferences-change', handleInboxCardPreferencesChange)
     return () => {
-      window.removeEventListener('eterno-mail:inbox-display-change', handleInboxDisplayChange)
-      window.removeEventListener('eterno-mail:inbox-card-preferences-change', handleInboxCardPreferencesChange)
+      window.removeEventListener('postilaatikko:inbox-display-change', handleInboxDisplayChange)
+      window.removeEventListener('postilaatikko:inbox-card-preferences-change', handleInboxCardPreferencesChange)
     }
   })
 

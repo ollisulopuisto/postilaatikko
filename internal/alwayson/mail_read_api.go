@@ -7,14 +7,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/email/replycontent"
-	"github.com/hkdb/aerion/internal/folder"
-	"github.com/hkdb/aerion/internal/mailservice"
-	"github.com/hkdb/aerion/internal/message"
-	"github.com/hkdb/aerion/internal/replylater"
-	"github.com/hkdb/aerion/internal/triage"
-	"github.com/hkdb/aerion/internal/views"
+	"github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/email/replycontent"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/mailservice"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/replylater"
+	"github.com/ollisulopuisto/postilaatikko/internal/triage"
+	"github.com/ollisulopuisto/postilaatikko/internal/views"
 )
 
 type mailboxReadOperations struct{ runtime *SyncRuntime }

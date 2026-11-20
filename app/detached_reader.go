@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hkdb/aerion/internal/ipc"
-	"github.com/hkdb/aerion/internal/platform"
-	"github.com/hkdb/aerion/internal/readerbridge"
+	"github.com/ollisulopuisto/postilaatikko/internal/ipc"
+	"github.com/ollisulopuisto/postilaatikko/internal/platform"
+	"github.com/ollisulopuisto/postilaatikko/internal/readerbridge"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 

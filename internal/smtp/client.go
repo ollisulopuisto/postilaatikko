@@ -1,4 +1,4 @@
-// Package smtp provides SMTP client functionality for Aerion
+// Package smtp provides SMTP client functionality for Postilaatikko
 package smtp
 
 import (
@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hkdb/aerion/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 	"github.com/rs/zerolog"
 )
 

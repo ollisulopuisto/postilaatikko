@@ -1,8 +1,8 @@
 package mailfilter
 
 import (
-	"github.com/hkdb/aerion/internal/account"
-	"github.com/hkdb/aerion/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/account"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
 	"strings"
 	"testing"
 )

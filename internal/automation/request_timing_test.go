@@ -11,9 +11,9 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/hkdb/aerion/internal/automation"
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/automation"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 )
 
 // withCapturedLog swaps the global logger for one writing JSON to a buffer.

@@ -1,6 +1,6 @@
 package undo
 
-import "github.com/hkdb/aerion/internal/replylater"
+import "github.com/ollisulopuisto/postilaatikko/internal/replylater"
 
 // ReplyLaterContext is the small app capability needed to reverse queue
 // membership without giving undo commands direct access to Wails runtime APIs.

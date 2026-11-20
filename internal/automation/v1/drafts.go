@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/hkdb/aerion/internal/draft"
-	"github.com/hkdb/aerion/internal/smtp"
+	"github.com/ollisulopuisto/postilaatikko/internal/draft"
+	"github.com/ollisulopuisto/postilaatikko/internal/smtp"
 )
 
 var ErrDraftRevisionConflict = draft.ErrDraftRevisionConflict

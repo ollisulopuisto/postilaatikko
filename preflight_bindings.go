@@ -2,7 +2,7 @@
 
 package main
 
-import "github.com/hkdb/aerion/app"
+import "github.com/ollisulopuisto/postilaatikko/app"
 
 // runPreflight is a no-op under the `bindings` build tag. Wails' binding
 // generator builds the binary with this tag and executes it once to emit

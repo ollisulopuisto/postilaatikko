@@ -9,7 +9,7 @@ import (
 
 	"golang.org/x/net/html"
 
-	"github.com/hkdb/aerion/internal/email"
+	"github.com/ollisulopuisto/postilaatikko/internal/email"
 )
 
 const (

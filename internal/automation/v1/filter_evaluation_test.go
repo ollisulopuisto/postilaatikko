@@ -1,7 +1,7 @@
 package v1
 
 import (
-	"github.com/hkdb/aerion/internal/mailfilter"
+	"github.com/ollisulopuisto/postilaatikko/internal/mailfilter"
 	"net/http"
 	"net/http/httptest"
 	"strings"

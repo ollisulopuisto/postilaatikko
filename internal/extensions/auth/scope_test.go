@@ -3,7 +3,7 @@ package auth
 import (
 	"testing"
 
-	coreapi "github.com/hkdb/aerion/internal/core/api/v1"
+	coreapi "github.com/ollisulopuisto/postilaatikko/internal/core/api/v1"
 )
 
 func TestMissingScopes(t *testing.T) {
@@ -68,10 +68,10 @@ func TestMissingScopes(t *testing.T) {
 
 func TestResolveClientConfigID(t *testing.T) {
 	tests := []struct {
-		name        string
-		provider    string
-		extPresent  bool
-		want        coreapi.ClientConfigID
+		name       string
+		provider   string
+		extPresent bool
+		want       coreapi.ClientConfigID
 	}{
 		{"google with ext config", "google", true, "google-extensions"},
 		{"google without ext config falls back to mail", "google", false, "google-mail"},

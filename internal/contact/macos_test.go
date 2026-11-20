@@ -2,7 +2,7 @@ package contact
 
 import (
 	"errors"
-	"github.com/hkdb/aerion/internal/macoscontacts"
+	"github.com/ollisulopuisto/postilaatikko/internal/macoscontacts"
 	"testing"
 )
 

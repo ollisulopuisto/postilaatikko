@@ -12,7 +12,7 @@ import (
 
 	gomessage "github.com/emersion/go-message"
 	"github.com/google/uuid"
-	"github.com/hkdb/aerion/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
 	"github.com/teamwork/tnef"
 )
 

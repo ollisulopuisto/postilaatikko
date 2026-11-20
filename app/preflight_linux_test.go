@@ -4,10 +4,10 @@ package app
 
 import (
 	"context"
-	"github.com/hkdb/aerion/internal/appstate"
-	automationclient "github.com/hkdb/aerion/internal/automation/client"
-	"github.com/hkdb/aerion/internal/database"
-	"github.com/hkdb/aerion/internal/settings"
+	"github.com/ollisulopuisto/postilaatikko/internal/appstate"
+	automationclient "github.com/ollisulopuisto/postilaatikko/internal/automation/client"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/settings"
 	gokeyring "github.com/zalando/go-keyring"
 	"os"
 	"os/exec"

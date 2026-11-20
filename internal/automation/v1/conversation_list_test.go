@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hkdb/aerion/internal/folder"
-	"github.com/hkdb/aerion/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
 )
 
 // stubConversationListOps implements ConversationListOperations with counters

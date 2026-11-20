@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/pendingremote"
-	"github.com/hkdb/aerion/internal/smtp"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/pendingremote"
+	"github.com/ollisulopuisto/postilaatikko/internal/smtp"
 )
 
 type remotePendingEnvelope struct {

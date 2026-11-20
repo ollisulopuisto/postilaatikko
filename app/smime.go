@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/hkdb/aerion/internal/logging"
-	"github.com/hkdb/aerion/internal/smime"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/smime"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 

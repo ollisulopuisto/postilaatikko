@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/hkdb/aerion/internal/message"
-	"github.com/hkdb/aerion/internal/undo"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/undo"
 )
 
 // moveMutationFlight represents one physical local-first move. resultReady is

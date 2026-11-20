@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hkdb/aerion/internal/credentials"
+	"github.com/ollisulopuisto/postilaatikko/internal/credentials"
 	"github.com/rs/zerolog"
 	"go.mozilla.org/pkcs7"
 )
@@ -280,4 +280,3 @@ func writeFilteredHeaders(buf *bytes.Buffer, headers []byte) {
 	// Always add MIME-Version for signed messages
 	buf.WriteString("MIME-Version: 1.0\r\n")
 }
-

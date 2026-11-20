@@ -11,7 +11,7 @@ import (
 
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
-	"github.com/hkdb/aerion/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
 )
 
 // recoverFailedHeaderBatch re-fetches the given UIDs without requesting ENVELOPE so the

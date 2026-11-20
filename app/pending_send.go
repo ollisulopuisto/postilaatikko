@@ -32,8 +32,8 @@ import (
 	"github.com/google/uuid"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"github.com/hkdb/aerion/internal/ipc"
-	"github.com/hkdb/aerion/internal/platform"
+	"github.com/ollisulopuisto/postilaatikko/internal/ipc"
+	"github.com/ollisulopuisto/postilaatikko/internal/platform"
 )
 
 // PendingSend is the durable record of one queued send.

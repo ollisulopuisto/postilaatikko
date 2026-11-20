@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/hkdb/aerion/internal/carddav"
-	coreapi "github.com/hkdb/aerion/internal/core/api/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/carddav"
+	coreapi "github.com/ollisulopuisto/postilaatikko/internal/core/api/v1"
 )
 
 // cardDAVWriteScope is the nominal scope passed when building a bearer client for an

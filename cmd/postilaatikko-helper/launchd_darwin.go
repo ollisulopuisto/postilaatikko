@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/hkdb/aerion/internal/alwayson"
+	"github.com/ollisulopuisto/postilaatikko/internal/alwayson"
 )
 
 const agentLabel = "fi.postilaatikko.send-later"

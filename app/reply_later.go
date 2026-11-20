@@ -4,9 +4,9 @@ import (
 	"errors"
 	"fmt"
 
-	agentapi "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/replylater"
-	"github.com/hkdb/aerion/internal/undo"
+	agentapi "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/replylater"
+	"github.com/ollisulopuisto/postilaatikko/internal/undo"
 )
 
 // newReplyLaterAutomationAPI builds the transport-independent API adapter for
