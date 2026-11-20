@@ -2,7 +2,7 @@ package v1
 
 import (
 	"context"
-	calendar "github.com/hkdb/aerion/extensions/calendar/backend"
+	calendar "github.com/ollisulopuisto/postilaatikko/extensions/calendar/backend"
 	"net/http"
 	"net/http/httptest"
 	"strings"

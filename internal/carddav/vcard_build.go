@@ -18,7 +18,7 @@ import (
 	"strings"
 
 	"github.com/emersion/go-vcard"
-	"github.com/hkdb/aerion/internal/contact"
+	"github.com/ollisulopuisto/postilaatikko/internal/contact"
 )
 
 // BuildVCard renders a contact.Record into vCard wire bytes. When originalRaw

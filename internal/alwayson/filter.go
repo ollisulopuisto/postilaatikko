@@ -3,13 +3,13 @@ package alwayson
 import (
 	"context"
 	"errors"
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
 	"time"
 
-	"github.com/hkdb/aerion/internal/folder"
-	"github.com/hkdb/aerion/internal/logging"
-	"github.com/hkdb/aerion/internal/mailfilter"
-	"github.com/hkdb/aerion/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/mailfilter"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
 )
 
 var errMissingFilterDestination = errors.New("automatic filter destination is missing")

@@ -28,7 +28,7 @@ import (
 	"github.com/emersion/go-webdav"
 	"github.com/google/uuid"
 
-	"github.com/hkdb/aerion/internal/kit/davutil"
+	"github.com/ollisulopuisto/postilaatikko/internal/kit/davutil"
 )
 
 // composedVCalendar is the output of composeVCalendar. NewSeries is

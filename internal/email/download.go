@@ -13,7 +13,7 @@ import (
 
 	gomessage "github.com/emersion/go-message"
 	msgcharset "github.com/emersion/go-message/charset"
-	"github.com/hkdb/aerion/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
 	"golang.org/x/text/encoding/htmlindex"
 )
 

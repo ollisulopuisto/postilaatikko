@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	"github.com/hkdb/aerion/internal/notification"
+	"github.com/ollisulopuisto/postilaatikko/internal/notification"
 	"sync"
 	"sync/atomic"
 	"testing"

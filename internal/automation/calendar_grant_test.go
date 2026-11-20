@@ -1,8 +1,8 @@
 package automation
 
 import (
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/database"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
 	"path/filepath"
 	"testing"
 )

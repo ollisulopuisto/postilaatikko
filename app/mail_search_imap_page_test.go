@@ -14,13 +14,13 @@ import (
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapserver"
 	"github.com/emersion/go-imap/v2/imapserver/imapmemserver"
-	"github.com/hkdb/aerion/internal/account"
-	"github.com/hkdb/aerion/internal/database"
-	"github.com/hkdb/aerion/internal/folder"
-	appimap "github.com/hkdb/aerion/internal/imap"
-	"github.com/hkdb/aerion/internal/message"
-	syncengine "github.com/hkdb/aerion/internal/sync"
-	"github.com/hkdb/aerion/internal/virtualfolder"
+	"github.com/ollisulopuisto/postilaatikko/internal/account"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	appimap "github.com/ollisulopuisto/postilaatikko/internal/imap"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
+	syncengine "github.com/ollisulopuisto/postilaatikko/internal/sync"
+	"github.com/ollisulopuisto/postilaatikko/internal/virtualfolder"
 )
 
 type searchPageSession struct {

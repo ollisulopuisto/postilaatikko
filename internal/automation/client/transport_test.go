@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/hkdb/aerion/internal/automation/client"
+	"github.com/ollisulopuisto/postilaatikko/internal/automation/client"
 )
 
 type countingTransport struct {

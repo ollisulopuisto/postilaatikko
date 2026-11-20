@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hkdb/aerion/internal/account"
-	"github.com/hkdb/aerion/internal/crypto"
-	"github.com/hkdb/aerion/internal/draft"
-	"github.com/hkdb/aerion/internal/scheduledsend"
-	"github.com/hkdb/aerion/internal/smtp"
+	"github.com/ollisulopuisto/postilaatikko/internal/account"
+	"github.com/ollisulopuisto/postilaatikko/internal/crypto"
+	"github.com/ollisulopuisto/postilaatikko/internal/draft"
+	"github.com/ollisulopuisto/postilaatikko/internal/scheduledsend"
+	"github.com/ollisulopuisto/postilaatikko/internal/smtp"
 	"github.com/zalando/go-keyring"
 )
 

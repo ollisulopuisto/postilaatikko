@@ -3,7 +3,7 @@ package sync
 import (
 	"context"
 	"errors"
-	"github.com/hkdb/aerion/internal/gmail"
+	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
 
 	"fmt"
 	"sort"
@@ -11,8 +11,8 @@ import (
 	gosync "sync"
 	"time"
 
-	"github.com/hkdb/aerion/internal/folder"
-	imapPkg "github.com/hkdb/aerion/internal/imap"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	imapPkg "github.com/ollisulopuisto/postilaatikko/internal/imap"
 )
 
 // folderStatusResult holds the result of a parallel STATUS fetch

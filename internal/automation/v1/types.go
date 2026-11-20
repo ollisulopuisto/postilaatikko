@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/hkdb/aerion/internal/email/replycontent"
-	"github.com/hkdb/aerion/internal/views"
+	"github.com/ollisulopuisto/postilaatikko/internal/email/replycontent"
+	"github.com/ollisulopuisto/postilaatikko/internal/views"
 )
 
 // Version is the versioned route prefix and contract version.

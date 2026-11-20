@@ -10,11 +10,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hkdb/aerion/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 )
 
 // darwinSingleInstanceLock uses a Unix socket for single-instance detection.
-// The socket lives at ~/Library/Application Support/Aerion/instance.sock.
+// The socket lives at ~/Library/Application Support/Postilaatikko/instance.sock.
 type darwinSingleInstanceLock struct {
 	listener   net.Listener
 	socketPath string
@@ -146,7 +146,7 @@ func (l *darwinSingleInstanceLock) handleConnection(conn net.Conn) {
 }
 
 // buildSocketPath returns the path for the instance lock socket.
-// Uses ~/Library/Application Support/Aerion/ which is the standard macOS app data location.
+// Uses ~/Library/Application Support/Postilaatikko/ which is the standard macOS app data location.
 func (l *darwinSingleInstanceLock) buildSocketPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {

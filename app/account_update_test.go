@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hkdb/aerion/internal/account"
-	"github.com/hkdb/aerion/internal/credentials"
-	"github.com/hkdb/aerion/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/account"
+	"github.com/ollisulopuisto/postilaatikko/internal/credentials"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
 	gokeyring "github.com/zalando/go-keyring"
 )
 

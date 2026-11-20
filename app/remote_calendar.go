@@ -2,9 +2,9 @@ package app
 
 import (
 	"errors"
-	calendar "github.com/hkdb/aerion/extensions/calendar/backend"
-	automationclient "github.com/hkdb/aerion/internal/automation/client"
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
+	calendar "github.com/ollisulopuisto/postilaatikko/extensions/calendar/backend"
+	automationclient "github.com/ollisulopuisto/postilaatikko/internal/automation/client"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
 )
 
 // calendarExtensionEnabled mirrors the local bridge's device-level gate.

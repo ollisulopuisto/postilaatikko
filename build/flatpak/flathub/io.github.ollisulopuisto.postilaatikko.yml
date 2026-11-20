@@ -1,11 +1,11 @@
-app-id: io.github.wesleiaqui.eternomail
+app-id: io.github.ollisulopuisto.postilaatikko
 runtime: org.gnome.Platform
 runtime-version: '50'
 sdk: org.gnome.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.golang
   - org.freedesktop.Sdk.Extension.node24
-command: eterno-mail
+command: postilaatikko
 
 finish-args:
   # Network access for email sync
@@ -23,17 +23,17 @@ finish-args:
   - --talk-name=org.freedesktop.secrets
 
 modules:
-  - name: aerion
+  - name: postilaatikko
     buildsystem: simple
     build-options:
       append-path: /usr/lib/sdk/golang/bin:/usr/lib/sdk/node24/bin
       env:
         GOROOT: /usr/lib/sdk/golang
-        GOPATH: /run/build/aerion/go
-        GOCACHE: /run/build/aerion/go-cache
+        GOPATH: /run/build/postilaatikko/go
+        GOCACHE: /run/build/postilaatikko/go-cache
         GO111MODULE: 'on'
         CGO_ENABLED: '1'
-        npm_config_cache: /run/build/aerion/flatpak-node/npm-cache
+        npm_config_cache: /run/build/postilaatikko/flatpak-node/npm-cache
         npm_config_offline: 'true'
 
     build-commands:
@@ -46,26 +46,26 @@ modules:
       # Build the Go binary using vendored modules. Public OAuth client IDs
       # are versioned source configuration; no runtime credentials helper.
       # Tags: desktop (Wails runtime), webkit2_41 (GTK webkit API), production (embedded assets)
-      - go build -mod=vendor -tags desktop,webkit2_41,production -ldflags "-w -s" -o eterno-mail
+      - go build -mod=vendor -tags desktop,webkit2_41,production -ldflags "-w -s" -o postilaatikko
       - CGO_ENABLED=0 go build -mod=vendor -trimpath -ldflags "-w -s" -o postilaatikko-helper ./cmd/postilaatikko-helper
 
       # Install binary
-      - install -Dm755 eterno-mail /app/bin/eterno-mail
+      - install -Dm755 postilaatikko /app/bin/postilaatikko
       - install -Dm755 postilaatikko-helper /app/bin/postilaatikko-helper
 
       # Install desktop file with correct app ID
-      - install -Dm644 build/linux/io.github.wesleiaqui.eternomail.desktop /app/share/applications/io.github.wesleiaqui.eternomail.desktop
+      - install -Dm644 build/linux/io.github.ollisulopuisto.postilaatikko.desktop /app/share/applications/io.github.ollisulopuisto.postilaatikko.desktop
 
       # Install icon with correct app ID
-      - install -Dm644 build/appicon.png /app/share/icons/hicolor/256x256/apps/io.github.wesleiaqui.eternomail.png
+      - install -Dm644 build/appicon.png /app/share/icons/hicolor/256x256/apps/io.github.ollisulopuisto.postilaatikko.png
 
       # Install metainfo (AppStream metadata)
-      - install -Dm644 build/flatpak/io.github.wesleiaqui.eternomail.metainfo.xml /app/share/metainfo/io.github.wesleiaqui.eternomail.metainfo.xml
+      - install -Dm644 build/flatpak/io.github.ollisulopuisto.postilaatikko.metainfo.xml /app/share/metainfo/io.github.ollisulopuisto.postilaatikko.metainfo.xml
 
     sources:
       # Application source code (tag and commit updated by calculate-hashes.sh)
       - type: git
-        url: https://github.com/wesleiaqui/eternomail.git
+        url: https://github.com/ollisulopuisto/postilaatikko.git
         tag: v0.3.10
         commit: 0af33989c78814bdd7699d9ac26c7516af5f8a76
 

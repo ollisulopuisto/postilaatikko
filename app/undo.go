@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"time"
 
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/imap"
-	"github.com/hkdb/aerion/internal/ipc"
-	"github.com/hkdb/aerion/internal/logging"
-	undoPkg "github.com/hkdb/aerion/internal/undo"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/imap"
+	"github.com/ollisulopuisto/postilaatikko/internal/ipc"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
+	undoPkg "github.com/ollisulopuisto/postilaatikko/internal/undo"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 

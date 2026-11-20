@@ -8,17 +8,17 @@ import (
 	"time"
 
 	"github.com/godbus/dbus/v5"
-	"github.com/hkdb/aerion/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 )
 
 const (
-	autostartFilename = "io.github.wesleiaqui.eternomail.desktop"
+	autostartFilename = "io.github.ollisulopuisto.postilaatikko.desktop"
 	desktopEntryTmpl  = `[Desktop Entry]
 Type=Application
-Name=Eterno Mail
-Comment=Eterno Mail email client
+Name=Postilaatikko
+Comment=Postilaatikko email client
 Exec=%s
-Icon=io.github.wesleiaqui.eternomail
+Icon=io.github.ollisulopuisto.postilaatikko
 Terminal=false
 Categories=Network;Email;
 X-GNOME-Autostart-enabled=true
@@ -83,7 +83,7 @@ func (m *linuxAutostartManager) portalRequestBackground(autostart bool) error {
 	}
 
 	// Generate handle token so we know the request object path in advance.
-	handleToken := fmt.Sprintf("aerion_%d", time.Now().UnixNano())
+	handleToken := fmt.Sprintf("postilaatikko_%d", time.Now().UnixNano())
 
 	// Compute expected request path from our unique bus name and handle token.
 	// Unique name is like ":1.42" → remove ":" and replace "." with "_" → "1_42"
@@ -115,7 +115,7 @@ func (m *linuxAutostartManager) portalRequestBackground(autostart bool) error {
 		"handle_token": dbus.MakeVariant(handleToken),
 		"reason":       dbus.MakeVariant("Start automatically on login and sync email in the background"),
 		"autostart":    dbus.MakeVariant(autostart),
-		"commandline":  dbus.MakeVariant([]string{"aerion"}),
+		"commandline":  dbus.MakeVariant([]string{"postilaatikko"}),
 	}
 
 	obj := conn.Object("org.freedesktop.portal.Desktop", "/org/freedesktop/portal/desktop")
@@ -181,6 +181,9 @@ func (m *linuxAutostartManager) xdgEnable() error {
 		return fmt.Errorf("failed to write autostart file: %w", err)
 	}
 
+	if err := removeLegacyAutostart(dir, ".desktop"); err != nil {
+		return err
+	}
 	log.Info().Str("path", path).Msg("Autostart enabled")
 	return nil
 }
@@ -199,6 +202,9 @@ func (m *linuxAutostartManager) xdgDisable() error {
 		return fmt.Errorf("failed to remove autostart file: %w", err)
 	}
 
+	if err := removeLegacyAutostart(dir, ".desktop"); err != nil {
+		return err
+	}
 	log.Info().Str("path", path).Msg("Autostart disabled")
 	return nil
 }
@@ -232,7 +238,21 @@ func (m *linuxAutostartManager) autostartDir() (string, error) {
 func (m *linuxAutostartManager) execCommand() string {
 	exe, err := os.Executable()
 	if err != nil {
-		return "aerion"
+		return "postilaatikko"
 	}
 	return exe
+}
+
+func (m *linuxAutostartManager) migrateLegacy() error {
+	if m.isFlatpak {
+		return nil
+	}
+	dir, err := m.autostartDir()
+	if err != nil {
+		return err
+	}
+	if hasLegacyAutostart(dir, ".desktop") {
+		return m.xdgEnable()
+	}
+	return nil
 }

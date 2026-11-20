@@ -59,8 +59,8 @@ func MonitorGBMErrors() {
 		for scanner.Scan() {
 			line := scanner.Text()
 			if strings.Contains(line, "Failed to create GBM buffer") ||
-			strings.Contains(line, "Protocol error) dispatching to Wayland display") ||
-			strings.Contains(line, "Failed to submit review to ODRS") {
+				strings.Contains(line, "Protocol error) dispatching to Wayland display") ||
+				strings.Contains(line, "Failed to submit review to ODRS") {
 				once.Do(func() {
 					showGBMFixDialog()
 				})
@@ -75,10 +75,10 @@ func MonitorGBMErrors() {
 func showGBMFixDialog() {
 	ShowDialogAsync(
 		DialogIconWarning,
-		"Eterno Mail - Display Issue Detected",
+		"Postilaatikko - Display Issue Detected",
 		"A display rendering error was detected that may cause a blank window or crash.\n\n"+
-			"To fix this permanently, close Eterno Mail and run:\n\n"+
-			"flatpak override --user --env=WEBKIT_DISABLE_DMABUF_RENDERER=1 io.github.wesleiaqui.eternomail\n\n"+
-			"Then restart Eterno Mail.",
+			"To fix this permanently, close Postilaatikko and run:\n\n"+
+			"flatpak override --user --env=WEBKIT_DISABLE_DMABUF_RENDERER=1 io.github.ollisulopuisto.postilaatikko\n\n"+
+			"Then restart Postilaatikko.",
 	)
 }

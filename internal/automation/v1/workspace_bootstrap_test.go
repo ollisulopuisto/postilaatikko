@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hkdb/aerion/internal/account"
-	"github.com/hkdb/aerion/internal/folder"
-	"github.com/hkdb/aerion/internal/message"
-	"github.com/hkdb/aerion/internal/virtualfolder"
+	"github.com/ollisulopuisto/postilaatikko/internal/account"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/virtualfolder"
 )
 
 type stubBootstrapOps struct {

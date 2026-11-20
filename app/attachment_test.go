@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/hkdb/aerion/internal/platform"
+	"github.com/ollisulopuisto/postilaatikko/internal/platform"
 )
 
 func TestValidateOpenPath(t *testing.T) {

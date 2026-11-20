@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/hkdb/aerion/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
 )
 
 // Store provides account storage operations

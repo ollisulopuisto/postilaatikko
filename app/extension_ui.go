@@ -1,8 +1,8 @@
 package app
 
 import (
-	coreapi "github.com/hkdb/aerion/internal/core/api/v1"
-	"github.com/hkdb/aerion/internal/settings"
+	coreapi "github.com/ollisulopuisto/postilaatikko/internal/core/api/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/settings"
 )
 
 // ListEnabledExtensions returns the names of all enabled first-party

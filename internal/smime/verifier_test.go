@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hkdb/aerion/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
 	"github.com/rs/zerolog"
 	"go.mozilla.org/pkcs7"
 )

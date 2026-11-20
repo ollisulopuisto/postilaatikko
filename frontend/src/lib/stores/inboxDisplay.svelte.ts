@@ -82,7 +82,7 @@ function saveCardPreferences(): void {
   // inbox explicitly so a changed card preference is reflected immediately,
   // including after the panel has been opened from a dialog.
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new Event('eterno-mail:inbox-card-preferences-change'))
+    window.dispatchEvent(new Event('postilaatikko:inbox-card-preferences-change'))
   }
 }
 
@@ -141,7 +141,7 @@ export function setInboxDisplayMode(mode: InboxDisplayMode): void {
   displayMode = mode
   save(STORAGE_KEY, mode)
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent<InboxDisplayMode>('eterno-mail:inbox-display-change', { detail: mode }))
+    window.dispatchEvent(new CustomEvent<InboxDisplayMode>('postilaatikko:inbox-display-change', { detail: mode }))
   }
 }
 

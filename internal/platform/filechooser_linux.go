@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/godbus/dbus/v5"
-	"github.com/hkdb/aerion/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 )
 
 // PortalSaveFile shows the XDG FileChooser portal Save dialog for a single file.

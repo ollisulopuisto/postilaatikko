@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/hkdb/aerion/internal/email/replycontent"
-	"github.com/hkdb/aerion/internal/email/textrepair"
-	"github.com/hkdb/aerion/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/email/replycontent"
+	"github.com/ollisulopuisto/postilaatikko/internal/email/textrepair"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
 )
 
 // GetMessage returns a stored message, optionally requiring it to belong to

@@ -3,15 +3,15 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"github.com/hkdb/aerion/internal/database"
-	"github.com/hkdb/aerion/internal/readerbridge"
-	"github.com/hkdb/aerion/internal/settings"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/readerbridge"
+	"github.com/ollisulopuisto/postilaatikko/internal/settings"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/hkdb/aerion/internal/ipc"
+	"github.com/ollisulopuisto/postilaatikko/internal/ipc"
 )
 
 func TestDetachedEmailTemplateOperationsUseParent(t *testing.T) {

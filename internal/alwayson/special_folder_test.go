@@ -5,10 +5,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/hkdb/aerion/internal/account"
-	"github.com/hkdb/aerion/internal/database"
-	"github.com/hkdb/aerion/internal/folder"
-	"github.com/hkdb/aerion/internal/views"
+	"github.com/ollisulopuisto/postilaatikko/internal/account"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/views"
 )
 
 func TestAllInboxesResolverSelectsOneEnabledInboxPerAccount(t *testing.T) {

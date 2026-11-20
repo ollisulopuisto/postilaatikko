@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hkdb/aerion/internal/account"
-	"github.com/hkdb/aerion/internal/carddav"
-	"github.com/hkdb/aerion/internal/contact"
-	"github.com/hkdb/aerion/internal/credentials"
-	"github.com/hkdb/aerion/internal/database"
-	"github.com/hkdb/aerion/internal/oauth2"
+	"github.com/ollisulopuisto/postilaatikko/internal/account"
+	"github.com/ollisulopuisto/postilaatikko/internal/carddav"
+	"github.com/ollisulopuisto/postilaatikko/internal/contact"
+	"github.com/ollisulopuisto/postilaatikko/internal/credentials"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/oauth2"
 	gokeyring "github.com/zalando/go-keyring"
 )
 

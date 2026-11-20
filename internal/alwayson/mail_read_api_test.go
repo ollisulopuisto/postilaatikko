@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hkdb/aerion/internal/database"
-	"github.com/hkdb/aerion/internal/message"
-	"github.com/hkdb/aerion/internal/views"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/views"
 )
 
 func setupThreadReadTest(t *testing.T) (*mailboxReadOperations, *database.DB) {

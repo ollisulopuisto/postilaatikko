@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/hkdb/aerion/internal/gmail"
+	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
 )
 
 // GmailAPIState is what the last Gmail API call for an account told us about

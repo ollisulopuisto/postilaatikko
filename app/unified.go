@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"sort"
 
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/folder"
-	"github.com/hkdb/aerion/internal/message"
-	"github.com/hkdb/aerion/internal/triage"
-	"github.com/hkdb/aerion/internal/views"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/triage"
+	"github.com/ollisulopuisto/postilaatikko/internal/views"
 )
 
 // unifiedSpecialFolders resolves the real folders represented by a synthetic

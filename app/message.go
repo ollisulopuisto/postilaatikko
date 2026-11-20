@@ -9,15 +9,15 @@ import (
 	"strconv"
 	"strings"
 
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/email/textrepair"
-	"github.com/hkdb/aerion/internal/folder"
-	"github.com/hkdb/aerion/internal/gmail"
-	"github.com/hkdb/aerion/internal/logging"
-	"github.com/hkdb/aerion/internal/message"
-	"github.com/hkdb/aerion/internal/pgp"
-	"github.com/hkdb/aerion/internal/smime"
-	"github.com/hkdb/aerion/internal/views"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/email/textrepair"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/pgp"
+	"github.com/ollisulopuisto/postilaatikko/internal/smime"
+	"github.com/ollisulopuisto/postilaatikko/internal/views"
 )
 
 // ============================================================================

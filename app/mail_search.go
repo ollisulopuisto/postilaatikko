@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"strings"
 
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/folder"
-	"github.com/hkdb/aerion/internal/gmail"
-	"github.com/hkdb/aerion/internal/mailservice"
-	"github.com/hkdb/aerion/internal/message"
-	"github.com/hkdb/aerion/internal/views"
-	"github.com/hkdb/aerion/internal/virtualfolder"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
+	"github.com/ollisulopuisto/postilaatikko/internal/mailservice"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/views"
+	"github.com/ollisulopuisto/postilaatikko/internal/virtualfolder"
 )
 
 type MailSearchRequest = mailservice.MailSearchRequest

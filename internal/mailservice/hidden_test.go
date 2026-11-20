@@ -5,12 +5,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/hkdb/aerion/internal/account"
-	"github.com/hkdb/aerion/internal/database"
-	"github.com/hkdb/aerion/internal/folder"
-	"github.com/hkdb/aerion/internal/message"
-	mailSync "github.com/hkdb/aerion/internal/sync"
-	"github.com/hkdb/aerion/internal/virtualfolder"
+	"github.com/ollisulopuisto/postilaatikko/internal/account"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
+	mailSync "github.com/ollisulopuisto/postilaatikko/internal/sync"
+	"github.com/ollisulopuisto/postilaatikko/internal/virtualfolder"
 )
 
 func TestHiddenVirtualSourceKeepsCachedConversationsWithoutProvider(t *testing.T) {

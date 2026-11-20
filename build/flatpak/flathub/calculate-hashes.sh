@@ -9,9 +9,9 @@ if [ "$#" -ne 1 ]; then
 fi
 
 TAG_NAME="$1"
-REPO="https://github.com/wesleiaqui/EternoMail"
+REPO="https://github.com/ollisulopuisto/postilaatikko"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MANIFEST="$SCRIPT_DIR/io.github.wesleiaqui.eternomail.yml"
+MANIFEST="$SCRIPT_DIR/io.github.ollisulopuisto.postilaatikko.yml"
 
 if [ ! -f "$MANIFEST" ]; then
     echo "ERROR: Manifest file not found: $MANIFEST" >&2

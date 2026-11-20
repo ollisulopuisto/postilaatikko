@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/hkdb/aerion/internal/mailfilter"
+	"github.com/ollisulopuisto/postilaatikko/internal/mailfilter"
 )
 
 // FilterRuleMutationRequest describes a persisted rule operation.

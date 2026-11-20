@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hkdb/aerion/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
 
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/message"
-	"github.com/hkdb/aerion/internal/virtualfolder"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/virtualfolder"
 )
 
 // A virtual-folder view must keep loading when the mailbox service's cached

@@ -3,7 +3,7 @@ package alwayson
 import (
 	"errors"
 
-	"github.com/hkdb/aerion/internal/automation"
+	"github.com/ollisulopuisto/postilaatikko/internal/automation"
 )
 
 // NewMailboxAPIServer composes the headless mailbox read handler with the

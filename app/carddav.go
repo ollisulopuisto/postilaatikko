@@ -5,11 +5,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hkdb/aerion/internal/account"
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/carddav"
-	"github.com/hkdb/aerion/internal/kit/davutil"
-	"github.com/hkdb/aerion/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/account"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/carddav"
+	"github.com/ollisulopuisto/postilaatikko/internal/kit/davutil"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 )
 
 // LinkedAccountInfo represents an email account that can be linked to a contact source

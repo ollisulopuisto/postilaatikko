@@ -3037,7 +3037,7 @@
       <AlertDialog.Title>{$_('attachment.flatpakOpenTitle')}</AlertDialog.Title>
       <AlertDialog.Description>
         <p class="mb-3">{$_('attachment.flatpakOpenDescription')}</p>
-        <pre class="mb-3 rounded bg-muted p-2 text-sm overflow-x-auto"><code>flatpak override --user --filesystem=home io.github.wesleiaqui.eternomail</code></pre>
+        <pre class="mb-3 rounded bg-muted p-2 text-sm overflow-x-auto"><code>flatpak override --user --filesystem=home io.github.ollisulopuisto.postilaatikko</code></pre>
         <p class="mb-3 text-sm text-destructive">{$_('attachment.flatpakOpenSecurityWarning')}</p>
         <p class="text-sm text-muted-foreground">{$_('attachment.flatpakOpenAlternative')}</p>
       </AlertDialog.Description>

@@ -1,13 +1,13 @@
 # Legacy local source experiment. It is intentionally not the Flathub manifest:
 # it downloads dependencies during build, despite pinning the Wails CLI.
-app-id: io.github.wesleiaqui.eternomail
+app-id: io.github.ollisulopuisto.postilaatikko
 runtime: org.gnome.Platform
 runtime-version: '50'
 sdk: org.gnome.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.golang
   - org.freedesktop.Sdk.Extension.node24
-command: eterno-mail
+command: postilaatikko
 
 finish-args:
   # Network access for email sync
@@ -25,27 +25,27 @@ finish-args:
   - --talk-name=org.freedesktop.secrets
 
 modules:
-  - name: aerion
+  - name: postilaatikko
     buildsystem: simple
     build-options:
       append-path: /usr/lib/sdk/golang/bin:/usr/lib/sdk/node24/bin
       env:
         GOROOT: /usr/lib/sdk/golang
-        GOPATH: /run/build/aerion/go
-        GOCACHE: /run/build/aerion/go-cache
+        GOPATH: /run/build/postilaatikko/go
+        GOCACHE: /run/build/postilaatikko/go-cache
         GO111MODULE: 'on'
         CGO_ENABLED: '1'
         # Use direct mode for reliability
         GOPROXY: 'direct'
         GOSUMDB: 'off'
         NODE_ENV: production
-        npm_config_cache: /run/build/aerion/npm-cache
+        npm_config_cache: /run/build/postilaatikko/npm-cache
 
     build-commands:
       # Install Wails CLI
       - |
-        export PATH=$PATH:/run/build/aerion/go/bin
-        export GOPATH=/run/build/aerion/go
+        export PATH=$PATH:/run/build/postilaatikko/go/bin
+        export GOPATH=/run/build/postilaatikko/go
         go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
 
       # Install frontend dependencies
@@ -57,28 +57,28 @@ modules:
       # Build the application. Official OAuth desktop-client configuration is
       # versioned source code; do not inject credentials through build flags.
       - |
-        export PATH=$PATH:/run/build/aerion/go/bin
-        /run/build/aerion/go/bin/wails build -tags webkit2_41,linux,production -o eterno-mail
+        export PATH=$PATH:/run/build/postilaatikko/go/bin
+        /run/build/postilaatikko/go/bin/wails build -tags webkit2_41,linux,production -o postilaatikko
 
       # Build the sibling headless service helper from the same source revision.
       - CGO_ENABLED=0 go build -mod=vendor -trimpath -ldflags "-w -s" -o postilaatikko-helper ./cmd/postilaatikko-helper
 
       # Install the binary
-      - install -Dm755 build/bin/eterno-mail /app/bin/eterno-mail
+      - install -Dm755 build/bin/postilaatikko /app/bin/postilaatikko
       - install -Dm755 postilaatikko-helper /app/bin/postilaatikko-helper
 
       # Install desktop file with correct app ID
-      - install -Dm644 build/linux/io.github.wesleiaqui.eternomail.desktop /app/share/applications/io.github.wesleiaqui.eternomail.desktop
+      - install -Dm644 build/linux/io.github.ollisulopuisto.postilaatikko.desktop /app/share/applications/io.github.ollisulopuisto.postilaatikko.desktop
 
       # Update desktop file Icon and Exec fields
-      - desktop-file-edit --set-key=Icon --set-value=io.github.wesleiaqui.eternomail /app/share/applications/io.github.wesleiaqui.eternomail.desktop
-      - desktop-file-edit --set-key=Exec --set-value=eterno-mail /app/share/applications/io.github.wesleiaqui.eternomail.desktop
+      - desktop-file-edit --set-key=Icon --set-value=io.github.ollisulopuisto.postilaatikko /app/share/applications/io.github.ollisulopuisto.postilaatikko.desktop
+      - desktop-file-edit --set-key=Exec --set-value=postilaatikko /app/share/applications/io.github.ollisulopuisto.postilaatikko.desktop
 
       # Install icon with correct app ID
-      - install -Dm644 build/appicon.png /app/share/icons/hicolor/256x256/apps/io.github.wesleiaqui.eternomail.png
+      - install -Dm644 build/appicon.png /app/share/icons/hicolor/256x256/apps/io.github.ollisulopuisto.postilaatikko.png
 
       # Install metainfo (AppStream metadata)
-      - install -Dm644 build/flatpak/io.github.wesleiaqui.eternomail.metainfo.xml /app/share/metainfo/io.github.wesleiaqui.eternomail.metainfo.xml
+      - install -Dm644 build/flatpak/io.github.ollisulopuisto.postilaatikko.metainfo.xml /app/share/metainfo/io.github.ollisulopuisto.postilaatikko.metainfo.xml
 
     sources:
       # Local source for development builds (make flatpak-dev)

@@ -1,7 +1,7 @@
 # Flathub Submission
 
 This directory contains the source-build manifest and assets for submitting
-Eterno Mail to Flathub after each GitHub release.
+Postilaatikko to Flathub after each GitHub release.
 
 ## Reproducible Source Build
 
@@ -18,7 +18,7 @@ Before submitting to Flathub:
    `v0.1.15`).
 2. **Update the stable manifest source** to that exact tag and commit.
 
-## Update `build/flatpak/flathub/io.github.wesleiaqui.eternomail.yml`
+## Update `build/flatpak/flathub/io.github.ollisulopuisto.postilaatikko.yml`
 
 After creating a release tag, update the manifest's Git source to the matching
 immutable tag and commit, then regenerate vendored dependency sources when the
@@ -46,13 +46,13 @@ git clone --branch=new-pr git@github.com:YOUR_USERNAME/flathub.git
 cd flathub
 
 # Create your submission branch
-git checkout -b add-eterno-mail new-pr
+git checkout -b add-postilaatikko new-pr
 ```
 
 ### Step 3: Copy Required Files to Forked Flathub Repo(5 files total)
 
 ```bash
-cd /path/to/Eterno-Mail
+cd /path/to/Postilaatikko
 git pull
 cd build/flatpak/flathub
 # Double check the source manifest and generated dependency sources
@@ -64,8 +64,8 @@ cd build/flatpak/flathub
 ```bash
 cd /path/to/forked/flathub
 git add .
-git commit -m "Add io.github.wesleiaqui.eternomail"
-git push origin add-eterno-mail
+git commit -m "Add io.github.ollisulopuisto.postilaatikko"
+git push origin add-postilaatikko
 ```
 
 ### Step 5: Create Pull Request
@@ -74,8 +74,8 @@ On GitHub, create a pull request:
 - **Base repository**: `flathub/flathub`
 - **Base branch**: `new-pr` ← **CRITICAL!**
 - **Head repository**: `YOUR_USERNAME/flathub`
-- **Compare branch**: `add-eterno-mail`
-- **Title**: `Add io.github.wesleiaqui.eternomail`
+- **Compare branch**: `add-postilaatikko`
+- **Title**: `Add io.github.ollisulopuisto.postilaatikko`
 
 ### Step 6: Review Process
 
@@ -93,7 +93,7 @@ Comment `bot, build` to trigger a test build once reviewers are satisfied.
 ### Step 7: Approval & Repository Creation
 
 After approval:
-- Flathub creates `flathub/io.github.wesleiaqui.eternomail` repository
+- Flathub creates `flathub/io.github.ollisulopuisto.postilaatikko` repository
 - You receive write access invitation (accept within 1 week)
 - Must have 2FA enabled on GitHub
 
@@ -108,10 +108,10 @@ After v0.1.14 is on Flathub, for subsequent releases (v0.1.15, v0.1.16, etc.):
 git pull
 
 # 3. Release to Flathub repository (using release.sh helper script)
-./release.sh /path/to/flathub/io.github.wesleiaqui.eternomail
+./release.sh /path/to/flathub/io.github.ollisulopuisto.postilaatikko
 # Script automatically copies: manifest, metainfo, desktop, icon, and flathub.json
 
-cd /path/to/flathub/io.github.wesleiaqui.eternomail
+cd /path/to/flathub/io.github.ollisulopuisto.postilaatikko
 git add .
 git commit -m "Update to v0.1.15"
 git push
@@ -121,16 +121,16 @@ git push
 
 ## Files in This Directory
 
-- `io.github.wesleiaqui.eternomail.yml` - Offline source-build manifest for Flathub
-- `io.github.wesleiaqui.eternomail-source.yml` - Legacy local source experiment (not suitable for Flathub)
+- `io.github.ollisulopuisto.postilaatikko.yml` - Offline source-build manifest for Flathub
+- `io.github.ollisulopuisto.postilaatikko-source.yml` - Legacy local source experiment (not suitable for Flathub)
 - `calculate-hashes.sh` - Helper script that automatically updates the manifest with new release hashes
 - `release.sh` - Helper script that copies all files to the Flathub repository
 - `README.md` - This file
 
 **Files to copy from parent directory for Flathub submission:**
-- `../io.github.wesleiaqui.eternomail.metainfo.xml` - AppStream metadata
-- `../../linux/io.github.wesleiaqui.eternomail.desktop` - Desktop file
-- `../../appicon.png` - Application icon (installed as `io.github.wesleiaqui.eternomail.png`)
+- `../io.github.ollisulopuisto.postilaatikko.metainfo.xml` - AppStream metadata
+- `../../linux/io.github.ollisulopuisto.postilaatikko.desktop` - Desktop file
+- `../../appicon.png` - Application icon (installed as `io.github.ollisulopuisto.postilaatikko.png`)
 
 ## OAuth Credentials
 

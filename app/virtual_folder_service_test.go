@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/hkdb/aerion/internal/virtualfolder"
+	"github.com/ollisulopuisto/postilaatikko/internal/virtualfolder"
 )
 
 func TestGetVirtualFolderUnreadCountsUsesConnectedHelper(t *testing.T) {

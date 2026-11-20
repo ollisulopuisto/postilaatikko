@@ -10,13 +10,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/hkdb/aerion/internal/account"
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/database"
-	"github.com/hkdb/aerion/internal/logging"
-	"github.com/hkdb/aerion/internal/message"
-	"github.com/hkdb/aerion/internal/views"
-	"github.com/hkdb/aerion/internal/virtualfolder"
+	"github.com/ollisulopuisto/postilaatikko/internal/account"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/views"
+	"github.com/ollisulopuisto/postilaatikko/internal/virtualfolder"
 )
 
 // ============================================================================

@@ -31,7 +31,7 @@ import (
 	"context"
 	"errors"
 
-	coreapi "github.com/hkdb/aerion/internal/core/api/v1"
+	coreapi "github.com/ollisulopuisto/postilaatikko/internal/core/api/v1"
 )
 
 // Provider is the per-source-type abstraction. Implementations are NOT
@@ -122,11 +122,11 @@ const (
 // the master event's current state (needed for ETag + ICSBlob composition)
 // plus the targeted occurrence + new fields.
 type PushInstancePayload struct {
-	Master           Event       // current master with ETag, Href, ProviderEventID, ICSBlob
-	InstanceTimeUnix int64       // original DTSTART of the targeted occurrence (unix seconds, UTC)
-	Op               EditScope   // EditScopeThis | EditScopeThisAndFuture
+	Master           Event     // current master with ETag, Href, ProviderEventID, ICSBlob
+	InstanceTimeUnix int64     // original DTSTART of the targeted occurrence (unix seconds, UTC)
+	Op               EditScope // EditScopeThis | EditScopeThisAndFuture
 	Kind             InstanceOpKind
-	In               EventInput  // new fields for update; ignored for delete
+	In               EventInput // new fields for update; ignored for delete
 }
 
 // PushInstanceResult carries what the API layer persists after a

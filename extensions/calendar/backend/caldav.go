@@ -13,7 +13,7 @@ import (
 	"github.com/emersion/go-webdav"
 	extcaldav "github.com/emersion/go-webdav/caldav"
 
-	"github.com/hkdb/aerion/internal/kit/davutil"
+	"github.com/ollisulopuisto/postilaatikko/internal/kit/davutil"
 )
 
 // DiscoveredCalendar is the calendar-shaped result of CalDAV discovery,
@@ -425,4 +425,3 @@ func resolveCalDAVURL(baseURL, href string) string {
 	}
 	return base.ResolveReference(ref).String()
 }
-

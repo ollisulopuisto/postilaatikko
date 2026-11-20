@@ -5,7 +5,7 @@ package recurrencebounded
 import (
 	"context"
 	"errors"
-	local "github.com/hkdb/aerion/internal/recurrencebounded/rrule"
+	local "github.com/ollisulopuisto/postilaatikko/internal/recurrencebounded/rrule"
 	upstream "github.com/teambition/rrule-go"
 	"sort"
 	"time"

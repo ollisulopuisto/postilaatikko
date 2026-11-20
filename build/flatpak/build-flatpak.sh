@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build Eterno Mail Flatpak for local development/testing.
+# Build Postilaatikko Flatpak for local development/testing.
 # Builds the binary on the host, then packages it into a Flatpak.
 
 set -e
@@ -7,7 +7,7 @@ set -e
 # Change to project root
 cd "$(dirname "$0")/../.."
 
-echo "=== Eterno Mail Flatpak Dev Builder ==="
+echo "=== Postilaatikko Flatpak Dev Builder ==="
 echo ""
 
 # Check if flatpak-builder is installed
@@ -39,7 +39,7 @@ echo "All runtimes installed"
 echo ""
 
 # Build the binary on the host
-echo "Building Eterno Mail binary on host..."
+echo "Building Postilaatikko binary on host..."
 make build-linux
 
 # Package into Flatpak using the dev manifest (packaging only, no compilation)
@@ -48,22 +48,22 @@ echo "Packaging into Flatpak..."
 echo ""
 
 flatpak-builder --disable-rofiles-fuse --force-clean --user --install-deps-from=flathub \
-    --repo=repo build-dir build/flatpak/io.github.wesleiaqui.eternomail-dev.yml
+    --repo=repo build-dir build/flatpak/io.github.ollisulopuisto.postilaatikko-dev.yml
 
 # Create bundle for distribution/testing on other machines
 echo ""
 echo "Creating .flatpak bundle..."
 mkdir -p build/bin
 
-flatpak build-bundle repo build/bin/Eterno-Mail-dev.flatpak io.github.wesleiaqui.eternomail
+flatpak build-bundle repo build/bin/Postilaatikko-dev.flatpak io.github.ollisulopuisto.postilaatikko
 
 echo ""
 echo "Build complete!"
 echo ""
-echo "Flatpak bundle: build/bin/Eterno-Mail-dev.flatpak"
+echo "Flatpak bundle: build/bin/Postilaatikko-dev.flatpak"
 echo ""
 echo "To install on a target machine:"
-echo "  flatpak install --user Eterno-Mail-dev.flatpak"
+echo "  flatpak install --user Postilaatikko-dev.flatpak"
 echo ""
 echo "To run:"
-echo "  flatpak run io.github.wesleiaqui.eternomail"
+echo "  flatpak run io.github.ollisulopuisto.postilaatikko"

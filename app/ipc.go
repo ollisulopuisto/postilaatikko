@@ -5,9 +5,9 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/hkdb/aerion/internal/folder"
-	"github.com/hkdb/aerion/internal/ipc"
-	"github.com/hkdb/aerion/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/ipc"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 

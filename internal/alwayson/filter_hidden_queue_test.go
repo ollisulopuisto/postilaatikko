@@ -2,12 +2,12 @@ package alwayson
 
 import (
 	"context"
-	"github.com/hkdb/aerion/internal/database"
-	"github.com/hkdb/aerion/internal/folder"
-	"github.com/hkdb/aerion/internal/mailboxevents"
-	"github.com/hkdb/aerion/internal/mailfilter"
-	"github.com/hkdb/aerion/internal/mailmove"
-	"github.com/hkdb/aerion/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/mailboxevents"
+	"github.com/ollisulopuisto/postilaatikko/internal/mailfilter"
+	"github.com/ollisulopuisto/postilaatikko/internal/mailmove"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
 	"path/filepath"
 	"testing"
 	"time"

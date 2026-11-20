@@ -3,8 +3,8 @@ package backend
 import (
 	"fmt"
 
-	"github.com/hkdb/aerion/extensions/calendar"
-	coreapi "github.com/hkdb/aerion/internal/core/api/v1"
+	"github.com/ollisulopuisto/postilaatikko/extensions/calendar"
+	coreapi "github.com/ollisulopuisto/postilaatikko/internal/core/api/v1"
 )
 
 // Extension is the Calendar extension's lifecycle handle. Tiny — just the
@@ -33,7 +33,7 @@ func (e *Extension) Manifest() coreapi.Manifest { return e.manifest }
 // CalDAV setup goes through the standalone "Add CalDAV source" dialog,
 // not through this account-setup-hook path.
 //
-// Runs once per Aerion process lifetime at App.Startup, regardless of
+// Runs once per Postilaatikko process lifetime at App.Startup, regardless of
 // enabled state — descriptive registrations persist across enable/disable
 // cycles. The frontend filters by enabled state at render time.
 func (e *Extension) Register(core coreapi.Core) (coreapi.Unregister, error) {

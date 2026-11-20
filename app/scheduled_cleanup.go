@@ -8,7 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/hkdb/aerion/internal/gmail"
+	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
 	"io"
 	"net/textproto"
 	"strings"
@@ -16,9 +16,9 @@ import (
 
 	goimap "github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
-	"github.com/hkdb/aerion/internal/draft"
-	"github.com/hkdb/aerion/internal/folder"
-	"github.com/hkdb/aerion/internal/scheduledsend"
+	"github.com/ollisulopuisto/postilaatikko/internal/draft"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/scheduledsend"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 

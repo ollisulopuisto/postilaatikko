@@ -19,17 +19,17 @@ import (
 	"strings"
 	"testing"
 
-	coreapi "github.com/hkdb/aerion/internal/core/api/v1"
+	coreapi "github.com/ollisulopuisto/postilaatikko/internal/core/api/v1"
 )
 
 // fakeSecrets satisfies coreapi.Secrets with a static password. Only Get is
 // exercised by caldavProvider — the rest stub safely.
 type fakeSecrets struct{ password string }
 
-func (f fakeSecrets) Set(_, _ string) error       { return nil }
+func (f fakeSecrets) Set(_, _ string) error        { return nil }
 func (f fakeSecrets) Get(_ string) (string, error) { return f.password, nil }
-func (f fakeSecrets) Delete(_ string) error       { return nil }
-func (f fakeSecrets) DeleteAll() error            { return nil }
+func (f fakeSecrets) Delete(_ string) error        { return nil }
+func (f fakeSecrets) DeleteAll() error             { return nil }
 
 var _ coreapi.Secrets = fakeSecrets{}
 

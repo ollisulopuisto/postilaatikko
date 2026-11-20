@@ -5,16 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
 	"cloud.google.com/go/pubsub/v2"
-	"github.com/hkdb/aerion/internal/account"
-	"github.com/hkdb/aerion/internal/gmail"
-	"github.com/hkdb/aerion/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/account"
+	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 	"google.golang.org/api/option"
 )
 

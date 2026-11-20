@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/hkdb/aerion/internal/gmail"
+	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
 	stdlog "log"
 	"slices"
 	"sort"
@@ -13,14 +13,14 @@ import (
 
 	goImap "github.com/emersion/go-imap/v2"
 	"github.com/google/uuid"
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/folder"
-	"github.com/hkdb/aerion/internal/imap"
-	"github.com/hkdb/aerion/internal/logging"
-	"github.com/hkdb/aerion/internal/mailmove"
-	"github.com/hkdb/aerion/internal/message"
-	"github.com/hkdb/aerion/internal/operations"
-	"github.com/hkdb/aerion/internal/undo"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/imap"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/mailmove"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/operations"
+	"github.com/ollisulopuisto/postilaatikko/internal/undo"
 )
 
 // withIMAPRetry wraps an IMAP operation with stale-connection retry.

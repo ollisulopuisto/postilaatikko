@@ -60,7 +60,7 @@ make dev
 
 Its outputs go to `build/bin/`; this script does not publish a release or notarize the app. Run it with `--help` for app-only and repeat-build options.
 
-Provider OAuth development overrides are described in `.env.example`. Configure your own provider registration when needed; do not commit credentials or local `.env` files. Compatibility-sensitive names such as the Go module `github.com/hkdb/aerion` and executable `eterno-mail` remain in the source.
+Provider OAuth development overrides are described in `.env.example`. Configure your own provider registration when needed; do not commit credentials or local `.env` files. The Go module and executable now use Postilaatikko. Existing data, keychain and preference namespaces remain compatible. See [identity and Flatpak migration notes](docs/IDENTITY_RENAME.md).
 
 For checks:
 

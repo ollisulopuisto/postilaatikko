@@ -1,7 +1,7 @@
 package app
 
 import (
-	"github.com/hkdb/aerion/internal/email/replycontent"
+	"github.com/ollisulopuisto/postilaatikko/internal/email/replycontent"
 )
 
 // GetReplyContent returns the reply extraction (new text, quoted history,

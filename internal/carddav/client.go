@@ -15,8 +15,8 @@ import (
 	"github.com/emersion/go-vcard"
 	"github.com/emersion/go-webdav"
 	"github.com/emersion/go-webdav/carddav"
-	"github.com/hkdb/aerion/internal/kit/davutil"
-	"github.com/hkdb/aerion/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/kit/davutil"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 	"github.com/rs/zerolog"
 )
 

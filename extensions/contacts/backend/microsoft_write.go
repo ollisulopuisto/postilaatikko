@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hkdb/aerion/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 	"github.com/rs/zerolog"
 )
 
@@ -93,12 +93,12 @@ type msContact struct {
 	// IMAddresses is a string[] (no protocol field). Encoded "protocol:handle"
 	// stays as a single string round-trip — converter strips/restores the prefix
 	// at the field boundary so the user's protocol metadata is preserved when
-	// the record stays inside Aerion's data model.
+	// the record stays inside Postilaatikko's data model.
 	IMAddresses []string `json:"imAddresses,omitempty"`
 
 	Categories []string `json:"categories,omitempty"`
 
-	Birthday string `json:"birthday,omitempty"`     // ISO 8601 datetime; we send YYYY-MM-DDTHH:00:00Z
+	Birthday string `json:"birthday,omitempty"` // ISO 8601 datetime; we send YYYY-MM-DDTHH:00:00Z
 	Personal string `json:"personalNotes,omitempty"`
 }
 

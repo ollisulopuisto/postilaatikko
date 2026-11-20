@@ -11,8 +11,8 @@ import (
 
 	"github.com/ProtonMail/go-crypto/openpgp"
 	"github.com/ProtonMail/go-crypto/openpgp/armor"
-	"github.com/hkdb/aerion/internal/credentials"
-	"github.com/hkdb/aerion/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/credentials"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 	"github.com/rs/zerolog"
 )
 

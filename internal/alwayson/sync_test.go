@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/hkdb/aerion/internal/database"
-	"github.com/hkdb/aerion/internal/imap"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/imap"
 )
 
 func TestSyncRuntimeStartsAndStopsWithoutAccounts(t *testing.T) {

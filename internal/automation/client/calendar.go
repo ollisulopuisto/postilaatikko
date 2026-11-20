@@ -3,8 +3,8 @@ package client
 import (
 	"context"
 	"encoding/json"
-	calendar "github.com/hkdb/aerion/extensions/calendar/backend"
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
+	calendar "github.com/ollisulopuisto/postilaatikko/extensions/calendar/backend"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
 	"net/http"
 	"net/url"
 )

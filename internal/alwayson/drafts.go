@@ -14,13 +14,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/hkdb/aerion/internal/account"
-	"github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/draft"
-	"github.com/hkdb/aerion/internal/email"
-	"github.com/hkdb/aerion/internal/message"
-	"github.com/hkdb/aerion/internal/scheduledsend"
-	"github.com/hkdb/aerion/internal/smtp"
+	"github.com/ollisulopuisto/postilaatikko/internal/account"
+	"github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/draft"
+	"github.com/ollisulopuisto/postilaatikko/internal/email"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/scheduledsend"
+	"github.com/ollisulopuisto/postilaatikko/internal/smtp"
 )
 
 func (r *SyncRuntime) ListDrafts(accountID string) ([]v1.DraftDocument, error) {

@@ -6,7 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	gomessage "github.com/emersion/go-message"
-	"github.com/hkdb/aerion/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
 	"os"
 	"strings"
 	"testing"

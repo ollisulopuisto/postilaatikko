@@ -14,9 +14,9 @@ import (
 	"sync"
 	"time"
 
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/logging"
-	"github.com/hkdb/aerion/internal/perflog"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/perflog"
 )
 
 const (

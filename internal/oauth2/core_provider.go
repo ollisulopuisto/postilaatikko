@@ -1,6 +1,6 @@
 package oauth2
 
-// coreProvider is Aerion core's CredentialsProvider. It owns every slot:
+// coreProvider is Postilaatikko core's CredentialsProvider. It owns every slot:
 //
 //   - `google-mail`, `google-contacts`, `google-calendar` — the public
 //     Google Desktop client (GoogleClientID). Whether its granted scopes are

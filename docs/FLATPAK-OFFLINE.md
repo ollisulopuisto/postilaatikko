@@ -1,7 +1,10 @@
+> Identity rename: this describes the new package layout, not a published remote.
+> Existing-install migration and legacy distribution caveats: [IDENTITY_RENAME.md](IDENTITY_RENAME.md).
+
 # Flatpak offline build status
 
 The future Flathub manifest is
-`build/flatpak/flathub/io.github.wesleiaqui.eternomail.yml`. It is the only
+`build/flatpak/flathub/io.github.ollisulopuisto.postilaatikko.yml`. It is the only
 release manifest and must use a real `vX.Y.Z` tag and its immutable commit.
 Until the first Eterno Mail tag exists, it is deliberately not suitable for a
 local release build. At present its `v0.3.3` tag and pinned commit do not
@@ -9,9 +12,9 @@ exist in `wesleiaqui/EternoMail`, so Flatpak source acquisition cannot resolve.
 
 For local packaging of the current checkout, use the prebuilt development
 manifest through `build/flatpak/build-local.sh`. It packages a locally built
-`eterno-mail`; it is not a Flathub submission path.
+`postilaatikko`; it is not a Flathub submission path.
 
-`io.github.wesleiaqui.eternomail-source.yml` is a legacy source experiment. It
+`io.github.ollisulopuisto.postilaatikko-source.yml` is a legacy source experiment. It
 uses network-dependent commands, although its Wails CLI is pinned to v2.15.0,
 so it must not be used for Flathub or release validation.
 

@@ -11,11 +11,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/hkdb/aerion/app"
-	"github.com/hkdb/aerion/internal/nativemenu"
-	"github.com/hkdb/aerion/internal/perflog"
-	"github.com/hkdb/aerion/internal/platform"
-	"github.com/hkdb/aerion/internal/settings"
+	"github.com/ollisulopuisto/postilaatikko/app"
+	"github.com/ollisulopuisto/postilaatikko/internal/nativemenu"
+	"github.com/ollisulopuisto/postilaatikko/internal/perflog"
+	"github.com/ollisulopuisto/postilaatikko/internal/platform"
+	"github.com/ollisulopuisto/postilaatikko/internal/settings"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
@@ -28,7 +28,7 @@ var assets embed.FS
 
 // appIcon is passed to GTK directly so Linux uses the current branded icon
 // for the running window instead of a stale icon cached for the desktop entry.
-// The matching desktop entry is io.github.wesleiaqui.eternomail.desktop.
+// The matching desktop entry is io.github.ollisulopuisto.postilaatikko.desktop.
 //
 //go:embed build/appicon.png
 var appIcon []byte
@@ -72,7 +72,7 @@ var (
 // DebugMode returns whether debug logging is enabled
 // Can be enabled via --debug flag or AERION_DEBUG=1 environment variable
 func DebugMode() bool {
-	return *debugMode || os.Getenv("AERION_DEBUG") == "1"
+	return *debugMode || (os.Getenv("POSTILAATIKKO_DEBUG") == "1" || os.Getenv("AERION_DEBUG") == "1")
 }
 
 func main() {
@@ -223,7 +223,7 @@ func runMainMode(mailtoData *app.MailtoData, rawMailtoArg string) {
 		},
 		Linux: &linux.Options{
 			WebviewGpuPolicy: linux.WebviewGpuPolicyOnDemand,
-			ProgramName:      "io.github.wesleiaqui.eternomail",
+			ProgramName:      "io.github.ollisulopuisto.postilaatikko",
 			Icon:             appIcon,
 		},
 	})
@@ -320,7 +320,7 @@ func runComposerMode() {
 		},
 		Linux: &linux.Options{
 			WebviewGpuPolicy: linux.WebviewGpuPolicyOnDemand,
-			ProgramName:      "io.github.wesleiaqui.eternomail",
+			ProgramName:      "io.github.ollisulopuisto.postilaatikko",
 			Icon:             appIcon,
 		},
 	})
@@ -392,7 +392,7 @@ func runReaderMode() {
 		OnStartup:        func(ctx context.Context) { nativeMenus.Start(ctx); app.StartReader(reader, ctx) },
 		OnShutdown:       func(context.Context) { app.ShutdownReader(reader) },
 		Bind:             []interface{}{reader},
-		Linux:            &linux.Options{WebviewGpuPolicy: linux.WebviewGpuPolicyOnDemand, ProgramName: "io.github.wesleiaqui.eternomail", Icon: appIcon},
+		Linux:            &linux.Options{WebviewGpuPolicy: linux.WebviewGpuPolicyOnDemand, ProgramName: "io.github.ollisulopuisto.postilaatikko", Icon: appIcon},
 	})
 	if err != nil {
 		println("Error:", err.Error())

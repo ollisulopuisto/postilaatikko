@@ -29,7 +29,7 @@ import (
 )
 
 // graphEvent is the JSON shape for /me/events resource. Only fields
-// Aerion reads/writes are modeled.
+// Postilaatikko reads/writes are modeled.
 type graphEvent struct {
 	ID          string     `json:"id,omitempty"`
 	ICalUID     string     `json:"iCalUId,omitempty"` // Graph's mixed-case key
@@ -422,7 +422,7 @@ func buildGraphRange(parts map[string]string, dtstart time.Time) graphRange {
 }
 
 // parseBYDAY splits a BYDAY value like "MO,WE,FR" into Graph day names.
-// Strips ordinal prefixes like "2MO" → "monday" (Aerion composer doesn't
+// Strips ordinal prefixes like "2MO" → "monday" (Postilaatikko composer doesn't
 // emit ordinals today; defensive for server-originated values).
 func parseBYDAY(byday string) []string {
 	if byday == "" {

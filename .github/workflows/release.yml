@@ -82,24 +82,24 @@ jobs:
 
           # Rename binary with version tag
           if [ "${{ matrix.arch }}" = "amd64" ]; then
-            mv build/bin/eterno-mail build/bin/eterno-mail-${{ github.ref_name }}-linux-x86_64
+            mv build/bin/postilaatikko build/bin/postilaatikko-${{ github.ref_name }}-linux-x86_64
           elif [ "${{ matrix.arch }}" = "arm64" ]; then
-            mv build/bin/eterno-mail build/bin/eterno-mail-${{ github.ref_name }}-linux-aarch64
+            mv build/bin/postilaatikko build/bin/postilaatikko-${{ github.ref_name }}-linux-aarch64
           fi
 
           # Create distribution tarball (complete package for manual installation)
           mkdir -p dist-package
-          cp build/bin/eterno-mail-${{ github.ref_name }}-linux-* dist-package/eterno-mail
+          cp build/bin/postilaatikko-${{ github.ref_name }}-linux-* dist-package/postilaatikko
           cp build/bin/postilaatikko-helper dist-package/postilaatikko-helper
           cp build/linux/install.sh dist-package/
           cp build/linux/uninstall.sh dist-package/
-          cp build/linux/io.github.wesleiaqui.eternomail.desktop dist-package/io.github.wesleiaqui.eternomail.desktop
-          cp build/linux/io.github.wesleiaqui.eternomail.png dist-package/io.github.wesleiaqui.eternomail.png
+          cp build/linux/io.github.ollisulopuisto.postilaatikko.desktop dist-package/io.github.ollisulopuisto.postilaatikko.desktop
+          cp build/linux/io.github.ollisulopuisto.postilaatikko.png dist-package/io.github.ollisulopuisto.postilaatikko.png
 
           if [ "${{ matrix.arch }}" = "amd64" ]; then
-            tar czf eterno-mail-linux-amd64.tar.gz -C dist-package .
+            tar czf postilaatikko-linux-amd64.tar.gz -C dist-package .
           elif [ "${{ matrix.arch }}" = "arm64" ]; then
-            tar czf eterno-mail-linux-arm64.tar.gz -C dist-package .
+            tar czf postilaatikko-linux-arm64.tar.gz -C dist-package .
           fi
 
           rm -rf dist-package
@@ -111,16 +111,15 @@ jobs:
           GOARCH: ${{ matrix.arch }}
         run: |
           make build-windows-installer
-          Move-Item build/bin/eterno-mail.exe build/bin/Eterno-Mail-windows-${{ matrix.arch }}.exe
+          Move-Item build/bin/postilaatikko.exe build/bin/Postilaatikko-windows-${{ matrix.arch }}.exe
 
       - uses: actions/upload-artifact@v7
         with:
-          name: eterno-mail-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
+          name: postilaatikko-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
           path: |
-            build/bin/eterno-mail-*
-            build/bin/Eterno-Mail-*
+            build/bin/postilaatikko-*
             build/bin/Postilaatikko-*
-            eterno-mail-*.tar.gz
+            postilaatikko-*.tar.gz
           retention-days: 1
 
   publish:
@@ -155,8 +154,8 @@ jobs:
 
           # Artifact path layout varies by platform; collect release files recursively.
           mapfile -d '' RELEASE_ASSETS < <(
-            find eterno-mail-* -type f \
-              \( -name 'eterno-mail-*' -o -name 'Eterno-Mail-*' -o -name 'Postilaatikko-*' -o -name '*.tar.gz' \) \
+            find postilaatikko-* -type f \
+              \( -name 'postilaatikko-*' -o -name 'Postilaatikko-*' -o -name '*.tar.gz' \) \
               -print0
           )
           if (( ${#RELEASE_ASSETS[@]} == 0 )); then
@@ -197,7 +196,7 @@ jobs:
         with:
           name: flathub-manifest
           path: |
-            build/flatpak/flathub/io.github.wesleiaqui.eternomail.yml
+            build/flatpak/flathub/io.github.ollisulopuisto.postilaatikko.yml
             build/flatpak/flathub/node-sources.json
           if-no-files-found: error
           retention-days: 1
@@ -227,7 +226,7 @@ jobs:
 
       - name: Apply prepared Flatpak sources
         run: |
-          install -m 644 "${{ runner.temp }}/flathub-manifest/io.github.wesleiaqui.eternomail.yml" build/flatpak/flathub/
+          install -m 644 "${{ runner.temp }}/flathub-manifest/io.github.ollisulopuisto.postilaatikko.yml" build/flatpak/flathub/
           install -m 644 "${{ runner.temp }}/flathub-manifest/node-sources.json" build/flatpak/flathub/
 
       - name: Set up Node.js for offline cache validation
@@ -269,7 +268,7 @@ jobs:
         run: |
           flatpak-builder --user --force-clean --repo=repo \
             --install-deps-from=flathub \
-            build-dir build/flatpak/flathub/io.github.wesleiaqui.eternomail.yml
+            build-dir build/flatpak/flathub/io.github.ollisulopuisto.postilaatikko.yml
 
           mkdir -p build/bin
           flatpak build-bundle \
@@ -277,8 +276,8 @@ jobs:
             --repo-url="$FLATPAK_REPOSITORY_URL" \
             --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo \
             repo \
-            build/bin/Eterno-Mail-${{ github.ref_name }}-${{ matrix.arch }}.flatpak \
-            io.github.wesleiaqui.eternomail \
+            build/bin/Postilaatikko-${{ github.ref_name }}-${{ matrix.arch }}.flatpak \
+            io.github.ollisulopuisto.postilaatikko \
             master
 
       # Both architectures are uploaded to the release only after both matrix
@@ -287,7 +286,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: flatpak-bundle-${{ matrix.arch }}
-          path: build/bin/Eterno-Mail-${{ github.ref_name }}-${{ matrix.arch }}.flatpak
+          path: build/bin/Postilaatikko-${{ github.ref_name }}-${{ matrix.arch }}.flatpak
           if-no-files-found: error
           retention-days: 1
 
@@ -374,12 +373,12 @@ jobs:
             "${{ runner.temp }}/flatpak-repositories/aarch64" \
             aarch64
           build/flatpak/manage-repository.sh finalize _site/flatpak/repo
-          install -m 644 build/flatpak/eternomail.flatpakrepo _site/flatpak/
+          install -m 644 build/flatpak/postilaatikko.flatpakrepo _site/flatpak/
 
       - name: Upload both Flatpak bundles to GitHub Release
         run: |
           gh release upload "${{ github.ref_name }}" \
-            "${{ runner.temp }}"/flatpak-bundles/Eterno-Mail-*.flatpak \
+            "${{ runner.temp }}"/flatpak-bundles/Postilaatikko-*.flatpak \
             --clobber
 
       - name: Upload Pages artifact
@@ -412,7 +411,7 @@ jobs:
 
       - name: Apply prepared Flatpak sources
         run: |
-          install -m 644 "${{ runner.temp }}/flathub-manifest/io.github.wesleiaqui.eternomail.yml" build/flatpak/flathub/
+          install -m 644 "${{ runner.temp }}/flathub-manifest/io.github.ollisulopuisto.postilaatikko.yml" build/flatpak/flathub/
           install -m 644 "${{ runner.temp }}/flathub-manifest/node-sources.json" build/flatpak/flathub/
 
       - name: Commit updated manifest
@@ -421,7 +420,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           python3 build/flatpak/flathub/validate-node-sources.py --check-only
-          git add build/flatpak/flathub/io.github.wesleiaqui.eternomail.yml build/flatpak/flathub/node-sources.json
+          git add build/flatpak/flathub/io.github.ollisulopuisto.postilaatikko.yml build/flatpak/flathub/node-sources.json
           if git diff --cached --quiet; then
             echo "No changes to commit"
             exit 0

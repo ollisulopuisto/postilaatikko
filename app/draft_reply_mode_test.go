@@ -3,8 +3,8 @@ package app
 import (
 	"testing"
 
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/smtp"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/smtp"
 )
 
 // Remote and detached editors read drafts through the helper document, so a

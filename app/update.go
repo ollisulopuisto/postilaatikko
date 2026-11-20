@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	latestReleaseEndpoint     = "https://api.github.com/repos/wesleiaqui/EternoMail/releases/latest"
+	latestReleaseEndpoint     = "https://api.github.com/repos/ollisulopuisto/postilaatikko/releases/latest"
 	updateAutoCheckKey        = "update_auto_check"
 	updateSkippedVersionKey   = "update_skipped_version"
 	updateLastCheckKey        = "update_last_check"
@@ -49,7 +49,7 @@ func (a *App) CheckForUpdates() (string, error) {
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-	req.Header.Set("User-Agent", "Eterno-Mail/"+Version)
+	req.Header.Set("User-Agent", "Postilaatikko/"+Version)
 
 	client := &http.Client{Timeout: updateRequestTimeout}
 	resp, err := client.Do(req)

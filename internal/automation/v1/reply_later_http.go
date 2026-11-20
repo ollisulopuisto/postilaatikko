@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/hkdb/aerion/internal/replylater"
+	"github.com/ollisulopuisto/postilaatikko/internal/replylater"
 )
 
 // ReplyLaterMutationRequest sets explicit queue membership for one conversation.

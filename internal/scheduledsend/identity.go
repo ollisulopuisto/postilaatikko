@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	devicecrypto "github.com/hkdb/aerion/internal/crypto"
+	devicecrypto "github.com/ollisulopuisto/postilaatikko/internal/crypto"
 	"github.com/zalando/go-keyring"
 	"golang.org/x/crypto/curve25519"
 	"golang.org/x/crypto/nacl/box"

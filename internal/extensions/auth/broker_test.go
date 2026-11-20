@@ -1,14 +1,14 @@
 package auth
 
 import (
-	contactsmanifest "github.com/hkdb/aerion/extensions/contacts"
+	contactsmanifest "github.com/ollisulopuisto/postilaatikko/extensions/contacts"
 	"path/filepath"
 	"testing"
 
-	coreapi "github.com/hkdb/aerion/internal/core/api/v1"
-	"github.com/hkdb/aerion/internal/credentials"
-	"github.com/hkdb/aerion/internal/database"
-	"github.com/hkdb/aerion/internal/oauth2"
+	coreapi "github.com/ollisulopuisto/postilaatikko/internal/core/api/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/credentials"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/oauth2"
 )
 
 // newTestBroker spins up a temp DB + credentials store + OAuth manager for

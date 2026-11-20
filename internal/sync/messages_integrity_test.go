@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hkdb/aerion/internal/database"
-	"github.com/hkdb/aerion/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
 )
 
 func TestSyncMessagesRejectsFolderFromAnotherAccount(t *testing.T) {

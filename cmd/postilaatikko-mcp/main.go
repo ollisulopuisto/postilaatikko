@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/hkdb/aerion/internal/automation/client"
-	"github.com/hkdb/aerion/internal/automation/mcp"
+	"github.com/ollisulopuisto/postilaatikko/internal/automation/client"
+	"github.com/ollisulopuisto/postilaatikko/internal/automation/mcp"
 )
 
 func main() {

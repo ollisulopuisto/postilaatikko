@@ -1,16 +1,16 @@
-# Flatpak Packaging for Eterno Mail
+# Flatpak Packaging for Postilaatikko
 
-This directory contains files for building and distributing Eterno Mail as a Flatpak.
+This directory contains files for building and distributing Postilaatikko as a Flatpak.
 
 ## Files
 
-- `io.github.wesleiaqui.eternomail-dev.yml` - Dev manifest (packages pre-built host binary, no compilation)
-- `io.github.wesleiaqui.eternomail.metainfo.xml` - AppStream metadata
+- `io.github.ollisulopuisto.postilaatikko-dev.yml` - Dev manifest (packages pre-built host binary, no compilation)
+- `io.github.ollisulopuisto.postilaatikko.metainfo.xml` - AppStream metadata
 - `build-flatpak.sh` - Dev build script (uses `-dev.yml`)
 - `build-local.sh` - From-source local build script (uses flathub manifest)
 - `test-build.sh` - CI build test script (Docker container)
 - `manage-repository.sh` - Restores and consolidates the persistent update repository
-- `eternomail.flatpakrepo` - Remote descriptor published by the release workflow
+- `postilaatikko.flatpakrepo` - Remote descriptor published by the release workflow
 - `build-flatpak-docker.sh`, `Dockerfile` - Docker-based build
 - `flathub/` - Flathub submission files (from-source manifests + vendored deps)
 
@@ -74,7 +74,7 @@ Builds everything from source inside the Flatpak sandbox, matching how Flathub b
 After building, run the Flatpak:
 
 ```bash
-flatpak run io.github.wesleiaqui.eternomail
+flatpak run io.github.ollisulopuisto.postilaatikko
 ```
 
 ## Validation
@@ -87,13 +87,13 @@ sudo dnf install libappstream-glib  # Fedora
 sudo apt install appstream-util      # Ubuntu/Debian
 
 # Validate (from project root)
-appstream-util validate build/flatpak/io.github.wesleiaqui.eternomail.metainfo.xml
+appstream-util validate build/flatpak/io.github.ollisulopuisto.postilaatikko.metainfo.xml
 ```
 
 Validate the desktop file:
 
 ```bash
-desktop-file-validate build/linux/io.github.wesleiaqui.eternomail.desktop
+desktop-file-validate build/linux/io.github.ollisulopuisto.postilaatikko.desktop
 ```
 
 ## Submitting to Flathub

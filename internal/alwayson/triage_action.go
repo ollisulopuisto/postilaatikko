@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"time"
 
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/replylater"
-	"github.com/hkdb/aerion/internal/triage"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/replylater"
+	"github.com/ollisulopuisto/postilaatikko/internal/triage"
 )
 
 type triageActionUndoSnapshot struct {

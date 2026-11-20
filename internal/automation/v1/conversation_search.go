@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/hkdb/aerion/internal/message"
-	"github.com/hkdb/aerion/internal/views"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/views"
 )
 
 // ConversationSearchRequest asks the helper's indexed header cache for one

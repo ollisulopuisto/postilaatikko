@@ -11,8 +11,8 @@ import (
 
 	"github.com/emersion/go-imap/v2/imapclient"
 	"github.com/emersion/go-sasl"
-	"github.com/hkdb/aerion/internal/logging"
-	"github.com/hkdb/aerion/internal/platform"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/platform"
 	"github.com/rs/zerolog"
 )
 

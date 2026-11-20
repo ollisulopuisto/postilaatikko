@@ -1,6 +1,6 @@
 package app
 
-import "github.com/hkdb/aerion/internal/settings"
+import "github.com/ollisulopuisto/postilaatikko/internal/settings"
 
 // ListEmailTemplates reads templates from the parent desktop's local settings.
 func (c *ComposerApp) ListEmailTemplates() ([]settings.EmailTemplate, error) {

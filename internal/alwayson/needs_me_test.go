@@ -3,10 +3,10 @@ package alwayson
 import (
 	"testing"
 
-	"github.com/hkdb/aerion/internal/account"
-	"github.com/hkdb/aerion/internal/folder"
-	"github.com/hkdb/aerion/internal/message"
-	"github.com/hkdb/aerion/internal/views"
+	"github.com/ollisulopuisto/postilaatikko/internal/account"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/views"
 )
 
 func TestRemoteNeedsMeTriageScopeListCountAndSearch(t *testing.T) {

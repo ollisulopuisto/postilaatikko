@@ -1,7 +1,7 @@
 package backend
 
 // PartStat is the iCalendar PARTSTAT enum (RFC 5545 § 3.2.12). Stored on
-// Attendee. The Aerion in-memory enum mirrors the wire-format strings so
+// Attendee. The Postilaatikko in-memory enum mirrors the wire-format strings so
 // translation to/from ICS is identity; provider-specific translation (Google
 // "needsAction|declined|tentative|accepted", Graph "none|organizer|
 // tentativelyAccepted|accepted|declined|notResponded") happens in
@@ -42,11 +42,11 @@ const (
 type Attendee struct {
 	Email      string `json:"email"`
 	CommonName string `json:"cn,omitempty"`
-	PartStat   string `json:"partStat,omitempty"`   // PartStat* const
-	Role       string `json:"role,omitempty"`       // Role* const
-	RSVP       bool   `json:"rsvp,omitempty"`       // RSVP param TRUE/FALSE
-	CUType     string `json:"cuType,omitempty"`     // CUType* const
-	Delegate   string `json:"delegate,omitempty"`   // DELEGATED-TO email, lowercase
+	PartStat   string `json:"partStat,omitempty"` // PartStat* const
+	Role       string `json:"role,omitempty"`     // Role* const
+	RSVP       bool   `json:"rsvp,omitempty"`     // RSVP param TRUE/FALSE
+	CUType     string `json:"cuType,omitempty"`   // CUType* const
+	Delegate   string `json:"delegate,omitempty"` // DELEGATED-TO email, lowercase
 
 	// ScheduleStatus is RFC 6638's SCHEDULE-STATUS param, returned by
 	// CalDAV servers after a PUT to indicate iTIP delivery state.

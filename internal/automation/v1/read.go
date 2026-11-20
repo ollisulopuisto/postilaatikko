@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hkdb/aerion/internal/account"
-	"github.com/hkdb/aerion/internal/email/replycontent"
-	"github.com/hkdb/aerion/internal/folder"
-	"github.com/hkdb/aerion/internal/message"
-	"github.com/hkdb/aerion/internal/views"
-	"github.com/hkdb/aerion/internal/virtualfolder"
+	"github.com/ollisulopuisto/postilaatikko/internal/account"
+	"github.com/ollisulopuisto/postilaatikko/internal/email/replycontent"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/views"
+	"github.com/ollisulopuisto/postilaatikko/internal/virtualfolder"
 )
 
 // CatalogOperations defines store-backed metadata reads for accounts,

@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
 )
 
 // Defaults chosen so a saturated broker stays under a few hundred KB and a

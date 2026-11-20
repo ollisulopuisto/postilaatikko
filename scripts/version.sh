@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Check that all materialized Eterno Mail application-version fields match VERSION.
+# Check that all materialized Postilaatikko application-version fields match VERSION.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -61,12 +61,12 @@ check_value "frontend/package.json" "$(json_version "$ROOT_DIR/frontend/package.
 check_value "frontend/package-lock.json root" "$(json_version "$ROOT_DIR/frontend/package-lock.json")"
 check_value "frontend/package-lock.json package root" "$(json_version "$ROOT_DIR/frontend/package-lock.json" 2)"
 check_value "wails.json" "$(awk -F'"' '/"productVersion"/ { print $4; exit }' "$ROOT_DIR/wails.json")"
-check_value "AppStream current release" "$(awk -F'"' '/<release version=/ { print $2; exit }' "$ROOT_DIR/build/flatpak/io.github.wesleiaqui.eternomail.metainfo.xml")"
+check_value "AppStream current release" "$(awk -F'"' '/<release version=/ { print $2; exit }' "$ROOT_DIR/build/flatpak/io.github.ollisulopuisto.postilaatikko.metainfo.xml")"
 ORIGIN_URL="$(git -C "$ROOT_DIR" remote get-url origin 2>/dev/null || true)"
 ORIGIN_REPOSITORY="$(printf '%s' "$ORIGIN_URL" | tr '[:upper:]' '[:lower:]')"
 case "$ORIGIN_REPOSITORY" in
     https://github.com/wesleiaqui/eternomail|https://github.com/wesleiaqui/eternomail.git|git@github.com:wesleiaqui/eternomail.git)
-        check_value "Flatpak source tag" "$(awk '/^[[:space:]]*tag: / { sub(/^[[:space:]]*tag: v/, ""); print; exit }' "$ROOT_DIR/build/flatpak/flathub/io.github.wesleiaqui.eternomail.yml")"
+        check_value "Flatpak source tag" "$(awk '/^[[:space:]]*tag: / { sub(/^[[:space:]]*tag: v/, ""); print; exit }' "$ROOT_DIR/build/flatpak/flathub/io.github.ollisulopuisto.postilaatikko.yml")"
         ;;
     *)
         echo "Skipping upstream Flatpak source-tag check for non-upstream origin"

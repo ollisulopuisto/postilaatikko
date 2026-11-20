@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hkdb/aerion/internal/undo"
+	"github.com/ollisulopuisto/postilaatikko/internal/undo"
 )
 
 type globalUndoTestCommand struct {

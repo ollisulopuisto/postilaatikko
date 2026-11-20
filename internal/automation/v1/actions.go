@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hkdb/aerion/internal/operations"
+	"github.com/ollisulopuisto/postilaatikko/internal/operations"
 )
 
 // ErrActionReceiptConflict means an idempotency key already belongs to a

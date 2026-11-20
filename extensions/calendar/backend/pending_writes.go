@@ -35,7 +35,7 @@ import (
 
 	"github.com/google/uuid"
 
-	coreapi "github.com/hkdb/aerion/internal/core/api/v1"
+	coreapi "github.com/ollisulopuisto/postilaatikko/internal/core/api/v1"
 )
 
 // PendingOpKind enumerates queueable operations.
@@ -58,11 +58,11 @@ const pendingMaxAttempts = 3
 // re-reading the events row at drain time — important because
 // soft-committed deletes have no events row to read.
 type PendingOp struct {
-	SourceID    string
-	CalendarID  string
-	EventID     string // local events.id; empty when no row (rare)
-	Op          PendingOpKind
-	Scope       EditScope // applies to update/delete; empty for create
+	SourceID   string
+	CalendarID string
+	EventID    string // local events.id; empty when no row (rare)
+	Op         PendingOpKind
+	Scope      EditScope // applies to update/delete; empty for create
 
 	// CalendarURL holds the URL/ID the provider uses to address the
 	// calendar (CalDAV path, Google calendarId, Microsoft Graph id).

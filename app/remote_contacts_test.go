@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
 )
 
 // resetContactsPendingKeys isolates the process-wide pending map per test.

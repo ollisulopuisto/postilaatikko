@@ -1,12 +1,12 @@
 #!/bin/bash
-# Copy Eterno Mail files to Flathub repository for submission/update
-# Usage: ./release.sh /path/to/flathub/io.github.wesleiaqui.eternomail
+# Copy Postilaatikko files to Flathub repository for submission/update
+# Usage: ./release.sh /path/to/flathub/io.github.ollisulopuisto.postilaatikko
 
 set -e
 
 if [ -z "$1" ]; then
     echo "Usage: $0 <flathub-repo-path>"
-    echo "Example: $0 ~/flathub/io.github.wesleiaqui.eternomail"
+    echo "Example: $0 ~/flathub/io.github.ollisulopuisto.postilaatikko"
     exit 1
 fi
 
@@ -21,7 +21,7 @@ fi
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 echo "=========================================="
-echo "Eterno Mail Flathub Release Helper"
+echo "Postilaatikko Flathub Release Helper"
 echo "=========================================="
 echo "Source: $SCRIPT_DIR"
 echo "Target: $FLATHUB_DIR"
@@ -36,9 +36,9 @@ echo ""
 
 # Copy manifest
 echo "Copying manifest..."
-cp "${SCRIPT_DIR}/io.github.wesleiaqui.eternomail.yml" \
-   "${FLATHUB_DIR}/io.github.wesleiaqui.eternomail.yml"
-echo "   io.github.wesleiaqui.eternomail.yml"
+cp "${SCRIPT_DIR}/io.github.ollisulopuisto.postilaatikko.yml" \
+   "${FLATHUB_DIR}/io.github.ollisulopuisto.postilaatikko.yml"
+echo "   io.github.ollisulopuisto.postilaatikko.yml"
 
 # Copy Go module vendoring sources
 echo "Copying Go module sources..."

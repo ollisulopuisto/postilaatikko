@@ -8,7 +8,7 @@ import (
 	"encoding/base64"
 	"fmt"
 
-	"github.com/hkdb/aerion/internal/drafthistory"
+	"github.com/ollisulopuisto/postilaatikko/internal/drafthistory"
 )
 
 func (a *App) draftHistoryStore() *drafthistory.Store {

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>io.github.wesleiaqui.eternomail</id>
+  <id>io.github.ollisulopuisto.postilaatikko</id>
+  <replaces><id>io.github.wesleiaqui.eternomail</id></replaces>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>Apache-2.0</project_license>
   <name>Postilaatikko</name>
@@ -21,41 +22,41 @@
       focused on fast everyday mail and cross-account organization.
     </p>
     <p xml:lang="cs">
-      Eterno Mail je moderní, nenáročný e-mailový klient inspirovaný aplikací Geary, zaměřený na
+      Postilaatikko je moderní, nenáročný e-mailový klient inspirovaný aplikací Geary, zaměřený na
       efektivní využití systémových prostředků a čistý uživatelský zážitek.
     </p>
     <p xml:lang="de">
-      Eterno Mail ist ein moderner, schlanker E-Mail-Client, inspiriert von Geary, mit Fokus auf
+      Postilaatikko ist ein moderner, schlanker E-Mail-Client, inspiriert von Geary, mit Fokus auf
       Ressourceneffizienz und eine übersichtliche Benutzeroberfläche.
     </p>
     <p xml:lang="fr">
-      Eterno Mail est un client e-mail moderne et léger inspiré par Geary, axé sur 
+      Postilaatikko est un client e-mail moderne et léger inspiré par Geary, axé sur
       l'efficacité des ressources et une expérience utilisateur épurée.
     </p>
     <p xml:lang="it">
-      Eterno Mail è un client di posta elettronica moderno e leggero ispirato a Geary, focalizzato su
+      Postilaatikko è un client di posta elettronica moderno e leggero ispirato a Geary, focalizzato su
       efficienza delle risorse e un'esperienza utente pulita.
     </p>
     <p xml:lang="nb">
-      Eterno Mail er en moderne og lettvekt e-postklient inspirert av Geary, fokusert på
+      Postilaatikko er en moderne og lettvekt e-postklient inspirert av Geary, fokusert på
       effektiv ressursbruk og en ren brukeropplevelse.
     </p>
     <p xml:lang="pl">
-      Eterno Mail to nowoczesny, lekki klient poczty e-mail zainspirowany programem Geary, stawiający na
+      Postilaatikko to nowoczesny, lekki klient poczty e-mail zainspirowany programem Geary, stawiający na
       wydajne wykorzystanie zasobów oraz przejrzysty interfejs użytkownika.
     </p>
     <p xml:lang="vi">
-      Eterno Mail là ứng dụng email hiện đại và nhẹ, được lấy cảm hứng từ Geary, tập trung vào
+      Postilaatikko là ứng dụng email hiện đại và nhẹ, được lấy cảm hứng từ Geary, tập trung vào
       hiệu quả sử dụng tài nguyên và trải nghiệm người dùng gọn gàng.
     </p>
     <p xml:lang="zh-CN">
-      Eterno Mail 是一款以 Geary 为灵感，注重资源效率与简洁使用体验的现代化轻量级电子邮件客户端应用程序。
+      Postilaatikko 是一款以 Geary 为灵感，注重资源效率与简洁使用体验的现代化轻量级电子邮件客户端应用程序。
     </p>
     <p xml:lang="zh-HK">
-      Eterno Mail 是一款以 Geary 為靈感，注重資源效率與簡潔使用體驗的現代化輕量級電子郵件客戶端應用程式。
+      Postilaatikko 是一款以 Geary 為靈感，注重資源效率與簡潔使用體驗的現代化輕量級電子郵件客戶端應用程式。
     </p>
     <p xml:lang="zh-TW">
-      Eterno Mail 是一款以 Geary 為靈感，注重資源效率與簡潔使用體驗的現代化輕量級電子郵件客戶端應用程式。
+      Postilaatikko 是一款以 Geary 為靈感，注重資源效率與簡潔使用體驗的現代化輕量級電子郵件客戶端應用程式。
     </p>
 
     <p>Features:</p>
@@ -229,29 +230,29 @@
     </ul>
   </description>
 
-  <launchable type="desktop-id">io.github.wesleiaqui.eternomail.desktop</launchable>
+  <launchable type="desktop-id">io.github.ollisulopuisto.postilaatikko.desktop</launchable>
 
   <screenshots>
     <screenshot type="default">
       <image>https://raw.githubusercontent.com/wesleiaqui/EternoMail/main/docs/ss.png</image>
-      <caption>Eterno Mail main window showing inbox</caption>
-      <caption xml:lang="cs">Hlavní okno aplikace Eterno Mail zobrazující schránku</caption>
-      <caption xml:lang="de">Das Hauptfenster von Eterno Mail mit dem Posteingang</caption>
-      <caption xml:lang="fr">Fenêtre principale d'Eterno Mail affichant la boîte de réception</caption>
-      <caption xml:lang="it">Finestra principale di Eterno Mail mostrante la casella di posta</caption>
-      <caption xml:lang="nb">Eterno Mail-vindu som viser innboks</caption>
-      <caption xml:lang="pl">Główne okno programu Eterno Mail przedstawiające skrzynkę odbiorczą</caption>
-      <caption xml:lang="vi">Cửa sổ chính của Eterno Mail hiển thị hộp thư đến</caption>
-      <caption xml:lang="zh-CN">Eterno Mail 主窗口显示收件箱</caption>
-      <caption xml:lang="zh-HK">Eterno Mail 主視窗顯示收件箱</caption>
-      <caption xml:lang="zh-TW">Eterno Mail 主視窗顯示收件匣</caption>
+      <caption>Postilaatikko main window showing inbox</caption>
+      <caption xml:lang="cs">Hlavní okno aplikace Postilaatikko zobrazující schránku</caption>
+      <caption xml:lang="de">Das Hauptfenster von Postilaatikko mit dem Posteingang</caption>
+      <caption xml:lang="fr">Fenêtre principale d'Postilaatikko affichant la boîte de réception</caption>
+      <caption xml:lang="it">Finestra principale di Postilaatikko mostrante la casella di posta</caption>
+      <caption xml:lang="nb">Postilaatikko-vindu som viser innboks</caption>
+      <caption xml:lang="pl">Główne okno programu Postilaatikko przedstawiające skrzynkę odbiorczą</caption>
+      <caption xml:lang="vi">Cửa sổ chính của Postilaatikko hiển thị hộp thư đến</caption>
+      <caption xml:lang="zh-CN">Postilaatikko 主窗口显示收件箱</caption>
+      <caption xml:lang="zh-HK">Postilaatikko 主視窗顯示收件箱</caption>
+      <caption xml:lang="zh-TW">Postilaatikko 主視窗顯示收件匣</caption>
     </screenshot>
   </screenshots>
 
-  <url type="homepage">https://github.com/wesleiaqui/eternomail</url>
-  <url type="bugtracker">https://github.com/wesleiaqui/eternomail/issues</url>
-  <url type="help">https://github.com/wesleiaqui/eternomail#readme</url>
-  <url type="vcs-browser">https://github.com/wesleiaqui/eternomail</url>
+  <url type="homepage">https://github.com/ollisulopuisto/postilaatikko</url>
+  <url type="bugtracker">https://github.com/ollisulopuisto/postilaatikko/issues</url>
+  <url type="help">https://github.com/ollisulopuisto/postilaatikko#readme</url>
+  <url type="vcs-browser">https://github.com/ollisulopuisto/postilaatikko</url>
 
   <developer id="io.github.wesleiaqui">
     <name>Weslei</name>
@@ -278,7 +279,7 @@
     <keyword xml:lang="de">E-Mail</keyword>
     <keyword xml:lang="de">Post</keyword>
     <keyword xml:lang="de">Nachrichten</keyword>
-    
+
     <keyword xml:lang="fr">e-mail</keyword>
     <keyword xml:lang="fr">courriel</keyword>
     <keyword xml:lang="fr">messagerie</keyword>
@@ -305,7 +306,7 @@
   </keywords>
 
   <provides>
-    <binary>eterno-mail</binary>
+    <binary>postilaatikko</binary>
   </provides>
 
   <releases>
@@ -620,7 +621,7 @@
     </release>
     <release version="0.2.0" date="2026-04-29">
       <description>
-        <p>Note: As of 2026-04-26, Eterno Mail is CASA Tier 2 certified and verified by Google so OAuth2 signin is no longer blocked.</p>
+        <p>Note: As of 2026-04-26, Postilaatikko is CASA Tier 2 certified and verified by Google so OAuth2 signin is no longer blocked.</p>
         <ul>
           <li>Refactored N+1 query on folder switch - #117</li>
           <li>Fixed IMAP server side search regression</li>
@@ -631,8 +632,8 @@
     </release>
     <release version="0.1.39" date="2026-04-27">
       <description>
-        
-        <p>As of 2026-04-26, Eterno Mail is CASA Tier 2 certified and verified by Google so oAuth2 signin will no longer be blocked.</p>
+
+        <p>As of 2026-04-26, Postilaatikko is CASA Tier 2 certified and verified by Google so oAuth2 signin will no longer be blocked.</p>
 
         <p>Version 0.1.39 is a major milestone that includes some remaining originally planned basic features and a substantial amount of bug fixes/refinements focused on making existing features much more reliable/stable. It will serve as a solid foundation for us to continue the further development of this mail client.</p>
 
@@ -670,7 +671,7 @@
           <li>Fixed name and subject preview decoding - #104</li>
           <li>Fixed provider icons consistency - #102</li>
           <li>Added better pgp and s/mime error feedback</li>
-          <li>Added a wider range of PGP keys and S/MIME certs support - #107</li> 
+          <li>Added a wider range of PGP keys and S/MIME certs support - #107</li>
         </ul>
       </description>
     </release>
@@ -794,7 +795,7 @@
           <li>Toast message to provide feedback for successful link clicks</li>
           <li>Cross accounts from field</li>
           <li>Handle external mailto calls</li>
-          <li>Added composer tab in settings</li> 
+          <li>Added composer tab in settings</li>
           <li>Allow setting detached composer as default</li>
           <li>Choose default or detached composer to handle mailto links</li>
           <li>Allow setting plaintext as default</li>
@@ -968,7 +969,7 @@
         <ul>
           <li>Refactored Linux notifications to use org.freedesktop.portal.Desktop</li>
           <li>Kept DBUS direct notifications if launched with --dbus-notify</li>
-          <li>Added trigger to refocus to Eterno Mail if notification is clicked</li>
+          <li>Added trigger to refocus to Postilaatikko if notification is clicked</li>
           <li>Added install.sh and uninstall.sh to Linux binary release</li>
           <li>Distribute binary tarballs with assets instead of just binary for Linux</li>
           <li>Fixed flatpak app ID</li>

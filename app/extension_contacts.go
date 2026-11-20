@@ -3,9 +3,9 @@ package app
 import (
 	"errors"
 
-	extcontactsbe "github.com/hkdb/aerion/extensions/contacts/backend"
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	coreapi "github.com/hkdb/aerion/internal/core/api/v1"
+	extcontactsbe "github.com/ollisulopuisto/postilaatikko/extensions/contacts/backend"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	coreapi "github.com/ollisulopuisto/postilaatikko/internal/core/api/v1"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 

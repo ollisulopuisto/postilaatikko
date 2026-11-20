@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/hkdb/aerion/internal/gmail"
+	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
 	"io"
 	"sort"
 	"strings"
@@ -13,10 +13,10 @@ import (
 
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
-	"github.com/hkdb/aerion/internal/folder"
-	imapPkg "github.com/hkdb/aerion/internal/imap"
-	"github.com/hkdb/aerion/internal/logging"
-	"github.com/hkdb/aerion/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	imapPkg "github.com/ollisulopuisto/postilaatikko/internal/imap"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
 )
 
 // messageSyncTimings records aggregate wall-clock time for one header sync.

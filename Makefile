@@ -20,7 +20,7 @@
 export
 
 # Go module path
-MODULE := github.com/hkdb/aerion
+MODULE := github.com/ollisulopuisto/postilaatikko
 
 # OAuth development overrides are inherited by `wails dev` at runtime.
 # Official builds use the public source defaults in
@@ -72,7 +72,7 @@ BUILD_ID ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 # Build production binary
 build:
 	@echo "Building Postilaatikko..."
-	wails build -tags $(BUILD_TAGS) -ldflags "-X github.com/hkdb/aerion/app.Build=$(BUILD_ID)"
+	wails build -tags $(BUILD_TAGS) -ldflags "-X github.com/ollisulopuisto/postilaatikko/app.Build=$(BUILD_ID)"
 ifeq ($(UNAME_S),Darwin)
 	@echo "Building the Send Later helper..."
 	go build -trimpath -ldflags="-s -w" -o build/bin/postilaatikko.app/Contents/MacOS/postilaatikko-helper ./cmd/postilaatikko-helper
@@ -184,7 +184,7 @@ else ifeq ($(UNAME_S),Darwin)
 	$(MAKE) install-darwin
 else
 	@echo "For Windows, use 'make build-windows-installer' and run the generated installer."
-	@echo "Or manually copy build/bin/aerion.exe to your preferred location."
+	@echo "Or manually copy build/bin/postilaatikko.exe to your preferred location."
 endif
 
 # Auto-detect platform and uninstall
@@ -199,31 +199,32 @@ endif
 
 ## Linux Installation
 
-# Install Eterno Mail on Linux
+# Install Postilaatikko on Linux
 install-linux: build
-	@echo "Installing Eterno Mail to $(DESTDIR)$(PREFIX)..."
-	install -Dm755 build/bin/eterno-mail "$(DESTDIR)$(PREFIX)/bin/eterno-mail"
-	install -Dm644 build/appicon.png "$(DESTDIR)$(PREFIX)/share/icons/hicolor/256x256/apps/io.github.wesleiaqui.eternomail.png"
-	install -Dm644 build/linux/io.github.wesleiaqui.eternomail.desktop "$(DESTDIR)$(PREFIX)/share/applications/io.github.wesleiaqui.eternomail.desktop"
+	@echo "Installing Postilaatikko to $(DESTDIR)$(PREFIX)..."
+	install -Dm755 build/bin/postilaatikko "$(DESTDIR)$(PREFIX)/bin/postilaatikko"
+	ln -sfn postilaatikko "$(DESTDIR)$(PREFIX)/bin/eterno-mail"
+	install -Dm644 build/appicon.png "$(DESTDIR)$(PREFIX)/share/icons/hicolor/256x256/apps/io.github.ollisulopuisto.postilaatikko.png"
+	install -Dm644 build/linux/io.github.ollisulopuisto.postilaatikko.desktop "$(DESTDIR)$(PREFIX)/share/applications/io.github.ollisulopuisto.postilaatikko.desktop"
 	@echo "Updating icon cache..."
 	-gtk-update-icon-cache -f -t "$(DESTDIR)$(PREFIX)/share/icons/hicolor" 2>/dev/null || true
 	@echo ""
 	@echo "Installation complete!"
 	@echo "You may need to log out and back in for the application to appear in your menu."
 	@echo ""
-	@echo "To set Eterno Mail as your default email client:"
-	@echo "  xdg-mime default io.github.wesleiaqui.eternomail.desktop x-scheme-handler/mailto"
+	@echo "To set Postilaatikko as your default email client:"
+	@echo "  xdg-mime default io.github.ollisulopuisto.postilaatikko.desktop x-scheme-handler/mailto"
 
-# Uninstall Eterno Mail from Linux
+# Uninstall Postilaatikko from Linux
 uninstall-linux:
-	@echo "Uninstalling Eterno Mail from $(DESTDIR)$(PREFIX)..."
-	rm -f "$(DESTDIR)$(PREFIX)/bin/eterno-mail"
+	@echo "Uninstalling Postilaatikko from $(DESTDIR)$(PREFIX)..."
+	rm -f "$(DESTDIR)$(PREFIX)/bin/postilaatikko"
 	rm -f "$(DESTDIR)$(PREFIX)/bin/aerion"
-	rm -f "$(DESTDIR)$(PREFIX)/share/icons/hicolor/256x256/apps/io.github.wesleiaqui.eternomail.png"
+	rm -f "$(DESTDIR)$(PREFIX)/share/icons/hicolor/256x256/apps/io.github.ollisulopuisto.postilaatikko.png"
 	rm -f "$(DESTDIR)$(PREFIX)/share/icons/hicolor/256x256/apps/io.github.hkdb.EternoMail.png"
 	rm -f "$(DESTDIR)$(PREFIX)/share/icons/hicolor/256x256/apps/io.github.hkdb.Aerion.png"
 	rm -f "$(DESTDIR)$(PREFIX)/share/icons/hicolor/256x256/apps/aerion.png"  # Remove old name if it exists
-	rm -f "$(DESTDIR)$(PREFIX)/share/applications/io.github.wesleiaqui.eternomail.desktop"
+	rm -f "$(DESTDIR)$(PREFIX)/share/applications/io.github.ollisulopuisto.postilaatikko.desktop"
 	rm -f "$(DESTDIR)$(PREFIX)/share/applications/io.github.hkdb.EternoMail.desktop"
 	rm -f "$(DESTDIR)$(PREFIX)/share/applications/io.github.hkdb.Aerion.desktop"
 	rm -f "$(DESTDIR)$(PREFIX)/share/applications/aerion.desktop"  # Remove old name if it exists
@@ -261,7 +262,7 @@ build-windows-installer:
 	@echo "Building Windows installer..."
 	wails build -tags $(BUILD_TAGS) -nsis
 	@echo ""
-	@echo "Installer created at build/bin/eterno-mail-$(GOARCH)-installer.exe"
+	@echo "Installer created at build/bin/postilaatikko-$(GOARCH)-installer.exe"
 
 ## Help
 

@@ -56,7 +56,7 @@ jobs:
         env:
           TARGET_ARCH: ${{ matrix.arch }}
         run: |
-          wails build -tags webkit2_41 -platform "darwin/${TARGET_ARCH}" -ldflags "-X github.com/hkdb/aerion/app.Build=${BUILD_ID}"
+          wails build -tags webkit2_41 -platform "darwin/${TARGET_ARCH}" -ldflags "-X github.com/ollisulopuisto/postilaatikko/app.Build=${BUILD_ID}"
           GOOS=darwin GOARCH="$TARGET_ARCH" go build -trimpath -ldflags="-s -w" \
             -o build/bin/postilaatikko.app/Contents/MacOS/postilaatikko-helper ./cmd/postilaatikko-helper
           codesign --force --deep --sign - build/bin/postilaatikko.app

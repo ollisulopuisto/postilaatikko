@@ -6,13 +6,13 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/hkdb/aerion/internal/account"
-	automationclient "github.com/hkdb/aerion/internal/automation/client"
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/certificate"
-	"github.com/hkdb/aerion/internal/credentials"
-	"github.com/hkdb/aerion/internal/imap"
-	"github.com/hkdb/aerion/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/account"
+	automationclient "github.com/ollisulopuisto/postilaatikko/internal/automation/client"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/certificate"
+	"github.com/ollisulopuisto/postilaatikko/internal/credentials"
+	"github.com/ollisulopuisto/postilaatikko/internal/imap"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 )
 
 // ============================================================================

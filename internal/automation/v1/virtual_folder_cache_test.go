@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hkdb/aerion/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
 )
 
 type cachedVirtualFolderTestOperations struct {

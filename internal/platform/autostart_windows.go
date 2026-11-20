@@ -6,12 +6,12 @@ import (
 
 	"golang.org/x/sys/windows/registry"
 
-	"github.com/hkdb/aerion/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 )
 
 const (
 	registryKeyPath = `Software\Microsoft\Windows\CurrentVersion\Run`
-	registryValue   = "Aerion"
+	registryValue   = "Postilaatikko"
 )
 
 // windowsAutostartManager manages Windows autostart via the registry.
@@ -22,7 +22,7 @@ func NewAutostartManager() AutostartManager {
 	return &windowsAutostartManager{}
 }
 
-// Enable adds a registry entry to start Aerion on login.
+// Enable adds a registry entry to start Postilaatikko on login.
 func (m *windowsAutostartManager) Enable() error {
 	log := logging.WithComponent("autostart")
 
@@ -39,6 +39,9 @@ func (m *windowsAutostartManager) Enable() error {
 		return fmt.Errorf("failed to set registry value: %w", err)
 	}
 
+	if err := key.DeleteValue("Aerion"); err != nil && err != registry.ErrNotExist {
+		return fmt.Errorf("remove legacy autostart: %w", err)
+	}
 	log.Info().Str("value", value).Msg("Autostart enabled")
 	return nil
 }
@@ -54,9 +57,10 @@ func (m *windowsAutostartManager) Disable() error {
 	}
 	defer key.Close()
 
-	if err := key.DeleteValue(registryValue); err != nil {
-		// Value doesn't exist, that's fine
-		return nil
+	for _, name := range []string{registryValue, "Aerion"} {
+		if err := key.DeleteValue(name); err != nil && err != registry.ErrNotExist {
+			return err
+		}
 	}
 
 	log.Info().Msg("Autostart disabled")
@@ -79,7 +83,20 @@ func (m *windowsAutostartManager) IsEnabled() bool {
 func (m *windowsAutostartManager) execCommand() string {
 	exe, err := os.Executable()
 	if err != nil {
-		return "aerion.exe"
+		return "postilaatikko.exe"
 	}
 	return exe
+}
+
+func (m *windowsAutostartManager) migrateLegacy() error {
+	key, err := registry.OpenKey(registry.CURRENT_USER, registryKeyPath, registry.QUERY_VALUE)
+	if err != nil {
+		return nil
+	}
+	_, _, err = key.GetStringValue("Aerion")
+	key.Close()
+	if err == nil {
+		return m.Enable()
+	}
+	return nil
 }

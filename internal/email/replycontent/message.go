@@ -1,8 +1,8 @@
 package replycontent
 
 import (
-	"github.com/hkdb/aerion/internal/message"
-	"github.com/hkdb/aerion/internal/views"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/views"
 )
 
 // RefOf is the account-qualified reference of a stored message.

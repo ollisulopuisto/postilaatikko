@@ -7,7 +7,7 @@ import "testing"
 // deferring to a future sync cycle when the response looks truncated.
 //
 // All sizes in bytes. maxMessageSize is the production constant — picking
-// inputs around it directly verifies the "Aerion-side cap is not a server
+// inputs around it directly verifies the "Postilaatikko-side cap is not a server
 // truncation" branch.
 func TestShouldChargeFailure(t *testing.T) {
 	cases := []struct {

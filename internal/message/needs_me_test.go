@@ -1,7 +1,7 @@
 package message
 
 import (
-	"github.com/hkdb/aerion/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
 	"path/filepath"
 	"testing"
 )

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/hkdb/aerion/internal/views"
+	"github.com/ollisulopuisto/postilaatikko/internal/views"
 )
 
 const (

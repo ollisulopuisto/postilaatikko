@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	coreapi "github.com/hkdb/aerion/internal/core/api/v1"
+	coreapi "github.com/ollisulopuisto/postilaatikko/internal/core/api/v1"
 )
 
 // --- recordingEventBus ----------------------------------------------------

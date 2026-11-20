@@ -6,8 +6,8 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
 )
 
 type accountMutationLedger struct {

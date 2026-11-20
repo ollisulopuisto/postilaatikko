@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/hkdb/aerion/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
 )
 
 func TestSaveAttachmentSafeNames(t *testing.T) {

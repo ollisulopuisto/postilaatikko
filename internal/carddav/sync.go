@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hkdb/aerion/internal/contact"
-	"github.com/hkdb/aerion/internal/credentials"
-	"github.com/hkdb/aerion/internal/kit/davutil"
-	"github.com/hkdb/aerion/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/contact"
+	"github.com/ollisulopuisto/postilaatikko/internal/credentials"
+	"github.com/ollisulopuisto/postilaatikko/internal/kit/davutil"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 	"github.com/rs/zerolog"
 )
 

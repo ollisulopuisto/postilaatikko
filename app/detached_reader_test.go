@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/hkdb/aerion/internal/ipc"
+	"github.com/ollisulopuisto/postilaatikko/internal/ipc"
 )
 
 type readerTestClient struct {

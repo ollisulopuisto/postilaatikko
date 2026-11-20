@@ -2,7 +2,7 @@
 # Restore, merge and finalize the persistent multi-architecture Flatpak repository.
 set -euo pipefail
 
-APP_ID="io.github.wesleiaqui.eternomail"
+APP_ID="io.github.ollisulopuisto.postilaatikko"
 BRANCH="master"
 
 usage() {
@@ -105,9 +105,9 @@ finalize_repository() {
 
     verify_repository "$repository"
     flatpak build-update-repo \
-        --title="Eterno Mail" \
-        --comment="Official Eterno Mail Flatpak repository" \
-        --description="Install and update Eterno Mail from its official Flatpak repository." \
+        --title="Postilaatikko" \
+        --comment="Official Postilaatikko Flatpak repository" \
+        --description="Install and update Postilaatikko from its official Flatpak repository." \
         --homepage="https://app.weslleys.com/" \
         --default-branch="$BRANCH" \
         --generate-static-deltas \

@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hkdb/aerion/internal/account"
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/database"
-	"github.com/hkdb/aerion/internal/draft"
-	"github.com/hkdb/aerion/internal/message"
-	"github.com/hkdb/aerion/internal/smtp"
+	"github.com/ollisulopuisto/postilaatikko/internal/account"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/draft"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/smtp"
 )
 
 func replyModeRuntime(t *testing.T) *SyncRuntime {

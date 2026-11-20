@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/hkdb/aerion/internal/linkresolve"
+	"github.com/ollisulopuisto/postilaatikko/internal/linkresolve"
 )
 
 // LinkChainResult is the redirect chain returned to the frontend for the

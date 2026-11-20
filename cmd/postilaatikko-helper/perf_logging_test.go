@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	"github.com/hkdb/aerion/internal/perflog"
+	"github.com/ollisulopuisto/postilaatikko/internal/perflog"
 	"net/http"
 	"os"
 	"path/filepath"

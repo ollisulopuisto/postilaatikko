@@ -1,8 +1,8 @@
 package app
 
 import (
-	"github.com/hkdb/aerion/internal/appstate"
-	"github.com/hkdb/aerion/internal/platform"
+	"github.com/ollisulopuisto/postilaatikko/internal/appstate"
+	"github.com/ollisulopuisto/postilaatikko/internal/platform"
 )
 
 // ============================================================================
@@ -68,7 +68,7 @@ func (a *App) GetWindowDecorationStatus() platform.WindowDecorationStatus {
 }
 
 // GetPendingMailto returns and clears any pending mailto: URL data.
-// This is used when Aerion is launched with a mailto: URL argument.
+// This is used when Postilaatikko is launched with a mailto: URL argument.
 func (a *App) GetPendingMailto() *MailtoData {
 	a.mailtoMu.Lock()
 	defer a.mailtoMu.Unlock()

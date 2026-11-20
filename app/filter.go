@@ -3,12 +3,12 @@ package app
 import (
 	"fmt"
 
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/folder"
-	"github.com/hkdb/aerion/internal/logging"
-	"github.com/hkdb/aerion/internal/mailfilter"
-	"github.com/hkdb/aerion/internal/message"
-	syncruntime "github.com/hkdb/aerion/internal/sync"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/mailfilter"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
+	syncruntime "github.com/ollisulopuisto/postilaatikko/internal/sync"
 )
 
 // ============================================================================

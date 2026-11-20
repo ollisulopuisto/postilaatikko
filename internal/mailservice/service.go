@@ -6,14 +6,14 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/hkdb/aerion/internal/account"
-	"github.com/hkdb/aerion/internal/email/replycontent"
-	"github.com/hkdb/aerion/internal/folder"
-	"github.com/hkdb/aerion/internal/message"
-	"github.com/hkdb/aerion/internal/replylater"
-	mailSync "github.com/hkdb/aerion/internal/sync"
-	"github.com/hkdb/aerion/internal/triage"
-	"github.com/hkdb/aerion/internal/virtualfolder"
+	"github.com/ollisulopuisto/postilaatikko/internal/account"
+	"github.com/ollisulopuisto/postilaatikko/internal/email/replycontent"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/replylater"
+	mailSync "github.com/ollisulopuisto/postilaatikko/internal/sync"
+	"github.com/ollisulopuisto/postilaatikko/internal/triage"
+	"github.com/ollisulopuisto/postilaatikko/internal/virtualfolder"
 )
 
 // Options supplies the stores and provider engine already owned by a runtime.

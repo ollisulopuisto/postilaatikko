@@ -3,8 +3,8 @@ package alwayson
 import (
 	"errors"
 
-	coreapi "github.com/hkdb/aerion/internal/core/api/v1"
-	"github.com/hkdb/aerion/internal/extensions/hostaccess"
+	coreapi "github.com/ollisulopuisto/postilaatikko/internal/core/api/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/extensions/hostaccess"
 )
 
 // extensionCore is the headless coreapi.Core the helper hands to the

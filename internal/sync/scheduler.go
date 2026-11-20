@@ -3,15 +3,15 @@ package sync
 import (
 	"context"
 	"errors"
-	"github.com/hkdb/aerion/internal/gmail"
+	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/hkdb/aerion/internal/account"
-	"github.com/hkdb/aerion/internal/folder"
-	"github.com/hkdb/aerion/internal/logging"
-	"github.com/hkdb/aerion/internal/platform"
+	"github.com/ollisulopuisto/postilaatikko/internal/account"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/platform"
 	"github.com/rs/zerolog"
 )
 

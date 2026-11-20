@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hkdb/aerion/internal/carddav"
-	"github.com/hkdb/aerion/internal/oauth2"
+	"github.com/ollisulopuisto/postilaatikko/internal/carddav"
+	"github.com/ollisulopuisto/postilaatikko/internal/oauth2"
 )
 
 // AuthContextInfo describes a single authenticated identity (email account or
@@ -112,7 +112,7 @@ type OAuthCredsChoices struct {
 	//   - placeholder copy ("Leave empty to keep current" vs "Paste …")
 	//   - "Clear saved Custom credentials" button visibility
 	//   - the "You also have a saved Custom override" hint when the
-	//     user is currently on an Aerion choice but Custom is still on file
+	//     user is currently on an Postilaatikko choice but Custom is still on file
 	// Under the pre-active-choice architecture this was equivalent to
 	// `Current == "custom"` because the picker wiped the row when the
 	// user switched away from Custom. With explicit active-choice
@@ -167,7 +167,7 @@ func (a *App) GetOAuthCredsChoices(configID, extensionID string) (OAuthCredsChoi
 	// `microsoft-calendar` are core-registered aliases of `microsoft-mail`
 	// (microsoft-mail's client IS the consolidated Microsoft client), so
 	// showing a separate "use mail's client" option would be a redundant
-	// duplicate of the "Aerion - Microsoft" shipped choice already added
+	// duplicate of the "Postilaatikko - Microsoft" shipped choice already added
 	// above.
 	if extensionID != "" && providerFromConfigID(configID) == "google" {
 		const mailSlot = "google-mail"
@@ -183,7 +183,7 @@ func (a *App) GetOAuthCredsChoices(configID, extensionID string) (OAuthCredsChoi
 	// Determine the Current selection from credStore state.
 	out.Current = a.resolveCurrentChoice(configID)
 	// Independent of the active choice — the row may exist while the
-	// user is currently routed to Aerion-shipped or Aerion-mail.
+	// user is currently routed to Postilaatikko-shipped or Postilaatikko-mail.
 	out.HasUserOverride = a.credStore != nil && a.credStore.HasUserClientCreds(configID)
 
 	// Fingerprint of whatever currently resolves.
@@ -287,10 +287,10 @@ func providerFromConfigID(configID string) string {
 // shippedLabelForSlot returns the user-visible label for the slot's own
 // shipped option. Google extension slots are the un-Google-verified test
 // clients (broader scopes than the mail-app's verified client) — labeled
-// "Aerion - Google (Testing)" so users understand they may see Google's
+// "Postilaatikko - Google (Testing)" so users understand they may see Google's
 // unverified-app warning during OAuth consent. Once Google verifies the
 // mail project for the extension scopes, the default switches to
-// "Aerion - Google" (the aerion-mail choice — mail's verified client).
+// "Postilaatikko - Google" (the aerion-mail choice — mail's verified client).
 func shippedLabelForSlot(configID string) string {
 	switch configID {
 	case "google-contacts", "google-calendar":
@@ -329,7 +329,7 @@ func (a *App) ClearOAuthCreds(configID string) error {
 // (mail accounts + standalone contacts sources) that match the given OAuth
 // provider. Used by the Contacts extension's write-access picker to let the
 // user attach a write grant to one of their EXISTING reads, rather than
-// adding a new account from inside the extension (which Aerion's design
+// adding a new account from inside the extension (which Postilaatikko's design
 // forbids — new accounts always come through core setup paths).
 //
 // Wails-bound. Returns an empty slice when nothing matches — the picker

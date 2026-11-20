@@ -14,7 +14,7 @@ import (
 // requested. It binds an ephemeral loopback port so profiling is not exposed to
 // the local network and does not conflict with another app instance.
 func startLocalProfiler() func() {
-	if os.Getenv("ETERNOMAIL_PPROF") != "1" {
+	if os.Getenv("POSTILAATIKKO_PPROF") != "1" && os.Getenv("ETERNOMAIL_PPROF") != "1" {
 		return func() {}
 	}
 

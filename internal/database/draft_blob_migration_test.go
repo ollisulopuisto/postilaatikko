@@ -3,7 +3,7 @@ package database
 import (
 	"testing"
 
-	"github.com/hkdb/aerion/internal/drafthistory"
+	"github.com/ollisulopuisto/postilaatikko/internal/drafthistory"
 )
 
 // The PR #45 blob code paths must work on a database produced by the real

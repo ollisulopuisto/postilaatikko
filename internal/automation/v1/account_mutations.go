@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hkdb/aerion/internal/account"
+	"github.com/ollisulopuisto/postilaatikko/internal/account"
 )
 
 var (

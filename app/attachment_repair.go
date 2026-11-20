@@ -7,8 +7,8 @@ import (
 	"net/mail"
 	"strings"
 
-	"github.com/hkdb/aerion/internal/email"
-	"github.com/hkdb/aerion/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/email"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
 )
 
 // RepairMessageAttachments explicitly re-fetches one local IMAP message. It

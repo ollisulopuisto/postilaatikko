@@ -10,12 +10,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hkdb/aerion/internal/logging"
+	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 )
 
 // windowsSingleInstanceLock uses a TCP socket on localhost for single-instance detection.
 // Windows doesn't support Unix sockets reliably, so we use a fixed TCP port on loopback.
-// The port number is stored in a lock file at %APPDATA%\Aerion\instance.port.
+// The port number is stored in a lock file at %APPDATA%\Postilaatikko\instance.port.
 type windowsSingleInstanceLock struct {
 	listener net.Listener
 	lockFile string

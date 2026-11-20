@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hkdb/aerion/internal/crypto"
-	"github.com/hkdb/aerion/internal/database"
+	"github.com/ollisulopuisto/postilaatikko/internal/crypto"
+	"github.com/ollisulopuisto/postilaatikko/internal/database"
 	gokeyring "github.com/zalando/go-keyring"
 )
 

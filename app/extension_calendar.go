@@ -1,7 +1,7 @@
 package app
 
 import (
-	extcalendarbe "github.com/hkdb/aerion/extensions/calendar/backend"
+	extcalendarbe "github.com/ollisulopuisto/postilaatikko/extensions/calendar/backend"
 )
 
 // initCalendarExtension wires the Calendar extension's Bridge into App

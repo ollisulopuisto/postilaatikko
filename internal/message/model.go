@@ -2,7 +2,7 @@
 package message
 
 import (
-	"github.com/hkdb/aerion/internal/email/reactions"
+	"github.com/ollisulopuisto/postilaatikko/internal/email/reactions"
 	"time"
 )
 

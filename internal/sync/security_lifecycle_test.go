@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/emersion/go-imap/v2"
-	"github.com/hkdb/aerion/internal/message"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
 	"strings"
 	"testing"
 	"time"

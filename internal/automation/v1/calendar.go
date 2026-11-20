@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	calendar "github.com/hkdb/aerion/extensions/calendar/backend"
+	calendar "github.com/ollisulopuisto/postilaatikko/extensions/calendar/backend"
 	"io"
 	"net/http"
 	"strings"
