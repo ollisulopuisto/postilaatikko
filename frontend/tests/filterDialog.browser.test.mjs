@@ -25,7 +25,13 @@ test('filter editor: prefill, literal subjects, duplicate names, explicit applic
         window.calls.push([name,args])
         switch(name){
           case 'GetFilterExecutionTarget':return Promise.resolve(window.target||{target:'local',endpoint:'',ready:true,writeAuthorized:true,errorCode:''})
-          case 'SaveFilterRuleToTarget':if(window.saveFails)return Promise.reject(new Error('read-back failed'));window.saved.push(args[2]);window.existing.push(args[2]);return Promise.resolve()
+          case 'SaveFilterRuleToTarget':{
+            const prior=window.existing.find(rule=>rule.id===args[2].id)
+            if(!prior){window.saved.push(args[2]);window.existing.push(args[2])}
+            if(prior&&JSON.stringify(prior)!==JSON.stringify(args[2]))return Promise.reject(new Error('rule changed on target'))
+            if(window.saveFails)return Promise.reject(new Error('saved but read-back failed'))
+            return Promise.resolve()
+          }
           case 'GetAccounts':return Promise.resolve([{id:'a',name:'Work',email:'me@example.com'}])
           case 'GetMessage':return Promise.resolve({fromEmail:'sender@example.com',toList:'[{"email":"me@example.com"}]',subject:'Hello, world'})
           case 'GetMessageListID':return Promise.resolve('news.example.com')
@@ -80,9 +86,12 @@ test('filter editor: prefill, literal subjects, duplicate names, explicit applic
     await page.waitForTimeout(80)
     assert.equal(await dialog.isVisible(),true,'unverified save keeps editor open')
     assert.equal(await page.evaluate(()=>window.calls.filter(([name])=>name==='CreateFilterRule').length),0,'no legacy fallback')
+    const persistedWrites=await page.evaluate(()=>window.saved.length)
     await page.evaluate(()=>{window.saveFails=false})
     await dialog.getByRole('button',{name:'Create filter',exact:true}).click()
     await page.waitForTimeout(80)
+    assert.equal(await page.evaluate(()=>window.saved.length),persistedWrites,'verified retry does not create a second rule')
+    assert.equal(await dialog.isVisible(),false,'persisted save can be verified on retry')
     assert.deepEqual(await page.evaluate(()=>window.calls.filter(([name])=>name==='SaveFilterRuleToTarget').at(-1)[1].slice(0,2)),['helper','https://studio.example.test:8029'])
     await page.evaluate(()=>{window.target={target:'helper',endpoint:'https://studio.example.test:8029',ready:false,writeAuthorized:false,errorCode:'remote_unavailable'};return window.show()})
     await page.getByText('The selected service is offline or needs write access. Reconnect in Settings before saving.').waitFor()

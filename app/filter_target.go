@@ -19,6 +19,7 @@ type FilterExecutionTarget struct {
 	ErrorCode       string `json:"errorCode"`
 }
 
+// GetFilterExecutionTarget reports the configured owner and current readiness.
 func (a *App) GetFilterExecutionTarget() FilterExecutionTarget {
 	state := FilterExecutionTarget{Target: "local", Ready: true, WriteAuthorized: true}
 	if a.mailboxService == nil {
