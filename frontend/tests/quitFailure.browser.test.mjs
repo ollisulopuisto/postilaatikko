@@ -9,7 +9,7 @@ const browserModule = process.env.POSTI_PLAYWRIGHT_PATH
 
 test('quit failure recovery text stays readable in English and Finnish at narrow widths', { skip: !browserModule, timeout: 60000 }, async () => {
   const root = fileURLToPath(new URL('..', import.meta.url))
-  const server = await createServer({
+  const server = await createServer({cacheDir:fileURLToPath(new URL(`../node_modules/.vite-test/${process.pid}/quitFailure`,import.meta.url)),
     root,
     plugins: [{ name: 'quit-toast-fixture', resolveId(id) { if (id === '/quit-mount.js') return id }, load(id) { if (id === '/quit-mount.js') return `export {mount} from 'svelte'; export {get} from 'svelte/store'` } }],
     server: { host: '127.0.0.1', port: 5195, strictPort: true, fs: { allow: [root, realpathSync(join(root, 'node_modules'))] } },

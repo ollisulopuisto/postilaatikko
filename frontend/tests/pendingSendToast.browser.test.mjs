@@ -11,7 +11,7 @@ const browserModule = process.env.POSTI_PLAYWRIGHT_PATH
 // out of the viewport, at narrow and at short window sizes.
 test('undo bar keeps its three controls on screen for a very large recipient list', { skip: !browserModule, timeout: 60000 }, async () => {
   const root = fileURLToPath(new URL('..', import.meta.url))
-  const server = await createServer({
+  const server = await createServer({cacheDir:fileURLToPath(new URL(`../node_modules/.vite-test/${process.pid}/pendingSendToast`,import.meta.url)),
     root,
     plugins: [{ name: 'toast-fixture', resolveId(id) { if (id === '/toast-mount.js') return id }, load(id) { if (id === '/toast-mount.js') return `export {mount} from 'svelte'` } }],
     server: { host: '127.0.0.1', port: 5194, strictPort: true, fs: { allow: [root, realpathSync(join(root, 'node_modules'))] } },

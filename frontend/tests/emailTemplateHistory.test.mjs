@@ -51,3 +51,8 @@ for (const body of ['', 'Template body']) {
     assert.deepEqual(state, after)
   })
 }
+
+test('detached composer exposes templates through its resolved API', () => {
+  assert.match(composer, /<EmailTemplates \{api\} onInsert=\{insertEmailTemplate\} compact=\{isCompact\} \/>/)
+  assert.doesNotMatch(composer, /\{#if !isDetached\}\s*<EmailTemplates/)
+})
