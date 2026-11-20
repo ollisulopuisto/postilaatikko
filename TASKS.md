@@ -51,6 +51,9 @@
 ## Palette active-view translation
 
 - UI-ERROR-AUDIT-006: Review. Instinct, `agent/UI-ERROR-AUDIT-006`, `/tmp/pl-palette-active`. Added missing EN/FI active-view translations. Regression failed before and passes after; actual palette rendered in EN/FI and pixels inspected. No native Mac run. No folder-palette feature changes pending owner decision.
+## Command palette folder jump
+
+- PALETTE-FOLDER-001: Review. Instinct, `agent/palette-folder-jump`, `/tmp/pl-palette-folders`. Owner requested folder matching below commands, exact/prefix/substring ranking, account/path context, bounded results, existing sidebar navigation and unmatched search last. No network queries while typing. Failing-first matching regressions now pass; exact/prefix/substring, duplicates, hidden ancestry, empty query, cap and actual App callback tests. Actual EN/FI palette keyboard selection picks the correct account; screenshots inspected. Frontend 1112 pass, 20 browser-gated skips, check/lint/build pass. Native Mac not run.
 
 ## Status and effort
 

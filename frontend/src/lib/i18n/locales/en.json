@@ -1612,6 +1612,8 @@
     }
   },
   "commandPalette": {
+    "folder": "Folder",
+    "searchMessages": "Search messages for \"{query}\"",
     "title": "Command palette",
     "placeholder": "Type a command or search...",
     "noResults": "No commands match “{query}”.",

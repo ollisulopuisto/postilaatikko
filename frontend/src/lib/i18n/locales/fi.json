@@ -1612,6 +1612,8 @@
     }
   },
   "commandPalette": {
+    "folder": "Kansio",
+    "searchMessages": "Hae viestejä: \"{query}\"",
     "title": "Komentovalikko",
     "placeholder": "Kirjoita komento tai hae...",
     "noResults": "Komentoja ei löytynyt haulle ”{query}”.",
