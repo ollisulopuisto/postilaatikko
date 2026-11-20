@@ -389,6 +389,7 @@ type App struct {
 	pendingCustomProvider *oauth2.ProviderConfig
 
 	// Contacts consent has its own manager/session and never consumes Mail tokens.
+	gmailFilterOAuthMu  goSync.Mutex
 	contactOAuthMu      goSync.Mutex
 	contactOAuthManager *oauth2.Manager
 	pendingContactOAuth *pendingContactOAuth

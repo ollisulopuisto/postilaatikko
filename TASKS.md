@@ -46,6 +46,10 @@
 
 - GMAIL-FILTER-001: Review. Instinct, `agent/gmail-filter-backend`, `/tmp/pl-gmail-filter-backend`. Native bounded list/get/create/delete, no ambiguous create retry, explicit incremental settings grant configuration and wrong-account/partial-consent validation. Dependent on FILTER-TARGET-001. Gmail and OAuth package tests pass. This PR supplies the transport and grant-validation primitives; app consent persistence/UI and native publication are dependent work, not implemented here. No live consent or publication.
 
+## Gmail filter account consent
+
+- GMAIL-FILTER-002: Review. Instinct, `agent/gmail-filter-publish`, `/tmp/pl-gmail-filter-publish`. Explicit selected-account filter consent, preserve mail grant, reject remote workspace until helper-owned authorization exists. Separate manager and no automatic authorization. Wrong-account/partial-grant/project-change/remote-switch tests, refresh preservation/rotation, callback isolation and persisted-readback checks pass. App tests use CGO disabled with a temporary uncommitted startup stub; native Mac and live Google consent unrun. Dependent on GMAIL-FILTER-001; provider preview, journal and publication UI follow separately.
+
 ## Status and effort
 
 - **Easy:** contained UI, copy, localization, or isolated behavior change.
