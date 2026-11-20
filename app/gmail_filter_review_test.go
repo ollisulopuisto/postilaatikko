@@ -70,6 +70,8 @@ func TestNativeGmailReviewBoundedPreviewAndFingerprint(t *testing.T) {
 			t.Error("preview mutated provider")
 		}
 		switch {
+		case strings.HasSuffix(req.URL.Path, "/profile"):
+			body = `{"emailAddress":"user@example.com"}`
 		case strings.HasSuffix(req.URL.Path, "/labels"):
 			body = `{"labels":[{"id":"opaque-user-id","name":"Reading","type":"user"},{"id":"UNREAD","name":"Unread","type":"system"},{"id":"INBOX","name":"Inbox","type":"system"}]}`
 		case strings.HasSuffix(req.URL.Path, "/messages"):

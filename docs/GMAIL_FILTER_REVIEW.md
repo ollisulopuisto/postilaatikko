@@ -23,3 +23,11 @@ The durable journal owns the one-create-attempt boundary. A create error reloads
 ## Verification
 
 Backend tests cover bounded provider requests, no writes during preview/review, stale fingerprints, selected-account user labels, preview failure without reservation, restart readback, and canonical fingerprint persistence with empty/duplicate label lists. The actual browser fixture covers selected consent, failed preview, preview invalidation, final review, cancellation, uncertain create, reopen and read-only recovery, including English and Finnish narrow layout captures. Live Google consent/provider matching and native macOS execution still require acceptance testing.
+
+## Durable provider owner binding
+
+The preview and prepared journal also bind the normalized Gmail account email and resolved Mail OAuth client ID, stored as non-secret metadata in the existing source-snapshot JSON. An account/project change invalidates review. The UI displays the email from the actual preview/frozen plan, not a stale account-context label.
+
+Before provider catalog reads, creation or reconciliation, the adapter verifies the authenticated Gmail profile. One token is pinned across that identity read and the following provider operation, so a credential replacement cannot switch the write's mailbox between those requests. A stale/expired pinned token fails rather than refreshing or retrying the write. No token is persisted in the publication journal.
+
+Old unbound prepared plans must be cancelled and reviewed again. An attempted old unbound plan needs manual inspection; it cannot be replayed or automatically reconciled against a guessed account. Every desktop mailbox-service connector also blocks desktop consent until helper-owned routes are available.
