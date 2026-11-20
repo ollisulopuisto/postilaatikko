@@ -275,3 +275,31 @@ func TestProductionMailboxHandlerMountsNativeGmailRoute(t *testing.T) {
 		t.Fatal("native Gmail ownership route missing")
 	}
 }
+
+func TestHelperNativeReviewDiscoversOnlySourceOwnerAndAttempt(t *testing.T) {
+	r := helperConsentFixture(t) // no settings consent, discovery makes no Google calls
+	contextReply, err := r.GmailPublication(context.Background(), v1.GmailPublicationRequest{Operation: "context", RuleID: "helper-rule"})
+	if err != nil || contextReply.AccountID != "helper-google" || !contextReply.ConsentRequired {
+		t.Fatal(contextReply, err)
+	}
+	status, err := r.GmailPublication(context.Background(), v1.GmailPublicationRequest{Operation: "status", RuleID: "helper-rule"})
+	if err != nil || status.Publication != nil {
+		t.Fatal(status, err)
+	}
+	// Prepare a journal fixture directly, not a provider mutation.
+	f := gmail.Filter{Criteria: gmail.FilterCriteria{Query: "from:sender"}, Action: gmail.FilterAction{RemoveLabelIDs: []string{"UNREAD"}}}
+	plan, err := r.rules.PrepareGmailPublication("helper-rule", "helper-google", f, nil, []string{"UNREAD"}, helperGmailBinding("helper@example.com", "helper-project"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, err = r.GmailPublication(context.Background(), v1.GmailPublicationRequest{Operation: "status", RuleID: "helper-rule"})
+	if err != nil || status.Publication == nil || status.Publication.ID != plan.ID || status.Fingerprint == "" {
+		t.Fatal(status, err)
+	}
+	if _, err = r.GmailPublication(context.Background(), v1.GmailPublicationRequest{Operation: "status", AccountID: "helper-google", ID: plan.ID, RuleID: "different-source"}); err == nil {
+		t.Fatal("other source attempt disclosed")
+	}
+	if _, err = r.GmailPublication(context.Background(), v1.GmailPublicationRequest{Operation: "context", RuleID: "missing"}); err == nil {
+		t.Fatal("missing source inferred")
+	}
+}

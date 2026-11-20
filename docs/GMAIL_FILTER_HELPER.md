@@ -1,27 +1,31 @@
-# Helper-owned Gmail filter publication API
+# Helper-owned Gmail filter publication
 
-This slice adds an account-owning helper path. It is not a completed desktop feature: consent exchange and desktop routing are still absent, and the desktop remains fail-closed for every helper connector.
+The existing Gmail review dialog now supports the configured account-owning helper and the explicit standalone workspace. No failed helper operation can switch to a desktop rule or credential store.
 
-## Operations
+## Desktop review
 
-`POST /v1/filters/gmail` requires mail.read. Context, bounded preview and status are reads. Preparation reserves the stopped source, publication changes future Gmail filtering, cancellation releases an unattempted source, and reconciliation can update the local journal. Those four operations additionally require both mail.write and account.manage.
+The dialog captures the configured connector, endpoint and client identity once. It displays the frozen execution owner and endpoint. Every subsequent operation supplies that workspace key. Changing the connector, endpoint or credential client invalidates the open review, even if the next workspace has the same account or rule IDs. Reopen the dialog to select a new owner.
 
-Native payloads contain one explicit Gmail query and supported label actions. Local substring criteria are not translated. User-label choices are validated against the selected helper account, system-label injection is refused, archive/Trash conflicts are refused, and the preview reads one 51-ID page, showing at most 50 plus truncation. It never changes historical mail.
+Read-only context and status discovery resolve the selected source account on the helper. No desktop account lookup supplies a helper account. Preparation, publication, cancellation and reconciliation remain explicit requests with selected account, source and frozen plan identity. Provider work has a bounded 30-second request timeout, not the connector's shorter health-read timeout. No create or consent completion is retried.
 
-The helper checks the explicit settings scope in its own canonical Mail credentials. Its new settings-token source is separate from ordinary search access. Tokens stay helper-local. The refresh path retains omitted refresh tokens and preserves old scope metadata when the response omits scope; explicit scope reductions are saved and settings access is then refused.
+## Consent
 
-## Ownership and recovery
+The desktop authorization button starts an IPv4 loopback listener. The helper retains the OAuth project, PKCE verifier and state, exchanges the forwarded callback code once, verifies the live Gmail identity and all required scopes, and persists its canonical Mail grant. No refresh token, project secret or verifier crosses the API.
 
-The durable journal binds account email/OAuth project and source/payload fingerprint. Each provider operation reads Gmail profile with the same pinned token used for its following request. An unknown create never replays. Reconciliation verifies one candidate with the journal's original baseline. Account/project/profile changes block publication and reconciliation.
+Sessions expire after five minutes, are bound to the authenticated API client and selected account, and are cancelled on unsuccessful desktop exit. The desktop opens only the expected Google authorization origin with its own listener redirect. A workspace change before callback forwarding blocks completion. If the completion response is lost, reopen review to check account context; never replay the code.
 
-Helper filtering already runs durable jobs. Preparation rejects pending, processing and outcome-unknown jobs within its journal transaction. The guard blocks enabling, edits, deletion and later job enqueue. No offline status or failed probe is used as proof of executor quiescence.
+Helper completion rechecks expiry, shutdown, account/project binding and the original grant before saving. Credential snapshots use compare-and-swap persistence. Helper Mail refresh paths also refuse stale responses so an older refresh cannot overwrite a newly consented settings grant. The keyring and SQLite are not transactional together; persistence/readback errors remain unverified.
 
-Only an unattempted plan can cancel. Published sources remain guarded, reverse transfer and provider deletion are not implemented. Old unbound records fail closed.
+## Publication and recovery
 
-## Checks and remaining work
+`POST /v1/filters/gmail` requires mail.read. Preparation, publication, cancellation and reconciliation additionally require mail.write and account.manage. Consent lifecycle requests require mail.read and account.manage.
 
-Tests use fake helper credentials/provider HTTP, never live Google. They cover selected helper tokens, no credential output, missing grants without provider calls, preview bounds, exact fingerprint, one uncertain create, status and read-only recovery, mismatched identity/account, job-state refusal and cancellation. Route tests cover both permissions, strict bounded JSON and credential-field rejection. The actual client tests prove failed create is not replayed. The production mount and route-coalescing classification tests cover the new route.
+Only stopped single-account sources without folder or move scope are eligible. Native payloads contain an explicit Gmail query and supported label actions. Local substring rules are never translated. Selected user labels come from the account's current catalog. Preview reads one page of at most 51 message IDs, showing at most 50 plus truncation. It never changes historical mail.
 
-Full alwayson, automation/client/v1, scheduled-send, helper command and affected dependencies passed with CGO disabled; affected vet and version consistency passed. Race execution was blocked at compile time by absent native GDK/GLib libraries and is not claimed passed. No native macOS, real Studio or live Google acceptance.
+The durable journal binds account email/OAuth project, source snapshot and payload fingerprint. Provider operations verify Gmail profile and pin the same token for the following request. Preparation rejects outstanding automatic jobs and locks the source. An unknown create never replays. Status reload and read-only reconciliation recover it. Only an unattempted plan can cancel. Published sources stay guarded; reverse transfer and provider deletion are not implemented. Old unbound plans fail closed.
 
-Next: selected-account expiring helper-owned consent exchange, then workspace-pinned desktop routing using the native review UI. Never obtain helper refresh tokens on the desktop or silently fall back to desktop credentials.
+## Validation boundaries
+
+Tests use synthetic helper credentials and mocked provider HTTP. Desktop tests cover workspace/client replacement, offline helper refusal, no local fallback, exact draft routing, a single failed create, a real loopback callback forwarding sequence and rejection of unexpected authorization destinations. Helper tests cover source-owned account/status discovery, permissions, PKCE, grant changes, expiry/shutdown during exchange, journal recovery and refresh races. The actual browser test covers selected helper consent, preview failure/invalidation, explicit final publication, uncertain-create recovery, reopen and EN/FI narrow layouts.
+
+No real Studio, live Google consent or mail matching, or native macOS acceptance has been run. Required CI and exact-head review still gate every merge. No build or release dispatch is part of this change.
