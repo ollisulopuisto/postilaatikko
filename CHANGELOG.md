@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Settings Images now shows retryable allowlist load failures and visible removal errors instead of false empty lists or silent failures. The privacy switch stays usable in narrow windows.
+
 - If quitting fails while checking pending mail or closing the app, show a localized error instead of silently leaving the app open. Pending-send and uncertain-delivery safety checks are unchanged.
 
 - Top-tab Unread no longer repeats its active state in a removable filter chip. List-local filters keep their chips.
