@@ -1733,6 +1733,7 @@
     }
   },
   "pendingSend": {
+    "quitFailed": "Could not finish quitting. The app stayed open. Check pending mail and try Quit again; do not resend a message whose delivery is uncertain.",
     "recoveryRequired": "Send paused. Choose Send now or Undo.",
     "queued": "Message queued",
     "sending": "Sending…",

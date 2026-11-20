@@ -1,46 +1,28 @@
-// Regression + performance guard for sortSearchRows in
-// frontend/src/lib/components/list/MessageList.svelte, used to order search
-// results on every search reload and sort toggle.
-//
-// MessageList.svelte cannot be imported directly in plain node (it pulls in
-// Svelte and wailsjs bindings), so this test replicates the production
-// sortSearchRows logic exactly and is kept in sync with it. A production
-// regression (re-introducing new Date() parsing) shows up directly here.
-//
-// Covers:
-// 1. sort order matches Date.getTime() ordering across date sets
-// 2. newest / oldest direction toggle is honoured
-// 3. mixed-precision timestamps (Go drops a zero fraction, so both "...:05Z"
-//    and "...:05.123Z" occur) order chronologically in both directions - a
-//    plain string comparison gets these wrong because '.' < 'Z'
-// 4. a material speedup over parsing latestDate with new Date() per comparison
-//    (strictly faster; the multiplier is hardware-dependent - ~2x observed in a
-//    shared CI container, more on desktop hardware, since decoration allocates
-//    one small object per row while parse count drops from O(n log n) to O(n))
-
+// Production search-row correctness and deterministic parse-work budget.
+// Wall-clock ratios on shared runners are not a reproducible regression guard.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { runInNewContext } from 'node:vm'
+import ts from 'typescript'
 
 // Reference: current pre-optimisation logic (parses per comparison).
 function sortSearchRowsDate(rows, direction) {
   return [...rows].sort((a, b) => direction * (new Date(a.latestDate).getTime() - new Date(b.latestDate).getTime()))
 }
 
-// Target: optimised logic (matches MessageList.svelte sortSearchRows).
-// Parse each row's latestDate once (decorate-sort-undecorate): plain string
-// comparison is NOT chronological because Go's time.Time JSON drops a zero
-// fraction ("...:05Z" vs "...:05.123Z").
-function sortSearchRows(rows, direction) {
-  return rows
-    .map((row) => ({ row, ts: Date.parse(row.latestDate) }))
-    .sort((a, b) => {
-      const aBad = Number.isNaN(a.ts)
-      const bBad = Number.isNaN(b.ts)
-      if (aBad || bBad) return aBad === bBad ? 0 : aBad ? 1 : -1
-      return direction * (a.ts - b.ts)
-    })
-    .map(({ row }) => row)
+// Exercise the production handler, not a separately maintained copy.
+const component = readFileSync(new URL('../src/lib/components/list/MessageList.svelte', import.meta.url), 'utf8')
+const start = component.indexOf('  function sortSearchRows(')
+const end = component.indexOf('  export function startAllMailSearch(', start)
+assert.ok(start >= 0 && end > start, 'production sort handler boundaries must exist')
+const production = ts.transpileModule(component.slice(start, end), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText
+function productionSort(rows, direction, DateClass = Date) {
+  const context = { searchSort: direction === 1 ? 'oldest' : 'newest', Date: DateClass, rows }
+  runInNewContext(production + '\nresult = sortSearchRows(rows)', context)
+  return Array.from(context.result)
 }
+const sortSearchRows = productionSort
 
 function isoRows(base, count, stepMs) {
   const rows = []
@@ -129,27 +111,33 @@ test('sortSearchRows handles a single row and empty input', () => {
   assert.deepEqual(sortSearchRows([], -1), [])
 })
 
-// ---- Performance regression guard ----
-function bench(fn, iters) {
-  for (let i = 0; i < 20; i++) fn() // warmup
-  const s0 = process.hrtime.bigint()
-  for (let i = 0; i < iters; i++) fn()
-  const s1 = process.hrtime.bigint()
-  return Number(s1 - s0) / 1e6 // ms
+// Guard the expensive work directly: every timestamp is read and parsed once,
+// whether rows arrive in sorted, reversed or shuffled order.
+for (const order of ['sorted', 'reversed', 'shuffled']) {
+  test(`production sort parses each date once for ${order} input`, () => {
+    let parses = 0, reads = 0
+    class CountingDate extends Date {
+      constructor(...args) { super(...args); parses++ }
+      static parse(value) { parses++; return Date.parse(value) }
+    }
+    const rows = isoRows(base, 500, 60000)
+    if (order === 'reversed') rows.reverse()
+    if (order === 'shuffled') {
+      let state = 17
+      for (let i = rows.length - 1; i > 0; i--) {
+        state = (state * 1664525 + 1013904223) >>> 0
+        const j = state % (i + 1)
+        ;[rows[i], rows[j]] = [rows[j], rows[i]]
+      }
+    }
+    for (const row of rows) {
+      const date = row.latestDate
+      Object.defineProperty(row, 'latestDate', { get() { reads++; return date } })
+    }
+    const actual = productionSort(rows, -1, CountingDate)
+    assert.equal(parses, rows.length, 'one parse per row, not per comparison')
+    assert.equal(reads, rows.length, 'one timestamp read per row')
+    assert.deepEqual(actual.map(r => r.id), Array.from({ length: 500 }, (_, i) => String(499 - i)))
+    assert.equal(rows.length, 500)
+  })
 }
-
-const ITERATIONS = 2000
-const rows500 = isoRows(base, 500, 60000)
-
-test('sortSearchRows parse-once is materially faster than new Date() parsing per comparison', () => {
-  const runOld = () => sortSearchRowsDate(rows500, -1)
-  const runNew = () => sortSearchRows(rows500, -1)
-
-  const oldMs = bench(runOld, ITERATIONS)
-  const newMs = bench(runNew, ITERATIONS)
-
-  console.log(`sortSearchRows new Date() per comparison=${oldMs.toFixed(2)}ms parse-once=${newMs.toFixed(2)}ms over ${ITERATIONS} sorts of 500 rows`)
-  assert.ok(newMs < oldMs, `expected parse-once (${newMs}ms) < new Date() per comparison (${oldMs}ms)`)
-  const speedup = oldMs / newMs
-  assert.ok(speedup > 1.5, `expected >1.5x speedup, got ${speedup.toFixed(2)}x`)
-})
