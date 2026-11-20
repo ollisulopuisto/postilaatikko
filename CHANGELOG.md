@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- About offers Retry when app information cannot be loaded, without restarting the update checker.
+
 - If quitting fails while checking pending mail or closing the app, show a localized error instead of silently leaving the app open. Pending-send and uncertain-delivery safety checks are unchanged.
 
 - Top-tab Unread no longer repeats its active state in a removable filter chip. List-local filters keep their chips.
