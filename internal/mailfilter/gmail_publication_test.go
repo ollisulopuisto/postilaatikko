@@ -206,3 +206,35 @@ func TestGmailPublicationRejectsUnsupportedDrafts(t *testing.T) {
 		})
 	}
 }
+
+type interleavedRecoveryProvider struct {
+	*fakeNativeProvider
+	list func()
+}
+
+func (p interleavedRecoveryProvider) ListFilters(ctx context.Context) ([]gmail.Filter, error) {
+	p.list()
+	return p.fakeNativeProvider.ListFilters(ctx)
+}
+func TestGmailRecoveryCannotOverwriteConcurrentKnownIdentity(t *testing.T) {
+	s, rule, draft, base := publicationFixture(t)
+	plan := preparePublication(t, s, rule, draft, base)
+	if _, err := s.db.Exec(`UPDATE gmail_filter_publications SET state='unknown' WHERE id=?`, plan.ID); err != nil {
+		t.Fatal(err)
+	}
+	candidate := draft
+	candidate.ID = "candidate-A"
+	base.filters = []gmail.Filter{candidate}
+	provider := interleavedRecoveryProvider{fakeNativeProvider: base, list: func() {
+		if _, err := s.db.Exec(`UPDATE gmail_filter_publications SET provider_id='created-B' WHERE id=?`, plan.ID); err != nil {
+			t.Fatal(err)
+		}
+	}}
+	if _, err := s.ReconcileGmailPublication(context.Background(), plan.ID, provider); err == nil {
+		t.Fatal("stale catalog candidate accepted")
+	}
+	stored, err := s.GetGmailPublication(plan.ID)
+	if err != nil || stored.ProviderID != "created-B" || stored.State != "unknown" {
+		t.Fatal("authoritative ID overwritten", stored, err)
+	}
+}
