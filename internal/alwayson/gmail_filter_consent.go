@@ -171,18 +171,29 @@ func (r *SyncRuntime) GmailConsent(ctx context.Context, clientID string, req v1.
 		if err = r.validateGmailConsentSnapshot(session); err != nil {
 			return result, err
 		}
+		r.gmailConsent.mu.Lock()
+		defer r.gmailConsent.mu.Unlock()
+		if r.gmailConsent.closed || time.Now().After(session.expires) {
+			return result, fmt.Errorf("helper consent closed or expired during exchange")
+		}
+		if err = ctx.Err(); err != nil {
+			return result, err
+		}
 		current, err := r.contacts.creds.GetOAuthTokens(session.accountID)
 		if err != nil {
 			return result, err
 		}
 		defer current.Clear()
+		if !gmailConsentTokensMatch(session, current) {
+			return result, fmt.Errorf("helper grant changed during consent; start again")
+		}
 		refresh := tokens.RefreshToken
 		if refresh == "" {
 			refresh = current.RefreshToken
 		}
 		stored := &credentials.OAuthTokens{Provider: "google", AccessToken: tokens.AccessToken, RefreshToken: refresh, ExpiresAt: time.Now().Add(time.Duration(tokens.ExpiresIn) * time.Second), Scopes: strings.Fields(tokens.Scope)}
 		defer stored.Clear()
-		if err = r.contacts.creds.SetOAuthTokens(session.accountID, stored); err != nil {
+		if err = r.contacts.creds.CompareAndSwapOAuthTokens(session.accountID, current, stored); err != nil {
 			return result, fmt.Errorf("persist helper settings grant: %w", err)
 		}
 		readback, err := r.contacts.creds.GetOAuthTokens(session.accountID)
@@ -212,11 +223,14 @@ func (r *SyncRuntime) validateGmailConsentSnapshot(session *helperGmailConsentSe
 		return err
 	}
 	defer tokens.Clear()
-	previous, current := slices.Clone(session.scopes), slices.Clone(tokens.Scopes)
-	slices.Sort(previous)
-	slices.Sort(current)
-	if gmailRefreshDigest(tokens.RefreshToken) != session.refreshDigest || !slices.Equal(previous, current) {
+	if !gmailConsentTokensMatch(session, tokens) {
 		return fmt.Errorf("helper grant changed during consent; start again")
 	}
 	return nil
+}
+func gmailConsentTokensMatch(session *helperGmailConsentSession, tokens *credentials.OAuthTokens) bool {
+	previous, current := slices.Clone(session.scopes), slices.Clone(tokens.Scopes)
+	slices.Sort(previous)
+	slices.Sort(current)
+	return tokens.Provider == "google" && gmailRefreshDigest(tokens.RefreshToken) == session.refreshDigest && slices.Equal(previous, current)
 }

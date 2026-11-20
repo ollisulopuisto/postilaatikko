@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/hkdb/aerion/internal/crypto"
 	"github.com/hkdb/aerion/internal/logging"
@@ -24,6 +25,8 @@ const (
 
 // Store provides credential storage with OS keyring and encrypted DB fallback
 type Store struct {
+	oauthMu sync.Mutex // serializes token snapshots and compare-and-swap persistence
+
 	db             *sql.DB
 	encryptor      *crypto.Encryptor
 	keyringEnabled bool
