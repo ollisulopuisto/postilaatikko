@@ -1209,6 +1209,19 @@ func (a *App) moveMessagesToIMAP(messages []*message.Message, sourceFolderID str
 	gmailRFCIDs, gmailSpam, useGmailLabels := a.gmailSpamMove(accountID, orderedMessages, sourceFolder, destFolder)
 
 	err = a.withIMAPRetry(accountID, func(conn *imap.Client) error {
+		// Once a mutation has started, reconnecting may only verify its durable
+		// outcome. Never replay COPY/DELETE with stale source UIDs or mappings.
+		if remoteStarted {
+			return fmt.Errorf("move outcome requires recovery; refusing mutation replay")
+		}
+		clear(resolved)
+		destinationUIDs = nil
+		sourceValidity := uint32(0)
+		sources := map[string]uint32{}
+		for _, m := range orderedMessages {
+			sources[m.ID] = m.UID
+		}
+
 		// Without UIDPLUS, take the Message-ID/UID baseline from the server
 		// before COPY. The local cache may be stale and RFC822 Message-ID is not
 		// unique, so it cannot safely stand in for this remote snapshot. A Gmail
@@ -1265,32 +1278,40 @@ func (a *App) moveMessagesToIMAP(messages []*message.Message, sourceFolderID str
 		if !apiMoved {
 			// Select source mailbox
 			log.Debug().Str("mailbox", sourceFolder.Path).Msg("Selecting source mailbox")
-			if _, err := conn.SelectMailbox(a.ctx, sourceFolder.Path); err != nil {
+			source, err := conn.SelectMailbox(a.ctx, sourceFolder.Path)
+			if err != nil {
 				return fmt.Errorf("failed to select source mailbox: %w", err)
+			}
+			sourceValidity = source.UIDValidity
+			if sourceFolder.UIDValidity != 0 && sourceFolder.UIDValidity != sourceValidity {
+				return fmt.Errorf("source generation changed before COPY")
 			}
 
 			// COPY every selected message to the destination mailbox.
 			if len(moveUIDs) > 0 {
 				log.Debug().Str("destMailbox", destFolder.Path).Int("count", len(moveUIDs)).Msg("Copying messages to destination")
 				remoteStarted = true
-				destUIDs, copyErr := conn.CopyMessages(moveUIDs, destFolder.Path)
+				destUIDs, copyValidity, copyErr := conn.CopyMessagesWithValidity(moveUIDs, destFolder.Path)
 				if copyErr != nil {
 					return fmt.Errorf("failed to copy messages: %w", copyErr)
 				}
 				if len(destUIDs) == len(orderedMessages) {
+					if copyValidity == 0 {
+						return fmt.Errorf("COPYUID omitted destination generation")
+					}
+					destinationValidity = copyValidity
 					copyUIDUsed = true
 					for index, uid := range destUIDs {
 						resolved[orderedMessages[index].ID] = uint32(uid)
 						destinationUIDs = append(destinationUIDs, uint32(uid))
 					}
 				}
+				if len(resolved) > 0 {
+					if err := a.messageStore.RecordCopiedMoveUIDs(destFolder.ID, destinationValidity, resolved, sourceFolderID, sourceValidity, sources); err != nil {
+						return err
+					}
+				}
 				log.Debug().Msg("Messages copied successfully")
-			}
-
-			// DELETE the source copies after the destination COPY succeeds.
-			log.Debug().Int("count", len(moveUIDs)).Msg("Deleting messages from source (marking deleted + expunge)")
-			if err := conn.DeleteMessagesByUID(moveUIDs); err != nil {
-				return fmt.Errorf("failed to delete messages from source: %w", err)
 			}
 		}
 
@@ -1366,8 +1387,32 @@ func (a *App) moveMessagesToIMAP(messages []*message.Message, sourceFolderID str
 			if latest.UIDValidity != destinationValidity {
 				return fmt.Errorf("destination UID validity changed during move")
 			}
-			if err := a.messageStore.RecordMoveUIDEvidence(destFolder.ID, destinationValidity, resolved); err != nil {
+			if !copyUIDUsed && !apiMoved {
+				if err := a.messageStore.RecordCopiedMoveUIDs(destFolder.ID, destinationValidity, resolved, sourceFolderID, sourceValidity, sources); err != nil {
+					return err
+				}
+			}
+			if apiMoved {
+				if err := a.messageStore.RecordMoveUIDEvidence(destFolder.ID, destinationValidity, resolved); err != nil {
+					return err
+				}
+			}
+		}
+		if !apiMoved {
+			source, err := conn.SelectMailbox(a.ctx, sourceFolder.Path)
+			if err != nil {
 				return err
+			}
+			if source.UIDValidity != sourceValidity {
+				return fmt.Errorf("source generation changed before cleanup")
+			}
+			if err := conn.DeleteMessagesByUID(moveUIDs); err != nil {
+				return fmt.Errorf("failed to delete messages from source: %w", err)
+			}
+			if len(resolved) > 0 {
+				if err := a.messageStore.ConfirmMoveCleanup(destFolder.ID, destinationValidity, resolved); err != nil {
+					return err
+				}
 			}
 		}
 		return nil

@@ -36,10 +36,6 @@ func (e *Engine) RecoverInterruptedMoves(ctx context.Context, accountID, folderI
 		return err
 	}
 	defer e.pool.Release(conn)
-	mailbox, err := conn.Client().SelectMailbox(ctx, f.Path)
-	if err != nil {
-		return err
-	}
 	var firstErr error
 	for _, id := range ids {
 		m, err := e.messageStore.Get(id)
@@ -48,6 +44,11 @@ func (e *Engine) RecoverInterruptedMoves(ctx context.Context, accountID, folderI
 		}
 		if m == nil || m.FolderID != folderID || int32(m.UID) >= 0 {
 			continue
+		}
+		// A previous pending item may have left the source selected.
+		mailbox, err := conn.Client().SelectMailbox(ctx, f.Path)
+		if err != nil {
+			return err
 		}
 		uid, validity, err := e.messageStore.MoveUIDEvidence(folderID, id)
 		if err == nil && validity != mailbox.UIDValidity {
@@ -65,6 +66,43 @@ func (e *Engine) RecoverInterruptedMoves(ctx context.Context, accountID, folderI
 				if len(uids) != 1 || uint32(uids[0]) != uid {
 					err = fmt.Errorf("verified move copy no longer present")
 				}
+			}
+		}
+		if err == nil {
+			sourceID, sourceUID, sourceValidity, done, stateErr := e.messageStore.MoveCleanupState(folderID, id)
+			err = stateErr
+			if err == nil && !done {
+				source, sourceErr := e.folderStore.Get(sourceID)
+				err = sourceErr
+				if err == nil && (source == nil || source.AccountID != accountID || sourceUID == 0 || sourceValidity == 0) {
+					err = fmt.Errorf("source cleanup identity unavailable")
+				}
+				if err == nil {
+					selected, selectErr := conn.Client().SelectMailbox(ctx, source.Path)
+					err = selectErr
+					if err == nil && selected.UIDValidity != sourceValidity {
+						err = fmt.Errorf("source cleanup generation changed")
+					}
+				}
+				if err == nil {
+					result, searchErr := conn.Client().RawClient().UIDSearch(&imap.SearchCriteria{UID: []imap.UIDSet{imap.UIDSetNum(imap.UID(sourceUID))}}, nil).Wait()
+					err = searchErr
+					if err == nil && len(result.AllUIDs()) != 0 {
+						err = fmt.Errorf("copy confirmed but source cleanup is incomplete")
+					}
+				}
+				if err == nil {
+					err = e.messageStore.ConfirmMoveCleanup(folderID, validity, map[string]uint32{id: uid})
+				}
+			}
+		}
+		if err == nil {
+			// Source verification may have changed the selected mailbox. Check
+			// the destination generation again before committing its UID.
+			latest, selectErr := conn.Client().SelectMailbox(ctx, f.Path)
+			err = selectErr
+			if err == nil && latest.UIDValidity != validity {
+				err = fmt.Errorf("move destination generation changed before reconcile")
 			}
 		}
 		if err == nil {

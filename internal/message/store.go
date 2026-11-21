@@ -1331,8 +1331,20 @@ func (s *Store) DeleteByFolder(folderID string) error {
 // DeleteSyncedUIDCache preserves unresolved local moves and repaired mail when
 // the server changes UID validity. Their evidence must not cascade away.
 func (s *Store) DeleteSyncedUIDCache(folderID string) error {
-	_, err := s.db.Exec(`DELETE FROM messages WHERE folder_id=? AND uid>0 AND id NOT IN (SELECT message_id FROM attachment_repair_backups)`, folderID)
-	return err
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err = tx.Exec(`DELETE FROM messages WHERE folder_id=? AND uid>0 AND id NOT IN (SELECT message_id FROM attachment_repair_backups)`, folderID); err != nil {
+		return err
+	}
+	// Repaired rows keep their bodies/history but never an addressable UID from
+	// the old generation. They are not candidates for automatic reattachment.
+	if _, err = tx.Exec(`UPDATE messages SET uid=-rowid WHERE folder_id=? AND uid>0`, folderID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // ExistsInFolder checks if a message with the given RFC 822 Message-ID exists
@@ -2851,7 +2863,7 @@ func (s *Store) reconcileMovedMessageUIDs(destinationFolderID string, uidsByLoca
 
 		if validity != nil {
 			var matches int
-			if err := tx.QueryRow(`SELECT COUNT(*) FROM move_uid_evidence WHERE message_id=? AND folder_id=? AND uid=? AND uid_validity=?`, movingLocalID, destinationFolderID, uid, *validity).Scan(&matches); err != nil {
+			if err := tx.QueryRow(`SELECT COUNT(*) FROM move_uid_evidence WHERE message_id=? AND folder_id=? AND uid=? AND uid_validity=? AND cleanup_complete=1`, movingLocalID, destinationFolderID, uid, *validity).Scan(&matches); err != nil {
 				return nil, err
 			}
 			if matches != 1 {
@@ -3814,7 +3826,7 @@ func (s *Store) RecordMoveUIDEvidence(folderID string, validity uint32, uids map
 		if uid == 0 {
 			return fmt.Errorf("missing destination UID")
 		}
-		_, err = tx.Exec(`INSERT INTO move_uid_evidence(message_id,folder_id,uid,uid_validity) SELECT id,folder_id,?,? FROM messages WHERE id=? AND folder_id=? AND uid<0 ON CONFLICT(message_id) DO UPDATE SET folder_id=excluded.folder_id,uid=excluded.uid,uid_validity=excluded.uid_validity`, uid, validity, id, folderID)
+		_, err = tx.Exec(`INSERT INTO move_uid_evidence(message_id,folder_id,uid,uid_validity) SELECT id,folder_id,?,? FROM messages WHERE id=? AND folder_id=? AND uid<0 ON CONFLICT(message_id) DO UPDATE SET folder_id=excluded.folder_id,uid=excluded.uid,uid_validity=excluded.uid_validity,source_folder_id='',source_uid=0,source_validity=0,cleanup_complete=1`, uid, validity, id, folderID)
 		if err != nil {
 			return err
 		}
@@ -3828,4 +3840,55 @@ func (s *Store) MoveUIDEvidence(folderID, id string) (uint32, uint32, error) {
 		return 0, 0, fmt.Errorf("interrupted move outcome unresolved for %s: %w", id, err)
 	}
 	return uid, validity, nil
+}
+
+// RecordCopiedMoveUIDs runs before source cleanup, while the original source
+// identity is known. A confirmed COPY is not yet a completed MOVE.
+func (s *Store) RecordCopiedMoveUIDs(folderID string, validity uint32, uids map[string]uint32, sourceFolderID string, sourceValidity uint32, sources map[string]uint32) error {
+	if validity == 0 || sourceValidity == 0 {
+		return fmt.Errorf("missing copy generation")
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for id, uid := range uids {
+		if uid == 0 || sources[id] == 0 {
+			return fmt.Errorf("missing copy identity")
+		}
+		_, err = tx.Exec(`INSERT INTO move_uid_evidence(message_id,folder_id,uid,uid_validity,source_folder_id,source_uid,source_validity,cleanup_complete) SELECT id,folder_id,?,?,?,?,?,0 FROM messages WHERE id=? AND folder_id=? AND uid<0 ON CONFLICT(message_id) DO UPDATE SET folder_id=excluded.folder_id,uid=excluded.uid,uid_validity=excluded.uid_validity,source_folder_id=excluded.source_folder_id,source_uid=excluded.source_uid,source_validity=excluded.source_validity,cleanup_complete=0`, uid, validity, sourceFolderID, sources[id], sourceValidity, id, folderID)
+		if err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+func (s *Store) MoveCleanupState(folderID, id string) (string, uint32, uint32, bool, error) {
+	var source string
+	var uid, validity uint32
+	var done bool
+	err := s.db.QueryRow(`SELECT source_folder_id,source_uid,source_validity,cleanup_complete FROM move_uid_evidence WHERE message_id=? AND folder_id=?`, id, folderID).Scan(&source, &uid, &validity, &done)
+	return source, uid, validity, done, err
+}
+func (s *Store) ConfirmMoveCleanup(folderID string, validity uint32, uids map[string]uint32) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for id, uid := range uids {
+		result, err := tx.Exec(`UPDATE move_uid_evidence SET cleanup_complete=1 WHERE message_id=? AND folder_id=? AND uid=? AND uid_validity=?`, id, folderID, uid, validity)
+		if err != nil {
+			return err
+		}
+		n, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if n != 1 {
+			return fmt.Errorf("copy evidence changed before cleanup confirmation")
+		}
+	}
+	return tx.Commit()
 }

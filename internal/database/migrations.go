@@ -1996,7 +1996,11 @@ var migrations = []Migration{
    message_id TEXT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
    folder_id TEXT NOT NULL,
    uid INTEGER NOT NULL CHECK(uid>0),
-   uid_validity INTEGER NOT NULL CHECK(uid_validity>0)
+   uid_validity INTEGER NOT NULL CHECK(uid_validity>0),
+   source_folder_id TEXT NOT NULL DEFAULT '',
+   source_uid INTEGER NOT NULL DEFAULT 0,
+   source_validity INTEGER NOT NULL DEFAULT 0,
+   cleanup_complete INTEGER NOT NULL DEFAULT 1
  );
  `},
 }
