@@ -39,3 +39,9 @@ The same dialog now captures the execution owner and client before review and di
 Durable settings consent is verified by refreshing the selected Google grant and requiring explicitly reported full scopes before desktop or helper persistence. A temporary authorization access token alone is insufficient. Mail refresh persistence uses shared snapshot compare-and-swap and rejects a concurrent credential replacement.
 
 Initialized desktops select standalone publication only while holding the real exclusive mailbox-sync owner lock. The connector allocated by Startup is not itself proof of helper ownership. If a helper holds that lock, publication routes to that helper without local fallback. Shutdown drains native publication operations before releasing ownership.
+
+### Published-source ownership and release
+
+Cancel review releases only a prepared, never-attempted plan. After an attempt, a local source remains frozen, including after confirmed publication, because the native Gmail rule runs independently. Unfreezing could double-process messages or lose the provider identity needed to recover an ambiguous create. Generic source editing, deletion and moving cannot safely imply native-rule deletion. Other rules can reorder around an unchanged frozen source.
+
+A future explicit release workflow must first verify the selected account, provider rule identity and resulting provider state, retain recovery evidence for ambiguous outcomes, and only then allow local execution again. This is a follow-up, not part of the current release or a new PR in this round. Until then, manage the native rule in Gmail and retain its frozen local ownership record.
