@@ -2,14 +2,12 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
 	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
-	"io"
 	"net/mail"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/ollisulopuisto/postilaatikko/internal/email"
@@ -103,7 +101,7 @@ func hasRepeatedAttachmentMetadata(items []*message.Attachment) bool {
 
 // loadAttachmentContent serves exact repaired payloads before any provider read.
 // Bulk callers retain raw for one lazy IMAP fetch only when a part needs it.
-func (a *App) loadAttachmentContent(msg *message.Message, att *message.Attachment, downloader *email.AttachmentDownloader, raw *[]byte) ([]byte, error) {
+func (a *App) loadAttachmentContent(msg *message.Message, att *message.Attachment, downloader *email.AttachmentDownloader, raw *[]byte, contexts ...context.Context) ([]byte, error) {
 	if a.attachmentStore != nil {
 		content, ok, err := a.attachmentStore.RepairedContent(att.ID)
 		if err != nil {
@@ -122,15 +120,19 @@ func (a *App) loadAttachmentContent(msg *message.Message, att *message.Attachmen
 			return content, nil
 		}
 	}
-	if a.paths != nil {
-		if content, ok := readManagedAttachmentCache(a.paths.AttachmentsPath(), att); ok {
+	if a.paths != nil && a.attachmentStore != nil {
+		if content, ok := a.attachmentStore.ReadVerifiedDownload(a.paths.AttachmentsPath(), att.ID); ok {
 			return content, nil
 		}
 	}
 	if a.syncEngine == nil {
 		return nil, fmt.Errorf("attachment has no cached payload or provider")
 	}
-	content, err := a.syncEngine.FetchGmailAttachment(a.ctx, msg.AccountID, att.ID)
+	ctx := a.ctx
+	if len(contexts) > 0 {
+		ctx = contexts[0]
+	}
+	content, err := a.syncEngine.FetchGmailAttachment(ctx, msg.AccountID, att.ID)
 	if !errors.Is(err, gmail.ErrNotCapable) {
 		return content, err
 	}
@@ -144,42 +146,4 @@ func (a *App) loadAttachmentContent(msg *message.Message, att *message.Attachmen
 		}
 	}
 	return downloader.ExtractUniqueAttachmentContent(*raw, att.Filename)
-}
-
-// Read only bounded regular files inside the managed cache, never arbitrary paths.
-func readManagedAttachmentCache(root string, att *message.Attachment) ([]byte, bool) {
-	const limit = 50 * 1024 * 1024
-	if root == "" || att.LocalPath == "" || att.Size < 0 || att.Size > limit {
-		return nil, false
-	}
-	root, err := filepath.EvalSymlinks(root)
-	if err != nil {
-		return nil, false
-	}
-	path, err := filepath.EvalSymlinks(att.LocalPath)
-	if err != nil {
-		return nil, false
-	}
-	rel, err := filepath.Rel(root, path)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
-		return nil, false
-	}
-	info, err := os.Stat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Size() > limit || info.Size() != int64(att.Size) {
-		return nil, false
-	}
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, false
-	}
-	defer f.Close()
-	info, err = f.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Size() > limit || info.Size() != int64(att.Size) {
-		return nil, false
-	}
-	content, err := io.ReadAll(io.LimitReader(f, limit+1))
-	if err != nil || len(content) > limit || len(content) != att.Size {
-		return nil, false
-	}
-	return content, true
 }

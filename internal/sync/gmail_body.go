@@ -10,6 +10,7 @@ import (
 	"github.com/ollisulopuisto/postilaatikko/internal/message"
 	"mime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -149,7 +150,7 @@ func (e *Engine) FetchGmailAttachment(ctx context.Context, accountID, localID st
 	}
 	// Data-bearing Gmail parts have no attachment ID. Match the same opaque
 	// part identity used at ingestion, never a guessed fallback filename.
-	root, err := c.Full(ctx, provider)
+	root, err := gmailAttachmentFull(ctx, c, accountID, provider)
 	if err != nil {
 		return nil, err
 	}
@@ -195,4 +196,37 @@ func (e *Engine) FetchGmailAttachment(ctx context.Context, accountID, localID st
 		return nil, gmail.ErrNotFound
 	}
 	return result, nil
+}
+
+type gmailAttachmentCacheKey struct{}
+type gmailAttachmentCache struct {
+	mu       sync.Mutex
+	messages map[[2]string]*gmail.Part
+}
+
+// WithGmailAttachmentCache scopes full-message reuse to one explicit read batch.
+// It never persists provider content or shares it across requests/accounts.
+func WithGmailAttachmentCache(ctx context.Context) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, gmailAttachmentCacheKey{}, &gmailAttachmentCache{messages: make(map[[2]string]*gmail.Part)})
+}
+func gmailAttachmentFull(ctx context.Context, c *gmail.Client, accountID, provider string) (*gmail.Part, error) {
+	cache, _ := ctx.Value(gmailAttachmentCacheKey{}).(*gmailAttachmentCache)
+	if cache == nil {
+		return c.Full(ctx, provider)
+	}
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+	key := [2]string{accountID, provider}
+	if root := cache.messages[key]; root != nil {
+		return root, nil
+	}
+	root, err := c.Full(ctx, provider)
+	if err != nil {
+		return nil, err
+	}
+	cache.messages[key] = root
+	return root, nil
 }

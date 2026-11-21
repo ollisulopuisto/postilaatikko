@@ -1992,6 +1992,12 @@ var migrations = []Migration{
  CREATE INDEX idx_gmail_filter_publications_account ON gmail_filter_publications(account_id,updated_at,id);
  `},
 	{Version: 86, SQL: `
+ CREATE TABLE attachment_download_integrity (
+   attachment_id TEXT PRIMARY KEY REFERENCES attachments(id) ON DELETE CASCADE,
+   local_path TEXT NOT NULL,
+   sha256 BLOB NOT NULL,
+   byte_size INTEGER NOT NULL CHECK(byte_size>=0)
+ );
  CREATE TABLE retained_receipt_decisions (
    folder_id TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
    uid_validity INTEGER NOT NULL CHECK(uid_validity>0),

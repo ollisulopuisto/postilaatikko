@@ -28,6 +28,7 @@ import (
 	"github.com/ollisulopuisto/postilaatikko/internal/pgp"
 	"github.com/ollisulopuisto/postilaatikko/internal/smime"
 	"github.com/ollisulopuisto/postilaatikko/internal/smtp"
+	"github.com/ollisulopuisto/postilaatikko/internal/sync"
 	"github.com/ollisulopuisto/postilaatikko/internal/views"
 	"github.com/rs/zerolog"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -1175,10 +1176,11 @@ func (a *App) fetchForwardAttachments(log zerolog.Logger, msg *message.Message, 
 	}
 
 	var raw []byte
+	ctx := sync.WithGmailAttachmentCache(a.ctx)
 
 	downloader := email.NewAttachmentDownloader(a.paths.AttachmentsPath())
 	for _, att := range regularAtts {
-		content, extractErr := a.loadAttachmentContent(msg, att, downloader, &raw)
+		content, extractErr := a.loadAttachmentContent(msg, att, downloader, &raw, ctx)
 		if extractErr != nil {
 			log.Warn().Err(extractErr).Str("filename", att.Filename).Msg("Failed to extract attachment for forward")
 			return fmt.Errorf("forward not prepared: original attachment %s unavailable: %w", att.Filename, extractErr)

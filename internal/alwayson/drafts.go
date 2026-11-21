@@ -21,6 +21,7 @@ import (
 	"github.com/ollisulopuisto/postilaatikko/internal/message"
 	"github.com/ollisulopuisto/postilaatikko/internal/scheduledsend"
 	"github.com/ollisulopuisto/postilaatikko/internal/smtp"
+	mailSync "github.com/ollisulopuisto/postilaatikko/internal/sync"
 )
 
 func (r *SyncRuntime) ListDrafts(accountID string) ([]v1.DraftDocument, error) {
@@ -380,8 +381,9 @@ func (r *SyncRuntime) replyAttachments(original *message.Message, mode, quotedHT
 	}
 	ops := &mailboxReadOperations{runtime: r}
 	var raw []byte
+	ctx := mailSync.WithGmailAttachmentCache(r.runtimeContext())
 	for _, item := range regular {
-		content, contentType, err := ops.readAttachmentBytes(original.AccountID, cachedContentID(original), item.ID, &raw)
+		content, contentType, err := ops.readAttachmentBytes(original.AccountID, cachedContentID(original), item.ID, &raw, ctx)
 		if err != nil {
 			return nil, v1.NewFault(v1.CodeContentNotFetched, "Original attachment unavailable; forward was not prepared. Fetch the live message content and try again.", false, err)
 		}

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/ollisulopuisto/postilaatikko/internal/email"
 	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
-	"os"
 	"strings"
 	"time"
 
@@ -416,7 +415,7 @@ func (o *mailboxReadOperations) ReadAttachmentBytes(accountID, messageID, attach
 	return o.readAttachmentBytes(accountID, messageID, attachmentID, &raw)
 }
 
-func (o *mailboxReadOperations) readAttachmentBytes(accountID, messageID, attachmentID string, raw *[]byte) ([]byte, string, error) {
+func (o *mailboxReadOperations) readAttachmentBytes(accountID, messageID, attachmentID string, raw *[]byte, contexts ...context.Context) ([]byte, string, error) {
 	msg, err := o.runtime.messages.Get(messageID)
 	if err != nil || msg == nil || msg.AccountID != accountID {
 		return nil, "", errors.New("message not found in account")
@@ -433,15 +432,17 @@ func (o *mailboxReadOperations) readAttachmentBytes(accountID, messageID, attach
 	if err != nil || ok {
 		return content, att.ContentType, err
 	}
-	if att.LocalPath != "" {
-		if content, err := os.ReadFile(att.LocalPath); err == nil {
-			return content, att.ContentType, nil
-		}
+	if content, ok := o.runtime.attachments.ReadVerifiedDownload(o.runtime.attachmentCacheRoot, att.ID); ok {
+		return content, att.ContentType, nil
 	}
+
 	if o.runtime.syncEngine == nil {
 		return nil, "", errors.New("attachment has no cached payload or provider")
 	}
 	ctx := o.runtime.runtimeContext()
+	if len(contexts) > 0 {
+		ctx = contexts[0]
+	}
 	content, err = o.runtime.syncEngine.FetchGmailAttachment(ctx, accountID, att.ID)
 	if !errors.Is(err, gmail.ErrNotCapable) {
 		if err != nil {

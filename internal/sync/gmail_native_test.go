@@ -226,4 +226,22 @@ func TestUnnamedGmailDataAttachmentUsesPartIdentity(t *testing.T) {
 	if !seen["one"] || !seen["two"] || requests != 5 {
 		t.Fatal("unnamed occurrences conflated", seen, requests)
 	}
+	batch := WithGmailAttachmentCache(context.Background())
+	for _, att := range atts {
+		got, err := engine.FetchGmailAttachment(batch, "g", att.ID)
+		if err != nil || !seen[string(got)] {
+			t.Fatal("batch lost part", string(got), err)
+		}
+	}
+	if requests != 6 {
+		t.Fatal("full Gmail response fetched more than once per batch", requests)
+	}
+	for _, att := range atts {
+		if _, err := engine.FetchGmailAttachment(WithGmailAttachmentCache(context.Background()), "g", att.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if requests != 8 {
+		t.Fatal("cache escaped its request", requests)
+	}
 }

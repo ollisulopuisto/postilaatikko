@@ -232,10 +232,9 @@ func (a *App) DownloadAttachment(attachmentID, savePath string) (string, error) 
 
 	log.Debug().Int("size", att.Size).Msg("Got attachment metadata")
 
-	// Check if already downloaded (only for default location, not custom paths)
-	if savePath == "" && att.LocalPath != "" {
-		if _, err := os.Stat(att.LocalPath); err == nil {
-			log.Debug().Msg("Attachment already downloaded")
+	// Open an existing download only while its original-byte integrity holds.
+	if savePath == "" && a.paths != nil {
+		if _, ok := a.attachmentStore.ReadVerifiedDownload(a.paths.AttachmentsPath(), att.ID); ok {
 			return att.LocalPath, nil
 		}
 	}
@@ -271,7 +270,7 @@ func (a *App) DownloadAttachment(attachmentID, savePath string) (string, error) 
 
 	// Update attachment record with local path (only for default location)
 	if savePath == "" {
-		if err := a.attachmentStore.UpdateLocalPath(attachmentID, localPath); err != nil {
+		if err := a.attachmentStore.SetVerifiedDownload(attachmentID, localPath, content); err != nil {
 			log.Warn().Err(err).Msg("Failed to update attachment local path")
 		}
 	}

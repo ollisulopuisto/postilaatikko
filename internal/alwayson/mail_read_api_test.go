@@ -12,6 +12,7 @@ import (
 	mailSync "github.com/ollisulopuisto/postilaatikko/internal/sync"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -296,5 +297,36 @@ func TestDeletedGmailAttachmentIsPermanentNotFound(t *testing.T) {
 	var fault *v1.Fault
 	if !errors.As(err, &fault) || fault.Code != v1.CodeNotFound || fault.Retryable {
 		t.Fatal("deleted file treated as outage", err)
+	}
+}
+
+func TestHelperDownloadCacheRequiresOriginalIntegrity(t *testing.T) {
+	ops, db := setupThreadReadTest(t)
+	defer db.Close()
+	root := t.TempDir()
+	ops.runtime.attachmentCacheRoot = root
+	path := filepath.Join(root, "file.txt")
+	if err := os.WriteFile(path, []byte("original"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	att := &message.Attachment{ID: "downloaded", MessageID: "msg-inbox", Filename: "file.txt", ContentType: "text/plain", Size: 8, LocalPath: path}
+	if err := ops.runtime.attachments.Create(att); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := ops.ReadAttachmentBytes("acc-1", "msg-inbox", att.ID); err == nil {
+		t.Fatal("legacy unverified download accepted")
+	}
+	if err := ops.runtime.attachments.SetVerifiedDownload(att.ID, path, []byte("original")); err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := ops.ReadAttachmentBytes("acc-1", "msg-inbox", att.ID)
+	if err != nil || string(got) != "original" {
+		t.Fatal(string(got), err)
+	}
+	if err := os.WriteFile(path, []byte("modified"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if got, _, err := ops.ReadAttachmentBytes("acc-1", "msg-inbox", att.ID); err == nil {
+		t.Fatal("edited helper download accepted", string(got))
 	}
 }
