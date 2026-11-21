@@ -19,12 +19,22 @@ func TestDeduplicateThreadMessagesPreservesScopeAndAccountBoundaries(t *testing.
 
 func TestDeduplicateThreadMessagesPrefersLiveOverCachedSnapshot(t *testing.T) {
 	var snapshotUID int32 = -7
-	snapshot := &Message{ID: "snapshot", AccountID: "a", FolderID: "inbox", MessageID: "same@test", UID: uint32(snapshotUID), BodyFetched: true}
+	snapshot := &Message{ID: "snapshot", AccountID: "a", FolderID: "inbox", MessageID: "same@test", UID: uint32(snapshotUID), BodyFetched: true, BodyText: "downloaded body"}
 	live := &Message{ID: "live", AccountID: "a", FolderID: "inbox", MessageID: "same@test", UID: 7}
 	for _, copies := range [][]*Message{{snapshot, live}, {live, snapshot}} {
 		got := DeduplicateThreadMessages(copies, "inbox", nil)
-		if len(got) != 1 || got[0] != live {
+		if len(got) != 1 || got[0].ID != live.ID || got[0].UID != live.UID || !got[0].BodyFetched || got[0].BodyText != snapshot.BodyText || got[0].CachedBodySourceID != snapshot.ID {
 			t.Fatal("cached snapshot hid live reader target", got)
 		}
+	}
+}
+
+func TestCachedReaderOverlayNeverMutatesSourceRows(t *testing.T) {
+	var negative int32 = -1
+	cached := &Message{ID: "snapshot", AccountID: "a", MessageID: "same@test", UID: uint32(negative), BodyText: "offline", BodyFetched: true}
+	live := &Message{ID: "live", AccountID: "a", MessageID: "same@test", UID: 8}
+	_ = DeduplicateThreadMessages([]*Message{cached, live}, "", nil)
+	if live.BodyFetched || live.BodyText != "" || cached.UID != uint32(negative) {
+		t.Fatal("presentation changed source identities or cache state")
 	}
 }

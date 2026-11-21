@@ -3072,6 +3072,7 @@ export namespace message {
 	    isDeleted: boolean;
 	    size: number;
 	    hasAttachments: boolean;
+	    cachedBodySourceId?: string;
 	    bodyText?: string;
 	    bodyHtml?: string;
 	    bodyFetched: boolean;
@@ -3124,6 +3125,7 @@ export namespace message {
 	        this.isDeleted = source["isDeleted"];
 	        this.size = source["size"];
 	        this.hasAttachments = source["hasAttachments"];
+	        this.cachedBodySourceId = source["cachedBodySourceId"];
 	        this.bodyText = source["bodyText"];
 	        this.bodyHtml = source["bodyHtml"];
 	        this.bodyFetched = source["bodyFetched"];

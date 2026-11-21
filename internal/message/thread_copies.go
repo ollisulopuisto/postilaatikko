@@ -43,5 +43,28 @@ func DeduplicateThreadMessages(messages []*Message, folderID string, matched map
 			result = append(result, msg)
 		}
 	}
+	// Reader content may come from a downloaded copy while flags and mutations
+	// keep the selected live identity. Never persist this presentation overlay.
+	for i, selected := range result {
+		if selected.BodyFetched || selected.UID == 0 || int32(selected.UID) < 0 {
+			continue
+		}
+		rfc := normalizeMessageID(selected.MessageID)
+		if rfc == "" {
+			continue
+		}
+		for _, cached := range messages {
+			if int32(cached.UID) < 0 && cached.AccountID == selected.AccountID && normalizeMessageID(cached.MessageID) == rfc && cached.BodyFetched && (cached.BodyText != "" || cached.BodyHTML != "") {
+				overlay := *selected
+				overlay.BodyText = cached.BodyText
+				overlay.BodyHTML = cached.BodyHTML
+				overlay.BodyFetched = true
+				overlay.CachedBodySourceID = cached.ID
+				overlay.HasAttachments = cached.HasAttachments || selected.HasAttachments
+				result[i] = &overlay
+				break
+			}
+		}
+	}
 	return result
 }

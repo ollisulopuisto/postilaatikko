@@ -2653,7 +2653,7 @@
                           <ConversationMessage
                             bind:this={emailBodyRefs[msg.id]}
                             conversationId={msg.threadId || threadId || ''}
-                            messageId={msg.id}
+                            messageId={msg.cachedBodySourceId || msg.id}
                             accountId={msg.accountId}
                             extractable={canExtract(msg)}
                             mode={readerMode}
@@ -2692,7 +2692,7 @@
                           </h3>
                           <AttachmentList
                             accountId={msg.accountId || accountId || ''}
-                            messageId={msg.id}
+                            messageId={msg.cachedBodySourceId || msg.id}
                             encryptedAttachments={pgpResults[msg.id]?.attachments ?? smimeResults[msg.id]?.attachments}
                           />
                         </div>

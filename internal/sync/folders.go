@@ -185,6 +185,16 @@ func (e *Engine) SyncFolders(ctx context.Context, accountID string) error {
 
 		// Check if folder exists locally
 		if existing, ok := localByPath[mb.Name]; ok {
+			unlock, err := e.folderLocks.lock(ctx, existing.ID)
+			if err != nil {
+				return err
+			}
+			current, err := e.folderStore.Get(existing.ID)
+			if err != nil || current == nil {
+				unlock()
+				return fmt.Errorf("reload discovered folder: %v", err)
+			}
+			existing = current
 			// Update existing folder
 			existing.Name = extractFolderName(mb.Name, mb.Delimiter)
 			existing.Type = folderType
@@ -222,7 +232,9 @@ func (e *Engine) SyncFolders(ctx context.Context, accountID string) error {
 						Msg("Folder discovery: UIDValidity changed; resetting flag-sync watermark")
 					existing.FlagsSyncModSeq = 0
 				}
-				existing.UIDValidity = status.UIDValidity
+				// UIDValidity describes the cached message universe, not the
+				// latest STATUS. Only selected-mailbox sync may advance it
+				// after invalidating the old cache under this folder lock.
 				existing.UIDNext = status.UIDNext
 				existing.HighestModSeq = status.HighestModSeq
 				existing.TotalCount = int(status.Messages)
@@ -232,6 +244,7 @@ func (e *Engine) SyncFolders(ctx context.Context, accountID string) error {
 			if err := e.folderStore.Update(existing); err != nil {
 				e.log.Warn().Err(err).Str("path", mb.Name).Msg("Failed to update folder")
 			}
+			unlock()
 		} else {
 			// Create new folder
 			f := &folder.Folder{
