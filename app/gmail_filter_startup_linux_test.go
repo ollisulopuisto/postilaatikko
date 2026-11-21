@@ -105,6 +105,12 @@ func TestGmailPublicationUsesRealStartupOwnership(t *testing.T) {
 			if a.ipcServer == nil || !strings.HasPrefix(a.ipcServer.Address(), socketDir+string(os.PathSeparator)) {
 				t.Fatal("startup used a shared IPC socket")
 			}
+			if !helperOwns {
+				client, workspace, err := a.captureNativeGmailWorkspace()
+				if err != nil || client != nil || workspace.Target != "local" || workspace.Key != "standalone" {
+					t.Fatalf("started desktop routed away from its executor: %+v %v", workspace, err)
+				}
+			}
 			err = a.requireStandaloneFilterOwner()
 			if (err == nil) == helperOwns {
 				t.Fatalf("helperOwns=%t ownership error=%v", helperOwns, err)

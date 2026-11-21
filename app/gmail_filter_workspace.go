@@ -47,7 +47,7 @@ func (a *App) GetNativeGmailWorkspace() (NativeGmailWorkspace, error) {
 }
 func (a *App) captureNativeGmailWorkspace() (*automationclient.Client, NativeGmailWorkspace, error) {
 	connector := a.mailboxService
-	if connector == nil {
+	if connector == nil || a.requireLocalFilterExecutor() == nil {
 		return nil, NativeGmailWorkspace{Key: "standalone", Target: "local"}, nil
 	}
 	client, err := connector.getClient()

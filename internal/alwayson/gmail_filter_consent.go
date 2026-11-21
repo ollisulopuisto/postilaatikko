@@ -146,6 +146,10 @@ func (r *SyncRuntime) GmailConsent(ctx context.Context, clientID string, req v1.
 		if err = r.validateGmailConsentSnapshot(session); err != nil {
 			return result, err
 		}
+		// Bound all exchange/profile/refresh requests by both the API caller and
+		// the consent session deadline. Cancellation reaches the token request.
+		ctx, cancel := context.WithDeadline(ctx, session.expires)
+		defer cancel()
 		tokens, err := session.flow.Exchange(ctx, req.Code, req.State)
 		if err != nil {
 			return result, err
@@ -185,7 +189,7 @@ func (r *SyncRuntime) GmailConsent(ctx context.Context, clientID string, req v1.
 		if helperGmailBinding(session.email, cfg.ClientID) != session.binding {
 			return result, fmt.Errorf("helper project changed before refresh verification")
 		}
-		verified, err := oauth2.NewManager().VerifyGoogleFilterRefresh(cfg, refreshGrant, session.scopes)
+		verified, err := oauth2.NewManager().VerifyGoogleFilterRefresh(ctx, cfg, refreshGrant, session.scopes)
 		if err != nil {
 			return result, fmt.Errorf("verify durable helper settings grant: %w", err)
 		}

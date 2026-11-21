@@ -3,6 +3,7 @@ package alwayson
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -65,6 +66,9 @@ func TestHelperConsentRetainsPKCEAndCredentialsOnOwner(t *testing.T) {
 				t.Error("code not exchanged on owning helper")
 			}
 			body = `{"access_token":"new-helper-access","expires_in":3600,"scope":"https://mail.google.com/ openid ` + gmail.ScopeSettingsBasic + `"}`
+			if req.Form.Get("grant_type") == "refresh_token" {
+				body = strings.Replace(body, "new-helper-access", "durable-helper-access", 1)
+			}
 		}
 		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body))}, nil
 	})
@@ -78,7 +82,7 @@ func TestHelperConsentRetainsPKCEAndCredentialsOnOwner(t *testing.T) {
 		t.Fatal(done, exchanges, err)
 	}
 	stored, err := r.contacts.creds.GetOAuthTokens("helper-google")
-	if err != nil || stored.AccessToken != "new-helper-access" || stored.RefreshToken != "helper-refresh" || !gmail.ScopesCoverFilters(stored.Scopes) {
+	if err != nil || stored.AccessToken != "durable-helper-access" || stored.RefreshToken != "helper-refresh" || !gmail.ScopesCoverFilters(stored.Scopes) {
 		t.Fatal("helper grant not preserved", err)
 	}
 	if _, err = r.GmailConsent(context.Background(), "desktop-client", complete); err == nil || exchanges != 2 {
@@ -292,5 +296,58 @@ func TestHelperConsentRejectsMissingDurableSettingsScope(t *testing.T) {
 	stored, err := r.contacts.creds.GetOAuthTokens(start.AccountID)
 	if err != nil || stored.AccessToken != "helper-access" || gmail.ScopesCoverFilters(stored.Scopes) {
 		t.Fatal("failed verification changed helper grant", err)
+	}
+}
+
+func TestHelperConsentRefreshHonorsRequestCancellation(t *testing.T) {
+	r := helperConsentFixture(t)
+	start := v1.GmailConsentRequest{Operation: "start", AccountID: "helper-google", RedirectURI: "http://127.0.0.1:12345/callback"}
+	reply, err := r.GmailConsent(context.Background(), "client", start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, _ := url.Parse(reply.AuthURL)
+	old := http.DefaultTransport
+	reached := make(chan struct{})
+	http.DefaultTransport = helperNativeRoundTrip(func(req *http.Request) (*http.Response, error) {
+		body := `{"emailAddress":"helper@example.com"}`
+		if req.Method == http.MethodPost {
+			if err := req.ParseForm(); err != nil {
+				t.Fatal(err)
+			}
+			if req.Form.Get("grant_type") == "refresh_token" {
+				close(reached)
+				<-req.Context().Done()
+				return nil, req.Context().Err()
+			}
+			body = `{"access_token":"exchange-only","expires_in":3600,"scope":"https://mail.google.com/ openid ` + gmail.ScopeSettingsBasic + `"}`
+		}
+		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body))}, nil
+	})
+	t.Cleanup(func() { http.DefaultTransport = old })
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		_, err := r.GmailConsent(ctx, "client", v1.GmailConsentRequest{Operation: "complete", AccountID: start.AccountID, SessionID: reply.SessionID, Code: "one-code", State: parsed.Query().Get("state")})
+		done <- err
+	}()
+	select {
+	case <-reached:
+	case <-time.After(2 * time.Second):
+		t.Fatal("durable refresh not reached")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatal("cancellation lost", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("durable refresh ignored cancellation")
+	}
+	stored, err := r.contacts.creds.GetOAuthTokens(start.AccountID)
+	if err != nil || stored.AccessToken != "helper-access" || gmail.ScopesCoverFilters(stored.Scopes) {
+		t.Fatal("cancelled verification changed grant", err)
 	}
 }
