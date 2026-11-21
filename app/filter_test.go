@@ -2031,3 +2031,67 @@ func TestSyncKeepsCachedUIDInsideServerArrivalWindow(t *testing.T) {
 		})
 	}
 }
+
+func TestGmailIMAPWindowEvictsTrashAndSpamWithoutSelfExemption(t *testing.T) {
+	for _, kind := range []string{"trash", "spam"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newFilterFixture(t, false)
+			if _, err := f.db.Exec(`UPDATE accounts SET imap_host='imap.gmail.com' WHERE id='acct-a'`); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := f.db.Exec(`UPDATE folders SET folder_type=? WHERE id='a-trash'`, kind); err != nil {
+				t.Fatal(err)
+			}
+			if err := f.app.messageStore.MoveMessages([]string{f.message.ID}, "a-trash"); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := f.db.Exec(`UPDATE messages SET uid=10 WHERE id=?`, f.message.ID); err != nil {
+				t.Fatal(err)
+			}
+			f.serverA.sess.rediscoverCopies = true
+			f.serverA.sess.internalDate = time.Now().AddDate(0, 0, -60)
+			f.serverA.sess.copiedUIDs = map[uint32]string{10: "Trash"}
+			if err := f.app.syncEngine.SyncMessages(context.Background(), "acct-a", "a-trash", 30, false); err != nil {
+				t.Fatal(err)
+			}
+			got, err := f.app.messageStore.Get(f.message.ID)
+			if err != nil || got != nil {
+				t.Fatal("expired Gmail special-folder row preserved itself", kind, got, err)
+			}
+		})
+	}
+}
+
+func TestGmailIMAPPreservesGenuineCrossFolderTrashCopy(t *testing.T) {
+	f := newFilterFixture(t, false)
+	if _, err := f.db.Exec(`UPDATE accounts SET imap_host='imap.gmail.com' WHERE id='acct-a'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.messageStore.Create(&message.Message{ID: "trash-copy", AccountID: "acct-a", FolderID: "a-trash", UID: 22, MessageID: f.message.MessageID, Date: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	f.serverA.sess.rediscoverCopies = true
+	f.serverA.sess.copiedUIDs = map[uint32]string{}
+	if err := f.app.syncEngine.SyncMessages(context.Background(), "acct-a", "a-inbox", 30, false); err != nil {
+		t.Fatal(err)
+	}
+	got, err := f.app.messageStore.Get(f.message.ID)
+	if err != nil || got == nil {
+		t.Fatal("Gmail genuine cross-folder preservation lost", got, err)
+	}
+}
+
+func TestRawAttachmentRejectsReusedUIDGeneration(t *testing.T) {
+	f := newFilterFixture(t, false)
+	if _, err := f.db.Exec(`UPDATE folders SET uid_validity=7 WHERE id='a-inbox'`); err != nil {
+		t.Fatal(err)
+	}
+	f.serverA.sess.validity = 8
+	if got, err := f.app.syncEngine.FetchRawAttachment(context.Background(), "acct-a", "a-inbox", f.message.UID); err == nil {
+		t.Fatal("attachment from reused UID generation returned", string(got))
+	}
+	f.serverA.sess.validity = 7
+	if got, err := f.app.syncEngine.FetchRawAttachment(context.Background(), "acct-a", "a-inbox", f.message.UID); err != nil || len(got) == 0 {
+		t.Fatal("verified attachment source rejected", err)
+	}
+}

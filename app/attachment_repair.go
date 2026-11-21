@@ -121,7 +121,7 @@ func (a *App) loadAttachmentContent(msg *message.Message, att *message.Attachmen
 		return nil, err
 	}
 	if *raw == nil {
-		*raw, err = a.syncEngine.FetchRawMessage(a.ctx, msg.AccountID, msg.FolderID, msg.UID)
+		*raw, err = a.syncEngine.FetchRawAttachment(a.ctx, msg.AccountID, msg.FolderID, msg.UID)
 		if err != nil {
 			return nil, err
 		}

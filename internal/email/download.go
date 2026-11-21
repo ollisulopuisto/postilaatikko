@@ -444,12 +444,15 @@ func (d *AttachmentDownloader) ExtractUniqueAttachmentContent(raw []byte, filena
 				}
 			}
 		}
-		ct, _, _ := mime.ParseMediaType(part.Header.Get("Content-Type"))
+		ct, ctParams, _ := mime.ParseMediaType(part.Header.Get("Content-Type"))
 		name := getFilename(part)
-		disposition, _, _ := mime.ParseMediaType(part.Header.Get("Content-Disposition"))
+		disposition, dispParams, _ := mime.ParseMediaType(part.Header.Get("Content-Disposition"))
 		// Match the sync parser: ordinary text is body content, while
 		// explicit attachments and non-signature binary leaves are files.
-		if disposition != "attachment" && (ct == "" || strings.HasPrefix(ct, "text/") || ct == "application/pkcs7-signature" || ct == "application/x-pkcs7-signature" || ct == "application/pgp-signature") {
+		inline := disposition == "inline" || part.Header.Get("Content-ID") != ""
+		named := dispParams["filename"] != "" || ctParams["name"] != ""
+		ordinaryText := strings.HasPrefix(ct, "text/") && !inline && !named
+		if disposition != "attachment" && (ct == "" || ordinaryText || ct == "application/pkcs7-signature" || ct == "application/x-pkcs7-signature" || ct == "application/pgp-signature") {
 			return nil
 		}
 		if ct == "application/ms-tnef" || strings.EqualFold(name, "winmail.dat") {

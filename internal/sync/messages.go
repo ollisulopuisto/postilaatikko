@@ -316,7 +316,7 @@ func (e *Engine) SyncMessages(ctx context.Context, accountID, folderID string, s
 		// Gmail hides messages from all other IMAP views when Trash/Spam label is
 		// added, so the UID disappears from this folder's server listing even though
 		// the message isn't truly deleted. Skip local deletion to preserve it.
-		if isGmail {
+		if isGmail && f.Type != folder.TypeTrash && f.Type != folder.TypeSpam {
 			msg, msgErr := e.messageStore.GetByUID(folderID, uid)
 			if msgErr == nil && msg != nil && msg.MessageID != "" {
 				inTrash, trashErr := e.messageStore.ExistsInFolder(msg.MessageID, string(folder.TypeTrash), accountID)

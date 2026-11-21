@@ -34,21 +34,22 @@ test('real App: offline repaired body uses snapshot content and live action iden
           IsReady: true, GetThemeMode: 'dark', GetLanguage: 'en', GetAccounts: [{ id: 'demo', name: 'Demo', email: 'demo@example.test', type: 'imap', enabled: true }],
           GetUIState: { selectedAccountId: 'unified', selectedFolderId: 'inbox', selectedFolderName: 'Inbox', selectedFolderType: 'inbox' },
           GetUnifiedFolderCount: 1,
-          GetUnifiedFolderConversations: [{ threadId: 'thread1', accountId: 'demo', folderId: 'inbox', subject: 'Message index regression', snippet: 'Click to open', latestDate: new Date().toISOString(), messageCount: 1, unreadCount: 0, participants: [{ name: 'Fixture sender', email: 'fixture@example.test' }] }],
-          GetConversation: { id: 'thread1', subject: 'Message index regression', messages: [{ id: 'msg1', accountId: 'demo', folderId: 'inbox', threadId: 'thread1', subject: 'Message index regression', fromName: 'Fixture sender', fromEmail: 'fixture@example.test', toList: [], ccList: [], date: new Date().toISOString(), bodyText: 'Offline body from repaired snapshot.', bodyFetched: true, cachedBodySourceId: 'snapshot', hasSMIME: true, hasPGP: true, hasAttachments:true, isRead: true }] },
+          GetUnifiedFolderConversations: [{ threadId: 'thread1', accountId: 'demo', folderId: 'inbox', subject: 'Message index regression', snippet: 'Click to open', latestDate: new Date().toISOString(), messageCount: 1, unreadCount: 1, participants: [{ name: 'Fixture sender', email: 'fixture@example.test' }] }],
+          GetConversation: { id: 'thread1', subject: 'Message index regression', messages: [{ id: 'msg1', accountId: 'demo', folderId: 'inbox', threadId: 'thread1', subject: 'Message index regression', fromName: 'Fixture sender', fromEmail: 'fixture@example.test', toList: [], ccList: [], date: new Date().toISOString(), bodyText: 'Offline body from repaired snapshot.', bodyFetched: true, cachedBodySourceId: 'snapshot', hasAttachments:true, isRead: false }] },
         }
         window.calls=[]
-        window.go = { app: { App: new Proxy({}, { get: (_, key) => (...args) => {window.calls.push({name:key,args});return Promise.resolve(key in data ? data[key] : key.startsWith('Get') || key.startsWith('List') ? [] : null)} }) } }
+        window.go = { app: { App: new Proxy({}, { get: (_, key) => (...args) => {window.calls.push({name:key,args});return Promise.resolve(key === 'ResolveMailActionTarget' ? args[0].messages.map(message => message.messageId) : key in data ? data[key] : key.startsWith('Get') || key.startsWith('List') ? [] : null)} }) } }
       })
       await page.goto('http://127.0.0.1:5187', { waitUntil: 'domcontentloaded' })
       await page.locator('[data-mail-row-key]').waitFor({state:'attached'})
       await page.mouse.move(25,300)
       await page.locator('[data-mail-row-key]').click()
       await page.getByText('Offline body from repaired snapshot.', {exact:true}).waitFor()
+      await page.getByRole('button', {name: 'Mark as read', exact: true}).click()
+      await page.waitForFunction(() => window.calls.some(c => c.name === 'MarkAsRead'))
       const calls = await page.evaluate(() => window.calls)
+      assert.ok(calls.some(c => c.name === 'MarkAsRead' && JSON.stringify(c.args).includes('msg1')), 'a real read action must target live identity')
       assert.equal(calls.filter(c => c.name === 'FetchMessageBodyForAccount').length, 0, 'cached overlay must not fetch a body')
-      assert.ok(calls.some(c => c.name === 'ProcessSMIMEMessage' && c.args[0] === 'snapshot'), 'S/MIME verification must use raw snapshot')
-      assert.ok(calls.some(c => c.name === 'ProcessPGPMessage' && c.args[0] === 'snapshot'), 'PGP verification must use raw snapshot')
       assert.ok(calls.some(c => c.name === 'GetMessageAttachments' && c.args.includes('snapshot')), JSON.stringify(calls.filter(c => /Attachment/.test(c.name))))
       assert.equal(calls.filter(c => /MarkAsRead/.test(c.name)).some(c => JSON.stringify(c.args).includes('snapshot')), false, 'read action must retain live identity')
       if (process.env.POSTI_REPAIR_SCREENSHOT) await page.screenshot({path:process.env.POSTI_REPAIR_SCREENSHOT})

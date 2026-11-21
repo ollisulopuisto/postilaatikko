@@ -3,6 +3,7 @@ package v1
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -654,7 +655,16 @@ func (h *ReadHandler) handleAttachmentRead(w http.ResponseWriter, r *http.Reques
 
 	data, contentType, err := h.attachments.ReadAttachmentBytes(req.Ref.AccountID, bodyContentID(msg), req.AttachmentID)
 	if err != nil {
-		h.writeError(w, r, http.StatusNotFound, CodeNotFound, fmt.Sprintf("Attachment read failed: %v", err), false)
+		var fault *Fault
+		if errors.As(err, &fault) {
+			status := http.StatusBadGateway
+			if fault.Code == CodeNotFound {
+				status = http.StatusNotFound
+			}
+			h.writeError(w, r, status, fault.Code, fault.Message, fault.Retryable)
+			return
+		}
+		h.writeError(w, r, http.StatusUnprocessableEntity, CodeContentNotFetched, "Attachment content unavailable", false)
 		return
 	}
 

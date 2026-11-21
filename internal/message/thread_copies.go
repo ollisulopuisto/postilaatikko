@@ -46,7 +46,7 @@ func DeduplicateThreadMessages(messages []*Message, folderID string, matched map
 	// Reader content may come from a downloaded copy while flags and mutations
 	// keep the selected live identity. Never persist this presentation overlay.
 	for i, selected := range result {
-		if selected.BodyFetched || selected.UID == 0 || int32(selected.UID) < 0 {
+		if selected.BodyFetched || selected.UID == 0 || int32(selected.UID) < 0 || hasReaderCryptoMetadata(selected) {
 			continue
 		}
 		rfc := normalizeMessageID(selected.MessageID)
@@ -54,21 +54,27 @@ func DeduplicateThreadMessages(messages []*Message, folderID string, matched map
 			continue
 		}
 		for _, cached := range messages {
-			if int32(cached.UID) < 0 && cached.AccountID == selected.AccountID && normalizeMessageID(cached.MessageID) == rfc && cached.BodyFetched && (cached.BodyText != "" || cached.BodyHTML != "" || cached.HasSMIME || cached.HasPGP) {
+			// RFC Message-ID alone is not proof that signed/encrypted bytes
+			// authenticate the live row's displayed headers. Fetch that row.
+			if hasReaderCryptoMetadata(cached) {
+				continue
+			}
+			if int32(cached.UID) < 0 && cached.AccountID == selected.AccountID && normalizeMessageID(cached.MessageID) == rfc && cached.BodyFetched && (cached.BodyText != "" || cached.BodyHTML != "") {
 				overlay := *selected
 				overlay.BodyText = cached.BodyText
 				overlay.BodyHTML = cached.BodyHTML
 				overlay.BodyFetched = true
 				overlay.CachedBodySourceID = cached.ID
 				overlay.HasAttachments = cached.HasAttachments || selected.HasAttachments
-				overlay.HasSMIME, overlay.SMIMEEncrypted = cached.HasSMIME, cached.SMIMEEncrypted
-				overlay.SMIMEStatus, overlay.SMIMESignerEmail, overlay.SMIMESignerSubject = cached.SMIMEStatus, cached.SMIMESignerEmail, cached.SMIMESignerSubject
-				overlay.HasPGP, overlay.PGPEncrypted = cached.HasPGP, cached.PGPEncrypted
-				overlay.PGPStatus, overlay.PGPSignerEmail, overlay.PGPSignerKeyID = cached.PGPStatus, cached.PGPSignerEmail, cached.PGPSignerKeyID
 				result[i] = &overlay
 				break
 			}
 		}
 	}
 	return result
+}
+
+// Any verification metadata belongs only to the row whose MIME was checked.
+func hasReaderCryptoMetadata(m *Message) bool {
+	return m.HasSMIME || m.HasPGP || m.SMIMEEncrypted || m.PGPEncrypted || m.SMIMEStatus != "" || m.PGPStatus != "" || m.SMIMESignerEmail != "" || m.SMIMESignerSubject != "" || m.PGPSignerEmail != "" || m.PGPSignerKeyID != ""
 }

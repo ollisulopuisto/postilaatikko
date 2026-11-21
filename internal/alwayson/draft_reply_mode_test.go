@@ -109,3 +109,22 @@ func TestHelperPrepareReplyUsesOfflineSnapshot(t *testing.T) {
 		}
 	}
 }
+
+func TestHelperForwardRejectsMissingSnapshotFiles(t *testing.T) {
+	r := replyModeRuntime(t)
+	r.attachments = message.NewAttachmentStore(r.db)
+	for _, msg := range []*message.Message{{ID: "cached", AccountID: "a", FolderID: "inbox", UID: 7, MessageID: "same@test", BodyFetched: true, BodyText: "offline quote", Date: time.Now()}, {ID: "live", AccountID: "a", FolderID: "inbox", UID: 8, MessageID: "same@test", ToList: "[]", CcList: "[]", Date: time.Now()}} {
+		if err := r.messages.Create(msg); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := r.db.Exec(`UPDATE messages SET uid=-1 WHERE id='cached'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.attachments.Create(&message.Attachment{ID: "missing", MessageID: "cached", Filename: "file.txt"}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := r.PrepareReply(v1.ReplyPreparationRequest{AccountID: "a", MessageID: "live", Mode: "forward"}); err == nil || got != nil {
+		t.Fatal("forward silently omitted original file", got, err)
+	}
+}

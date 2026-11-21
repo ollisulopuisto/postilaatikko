@@ -154,6 +154,9 @@ func TestIMAPAttachmentFallbackRejectsSameNameParts(t *testing.T) {
 	f.app.attachmentStore = message.NewAttachmentStore(f.db)
 	raw := "MIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=b\r\n\r\n--b\r\nContent-Type: text/plain\r\nContent-Disposition: attachment; filename=same.txt\r\n\r\none\r\n--b\r\nContent-Type: text/plain\r\nContent-Disposition: attachment; filename=same.txt\r\n\r\ntwo\r\n--b--\r\n"
 	f.serverA.sess.messages[f.message.UID] = []byte(raw)
+	if _, err := f.db.Exec(`UPDATE folders SET uid_validity=1 WHERE id='a-inbox'`); err != nil {
+		t.Fatal(err)
+	}
 	for _, id := range []string{"first", "second"} {
 		att := &message.Attachment{ID: id, MessageID: f.message.ID, Filename: "same.txt"}
 		if err := f.app.attachmentStore.Create(att); err != nil {

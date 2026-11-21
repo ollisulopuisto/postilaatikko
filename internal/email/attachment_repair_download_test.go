@@ -58,3 +58,26 @@ func TestUniqueAttachmentFallbackIgnoresUnnamedBodyAndSignatures(t *testing.T) {
 		}
 	}
 }
+
+func TestInlineTextAttachmentFallbackKeepsCalendarAndContact(t *testing.T) {
+	for _, ct := range []string{"text/calendar", "text/vcard"} {
+		prefix := "Content-Type: multipart/mixed; boundary=b\r\n\r\n--b\r\nContent-Type: " + ct + "\r\nContent-Disposition: inline; filename=file.txt\r\n\r\ninline bytes\r\n"
+		raw := prefix + "--b--\r\n"
+		got, err := NewAttachmentDownloader("").ExtractUniqueAttachmentContent([]byte(raw), "file.txt")
+		if err != nil || string(got) != "inline bytes" {
+			t.Fatal("listed inline text file rejected", ct, string(got), err)
+		}
+		raw = prefix + "--b\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename=file.txt\r\n\r\nother bytes\r\n--b--\r\n"
+		if got, err := NewAttachmentDownloader("").ExtractUniqueAttachmentContent([]byte(raw), "file.txt"); err == nil {
+			t.Fatal("inline text hidden from ambiguity check", ct, string(got))
+		}
+	}
+}
+
+func TestNamedGmailTextWithoutDispositionIsAFile(t *testing.T) {
+	raw := "Content-Type: multipart/mixed; boundary=b\r\n\r\n--b\r\nContent-Type: text/plain; name=notes.txt\r\n\r\nnotes\r\n--b\r\nContent-Type: text/plain\r\n\r\nbody\r\n--b--\r\n"
+	got, err := NewAttachmentDownloader("").ExtractUniqueAttachmentContent([]byte(raw), "notes.txt")
+	if err != nil || string(got) != "notes" {
+		t.Fatal("named Gmail text rejected", string(got), err)
+	}
+}

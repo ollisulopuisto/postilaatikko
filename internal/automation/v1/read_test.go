@@ -31,6 +31,7 @@ type mockReadOperations struct {
 	fetchMsg        *message.Message
 	attachments     []*message.Attachment
 	attachmentBytes []byte
+	attachmentErr   error
 }
 
 func (m *mockReadOperations) GetAccounts() ([]*account.Account, error) {
@@ -64,7 +65,7 @@ func (m *mockReadOperations) GetAttachments(messageID string) ([]*message.Attach
 	return m.attachments, nil
 }
 func (m *mockReadOperations) ReadAttachmentBytes(accountID, messageID, attachmentID string) ([]byte, string, error) {
-	return m.attachmentBytes, "text/plain", nil
+	return m.attachmentBytes, "text/plain", m.attachmentErr
 }
 
 func setupReadTestServer(ops v1.ReadOperations, grantedCaps map[v1.Capability]bool) (*http.ServeMux, *mockReadOperations) {
@@ -241,5 +242,19 @@ func TestExplicitFetchCannotBeSatisfiedByReaderOverlay(t *testing.T) {
 	}
 	if rec.Code != 200 || body.Data.Original == nil || body.Data.Original.Text != "downloaded live" {
 		t.Fatal("explicit route skipped storage-backed fetch", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAttachmentProviderFailureIsRetryableNotMissing(t *testing.T) {
+	ops := &mockReadOperations{msg: &message.Message{ID: "m", AccountID: "a"}, attachmentErr: v1.NewFault(v1.CodeProviderError, "Provider unavailable", true, nil)}
+	mux, _ := setupReadTestServer(ops, map[v1.Capability]bool{v1.CapabilityAttachmentRead: true})
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest("POST", "/v1/messages/attachments/read", strings.NewReader(`{"ref":{"accountId":"a","messageId":"m"},"attachmentId":"file"}`)))
+	var response v1.ErrorResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusBadGateway || response.Error.Code != v1.CodeProviderError || !response.Error.Retryable {
+		t.Fatal("provider outage reported missing", rec.Code, rec.Body.String())
 	}
 }

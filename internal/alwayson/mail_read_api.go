@@ -423,7 +423,7 @@ func (o *mailboxReadOperations) readAttachmentBytes(accountID, messageID, attach
 	}
 	att, err := o.runtime.attachments.Get(attachmentID)
 	if err != nil || att == nil || att.MessageID != msg.ID {
-		return nil, "", errors.New("attachment not found in message")
+		return nil, "", v1.NewFault(v1.CodeNotFound, "Attachment not found in message", false, nil)
 	}
 	content, ok, err := o.runtime.attachments.RepairedContent(att.ID)
 	if err != nil || ok {
@@ -444,15 +444,18 @@ func (o *mailboxReadOperations) readAttachmentBytes(accountID, messageID, attach
 	ctx := o.runtime.runtimeContext()
 	content, err = o.runtime.syncEngine.FetchGmailAttachment(ctx, accountID, att.ID)
 	if !errors.Is(err, gmail.ErrNotCapable) {
-		return content, att.ContentType, err
+		if err != nil {
+			return nil, "", v1.NewFault(v1.CodeProviderError, "Attachment provider unavailable", true, err)
+		}
+		return content, att.ContentType, nil
 	}
 	if err := o.runtime.messages.ValidateRawContentTarget(msg); err != nil {
 		return nil, "", err
 	}
 	if *raw == nil {
-		*raw, err = o.runtime.syncEngine.FetchRawMessage(ctx, accountID, msg.FolderID, msg.UID)
+		*raw, err = o.runtime.syncEngine.FetchRawAttachment(ctx, accountID, msg.FolderID, msg.UID)
 		if err != nil {
-			return nil, "", err
+			return nil, "", v1.NewFault(v1.CodeProviderError, "Attachment provider unavailable or mailbox generation changed", true, err)
 		}
 	}
 	content, err = email.NewAttachmentDownloader("").ExtractUniqueAttachmentContent(*raw, att.Filename)

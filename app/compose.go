@@ -1081,7 +1081,9 @@ func (a *App) PrepareReply(messageID, mode string) (*smtp.ComposeMessage, error)
 
 	// For forwards, also include regular (non-inline) attachments
 	if mode == "forward" {
-		a.fetchForwardAttachments(log, msg, &attachments)
+		if err := a.fetchForwardAttachments(log, msg, &attachments); err != nil {
+			return nil, err
+		}
 	}
 
 	return &smtp.ComposeMessage{
@@ -1110,7 +1112,7 @@ func (a *App) PrepareComposerReply(accountID, messageID, mode string) (*smtp.Com
 	if !useService {
 		return a.PrepareReply(messageID, mode)
 	}
-	client, err := a.composerServiceClient(ctx, v1.CapabilityMailRead, v1.CapabilityMailBodyFetch, v1.CapabilityDraftWrite)
+	client, err := a.composerServiceClient(ctx, v1.CapabilityMailRead, v1.CapabilityAttachmentRead, v1.CapabilityMailBodyFetch, v1.CapabilityDraftWrite)
 	if err != nil {
 		return nil, err
 	}
@@ -1153,12 +1155,12 @@ func quotedHTMLReferencesCID(html, cid string) bool {
 }
 
 // fetchForwardAttachments fetches regular (non-inline) attachment content from IMAP
-// and appends them to the attachments slice. Failures are logged but not fatal.
-func (a *App) fetchForwardAttachments(log zerolog.Logger, msg *message.Message, attachments *[]smtp.Attachment) {
+// and appends them to the attachments slice. Missing files abort preparation.
+func (a *App) fetchForwardAttachments(log zerolog.Logger, msg *message.Message, attachments *[]smtp.Attachment) error {
 	allAtts, err := a.attachmentStore.GetByMessage(readerContentID(msg))
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to get attachments for forward")
-		return
+		return err
 	}
 
 	// Filter to non-inline attachments only
@@ -1169,7 +1171,7 @@ func (a *App) fetchForwardAttachments(log zerolog.Logger, msg *message.Message, 
 		}
 	}
 	if len(regularAtts) == 0 {
-		return
+		return nil
 	}
 
 	var raw []byte
@@ -1179,7 +1181,7 @@ func (a *App) fetchForwardAttachments(log zerolog.Logger, msg *message.Message, 
 		content, extractErr := a.loadAttachmentContent(msg, att, downloader, &raw)
 		if extractErr != nil {
 			log.Warn().Err(extractErr).Str("filename", att.Filename).Msg("Failed to extract attachment for forward")
-			continue
+			return fmt.Errorf("forward not prepared: original attachment %s unavailable: %w", att.Filename, extractErr)
 		}
 		*attachments = append(*attachments, smtp.Attachment{
 			Content:     content,
@@ -1188,6 +1190,7 @@ func (a *App) fetchForwardAttachments(log zerolog.Logger, msg *message.Message, 
 			Inline:      false,
 		})
 	}
+	return nil
 }
 
 // parseDataURL extracts the content type and base64 data from a data URL.
