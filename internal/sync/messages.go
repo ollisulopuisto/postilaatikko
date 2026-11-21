@@ -258,6 +258,9 @@ func (e *Engine) SyncMessages(ctx context.Context, accountID, folderID string, s
 	for _, uid := range restored {
 		localUIDSet[uid] = true
 	}
+	if len(restored) > 0 {
+		prevModSeq, f.FlagsSyncModSeq = 0, 0
+	}
 
 	// Find new UIDs (on server but not local)
 	var newUIDs []uint32
@@ -362,7 +365,7 @@ func (e *Engine) SyncMessages(ctx context.Context, accountID, folderID string, s
 			conn.Client().RawClient(),
 			folderID,
 			existingUIDs,
-			uidValidityChanged,
+			uidValidityChanged || len(restored) > 0,
 			prevModSeq,
 			mailbox.HighestModSeq,
 			conn.Client().SupportsCondStore(),

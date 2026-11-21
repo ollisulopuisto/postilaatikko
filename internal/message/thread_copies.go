@@ -54,13 +54,17 @@ func DeduplicateThreadMessages(messages []*Message, folderID string, matched map
 			continue
 		}
 		for _, cached := range messages {
-			if int32(cached.UID) < 0 && cached.AccountID == selected.AccountID && normalizeMessageID(cached.MessageID) == rfc && cached.BodyFetched && (cached.BodyText != "" || cached.BodyHTML != "") {
+			if int32(cached.UID) < 0 && cached.AccountID == selected.AccountID && normalizeMessageID(cached.MessageID) == rfc && cached.BodyFetched && (cached.BodyText != "" || cached.BodyHTML != "" || cached.HasSMIME || cached.HasPGP) {
 				overlay := *selected
 				overlay.BodyText = cached.BodyText
 				overlay.BodyHTML = cached.BodyHTML
 				overlay.BodyFetched = true
 				overlay.CachedBodySourceID = cached.ID
 				overlay.HasAttachments = cached.HasAttachments || selected.HasAttachments
+				overlay.HasSMIME, overlay.SMIMEEncrypted = cached.HasSMIME, cached.SMIMEEncrypted
+				overlay.SMIMEStatus, overlay.SMIMESignerEmail, overlay.SMIMESignerSubject = cached.SMIMEStatus, cached.SMIMESignerEmail, cached.SMIMESignerSubject
+				overlay.HasPGP, overlay.PGPEncrypted = cached.HasPGP, cached.PGPEncrypted
+				overlay.PGPStatus, overlay.PGPSignerEmail, overlay.PGPSignerKeyID = cached.PGPStatus, cached.PGPSignerEmail, cached.PGPSignerKeyID
 				result[i] = &overlay
 				break
 			}

@@ -28,6 +28,7 @@ import (
 	"github.com/ollisulopuisto/postilaatikko/internal/pgp"
 	"github.com/ollisulopuisto/postilaatikko/internal/smime"
 	"github.com/ollisulopuisto/postilaatikko/internal/smtp"
+	"github.com/ollisulopuisto/postilaatikko/internal/views"
 	"github.com/rs/zerolog"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -890,7 +891,7 @@ func (a *App) PrepareReply(messageID, mode string) (*smtp.ComposeMessage, error)
 	log.Debug().Str("message_ref", logging.ShortHash(messageID)).Str("mode", mode).Msg("Preparing reply message")
 
 	// Get the original message
-	msg, err := a.messageStore.Get(messageID)
+	msg, err := a.messageStore.GetReaderMessage(messageID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get message: %w", err)
 	}
@@ -1052,7 +1053,7 @@ func (a *App) PrepareReply(messageID, mode string) (*smtp.ComposeMessage, error)
 
 	// Fetch inline attachments so cid: references in quoted HTML render correctly
 	var attachments []smtp.Attachment
-	inlineMap, inlineErr := a.attachmentStore.GetInlineByMessage(messageID)
+	inlineMap, inlineErr := a.attachmentStore.GetInlineByMessage(readerContentID(msg))
 	if inlineErr != nil {
 		log.Warn().Err(inlineErr).Msg("Failed to get inline attachments for reply/forward")
 	}
@@ -1113,9 +1114,15 @@ func (a *App) PrepareComposerReply(accountID, messageID, mode string) (*smtp.Com
 	if err != nil {
 		return nil, err
 	}
-	_, err = client.ReadBody(ctx, v1.BodyReadRequest{Ref: v1.MessageRef{AccountID: accountID, MessageID: messageID}, Mode: v1.FetchExplicit})
+	ref := v1.MessageRef{AccountID: accountID, MessageID: messageID}
+	cached, err := client.ReadBody(ctx, v1.BodyReadRequest{Ref: ref, Mode: v1.FetchCachedOnly})
 	if err != nil {
-		return nil, fmt.Errorf("fetch original message body through mailbox service: %w", err)
+		return nil, fmt.Errorf("read cached original through mailbox service: %w", err)
+	}
+	if cached.ContentState != views.ContentCached {
+		if _, err := client.ReadBody(ctx, v1.BodyReadRequest{Ref: ref, Mode: v1.FetchExplicit}); err != nil {
+			return nil, fmt.Errorf("fetch original message body through mailbox service: %w", err)
+		}
 	}
 	return client.PrepareReply(ctx, v1.ReplyPreparationRequest{AccountID: accountID, MessageID: messageID, Mode: mode})
 }
@@ -1148,7 +1155,7 @@ func quotedHTMLReferencesCID(html, cid string) bool {
 // fetchForwardAttachments fetches regular (non-inline) attachment content from IMAP
 // and appends them to the attachments slice. Failures are logged but not fatal.
 func (a *App) fetchForwardAttachments(log zerolog.Logger, msg *message.Message, attachments *[]smtp.Attachment) {
-	allAtts, err := a.attachmentStore.GetByMessage(msg.ID)
+	allAtts, err := a.attachmentStore.GetByMessage(readerContentID(msg))
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to get attachments for forward")
 		return
@@ -1165,16 +1172,11 @@ func (a *App) fetchForwardAttachments(log zerolog.Logger, msg *message.Message, 
 		return
 	}
 
-	// Fetch raw message from IMAP once for all attachments
-	raw, fetchErr := a.syncEngine.FetchRawMessage(a.ctx, msg.AccountID, msg.FolderID, msg.UID)
-	if fetchErr != nil {
-		log.Warn().Err(fetchErr).Msg("Failed to fetch raw message for forward attachments (offline?)")
-		return
-	}
+	var raw []byte
 
 	downloader := email.NewAttachmentDownloader(a.paths.AttachmentsPath())
 	for _, att := range regularAtts {
-		content, extractErr := a.storedAttachmentContent(downloader, raw, att)
+		content, extractErr := a.loadAttachmentContent(msg, att, downloader, &raw)
 		if extractErr != nil {
 			log.Warn().Err(extractErr).Str("filename", att.Filename).Msg("Failed to extract attachment for forward")
 			continue
@@ -1532,4 +1534,12 @@ func (ops *composeOps) gmailClient(ctx context.Context, accountID string) (*gmai
 		return tokens.AccessToken, nil
 	})
 	return client, nil
+}
+
+// readerContentID selects cached content without changing the live action target.
+func readerContentID(msg *message.Message) string {
+	if msg.CachedBodySourceID != "" {
+		return msg.CachedBodySourceID
+	}
+	return msg.ID
 }

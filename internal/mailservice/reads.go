@@ -32,9 +32,15 @@ func (s *Service) GetMessage(accountID, messageID string) (*message.Message, err
 // FetchMessageBody fetches full content only when explicitly requested by the
 // caller. Cached bodies are returned without contacting the provider.
 func (s *Service) FetchMessageBody(ctx context.Context, accountID, messageID string) (*message.Message, error) {
-	msg, err := s.GetMessage(accountID, messageID)
+	if s == nil || s.messageStore == nil {
+		return nil, errors.New("message service is not ready")
+	}
+	msg, err := s.messageStore.Get(messageID)
 	if err != nil {
 		return nil, err
+	}
+	if msg == nil || accountID != "" && msg.AccountID != accountID {
+		return nil, errors.New("message not found in account")
 	}
 	if msg.BodyFetched {
 		return msg, nil

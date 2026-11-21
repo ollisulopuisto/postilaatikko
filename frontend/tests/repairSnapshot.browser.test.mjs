@@ -1,5 +1,5 @@
 // Full App, real browser; only the Wails backend is a deterministic fixture.
-// Opt in: POSTI_PLAYWRIGHT_PATH=/absolute/path/to/playwright/index.mjs node --test tests/messageIndex.browser.test.mjs
+// Opt in: POSTI_PLAYWRIGHT_PATH=/absolute/path/to/playwright/index.mjs node --test tests/repairSnapshot.browser.test.mjs
 // No live mailbox or native app is used. The regular suite still covers layout policy.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -22,7 +22,7 @@ test('real App: offline repaired body uses snapshot content and live action iden
       if (server.exitCode !== null || i === 99) throw new Error(`Vite did not start: ${serverLog}`)
       await delay(100)
     }
-    browser = await chromium.launch({ executablePath: process.env.CHROME_BIN || '/usr/bin/google-chrome-stable', headless: true, args: ['--no-sandbox'] })
+    browser = await chromium.launch({ ...(process.env.POSTI_CHROMIUM_BUNDLED ? {} : { executablePath: process.env.CHROME_BIN || '/usr/bin/google-chrome-stable' }), headless: true, args: ['--no-sandbox'] })
     for (const width of [1280]) {
       const page = await browser.newPage({ viewport: { width, height: 800 } })
       const errors = []
@@ -35,7 +35,7 @@ test('real App: offline repaired body uses snapshot content and live action iden
           GetUIState: { selectedAccountId: 'unified', selectedFolderId: 'inbox', selectedFolderName: 'Inbox', selectedFolderType: 'inbox' },
           GetUnifiedFolderCount: 1,
           GetUnifiedFolderConversations: [{ threadId: 'thread1', accountId: 'demo', folderId: 'inbox', subject: 'Message index regression', snippet: 'Click to open', latestDate: new Date().toISOString(), messageCount: 1, unreadCount: 0, participants: [{ name: 'Fixture sender', email: 'fixture@example.test' }] }],
-          GetConversation: { id: 'thread1', subject: 'Message index regression', messages: [{ id: 'msg1', accountId: 'demo', folderId: 'inbox', threadId: 'thread1', subject: 'Message index regression', fromName: 'Fixture sender', fromEmail: 'fixture@example.test', toList: [], ccList: [], date: new Date().toISOString(), bodyText: 'Offline body from repaired snapshot.', bodyFetched: true, cachedBodySourceId: 'snapshot', hasAttachments:true, isRead: true }] },
+          GetConversation: { id: 'thread1', subject: 'Message index regression', messages: [{ id: 'msg1', accountId: 'demo', folderId: 'inbox', threadId: 'thread1', subject: 'Message index regression', fromName: 'Fixture sender', fromEmail: 'fixture@example.test', toList: [], ccList: [], date: new Date().toISOString(), bodyText: 'Offline body from repaired snapshot.', bodyFetched: true, cachedBodySourceId: 'snapshot', hasSMIME: true, hasPGP: true, hasAttachments:true, isRead: true }] },
         }
         window.calls=[]
         window.go = { app: { App: new Proxy({}, { get: (_, key) => (...args) => {window.calls.push({name:key,args});return Promise.resolve(key in data ? data[key] : key.startsWith('Get') || key.startsWith('List') ? [] : null)} }) } }
@@ -47,6 +47,8 @@ test('real App: offline repaired body uses snapshot content and live action iden
       await page.getByText('Offline body from repaired snapshot.', {exact:true}).waitFor()
       const calls = await page.evaluate(() => window.calls)
       assert.equal(calls.filter(c => c.name === 'FetchMessageBodyForAccount').length, 0, 'cached overlay must not fetch a body')
+      assert.ok(calls.some(c => c.name === 'ProcessSMIMEMessage' && c.args[0] === 'snapshot'), 'S/MIME verification must use raw snapshot')
+      assert.ok(calls.some(c => c.name === 'ProcessPGPMessage' && c.args[0] === 'snapshot'), 'PGP verification must use raw snapshot')
       assert.ok(calls.some(c => c.name === 'GetMessageAttachments' && c.args.includes('snapshot')), JSON.stringify(calls.filter(c => /Attachment/.test(c.name))))
       assert.equal(calls.filter(c => /MarkAsRead/.test(c.name)).some(c => JSON.stringify(c.args).includes('snapshot')), false, 'read action must retain live identity')
       if (process.env.POSTI_REPAIR_SCREENSHOT) await page.screenshot({path:process.env.POSTI_REPAIR_SCREENSHOT})

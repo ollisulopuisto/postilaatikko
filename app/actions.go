@@ -1257,9 +1257,6 @@ func (a *App) moveMessagesToIMAP(messages []*message.Message, sourceFolderID str
 		destinationValidity := destination.UIDValidity
 		preCopyUIDs := make(map[string]map[uint32]bool)
 		if !conn.Caps().Has(goImap.CapUIDPlus) || useGmailLabels {
-			if _, err := conn.SelectMailbox(a.ctx, destFolder.Path); err != nil {
-				return fmt.Errorf("failed to select destination mailbox for pre-COPY UID snapshot: %w", err)
-			}
 			for _, moved := range orderedMessages {
 				if moved.MessageID == "" {
 					continue

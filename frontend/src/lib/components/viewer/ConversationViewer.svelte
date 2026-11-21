@@ -886,7 +886,7 @@
       if (!msg.hasSMIME) continue
       smimeLoading = new Set([...smimeLoading, msg.id])
 
-      ProcessSMIMEMessage(msg.id).then(result => {
+      ProcessSMIMEMessage(msg.cachedBodySourceId || msg.id).then(result => {
         if (generation !== viewGeneration) return
         smimeResults = { ...smimeResults, [msg.id]: result }
         const next = new Set(smimeLoading)
@@ -912,7 +912,7 @@
       if (!msg.hasPGP) continue
       pgpLoading = new Set([...pgpLoading, msg.id])
 
-      ProcessPGPMessage(msg.id).then(result => {
+      ProcessPGPMessage(msg.cachedBodySourceId || msg.id).then(result => {
         if (generation !== viewGeneration) return
         pgpResults = { ...pgpResults, [msg.id]: result }
         const next = new Set(pgpLoading)

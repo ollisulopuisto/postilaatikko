@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ollisulopuisto/postilaatikko/internal/account"
 	"github.com/ollisulopuisto/postilaatikko/internal/database"
 	"github.com/ollisulopuisto/postilaatikko/internal/message"
 	"github.com/ollisulopuisto/postilaatikko/internal/views"
@@ -152,6 +153,13 @@ func TestGetThreadCountsAndCompletenessUseRetainedCopies(t *testing.T) {
 func TestThreadThenCachedBodyReadsSnapshotWithoutProvider(t *testing.T) {
 	ops, db := setupThreadReadTest(t)
 	defer db.Close()
+	parts := []message.RepairPart{
+		{Metadata: message.Attachment{ID: "exact-one", MessageID: "msg-inbox", Filename: "same.txt", ContentType: "text/plain", Size: 3}, Payload: []byte("one")},
+		{Metadata: message.Attachment{ID: "exact-two", MessageID: "msg-inbox", Filename: "same.txt", ContentType: "text/plain", Size: 3}, Payload: []byte("two")},
+	}
+	if _, err := ops.runtime.attachments.RepairFromMIME("acc-1", "msg-inbox", "fixture", parts, ""); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := db.Exec(`UPDATE messages SET message_id='same@test',uid=-1 WHERE id='msg-inbox'`); err != nil {
 		t.Fatal(err)
 	}
@@ -169,11 +177,12 @@ func TestThreadThenCachedBodyReadsSnapshotWithoutProvider(t *testing.T) {
 			selected = &view.Messages[i]
 		}
 	}
-	if selected == nil || selected.ContentState != views.ContentCached || len(selected.Attachments) != 1 {
+	if selected == nil || selected.ContentState != views.ContentCached || len(selected.Attachments) != 2 {
 		t.Fatal("thread lost cached source", selected)
 	}
 	mux := http.NewServeMux()
 	v1.MountThreadBodyRoutes(mux, ops, func(http.ResponseWriter, *http.Request, v1.Capability) bool { return true })
+	v1.MountAttachmentRoutes(mux, ops, ops, func(http.ResponseWriter, *http.Request, v1.Capability) bool { return true })
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest("POST", "/v1/messages/body", strings.NewReader(`{"ref":{"accountId":"acc-1","messageId":"live"},"mode":"cached","includeOriginal":true}`)))
 	var body v1.Response[v1.MessageBody]
@@ -182,6 +191,32 @@ func TestThreadThenCachedBodyReadsSnapshotWithoutProvider(t *testing.T) {
 	}
 	if rec.Code != 200 || body.Data.ContentState != views.ContentCached || body.Data.Original == nil || body.Data.Original.Text != "PRIVATE BODY TEXT" || body.Data.Ref.MessageID != "live" {
 		t.Fatal("cached-only body disagrees with thread", rec.Code, rec.Body.String())
+	}
+	for _, part := range parts {
+		rec := httptest.NewRecorder()
+		body := `{"ref":{"accountId":"acc-1","messageId":"live"},"attachmentId":"` + part.Metadata.ID + `"}`
+		mux.ServeHTTP(rec, httptest.NewRequest("POST", "/v1/messages/attachments/read", strings.NewReader(body)))
+		if rec.Code != 200 || rec.Body.String() != string(part.Payload) {
+			t.Fatal("snapshot byte route lost exact occurrence", rec.Code, rec.Body.String())
+		}
+		if _, _, err := ops.ReadAttachmentBytes("wrong", "msg-inbox", part.Metadata.ID); err == nil {
+			t.Fatal("cross-account attachment read allowed")
+		}
+		if _, _, err := ops.ReadAttachmentBytes("acc-1", "live", part.Metadata.ID); err == nil {
+			t.Fatal("cross-message attachment read allowed")
+		}
+	}
+	ops.runtime.accounts = account.NewStore(db)
+	forward, err := ops.runtime.PrepareReply(v1.ReplyPreparationRequest{AccountID: "acc-1", MessageID: "live", Mode: "forward"})
+	if err != nil || len(forward.Attachments) != 2 || string(forward.Attachments[0].Content) != "one" || string(forward.Attachments[1].Content) != "two" {
+		t.Fatal("helper forward lost cached exact parts", forward, err)
+	}
+	production := http.NewServeMux()
+	mountMailboxV1Routes(production, &mailboxRouteDeps{messageRead: ops, attachmentRead: ops})
+	denied := httptest.NewRecorder()
+	production.ServeHTTP(denied, httptest.NewRequest("POST", "/v1/messages/attachments/read", strings.NewReader(`{}`)))
+	if denied.Code != http.StatusUnauthorized {
+		t.Fatal("production attachment route missing or unguarded", denied.Code)
 	}
 	raw, err := ops.runtime.messages.Get("live")
 	if err != nil || raw.BodyFetched || raw.BodyText != "" {

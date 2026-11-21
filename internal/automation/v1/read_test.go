@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/ollisulopuisto/postilaatikko/internal/account"
@@ -226,5 +227,19 @@ func TestReadHandler_ProviderFetchFailure(t *testing.T) {
 
 	if rec.Code != http.StatusBadGateway {
 		t.Errorf("expected 502 Bad Gateway on provider failure, got %d", rec.Code)
+	}
+}
+
+func TestExplicitFetchCannotBeSatisfiedByReaderOverlay(t *testing.T) {
+	ops := &mockReadOperations{msg: &message.Message{ID: "live", AccountID: "a", BodyFetched: true, BodyText: "snapshot", CachedBodySourceID: "retired"}, fetchMsg: &message.Message{ID: "live", AccountID: "a", BodyFetched: true, BodyText: "downloaded live"}}
+	mux, _ := setupReadTestServer(ops, map[v1.Capability]bool{v1.CapabilityMailRead: true, v1.CapabilityMailBodyFetch: true})
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest("POST", "/v1/messages/body", strings.NewReader(`{"ref":{"accountId":"a","messageId":"live"},"mode":"fetch","includeOriginal":true}`)))
+	var body v1.Response[v1.MessageBody]
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != 200 || body.Data.Original == nil || body.Data.Original.Text != "downloaded live" {
+		t.Fatal("explicit route skipped storage-backed fetch", rec.Code, rec.Body.String())
 	}
 }

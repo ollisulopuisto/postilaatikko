@@ -15,7 +15,6 @@ import (
 	automationclient "github.com/ollisulopuisto/postilaatikko/internal/automation/client"
 	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
 	"github.com/ollisulopuisto/postilaatikko/internal/email"
-	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
 	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 	"github.com/ollisulopuisto/postilaatikko/internal/message"
 	"github.com/ollisulopuisto/postilaatikko/internal/pgp"
@@ -255,27 +254,10 @@ func (a *App) DownloadAttachment(attachmentID, savePath string) (string, error) 
 	log.Debug().Uint32("uid", msg.UID).Str("folderID", msg.FolderID).Msg("Got message info")
 
 	downloader := email.NewAttachmentDownloader(a.paths.AttachmentsPath())
-	content, err := a.syncEngine.FetchGmailAttachment(a.ctx, msg.AccountID, att.ID)
-	if errors.Is(err, gmail.ErrNotCapable) {
-
-		// Fetch raw message from IMAP
-		raw, err := a.syncEngine.FetchRawMessage(a.ctx, msg.AccountID, msg.FolderID, msg.UID)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to fetch raw message from IMAP")
-			return "", fmt.Errorf("failed to fetch message: %w", err)
-		}
-
-		log.Debug().Int("rawSize", len(raw)).Msg("Fetched raw message from IMAP")
-
-		// Extract attachment content
-		content, err = a.storedAttachmentContent(downloader, raw, att)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to extract attachment content")
-			return "", fmt.Errorf("failed to extract attachment: %w", err)
-		}
-
-	} else if err != nil {
-		return "", fmt.Errorf("failed to fetch Gmail attachment: %w", err)
+	var raw []byte
+	content, err := a.loadAttachmentContent(msg, att, downloader, &raw)
+	if err != nil {
+		return "", err
 	}
 
 	log.Debug().Int("contentSize", len(content)).Msg("Extracted attachment content")
@@ -735,18 +717,14 @@ func (a *App) SaveAllAttachments(messageID string) (string, error) {
 		return "", fmt.Errorf("message not found: %s", messageID)
 	}
 
-	// Fetch raw message from IMAP
-	raw, err := a.syncEngine.FetchRawMessage(a.ctx, msg.AccountID, msg.FolderID, msg.UID)
-	if err != nil {
-		return "", fmt.Errorf("failed to fetch message: %w", err)
-	}
+	var raw []byte
 
 	// Save each attachment
 	downloader := email.NewAttachmentDownloader(a.paths.AttachmentsPath())
 	savedCount := 0
 
 	for _, att := range attachments {
-		content, err := a.storedAttachmentContent(downloader, raw, att)
+		content, err := a.loadAttachmentContent(msg, att, downloader, &raw)
 		if err != nil {
 			log.Warn().Err(err).Str("filename", att.Filename).Msg("Failed to extract attachment")
 			continue
@@ -1029,11 +1007,7 @@ func (a *App) saveAllAttachmentsViaPortal(messageID string, attachments []*messa
 		return "", fmt.Errorf("message not found: %s", messageID)
 	}
 
-	// Fetch raw message from IMAP
-	raw, err := a.syncEngine.FetchRawMessage(a.ctx, msg.AccountID, msg.FolderID, msg.UID)
-	if err != nil {
-		return "", fmt.Errorf("failed to fetch message: %w", err)
-	}
+	var raw []byte
 
 	downloader := email.NewAttachmentDownloader(a.paths.AttachmentsPath())
 	savedCount := 0
@@ -1043,7 +1017,7 @@ func (a *App) saveAllAttachmentsViaPortal(messageID string, attachments []*messa
 			break
 		}
 
-		content, err := a.storedAttachmentContent(downloader, raw, att)
+		content, err := a.loadAttachmentContent(msg, att, downloader, &raw)
 		if err != nil {
 			log.Warn().Err(err).Str("filename", att.Filename).Msg("Failed to extract attachment")
 			continue

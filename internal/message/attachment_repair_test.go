@@ -298,3 +298,46 @@ func TestInterruptedMoveEvidenceAndRepairSurviveCachePruning(t *testing.T) {
 		t.Fatal("newer move overwritten by stale recovery", got, err)
 	}
 }
+
+func TestRecoveredReceiptDecisionSurvivesPruneRetirementAndReattach(t *testing.T) {
+	ms, db := setupThreadTestDB(t)
+	defer db.Close()
+	if _, err := db.Exec(`UPDATE folders SET uid_validity=7, flags_sync_modseq=100 WHERE id='fld-1'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := ms.Create(&Message{ID: "receipt", AccountID: "acc-1", FolderID: "fld-1", UID: 8, MessageID: "receipt@test", Date: time.Now().AddDate(0, -3, 0), ReadReceiptHandled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ms.DeleteOlderThanInFolder("fld-1", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	row, err := ms.Get("receipt")
+	if err != nil || row == nil || !row.ReadReceiptHandled {
+		t.Fatal("age pruning erased receipt decision", row, err)
+	}
+	if err := ms.DeleteSyncedUID("fld-1", 8); err != nil {
+		t.Fatal(err)
+	}
+	row, err = ms.Get("receipt")
+	if err != nil || row == nil || int32(row.UID) >= 0 || !row.ReadReceiptHandled {
+		t.Fatal("window retirement erased decision or kept live UID", row, err)
+	}
+	if _, err := ms.ReattachRetiredRepairs("fld-1", 7, map[uint32]bool{8: true}); err != nil {
+		t.Fatal(err)
+	}
+	row, err = ms.Get("receipt")
+	if err != nil || row == nil || row.UID != 8 || !row.ReadReceiptHandled {
+		t.Fatal("window expansion lost identity or decision", row, err)
+	}
+	var watermark int
+	if err := db.QueryRow(`SELECT flags_sync_modseq FROM folders WHERE id='fld-1'`).Scan(&watermark); err != nil || watermark != 0 {
+		t.Fatal("restored row can skip historical flags", watermark, err)
+	}
+	if err := ms.DeleteSyncedUIDCache("fld-1"); err != nil {
+		t.Fatal(err)
+	}
+	row, err = ms.Get("receipt")
+	if err != nil || row == nil || int32(row.UID) >= 0 || !row.ReadReceiptHandled {
+		t.Fatal("generation reset erased receipt decision", row, err)
+	}
+}

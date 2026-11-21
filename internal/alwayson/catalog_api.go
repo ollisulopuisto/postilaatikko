@@ -774,6 +774,7 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 		bootstrap:          workspaceBootstrapOperations{ConversationListOperations: operations, ConversationListKeysetOperations: operations, catalog: operations, unreadCounts: r},
 		search:             readOperations,
 		messageRead:        readOperations,
+		attachmentRead:     readOperations,
 		actionTarget:       mailboxActions,
 		actions:            mailboxActions,
 		receipts:           actionReceipts,
@@ -843,6 +844,7 @@ type mailboxRouteDeps struct {
 	bootstrap          v1.WorkspaceBootstrapOperations
 	search             v1.SearchOperations
 	messageRead        v1.MessageReadOperations
+	attachmentRead     v1.AttachmentReadOperations
 	actionTarget       operations.MessageLookup
 	actions            v1.ActionOperations
 	receipts           v1.ActionReceiptStore
@@ -887,6 +889,7 @@ func mountMailboxV1Routes(mux v1.RouteMux, d *mailboxRouteDeps) {
 	v1.MountWorkspaceBootstrapRoute(mux, d.bootstrap, requireCap)
 	v1.MountSearchRoute(mux, d.search, requireCap)
 	v1.MountThreadBodyRoutes(mux, d.messageRead, requireCap)
+	v1.MountAttachmentRoutes(mux, d.messageRead, d.attachmentRead, requireCap)
 	v1.MountActionTargetRoute(mux, d.actionTarget, requireCap)
 	v1.NewActionsHandlerWithReceiptStore(d.actions, d.receipts, d.keyDigest).MountRoutes(mux, requireCap)
 	v1.MountActionUndoRoutes(mux, d.undoStore, d.undoOps, d.keyDigest, requireCap)

@@ -389,8 +389,14 @@ func (e *Engine) FetchServerMessage(ctx context.Context, accountID, folderID str
 	if len(found) != 1 || found[0] != uid {
 		return nil, fmt.Errorf("message not found on server: UID %d", uid)
 	}
-	if _, err := e.messageStore.ReattachRetiredRepairs(folderID, mailbox.UIDValidity, map[uint32]bool{uid: true}); err != nil {
+	restored, err := e.messageStore.ReattachRetiredRepairs(folderID, mailbox.UIDValidity, map[uint32]bool{uid: true})
+	if err != nil {
 		return nil, err
+	}
+	if len(restored) > 0 {
+		if _, err := e.syncMessageFlags(ctx, conn.Client().RawClient(), folderID, restored); err != nil {
+			return nil, fmt.Errorf("refresh restored flags: %w", err)
+		}
 	}
 	// Check if already exists locally
 	existing, err := e.messageStore.GetByUID(folderID, uid)

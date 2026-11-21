@@ -28,9 +28,11 @@ func (e *Engine) RecoverInterruptedMoves(ctx context.Context, accountID, folderI
 	if f == nil || f.AccountID != accountID || f.Hidden {
 		return fmt.Errorf("move recovery folder unavailable")
 	}
-	if _, err := e.GmailClient(ctx, accountID); err == nil {
+	_, err = e.GmailClient(ctx, accountID)
+	if err == nil {
 		return fmt.Errorf("legacy IMAP move requires verified IMAP recovery")
-	} else if err != gmail.ErrNotCapable {
+	}
+	if err != gmail.ErrNotCapable {
 		return err
 	}
 	conn, err := e.pool.GetConnection(ctx, accountID)
@@ -52,13 +54,19 @@ func (e *Engine) recoverInterruptedMovesOnConnection(ctx context.Context, accoun
 		if m == nil || m.FolderID != folderID || int32(m.UID) >= 0 {
 			continue
 		}
+		uid, validity, err := e.messageStore.MoveUIDEvidence(folderID, id)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
 		// A previous pending item may have left the source selected.
 		mailbox, err := client.SelectMailbox(ctx, f.Path)
 		if err != nil {
 			return err
 		}
-		uid, validity, err := e.messageStore.MoveUIDEvidence(folderID, id)
-		if err == nil && validity != mailbox.UIDValidity {
+		if validity != mailbox.UIDValidity {
 			err = fmt.Errorf("move destination UID validity changed")
 		}
 		if err == nil {

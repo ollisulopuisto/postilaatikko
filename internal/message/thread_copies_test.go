@@ -19,10 +19,13 @@ func TestDeduplicateThreadMessagesPreservesScopeAndAccountBoundaries(t *testing.
 
 func TestDeduplicateThreadMessagesPrefersLiveOverCachedSnapshot(t *testing.T) {
 	var snapshotUID int32 = -7
-	snapshot := &Message{ID: "snapshot", AccountID: "a", FolderID: "inbox", MessageID: "same@test", UID: uint32(snapshotUID), BodyFetched: true, BodyText: "downloaded body"}
+	snapshot := &Message{ID: "snapshot", AccountID: "a", FolderID: "inbox", MessageID: "same@test", UID: uint32(snapshotUID), BodyFetched: true, BodyText: "downloaded body", HasSMIME: true, SMIMEStatus: "valid", SMIMESignerEmail: "s@test", HasPGP: true, PGPStatus: "valid", PGPSignerKeyID: "key"}
 	live := &Message{ID: "live", AccountID: "a", FolderID: "inbox", MessageID: "same@test", UID: 7}
 	for _, copies := range [][]*Message{{snapshot, live}, {live, snapshot}} {
 		got := DeduplicateThreadMessages(copies, "inbox", nil)
+		if !got[0].HasSMIME || got[0].SMIMEStatus != "valid" || got[0].SMIMESignerEmail != "s@test" || !got[0].HasPGP || got[0].PGPSignerKeyID != "key" {
+			t.Fatal("cached body lost verification metadata", got[0])
+		}
 		if len(got) != 1 || got[0].ID != live.ID || got[0].UID != live.UID || !got[0].BodyFetched || got[0].BodyText != snapshot.BodyText || got[0].CachedBodySourceID != snapshot.ID {
 			t.Fatal("cached snapshot hid live reader target", got)
 		}
@@ -36,5 +39,22 @@ func TestCachedReaderOverlayNeverMutatesSourceRows(t *testing.T) {
 	_ = DeduplicateThreadMessages([]*Message{cached, live}, "", nil)
 	if live.BodyFetched || live.BodyText != "" || cached.UID != uint32(negative) {
 		t.Fatal("presentation changed source identities or cache state")
+	}
+}
+
+func TestReaderOverlayKeepsEncryptedSnapshotWithoutPlaintext(t *testing.T) {
+	ms, db := setupThreadTestDB(t)
+	defer db.Close()
+	for _, msg := range []*Message{{ID: "cached", AccountID: "acc-1", FolderID: "fld-1", UID: 7, MessageID: "encrypted@test", BodyFetched: true}, {ID: "live", AccountID: "acc-1", FolderID: "fld-1", UID: 8, MessageID: "encrypted@test"}} {
+		if err := ms.Create(msg); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.Exec(`UPDATE messages SET uid=-1,smime_raw_body=?,smime_encrypted=1 WHERE id='cached'`, []byte("encrypted fixture")); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ms.GetReaderMessage("live")
+	if err != nil || got.CachedBodySourceID != "cached" || !got.HasSMIME || !got.SMIMEEncrypted || !got.BodyFetched {
+		t.Fatal("encrypted snapshot lost its verifier source", got, err)
 	}
 }

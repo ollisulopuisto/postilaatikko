@@ -1328,7 +1328,7 @@ func (s *Store) DeleteByFolder(folderID string) error {
 	return nil
 }
 
-// DeleteSyncedUID preserves repaired content as a non-addressable snapshot when
+// DeleteSyncedUID preserves repaired content and receipt decisions as snapshots when
 // an ordinary listing omits its UID. A date-window omission is not deletion proof.
 func (s *Store) DeleteSyncedUID(folderID string, uid uint32) error {
 	tx, err := s.db.Begin()
@@ -1336,7 +1336,7 @@ func (s *Store) DeleteSyncedUID(folderID string, uid uint32) error {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	if _, err = tx.Exec(`INSERT OR IGNORE INTO quarantined_repair_messages(message_id) SELECT id FROM messages WHERE folder_id=? AND uid=? AND id IN (SELECT message_id FROM attachment_repair_backups)`, folderID, uid); err != nil {
+	if _, err = tx.Exec(`INSERT OR IGNORE INTO quarantined_repair_messages(message_id) SELECT id FROM messages WHERE folder_id=? AND uid=? AND (COALESCE(read_receipt_handled,0)=1 OR id IN (SELECT message_id FROM attachment_repair_backups))`, folderID, uid); err != nil {
 		return err
 	}
 	// Preserve only exact same-generation identity, separately from move proof.
@@ -1365,13 +1365,13 @@ func (s *Store) DeleteSyncedUIDCache(folderID string) error {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	if _, err = tx.Exec(`DELETE FROM messages WHERE folder_id=? AND uid>0 AND id NOT IN (SELECT message_id FROM attachment_repair_backups)`, folderID); err != nil {
+	if _, err = tx.Exec(`DELETE FROM messages WHERE folder_id=? AND uid>0 AND COALESCE(read_receipt_handled,0)=0 AND id NOT IN (SELECT message_id FROM attachment_repair_backups)`, folderID); err != nil {
 		return err
 	}
 	if _, err = tx.Exec(`DELETE FROM retired_repair_uids WHERE folder_id=?`, folderID); err != nil {
 		return err
 	}
-	// Repaired rows keep their bodies/history but never an addressable UID from
+	// Retained rows keep their bodies/history but never an addressable UID from
 	// the old generation. They are not candidates for automatic reattachment.
 	if _, err = tx.Exec(`INSERT OR IGNORE INTO quarantined_repair_messages(message_id) SELECT id FROM messages WHERE folder_id=? AND uid>0`, folderID); err != nil {
 		return err
@@ -1676,7 +1676,7 @@ func (s *Store) CountByFolder(folderID string) (int, error) {
 // Returns the number of messages deleted
 func (s *Store) DeleteOlderThanInFolder(folderID string, before time.Time) (int, error) {
 	result, err := s.db.Exec(
-		"DELETE FROM messages WHERE folder_id = ? AND date < ? AND uid > 0 AND id NOT IN (SELECT message_id FROM attachment_repair_backups)",
+		"DELETE FROM messages WHERE folder_id = ? AND date < ? AND uid > 0 AND COALESCE(read_receipt_handled,0)=0 AND id NOT IN (SELECT message_id FROM attachment_repair_backups)",
 		folderID, before,
 	)
 	if err != nil {
@@ -3879,6 +3879,9 @@ func (s *Store) RecordMoveUIDEvidence(folderID string, validity uint32, uids map
 	}
 	return tx.Commit()
 }
+
+// MoveUIDEvidence returns recorded destination identity only while id remains
+// pending in folderID. A caller must verify its generation and server presence.
 func (s *Store) MoveUIDEvidence(folderID, id string) (uint32, uint32, error) {
 	var uid, validity uint32
 	err := s.db.QueryRow(`SELECT e.uid,e.uid_validity FROM move_uid_evidence e JOIN messages m ON m.id=e.message_id WHERE m.id=? AND m.folder_id=? AND m.uid<0 AND e.folder_id=m.folder_id`, id, folderID).Scan(&uid, &validity)
@@ -3945,7 +3948,7 @@ func (s *Store) ConfirmMoveCleanup(folderID string, validity uint32, uids map[st
 	return tx.Commit()
 }
 
-// LiveMutationIDs excludes only explicit repaired snapshots, never unresolved
+// LiveMutationIDs excludes only explicit retained snapshots, never unresolved
 // optimistic moves. Their history remains readable but has no server target.
 func (s *Store) LiveMutationIDs(ids []string) ([]string, error) {
 	out := make([]string, 0, len(ids))
@@ -4012,6 +4015,13 @@ func (s *Store) ReattachRetiredRepairs(folderID string, validity uint32, remote 
 	if err != nil {
 		return nil, err
 	}
+	// A retired row missed flag changes below the old folder watermark. Reset
+	// it transactionally so even a failed next fetch cannot skip reconciliation.
+	if len(candidates) > 0 {
+		if _, err = tx.Exec(`UPDATE folders SET flags_sync_modseq=0 WHERE id=?`, folderID); err != nil {
+			return nil, err
+		}
+	}
 	var restored []uint32
 	for _, c := range candidates {
 		if _, err = tx.Exec(`UPDATE messages SET uid=? WHERE id=?`, c.uid, c.id); err != nil {
@@ -4038,7 +4048,7 @@ func (s *Store) GetReaderMessage(id string) (*Message, error) {
 	if err != nil || m == nil || m.BodyFetched || m.UID == 0 || int32(m.UID) < 0 || normalizeMessageID(m.MessageID) == "" {
 		return m, err
 	}
-	rows, err := s.db.Query(`SELECT id FROM messages WHERE account_id=? AND uid<0 AND TRIM(TRIM(message_id),'< >')=? AND body_fetched=1 AND (COALESCE(body_text,'')!='' OR COALESCE(body_html,'')!='') ORDER BY date DESC`, m.AccountID, normalizeMessageID(m.MessageID))
+	rows, err := s.db.Query(`SELECT id FROM messages WHERE account_id=? AND uid<0 AND TRIM(TRIM(message_id),'< >')=? AND body_fetched=1 AND (COALESCE(body_text,'')!='' OR COALESCE(body_html,'')!='' OR smime_raw_body IS NOT NULL OR pgp_raw_body IS NOT NULL) ORDER BY date DESC`, m.AccountID, normalizeMessageID(m.MessageID))
 	if err != nil {
 		return nil, err
 	}

@@ -105,6 +105,11 @@ func MountThreadBodyRoutes(mux RouteMux, ops MessageReadOperations, requireCap f
 	(&ReadHandler{messages: ops}).mountThreadBodyRoutes(mux, requireCap)
 }
 
+// MountAttachmentRoutes mounts account-qualified metadata and byte reads.
+func MountAttachmentRoutes(mux RouteMux, messages MessageReadOperations, attachments AttachmentReadOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+	(&ReadHandler{messages: messages, attachments: attachments}).mountAttachmentRoutes(mux, requireCap)
+}
+
 // MountRoutes mounts read API endpoints onto a standard http.ServeMux.
 func (h *ReadHandler) MountRoutes(mux RouteMux, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	h.mountCatalogRoutes(mux, requireCap)
@@ -547,7 +552,7 @@ func (h *ReadHandler) handleMessageBody(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	if shouldFetch && !msg.BodyFetched {
+	if shouldFetch {
 		fetchedMsg, fetchErr := h.messages.FetchMessageBody(r.Context(), req.Ref.AccountID, req.Ref.MessageID)
 		if fetchErr != nil {
 			h.writeError(w, r, http.StatusBadGateway, CodeProviderError, fmt.Sprintf("Provider fetch failed: %v", fetchErr), true)

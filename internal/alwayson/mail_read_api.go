@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ollisulopuisto/postilaatikko/internal/email"
+	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
+	"os"
 	"strings"
 	"time"
 
@@ -401,3 +404,59 @@ func cachedContentID(msg *message.Message) string {
 	}
 	return msg.ID
 }
+
+// GetAttachments returns metadata only; the route validates account ownership.
+func (o *mailboxReadOperations) GetAttachments(messageID string) ([]*message.Attachment, error) {
+	return o.runtime.attachments.GetByMessage(messageID)
+}
+
+// ReadAttachmentBytes validates both owners before looking up any cached bytes.
+func (o *mailboxReadOperations) ReadAttachmentBytes(accountID, messageID, attachmentID string) ([]byte, string, error) {
+	var raw []byte
+	return o.readAttachmentBytes(accountID, messageID, attachmentID, &raw)
+}
+
+func (o *mailboxReadOperations) readAttachmentBytes(accountID, messageID, attachmentID string, raw *[]byte) ([]byte, string, error) {
+	msg, err := o.runtime.messages.Get(messageID)
+	if err != nil || msg == nil || msg.AccountID != accountID {
+		return nil, "", errors.New("message not found in account")
+	}
+	att, err := o.runtime.attachments.Get(attachmentID)
+	if err != nil || att == nil || att.MessageID != msg.ID {
+		return nil, "", errors.New("attachment not found in message")
+	}
+	content, ok, err := o.runtime.attachments.RepairedContent(att.ID)
+	if err != nil || ok {
+		return content, att.ContentType, err
+	}
+	content, ok, err = o.runtime.attachments.CachedContent(att.ID)
+	if err != nil || ok {
+		return content, att.ContentType, err
+	}
+	if att.LocalPath != "" {
+		if content, err := os.ReadFile(att.LocalPath); err == nil {
+			return content, att.ContentType, nil
+		}
+	}
+	if o.runtime.syncEngine == nil {
+		return nil, "", errors.New("attachment has no cached payload or provider")
+	}
+	ctx := o.runtime.runtimeContext()
+	content, err = o.runtime.syncEngine.FetchGmailAttachment(ctx, accountID, att.ID)
+	if !errors.Is(err, gmail.ErrNotCapable) {
+		return content, att.ContentType, err
+	}
+	if msg.UID == 0 || int32(msg.UID) < 0 {
+		return nil, "", errors.New("snapshot attachment has no exact cached payload")
+	}
+	if *raw == nil {
+		*raw, err = o.runtime.syncEngine.FetchRawMessage(ctx, accountID, msg.FolderID, msg.UID)
+		if err != nil {
+			return nil, "", err
+		}
+	}
+	content, err = email.NewAttachmentDownloader("").ExtractAttachmentContent(*raw, att.Filename)
+	return content, att.ContentType, err
+}
+
+var _ v1.AttachmentReadOperations = (*mailboxReadOperations)(nil)

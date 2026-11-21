@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/ollisulopuisto/postilaatikko/internal/platform"
 	"io"
 	"net"
 	"net/mail"
@@ -23,6 +24,7 @@ import (
 	"github.com/ollisulopuisto/postilaatikko/internal/folder"
 	appimap "github.com/ollisulopuisto/postilaatikko/internal/imap"
 	"github.com/ollisulopuisto/postilaatikko/internal/mailfilter"
+	"github.com/ollisulopuisto/postilaatikko/internal/mailservice"
 	"github.com/ollisulopuisto/postilaatikko/internal/message"
 	syncre "github.com/ollisulopuisto/postilaatikko/internal/sync"
 	"github.com/ollisulopuisto/postilaatikko/internal/undo"
@@ -84,6 +86,7 @@ type testIMAPSession struct {
 	copyValidity     uint32
 	deletedForSearch map[uint32]bool
 	listForDiscovery bool
+	selectCount      int
 	rejectAppend     bool // when true, Append is rejected after recording the attempt
 }
 
@@ -398,6 +401,7 @@ func (c *testIMAPConnection) Select(mailbox string, options *imap.SelectOptions)
 	c.mailbox = mailbox
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.selectCount++
 	count := uint32(len(c.messages))
 	if c.rediscoverCopies {
 		count = 0
@@ -1838,7 +1842,7 @@ func TestSearchImportsRestoreExactRetiredRepair(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			f := newFilterFixture(t, false)
 			f.app.ctx = context.Background()
-			if _, err := f.db.Exec(`UPDATE folders SET uid_validity=7 WHERE id='a-inbox'`); err != nil {
+			if _, err := f.db.Exec(`UPDATE folders SET uid_validity=7,flags_sync_modseq=100 WHERE id='a-inbox'`); err != nil {
 				t.Fatal(err)
 			}
 			f.serverA.sess.validity = 7
@@ -1847,7 +1851,7 @@ func TestSearchImportsRestoreExactRetiredRepair(t *testing.T) {
 			if _, err := message.NewAttachmentStore(f.db).RepairFromMIME("acct-a", f.message.ID, "snapshot", nil, ""); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := f.db.Exec(`UPDATE messages SET body_fetched=1,body_text='downloaded' WHERE id=?`, f.message.ID); err != nil {
+			if _, err := f.db.Exec(`UPDATE messages SET body_fetched=1,body_text='downloaded',is_read=1,is_starred=1 WHERE id=?`, f.message.ID); err != nil {
 				t.Fatal(err)
 			}
 			if err := f.app.messageStore.DeleteSyncedUID("a-inbox", f.message.UID); err != nil {
@@ -1885,6 +1889,9 @@ func TestSearchImportsRestoreExactRetiredRepair(t *testing.T) {
 			}
 			if got.ID != f.message.ID || got.UID != f.message.UID || got.BodyText != "downloaded" {
 				t.Fatal("search stranded repair", got)
+			}
+			if got.IsRead || got.IsStarred {
+				t.Fatal("search reattached stale flags", got)
 			}
 			var copies int
 			if err := f.db.QueryRow(`SELECT COUNT(*) FROM messages WHERE folder_id='a-inbox'`).Scan(&copies); err != nil || copies != 1 {
@@ -1935,5 +1942,64 @@ func TestServiceThreadAdapterUsesCachedSnapshotContent(t *testing.T) {
 	got, err := f.app.conversationFromServiceThread(&views.ThreadView{Ref: views.ThreadRef{AccountID: "acct-a", ThreadID: "thread"}, Messages: []views.ThreadMessage{{Ref: views.MessageRef{AccountID: "acct-a", MessageID: "live"}, FolderID: "a-inbox", ContentState: views.ContentCached}}}, "a-inbox")
 	if err != nil || len(got.Messages) != 1 || got.Messages[0].ID != "live" || got.Messages[0].BodyText != "offline snapshot" || got.Messages[0].CachedBodySourceID != f.message.ID {
 		t.Fatal("desktop adapter dropped cached source", got, err)
+	}
+}
+
+func TestExplicitBodyFetchPopulatesLiveRowDespiteSnapshot(t *testing.T) {
+	f := newFilterFixture(t, false)
+	f.app.ctx = context.Background()
+	if _, err := f.db.Exec(`UPDATE messages SET uid=-1,body_fetched=1,body_text='offline snapshot' WHERE id=?`, f.message.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.messageStore.Create(&message.Message{ID: "live", AccountID: "acct-a", FolderID: "a-inbox", UID: 10, MessageID: f.message.MessageID}); err != nil {
+		t.Fatal(err)
+	}
+	service := mailservice.New(mailservice.Options{Messages: f.app.messageStore, Sync: f.app.syncEngine})
+	cached, err := service.GetMessage("acct-a", "live")
+	if err != nil || cached.BodyText != "offline snapshot" {
+		t.Fatal("reader fallback unavailable", cached, err)
+	}
+	if _, err := service.FetchMessageBody(context.Background(), "acct-a", "live"); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := f.app.messageStore.Get("live")
+	if err != nil || !stored.BodyFetched || stored.BodyText == "" || stored.BodyText == "offline snapshot" {
+		t.Fatal("explicit fetch skipped live persistence", stored, err)
+	}
+}
+
+func TestPrepareReplyUsesOfflineSnapshotForEveryMode(t *testing.T) {
+	f := newFilterFixture(t, false)
+	f.app.attachmentStore = message.NewAttachmentStore(f.db)
+	f.app.paths = &platform.Paths{Data: t.TempDir()}
+	if _, err := f.db.Exec(`UPDATE messages SET uid=-rowid,message_id='quote@test',body_fetched=1,body_text='saved original quotation' WHERE id=?`, f.message.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.messageStore.Create(&message.Message{ID: "live", AccountID: "acct-a", FolderID: "a-inbox", UID: 8, MessageID: "quote@test", ThreadID: "quote@test", Date: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	f.app.syncEngine = nil // No provider path can satisfy the quote.
+	for _, mode := range []string{"reply", "reply-all", "forward"} {
+		got, err := f.app.PrepareReply("live", mode)
+		if err != nil || !strings.Contains(got.TextBody, "saved original quotation") || !strings.Contains(got.HTMLBody, "saved original quotation") {
+			t.Fatal("offline quote lost", mode, got, err)
+		}
+	}
+}
+
+func TestRecoveryWithoutEvidenceDoesNotSelectMailbox(t *testing.T) {
+	f := newFilterFixture(t, false)
+	if err := f.app.messageStore.MoveMessages([]string{f.message.ID}, "a-trash"); err != nil {
+		t.Fatal(err)
+	}
+	err := f.app.syncEngine.RecoverInterruptedMoves(context.Background(), "acct-a", "a-trash", []string{f.message.ID})
+	if err == nil {
+		t.Fatal("unknown move outcome was treated as proven")
+	}
+	f.serverA.sess.mu.Lock()
+	count := f.serverA.sess.selectCount
+	f.serverA.sess.mu.Unlock()
+	if count != 0 {
+		t.Fatal("unproven snapshot caused mailbox selection", count)
 	}
 }
