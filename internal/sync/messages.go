@@ -174,15 +174,9 @@ func (e *Engine) SyncMessages(ctx context.Context, accountID, folderID string, s
 			Int("syncPeriodDays", syncPeriodDays).
 			Msg("Using date-based sync filter")
 
-		// Delete local messages older than sync period
-		cleanupStarted := time.Now()
-		deleted, err := e.messageStore.DeleteOlderThanInFolder(folderID, sinceDate)
-		timings.cleanup += time.Since(cleanupStarted)
-		if err != nil {
-			e.log.Warn().Err(err).Msg("Failed to delete old messages")
-		} else if deleted > 0 {
-			e.log.Info().Int("deleted", deleted).Msg("Deleted messages older than sync period")
-		}
+		// The server window uses INTERNALDATE, not the envelope's sent date.
+		// Reconcile absent UIDs only after a successful server listing below;
+		// pre-pruning would dispatch old cached mail as a new arrival.
 	}
 
 	// Get local message UIDs

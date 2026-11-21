@@ -2003,3 +2003,31 @@ func TestRecoveryWithoutEvidenceDoesNotSelectMailbox(t *testing.T) {
 		t.Fatal("unproven snapshot caused mailbox selection", count)
 	}
 }
+
+func TestSyncKeepsCachedUIDInsideServerArrivalWindow(t *testing.T) {
+	for _, handled := range []bool{false, true} {
+		t.Run(fmt.Sprintf("handled-%t", handled), func(t *testing.T) {
+			f := newFilterFixture(t, false)
+			f.serverA.sess.rediscoverCopies = true
+			f.serverA.sess.internalDate = time.Now().AddDate(0, 0, -29)
+			f.serverA.sess.copiedUIDs = map[uint32]string{f.message.UID: "INBOX"}
+			if _, err := f.db.Exec(`UPDATE messages SET date=?,read_receipt_handled=?,inbox_category='personal' WHERE id=?`, time.Now().AddDate(0, 0, -31), handled, f.message.ID); err != nil {
+				t.Fatal(err)
+			}
+			hooks := make(chan string, 4)
+			f.app.syncEngine.SetNewMessageHandler(func(_, _ string, m *message.Message) { hooks <- m.ID })
+			if err := f.app.syncEngine.SyncMessages(context.Background(), "acct-a", "a-inbox", 30, false); err != nil {
+				t.Fatal(err)
+			}
+			got, err := f.app.messageStore.Get(f.message.ID)
+			if err != nil || got == nil || got.UID != f.message.UID || got.ReadReceiptHandled != handled {
+				t.Fatal("server-listed cached identity was pruned", got, err)
+			}
+			select {
+			case id := <-hooks:
+				t.Fatal("cached window member dispatched new-mail rule", id)
+			case <-time.After(50 * time.Millisecond):
+			}
+		})
+	}
+}

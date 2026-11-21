@@ -446,6 +446,12 @@ func (d *AttachmentDownloader) ExtractUniqueAttachmentContent(raw []byte, filena
 		}
 		ct, _, _ := mime.ParseMediaType(part.Header.Get("Content-Type"))
 		name := getFilename(part)
+		disposition, _, _ := mime.ParseMediaType(part.Header.Get("Content-Disposition"))
+		// Match the sync parser: ordinary text is body content, while
+		// explicit attachments and non-signature binary leaves are files.
+		if disposition != "attachment" && (ct == "" || strings.HasPrefix(ct, "text/") || ct == "application/pkcs7-signature" || ct == "application/x-pkcs7-signature" || ct == "application/pgp-signature") {
+			return nil
+		}
 		if ct == "application/ms-tnef" || strings.EqualFold(name, "winmail.dat") {
 			content, err := readAttachmentContent(part.Body)
 			if err != nil {

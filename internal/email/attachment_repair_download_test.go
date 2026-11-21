@@ -47,3 +47,14 @@ func TestRawFallbackRejectsAmbiguousFilename(t *testing.T) {
 		t.Fatal("incomplete MIME established uniqueness")
 	}
 }
+
+func TestUniqueAttachmentFallbackIgnoresUnnamedBodyAndSignatures(t *testing.T) {
+	d := NewAttachmentDownloader("")
+	for _, bodyType := range []string{"text/plain", "text/html", "application/pkcs7-signature", "application/x-pkcs7-signature", "application/pgp-signature"} {
+		raw := "MIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=b\r\n\r\n--b\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename=attachment.bin\r\n\r\nfile bytes\r\n--b\r\nContent-Type: " + bodyType + "\r\n\r\nnot a file\r\n--b--\r\n"
+		got, err := d.ExtractUniqueAttachmentContent([]byte(raw), "attachment.bin")
+		if err != nil || string(got) != "file bytes" {
+			t.Fatal("nonattachment blocked unique file", bodyType, string(got), err)
+		}
+	}
+}
