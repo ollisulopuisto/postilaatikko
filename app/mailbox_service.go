@@ -361,7 +361,7 @@ func (c *mailboxServiceConnector) status(ctx context.Context) MailboxServiceStat
 		Connected:                   true,
 		WriteAuthorized:             hasCapability(capabilities.Capabilities, v1.CapabilityMailWrite),
 		AccountManagementAuthorized: hasCapability(capabilities.Capabilities, v1.CapabilityAccountManage),
-		DraftAccessAuthorized:       hasCapability(capabilities.Capabilities, v1.CapabilityDraftRead) && hasCapability(capabilities.Capabilities, v1.CapabilityDraftWrite),
+		DraftAccessAuthorized:       hasCapability(capabilities.Capabilities, v1.CapabilityDraftRead) && hasCapability(capabilities.Capabilities, v1.CapabilityDraftWrite) && hasCapability(capabilities.Capabilities, v1.CapabilityAttachmentRead),
 		SendAuthorized:              hasCapability(capabilities.Capabilities, v1.CapabilityMailSend),
 		APIVersion:                  capabilities.Version,
 		Capabilities:                granted,
@@ -1510,7 +1510,7 @@ func (a *App) EnableMailboxServiceAccountManagement() (MailboxServiceStatus, err
 	return a.mailboxService.status(ctx), nil
 }
 
-// EnableMailboxServiceDraftAccess explicitly grants this desktop draft read and write access.
+// EnableMailboxServiceDraftAccess explicitly grants draft access and original attachment reads for reply preparation.
 func (a *App) EnableMailboxServiceDraftAccess() (MailboxServiceStatus, error) {
 	if a.mailboxService == nil {
 		return MailboxServiceStatus{ErrorCode: "service_unavailable", Message: "The local mailbox service is not reachable."}, errors.New("mailbox service is not initialized")
@@ -1523,6 +1523,9 @@ func (a *App) EnableMailboxServiceDraftAccess() (MailboxServiceStatus, error) {
 		return a.mailboxService.status(ctx), err
 	}
 	if err := a.mailboxService.authorizeCapability(ctx, v1.CapabilityDraftWrite); err != nil {
+		return a.mailboxService.status(ctx), err
+	}
+	if err := a.mailboxService.authorizeCapability(ctx, v1.CapabilityAttachmentRead); err != nil {
 		return a.mailboxService.status(ctx), err
 	}
 	return a.mailboxService.status(ctx), nil

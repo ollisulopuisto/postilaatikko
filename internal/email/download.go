@@ -449,9 +449,9 @@ func (d *AttachmentDownloader) ExtractUniqueAttachmentContent(raw []byte, filena
 		disposition, dispParams, _ := mime.ParseMediaType(part.Header.Get("Content-Disposition"))
 		// Match the sync parser: ordinary text is body content, while
 		// explicit attachments and non-signature binary leaves are files.
-		inline := disposition == "inline" || part.Header.Get("Content-ID") != ""
+		hasCID := part.Header.Get("Content-ID") != ""
 		named := dispParams["filename"] != "" || ctParams["name"] != ""
-		ordinaryText := strings.HasPrefix(ct, "text/") && !inline && !named
+		ordinaryText := strings.HasPrefix(ct, "text/") && !hasCID && !named && (ct == "text/plain" || ct == "text/html" || disposition != "inline")
 		if disposition != "attachment" && (ct == "" || ordinaryText || ct == "application/pkcs7-signature" || ct == "application/x-pkcs7-signature" || ct == "application/pgp-signature") {
 			return nil
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
 	"github.com/ollisulopuisto/postilaatikko/internal/folder"
 	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
@@ -267,5 +268,33 @@ func TestHelperGmailRawFallbackKeepsProviderIdentityAndRejectsAmbiguity(t *testi
 	}
 	if _, _, err := ops.ReadAttachmentBytes("acc-1", msg.ID, att.ID); err == nil {
 		t.Fatal("unbound snapshot reached provider")
+	}
+}
+
+func TestDeletedGmailAttachmentIsPermanentNotFound(t *testing.T) {
+	ops, db := setupThreadReadTest(t)
+	defer db.Close()
+	if _, err := db.Exec(`UPDATE accounts SET imap_host='imap.gmail.com',auth_type='oauth2' WHERE id='acc-1'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := ops.runtime.attachments.Create(&message.Attachment{ID: "gone", MessageID: "msg-inbox", Filename: "file.pdf", Size: 4}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ops.runtime.attachments.SetGmailReference("gone", "provider", "gone-file"); err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"error":{"code":404,"message":"not found"}}`))
+	}))
+	defer server.Close()
+	e := mailSync.NewEngine(nil, account.NewStore(db), folder.NewStore(db), ops.runtime.messages, ops.runtime.attachments)
+	e.SetGmailTokenSource(func(context.Context, string, bool) (string, error) { return "fixture", nil })
+	e.SetGmailClientFactory(func(src gmail.TokenSource) *gmail.Client { c := gmail.NewClient(src); c.BaseURL = server.URL; return c })
+	ops.runtime.syncEngine = e
+	_, _, err := ops.ReadAttachmentBytes("acc-1", "msg-inbox", "gone")
+	var fault *v1.Fault
+	if !errors.As(err, &fault) || fault.Code != v1.CodeNotFound || fault.Retryable {
+		t.Fatal("deleted file treated as outage", err)
 	}
 }

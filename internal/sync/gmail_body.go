@@ -70,10 +70,8 @@ func (e *Engine) gmailBody(ctx context.Context, c *gmail.Client, m *message.Mess
 				if err = e.attachmentStore.Create(att); err != nil && !strings.Contains(err.Error(), "UNIQUE constraint") {
 					return err
 				}
-				if part.Body.AttachmentID != "" {
-					if err = e.attachmentStore.SetGmailReference(att.ID, id, part.Body.AttachmentID); err != nil {
-						return err
-					}
+				if err = e.attachmentStore.SetGmailReference(att.ID, id, part.Body.AttachmentID); err != nil {
+					return err
 				}
 			}
 			return nil
@@ -126,9 +124,6 @@ func (e *Engine) FetchGmailAttachment(ctx context.Context, accountID, localID st
 	if err != nil {
 		return nil, err
 	}
-	if provider == "" || attachment == "" {
-		return nil, gmail.ErrNotCapable
-	}
 	att, err := e.attachmentStore.Get(localID)
 	if err != nil || att == nil {
 		return nil, fmt.Errorf("attachment not found")
@@ -137,5 +132,67 @@ func (e *Engine) FetchGmailAttachment(ctx context.Context, accountID, localID st
 	if err != nil || m == nil || m.AccountID != accountID {
 		return nil, fmt.Errorf("attachment account mismatch")
 	}
-	return c.Attachment(ctx, provider, attachment)
+	if provider == "" {
+		// Upgrade previously ingested data-bearing parts without changing their
+		// local IDs. Other legacy metadata still uses the raw-MIME fallback.
+		localUUID, parseErr := uuid.Parse(localID)
+		if parseErr != nil || localUUID.Version() != 5 {
+			return nil, gmail.ErrNotCapable
+		}
+		provider, err = e.GmailProviderID(ctx, c, m)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if attachment != "" {
+		return c.Attachment(ctx, provider, attachment)
+	}
+	// Data-bearing Gmail parts have no attachment ID. Match the same opaque
+	// part identity used at ingestion, never a guessed fallback filename.
+	root, err := c.Full(ctx, provider)
+	if err != nil {
+		return nil, err
+	}
+	var result []byte
+	found := false
+	var visit func(*gmail.Part, int) error
+	visit = func(part *gmail.Part, depth int) error {
+		if depth > 50 {
+			return fmt.Errorf("Gmail MIME nesting exceeds limit")
+		}
+		id := uuid.NewSHA1(uuid.NameSpaceURL, []byte(m.ID+":"+part.PartID+":"+part.Body.AttachmentID)).String()
+		if id == localID {
+			if found {
+				return fmt.Errorf("ambiguous Gmail attachment identity")
+			}
+			found = true
+			if part.Body.Size < 0 || part.Body.Size > maxMessageSize || len(part.Body.Data) > (maxMessageSize+2)/3*4 {
+				return fmt.Errorf("Gmail attachment exceeds size limit")
+			}
+			if part.Body.AttachmentID != "" {
+				result, err = c.Attachment(ctx, provider, part.Body.AttachmentID)
+			} else {
+				result, err = base64.RawURLEncoding.DecodeString(strings.TrimRight(part.Body.Data, "="))
+			}
+			if err != nil {
+				return err
+			}
+			if len(result) > maxMessageSize || len(result) != part.Body.Size {
+				return fmt.Errorf("incomplete Gmail attachment")
+			}
+		}
+		for i := range part.Parts {
+			if err := visit(&part.Parts[i], depth+1); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err = visit(root, 0); err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, gmail.ErrNotFound
+	}
+	return result, nil
 }

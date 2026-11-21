@@ -81,3 +81,23 @@ func TestNamedGmailTextWithoutDispositionIsAFile(t *testing.T) {
 		t.Fatal("named Gmail text rejected", string(got), err)
 	}
 }
+
+func TestUnnamedInlineBodyDoesNotCollideWithAttachment(t *testing.T) {
+	for _, ct := range []string{"text/plain", "text/html"} {
+		raw := "Content-Type: multipart/mixed; boundary=b\r\n\r\n--b\r\nContent-Type: " + ct + "\r\nContent-Disposition: inline\r\n\r\nbody\r\n--b\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename=attachment.bin\r\n\r\nfile\r\n--b--\r\n"
+		got, err := NewAttachmentDownloader("").ExtractUniqueAttachmentContent([]byte(raw), "attachment.bin")
+		if err != nil || string(got) != "file" {
+			t.Fatal(ct, string(got), err)
+		}
+	}
+}
+
+func TestUnnamedInlineCalendarAndContactRemainFiles(t *testing.T) {
+	for _, ct := range []string{"text/calendar", "text/vcard"} {
+		raw := "Content-Type: " + ct + "\r\nContent-Disposition: inline\r\n\r\nfile"
+		got, err := NewAttachmentDownloader("").ExtractUniqueAttachmentContent([]byte(raw), "attachment.bin")
+		if err != nil || string(got) != "file" {
+			t.Fatal(ct, string(got), err)
+		}
+	}
+}

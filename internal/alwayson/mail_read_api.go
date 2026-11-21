@@ -445,7 +445,7 @@ func (o *mailboxReadOperations) readAttachmentBytes(accountID, messageID, attach
 	content, err = o.runtime.syncEngine.FetchGmailAttachment(ctx, accountID, att.ID)
 	if !errors.Is(err, gmail.ErrNotCapable) {
 		if err != nil {
-			return nil, "", v1.NewFault(v1.CodeProviderError, "Attachment provider unavailable", true, err)
+			return nil, "", attachmentProviderFault(err)
 		}
 		return content, att.ContentType, nil
 	}
@@ -455,7 +455,7 @@ func (o *mailboxReadOperations) readAttachmentBytes(accountID, messageID, attach
 	if *raw == nil {
 		*raw, err = o.runtime.syncEngine.FetchRawAttachment(ctx, accountID, msg.FolderID, msg.UID)
 		if err != nil {
-			return nil, "", v1.NewFault(v1.CodeProviderError, "Attachment provider unavailable or mailbox generation changed", true, err)
+			return nil, "", attachmentProviderFault(err)
 		}
 	}
 	content, err = email.NewAttachmentDownloader("").ExtractUniqueAttachmentContent(*raw, att.Filename)
@@ -463,3 +463,10 @@ func (o *mailboxReadOperations) readAttachmentBytes(accountID, messageID, attach
 }
 
 var _ v1.AttachmentReadOperations = (*mailboxReadOperations)(nil)
+
+func attachmentProviderFault(err error) error {
+	if errors.Is(err, gmail.ErrNotFound) {
+		return v1.NewFault(v1.CodeNotFound, "Attachment no longer exists at the provider", false, err)
+	}
+	return v1.NewFault(v1.CodeProviderError, "Attachment provider unavailable or mailbox generation changed", true, err)
+}

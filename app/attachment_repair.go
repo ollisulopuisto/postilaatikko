@@ -6,7 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
+	"io"
 	"net/mail"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/ollisulopuisto/postilaatikko/internal/email"
@@ -110,6 +113,20 @@ func (a *App) loadAttachmentContent(msg *message.Message, att *message.Attachmen
 			return content, nil
 		}
 	}
+	if a.attachmentStore != nil {
+		content, ok, err := a.attachmentStore.CachedContent(att.ID)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			return content, nil
+		}
+	}
+	if a.paths != nil {
+		if content, ok := readManagedAttachmentCache(a.paths.AttachmentsPath(), att); ok {
+			return content, nil
+		}
+	}
 	if a.syncEngine == nil {
 		return nil, fmt.Errorf("attachment has no cached payload or provider")
 	}
@@ -127,4 +144,42 @@ func (a *App) loadAttachmentContent(msg *message.Message, att *message.Attachmen
 		}
 	}
 	return downloader.ExtractUniqueAttachmentContent(*raw, att.Filename)
+}
+
+// Read only bounded regular files inside the managed cache, never arbitrary paths.
+func readManagedAttachmentCache(root string, att *message.Attachment) ([]byte, bool) {
+	const limit = 50 * 1024 * 1024
+	if root == "" || att.LocalPath == "" || att.Size < 0 || att.Size > limit {
+		return nil, false
+	}
+	root, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return nil, false
+	}
+	path, err := filepath.EvalSymlinks(att.LocalPath)
+	if err != nil {
+		return nil, false
+	}
+	rel, err := filepath.Rel(root, path)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return nil, false
+	}
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Size() > limit || info.Size() != int64(att.Size) {
+		return nil, false
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, false
+	}
+	defer f.Close()
+	info, err = f.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Size() > limit || info.Size() != int64(att.Size) {
+		return nil, false
+	}
+	content, err := io.ReadAll(io.LimitReader(f, limit+1))
+	if err != nil || len(content) > limit || len(content) != att.Size {
+		return nil, false
+	}
+	return content, true
 }

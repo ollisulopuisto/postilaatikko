@@ -10,6 +10,8 @@ import (
 	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
 	"github.com/ollisulopuisto/postilaatikko/internal/message"
 	"github.com/ollisulopuisto/postilaatikko/internal/platform"
+	"github.com/ollisulopuisto/postilaatikko/internal/smtp"
+	"github.com/rs/zerolog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -166,5 +168,55 @@ func TestIMAPAttachmentFallbackRejectsSameNameParts(t *testing.T) {
 		if got, err := f.app.loadAttachmentContent(f.message, att, email.NewAttachmentDownloader(""), &cached); err == nil {
 			t.Fatal("IMAP ambiguity returned wrong occurrence", id, string(got))
 		}
+	}
+}
+
+func TestDesktopForwardUsesManagedDownloadedFileOffline(t *testing.T) {
+	f := newFilterFixture(t, false)
+	a := f.app
+	a.syncEngine = nil
+	a.paths = &platform.Paths{Data: t.TempDir()}
+	a.attachmentStore = message.NewAttachmentStore(f.db)
+	if err := os.MkdirAll(a.paths.AttachmentsPath(), 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(a.paths.AttachmentsPath(), "original.pdf")
+	if err := os.WriteFile(path, []byte("file"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	att := &message.Attachment{ID: "downloaded", MessageID: f.message.ID, Filename: "original.pdf", ContentType: "application/pdf", Size: 4, LocalPath: path}
+	if err := a.attachmentStore.Create(att); err != nil {
+		t.Fatal(err)
+	}
+	msg, err := a.messageStore.Get(f.message.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var attachments []smtp.Attachment
+	if err := a.fetchForwardAttachments(zerolog.Nop(), msg, &attachments); err != nil || len(attachments) != 1 || string(attachments[0].Content) != "file" {
+		t.Fatal("downloaded file did not forward offline", attachments, err)
+	}
+	for name, mutate := range map[string]func(){
+		"wrong-size": func() { att.Size = 3 },
+		"outside": func() {
+			att.LocalPath = filepath.Join(t.TempDir(), "outside")
+			_ = os.WriteFile(att.LocalPath, []byte("file"), 0600)
+		},
+		"symlink": func() {
+			outside := filepath.Join(t.TempDir(), "secret")
+			_ = os.WriteFile(outside, []byte("file"), 0600)
+			att.LocalPath = filepath.Join(a.paths.AttachmentsPath(), "link")
+			_ = os.Symlink(outside, att.LocalPath)
+		},
+		"missing": func() { att.LocalPath = filepath.Join(a.paths.AttachmentsPath(), "missing") },
+	} {
+		t.Run(name, func(t *testing.T) {
+			att.LocalPath = path
+			att.Size = 4
+			mutate()
+			if got, ok := readManagedAttachmentCache(a.paths.AttachmentsPath(), att); ok {
+				t.Fatal("unsafe cache accepted", string(got))
+			}
+		})
 	}
 }

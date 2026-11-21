@@ -226,9 +226,9 @@ func (c *Client) ReadAttachmentBytes(ctx context.Context, ref v1.MessageRef, att
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		var errResponse v1.ErrorResponse
 		if json.Unmarshal(data, &errResponse) == nil && errResponse.Error.Code != "" {
-			return nil, "", fmt.Errorf("api error (%s): %s", errResponse.Error.Code, errResponse.Error.Message)
+			return nil, "", &APIError{StatusCode: response.StatusCode, Fault: v1.NewFault(errResponse.Error.Code, errResponse.Error.Message, errResponse.Error.Retryable, nil)}
 		}
-		return nil, "", fmt.Errorf("api error (http %d): %s", response.StatusCode, string(data))
+		return nil, "", &HTTPError{StatusCode: response.StatusCode, Body: string(data)}
 	}
 	return data, response.Header.Get("Content-Type"), nil
 }
