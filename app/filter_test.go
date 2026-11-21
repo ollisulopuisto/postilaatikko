@@ -775,11 +775,6 @@ func TestBulkFilterFallbackPreservesOtherMoveLocalState(t *testing.T) {
 			if err := f.db.QueryRow(`SELECT read_receipt_handled FROM messages WHERE id=?`, last).Scan(&handled); err != nil || !handled {
 				t.Fatal("read receipt dismissal lost", err)
 			}
-			if count == 9 {
-				// Slot admission must occur before even the optimistic destination write.
-				// The last COPY may enter only after one of the eight completed handles.
-				// A separate full-slot regression below checks the exact local snapshot.
-			}
 			release()
 			select {
 			case err := <-done:
