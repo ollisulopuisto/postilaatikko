@@ -3,6 +3,10 @@ package alwayson
 import (
 	"context"
 	"encoding/json"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/mailservice"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -142,5 +146,45 @@ func TestGetThreadCountsAndCompletenessUseRetainedCopies(t *testing.T) {
 	}
 	if view.Completeness != views.CompletenessOf(view.Messages) {
 		t.Fatalf("completeness does not describe retained messages: %+v", view.Completeness)
+	}
+}
+
+func TestThreadThenCachedBodyReadsSnapshotWithoutProvider(t *testing.T) {
+	ops, db := setupThreadReadTest(t)
+	defer db.Close()
+	if _, err := db.Exec(`UPDATE messages SET message_id='same@test',uid=-1 WHERE id='msg-inbox'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := ops.runtime.messages.Create(&message.Message{ID: "live", AccountID: "acc-1", FolderID: "inbox", UID: 8, MessageID: "same@test", ThreadID: "thread-current", Date: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	ops.runtime.mailService = mailservice.New(mailservice.Options{Messages: ops.runtime.messages}) // No provider exists.
+	view, err := ops.GetThread(context.Background(), views.ThreadRef{AccountID: "acc-1", ThreadID: "thread-current"}, views.Scope{Kind: views.ScopeFolder, AccountID: "acc-1", FolderID: "inbox"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var selected *views.ThreadMessage
+	for i := range view.Messages {
+		if view.Messages[i].Ref.MessageID == "live" {
+			selected = &view.Messages[i]
+		}
+	}
+	if selected == nil || selected.ContentState != views.ContentCached || len(selected.Attachments) != 1 {
+		t.Fatal("thread lost cached source", selected)
+	}
+	mux := http.NewServeMux()
+	v1.MountThreadBodyRoutes(mux, ops, func(http.ResponseWriter, *http.Request, v1.Capability) bool { return true })
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest("POST", "/v1/messages/body", strings.NewReader(`{"ref":{"accountId":"acc-1","messageId":"live"},"mode":"cached","includeOriginal":true}`)))
+	var body v1.Response[v1.MessageBody]
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != 200 || body.Data.ContentState != views.ContentCached || body.Data.Original == nil || body.Data.Original.Text != "PRIVATE BODY TEXT" || body.Data.Ref.MessageID != "live" {
+		t.Fatal("cached-only body disagrees with thread", rec.Code, rec.Body.String())
+	}
+	raw, err := ops.runtime.messages.Get("live")
+	if err != nil || raw.BodyFetched || raw.BodyText != "" {
+		t.Fatal("reader persisted overlay", raw, err)
 	}
 }

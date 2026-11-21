@@ -604,7 +604,7 @@ func (h *ReadHandler) handleAttachmentList(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	atts, err := h.attachments.GetAttachments(req.Ref.MessageID)
+	atts, err := h.attachments.GetAttachments(bodyContentID(msg))
 	if err != nil {
 		h.writeError(w, r, http.StatusInternalServerError, CodeInternal, "Failed to retrieve attachments", true)
 		return
@@ -647,7 +647,7 @@ func (h *ReadHandler) handleAttachmentRead(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	data, contentType, err := h.attachments.ReadAttachmentBytes(req.Ref.AccountID, req.Ref.MessageID, req.AttachmentID)
+	data, contentType, err := h.attachments.ReadAttachmentBytes(req.Ref.AccountID, bodyContentID(msg), req.AttachmentID)
 	if err != nil {
 		h.writeError(w, r, http.StatusNotFound, CodeNotFound, fmt.Sprintf("Attachment read failed: %v", err), false)
 		return
@@ -696,4 +696,11 @@ func (h *ReadHandler) writeError(w http.ResponseWriter, r *http.Request, statusC
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(statusCode)
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func bodyContentID(msg *message.Message) string {
+	if msg.CachedBodySourceID != "" {
+		return msg.CachedBodySourceID
+	}
+	return msg.ID
 }

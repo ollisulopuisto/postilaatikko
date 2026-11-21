@@ -16,7 +16,7 @@ func (s *Service) GetMessage(accountID, messageID string) (*message.Message, err
 	if s == nil || s.messageStore == nil {
 		return nil, errors.New("message service is not ready")
 	}
-	msg, err := s.messageStore.Get(messageID)
+	msg, err := s.messageStore.GetReaderMessage(messageID)
 	if err != nil {
 		return nil, err
 	}

@@ -4030,3 +4030,40 @@ func (s *Store) ReattachRetiredRepairs(folderID string, validity uint32, remote 
 	}
 	return restored, nil
 }
+
+// GetReaderMessage resolves cached presentation content while keeping the live
+// row's identity and flags. Callers must never persist this read-only overlay.
+func (s *Store) GetReaderMessage(id string) (*Message, error) {
+	m, err := s.Get(id)
+	if err != nil || m == nil || m.BodyFetched || m.UID == 0 || int32(m.UID) < 0 || normalizeMessageID(m.MessageID) == "" {
+		return m, err
+	}
+	rows, err := s.db.Query(`SELECT id FROM messages WHERE account_id=? AND uid<0 AND TRIM(TRIM(message_id),'< >')=? AND body_fetched=1 AND (COALESCE(body_text,'')!='' OR COALESCE(body_html,'')!='') ORDER BY date DESC`, m.AccountID, normalizeMessageID(m.MessageID))
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range ids {
+		cached, err := s.Get(id)
+		if err != nil {
+			return nil, err
+		}
+		if cached != nil && normalizeMessageID(cached.MessageID) == normalizeMessageID(m.MessageID) {
+			return DeduplicateThreadMessages([]*Message{m, cached}, m.FolderID, nil)[0], nil
+		}
+	}
+	return m, nil
+}

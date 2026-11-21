@@ -188,7 +188,7 @@ func (o *mailboxReadOperations) GetThread(ctx context.Context, ref views.ThreadR
 		}
 		attachmentSummaries := []views.AttachmentSummary{}
 		if o.runtime.attachments != nil {
-			attachments, err := o.runtime.attachments.GetByMessage(msg.ID)
+			attachments, err := o.runtime.attachments.GetByMessage(cachedContentID(msg))
 			if err != nil {
 				return nil, fmt.Errorf("list thread attachment metadata: %w", err)
 			}
@@ -394,3 +394,10 @@ func (o *mailboxReadOperations) FetchMessageBody(ctx context.Context, accountID,
 
 var _ v1.SearchOperations = (*mailboxReadOperations)(nil)
 var _ v1.MessageReadOperations = (*mailboxReadOperations)(nil)
+
+func cachedContentID(msg *message.Message) string {
+	if msg.CachedBodySourceID != "" {
+		return msg.CachedBodySourceID
+	}
+	return msg.ID
+}

@@ -86,6 +86,7 @@ func (e *Engine) SearchIMAPPage(ctx context.Context, accountID, folderID, query 
 	if query != "" {
 		criteria = buildSearchCriteria(query)
 	}
+	criteria.NotFlag = append(criteria.NotFlag, imap.FlagDeleted)
 	var before uint32
 	if cursor != nil {
 		if err := validateSearchCursor(*cursor, accountID, folderID, query, mailbox.UIDValidity); err != nil {

@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/mail"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -25,6 +26,7 @@ import (
 	"github.com/ollisulopuisto/postilaatikko/internal/message"
 	syncre "github.com/ollisulopuisto/postilaatikko/internal/sync"
 	"github.com/ollisulopuisto/postilaatikko/internal/undo"
+	"github.com/ollisulopuisto/postilaatikko/internal/views"
 )
 
 // cannedRaw is the RFC822 payload served by the fake source server for the
@@ -80,6 +82,7 @@ type testIMAPSession struct {
 	mailboxValidity  map[string]uint32
 	resetOnCopy      uint32
 	copyValidity     uint32
+	deletedForSearch map[uint32]bool
 	listForDiscovery bool
 	rejectAppend     bool // when true, Append is rejected after recording the attempt
 }
@@ -245,6 +248,10 @@ func (s *testIMAPSession) searchMailbox(mailbox string, kind imapserver.NumKind,
 		if s.rediscoverCopies {
 			var uids []int
 			for uid, owner := range s.copiedUIDs {
+				if s.deletedForSearch[uid] && slices.Contains(criteria.NotFlag, imap.FlagDeleted) {
+					continue
+				}
+
 				date := s.internalDate
 				if date.IsZero() {
 					date = time.Now().UTC()
@@ -1884,5 +1891,49 @@ func TestSearchImportsRestoreExactRetiredRepair(t *testing.T) {
 				t.Fatal("duplicate search import", copies, err)
 			}
 		})
+	}
+}
+
+func TestServerSearchExcludesDeletedAndDropsRacingResult(t *testing.T) {
+	f := newFilterFixture(t, false)
+	f.app.ctx = context.Background()
+	f.serverA.sess.rediscoverCopies = true
+	f.serverA.sess.copiedUIDs = map[uint32]string{10: "INBOX"}
+	f.serverA.sess.deletedForSearch = map[uint32]bool{10: true}
+	for _, pageMode := range []bool{false, true} {
+		if pageMode {
+			p, err := f.app.syncEngine.SearchIMAPPage(context.Background(), "acct-a", "a-inbox", "", nil, 10)
+			if err != nil || len(p.Results) != 0 {
+				t.Fatal("paged search exposed deleted mail", p, err)
+			}
+		} else {
+			p, err := f.app.syncEngine.IMAPSearch(context.Background(), "acct-a", "a-inbox", "invoice", 10)
+			if err != nil || p.TotalCount != 0 {
+				t.Fatal("desktop search exposed deleted mail", p, err)
+			}
+		}
+	}
+	f.serverA.sess.deletedForSearch[10] = false
+	p, err := f.app.syncEngine.IMAPSearch(context.Background(), "acct-a", "a-inbox", "invoice", 10)
+	if err != nil || p.TotalCount != 1 {
+		t.Fatal("live result absent", p, err)
+	}
+	f.serverA.sess.deletedForSearch[10] = true
+	if _, err := f.app.syncEngine.FetchServerMessage(context.Background(), "acct-a", "a-inbox", 10); err == nil || !strings.Contains(err.Error(), "message not found on server") {
+		t.Fatal("racing deletion did not use stale-result predicate", err)
+	}
+}
+
+func TestServiceThreadAdapterUsesCachedSnapshotContent(t *testing.T) {
+	f := newFilterFixture(t, false)
+	if _, err := f.db.Exec(`UPDATE messages SET uid=-1,body_fetched=1,body_text='offline snapshot' WHERE id=?`, f.message.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.messageStore.Create(&message.Message{ID: "live", AccountID: "acct-a", FolderID: "a-inbox", UID: 8, MessageID: f.message.MessageID}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := f.app.conversationFromServiceThread(&views.ThreadView{Ref: views.ThreadRef{AccountID: "acct-a", ThreadID: "thread"}, Messages: []views.ThreadMessage{{Ref: views.MessageRef{AccountID: "acct-a", MessageID: "live"}, FolderID: "a-inbox", ContentState: views.ContentCached}}}, "a-inbox")
+	if err != nil || len(got.Messages) != 1 || got.Messages[0].ID != "live" || got.Messages[0].BodyText != "offline snapshot" || got.Messages[0].CachedBodySourceID != f.message.ID {
+		t.Fatal("desktop adapter dropped cached source", got, err)
 	}
 }

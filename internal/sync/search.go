@@ -130,6 +130,7 @@ func (e *Engine) IMAPSearch(ctx context.Context, accountID, folderID, query stri
 	// This produces: UID SEARCH OR FROM "q" OR SUBJECT "q" OR TO "q" OR CC "q" BODY "q"
 	client := conn.Client().RawClient()
 	criteria := buildSearchCriteria(query)
+	criteria.NotFlag = append(criteria.NotFlag, imap.FlagDeleted)
 	uids, err := uidSearch(ctx, client, criteria)
 	if err != nil {
 		return nil, err
@@ -386,7 +387,7 @@ func (e *Engine) FetchServerMessage(ctx context.Context, accountID, folderID str
 		return nil, err
 	}
 	if len(found) != 1 || found[0] != uid {
-		return nil, fmt.Errorf("message no longer exists")
+		return nil, fmt.Errorf("message not found on server: UID %d", uid)
 	}
 	if _, err := e.messageStore.ReattachRetiredRepairs(folderID, mailbox.UIDValidity, map[uint32]bool{uid: true}); err != nil {
 		return nil, err
