@@ -688,3 +688,8 @@ README review follow-up: qualify checksum instructions because tagged releases d
 
 - GMAIL-FILTER-009: Review. Instinct, `agent/gmail-filter-routing`, `/tmp/pl-gmail-filter-routing`. Route the approved dialog through the captured execution owner and client, including helper-owned consent code forwarding and durable status discovery. No local fallback, no create or callback replay. Local fixtures only; live Google/Studio and native macOS acceptance remain outstanding.
 - GMAIL-FILTER-010: Deferred by owner on 2026-11-21. Automatic Gmail filter forwarding in PR #306 is closed without merging; branch `agent/gmail-filter-forwarding` is retained. The current release does not wait on forwarding. Resume only after a new owner decision, rebase onto completed dependencies, and fresh required CI plus exact-head Devin review.
+
+## Security advisory fixes (2026-11-21)
+
+- Status: Review. Owner: Instinct. Branch: `agent/security-advisory-fixes`. Worktree: `/downloads/security-pilot/postilaatikko-fix`.
+- Scope: non-breaking dependency and Go patch updates, before/after scanner evidence, no merge or release. Separate from the report-only scanner pilot.
