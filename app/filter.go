@@ -250,6 +250,12 @@ func (a *App) applyFilterActions(rule *mailfilter.Rule, ids []string, snapshots 
 	}
 	count := 0
 	for _, snapshot := range snapshots {
+		a.syncOwnerMu.Lock()
+		stopping := a.syncShutdown
+		a.syncOwnerMu.Unlock()
+		if stopping {
+			return count, fmt.Errorf("filter batch interrupted by shutdown")
+		}
 		if snapshot == nil {
 			continue
 		}
@@ -315,6 +321,9 @@ func (a *App) applyFilterActions(rule *mailfilter.Rule, ids []string, snapshots 
 			acted = true
 			return false, "", nil
 		})
+		// The local-first move returns before provider reconciliation. Keep the
+		// execution lease until its tracked physical operation has settled.
+		a.waitForFilterMove(snapshot)
 		if err != nil {
 			return count, err
 		}
@@ -372,4 +381,15 @@ func (a *App) markFilterReadSynchronously(m *message.Message) error {
 	}
 	a.emitRuntimeEvent("messages:readChanged", map[string]interface{}{"messageIds": []string{m.ID}, "isRead": true})
 	return nil
+}
+
+// Join the per-message move completion without holding the mutation mutex.
+// The filter execution lease keeps publication and ownership release outside it.
+func (a *App) waitForFilterMove(m *message.Message) {
+	a.moveMutationMu.Lock()
+	flight := a.moveMutationFlights[m.AccountID+"\x00"+m.ID]
+	a.moveMutationMu.Unlock()
+	if flight != nil {
+		<-flight.terminal
+	}
 }

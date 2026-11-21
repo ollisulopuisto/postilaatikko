@@ -138,3 +138,12 @@ func TestCreateRejectsForwardingButReadRetainsIt(t *testing.T) {
 		t.Fatal("existing forwarding lost", existing, err)
 	}
 }
+
+func TestFilterWriteErrorDistinguishesRejectionFromUncertainty(t *testing.T) {
+	for _, status := range []int{400, 401, 403, 429, 500, 503} {
+		err := filterWriteError(&APIError{Status: status})
+		if errors.Is(err, ErrFilterRejected) != (status < 500) || errors.Is(err, ErrFilterOutcomeUnknown) != (status >= 500) {
+			t.Fatal(status, err)
+		}
+	}
+}

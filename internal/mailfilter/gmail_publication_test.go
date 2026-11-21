@@ -13,6 +13,7 @@ type fakeNativeProvider struct {
 	filters   []gmail.Filter
 	writes    int
 	uncertain bool
+	rejected  bool
 	drop      bool
 	readErr   bool
 }
@@ -26,6 +27,9 @@ func (p *fakeNativeProvider) ListFilters(context.Context) ([]gmail.Filter, error
 }
 func (p *fakeNativeProvider) CreateFilter(_ context.Context, f gmail.Filter) (*gmail.Filter, error) {
 	p.writes++
+	if p.rejected {
+		return nil, gmail.ErrFilterRejected
+	}
 	f.ID = "created"
 	if !p.drop {
 		p.filters = append(p.filters, f)
@@ -274,5 +278,32 @@ func TestLiveRecoveryWaitsForOneCreateResponse(t *testing.T) {
 	stored, err := s.GetGmailPublication(plan.ID)
 	if err != nil || stored.ProviderID != "created" || stored.State != "published" || base.writes != 1 {
 		t.Fatal("live recovery changed write identity", stored, err)
+	}
+}
+
+func TestRejectedGmailPublicationCanReleaseButNeverReplay(t *testing.T) {
+	s, r, f, p := publicationFixture(t)
+	p.rejected = true
+	plan := preparePublication(t, s, r, f, p)
+	if _, err := s.PublishGmailFilter(context.Background(), plan.ID, p); !errors.Is(err, gmail.ErrFilterRejected) {
+		t.Fatal(err)
+	}
+	restarted := NewStore(s.db)
+	got, err := restarted.GetGmailPublication(plan.ID)
+	if err != nil || got.State != "rejected" {
+		t.Fatal(got, err)
+	}
+	if _, err := restarted.PublishGmailFilter(context.Background(), plan.ID, p); err == nil || p.writes != 1 {
+		t.Fatal("replayed rejected create", err, p.writes)
+	}
+	if _, err := restarted.ReconcileGmailPublication(context.Background(), plan.ID, p); err == nil {
+		t.Fatal("reconciled rejection")
+	}
+	if err := restarted.CancelGmailPublication(plan.ID); err != nil {
+		t.Fatal(err)
+	}
+	r.Enabled = true
+	if err := restarted.Update(r); err != nil {
+		t.Fatal("rejected source remains frozen", err)
 	}
 }

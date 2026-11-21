@@ -11,6 +11,7 @@ import (
 
 	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
 	"github.com/ollisulopuisto/postilaatikko/internal/mailfilter"
+	"github.com/ollisulopuisto/postilaatikko/internal/message"
 	"github.com/ollisulopuisto/postilaatikko/internal/oauth2"
 )
 
@@ -115,5 +116,54 @@ func TestNativePublicationRequiresExplicitGrantAndSelectedAccount(t *testing.T) 
 	}
 	if _, err := a.gmailFilterProvider("missing"); err == nil {
 		t.Fatal("missing account accepted")
+	}
+}
+
+func TestFilterBatchStopsAfterShutdownStarts(t *testing.T) {
+	f := newFilterFixture(t, false)
+	f.app.ownFlagChangeAt = make(map[string]time.Time)
+	// The read event is a deterministic point inside the first message action.
+	// Starting shutdown there must prevent a second message in the same batch.
+	f.app.runtimeEventEmitter = func(name string, _ ...interface{}) {
+		if name == "messages:readChanged" {
+			f.app.syncOwnerMu.Lock()
+			f.app.syncShutdown = true
+			f.app.syncOwnerMu.Unlock()
+		}
+	}
+	rule := &mailfilter.Rule{ID: "batch", AccountIDs: []string{"acct-a"}, FromContains: []string{"bob"}, ActionMarkRead: true}
+	n, err := f.app.applyFilterActions(rule, []string{f.message.ID}, f.message, f.message)
+	if n != 1 || err == nil {
+		t.Fatalf("batch continued during shutdown: count=%d err=%v", n, err)
+	}
+}
+
+func TestFilterDrainWaitsForBackgroundMoveCompletion(t *testing.T) {
+	a := &App{}
+	m := &message.Message{ID: "one", AccountID: "mail"}
+	terminal := make(chan struct{})
+	a.moveMutationFlights = map[string]*moveMutationFlight{"mail\x00one": {terminal: terminal}}
+	a.filterExecutionMu.RLock()
+	waiting := make(chan struct{})
+	done := make(chan struct{})
+	go func() { close(waiting); a.waitForFilterMove(m); a.filterExecutionMu.RUnlock(); close(done) }()
+	<-waiting
+	acquired := make(chan struct{})
+	go func() { a.filterExecutionMu.Lock(); a.filterExecutionMu.Unlock(); close(acquired) }()
+	select {
+	case <-acquired:
+		t.Fatal("publication drained before physical move")
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(terminal)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("filter did not join completion")
+	}
+	select {
+	case <-acquired:
+	case <-time.After(time.Second):
+		t.Fatal("publication never drained")
 	}
 }

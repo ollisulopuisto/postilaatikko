@@ -3,6 +3,7 @@ package mailfilter
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"slices"
@@ -15,6 +16,9 @@ import (
 // Serialize live publish/recovery operations across Store instances in this
 // process. SQL state/identity CAS still rejects stale cross-process updates.
 var gmailPublicationMu sync.Mutex
+
+// ErrGmailDuplicateFilter means a new draft would duplicate an existing provider rule.
+var ErrGmailDuplicateFilter = errors.New("matching Gmail filter already exists; cancel this review and inspect Gmail settings")
 
 // NativeFilterProvider is the provider-owned catalog, never a local rule store.
 type NativeFilterProvider interface {
@@ -193,7 +197,7 @@ func (s *Store) PublishGmailFilter(ctx context.Context, id string, provider Nati
 	for _, f := range current {
 		ids = append(ids, f.ID)
 		if sameNativeFilter(f, p.Filter) {
-			return nil, fmt.Errorf("matching Gmail filter already exists")
+			return nil, ErrGmailDuplicateFilter
 		}
 	}
 	expected := slices.Clone(p.BaselineIDs)
@@ -214,6 +218,19 @@ func (s *Store) PublishGmailFilter(ctx context.Context, id string, provider Nati
 		return nil, fmt.Errorf("publication changed or jobs outstanding")
 	}
 	created, writeErr := provider.CreateFilter(ctx, p.Filter)
+	// A typed definitive provider rejection proves no filter was created.
+	// Keep the attempted plan terminal and non-replayable, but let the user
+	// cancel it explicitly to release the local source for a new review.
+	if writeErr != nil && created == nil && errors.Is(writeErr, gmail.ErrFilterRejected) {
+		result, err := s.db.Exec(`UPDATE gmail_filter_publications SET state='rejected',updated_at=datetime('now') WHERE id=? AND state='attempted' AND provider_id=''`, id)
+		if err != nil {
+			return nil, err
+		}
+		if n, err := result.RowsAffected(); err != nil || n != 1 {
+			return nil, fmt.Errorf("rejected publication changed concurrently; reload status")
+		}
+		return nil, fmt.Errorf("Gmail rejected this filter; cancel the rejected plan and review its query/actions: %w", writeErr)
+	}
 	providerID := ""
 	if created != nil {
 		providerID = created.ID
@@ -260,8 +277,8 @@ func (s *Store) reconcileGmailPublication(ctx context.Context, id string, provid
 	if provider.AccountID() != p.AccountID {
 		return nil, fmt.Errorf("provider account mismatch")
 	}
-	if p.State == "prepared" {
-		return nil, fmt.Errorf("publication has not been attempted")
+	if p.State == "prepared" || p.State == "rejected" {
+		return nil, fmt.Errorf("publication has no provider result; cancel this plan before reviewing again")
 	}
 	var candidates []gmail.Filter
 	if p.ProviderID != "" {
@@ -299,10 +316,10 @@ func (s *Store) reconcileGmailPublication(ctx context.Context, id string, provid
 	return s.GetGmailPublication(id)
 }
 
-// CancelGmailPublication removes only an unattempted plan, restoring local
-// editing freedom. Once claimed, provider reconciliation is mandatory.
+// CancelGmailPublication releases an unattempted or definitively rejected plan.
+// Ambiguous attempts and successful publications require provider reconciliation.
 func (s *Store) CancelGmailPublication(id string) error {
-	result, err := s.db.Exec(`DELETE FROM gmail_filter_publications WHERE id=? AND state='prepared'`, id)
+	result, err := s.db.Exec(`DELETE FROM gmail_filter_publications WHERE id=? AND state IN ('prepared','rejected')`, id)
 	if err != nil {
 		return err
 	}

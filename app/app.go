@@ -1294,17 +1294,18 @@ func (a *App) Shutdown(ctx context.Context) {
 }
 
 func (a *App) shutdown(ctx context.Context) {
-	// Drain native filter writes before releasing the process executor lease.
-	a.filterExecutionMu.Lock()
-	defer a.filterExecutionMu.Unlock()
-	a.stopPendingReceiptReconciler()
-	a.clearContactOAuth()
-	log := logging.WithComponent("app")
 	a.syncOwnerMu.Lock()
 	a.syncShutdown = true
 	cancelSyncOwnerWait := a.syncOwnerCancel
 	a.syncOwnerCancel = nil
 	a.syncOwnerMu.Unlock()
+	// Stop the remaining batch before waiting for its active message/write.
+	// Do not hold syncOwnerMu while taking the execution lock.
+	a.filterExecutionMu.Lock()
+	defer a.filterExecutionMu.Unlock()
+	a.stopPendingReceiptReconciler()
+	a.clearContactOAuth()
+	log := logging.WithComponent("app")
 	if cancelSyncOwnerWait != nil {
 		cancelSyncOwnerWait()
 	}

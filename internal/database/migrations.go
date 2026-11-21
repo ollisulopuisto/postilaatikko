@@ -1982,7 +1982,7 @@ var migrations = []Migration{
   id TEXT PRIMARY KEY,
   rule_id TEXT NOT NULL UNIQUE,
   account_id TEXT NOT NULL,
-  state TEXT NOT NULL CHECK(state IN ('prepared','attempted','unknown','published')),
+  state TEXT NOT NULL CHECK(state IN ('prepared','attempted','unknown','published','rejected')),
   source_json TEXT NOT NULL,
   filter_json TEXT NOT NULL,
   baseline_ids TEXT NOT NULL,

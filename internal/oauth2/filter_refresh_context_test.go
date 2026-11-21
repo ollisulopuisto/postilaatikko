@@ -25,7 +25,11 @@ func TestFilterGrantRefreshHonorsCallerDeadline(t *testing.T) {
 	defer cancel()
 	started := time.Now()
 	_, err := NewManager().VerifyGoogleFilterRefresh(ctx, ProviderConfig{TokenURL: server.URL}, "synthetic-refresh", []string{"mail"})
-	<-reached
+	select {
+	case <-reached:
+	case <-time.After(time.Second):
+		t.Fatalf("refresh never reached test server: %v", err)
+	}
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal("refresh ignored request deadline", err)
 	}
