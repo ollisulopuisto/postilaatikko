@@ -1341,6 +1341,9 @@ func (s *Store) DeleteSyncedUIDCache(folderID string) error {
 	}
 	// Repaired rows keep their bodies/history but never an addressable UID from
 	// the old generation. They are not candidates for automatic reattachment.
+	if _, err = tx.Exec(`INSERT OR IGNORE INTO quarantined_repair_messages(message_id) SELECT id FROM messages WHERE folder_id=? AND uid>0`, folderID); err != nil {
+		return err
+	}
 	if _, err = tx.Exec(`UPDATE messages SET uid=-rowid WHERE folder_id=? AND uid>0`, folderID); err != nil {
 		return err
 	}
@@ -2870,6 +2873,17 @@ func (s *Store) reconcileMovedMessageUIDs(destinationFolderID string, uidsByLoca
 				return nil, fmt.Errorf("move recovery proof changed for %s", movingLocalID)
 			}
 		}
+		// A COPYUID from a newer generation cannot be promoted into an old
+		// cache. Keep it pending until ordinary sync resets that cache.
+		var proofValidity, cachedValidity int64
+		var cleanupDone bool
+		proofErr := tx.QueryRow(`SELECT e.uid_validity,COALESCE(f.uid_validity,0),e.cleanup_complete FROM move_uid_evidence e JOIN folders f ON f.id=e.folder_id WHERE e.message_id=? AND e.folder_id=? AND e.uid=?`, movingLocalID, destinationFolderID, uid).Scan(&proofValidity, &cachedValidity, &cleanupDone)
+		if proofErr != nil && proofErr != sql.ErrNoRows {
+			return nil, proofErr
+		}
+		if proofErr == nil && (!cleanupDone || (cachedValidity != 0 && cachedValidity != proofValidity)) {
+			return nil, fmt.Errorf("move awaits destination cache generation or source cleanup")
+		}
 		var movingAccountID string
 		var movingUID int64
 		var movingMessageID sql.NullString
@@ -3891,4 +3905,20 @@ func (s *Store) ConfirmMoveCleanup(folderID string, validity uint32, uids map[st
 		}
 	}
 	return tx.Commit()
+}
+
+// LiveMutationIDs excludes only explicit repaired snapshots, never unresolved
+// optimistic moves. Their history remains readable but has no server target.
+func (s *Store) LiveMutationIDs(ids []string) ([]string, error) {
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		var n int
+		if err := s.db.QueryRow(`SELECT COUNT(*) FROM quarantined_repair_messages WHERE message_id=?`, id).Scan(&n); err != nil {
+			return nil, err
+		}
+		if n == 0 {
+			out = append(out, id)
+		}
+	}
+	return out, nil
 }

@@ -1992,6 +1992,9 @@ var migrations = []Migration{
  CREATE INDEX idx_gmail_filter_publications_account ON gmail_filter_publications(account_id,updated_at,id);
  `},
 	{Version: 86, SQL: `
+ CREATE TABLE quarantined_repair_messages (
+   message_id TEXT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE
+ );
  CREATE TABLE move_uid_evidence (
    message_id TEXT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
    folder_id TEXT NOT NULL,

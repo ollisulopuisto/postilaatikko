@@ -623,6 +623,15 @@ func (a *App) moveToFolderWithService(messageIDs []string, destFolderID string, 
 		return operationID, nil
 	}
 
+	liveIDs, err := a.messageStore.LiveMutationIDs(messageIDs)
+	if err != nil {
+		return operationID, err
+	}
+	if len(liveIDs) == 0 {
+		return operationID, fmt.Errorf("selected repair snapshots have no server move target")
+	}
+	messageIDs = liveIDs
+
 	// Cross-account selections (Unified Inbox or any mixed-account multi-
 	// select) route to a partition helper that recurses through this
 	// same function with uniform single-account slices. The existing
