@@ -267,6 +267,9 @@ type App struct {
 	replyContent        *replycontent.Service
 	virtualFolderStore  *virtualfolder.Store
 	filterExecutionMu   goSync.RWMutex
+	filterMovesMu       goSync.Mutex
+	filterMoves         map[*undo.MoveCompletion]struct{}
+	filterMoveSlots     chan struct{}
 	filterStore         *mailfilter.Store
 	moveFilterHistory   *mailfilter.MoveHistory
 	filterRouter        *mailfilter.AutomaticRouter
@@ -1301,8 +1304,8 @@ func (a *App) shutdown(ctx context.Context) {
 	a.syncOwnerMu.Unlock()
 	// Stop the remaining batch before waiting for its active message/write.
 	// Do not hold syncOwnerMu while taking the execution lock.
-	a.filterExecutionMu.Lock()
-	defer a.filterExecutionMu.Unlock()
+	releaseBoundary := a.acquireFilterExecutionBoundary()
+	defer releaseBoundary()
 	a.stopPendingReceiptReconciler()
 	a.clearContactOAuth()
 	log := logging.WithComponent("app")

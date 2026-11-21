@@ -85,8 +85,8 @@ func (a *App) gmailFilterProvider(accountID string) (accountFilterProvider, erro
 // prepareLocalGmailPublication is internal until the UI can supply an explicitly
 // reviewed provider-native payload. It never stops a source rule implicitly.
 func (a *App) prepareLocalGmailPublication(ctx context.Context, ruleID, accountID string, draft gmail.Filter) (*mailfilter.GmailPublication, error) {
-	a.filterExecutionMu.Lock()
-	defer a.filterExecutionMu.Unlock()
+	releaseBoundary := a.acquireFilterExecutionBoundary()
+	defer releaseBoundary()
 	provider, err := a.gmailFilterProvider(accountID)
 	if err != nil {
 		return nil, err
@@ -109,8 +109,8 @@ func (a *App) prepareLocalGmailPublication(ctx context.Context, ruleID, accountI
 // publishLocalGmailPublication excludes direct in-flight app filtering, then
 // verifies the durable source guard before making the one provider attempt.
 func (a *App) publishLocalGmailPublication(ctx context.Context, id string) (*mailfilter.GmailPublication, error) {
-	a.filterExecutionMu.Lock()
-	defer a.filterExecutionMu.Unlock()
+	releaseBoundary := a.acquireFilterExecutionBoundary()
+	defer releaseBoundary()
 	if err := a.requireStandaloneFilterOwner(); err != nil {
 		return nil, err
 	}

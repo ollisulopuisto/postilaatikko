@@ -14,6 +14,7 @@ type fakeNativeProvider struct {
 	writes    int
 	uncertain bool
 	rejected  bool
+	createErr error
 	drop      bool
 	readErr   bool
 }
@@ -27,6 +28,9 @@ func (p *fakeNativeProvider) ListFilters(context.Context) ([]gmail.Filter, error
 }
 func (p *fakeNativeProvider) CreateFilter(_ context.Context, f gmail.Filter) (*gmail.Filter, error) {
 	p.writes++
+	if p.createErr != nil {
+		return nil, p.createErr
+	}
 	if p.rejected {
 		return nil, gmail.ErrFilterRejected
 	}
@@ -305,5 +309,21 @@ func TestRejectedGmailPublicationCanReleaseButNeverReplay(t *testing.T) {
 	r.Enabled = true
 	if err := restarted.Update(r); err != nil {
 		t.Fatal("rejected source remains frozen", err)
+	}
+}
+
+func TestUnsubmittedGmailPublicationStaysCancellable(t *testing.T) {
+	s, r, f, p := publicationFixture(t)
+	plan := preparePublication(t, s, r, f, p)
+	p.createErr = gmail.ErrFilterNotSubmitted
+	if _, err := s.PublishGmailFilter(context.Background(), plan.ID, p); !errors.Is(err, gmail.ErrFilterNotSubmitted) {
+		t.Fatal(err)
+	}
+	got, err := s.GetGmailPublication(plan.ID)
+	if err != nil || got.State != "prepared" {
+		t.Fatal(got, err)
+	}
+	if err := s.CancelGmailPublication(plan.ID); err != nil {
+		t.Fatal("unsent review stranded", err)
 	}
 }

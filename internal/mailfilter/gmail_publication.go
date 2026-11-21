@@ -218,6 +218,18 @@ func (s *Store) PublishGmailFilter(ctx context.Context, id string, provider Nati
 		return nil, fmt.Errorf("publication changed or jobs outstanding")
 	}
 	created, writeErr := provider.CreateFilter(ctx, p.Filter)
+	// A pre-transport failure consumed no provider attempt. Restore the review
+	// using a compare-and-swap, rather than freezing an unsent plan as unknown.
+	if created == nil && errors.Is(writeErr, gmail.ErrFilterNotSubmitted) {
+		result, err := s.db.Exec(`UPDATE gmail_filter_publications SET state='prepared',updated_at=datetime('now') WHERE id=? AND state='attempted' AND provider_id=''`, id)
+		if err != nil {
+			return nil, err
+		}
+		if n, err := result.RowsAffected(); err != nil || n != 1 {
+			return nil, fmt.Errorf("unsent publication changed; reload status")
+		}
+		return nil, writeErr
+	}
 	// A typed definitive provider rejection proves no filter was created.
 	// Keep the attempted plan terminal and non-replayable, but let the user
 	// cancel it explicitly to release the local source for a new review.

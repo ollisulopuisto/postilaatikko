@@ -11,8 +11,8 @@ import (
 
 	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
 	"github.com/ollisulopuisto/postilaatikko/internal/mailfilter"
-	"github.com/ollisulopuisto/postilaatikko/internal/message"
 	"github.com/ollisulopuisto/postilaatikko/internal/oauth2"
+	"github.com/ollisulopuisto/postilaatikko/internal/undo"
 )
 
 func TestNativePublicationRejectsAnyHelperOwner(t *testing.T) {
@@ -138,32 +138,72 @@ func TestFilterBatchStopsAfterShutdownStarts(t *testing.T) {
 	}
 }
 
-func TestFilterDrainWaitsForBackgroundMoveCompletion(t *testing.T) {
+func TestFilterDrainWaitsForExactBackgroundMoveCompletion(t *testing.T) {
 	a := &App{}
-	m := &message.Message{ID: "one", AccountID: "mail"}
-	terminal := make(chan struct{})
-	a.moveMutationFlights = map[string]*moveMutationFlight{"mail\x00one": {terminal: terminal}}
-	a.filterExecutionMu.RLock()
-	waiting := make(chan struct{})
+	first, second := undo.NewMoveCompletion(), undo.NewMoveCompletion()
+	a.trackFilterMove(first)
+	a.trackFilterMove(second)
 	done := make(chan struct{})
-	go func() { close(waiting); a.waitForFilterMove(m); a.filterExecutionMu.RUnlock(); close(done) }()
-	<-waiting
-	acquired := make(chan struct{})
-	go func() { a.filterExecutionMu.Lock(); close(acquired); a.filterExecutionMu.Unlock() }()
+	go func() {
+		release := a.acquireFilterExecutionBoundary()
+		defer release()
+		close(done)
+	}()
 	select {
-	case <-acquired:
-		t.Fatal("publication drained before physical move")
+	case <-done:
+		t.Fatal("drained before physical moves")
 	case <-time.After(20 * time.Millisecond):
 	}
-	close(terminal)
+	first.Complete(nil)
+	select {
+	case <-done:
+		t.Fatal("drained after only one handle")
+	case <-time.After(20 * time.Millisecond):
+	}
+	second.Complete(nil)
 	select {
 	case <-done:
 	case <-time.After(time.Second):
-		t.Fatal("filter did not join completion")
+		t.Fatal("exact handles never drained")
 	}
+}
+
+func TestFilterMovesOverlapUntilBound(t *testing.T) {
+	a := &App{}
+	handles := make([]*undo.MoveCompletion, 8)
+	for i := range handles {
+		handles[i] = undo.NewMoveCompletion()
+	}
+	defer func() {
+		for _, h := range handles {
+			h.Complete(nil)
+		}
+	}()
+	admitted := make(chan struct{})
+	go func() {
+		for _, h := range handles {
+			a.trackFilterMove(h)
+		}
+		close(admitted)
+	}()
 	select {
-	case <-acquired:
+	case <-admitted:
 	case <-time.After(time.Second):
-		t.Fatal("publication never drained")
+		t.Fatal("moves serialized before overlap bound")
+	}
+	ninth := undo.NewMoveCompletion()
+	defer ninth.Complete(nil)
+	next := make(chan struct{})
+	go func() { a.trackFilterMove(ninth); close(next) }()
+	select {
+	case <-next:
+		t.Fatal("overlap bound exceeded")
+	case <-time.After(20 * time.Millisecond):
+	}
+	handles[0].Complete(nil)
+	select {
+	case <-next:
+	case <-time.After(time.Second):
+		t.Fatal("slot not released")
 	}
 }

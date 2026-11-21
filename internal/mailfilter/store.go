@@ -208,6 +208,28 @@ func (s *Store) Reorder(ids []string) error {
 			s.log.Warn().Err(err).Msg("Failed to rollback filter rule reorder transaction")
 		}
 	}()
+	// Snapshot visible positions before any writes. Stored priorities can have
+	// gaps after deletion, and normalizing unrelated rows must not shift this test.
+	positions := make(map[string]int)
+	rows, err := tx.Query(`SELECT id FROM mail_filter_rules ORDER BY order_index ASC,name ASC`)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		positions[id] = len(positions)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
 	for index, id := range ids {
 		result, err := tx.Exec(`UPDATE mail_filter_rules SET order_index = ?, updated_at = ? WHERE id = ? AND NOT EXISTS(SELECT 1 FROM gmail_filter_publications p WHERE p.rule_id=mail_filter_rules.id)`, index, time.Now().UTC(), id)
 		if err != nil {
@@ -224,7 +246,7 @@ func (s *Store) Reorder(ids []string) error {
 			}
 			// The UI sends the whole list. A frozen source staying in place must
 			// not block unrelated rules from being reordered around it.
-			if guarded == 1 && currentIndex == index {
+			if guarded == 1 && positions[id] == index {
 				continue
 			}
 			return fmt.Errorf("Gmail-owned source must keep its position; cancel its unattempted review before moving it")

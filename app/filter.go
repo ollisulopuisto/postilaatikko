@@ -9,6 +9,7 @@ import (
 	"github.com/ollisulopuisto/postilaatikko/internal/mailfilter"
 	"github.com/ollisulopuisto/postilaatikko/internal/message"
 	syncruntime "github.com/ollisulopuisto/postilaatikko/internal/sync"
+	"github.com/ollisulopuisto/postilaatikko/internal/undo"
 )
 
 // ============================================================================
@@ -321,9 +322,6 @@ func (a *App) applyFilterActions(rule *mailfilter.Rule, ids []string, snapshots 
 			acted = true
 			return false, "", nil
 		})
-		// The local-first move returns before provider reconciliation. Keep the
-		// execution lease until its tracked physical operation has settled.
-		a.waitForFilterMove(snapshot)
 		if err != nil {
 			return count, err
 		}
@@ -383,13 +381,59 @@ func (a *App) markFilterReadSynchronously(m *message.Message) error {
 	return nil
 }
 
-// Join the per-message move completion without holding the mutation mutex.
-// The filter execution lease keeps publication and ownership release outside it.
-func (a *App) waitForFilterMove(m *message.Message) {
-	a.moveMutationMu.Lock()
-	flight := a.moveMutationFlights[m.AccountID+"\x00"+m.ID]
-	a.moveMutationMu.Unlock()
-	if flight != nil {
-		<-flight.terminal
+// Filter-issued local-first moves retain their exact physical completion handles.
+// Publication and shutdown take the exclusive execution lease before draining,
+// so no new filter can add a handle behind the boundary.
+func (a *App) trackFilterMove(completion *undo.MoveCompletion) {
+	a.filterMovesMu.Lock()
+	if a.filterMoveSlots == nil {
+		a.filterMoveSlots = make(chan struct{}, 8)
 	}
+	slots := a.filterMoveSlots
+	a.filterMovesMu.Unlock()
+	// Backpressure only when the overlap bound is full, not for every move.
+	slots <- struct{}{}
+	a.filterMovesMu.Lock()
+	if a.filterMoves == nil {
+		a.filterMoves = make(map[*undo.MoveCompletion]struct{})
+	}
+	a.filterMoves[completion] = struct{}{}
+	a.filterMovesMu.Unlock()
+	go func() {
+		_ = completion.Wait()
+		<-slots
+		a.filterMovesMu.Lock()
+		delete(a.filterMoves, completion)
+		a.filterMovesMu.Unlock()
+	}()
+}
+
+func (a *App) filterMoveToWait(limit int) *undo.MoveCompletion {
+	a.filterMovesMu.Lock()
+	defer a.filterMovesMu.Unlock()
+	if len(a.filterMoves) < limit {
+		return nil
+	}
+	for completion := range a.filterMoves {
+		return completion
+	}
+	return nil
+}
+
+func (a *App) drainFilterMoves() {
+	for {
+		completion := a.filterMoveToWait(1)
+		if completion == nil {
+			return
+		}
+		_ = completion.Wait()
+	}
+}
+
+// acquireFilterExecutionBoundary excludes new local actions and joins all exact
+// physical completions before publication or mailbox ownership release.
+func (a *App) acquireFilterExecutionBoundary() func() {
+	a.filterExecutionMu.Lock()
+	a.drainFilterMoves()
+	return a.filterExecutionMu.Unlock
 }

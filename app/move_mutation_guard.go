@@ -246,7 +246,11 @@ func (a *App) bindMoveMutationCompletion(messages []*message.Message, completion
 		return
 	}
 	flight.pendingCompletions++
+	filterIssued := strings.HasPrefix(flight.action, "filter:")
 	a.moveMutationMu.Unlock()
+	if filterIssued {
+		a.trackFilterMove(completion)
+	}
 
 	go func() {
 		_ = completion.Wait()

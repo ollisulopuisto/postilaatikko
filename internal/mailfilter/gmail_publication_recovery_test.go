@@ -164,3 +164,29 @@ func TestReorderOtherRulesPreservesGmailSourceSnapshot(t *testing.T) {
 		t.Fatal("failed reorder changed source", err)
 	}
 }
+
+func TestGuardedReorderUsesVisibleSlotAfterDeleteGap(t *testing.T) {
+	s, r, f, p := publicationFixture(t)
+	for _, id := range []string{"before", "after", "last"} {
+		if err := s.Create(&Rule{ID: id, Name: id, ActionMarkRead: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.Reorder([]string{"before", r.ID, "after", "last"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Delete("before"); err != nil {
+		t.Fatal(err)
+	}
+	plan := preparePublication(t, s, r, f, p)
+	if err := s.Reorder([]string{r.ID, "last", "after"}); err != nil {
+		t.Fatal("same visible slot rejected after delete", err)
+	}
+	if err := s.Reorder([]string{"last", r.ID, "after"}); err == nil {
+		t.Fatal("moved frozen source")
+	}
+	got, err := s.GetGmailPublication(plan.ID)
+	if err != nil || got.Source.OrderIndex != 1 {
+		t.Fatal("frozen snapshot changed", got, err)
+	}
+}

@@ -147,3 +147,13 @@ func TestFilterWriteErrorDistinguishesRejectionFromUncertainty(t *testing.T) {
 		}
 	}
 }
+
+func TestFilterCreateTokenFailureNeverSubmits(t *testing.T) {
+	calls := 0
+	c := filterTestClient(t, func(w http.ResponseWriter, r *http.Request) { calls++; w.WriteHeader(500) })
+	c.tokenSource = func(context.Context, bool) (string, error) { return "", errors.New("owner shutting down") }
+	_, err := c.CreateFilter(context.Background(), Filter{Criteria: FilterCriteria{Query: "from:a"}, Action: FilterAction{RemoveLabelIDs: []string{"UNREAD"}}})
+	if !errors.Is(err, ErrFilterNotSubmitted) || errors.Is(err, ErrFilterOutcomeUnknown) || calls != 0 {
+		t.Fatal(err, calls)
+	}
+}
