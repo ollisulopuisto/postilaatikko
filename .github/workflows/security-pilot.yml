@@ -98,6 +98,8 @@ jobs:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
           dependency-caching: false
+        env:
+          GOFLAGS: -tags=webkit2_41
       - uses: github/codeql-action/analyze@800a1d8701a65d150a672fef0923dbf2660a62ec
         with:
           category: /language:${{ matrix.language }}/security-pilot
