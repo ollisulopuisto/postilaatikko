@@ -18,7 +18,7 @@ Review binds a fingerprint to the exact account, stopped source snapshot and nat
 
 ## Recovery
 
-The durable journal owns the one-create-attempt boundary. A create error reloads that state before any further action is offered. Attempted/unknown results expose read-only Check Gmail result, never another create. Closing/reopening the dialog recovers its account-qualified journal entry. Only an unattempted prepared review may be cancelled to release its local source. A verified publication keeps the source guard; reverse transfer and provider-filter removal are not implemented.
+The durable journal owns the one-create-attempt boundary. A create error reloads that state before any further action is offered. Attempted/unknown results expose read-only Check Gmail result, never another create. Closing/reopening the dialog recovers its account-qualified journal entry. An unattempted prepared review or a definitively rejected create may be explicitly cancelled to release its local source. A verified publication keeps the source guard; reverse transfer and provider-filter removal are not implemented.
 
 ## Verification
 
@@ -42,7 +42,7 @@ Initialized desktops select standalone publication only while holding the real e
 
 ### Published-source ownership and release
 
-Cancel review releases only a prepared, never-attempted plan. After an attempt, a local source remains frozen, including after confirmed publication, because the native Gmail rule runs independently. Unfreezing could double-process messages or lose the provider identity needed to recover an ambiguous create. Generic source editing, deletion and moving cannot safely imply native-rule deletion. Other rules can reorder around an unchanged frozen source.
+Cancel review releases a prepared, never-submitted plan or a definitively rejected create. Ambiguous attempts and confirmed publications keep the local source frozen, because the native Gmail rule runs independently. Unfreezing could double-process messages or lose the provider identity needed to recover an ambiguous create. Generic source editing, deletion and moving cannot safely imply native-rule deletion. Other rules can reorder around an unchanged frozen source.
 
 A future explicit release workflow must first verify the selected account, provider rule identity and resulting provider state, retain recovery evidence for ambiguous outcomes, and only then allow local execution again. This is a follow-up, not part of the current release or a new PR in this round. Until then, manage the native rule in Gmail and retain its frozen local ownership record.
 

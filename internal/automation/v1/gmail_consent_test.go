@@ -68,3 +68,16 @@ func TestGmailConsentStubDoesNotExposeBackendErrors(t *testing.T) {
 		t.Fatal("backend error disclosure", rec.Code, rec.Body.String())
 	}
 }
+
+func TestGmailConsentRejectsMissingAccountBeforeOwner(t *testing.T) {
+	stub := &gmailConsentStub{}
+	mux := http.NewServeMux()
+	MountGmailConsentRoutes(mux, stub, func(*http.Request) string { return "client" }, func(http.ResponseWriter, *http.Request, Capability) bool { return true })
+	for _, body := range []string{`{"operation":"start"}`, `{"operation":"complete","accountId":" "}`} {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest("POST", "/v1/filters/gmail/consent", strings.NewReader(body)))
+		if rec.Code != 400 || stub.calls != 0 {
+			t.Fatal("missing account reached owner", rec.Code, stub.calls)
+		}
+	}
+}

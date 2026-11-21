@@ -124,7 +124,7 @@ func (c *Client) doRequestWithHeaders(ctx context.Context, method, path string, 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		var errResp v1.ErrorResponse
 		if jsonErr := json.Unmarshal(respBytes, &errResp); jsonErr == nil && errResp.Error.Code != "" {
-			return nil, fmt.Errorf("api error (%s): %s: %w", errResp.Error.Code, errResp.Error.Message, v1.NewFault(errResp.Error.Code, errResp.Error.Message, errResp.Error.Retryable, nil))
+			return nil, &APIError{StatusCode: resp.StatusCode, Fault: v1.NewFault(errResp.Error.Code, errResp.Error.Message, errResp.Error.Retryable, nil)}
 		}
 		return nil, &HTTPError{StatusCode: resp.StatusCode, Body: string(respBytes)}
 	}
@@ -776,6 +776,17 @@ func (c *Client) ListConversations(ctx context.Context, req v1.ConversationListR
 	}
 	return &resp.Data, nil
 }
+
+// APIError preserves transport status as well as the stable public API fault.
+type APIError struct {
+	StatusCode int
+	Fault      *v1.Fault
+}
+
+func (e *APIError) Error() string {
+	return fmt.Sprintf("api error (%s): %s", e.Fault.Code, e.Fault.Message)
+}
+func (e *APIError) Unwrap() error { return e.Fault }
 
 // HTTPError reports a non-2xx response that carried no API error envelope,
 // such as a missing route on an older helper.

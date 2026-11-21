@@ -4,13 +4,17 @@ package app
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	automationclient "github.com/ollisulopuisto/postilaatikko/internal/automation/client"
 	"github.com/ollisulopuisto/postilaatikko/internal/ipc"
 	"github.com/ollisulopuisto/postilaatikko/internal/syncowner"
 	keyring "github.com/zalando/go-keyring"
@@ -99,6 +103,7 @@ func TestGmailPublicationUsesRealStartupOwnership(t *testing.T) {
 				}
 				time.Sleep(time.Millisecond)
 			}
+
 			if !reachedReady || a.mailboxService == nil || a.filterStore == nil {
 				t.Fatal("production startup path was not exercised")
 			}
@@ -109,6 +114,28 @@ func TestGmailPublicationUsesRealStartupOwnership(t *testing.T) {
 				client, workspace, err := a.captureNativeGmailWorkspace()
 				if err != nil || client != nil || workspace.Target != "local" || workspace.Key != "standalone" {
 					t.Fatalf("started desktop routed away from its executor: %+v %v", workspace, err)
+				}
+			}
+
+			if helperOwns {
+				if a.mailboxService.isRemote() {
+					t.Fatal("startup fixture did not use default localhost helper")
+				}
+				calls := 0
+				a.mailboxService.client = automationclient.New(automationclient.Config{Endpoint: mailboxServiceEndpoint, Transport: contactsRoundTrip(func(req *http.Request) (*http.Response, error) {
+					calls++
+					if req.URL.String() != mailboxServiceEndpoint+"/v1/filters/gmail" {
+						return nil, fmt.Errorf("wrong helper destination: %s", req.URL)
+					}
+					return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"data":{"accountId":"helper-mail","email":"helper@example.test","consentRequired":true}}`))}, nil
+				})})
+				workspace, err := a.GetNativeGmailWorkspace()
+				if err != nil || workspace.Target != "helper" || workspace.Endpoint != mailboxServiceEndpoint {
+					t.Fatal("competing localhost owner not selected", workspace, err)
+				}
+				reply, err := a.NativeGmailReview(NativeGmailReviewRequest{Workspace: workspace.Key, Operation: "context", RuleID: "source"})
+				if err != nil || reply.Context == nil || reply.Context.AccountID != "helper-mail" || calls != 1 {
+					t.Fatal("startup helper route fell back", reply, err, calls)
 				}
 			}
 			err = a.requireStandaloneFilterOwner()

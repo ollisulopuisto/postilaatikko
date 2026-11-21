@@ -10,7 +10,7 @@ const captureDir=process.env.POSTI_BROWSER_CAPTURE_DIR||join(tmpdir(),'posti-nat
 mkdirSync(captureDir,{recursive:true})
 test('native Gmail review: selected consent, preview invalidation, explicit publish, uncertain recovery and reopen',{skip:!browserModule,timeout:60000},async()=>{
   const root=fileURLToPath(new URL('..',import.meta.url))
-  const server=await createServer({cacheDir:fileURLToPath(new URL(`../node_modules/.vite-test/${process.pid}/nativeGmail`,import.meta.url)),root,plugins:[{name:'native-fixture',resolveId(id){if(id==='/native-mount.js')return id},load(id){if(id==='/native-mount.js')return `export {mount,unmount} from 'svelte'`}}],server:{host:'127.0.0.1',port:5198,strictPort:true,fs:{allow:[root,realpathSync(join(root,'node_modules'))]}},logLevel:'error'})
+  const server=await createServer({cacheDir:fileURLToPath(new URL(`../node_modules/.vite-test/${process.pid}/nativeGmail`,import.meta.url)),root,plugins:[{name:'native-fixture',resolveId(id){if(id==='/native-mount.js')return id},load(id){if(id==='/native-mount.js')return `export {mount,unmount} from 'svelte'`}}],server:{host:'127.0.0.1',port:5217,strictPort:true,fs:{allow:[root,realpathSync(join(root,'node_modules'))]}},logLevel:'error'})
   await server.listen()
   const {chromium}=await import(browserModule)
   const browser=await chromium.launch({executablePath:process.env.POSTI_CHROMIUM_BUNDLED?undefined:'/usr/bin/google-chrome-stable',headless:true,args:['--no-sandbox']})
@@ -18,7 +18,7 @@ test('native Gmail review: selected consent, preview invalidation, explicit publ
     const page=await browser.newPage({viewport:{width:1024,height:1000}})
     const errors=[];page.on('pageerror',error=>errors.push(error.message))
     await page.route('**/native-fixture',route=>route.fulfill({contentType:'text/html',body:'<html data-theme="dark"><body style="background:#18191d"><div id="fixture"></div></body></html>'}))
-    await page.goto('http://127.0.0.1:5198/native-fixture')
+    await page.goto('http://127.0.0.1:5217/native-fixture')
     await page.evaluate(async()=>{
       await import('/src/app.css'); await import('/src/lib/iconify-offline.ts');window.calls=[];window.consent=true;window.plan={};window.failCreate=true
       window.go={app:{App:new Proxy({},{get:(_,name)=>(...args)=>{
@@ -33,7 +33,7 @@ test('native Gmail review: selected consent, preview invalidation, explicit publ
           case 'context':return Promise.resolve({context:{accountId:'work',email:'me@example.com',consentRequired:window.consent,labels:[{id:'user-label',name:'Reading'}]}})
           case 'preview':return window.previewFails?Promise.reject(new Error('preview unavailable')):Promise.resolve({preview:{accountEmail:'reviewed@example.com',found:50,truncated:true,fingerprint:JSON.stringify(req.draft)}})
           case 'prepare':window.plan={id:'plan',ruleId:'source',accountId:'work',accountEmail:'reviewed@example.com',state:'prepared',fingerprint:req.fingerprint,query:req.draft.query,addLabelIds:req.draft.labelIds,removeLabelIds:['UNREAD']};return Promise.resolve({publication:window.plan})
-          case 'publish':window.plan={...window.plan,state:'unknown'};return Promise.reject(new Error('create timed out'))
+          case 'publish':window.plan={...window.plan,state:window.rejectCreate?'rejected':'unknown'};return Promise.reject(new Error(window.rejectCreate?'Gmail rejected filter':'create timed out'))
           case 'reconcile':window.plan={...window.plan,state:'published',providerId:'gmail-id'};return Promise.resolve({publication:window.plan})
           case 'cancel':window.plan={};return Promise.resolve({})
           default:return Promise.reject(new Error('unexpected operation'))
@@ -108,16 +108,23 @@ test('native Gmail review: selected consent, preview invalidation, explicit publ
       await page.screenshot({path:join(captureDir,`native-gmail-published-${locale}-320.png`),fullPage:true})
     }
 
-    // A definitive provider rejection can release its source, but must never
-    // offer another create attempt or read-only recovery for that plan.
-    await page.evaluate(()=>{window.plan={...window.plan,state:'rejected',providerId:''};return window.show('en')})
+    // Exercise rejection in the already-open prepared review, not only reopen.
+    await page.evaluate(()=>{window.plan={};window.rejectCreate=true;return window.show('en')})
+    await page.getByLabel('Gmail search query').fill('from:rejected@example.com')
+    await page.getByLabel('Mark read',{exact:true}).check()
+    await page.getByRole('button',{name:'Preview existing mail'}).click()
+    await page.getByRole('button',{name:'Review exact Gmail rule'}).click()
+    await page.getByRole('button',{name:'Publish to Gmail',exact:true}).click()
     await page.getByText('Gmail rejected this filter without creating it.',{exact:false}).waitFor()
     assert.equal(await page.getByRole('button',{name:'Publish to Gmail',exact:true}).count(),0)
     assert.equal(await page.getByRole('button',{name:'Check Gmail result'}).count(),0)
-    await page.screenshot({path:join(captureDir,'native-gmail-rejected-en-320.png'),fullPage:true})
+    await page.screenshot({path:join(captureDir,'native-gmail-live-rejected-en-320.png'),fullPage:true})
+    // Reopen must preserve the same safe cancellation-only state too.
+    await page.evaluate(()=>window.show('en'))
+    await page.getByText('Gmail rejected this filter without creating it.',{exact:false}).waitFor()
     await page.getByRole('button',{name:'Cancel review and release source'}).click()
     await page.getByLabel('Gmail search query').waitFor()
-    assert.equal(await page.evaluate(()=>window.calls.filter(([n,args])=>n==='NativeGmailReview'&&args[0].operation==='publish').length),1)
+    assert.equal(await page.evaluate(()=>window.calls.filter(([n,args])=>n==='NativeGmailReview'&&args[0].operation==='publish').length),2)
     assert.deepEqual(errors,[])
   }finally{await browser.close();await server.close()}
 })
