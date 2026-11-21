@@ -1,14 +1,17 @@
 package oauth2
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
 // VerifyGoogleFilterRefresh proves settings access survives the next refresh.
 // Missing reported scopes are unverified, not evidence of durable access.
-func (m *Manager) VerifyGoogleFilterRefresh(provider ProviderConfig, refreshToken string, required []string) (*TokenResponse, error) {
+func (m *Manager) VerifyGoogleFilterRefresh(ctx context.Context, provider ProviderConfig, refreshToken string, required []string) (*TokenResponse, error) {
 	if refreshToken == "" {
 		return nil, fmt.Errorf("durable Google refresh grant missing")
 	}
-	tokens, err := m.RefreshTokenWithProvider(provider, refreshToken)
+	tokens, err := m.RefreshTokenWithProviderContext(ctx, provider, refreshToken)
 	if err != nil {
 		return nil, err
 	}

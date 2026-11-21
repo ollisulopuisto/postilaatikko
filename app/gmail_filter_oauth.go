@@ -135,7 +135,7 @@ func (a *App) persistGmailFilterConsent(accountID, expectedEmail string, previou
 	}
 	// Prove that the durable refresh grant also carries settings access. The
 	// incremental access token alone is not proof when Google reuses a grant.
-	verified, err := oauth2.NewManager().VerifyGoogleFilterRefresh(cfg, refreshToken, previous.Scopes)
+	verified, err := oauth2.NewManager().VerifyGoogleFilterRefresh(ctx, cfg, refreshToken, previous.Scopes)
 	if err != nil {
 		return fmt.Errorf("verify durable Gmail settings grant: %w", err)
 	}
