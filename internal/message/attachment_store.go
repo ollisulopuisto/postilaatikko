@@ -273,3 +273,13 @@ func (s *AttachmentStore) GmailReference(localID string) (providerMessage, provi
 	}
 	return
 }
+
+// CachedContent returns an inline payload stored in the metadata cache. A nil
+// SQL value means unavailable, while an empty non-null blob is valid content.
+func (s *AttachmentStore) CachedContent(id string) ([]byte, bool, error) {
+	var content []byte
+	if err := s.db.QueryRow(`SELECT content FROM attachments WHERE id=?`, id).Scan(&content); err != nil {
+		return nil, false, err
+	}
+	return content, content != nil, nil
+}

@@ -51,11 +51,12 @@ type Message struct {
 	HasAttachments bool `json:"hasAttachments"`
 
 	// Body (may be empty until fetched)
-	BodyText    string `json:"bodyText,omitempty"`
-	BodyHTML    string `json:"bodyHtml,omitempty"`
-	BodyFetched bool   `json:"bodyFetched"`       // Whether full body has been downloaded
-	BodyFailed  bool   `json:"-"`                 // Set when fetch+parse produced no usable content; excludes from body-fetch queue (server-internal; not exposed to frontend)
-	Matched     *bool  `json:"matched,omitempty"` // Whether the message belongs to the active thread view scope
+	CachedBodySourceID string `json:"cachedBodySourceId,omitempty"` // Read-only body/attachment source, never an action target.
+	BodyText           string `json:"bodyText,omitempty"`
+	BodyHTML           string `json:"bodyHtml,omitempty"`
+	BodyFetched        bool   `json:"bodyFetched"`       // Whether full body has been downloaded
+	BodyFailed         bool   `json:"-"`                 // Set when fetch+parse produced no usable content; excludes from body-fetch queue (server-internal; not exposed to frontend)
+	Matched            *bool  `json:"matched,omitempty"` // Whether the message belongs to the active thread view scope
 
 	// Read receipt
 	ReadReceiptTo      string `json:"readReceiptTo,omitempty"` // Email requesting receipt (from Disposition-Notification-To header)

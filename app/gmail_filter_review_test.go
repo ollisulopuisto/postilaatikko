@@ -45,6 +45,8 @@ func TestNativeGmailReviewPayload(t *testing.T) {
 		{"no query", NativeGmailDraft{MarkRead: true}, true},
 		{"query control", NativeGmailDraft{Query: "a\nb", MarkRead: true}, true},
 		{"empty action", NativeGmailDraft{Query: "from:sender"}, true},
+		{"two user labels", NativeGmailDraft{Query: "from:sender", LabelIDs: []string{"a", "b"}}, true},
+		{"duplicate user label", NativeGmailDraft{Query: "from:sender", LabelIDs: []string{"a", "a"}, Trash: true}, false},
 		{"opposing relocate", NativeGmailDraft{Query: "from:sender", Archive: true, Trash: true}, true},
 		{"native query preserved", NativeGmailDraft{Query: "from:(a OR b) has:attachment", MarkRead: true, Archive: true, LabelIDs: []string{"opaque-user-id"}}, false},
 	} {
@@ -146,7 +148,7 @@ func TestNativeGmailFingerprintSurvivesDurableCanonicalization(t *testing.T) {
 	for _, draft := range []NativeGmailDraft{
 		{Query: "from:sender", MarkRead: true},
 		{Query: "from:sender", Trash: true},
-		{Query: "from:sender", LabelIDs: []string{"b", "a", "b"}},
+		{Query: "from:sender", LabelIDs: []string{"b", "b"}},
 	} {
 		t.Run(fmt.Sprint(draft.MarkRead, draft.Trash, draft.LabelIDs), func(t *testing.T) {
 			a, r := nativeReviewFixture(t)

@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ollisulopuisto/postilaatikko/internal/email"
+	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
+	"os"
 	"strings"
 	"time"
 
@@ -188,7 +191,7 @@ func (o *mailboxReadOperations) GetThread(ctx context.Context, ref views.ThreadR
 		}
 		attachmentSummaries := []views.AttachmentSummary{}
 		if o.runtime.attachments != nil {
-			attachments, err := o.runtime.attachments.GetByMessage(msg.ID)
+			attachments, err := o.runtime.attachments.GetByMessage(cachedContentID(msg))
 			if err != nil {
 				return nil, fmt.Errorf("list thread attachment metadata: %w", err)
 			}
@@ -394,3 +397,69 @@ func (o *mailboxReadOperations) FetchMessageBody(ctx context.Context, accountID,
 
 var _ v1.SearchOperations = (*mailboxReadOperations)(nil)
 var _ v1.MessageReadOperations = (*mailboxReadOperations)(nil)
+
+func cachedContentID(msg *message.Message) string {
+	if msg.CachedBodySourceID != "" {
+		return msg.CachedBodySourceID
+	}
+	return msg.ID
+}
+
+// GetAttachments returns metadata only; the route validates account ownership.
+func (o *mailboxReadOperations) GetAttachments(messageID string) ([]*message.Attachment, error) {
+	return o.runtime.attachments.GetByMessage(messageID)
+}
+
+// ReadAttachmentBytes validates both owners before looking up any cached bytes.
+func (o *mailboxReadOperations) ReadAttachmentBytes(accountID, messageID, attachmentID string) ([]byte, string, error) {
+	var raw []byte
+	return o.readAttachmentBytes(accountID, messageID, attachmentID, &raw)
+}
+
+func (o *mailboxReadOperations) readAttachmentBytes(accountID, messageID, attachmentID string, raw *[]byte) ([]byte, string, error) {
+	msg, err := o.runtime.messages.Get(messageID)
+	if err != nil || msg == nil || msg.AccountID != accountID {
+		return nil, "", errors.New("message not found in account")
+	}
+	att, err := o.runtime.attachments.Get(attachmentID)
+	if err != nil || att == nil || att.MessageID != msg.ID {
+		return nil, "", v1.NewFault(v1.CodeNotFound, "Attachment not found in message", false, nil)
+	}
+	content, ok, err := o.runtime.attachments.RepairedContent(att.ID)
+	if err != nil || ok {
+		return content, att.ContentType, err
+	}
+	content, ok, err = o.runtime.attachments.CachedContent(att.ID)
+	if err != nil || ok {
+		return content, att.ContentType, err
+	}
+	if att.LocalPath != "" {
+		if content, err := os.ReadFile(att.LocalPath); err == nil {
+			return content, att.ContentType, nil
+		}
+	}
+	if o.runtime.syncEngine == nil {
+		return nil, "", errors.New("attachment has no cached payload or provider")
+	}
+	ctx := o.runtime.runtimeContext()
+	content, err = o.runtime.syncEngine.FetchGmailAttachment(ctx, accountID, att.ID)
+	if !errors.Is(err, gmail.ErrNotCapable) {
+		if err != nil {
+			return nil, "", v1.NewFault(v1.CodeProviderError, "Attachment provider unavailable", true, err)
+		}
+		return content, att.ContentType, nil
+	}
+	if err := o.runtime.messages.ValidateRawContentTarget(msg); err != nil {
+		return nil, "", err
+	}
+	if *raw == nil {
+		*raw, err = o.runtime.syncEngine.FetchRawAttachment(ctx, accountID, msg.FolderID, msg.UID)
+		if err != nil {
+			return nil, "", v1.NewFault(v1.CodeProviderError, "Attachment provider unavailable or mailbox generation changed", true, err)
+		}
+	}
+	content, err = email.NewAttachmentDownloader("").ExtractUniqueAttachmentContent(*raw, att.Filename)
+	return content, att.ContentType, err
+}
+
+var _ v1.AttachmentReadOperations = (*mailboxReadOperations)(nil)

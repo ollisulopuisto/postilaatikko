@@ -75,6 +75,8 @@ type SyncRuntime struct {
 	filterWake                  chan struct{}
 	filterStop                  chan struct{}
 	syncLockPath                string
+	publicationOwnerMu          sync.RWMutex
+	publicationOwner            *syncowner.Lock
 	ctxMu                       sync.RWMutex
 	ctx                         context.Context
 	cancel                      context.CancelFunc
@@ -976,7 +978,13 @@ func (r *SyncRuntime) runSyncLifecycle(ctx context.Context) {
 		}
 		return
 	}
+	r.publicationOwnerMu.Lock()
+	r.publicationOwner = owner
+	r.publicationOwnerMu.Unlock()
 	defer func() {
+		r.publicationOwnerMu.Lock()
+		defer r.publicationOwnerMu.Unlock()
+		r.publicationOwner = nil
 		if err := owner.Release(); err != nil {
 			log.Warn().Err(err).Msg("Failed to release mailbox sync ownership")
 		}

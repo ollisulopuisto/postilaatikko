@@ -79,10 +79,14 @@ func (e *Engine) SearchIMAPPage(ctx context.Context, accountID, folderID, query 
 	if err != nil {
 		return nil, err
 	}
+	if err := e.ensureSearchCacheGeneration(f, mailbox.UIDValidity); err != nil {
+		return nil, err
+	}
 	criteria := &imap.SearchCriteria{}
 	if query != "" {
 		criteria = buildSearchCriteria(query)
 	}
+	criteria.NotFlag = append(criteria.NotFlag, imap.FlagDeleted)
 	var before uint32
 	if cursor != nil {
 		if err := validateSearchCursor(*cursor, accountID, folderID, query, mailbox.UIDValidity); err != nil {
@@ -104,6 +108,9 @@ func (e *Engine) SearchIMAPPage(ctx context.Context, accountID, folderID, query 
 	hits, err := e.fetchEnvelopesForSearch(ctx, conn.Client().RawClient(), accountID, folderID, f.Name, pageUIDs)
 	if err != nil {
 		return nil, err
+	}
+	for _, hit := range hits {
+		hit.UIDValidity = mailbox.UIDValidity
 	}
 	page := &IMAPSearchPage{Results: hits}
 	if next != 0 {

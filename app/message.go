@@ -580,7 +580,7 @@ func (a *App) conversationFromServiceThread(view *views.ThreadView, folderID str
 			msg.ReceivedAt = *item.ReceivedAt
 		}
 		if a.messageStore != nil {
-			localMessage, err := a.messageStore.Get(item.Ref.MessageID)
+			localMessage, err := a.messageStore.GetReaderMessage(item.Ref.MessageID)
 			if err != nil {
 				return nil, fmt.Errorf("read cached thread body: %w", err)
 			}
@@ -588,6 +588,7 @@ func (a *App) conversationFromServiceThread(view *views.ThreadView, folderID str
 				msg.BodyText = textrepair.FinnishUTF8(localMessage.BodyText)
 				msg.BodyHTML = localMessage.BodyHTML
 				msg.BodyFetched = true
+				msg.CachedBodySourceID = localMessage.CachedBodySourceID
 			}
 		}
 		if item.Snippet != "" {

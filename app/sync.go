@@ -169,8 +169,7 @@ func (a *App) syncFolder(accountID, folderID string, restart bool) error {
 		syncPeriodDays = acc.SyncPeriodDays
 	}
 
-	// Restart recovery must see the complete destination, not a date-limited
-	// window that could mistake older completed copies for absent mail.
+	// Recovery is a separate targeted verification, never a wider sync window.
 	a.moveSyncMu.Lock()
 	recoveryIDs := append([]string(nil), a.moveRecoveryIDs[folderID]...)
 	delete(a.moveRecoveryIDs, folderID)
@@ -181,17 +180,6 @@ func (a *App) syncFolder(accountID, folderID string, restart bool) error {
 			a.retainMoveRecovery(folderID, recoveryIDs)
 		}
 	}()
-	if len(recoveryIDs) > 0 {
-		// Native Gmail sync refreshes only a recent page. Legacy IMAP
-		// placeholders must be retained rather than swept from that page.
-		if _, apiErr := a.syncEngine.GmailClient(ctx, accountID); apiErr == nil {
-			a.retainMoveRecovery(folderID, recoveryIDs)
-			recoveryIDs = nil
-		} else if !errors.Is(apiErr, gmail.ErrNotCapable) {
-			return apiErr
-		}
-		syncPeriodDays = 0
-	}
 	currentFolder, err := a.folderStore.Get(folderID)
 	if err != nil {
 		return err
@@ -229,11 +217,11 @@ func (a *App) syncFolder(accountID, folderID string, restart bool) error {
 		return err
 	}
 
-	if err := a.recoverInterruptedMoves(folderID, recoveryIDs); err != nil {
-		return fmt.Errorf("recover interrupted moves: %w", err)
+	if err := a.recoverInterruptedMoves(ctx, accountID, folderID, recoveryIDs); err != nil {
+		log.Warn().Err(err).Str("folderID", folderID).Msg("Folder refreshed; interrupted moves remain unresolved")
+	} else {
+		recovered = true
 	}
-
-	recovered = true
 
 	// Checkpoint WAL after heavy sync operation
 	if checkpointErr := a.db.Checkpoint(); checkpointErr != nil {

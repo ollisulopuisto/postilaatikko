@@ -3,7 +3,9 @@ package app
 import (
 	"bytes"
 	"crypto/sha256"
+	"errors"
 	"fmt"
+	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
 	"net/mail"
 	"strings"
 
@@ -94,4 +96,35 @@ func hasRepeatedAttachmentMetadata(items []*message.Attachment) bool {
 		seen[k] = true
 	}
 	return false
+}
+
+// loadAttachmentContent serves exact repaired payloads before any provider read.
+// Bulk callers retain raw for one lazy IMAP fetch only when a part needs it.
+func (a *App) loadAttachmentContent(msg *message.Message, att *message.Attachment, downloader *email.AttachmentDownloader, raw *[]byte) ([]byte, error) {
+	if a.attachmentStore != nil {
+		content, ok, err := a.attachmentStore.RepairedContent(att.ID)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			return content, nil
+		}
+	}
+	if a.syncEngine == nil {
+		return nil, fmt.Errorf("attachment has no cached payload or provider")
+	}
+	content, err := a.syncEngine.FetchGmailAttachment(a.ctx, msg.AccountID, att.ID)
+	if !errors.Is(err, gmail.ErrNotCapable) {
+		return content, err
+	}
+	if err := a.messageStore.ValidateRawContentTarget(msg); err != nil {
+		return nil, err
+	}
+	if *raw == nil {
+		*raw, err = a.syncEngine.FetchRawAttachment(a.ctx, msg.AccountID, msg.FolderID, msg.UID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return downloader.ExtractUniqueAttachmentContent(*raw, att.Filename)
 }

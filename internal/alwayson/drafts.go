@@ -232,7 +232,7 @@ func (r *SyncRuntime) PrepareReply(req v1.ReplyPreparationRequest) (*smtp.Compos
 	if acc == nil {
 		return nil, errors.New("account not found")
 	}
-	original, err := r.messages.Get(req.MessageID)
+	original, err := r.messages.GetReaderMessage(req.MessageID)
 	if err != nil {
 		return nil, err
 	}
@@ -335,18 +335,21 @@ func (r *SyncRuntime) PrepareReply(req v1.ReplyPreparationRequest) (*smtp.Compos
 	if original.MessageID != "" {
 		refs = append(refs, angleMessageID(original.MessageID))
 	}
-	attachments := r.replyAttachments(original, req.Mode, quotedHTML)
+	attachments, err := r.replyAttachments(original, req.Mode, quotedHTML)
+	if err != nil {
+		return nil, err
+	}
 	return &smtp.ComposeMessage{From: from, ReplyMode: req.Mode, To: to, Cc: cc, Subject: subject, HTMLBody: htmlBody, TextBody: body,
 		InReplyTo: angleMessageID(original.MessageID), References: refs, GmailThreadID: gmailThreadID(original),
 		IdentityID: identityID(identity), Attachments: attachments}, nil
 }
 
-func (r *SyncRuntime) replyAttachments(original *message.Message, mode, quotedHTML string) []smtp.Attachment {
+func (r *SyncRuntime) replyAttachments(original *message.Message, mode, quotedHTML string) ([]smtp.Attachment, error) {
 	if r.attachments == nil || original == nil {
-		return nil
+		return nil, nil
 	}
 	var result []smtp.Attachment
-	inline, err := r.attachments.GetInlineByMessage(original.ID)
+	inline, err := r.attachments.GetInlineByMessage(cachedContentID(original))
 	if err == nil {
 		for cid, dataURL := range inline {
 			if mode != "forward" && !strings.Contains(quotedHTML, "cid:"+cid) {
@@ -359,12 +362,12 @@ func (r *SyncRuntime) replyAttachments(original *message.Message, mode, quotedHT
 			result = append(result, smtp.Attachment{ContentBase64: encoded, ContentType: contentType, ContentID: cid, Inline: true, Filename: cid})
 		}
 	}
-	if mode != "forward" || r.syncEngine == nil {
-		return result
+	if mode != "forward" {
+		return result, nil
 	}
-	items, err := r.attachments.GetByMessage(original.ID)
+	items, err := r.attachments.GetByMessage(cachedContentID(original))
 	if err != nil {
-		return result
+		return nil, err
 	}
 	regular := make([]*message.Attachment, 0, len(items))
 	for _, item := range items {
@@ -373,24 +376,18 @@ func (r *SyncRuntime) replyAttachments(original *message.Message, mode, quotedHT
 		}
 	}
 	if len(regular) == 0 {
-		return result
+		return result, nil
 	}
-	raw, err := r.syncEngine.FetchRawMessage(r.runtimeContext(), original.AccountID, original.FolderID, original.UID)
-	if err != nil {
-		return result
-	}
-	downloader := email.NewAttachmentDownloader("")
+	ops := &mailboxReadOperations{runtime: r}
+	var raw []byte
 	for _, item := range regular {
-		content, repaired, err := r.attachments.RepairedContent(item.ID)
-		if err == nil && !repaired {
-			content, err = downloader.ExtractAttachmentContent(raw, item.Filename)
-		}
+		content, contentType, err := ops.readAttachmentBytes(original.AccountID, cachedContentID(original), item.ID, &raw)
 		if err != nil {
-			continue
+			return nil, v1.NewFault(v1.CodeContentNotFetched, "Original attachment unavailable; forward was not prepared. Fetch the live message content and try again.", false, err)
 		}
-		result = append(result, smtp.Attachment{Content: content, ContentType: item.ContentType, Filename: item.Filename})
+		result = append(result, smtp.Attachment{Content: content, ContentType: contentType, Filename: item.Filename})
 	}
-	return result
+	return result, nil
 }
 
 func (r *SyncRuntime) runtimeContext() context.Context {

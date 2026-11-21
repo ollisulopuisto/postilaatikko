@@ -113,16 +113,12 @@ func (a *App) startBackgroundSync(ctx context.Context) {
 	a.syncScheduler.SetSyncCompletedCallback(func(accountID, folderID string, err error) {
 		if err == nil {
 			a.moveSyncMu.Lock()
-			recovering := len(a.moveRecoveryIDs[folderID]) > 0
+			ids := append([]string(nil), a.moveRecoveryIDs[folderID]...)
+			delete(a.moveRecoveryIDs, folderID)
 			a.moveSyncMu.Unlock()
-			if recovering {
-				a.syncMu.Lock()
-				delete(a.syncLastRequest, accountID+":"+folderID)
-				a.syncMu.Unlock()
-				if recoveryErr := a.SyncFolder(accountID, folderID); recoveryErr != nil {
-					log.Warn().Err(recoveryErr).Msg("Interrupted moves still require recovery")
-					err = recoveryErr
-				}
+			if recoveryErr := a.recoverInterruptedMoves(ctx, accountID, folderID, ids); recoveryErr != nil {
+				a.retainMoveRecovery(folderID, ids)
+				log.Warn().Err(recoveryErr).Msg("Interrupted moves still require recovery")
 			}
 		}
 		if err != nil {

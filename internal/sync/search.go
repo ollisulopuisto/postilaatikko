@@ -24,6 +24,7 @@ type IMAPSearchResponse struct {
 
 // IMAPSearchResult represents a single IMAP server-side search result
 type IMAPSearchResult struct {
+	UIDValidity  uint32 `json:"-"` // Selected-mailbox generation for header imports.
 	RFCMessageID string `json:"rfcMessageId,omitempty"`
 	InReplyTo    string `json:"inReplyTo,omitempty"`
 	UID          uint32 `json:"uid"`
@@ -115,9 +116,12 @@ func (e *Engine) IMAPSearch(ctx context.Context, accountID, folderID, query stri
 	defer func() { e.pool.Release(conn) }()
 
 	// Select mailbox
-	_, err = conn.Client().SelectMailbox(ctx, f.Path)
+	mailbox, err := conn.Client().SelectMailbox(ctx, f.Path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to select mailbox: %w", err)
+	}
+	if err := e.ensureSearchCacheGeneration(f, mailbox.UIDValidity); err != nil {
+		return nil, err
 	}
 
 	// IMAP SEARCH using OR across multiple fields for maximum compatibility.
@@ -126,6 +130,7 @@ func (e *Engine) IMAPSearch(ctx context.Context, accountID, folderID, query stri
 	// This produces: UID SEARCH OR FROM "q" OR SUBJECT "q" OR TO "q" OR CC "q" BODY "q"
 	client := conn.Client().RawClient()
 	criteria := buildSearchCriteria(query)
+	criteria.NotFlag = append(criteria.NotFlag, imap.FlagDeleted)
 	uids, err := uidSearch(ctx, client, criteria)
 	if err != nil {
 		return nil, err
@@ -343,6 +348,12 @@ func (e *Engine) fetchEnvelopesForSearch(ctx context.Context, client *imapclient
 // FetchServerMessage fetches a full message by UID from IMAP, parses it, saves to local DB,
 // and returns it. Used when a user interacts with a non-local server search result.
 func (e *Engine) FetchServerMessage(ctx context.Context, accountID, folderID string, uid uint32) (*message.Message, error) {
+	unlock, err := e.folderLocks.lock(ctx, folderID)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+
 	// Get folder path
 	f, err := e.folderStore.Get(folderID)
 	if err != nil {
@@ -355,15 +366,6 @@ func (e *Engine) FetchServerMessage(ctx context.Context, accountID, folderID str
 		return nil, fmt.Errorf("folder belongs to another account")
 	}
 
-	// Check if already exists locally
-	existing, err := e.messageStore.GetByUID(folderID, uid)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check local message: %w", err)
-	}
-	if existing != nil {
-		return existing, nil
-	}
-
 	// Acquire connection
 	conn, err := e.pool.GetConnection(ctx, accountID)
 	if err != nil {
@@ -372,9 +374,37 @@ func (e *Engine) FetchServerMessage(ctx context.Context, accountID, folderID str
 	defer func() { e.pool.Release(conn) }()
 
 	// Select mailbox
-	_, err = conn.Client().SelectMailbox(ctx, f.Path)
+	mailbox, err := conn.Client().SelectMailbox(ctx, f.Path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to select mailbox: %w", err)
+	}
+	if err := e.ensureSearchCacheGeneration(f, mailbox.UIDValidity); err != nil {
+		return nil, err
+	}
+
+	found, err := uidSearch(ctx, conn.Client().RawClient(), &imap.SearchCriteria{UID: []imap.UIDSet{imap.UIDSetNum(imap.UID(uid))}, NotFlag: []imap.Flag{imap.FlagDeleted}})
+	if err != nil {
+		return nil, err
+	}
+	if len(found) != 1 || found[0] != uid {
+		return nil, fmt.Errorf("message not found on server: UID %d", uid)
+	}
+	restored, err := e.messageStore.ReattachRetiredRepairs(folderID, mailbox.UIDValidity, map[uint32]bool{uid: true})
+	if err != nil {
+		return nil, err
+	}
+	if len(restored) > 0 {
+		if _, err := e.syncMessageFlags(ctx, conn.Client().RawClient(), folderID, restored); err != nil {
+			return nil, fmt.Errorf("refresh restored flags: %w", err)
+		}
+	}
+	// Check if already exists locally
+	existing, err := e.messageStore.GetByUID(folderID, uid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check local message: %w", err)
+	}
+	if existing != nil {
+		return existing, nil
 	}
 
 	// Fetch full message
@@ -492,6 +522,28 @@ func (e *Engine) FetchServerMessage(ctx context.Context, accountID, folderID str
 }
 
 func (e *Engine) CacheIMAPSearchHeaders(accountID, folderID string, hits []*IMAPSearchResult) ([]*message.Message, error) {
+	unlock, err := e.folderLocks.lock(context.Background(), folderID)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
+	f, err := e.folderStore.Get(folderID)
+	if err != nil {
+		return nil, err
+	}
+	if f == nil || f.AccountID != accountID {
+		return nil, fmt.Errorf("search folder scope changed")
+	}
+	remote := map[uint32]bool{}
+	for _, h := range hits {
+		if h.AccountID != accountID || h.FolderID != folderID || h.UIDValidity == 0 || h.UIDValidity != f.UIDValidity {
+			return nil, fmt.Errorf("search result scope or generation changed")
+		}
+		remote[h.UID] = true
+	}
+	if _, err := e.messageStore.ReattachRetiredRepairs(folderID, f.UIDValidity, remote); err != nil {
+		return nil, err
+	}
 	result := []*message.Message{}
 	for _, h := range hits {
 		if h.AccountID != accountID || h.FolderID != folderID {
@@ -518,4 +570,23 @@ func (e *Engine) CacheIMAPSearchHeaders(accountID, folderID string, hits []*IMAP
 		result = append(result, m)
 	}
 	return result, nil
+}
+
+// ensureSearchCacheGeneration is called only after SELECT under the folder lock.
+// Search imports share the same UID universe and invalidation rules as sync.
+func (e *Engine) ensureSearchCacheGeneration(f *folder.Folder, validity uint32) error {
+	if validity == 0 {
+		return fmt.Errorf("mailbox generation unavailable")
+	}
+	if f.UIDValidity != validity {
+		if err := e.messageStore.DeleteSyncedUIDCache(f.ID); err != nil {
+			return err
+		}
+		f.UIDValidity = validity
+		f.FlagsSyncModSeq = 0
+		if err := e.folderStore.Update(f); err != nil {
+			return err
+		}
+	}
+	return nil
 }

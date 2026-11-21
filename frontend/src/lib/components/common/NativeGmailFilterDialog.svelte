@@ -142,7 +142,7 @@
         </div>
         {#if context.labels.length}
           <div class="max-h-36 overflow-y-auto rounded-md border border-border p-2" aria-label={$_('gmailFilters.addLabels')}>
-            {#each context.labels as label (label.id)}<label class="flex items-center gap-2 py-1 text-sm"><input type="checkbox" bind:group={labels} value={label.id} />{label.name}</label>{/each}
+            {#each context.labels as label (label.id)}<label class="flex items-center gap-2 py-1 text-sm"><input type="checkbox" checked={labels.includes(label.id)} onchange={(event) => { labels = event.currentTarget.checked ? [label.id] : [] }} />{label.name}</label>{/each}
           </div>
         {/if}
       </fieldset>
