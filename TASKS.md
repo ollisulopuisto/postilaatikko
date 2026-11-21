@@ -67,6 +67,10 @@
 
 - GMAIL-FILTER-002: Review. Implementation `2565ff3`, credential-module alignment `d403d714`. Instinct, `agent/gmail-filter-publish`, `/tmp/pl-gmail-filter-publish`. Explicit selected-account filter consent, preserve mail grant, reject remote workspace until helper-owned authorization exists. Separate manager and no automatic authorization. Wrong-account/partial-grant/project-change/remote-switch tests, refresh preservation/rotation, callback isolation and persisted-readback checks pass. Review fixes verify settings scopes by refreshing the durable grant before saving; shared Mail snapshot CAS prevents stale desktop/helper refreshes from erasing consent. Deterministic missing/reduced refreshed-scope and refresh-versus-consent regression tests pass. App tests use CGO disabled with a temporary uncommitted startup stub; native Mac and live Google consent unrun. Dependent on GMAIL-FILTER-001; provider preview, journal and publication UI follow separately.
 
+## Gmail filter publication journal
+
+- GMAIL-FILTER-003: Review. Instinct, `agent/gmail-filter-journal`, `/tmp/pl-gmail-filter-journal`. Durable single-attempt publication state, provider-native label-only payload, read-back/fingerprint reconciliation. No automatic literal-substring conversion, forwarding or UI activation. Migration 85, restart recovery, concurrent one-claim (20 repeats), wrong-account/changed-source/catalog, unsupported-draft, pending/processing/unknown-job, cancellation and local-execution guards pass. App/database/mailfilter/automation suites and affected-package vet pass; app tests use the temporary uncommitted Linux startup stub. The first race-instrumented suite attempt timed out during compilation; a narrowed concurrent-claim test then passed under the race detector. Full race-suite acceptance remains unverified. Account-owning app/service integration follows only with runtime executor quiescence and no outstanding jobs; no UI invokes this core yet.
+
 ## Status and effort
 
 - **Easy:** contained UI, copy, localization, or isolated behavior change.

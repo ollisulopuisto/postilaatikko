@@ -139,7 +139,7 @@ func (s *Store) Update(rule *Rule) error {
 	result, err := s.db.Exec(`
 		UPDATE mail_filter_rules
 		SET name = ?, enabled = ?, order_index = ?, account_id = ?, account_ids = ?, folder_ids = ?, from_contains = ?, to_contains = ?, subject_contains = ?, list_id_contains = ?, dest_folder_id = ?, action_mark_read = ?, action_archive = ?, action_trash = ?, updated_at = ?
-		WHERE id = ?
+		WHERE id = ? AND NOT EXISTS(SELECT 1 FROM gmail_filter_publications p WHERE p.rule_id=mail_filter_rules.id)
 	`,
 		rule.Name,
 		boolToInt(rule.Enabled),
@@ -166,7 +166,7 @@ func (s *Store) Update(rule *Rule) error {
 		return fmt.Errorf("failed to confirm filter rule update: %w", err)
 	}
 	if rowsAffected == 0 {
-		return fmt.Errorf("filter rule not found: %s", rule.ID)
+		return fmt.Errorf("filter rule missing or Gmail execution ownership requires reconciliation: %s", rule.ID)
 	}
 	return nil
 }
@@ -176,10 +176,24 @@ func (s *Store) Delete(id string) error {
 	if id == "" {
 		return fmt.Errorf("filter rule ID cannot be empty")
 	}
-	_, err := s.db.Exec(`DELETE FROM mail_filter_rules WHERE id = ?`, id)
+	result, err := s.db.Exec(`DELETE FROM mail_filter_rules WHERE id = ? AND NOT EXISTS(SELECT 1 FROM gmail_filter_publications p WHERE p.rule_id=mail_filter_rules.id)`, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete filter rule: %w", err)
 	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		var guarded int
+		if err := s.db.QueryRow(`SELECT COUNT(*) FROM gmail_filter_publications WHERE rule_id=?`, id).Scan(&guarded); err != nil {
+			return err
+		}
+		if guarded > 0 {
+			return fmt.Errorf("Gmail execution ownership requires reconciliation before deleting its local source")
+		}
+	}
+
 	return nil
 }
 
@@ -195,7 +209,7 @@ func (s *Store) Reorder(ids []string) error {
 		}
 	}()
 	for index, id := range ids {
-		result, err := tx.Exec(`UPDATE mail_filter_rules SET order_index = ?, updated_at = ? WHERE id = ?`, index, time.Now().UTC(), id)
+		result, err := tx.Exec(`UPDATE mail_filter_rules SET order_index = ?, updated_at = ? WHERE id = ? AND NOT EXISTS(SELECT 1 FROM gmail_filter_publications p WHERE p.rule_id=mail_filter_rules.id)`, index, time.Now().UTC(), id)
 		if err != nil {
 			return fmt.Errorf("failed to reorder filter rule %s: %w", id, err)
 		}
