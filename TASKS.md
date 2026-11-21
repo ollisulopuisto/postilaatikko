@@ -692,4 +692,4 @@ README review follow-up: qualify checksum instructions because tagged releases d
 ## Security advisory fixes (2026-11-21)
 
 - Status: Review. Owner: Instinct. Branch: `agent/security-advisory-fixes`. Worktree: `/downloads/security-pilot/postilaatikko-fix`.
-- Scope: non-breaking dependency and Go patch updates, before/after scanner evidence, no merge or release. Separate from the report-only scanner pilot.
+- Scope: dependency and Go patch updates plus owner-approved scoped esbuild override; before/after scanner evidence. Implementation 40c26c0a plus follow-up in this branch. Merge authorized after own review and exact-head CI. Separate from the report-only scanner pilot; no release here.

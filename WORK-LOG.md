@@ -17,3 +17,10 @@ Update Go's security patch floor and vulnerable dependencies while keeping appli
 - Own review: checked full manifest/lock/Go diffs, kept generated asset changes out, no scanner-pilot workflow changes. Devin review requested separately.
 
 </details>
+
+### Follow-up review, 2026-11-21
+
+- Owner approved fixing the remaining esbuild chain. A scoped svelte-i18n override uses esbuild 0.25.12, matching Vite, while preserving svelte-i18n 4.0.1. No translation API downgrade. npm audit is now zero.
+- Re-ran clean install, lint, check, build and tests after the actual resolved esbuild change: 1118 pass, 26 browser-gated skips. The translation-extraction CLI processed all Svelte source files successfully. Runtime/native Mac UI not inspected.
+- Devin found stale Flatpak dependency sources. Before regeneration the five source tests fail on a missing npm archive. Regenerated node-sources.json and go.mod.yml/modules.txt using the documented pinned generator; source tests now pass 5/5 and coverage validates 465 lock entries. Full offline Flatpak build not run.
+- Implementation commit before this follow-up: 40c26c0a. New commit in this branch carries the correction. Hosted exact-head CI must pass before merge.
