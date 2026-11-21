@@ -575,7 +575,7 @@ func (t *SMTPTransport) Deliver(ctx context.Context, delivery Delivery) error {
 			if err != nil {
 				// Token lookup/refresh runs before submission, or after an
 				// explicit 401 rejection. It cannot mean mail was accepted.
-				return "", &DeliveryError{Kind: AuthorizationRequired, Err: err}
+				return "", tokenDeliveryFailure(err)
 			}
 			if !gmail.ScopesCoverModify(tokens.Scopes) {
 				return "", gmail.ErrReauthRequired
@@ -665,7 +665,7 @@ func (t *SMTPTransport) smtpConfig(ctx context.Context, acc *account.Account) (s
 	if acc.AuthType == account.AuthOAuth2 {
 		tokens, err := t.tokens(ctx, acc.ID)
 		if err != nil {
-			return config, &DeliveryError{Kind: AuthorizationRequired, Err: err}
+			return config, tokenDeliveryFailure(err)
 		}
 		config.AuthType, config.AccessToken = smtp.AuthTypeOAuth2, tokens.AccessToken
 		return config, nil
@@ -680,15 +680,28 @@ func (t *SMTPTransport) smtpConfig(ctx context.Context, acc *account.Account) (s
 		config.Password, err = t.creds.GetPassword(acc.ID)
 	}
 	if err != nil {
-		return config, &DeliveryError{Kind: AuthorizationRequired, Err: err}
+		return config, tokenDeliveryFailure(err)
 	}
 	return config, nil
+}
+
+func tokenDeliveryFailure(err error) *DeliveryError {
+	kind := AuthorizationRequired
+	if errors.Is(err, credentials.ErrOAuthTokensChanged) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		kind = SafeRetry
+	}
+	return &DeliveryError{Kind: kind, Err: err}
 }
 
 func (t *SMTPTransport) tokens(ctx context.Context, accountID string) (*credentials.OAuthTokens, error) {
 	return t.tokensWithForce(ctx, accountID, false)
 }
 func (t *SMTPTransport) tokensWithForce(ctx context.Context, accountID string, force bool) (*credentials.OAuthTokens, error) {
+	release, err := credentials.LockOAuthRefresh(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -696,6 +709,9 @@ func (t *SMTPTransport) tokensWithForce(ctx context.Context, accountID string, f
 	if err != nil || (!force && !tokens.IsExpiringSoon(5*time.Minute)) {
 		return tokens, err
 	}
+	expected := *tokens
+	expected.Scopes = append([]string(nil), tokens.Scopes...)
+	defer expected.Clear()
 	var refreshed *oauth2.TokenResponse
 	if tokens.Provider == "custom" {
 		provider, ok, err := t.creds.GetCustomOAuthProvider(accountID)
@@ -714,9 +730,15 @@ func (t *SMTPTransport) tokensWithForce(ctx context.Context, accountID string, f
 			return nil, err
 		}
 	}
-	tokens.AccessToken, tokens.RefreshToken = refreshed.AccessToken, refreshed.RefreshToken
+	tokens.AccessToken = refreshed.AccessToken
+	if refreshed.RefreshToken != "" {
+		tokens.RefreshToken = refreshed.RefreshToken
+	}
+	if strings.TrimSpace(refreshed.Scope) != "" {
+		tokens.Scopes = strings.Fields(refreshed.Scope)
+	}
 	tokens.ExpiresAt = time.Now().Add(time.Duration(refreshed.ExpiresIn) * time.Second)
-	if err := t.creds.SetOAuthTokens(accountID, tokens); err != nil {
+	if err := t.creds.CompareAndSwapOAuthTokens(accountID, &expected, tokens); err != nil {
 		return nil, err
 	}
 	return tokens, ctx.Err()

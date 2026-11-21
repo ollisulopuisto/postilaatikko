@@ -76,22 +76,34 @@ func (ops *composeOps) getValidOAuthToken(ctx context.Context, accountID string)
 		return tokens, nil
 	}
 
-	return ops.refreshStoredOAuthToken(ctx, accountID, tokens)
+	return ops.refreshStoredOAuthToken(ctx, accountID, false)
 }
 
 // forceRefreshOAuthToken refreshes the stored token even if it has not
 // expired. Used when an API call was rejected with 401 before expiry.
 func (ops *composeOps) forceRefreshOAuthToken(ctx context.Context, accountID string) (*credentials.OAuthTokens, error) {
-	tokens, err := ops.credStore.GetOAuthTokens(accountID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get OAuth tokens: %w", err)
-	}
-	return ops.refreshStoredOAuthToken(ctx, accountID, tokens)
+	return ops.refreshStoredOAuthToken(ctx, accountID, true)
 }
 
 // refreshStoredOAuthToken refreshes tokens with the stored refresh token and
 // persists the result, asking the frontend to re-authorize if the refresh fails.
-func (ops *composeOps) refreshStoredOAuthToken(ctx context.Context, accountID string, tokens *credentials.OAuthTokens) (*credentials.OAuthTokens, error) {
+func (ops *composeOps) refreshStoredOAuthToken(ctx context.Context, accountID string, force bool) (*credentials.OAuthTokens, error) {
+	release, err := credentials.LockOAuthRefresh(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	// Reload after waiting so no earlier snapshot can erase consent.
+	tokens, err := ops.credStore.GetOAuthTokens(accountID)
+	if err != nil {
+		return nil, err
+	}
+	if !force && !tokens.IsExpiringSoon(5*time.Minute) {
+		return tokens, nil
+	}
+	expected := *tokens
+	expected.Scopes = append([]string(nil), tokens.Scopes...)
+	defer expected.Clear()
 	log := logging.WithComponent("composeOps")
 
 	log.Debug().
@@ -128,9 +140,11 @@ func (ops *composeOps) refreshStoredOAuthToken(ctx context.Context, accountID st
 		tokens.RefreshToken = newTokenResp.RefreshToken
 	}
 
-	if err := ops.credStore.SetOAuthTokens(accountID, tokens); err != nil {
-		log.Warn().Err(err).Msg("Failed to save refreshed OAuth tokens")
-		// Continue anyway - we have valid tokens in memory
+	if strings.TrimSpace(newTokenResp.Scope) != "" {
+		tokens.Scopes = strings.Fields(newTokenResp.Scope)
+	}
+	if err := ops.credStore.CompareAndSwapOAuthTokens(accountID, &expected, tokens); err != nil {
+		return nil, fmt.Errorf("save refreshed OAuth grant: %w", err)
 	}
 
 	log.Info().
