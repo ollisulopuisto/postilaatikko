@@ -127,7 +127,12 @@ func applyHistoricalMigrations(t *testing.T, db *database.DB, version int) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = db.Exec(`CREATE TABLE migrations (version INTEGER PRIMARY KEY, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP)`); err != nil {
+	applyHistoricalMigrationSource(t, db, version, source)
+}
+
+func applyHistoricalMigrationSource(t *testing.T, db *database.DB, version int, source *ast.File) {
+	t.Helper()
+	if _, err := db.Exec(`CREATE TABLE migrations (version INTEGER PRIMARY KEY, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP)`); err != nil {
 		t.Fatal(err)
 	}
 	applied := 0
@@ -145,8 +150,9 @@ func applyHistoricalMigrations(t *testing.T, db *database.DB, version int) {
 			if !ok {
 				t.Fatal("migration entry is not literal")
 			}
-			var number int
-			var sqlText string
+			// Inspect the version first. SQL after the cutoff is irrelevant,
+			// even when its expression no longer uses a string literal.
+			fields := map[string]ast.Expr{}
 			for _, field := range entry.Elts {
 				pair, ok := field.(*ast.KeyValueExpr)
 				if !ok {
@@ -156,22 +162,26 @@ func applyHistoricalMigrations(t *testing.T, db *database.DB, version int) {
 				if !ok {
 					t.Fatal("migration key is not an identifier")
 				}
-				value, ok := pair.Value.(*ast.BasicLit)
-				if !ok {
-					t.Fatal("migration value is not literal")
-				}
-				switch key.Name {
-				case "Version":
-					number, err = strconv.Atoi(value.Value)
-				case "SQL":
-					sqlText, err = strconv.Unquote(value.Value)
-				}
-				if err != nil {
-					t.Fatal(err)
-				}
+				fields[key.Name] = pair.Value
+			}
+			versionValue, ok := fields["Version"].(*ast.BasicLit)
+			if !ok {
+				t.Fatal("migration version is not literal")
+			}
+			number, err := strconv.Atoi(versionValue.Value)
+			if err != nil {
+				t.Fatal(err)
 			}
 			if number > version {
 				break
+			}
+			sqlValue, ok := fields["SQL"].(*ast.BasicLit)
+			if !ok {
+				t.Fatal("historical SQL is not literal")
+			}
+			sqlText, err := strconv.Unquote(sqlValue.Value)
+			if err != nil {
+				t.Fatal(err)
 			}
 			if number <= applied || sqlText == "" {
 				t.Fatal("invalid migration fixture", number)
@@ -196,5 +206,27 @@ func applyHistoricalMigrations(t *testing.T, db *database.DB, version int) {
 	})
 	if applied != version {
 		t.Fatalf("applied migrations through %d, wanted %d", applied, version)
+	}
+}
+
+func TestHistoricalFixtureIgnoresFutureSQLExpression(t *testing.T) {
+	source, err := parser.ParseFile(token.NewFileSet(), "fixture.go", `package fixture
+ const futureSQL = "invalid future SQL must not run"
+ var migrations = []Migration{
+  {Version:1, SQL:"CREATE TABLE historical (id TEXT)"},
+  {SQL:futureSQL, Version:2},
+ }`, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := database.Open(filepath.Join(t.TempDir(), "historical.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	applyHistoricalMigrationSource(t, db, 1, source)
+	var count int
+	if err := db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE name='historical'`).Scan(&count); err != nil || count != 1 {
+		t.Fatal("historical migration missing", count, err)
 	}
 }
