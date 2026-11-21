@@ -2,6 +2,7 @@ package v1
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -64,7 +65,11 @@ func TestGmailConsentStubDoesNotExposeBackendErrors(t *testing.T) {
 	MountGmailConsentRoutes(mux, &gmailConsentStub{err: errors.New(secret)}, func(*http.Request) string { return "client" }, func(http.ResponseWriter, *http.Request, Capability) bool { return true })
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest("POST", "/v1/filters/gmail/consent", strings.NewReader(`{"operation":"start","accountId":"helper"}`)))
-	if rec.Code != 409 || strings.Contains(rec.Body.String(), secret) || !strings.Contains(rec.Body.String(), "select the Gmail account") || !strings.Contains(rec.Body.String(), "Gmail settings permission") {
+	var envelope ErrorResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Error.Code != CodeConflict || rec.Code != 409 || strings.Contains(rec.Body.String(), secret) || !strings.Contains(rec.Body.String(), "select the Gmail account") || !strings.Contains(rec.Body.String(), "Gmail settings permission") {
 		t.Fatal("backend error disclosure", rec.Code, rec.Body.String())
 	}
 }
@@ -76,7 +81,11 @@ func TestGmailConsentRejectsMissingAccountBeforeOwner(t *testing.T) {
 	for _, body := range []string{`{"operation":"start"}`, `{"operation":"complete","accountId":" "}`} {
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, httptest.NewRequest("POST", "/v1/filters/gmail/consent", strings.NewReader(body)))
-		if rec.Code != 400 || stub.calls != 0 {
+		var envelope ErrorResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &envelope); err != nil {
+			t.Fatal(err)
+		}
+		if envelope.Error.Code != CodeInvalidRequest || rec.Code != 400 || stub.calls != 0 {
 			t.Fatal("missing account reached owner", rec.Code, stub.calls)
 		}
 	}

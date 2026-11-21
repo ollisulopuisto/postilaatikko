@@ -5,16 +5,17 @@ package app
 import (
 	"context"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	automationclient "github.com/ollisulopuisto/postilaatikko/internal/automation/client"
+	"github.com/ollisulopuisto/postilaatikko/internal/automation"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
 	"github.com/ollisulopuisto/postilaatikko/internal/ipc"
 	"github.com/ollisulopuisto/postilaatikko/internal/syncowner"
 	keyring "github.com/zalando/go-keyring"
@@ -69,6 +70,42 @@ func TestGmailPublicationUsesRealStartupOwnership(t *testing.T) {
 					}
 				}()
 			}
+			var helperCalls atomic.Int32
+			if helperOwns {
+				// Preserve the startup-provisioned client's endpoint, token and
+				// transport. Redirect only its actual socket request to an
+				// isolated helper running the production auth middleware.
+				helper := automation.NewServer(automation.ServerConfig{Addr: "127.0.0.1:0", TokenStore: automation.NewSQLiteTokenStore(a.db), V1Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.URL.Path != "/v1/filters/gmail" {
+						http.NotFound(w, r)
+						return
+					}
+					if !automation.RequireGrantCapability(w, r, v1.CapabilityMailRead) {
+						return
+					}
+					helperCalls.Add(1)
+					w.Header().Set("Content-Type", "application/json")
+					_, _ = fmt.Fprint(w, `{"data":{"accountId":"helper-mail","email":"helper@example.test","consentRequired":true}}`)
+				})})
+				if err := helper.Start(); err != nil {
+					t.Fatal(err)
+				}
+				defer func() {
+					if err := helper.Stop(context.Background()); err != nil {
+						t.Error(err)
+					}
+				}()
+				originalTransport := http.DefaultTransport
+				routedTransport := originalTransport.(*http.Transport).Clone()
+				routedTransport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+					if network != "tcp" || address != "127.0.0.1:8029" {
+						return nil, fmt.Errorf("unexpected helper destination: %s %s", network, address)
+					}
+					return (&net.Dialer{}).DialContext(ctx, network, helper.Addr())
+				}
+				http.DefaultTransport = routedTransport
+				defer func() { routedTransport.CloseIdleConnections(); http.DefaultTransport = originalTransport }()
+			}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			a.runtimeEventSubscriber = func(string, func(...interface{})) func() { return func() {} }
@@ -121,21 +158,18 @@ func TestGmailPublicationUsesRealStartupOwnership(t *testing.T) {
 				if a.mailboxService.isRemote() {
 					t.Fatal("startup fixture did not use default localhost helper")
 				}
-				calls := 0
-				a.mailboxService.client = automationclient.New(automationclient.Config{Endpoint: mailboxServiceEndpoint, Transport: contactsRoundTrip(func(req *http.Request) (*http.Response, error) {
-					calls++
-					if req.URL.String() != mailboxServiceEndpoint+"/v1/filters/gmail" {
-						return nil, fmt.Errorf("wrong helper destination: %s", req.URL)
-					}
-					return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"data":{"accountId":"helper-mail","email":"helper@example.test","consentRequired":true}}`))}, nil
-				})})
+				provisioned := a.mailboxService.client
+				if provisioned == nil || a.mailboxService.credential == nil {
+					t.Fatal("startup did not provision client")
+				}
+
 				workspace, err := a.GetNativeGmailWorkspace()
 				if err != nil || workspace.Target != "helper" || workspace.Endpoint != mailboxServiceEndpoint {
 					t.Fatal("competing localhost owner not selected", workspace, err)
 				}
 				reply, err := a.NativeGmailReview(NativeGmailReviewRequest{Workspace: workspace.Key, Operation: "context", RuleID: "source"})
-				if err != nil || reply.Context == nil || reply.Context.AccountID != "helper-mail" || calls != 1 {
-					t.Fatal("startup helper route fell back", reply, err, calls)
+				if err != nil || reply.Context == nil || reply.Context.AccountID != "helper-mail" || helperCalls.Load() != 1 || a.mailboxService.client != provisioned {
+					t.Fatal("startup helper route fell back", reply, err, helperCalls.Load())
 				}
 			}
 			err = a.requireStandaloneFilterOwner()
