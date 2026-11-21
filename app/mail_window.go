@@ -58,7 +58,11 @@ func newMailWindowEvent(name string, data []any) (ipc.Message, error) {
 func (a *App) bridgeMailWindowEvents() {
 	log := logging.WithComponent("app.mail-window")
 	for _, name := range mailWindowEvents {
-		wailsRuntime.EventsOn(a.ctx, name, func(data ...interface{}) {
+		subscribe := a.runtimeEventSubscriber
+		if subscribe == nil {
+			subscribe = func(name string, cb func(...interface{})) func() { return wailsRuntime.EventsOn(a.ctx, name, cb) }
+		}
+		subscribe(name, func(data ...interface{}) {
 			msg, err := newMailWindowEvent(name, data)
 			if err != nil {
 				log.Warn().Err(err).Str("event", name).Msg("Skipped window event")

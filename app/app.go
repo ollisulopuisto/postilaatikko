@@ -235,7 +235,8 @@ type App struct {
 	ctx context.Context
 	// Optional test seam for mutation/event integration tests. Production uses
 	// the Wails lifecycle context through emitRuntimeEvent.
-	runtimeEventEmitter func(string, ...interface{})
+	runtimeEventEmitter    func(string, ...interface{})
+	runtimeEventSubscriber func(string, func(...interface{})) func()
 
 	// ready is the backend-up signal the frontend polls before mounting the
 	// main app. False until Startup completes. The boot splash in
@@ -1032,7 +1033,7 @@ func (a *App) Startup(ctx context.Context) {
 	// the normal case, IsReady for the "event fired before listener
 	// registered" race.
 	a.ready = true
-	wailsRuntime.EventsEmit(a.ctx, "app:ready")
+	a.emitRuntimeEvent("app:ready")
 
 	// Initialize desktop notifications with click handling
 	a.initNotifications(ctx)
@@ -1293,6 +1294,9 @@ func (a *App) Shutdown(ctx context.Context) {
 }
 
 func (a *App) shutdown(ctx context.Context) {
+	// Drain native filter writes before releasing the process executor lease.
+	a.filterExecutionMu.Lock()
+	defer a.filterExecutionMu.Unlock()
 	a.stopPendingReceiptReconciler()
 	a.clearContactOAuth()
 	log := logging.WithComponent("app")

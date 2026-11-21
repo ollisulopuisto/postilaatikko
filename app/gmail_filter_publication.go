@@ -24,18 +24,35 @@ func (p accountFilterProvider) GetFilter(ctx context.Context, id string) (*gmail
 	return p.client.GetFilter(ctx, id)
 }
 
-// requireStandaloneFilterOwner refuses both remote and localhost service owners.
-// A disabled helper or a failed status probe is not proof of no other executor.
-// Helper publication must run on that helper through its own guarded API.
+// requireStandaloneFilterOwner requires positive local executor ownership when
+// Startup has installed its connector. A failed helper probe is never ownership.
 func (a *App) requireStandaloneFilterOwner() error {
-	if a.mailboxService != nil {
-		return fmt.Errorf("Gmail publication requires standalone ownership; mailbox-service publication is not available")
+	if err := a.requireLocalFilterExecutor(); err != nil {
+		return err
 	}
 	if a.filterStore == nil || a.accountStore == nil || a.credStore == nil {
 		return fmt.Errorf("local filter owner unavailable")
 	}
 	return nil
 }
+
+func (a *App) requireLocalFilterExecutor() error {
+	if a.remoteServiceMode || (a.mailboxService != nil && a.mailboxService.isRemote()) {
+		return fmt.Errorf("Gmail publication requires the selected account owner")
+	}
+	a.syncOwnerMu.Lock()
+	defer a.syncOwnerMu.Unlock()
+	if a.syncShutdown {
+		return fmt.Errorf("local filter executor is shutting down")
+	}
+	// Nil connectors support deliberately unstarted local owners. A started
+	// desktop must hold the same exclusive process lock used by sync/filtering.
+	if a.mailboxService != nil && a.syncOwnerLock == nil {
+		return fmt.Errorf("local filter executor does not own mailbox sync")
+	}
+	return nil
+}
+
 func (a *App) gmailFilterProvider(accountID string) (accountFilterProvider, error) {
 	if err := a.requireStandaloneFilterOwner(); err != nil {
 		return accountFilterProvider{}, err
@@ -108,6 +125,8 @@ func (a *App) publishLocalGmailPublication(ctx context.Context, id string) (*mai
 	return a.filterStore.PublishGmailFilter(ctx, id, provider)
 }
 func (a *App) reconcileLocalGmailPublication(ctx context.Context, id string) (*mailfilter.GmailPublication, error) {
+	a.filterExecutionMu.RLock()
+	defer a.filterExecutionMu.RUnlock()
 	if err := a.requireStandaloneFilterOwner(); err != nil {
 		return nil, err
 	}

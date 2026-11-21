@@ -57,8 +57,8 @@ func (a *App) AuthorizeGmailFilters(accountID string) error {
 
 func (a *App) prepareGmailFilterConsent(accountID string) (string, *credentials.OAuthTokens, oauth2.ProviderConfig, error) {
 	empty := oauth2.ProviderConfig{}
-	if a.mailboxService != nil && a.mailboxService.isRemote() {
-		return "", nil, empty, fmt.Errorf("Gmail filter authorization requires the account-owning local workspace")
+	if err := a.requireLocalFilterExecutor(); err != nil {
+		return "", nil, empty, err
 	}
 	if a.accountStore == nil || a.credStore == nil {
 		return "", nil, empty, fmt.Errorf("account credentials unavailable")
