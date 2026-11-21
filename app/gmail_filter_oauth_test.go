@@ -174,3 +174,45 @@ func TestMailRefreshCannotUndoConcurrentFilterConsent(t *testing.T) {
 		t.Fatal("consent lost", err)
 	}
 }
+
+func TestFilterConsentRejectsContextSwitchDuringRefreshVerification(t *testing.T) {
+	for _, mode := range []string{"workspace", "project", "account"} {
+		t.Run(mode, func(t *testing.T) {
+			a := filterConsentFixture(t)
+			email, previous, cfg, err := a.prepareGmailFilterConsent("mail")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer previous.Clear()
+			old := http.DefaultTransport
+			http.DefaultTransport = contactsRoundTrip(func(req *http.Request) (*http.Response, error) {
+				switch mode {
+				case "workspace":
+					a.mailboxService = &mailboxServiceConnector{endpoint: "https://example.test"}
+				case "project":
+					oauth2.UserOverrideLookup = func(string) (oauth2.ClientCredentials, bool) {
+						return oauth2.ClientCredentials{ClientID: "changed"}, true
+					}
+				case "account":
+					if _, err := a.accountStore.Get("mail"); err != nil {
+						t.Fatal(err)
+					}
+					if err := a.credStore.DeleteOAuthTokens("mail"); err != nil {
+						t.Fatal(err)
+					}
+				}
+				return old.RoundTrip(req)
+			})
+			response := &oauth2.TokenResponse{AccessToken: "initial", ExpiresIn: 3600, Scope: strings.Join(append(append([]string(nil), previous.Scopes...), gmail.ScopeSettingsBasic), " ")}
+			if err = a.persistGmailFilterConsent("mail", email, previous, cfg.ClientID, response, email); err == nil {
+				t.Fatal("context switch accepted")
+			}
+			if mode != "account" {
+				stored, err := a.credStore.GetOAuthTokens("mail")
+				if err != nil || stored.AccessToken != "mail-access" {
+					t.Fatal("switched consent changed grant", err)
+				}
+			}
+		})
+	}
+}

@@ -575,7 +575,7 @@ func (t *SMTPTransport) Deliver(ctx context.Context, delivery Delivery) error {
 			if err != nil {
 				// Token lookup/refresh runs before submission, or after an
 				// explicit 401 rejection. It cannot mean mail was accepted.
-				return "", &DeliveryError{Kind: AuthorizationRequired, Err: err}
+				return "", tokenDeliveryFailure(err)
 			}
 			if !gmail.ScopesCoverModify(tokens.Scopes) {
 				return "", gmail.ErrReauthRequired
@@ -665,7 +665,7 @@ func (t *SMTPTransport) smtpConfig(ctx context.Context, acc *account.Account) (s
 	if acc.AuthType == account.AuthOAuth2 {
 		tokens, err := t.tokens(ctx, acc.ID)
 		if err != nil {
-			return config, &DeliveryError{Kind: AuthorizationRequired, Err: err}
+			return config, tokenDeliveryFailure(err)
 		}
 		config.AuthType, config.AccessToken = smtp.AuthTypeOAuth2, tokens.AccessToken
 		return config, nil
@@ -680,9 +680,17 @@ func (t *SMTPTransport) smtpConfig(ctx context.Context, acc *account.Account) (s
 		config.Password, err = t.creds.GetPassword(acc.ID)
 	}
 	if err != nil {
-		return config, &DeliveryError{Kind: AuthorizationRequired, Err: err}
+		return config, tokenDeliveryFailure(err)
 	}
 	return config, nil
+}
+
+func tokenDeliveryFailure(err error) *DeliveryError {
+	kind := AuthorizationRequired
+	if errors.Is(err, credentials.ErrOAuthTokensChanged) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		kind = SafeRetry
+	}
+	return &DeliveryError{Kind: kind, Err: err}
 }
 
 func (t *SMTPTransport) tokens(ctx context.Context, accountID string) (*credentials.OAuthTokens, error) {

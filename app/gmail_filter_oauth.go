@@ -132,6 +132,16 @@ func (a *App) persistGmailFilterConsent(accountID, expectedEmail string, previou
 	refreshToken = verified.RefreshToken
 	tokens := &credentials.OAuthTokens{Provider: "google", AccessToken: response.AccessToken, RefreshToken: refreshToken, ExpiresAt: time.Now().Add(time.Duration(response.ExpiresIn) * time.Second), Scopes: strings.Fields(response.Scope)}
 	defer tokens.Clear()
+	// The verification network call can outlive a workspace/account/client switch.
+	// Revalidate context without replacing the pre-request credential CAS snapshot.
+	verifiedEmail, verifiedCurrent, verifiedCfg, err := a.prepareGmailFilterConsent(accountID)
+	if err != nil {
+		return err
+	}
+	defer verifiedCurrent.Clear()
+	if !strings.EqualFold(verifiedEmail, expectedEmail) || verifiedCfg.ClientID != clientID {
+		return fmt.Errorf("Gmail context changed during verification; start again")
+	}
 	if err := a.credStore.CompareAndSwapOAuthTokens(accountID, current, tokens); err != nil {
 		return fmt.Errorf("persist Gmail filter grant: %w", err)
 	}
