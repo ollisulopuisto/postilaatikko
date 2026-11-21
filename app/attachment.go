@@ -386,10 +386,21 @@ func (a *App) SaveAllAttachmentsForAccount(accountID, messageID string) (string,
 	return saveDir, nil
 }
 
+// Explicit opening preserves editable legacy downloads without promoting their
+// bytes to verified originals. All export/forward paths still require integrity.
+func (a *App) attachmentPathForOpening(id string) (string, error) {
+	if a.attachmentStore != nil && a.paths != nil {
+		if path, ok := a.attachmentStore.LocalDownloadPath(a.paths.AttachmentsPath(), id); ok {
+			return path, nil
+		}
+	}
+	return a.DownloadAttachment(id, "")
+}
+
 // OpenAttachment downloads (if needed) and opens an attachment with the default application
 func (a *App) OpenAttachment(attachmentID string) error {
 	// Download if not already downloaded
-	localPath, err := a.DownloadAttachment(attachmentID, "")
+	localPath, err := a.attachmentPathForOpening(attachmentID)
 	if err != nil {
 		return err
 	}
@@ -401,6 +412,26 @@ func (a *App) OpenAttachment(attachmentID string) error {
 // OpenAttachmentForAccount opens an attachment after explicitly fetching it
 // from its owning helper account when configured for remote-only mode.
 func (a *App) OpenAttachmentForAccount(accountID, messageID, attachmentID string) error {
+	if !a.remoteServiceMode {
+		if a.attachmentStore == nil || a.messageStore == nil {
+			return errors.New("attachment store unavailable")
+		}
+		att, err := a.attachmentStore.Get(attachmentID)
+		if err != nil {
+			return err
+		}
+		if att == nil {
+			return errors.New("attachment not found in message")
+		}
+		msg, err := a.messageStore.GetReaderMessage(messageID)
+		if err != nil {
+			return err
+		}
+		if msg == nil || msg.AccountID != accountID || readerContentID(msg) != att.MessageID {
+			return errors.New("message not found in account")
+		}
+		return a.OpenAttachment(attachmentID)
+	}
 	path, err := a.DownloadAttachmentForAccount(accountID, messageID, attachmentID, "")
 	if err != nil {
 		return err

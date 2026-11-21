@@ -384,3 +384,83 @@ func TestForwardSharesGmailDataPartFetch(t *testing.T) {
 		t.Fatal("forward refetched full message", len(files), calls, err)
 	}
 }
+
+func TestOpeningRepairedMatchingDownloadDoesNotCreateDuplicate(t *testing.T) {
+	f := newFilterFixture(t, false)
+	a := f.app
+	a.syncEngine = nil
+	a.paths = &platform.Paths{Data: t.TempDir()}
+	a.attachmentStore = message.NewAttachmentStore(f.db)
+	root := a.paths.AttachmentsPath()
+	if err := os.MkdirAll(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "invoice.pdf")
+	mustWriteFixture(t, path, []byte("original"))
+	if err := a.attachmentStore.Create(&message.Attachment{ID: "old-download", MessageID: f.message.ID, Filename: "invoice.pdf", LocalPath: path, Size: 8}); err != nil {
+		t.Fatal(err)
+	}
+	parts := []message.RepairPart{{Metadata: message.Attachment{ID: "repaired-download", MessageID: f.message.ID, Filename: "invoice.pdf", Size: 8}, Payload: []byte("original")}}
+	if _, err := a.attachmentStore.RepairFromMIME("acct-a", f.message.ID, "digest", parts, root); err != nil {
+		t.Fatal(err)
+	}
+	got, err := a.DownloadAttachment("repaired-download", "")
+	if err != nil || got != path {
+		t.Fatal("matching verified path not reused", got, err)
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil || len(entries) != 1 {
+		t.Fatal("duplicate download created", len(entries), err)
+	}
+}
+
+func TestLegacyEditableDownloadOpensOfflineWithoutBecomingOriginal(t *testing.T) {
+	f := newFilterFixture(t, false)
+	a := f.app
+	a.syncEngine = nil
+	a.paths = &platform.Paths{Data: t.TempDir()}
+	a.attachmentStore = message.NewAttachmentStore(f.db)
+	root := a.paths.AttachmentsPath()
+	if err := os.MkdirAll(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "legacy.txt")
+	mustWriteFixture(t, path, []byte("editable"))
+	att := &message.Attachment{ID: "legacy", MessageID: f.message.ID, Filename: "legacy.txt", LocalPath: path, Size: 8}
+	if err := a.attachmentStore.Create(att); err != nil {
+		t.Fatal(err)
+	}
+	got, err := a.attachmentPathForOpening(att.ID)
+	if err != nil || got != path {
+		t.Fatal("legacy offline open lost", got, err)
+	}
+	if _, ok := a.attachmentStore.ReadVerifiedDownload(root, att.ID); ok {
+		t.Fatal("opening promoted legacy bytes to original")
+	}
+	var files []smtp.Attachment
+	if err := a.fetchForwardAttachments(zerolog.Nop(), f.message, &files); err == nil {
+		t.Fatal("legacy opening authorized forwarding")
+	}
+	if _, err := a.DownloadAttachment(att.ID, filepath.Join(t.TempDir(), "export.txt")); err == nil {
+		t.Fatal("legacy opening authorized original export")
+	}
+	// Existing edited downloads are still explicitly openable, not sent as originals.
+	if err := a.attachmentStore.SetVerifiedDownload(att.ID, path, []byte("original")); err != nil {
+		t.Fatal(err)
+	}
+	got, err = a.attachmentPathForOpening(att.ID)
+	if err != nil || got != path {
+		t.Fatal("editable download no longer openable", got, err)
+	}
+	if _, ok := a.attachmentStore.ReadVerifiedDownload(root, att.ID); ok {
+		t.Fatal("edited bytes treated as original")
+	}
+	outside := filepath.Join(t.TempDir(), "outside.txt")
+	mustWriteFixture(t, outside, []byte("outside"))
+	if err := a.attachmentStore.UpdateLocalPath(att.ID, outside); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.attachmentPathForOpening(att.ID); err == nil {
+		t.Fatal("arbitrary legacy path opened")
+	}
+}

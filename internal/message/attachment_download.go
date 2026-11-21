@@ -84,3 +84,29 @@ func (s *AttachmentStore) SetVerifiedDownload(id, path string, content []byte) e
 	}
 	return tx.Commit()
 }
+
+// LocalDownloadPath is for explicitly opening the user's editable download,
+// not for forwarding/exporting original mail bytes or creating integrity data.
+func (s *AttachmentStore) LocalDownloadPath(root, id string) (string, bool) {
+	var path string
+	if err := s.db.QueryRow(`SELECT COALESCE(local_path,'') FROM attachments WHERE id=?`, id).Scan(&path); err != nil || root == "" || path == "" {
+		return "", false
+	}
+	canonicalRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return "", false
+	}
+	canonicalPath, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return "", false
+	}
+	rel, err := filepath.Rel(canonicalRoot, canonicalPath)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return "", false
+	}
+	info, err := os.Stat(canonicalPath)
+	if err != nil || !info.Mode().IsRegular() {
+		return "", false
+	}
+	return canonicalPath, true
+}

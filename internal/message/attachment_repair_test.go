@@ -383,3 +383,55 @@ func TestRepairReattachmentResetsFlagWatermark(t *testing.T) {
 		t.Fatal("restored repair can skip flags", watermark, err)
 	}
 }
+
+func TestRepairAndUndoPreserveVerifiedDownloadIntegrity(t *testing.T) {
+	ms, db := setupThreadTestDB(t)
+	defer db.Close()
+	if err := ms.Create(&Message{ID: "integrity-mail", AccountID: "acc-1", FolderID: "fld-1", UID: 22, Date: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	store := NewAttachmentStore(db)
+	root := t.TempDir()
+	path := filepath.Join(root, "file.txt")
+	if err := os.WriteFile(path, []byte("original"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"verified", "legacy"} {
+		if err := store.Create(&Attachment{ID: id, MessageID: "integrity-mail", Filename: "file.txt", LocalPath: path, Size: 8}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.SetVerifiedDownload("verified", path, []byte("original")); err != nil {
+		t.Fatal(err)
+	}
+	parts := []RepairPart{{Metadata: Attachment{ID: "replacement", MessageID: "integrity-mail", Filename: "file.txt", Size: 8}, Payload: []byte("original")}}
+	backup, err := store.RepairFromMIME("acc-1", "integrity-mail", "snapshot", parts, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertVerified := func(id string, want bool) {
+		t.Helper()
+		got, ok := store.ReadVerifiedDownload(root, id)
+		if ok != want || (want && string(got) != "original") {
+			t.Fatal("integrity wrong", id, string(got), ok, want)
+		}
+	}
+	assertVerified("replacement", true)
+	if err := store.RestoreRepair("acc-1", "integrity-mail", backup); err != nil {
+		t.Fatal(err)
+	}
+	assertVerified("verified", true)
+	assertVerified("legacy", false)
+	next, err := store.RepairBackupID("integrity-mail")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RestoreRepair("acc-1", "integrity-mail", next); err != nil {
+		t.Fatal(err)
+	}
+	assertVerified("replacement", true)
+	if err := os.WriteFile(path, []byte("modified"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	assertVerified("replacement", false)
+}
