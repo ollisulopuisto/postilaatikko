@@ -30,7 +30,7 @@ test('native Gmail review: selected consent, preview invalidation, explicit publ
         if(req.workspace!=='helper-key')return Promise.reject(new Error('wrong workspace'))
         switch(req.operation){
           case 'status':return Promise.resolve({publication:window.plan})
-          case 'context':return Promise.resolve({context:{accountId:'work',email:'me@example.com',consentRequired:window.consent,labels:[{id:'user-label',name:'Reading'}]}})
+          case 'context':return Promise.resolve({context:{accountId:'work',email:'me@example.com',consentRequired:window.consent,labels:[{id:'user-label',name:'Reading'},{id:'receipts-label',name:'Receipts'}]}})
           case 'preview':return window.previewFails?Promise.reject(new Error('preview unavailable')):Promise.resolve({preview:{accountEmail:'reviewed@example.com',found:50,truncated:true,fingerprint:JSON.stringify(req.draft)}})
           case 'prepare':window.plan={id:'plan',ruleId:'source',accountId:'work',accountEmail:'reviewed@example.com',state:'prepared',fingerprint:req.fingerprint,query:req.draft.query,addLabelIds:req.draft.labelIds,removeLabelIds:['UNREAD']};return Promise.resolve({publication:window.plan})
           case 'publish':window.plan={...window.plan,state:window.rejectCreate?'rejected':'unknown'};return Promise.reject(new Error(window.rejectCreate?'Gmail rejected filter':'create timed out'))
@@ -55,6 +55,12 @@ test('native Gmail review: selected consent, preview invalidation, explicit publ
     assert.deepEqual(await page.evaluate(()=>window.calls.find(([n])=>n==='AuthorizeNativeGmailWorkspace')[1]),['helper-key','work'])
     await page.getByLabel('Mark read',{exact:true}).check()
     await page.getByLabel('Reading',{exact:true}).check()
+    await page.getByLabel('Receipts',{exact:true}).check()
+    assert.equal(await page.getByLabel('Reading',{exact:true}).isChecked(),false,'second user label replaces first')
+    assert.equal(await page.getByLabel('Receipts',{exact:true}).isChecked(),true)
+    await page.getByLabel('Reading',{exact:true}).check()
+    assert.equal(await page.getByLabel('Receipts',{exact:true}).isChecked(),false)
+
     const review=page.getByRole('button',{name:'Review exact Gmail rule'})
     assert.equal(await review.isDisabled(),true)
     await page.evaluate(()=>{window.previewFails=true})

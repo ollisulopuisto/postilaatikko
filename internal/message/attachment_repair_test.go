@@ -250,34 +250,51 @@ func TestRepairRejectsGmailAndChangedSourceWithoutTouchingEitherMessage(t *testi
 	}
 }
 
-func TestInterruptedMoveRecoveryRetainsAmbiguousAndRepairedState(t *testing.T) {
+func TestInterruptedMoveEvidenceAndRepairSurviveCachePruning(t *testing.T) {
 	ms, db := setupThreadTestDB(t)
 	defer db.Close()
-	for i, id := range []string{"pending", "one", "two"} {
-		if err := ms.Create(&Message{ID: id, AccountID: "acc-1", FolderID: "fld-1", UID: uint32(i + 1), MessageID: "same@test", Date: time.Now(), ReceivedAt: time.Now()}); err != nil {
+	for i, id := range []string{"pending", "repaired", "prunable"} {
+		if err := ms.Create(&Message{ID: id, AccountID: "acc-1", FolderID: "fld-1", UID: uint32(i + 1), MessageID: id + "@test", Date: time.Now().AddDate(0, -3, 0)}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := db.Exec(`UPDATE messages SET uid=-1 WHERE id='pending'`); err != nil {
+	if err := ms.MoveMessages([]string{"pending"}, "fld-1"); err != nil {
 		t.Fatal(err)
 	}
-	if err := ms.RecoverTempMoves("fld-1", []string{"pending"}); err == nil {
-		t.Fatal("ambiguous recovery allowed")
-	}
-	if got, err := ms.Get("pending"); err != nil || got == nil {
-		t.Fatal("ambiguous identity lost", err)
+	if err := ms.RecordMoveUIDEvidence("fld-1", 1, map[string]uint32{"pending": 100}); err != nil {
+		t.Fatal(err)
 	}
 	store := NewAttachmentStore(db)
-	if _, err := store.RepairFromMIME("acc-1", "pending", "snapshot", []RepairPart{{Metadata: Attachment{ID: "recovered-exact", MessageID: "pending", Filename: "one", Size: 3}, Payload: []byte("one")}}, ""); err != nil {
+	if _, err := store.RepairFromMIME("acc-1", "repaired", "snapshot", []RepairPart{{Metadata: Attachment{ID: "recovered-exact", MessageID: "repaired", Filename: "one", Size: 3}, Payload: []byte("one")}}, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`DELETE FROM messages WHERE id IN ('one','two')`); err != nil {
+	if _, err := ms.DeleteOlderThanInFolder("fld-1", time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if err := ms.RecoverTempMoves("fld-1", []string{"pending"}); err == nil {
-		t.Fatal("recovery deleted repair-protected placeholder")
+	if err := ms.DeleteSyncedUIDCache("fld-1"); err != nil {
+		t.Fatal(err)
 	}
-	if got, err := ms.Get("pending"); err != nil || got == nil {
-		t.Fatal("repair owner lost", err)
+	for _, id := range []string{"pending", "repaired"} {
+		if got, err := ms.Get(id); err != nil || got == nil {
+			t.Fatal("prune lost protected row", id, err)
+		}
+	}
+	if uid, v, err := ms.MoveUIDEvidence("fld-1", "pending"); err != nil || uid != 100 || v != 1 {
+		t.Fatal("evidence pruned", uid, v, err)
+	}
+	if got, err := ms.Get("prunable"); err != nil || got != nil {
+		t.Fatal("ordinary age pruning stopped", err)
+	}
+	if err := ms.MoveMessages([]string{"pending"}, "fld-1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := ms.MoveUIDEvidence("fld-1", "pending"); err == nil {
+		t.Fatal("subsequent move reused stale proof")
+	}
+	if err := ms.ReconcileVerifiedMoveUID("fld-1", "pending", 100, 1); err == nil {
+		t.Fatal("stale proof committed after newer move")
+	}
+	if got, err := ms.Get("pending"); err != nil || got == nil || int32(got.UID) >= 0 {
+		t.Fatal("newer move overwritten by stale recovery", got, err)
 	}
 }

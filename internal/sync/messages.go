@@ -149,7 +149,7 @@ func (e *Engine) SyncMessages(ctx context.Context, accountID, folderID string, s
 
 		// Delete all local messages and resync
 		cleanupStarted := time.Now()
-		if err := e.messageStore.DeleteByFolder(folderID); err != nil {
+		if err := e.messageStore.DeleteSyncedUIDCache(folderID); err != nil {
 			timings.cleanup += time.Since(cleanupStarted)
 			return fmt.Errorf("failed to delete messages: %w", err)
 		}
@@ -237,7 +237,7 @@ func (e *Engine) SyncMessages(ctx context.Context, accountID, folderID string, s
 		if err := e.folderStore.Update(f); err != nil {
 			e.log.Warn().Err(err).Msg("Failed to update folder sync state")
 		}
-		return fmt.Errorf("destination sync incomplete: empty remote listing conflicts with local messages")
+		return nil
 	}
 
 	compareStarted := time.Now()

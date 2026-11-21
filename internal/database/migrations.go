@@ -1991,4 +1991,12 @@ var migrations = []Migration{
  );
  CREATE INDEX idx_gmail_filter_publications_account ON gmail_filter_publications(account_id,updated_at,id);
  `},
+	{Version: 86, SQL: `
+ CREATE TABLE move_uid_evidence (
+   message_id TEXT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+   folder_id TEXT NOT NULL,
+   uid INTEGER NOT NULL CHECK(uid>0),
+   uid_validity INTEGER NOT NULL CHECK(uid_validity>0)
+ );
+ `},
 }

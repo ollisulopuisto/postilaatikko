@@ -842,6 +842,7 @@ func (a *App) moveToFolderWithService(messageIDs []string, destFolderID string, 
 					"folderId":  destFolderID,
 					"error":     err.Error(),
 				})
+				a.retainMoveRecovery(destFolderID, messageIDs)
 				moveCompletion.Complete(err)
 			}
 		}()
@@ -872,6 +873,9 @@ func (a *App) moveToFolderWithService(messageIDs []string, destFolderID string, 
 					"folderId":  destFolderID,
 					"error":     err.Error(),
 				})
+				if remoteStarted || groupRemoteStarted {
+					a.retainMoveRecovery(destFolderID, messageIDs)
+				}
 				moveCompletion.Complete(err)
 				return
 			}
@@ -903,6 +907,7 @@ func (a *App) moveToFolderWithService(messageIDs []string, destFolderID string, 
 				moveCompletion.Complete(nil)
 				return
 			}
+			a.retainMoveRecovery(destFolderID, messageIDs)
 			var identityConflict *message.MovedUIDConflictError
 			if errors.As(err, &identityConflict) {
 				stdlog.Printf("UNDO MOVE operationId=%s phase=uid-owner movingLocalId=%s existingLocalId=%s destFolderId=%s destinationUID=%d messageIdMatch=%t resolution=conflict", operationID, identityConflict.MovingLocalID, identityConflict.ExistingLocalID, destFolderID, identityConflict.DestinationUID, identityConflict.MessageIDMatch)
@@ -1064,9 +1069,9 @@ func (a *App) flushMoveDestinationSync(key, accountID, destFolderID string) {
 	}
 
 	if syncErr == nil {
-		// Header synchronization has replaced the temporary negative UIDs with
-		// the actual server UIDs, so Undo can now safely reverse the move.
-		if err := a.messageStore.DeleteTempUIDsForMessages(destFolderID, ids); err != nil {
+		// A normal header sync is not proof that a matching copy belongs to
+		// this move. Reconcile only recorded and freshly verified UIDs.
+		if err := a.recoverInterruptedMoves(a.actionContext(), accountID, destFolderID, ids); err != nil {
 			syncErr = err
 		}
 	}
@@ -1208,6 +1213,11 @@ func (a *App) moveMessagesToIMAP(messages []*message.Message, sourceFolderID str
 		// before COPY. The local cache may be stale and RFC822 Message-ID is not
 		// unique, so it cannot safely stand in for this remote snapshot. A Gmail
 		// label change returns no COPYUID either, so it needs the baseline too.
+		destination, err := conn.SelectMailbox(a.ctx, destFolder.Path)
+		if err != nil {
+			return fmt.Errorf("read destination UID validity: %w", err)
+		}
+		destinationValidity := destination.UIDValidity
 		preCopyUIDs := make(map[string]map[uint32]bool)
 		if !conn.Caps().Has(goImap.CapUIDPlus) || useGmailLabels {
 			if _, err := conn.SelectMailbox(a.ctx, destFolder.Path); err != nil {
@@ -1348,6 +1358,18 @@ func (a *App) moveMessagesToIMAP(messages []*message.Message, sourceFolderID str
 			}
 		}
 
+		if len(resolved) > 0 {
+			latest, err := conn.SelectMailbox(a.ctx, destFolder.Path)
+			if err != nil {
+				return err
+			}
+			if latest.UIDValidity != destinationValidity {
+				return fmt.Errorf("destination UID validity changed during move")
+			}
+			if err := a.messageStore.RecordMoveUIDEvidence(destFolder.ID, destinationValidity, resolved); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 
@@ -2666,9 +2688,9 @@ func (a *App) retainMoveRecovery(folderID string, ids []string) {
 	}
 	a.moveRecoveryIDs[folderID] = append(a.moveRecoveryIDs[folderID], ids...)
 }
-func (a *App) recoverInterruptedMoves(folderID string, ids []string) error {
+func (a *App) recoverInterruptedMoves(ctx context.Context, accountID, folderID string, ids []string) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	return a.messageStore.RecoverTempMoves(folderID, ids)
+	return a.syncEngine.RecoverInterruptedMoves(ctx, accountID, folderID, ids)
 }

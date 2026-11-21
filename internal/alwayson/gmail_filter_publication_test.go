@@ -17,6 +17,7 @@ import (
 	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
 	"github.com/ollisulopuisto/postilaatikko/internal/mailfilter"
 	"github.com/ollisulopuisto/postilaatikko/internal/oauth2"
+	"github.com/ollisulopuisto/postilaatikko/internal/syncowner"
 	gokeyring "github.com/zalando/go-keyring"
 )
 
@@ -24,7 +25,18 @@ func helperNativeFixture(t *testing.T) *SyncRuntime {
 	t.Helper()
 	gokeyring.MockInit()
 	r := openContactsAPITestRuntime(t)
-	_, err := r.db.Exec(`INSERT INTO accounts(id,name,email,imap_host,smtp_host,username,auth_type) VALUES('helper-google','Helper','helper@example.com','imap.gmail.com','smtp.gmail.com','helper@example.com','oauth2')`)
+	owner, err := syncowner.TryAcquire(r.syncLockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.publicationOwner = owner
+	t.Cleanup(func() {
+		r.publicationOwnerMu.Lock()
+		r.publicationOwner = nil
+		_ = owner.Release()
+		r.publicationOwnerMu.Unlock()
+	})
+	_, err = r.db.Exec(`INSERT INTO accounts(id,name,email,imap_host,smtp_host,username,auth_type) VALUES('helper-google','Helper','helper@example.com','imap.gmail.com','smtp.gmail.com','helper@example.com','oauth2')`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -331,5 +343,120 @@ func TestHelperGmailPublicationRejectsUnsupportedAccountWithEligibilityCode(t *t
 	_, err = r.GmailPublication(context.Background(), v1.GmailPublicationRequest{Operation: "context", AccountID: "helper-google"})
 	if !errors.Is(err, v1.ErrGmailAccountIneligible) {
 		t.Fatal("unsupported account lost eligibility classification", err)
+	}
+}
+
+func TestHelperPublicationRequiresExecutionLease(t *testing.T) {
+	r := helperNativeFixture(t)
+	oldTransport := http.DefaultTransport
+	http.DefaultTransport = helperNativeRoundTrip(func(*http.Request) (*http.Response, error) {
+		return nil, fmt.Errorf("provider must not be contacted without ownership")
+	})
+	defer func() { http.DefaultTransport = oldTransport }()
+	r.publicationOwnerMu.Lock()
+	owner := r.publicationOwner
+	r.publicationOwner = nil
+	r.publicationOwnerMu.Unlock()
+	defer func() { r.publicationOwnerMu.Lock(); r.publicationOwner = owner; r.publicationOwnerMu.Unlock() }()
+	for _, operation := range []string{"prepare", "publish", "reconcile"} {
+		if _, err := r.GmailPublication(context.Background(), v1.GmailPublicationRequest{Operation: operation, AccountID: "helper-google", RuleID: "helper-rule"}); err == nil || !strings.Contains(err.Error(), "does not own") {
+			t.Fatal("non-owner accepted", operation, err)
+		}
+	}
+}
+func TestHelperPublicationStatusAndCancelSurviveAccountRemoval(t *testing.T) {
+	for _, state := range []string{"prepared", "rejected"} {
+		t.Run(state, func(t *testing.T) {
+			r := helperNativeFixture(t)
+			r.credentialCleanup = func(id string) error { return nil }
+			f := gmail.Filter{Criteria: gmail.FilterCriteria{Query: "from:sender"}, Action: gmail.FilterAction{RemoveLabelIDs: []string{"UNREAD"}}}
+			plan, err := r.rules.PrepareGmailPublication("helper-rule", "helper-google", f, nil, []string{"UNREAD"}, helperGmailBinding("helper@example.com", "helper-project"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := r.db.Exec(`UPDATE gmail_filter_publications SET state=? WHERE id=?`, state, plan.ID); err != nil {
+				t.Fatal(err)
+			}
+			if err := r.DeleteAccount("helper-google"); err != nil {
+				t.Fatal(err)
+			}
+			reply, err := r.GmailPublication(context.Background(), v1.GmailPublicationRequest{Operation: "status", RuleID: "helper-rule"})
+			if err != nil || reply.Publication == nil || reply.Publication.ID != plan.ID {
+				t.Fatal("removed account hid journal", reply, err)
+			}
+			if _, err := r.GmailPublication(context.Background(), v1.GmailPublicationRequest{Operation: "cancel", AccountID: "wrong", ID: plan.ID}); err == nil {
+				t.Fatal("wrong account cancelled journal")
+			}
+			if _, err := r.GmailPublication(context.Background(), v1.GmailPublicationRequest{Operation: "cancel", AccountID: "helper-google", ID: plan.ID}); err != nil {
+				t.Fatal("removed account stranded reservation", err)
+			}
+		})
+	}
+}
+func TestHelperNativeUserLabelLimit(t *testing.T) {
+	labels := []gmail.Label{{ID: "a", Type: "user"}, {ID: "b", Type: "user"}, {ID: "TRASH", Type: "system"}}
+	for _, ids := range [][]string{{"a", "b"}, {"a", "a", "TRASH"}, {"a", "TRASH"}} {
+		_, err := helperAllowedLabels(gmail.Filter{Action: gmail.FilterAction{AddLabelIDs: ids}}, labels)
+		if (err != nil) != (ids[1] == "b") {
+			t.Fatal(ids, err)
+		}
+	}
+}
+
+func TestHelperPublicationRetainsLeaseUntilPreparationEnds(t *testing.T) {
+	r := helperNativeFixture(t)
+	entered, release := make(chan struct{}), make(chan struct{})
+	oldTransport := http.DefaultTransport
+	http.DefaultTransport = helperNativeRoundTrip(func(req *http.Request) (*http.Response, error) {
+		body := ""
+		switch {
+		case strings.HasSuffix(req.URL.Path, "/profile"):
+			body = `{"emailAddress":"helper@example.com"}`
+		case strings.HasSuffix(req.URL.Path, "/labels"):
+			body = `{"labels":[{"id":"UNREAD","type":"system"}]}`
+		case strings.HasSuffix(req.URL.Path, "/messages"):
+			body = `{"messages":[]}`
+		case strings.HasSuffix(req.URL.Path, "/settings/filters"):
+			close(entered)
+			<-release
+			body = `{"filter":[]}`
+		default:
+			t.Error("unexpected provider path", req.URL.Path)
+		}
+		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body))}, nil
+	})
+	defer func() { http.DefaultTransport = oldTransport }()
+	req := v1.GmailPublicationRequest{Operation: "preview", AccountID: "helper-google", RuleID: "helper-rule", Filter: gmail.Filter{Criteria: gmail.FilterCriteria{Query: "from:sender"}, Action: gmail.FilterAction{RemoveLabelIDs: []string{"UNREAD"}}}}
+	preview, err := r.GmailPublication(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Operation = "prepare"
+	req.Fingerprint = preview.Fingerprint
+	done := make(chan error, 1)
+	go func() { _, err := r.GmailPublication(context.Background(), req); done <- err }()
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		close(release)
+		t.Fatal("preparation did not reach provider")
+	}
+	teardown := make(chan struct{})
+	go func() { r.publicationOwnerMu.Lock(); close(teardown); r.publicationOwnerMu.Unlock() }()
+	select {
+	case <-teardown:
+		close(release)
+		<-done
+		t.Fatal("ownership teardown passed active preparation")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-teardown:
+	case <-time.After(time.Second):
+		t.Fatal("ownership teardown did not drain")
 	}
 }

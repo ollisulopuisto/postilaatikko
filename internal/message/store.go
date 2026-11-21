@@ -1328,6 +1328,13 @@ func (s *Store) DeleteByFolder(folderID string) error {
 	return nil
 }
 
+// DeleteSyncedUIDCache preserves unresolved local moves and repaired mail when
+// the server changes UID validity. Their evidence must not cascade away.
+func (s *Store) DeleteSyncedUIDCache(folderID string) error {
+	_, err := s.db.Exec(`DELETE FROM messages WHERE folder_id=? AND uid>0 AND id NOT IN (SELECT message_id FROM attachment_repair_backups)`, folderID)
+	return err
+}
+
 // ExistsInFolder checks if a message with the given RFC 822 Message-ID exists
 // in a folder of the specified type (e.g., "trash", "spam") for the account.
 func (s *Store) ExistsInFolder(messageID string, folderType string, accountID string) (bool, error) {
@@ -1622,7 +1629,7 @@ func (s *Store) CountByFolder(folderID string) (int, error) {
 // Returns the number of messages deleted
 func (s *Store) DeleteOlderThanInFolder(folderID string, before time.Time) (int, error) {
 	result, err := s.db.Exec(
-		"DELETE FROM messages WHERE folder_id = ? AND date < ?",
+		"DELETE FROM messages WHERE folder_id = ? AND date < ? AND uid > 0 AND id NOT IN (SELECT message_id FROM attachment_repair_backups)",
 		folderID, before,
 	)
 	if err != nil {
@@ -2720,11 +2727,18 @@ func (s *Store) MoveMessages(ids []string, newFolderID string) error {
 		strings.Join(placeholders, ", "),
 	)
 
-	_, err := s.db.Exec(query, args...)
+	tx, err := s.db.Begin()
 	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err = tx.Exec("DELETE FROM move_uid_evidence WHERE message_id IN ("+strings.Join(placeholders, ",")+")", args[1:]...); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(query, args...); err != nil {
 		return fmt.Errorf("failed to move messages: %w", err)
 	}
-	return nil
+	return tx.Commit()
 }
 
 // MoveSourceState is the stable server identity captured immediately before a
@@ -2811,6 +2825,16 @@ func (e *MovedUIDConflictError) Error() string {
 // message while the COPY was in flight; in that case this method consolidates
 // the sync-created row into the stable locally-moved row transactionally.
 func (s *Store) ReconcileMovedMessageUIDs(destinationFolderID string, uidsByLocalID map[string]uint32) ([]MovedUIDReconcileResult, error) {
+	return s.reconcileMovedMessageUIDs(destinationFolderID, uidsByLocalID, nil)
+}
+
+// ReconcileVerifiedMoveUID rechecks the journal in the same transaction that
+// changes the pending row, so a newer move cannot inherit stale recovery proof.
+func (s *Store) ReconcileVerifiedMoveUID(folderID, id string, uid, validity uint32) error {
+	_, err := s.reconcileMovedMessageUIDs(folderID, map[string]uint32{id: uid}, &validity)
+	return err
+}
+func (s *Store) reconcileMovedMessageUIDs(destinationFolderID string, uidsByLocalID map[string]uint32, validity *uint32) ([]MovedUIDReconcileResult, error) {
 	if len(uidsByLocalID) == 0 {
 		return nil, nil
 	}
@@ -2825,6 +2849,15 @@ func (s *Store) ReconcileMovedMessageUIDs(destinationFolderID string, uidsByLoca
 			return nil, fmt.Errorf("invalid destination UID for message %s", movingLocalID)
 		}
 
+		if validity != nil {
+			var matches int
+			if err := tx.QueryRow(`SELECT COUNT(*) FROM move_uid_evidence WHERE message_id=? AND folder_id=? AND uid=? AND uid_validity=?`, movingLocalID, destinationFolderID, uid, *validity).Scan(&matches); err != nil {
+				return nil, err
+			}
+			if matches != 1 {
+				return nil, fmt.Errorf("move recovery proof changed for %s", movingLocalID)
+			}
+		}
 		var movingAccountID string
 		var movingUID int64
 		var movingMessageID sql.NullString
@@ -3766,24 +3799,33 @@ func (s *Store) TempMoveSnapshot() (map[string][]string, error) {
 	return out, rows.Err()
 }
 
-// RecoverTempMoves consolidates an unambiguous rediscovered Message-ID before
-// removing only old owned placeholders. Repair-protected data is never deleted.
-func (s *Store) RecoverTempMoves(folderID string, ids []string) error {
-	for _, id := range ids {
-		var uid sql.NullInt64
-		var matches int
-		err := s.db.QueryRow(`SELECT MIN(remote.uid),COUNT(*) FROM messages pending JOIN messages remote ON remote.folder_id=pending.folder_id AND remote.account_id=pending.account_id AND trim(remote.message_id,'<>')=trim(pending.message_id,'<>') AND remote.uid>0 WHERE pending.id=? AND pending.folder_id=? AND pending.uid<0 AND pending.message_id<>'' GROUP BY pending.id`, id, folderID).Scan(&uid, &matches)
-		if err != nil && err != sql.ErrNoRows {
+// RecordMoveUIDEvidence records only a server-confirmed COPYUID or the verified
+// pre-COPY baseline difference. A Message-ID match alone is never evidence.
+func (s *Store) RecordMoveUIDEvidence(folderID string, validity uint32, uids map[string]uint32) error {
+	if validity == 0 {
+		return fmt.Errorf("missing destination UID validity")
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for id, uid := range uids {
+		if uid == 0 {
+			return fmt.Errorf("missing destination UID")
+		}
+		_, err = tx.Exec(`INSERT INTO move_uid_evidence(message_id,folder_id,uid,uid_validity) SELECT id,folder_id,?,? FROM messages WHERE id=? AND folder_id=? AND uid<0 ON CONFLICT(message_id) DO UPDATE SET folder_id=excluded.folder_id,uid=excluded.uid,uid_validity=excluded.uid_validity`, uid, validity, id, folderID)
+		if err != nil {
 			return err
 		}
-		if matches > 1 {
-			return fmt.Errorf("interrupted move has ambiguous destination copies: %s", id)
-		}
-		if err == nil && uid.Valid {
-			if _, err := s.ReconcileMovedMessageUIDs(folderID, map[string]uint32{id: uint32(uid.Int64)}); err != nil {
-				return err
-			}
-		}
 	}
-	return s.DeleteTempUIDsForMessages(folderID, ids)
+	return tx.Commit()
+}
+func (s *Store) MoveUIDEvidence(folderID, id string) (uint32, uint32, error) {
+	var uid, validity uint32
+	err := s.db.QueryRow(`SELECT e.uid,e.uid_validity FROM move_uid_evidence e JOIN messages m ON m.id=e.message_id WHERE m.id=? AND m.folder_id=? AND m.uid<0 AND e.folder_id=m.folder_id`, id, folderID).Scan(&uid, &validity)
+	if err != nil {
+		return 0, 0, fmt.Errorf("interrupted move outcome unresolved for %s: %w", id, err)
+	}
+	return uid, validity, nil
 }
