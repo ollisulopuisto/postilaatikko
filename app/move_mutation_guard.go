@@ -24,6 +24,7 @@ type moveMutationFlight struct {
 	err                error
 	resultPublished    bool
 	pendingCompletions int
+	filterCompletion   func(*undo.MoveCompletion)
 	waiterPublished    bool
 	released           bool
 }
@@ -123,6 +124,7 @@ func (a *App) runMoveMutationWithMode(
 	action string,
 	reverseUndo bool,
 	mutation func() (moved bool, operationID string, err error),
+	completionHandlers ...func(*undo.MoveCompletion),
 ) (moved bool, operationID string, coalesced bool, err error) {
 	for {
 		// This lookup intentionally lives inside the acquisition loop. If another
@@ -181,6 +183,9 @@ func (a *App) runMoveMutationWithMode(
 			resultReady: make(chan struct{}),
 			terminal:    make(chan struct{}),
 			waiterReady: make(chan struct{}),
+		}
+		if len(completionHandlers) > 0 {
+			flight.filterCompletion = completionHandlers[0]
 		}
 		for _, key := range keys {
 			a.moveMutationFlights[key] = flight
@@ -246,7 +251,11 @@ func (a *App) bindMoveMutationCompletion(messages []*message.Message, completion
 		return
 	}
 	flight.pendingCompletions++
+	completionHandler := flight.filterCompletion
 	a.moveMutationMu.Unlock()
+	if completionHandler != nil {
+		completionHandler(completion)
+	}
 
 	go func() {
 		_ = completion.Wait()

@@ -15,12 +15,16 @@
   import { toasts } from '$lib/stores/toast'
   import { _ } from '$lib/i18n'
   import FilterDialog from '../common/FilterDialog.svelte'
+  import { filterAccountIDs } from '$lib/filters/scope'
+  import NativeGmailFilterDialog from '../common/NativeGmailFilterDialog.svelte'
 
   let rules = $state<mailfilter.Rule[]>([])
   let loading = $state(true)
   let busy = $state(false)
   let showEditor = $state(false)
   let editingRule = $state<mailfilter.Rule | null>(null)
+  let gmailRuleId = $state('')
+  let showGmail = $state(false)
   let deleteTarget = $state<mailfilter.Rule | null>(null)
 
   async function load() {
@@ -80,7 +84,7 @@
     reordered.splice(target, 0, item)
     try {
       await ReorderFilterRules(reordered.map(rule => rule.id))
-      rules = reordered.map((rule, orderIndex) => mailfilter.Rule.createFrom({ ...rule, orderIndex }))
+      await load()
     } catch (err) {
       toasts.error(`${$_('filters.saveFailed')}: ${String(err)}`)
       await load()
@@ -122,6 +126,8 @@
     </Button>
   </div>
 
+  <p class="text-xs text-muted-foreground">{$_('gmailFilters.eligibility')}</p>
+
   {#if loading}
     <div class="flex items-center justify-center py-6">
       <Icon icon="mdi:loading" class="h-5 w-5 animate-spin text-muted-foreground" />
@@ -138,6 +144,11 @@
             <span class="truncate text-xs text-muted-foreground">{actionSummary(rule)}</span>
           </div>
           <div class="flex shrink-0 items-center gap-1">
+            {#if !rule.enabled && !rule.destFolderId && !rule.folderIds?.length && filterAccountIDs(rule).length === 1}
+              <Button variant="ghost" size="icon" class="h-7 w-7" disabled={busy} title={$_('gmailFilters.open')} onclick={() => { gmailRuleId = rule.id; showGmail = true }}>
+                <Icon icon="mdi:google" class="h-4 w-4" />
+              </Button>
+            {/if}
             <Button variant="ghost" size="icon" class="h-7 w-7" disabled={busy || index === 0} title={$_('filters.moveUp')} onclick={() => void move(index, -1)}>
               <Icon icon="mdi:arrow-up" class="h-4 w-4" />
             </Button>
@@ -171,3 +182,7 @@
   onConfirm={() => void confirmDelete()}
   onCancel={() => { deleteTarget = null }}
 />
+
+{#if showGmail}
+  <NativeGmailFilterDialog bind:open={showGmail} ruleId={gmailRuleId} onChanged={() => void load()} />
+{/if}

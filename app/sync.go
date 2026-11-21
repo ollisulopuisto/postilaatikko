@@ -13,7 +13,6 @@ import (
 	"github.com/ollisulopuisto/postilaatikko/internal/folder"
 	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 	"github.com/ollisulopuisto/postilaatikko/internal/syncowner"
-	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // maxConcurrentAccountSyncs limits only simultaneous complete account syncs
@@ -170,6 +169,37 @@ func (a *App) syncFolder(accountID, folderID string, restart bool) error {
 		syncPeriodDays = acc.SyncPeriodDays
 	}
 
+	// Restart recovery must see the complete destination, not a date-limited
+	// window that could mistake older completed copies for absent mail.
+	a.moveSyncMu.Lock()
+	recoveryIDs := append([]string(nil), a.moveRecoveryIDs[folderID]...)
+	delete(a.moveRecoveryIDs, folderID)
+	a.moveSyncMu.Unlock()
+	recovered := false
+	defer func() {
+		if !recovered && len(recoveryIDs) > 0 {
+			a.retainMoveRecovery(folderID, recoveryIDs)
+		}
+	}()
+	if len(recoveryIDs) > 0 {
+		// Native Gmail sync refreshes only a recent page. Legacy IMAP
+		// placeholders must be retained rather than swept from that page.
+		if _, apiErr := a.syncEngine.GmailClient(ctx, accountID); apiErr == nil {
+			a.retainMoveRecovery(folderID, recoveryIDs)
+			recoveryIDs = nil
+		} else if !errors.Is(apiErr, gmail.ErrNotCapable) {
+			return apiErr
+		}
+		syncPeriodDays = 0
+	}
+	currentFolder, err := a.folderStore.Get(folderID)
+	if err != nil {
+		return err
+	}
+	if currentFolder != nil && currentFolder.Hidden {
+		return nil
+	}
+
 	// Use ctx (not a.ctx) for sync operations so they can be cancelled
 	err = a.syncEngine.SyncMessages(ctx, accountID, folderID, syncPeriodDays, false)
 	if err != nil {
@@ -182,7 +212,7 @@ func (a *App) syncFolder(accountID, folderID string, restart bool) error {
 		var certErr *certificate.Error
 		if errors.As(err, &certErr) {
 			log.Warn().Str("folder", folderID).Str("fingerprint", certErr.Info.Fingerprint).Msg("Untrusted certificate during sync")
-			wailsRuntime.EventsEmit(a.ctx, "certificate:untrusted", map[string]interface{}{
+			a.emitRuntimeEvent("certificate:untrusted", map[string]interface{}{
 				"accountId":   accountID,
 				"certificate": certErr.Info,
 			})
@@ -191,13 +221,19 @@ func (a *App) syncFolder(accountID, folderID string, restart bool) error {
 
 		// Actual error - emit error event
 		log.Error().Err(err).Str("folder", folderID).Msg("Header sync failed")
-		wailsRuntime.EventsEmit(a.ctx, "folder:syncError", map[string]interface{}{
+		a.emitRuntimeEvent("folder:syncError", map[string]interface{}{
 			"accountId": accountID,
 			"folderId":  folderID,
 			"error":     err.Error(),
 		})
 		return err
 	}
+
+	if err := a.recoverInterruptedMoves(folderID, recoveryIDs); err != nil {
+		return fmt.Errorf("recover interrupted moves: %w", err)
+	}
+
+	recovered = true
 
 	// Checkpoint WAL after heavy sync operation
 	if checkpointErr := a.db.Checkpoint(); checkpointErr != nil {

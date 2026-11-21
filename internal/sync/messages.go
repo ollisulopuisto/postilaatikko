@@ -237,7 +237,7 @@ func (e *Engine) SyncMessages(ctx context.Context, accountID, folderID string, s
 		if err := e.folderStore.Update(f); err != nil {
 			e.log.Warn().Err(err).Msg("Failed to update folder sync state")
 		}
-		return nil
+		return fmt.Errorf("destination sync incomplete: empty remote listing conflicts with local messages")
 	}
 
 	compareStarted := time.Now()
@@ -535,6 +535,9 @@ func (e *Engine) SyncMessages(ctx context.Context, accountID, folderID string, s
 		Dur("duration", time.Since(startedAt)).
 		Msg("Message sync complete (headers)")
 
+	if persistedNewMessages != len(newUIDs) {
+		return fmt.Errorf("incomplete destination header sync: persisted %d of %d messages", persistedNewMessages, len(newUIDs))
+	}
 	return nil
 }
 

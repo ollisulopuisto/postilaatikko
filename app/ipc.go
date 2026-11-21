@@ -38,8 +38,11 @@ func (a *App) initIPC(ctx context.Context) {
 	// Log the address (available immediately after NewServer)
 	log.Info().Str("address", a.ipcServer.Address()).Msg("Starting IPC server")
 
-	// Start server in background
+	// Join startup/accept completion during teardown before test environment
+	// restoration or any subsequent IPC lifecycle can change the socket root.
+	a.ipcServerDone = make(chan struct{})
 	go func() {
+		defer close(a.ipcServerDone)
 		defer recoverPanic("app.ipc", "IPC server")
 		if err := a.ipcServer.Start(ctx); err != nil {
 			// Context cancellation is expected during shutdown

@@ -57,8 +57,8 @@ func (a *App) AuthorizeGmailFilters(accountID string) error {
 
 func (a *App) prepareGmailFilterConsent(accountID string) (string, *credentials.OAuthTokens, oauth2.ProviderConfig, error) {
 	empty := oauth2.ProviderConfig{}
-	if a.mailboxService != nil && a.mailboxService.isRemote() {
-		return "", nil, empty, fmt.Errorf("Gmail filter authorization requires the account-owning local workspace")
+	if err := a.requireLocalFilterExecutor(); err != nil {
+		return "", nil, empty, err
 	}
 	if a.accountStore == nil || a.credStore == nil {
 		return "", nil, empty, fmt.Errorf("account credentials unavailable")
@@ -135,7 +135,7 @@ func (a *App) persistGmailFilterConsent(accountID, expectedEmail string, previou
 	}
 	// Prove that the durable refresh grant also carries settings access. The
 	// incremental access token alone is not proof when Google reuses a grant.
-	verified, err := oauth2.NewManager().VerifyGoogleFilterRefresh(cfg, refreshToken, previous.Scopes)
+	verified, err := oauth2.NewManager().VerifyGoogleFilterRefresh(ctx, cfg, refreshToken, previous.Scopes)
 	if err != nil {
 		return fmt.Errorf("verify durable Gmail settings grant: %w", err)
 	}

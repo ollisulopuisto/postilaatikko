@@ -42,6 +42,7 @@ func TestSaveVerifiedRule(t *testing.T) {
 		writes    int
 	}{
 		{name: "create read back", writes: 1},
+		{name: "sparse append", store: fakeTargetStore{rules: []*Rule{{ID: "older", Name: "older", OrderIndex: 50}}}, writes: 1},
 		{name: "before read fails", store: fakeTargetStore{failRead: 1}, wantError: true},
 		{name: "duplicate ID is conflict", store: fakeTargetStore{rules: []*Rule{{ID: "one", Name: "other"}}}, wantError: true},
 		{name: "external update conflict", store: fakeTargetStore{rules: []*Rule{{ID: "one", Name: "other"}}}, expected: &Rule{ID: "one", Name: "before"}, wantError: true},
@@ -56,6 +57,9 @@ func TestSaveVerifiedRule(t *testing.T) {
 			err := SaveVerifiedRule(context.Background(), &tc.store, r, tc.expected)
 			if (err != nil) != tc.wantError {
 				t.Fatalf("error=%v", err)
+			}
+			if tc.name == "sparse append" && (len(tc.store.rules) != 1 || tc.store.rules[0].OrderIndex != 51) {
+				t.Fatal("verified save ignored sparse priority", tc.store.rules)
 			}
 			if tc.store.writes != tc.writes {
 				t.Fatalf("writes=%d", tc.store.writes)

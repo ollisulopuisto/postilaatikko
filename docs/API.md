@@ -114,8 +114,18 @@ The helper mounts provider-aware search and account-qualified thread/body reads:
 For encrypted drafts, the desktop encrypts the draft body and attachments locally and sends only `encrypted`, `encryptedBody`, `pgpEncrypted`, `pgpEncryptedBody`, and `attachmentsData` with compose metadata. The helper stores the opaque ciphertext and revision without private-key access. Immediate-send RFC822 preparation, signing, and encryption also remain on the desktop before delivery through the helper.
 
 ### 5. Mail Mutations
+- `POST /v1/filters/gmail/consent` requires `mail.read` and `account.manage` at every stage. `start` takes the selected helper `accountId` and an explicit `http://127.0.0.1:PORT/callback` desktop listener URI. It returns non-secret account context, session ID, authorization URL and five-minute expiry. PKCE verifier and OAuth project secret stay on the helper.
+  - `complete` sends only the account/session ID and one-time callback `code`/`state`. The helper exchanges it once, checks live Gmail profile plus reported scope coverage, verifies its original account/project/grant snapshot still matches, preserves omitted refresh tokens and reads back its saved canonical Mail grant before success.
+  - `cancel` discards an unconsumed session. Sessions are bound to the authenticated API client, expire, are removed on shutdown, and cannot replay. Unknown completion must be checked through a fresh context read rather than resubmitting the code.
+  - No access token, refresh token, caller identity claim or PKCE verifier is accepted in request JSON or returned. A browser on the desktop is required; the workspace-pinned desktop dialog forwards the one-use callback to this helper.
+- `POST /v1/filters/gmail` operates only on helper-owned Gmail accounts. All operations require `mail.read`. `prepare`, `publish`, `cancel`, and `reconcile` additionally require both `mail.write` and `account.manage`. Reconciliation never writes to Gmail, but can update the local journal.
+  - `context`, `preview`, `prepare` take `accountId` and the stopped source `ruleId`; native drafts use only an explicit Gmail `filter.criteria.query` and supported label actions. `prepare` takes the preview `fingerprint`. Existing jobs block preparation.
+  - `status`, `publish`, `reconcile`, `cancel` take `accountId` and publication `id`; `publish` also takes its frozen `fingerprint`. Unknown creates must use `reconcile`, never another publish. Only unattempted preparation can cancel.
+  - Context returns `consentRequired` without initiating consent. An existing helper-local Google settings grant is required for provider reads/writes. No token or credential can be supplied in this request. Consent is requested separately through the explicit helper-owned consent lifecycle above.
+  - Preview is at most one 51-ID page, displayed as up to 50 plus truncation. No historical mail mutation. This provider-native query is not a translation of local substring conditions or priority.
 - `POST /v1/filters/mutations` (Requires `mail.write`)
   - Request body uses `operation` with `rule` for `create`/`update`, `id` for `delete`, or `ids` for `reorder`.
+  - Reorder requires every existing rule ID exactly once, in the requested visible order. Partial lists, unknown IDs and duplicates are rejected without changing any priorities, even when no Gmail publication owns a rule. Reload the rules after success: stored priorities can be sparse around frozen Gmail-owned rules and are not list positions.
   - Rule validation is performed by the helper against its account/folder catalog, including the cross-account destination constraint.
 - `GET /v1/reply-later` (Requires `mail.read`)
   - Returns account-qualified Reply Later queue entries and whether each conversation is present in the local message index.
@@ -268,3 +278,5 @@ bounded header pages, provider-aware search, thread metadata, cached body reads,
 and explicit body fetch. Gmail Pub/Sub pull notifications and daily watch
 renewal are optional helper workers. Mail actions are idempotent; attachment
 reads are not yet available through the helper.
+
+Consent completion checks expiry, request cancellation and runtime shutdown again after token exchange/profile validation, before persistence. Mail credential snapshots and CAS persistence serialize against Store readers/writers. Helper Mail refresh paths also use CAS and refuse stale provider responses, so an older refresh cannot overwrite a newer settings grant. SQLite and the system keyring remain separate stores: persistence/readback errors are unverified, never reported as successful consent.

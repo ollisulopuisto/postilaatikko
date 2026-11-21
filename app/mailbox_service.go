@@ -114,6 +114,7 @@ type mailboxServiceConnector struct {
 	undoLatestFunc     func(context.Context, string) (*v1.ActionUndoResult, error)
 	undoOperationFunc  func(context.Context, string, string) (*v1.ActionUndoResult, error)
 	endpoint           string
+	transport          http.RoundTripper
 }
 
 type activeMailboxSearch struct {
@@ -121,8 +122,12 @@ type activeMailboxSearch struct {
 	cancel context.CancelFunc
 }
 
-func newMailboxServiceConnector(db *database.DB) *mailboxServiceConnector {
-	return &mailboxServiceConnector{db: db, keyring: keyring.New()}
+func newMailboxServiceConnector(db *database.DB, transports ...http.RoundTripper) *mailboxServiceConnector {
+	c := &mailboxServiceConnector{db: db, keyring: keyring.New()}
+	if len(transports) > 0 {
+		c.transport = transports[0]
+	}
+	return c
 }
 
 func (c *mailboxServiceConnector) getClient() (*automationclient.Client, error) {
@@ -175,7 +180,7 @@ func (c *mailboxServiceConnector) getClient() (*automationclient.Client, error) 
 			}
 		}
 		c.credential = &credential
-		c.client = newMailboxAPIClientAt(endpoint, credential.Token)
+		c.client = newMailboxAPIClientAtWithTimeout(endpoint, credential.Token, mailboxAPIRequestTimeout, c.transport)
 		return c.client, nil
 	} else if !errors.Is(err, keyring.ErrCredentialNotFound) {
 		return nil, err
@@ -208,7 +213,7 @@ func (c *mailboxServiceConnector) getClient() (*automationclient.Client, error) 
 		return nil, err
 	}
 	c.credential = &desktopMailboxCredential{ClientID: grant.ClientID, Token: grant.Token}
-	c.client = newMailboxAPIClient(grant.Token)
+	c.client = newMailboxAPIClientAtWithTimeout(endpoint, grant.Token, mailboxAPIRequestTimeout, c.transport)
 	return c.client, nil
 }
 
@@ -282,11 +287,16 @@ func newMailboxAPIClientAt(endpoint, token string) *automationclient.Client {
 	return newMailboxAPIClientAtWithTimeout(endpoint, token, mailboxAPIRequestTimeout)
 }
 
-func newMailboxAPIClientAtWithTimeout(endpoint, token string, timeout time.Duration) *automationclient.Client {
+func newMailboxAPIClientAtWithTimeout(endpoint, token string, timeout time.Duration, transports ...http.RoundTripper) *automationclient.Client {
+	var transport http.RoundTripper
+	if len(transports) > 0 {
+		transport = transports[0]
+	}
 	return automationclient.New(automationclient.Config{
-		Endpoint: endpoint,
-		Token:    token,
-		Timeout:  timeout,
+		Endpoint:  endpoint,
+		Token:     token,
+		Timeout:   timeout,
+		Transport: transport,
 	})
 }
 

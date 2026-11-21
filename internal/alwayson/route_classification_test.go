@@ -130,6 +130,8 @@ var classifiedRoutes = []routeClassification{
 	post("/v1/views/mutations", false),
 	// Filter rules and jobs.
 	post("/v1/filters/evaluate", false),
+	post("/v1/filters/gmail", false),
+	post("/v1/filters/gmail/consent", false),
 	get("/v1/filters", false),
 	post("/v1/filters/mutations", false),
 	get("/v1/filter-jobs", false),

@@ -124,7 +124,7 @@ func (c *Client) doRequestWithHeaders(ctx context.Context, method, path string, 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		var errResp v1.ErrorResponse
 		if jsonErr := json.Unmarshal(respBytes, &errResp); jsonErr == nil && errResp.Error.Code != "" {
-			return nil, fmt.Errorf("api error (%s): %s: %w", errResp.Error.Code, errResp.Error.Message, v1.NewFault(errResp.Error.Code, errResp.Error.Message, errResp.Error.Retryable, nil))
+			return nil, &APIError{StatusCode: resp.StatusCode, Fault: v1.NewFault(errResp.Error.Code, errResp.Error.Message, errResp.Error.Retryable, nil)}
 		}
 		return nil, &HTTPError{StatusCode: resp.StatusCode, Body: string(respBytes)}
 	}
@@ -515,6 +515,45 @@ func (c *Client) MutateFilterRule(ctx context.Context, req v1.FilterRuleMutation
 	return err
 }
 
+// gmailOwnerOperationClient keeps the pinned endpoint/credential/transport but
+// allows provider work beyond the connector's two-second health-read timeout.
+// Caller cancellation remains authoritative and no request is replayed.
+func (c *Client) gmailOwnerOperationClient() *Client {
+	copy := *c
+	httpClient := *c.httpClient
+	httpClient.Timeout = 30 * time.Second
+	copy.httpClient = &httpClient
+	return &copy
+}
+
+// GmailPublication performs one explicit account-owning helper operation.
+// The transport never retries this POST. Unknown creates use reconcile instead.
+func (c *Client) GmailPublication(ctx context.Context, req v1.GmailPublicationRequest) (v1.GmailPublicationReply, error) {
+	data, err := c.gmailOwnerOperationClient().doRequest(ctx, http.MethodPost, "/v1/filters/gmail", req, "")
+	if err != nil {
+		return v1.GmailPublicationReply{}, err
+	}
+	var response v1.Response[v1.GmailPublicationReply]
+	if err = json.Unmarshal(data, &response); err != nil {
+		return v1.GmailPublicationReply{}, err
+	}
+	return response.Data, nil
+}
+
+// GmailConsent advances one explicit helper-owned consent session. It never
+// sends a refresh token, verifier, secret or desktop OAuth token to the helper.
+func (c *Client) GmailConsent(ctx context.Context, req v1.GmailConsentRequest) (v1.GmailConsentReply, error) {
+	data, err := c.gmailOwnerOperationClient().doRequest(ctx, http.MethodPost, "/v1/filters/gmail/consent", req, "")
+	if err != nil {
+		return v1.GmailConsentReply{}, err
+	}
+	var response v1.Response[v1.GmailConsentReply]
+	if err = json.Unmarshal(data, &response); err != nil {
+		return v1.GmailConsentReply{}, err
+	}
+	return response.Data, nil
+}
+
 // GetUncertainFilterJobs lists one bounded page of automatic moves for inspection.
 func (c *Client) GetUncertainFilterJobs(ctx context.Context, limit int, cursor string) (v1.FilterJobPage, error) {
 	query := url.Values{}
@@ -737,6 +776,17 @@ func (c *Client) ListConversations(ctx context.Context, req v1.ConversationListR
 	}
 	return &resp.Data, nil
 }
+
+// APIError preserves transport status as well as the stable public API fault.
+type APIError struct {
+	StatusCode int
+	Fault      *v1.Fault
+}
+
+func (e *APIError) Error() string {
+	return fmt.Sprintf("api error (%s): %s", e.Fault.Code, e.Fault.Message)
+}
+func (e *APIError) Unwrap() error { return e.Fault }
 
 // HTTPError reports a non-2xx response that carried no API error envelope,
 // such as a missing route on an older helper.

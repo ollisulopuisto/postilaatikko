@@ -230,3 +230,27 @@ func TestStore_CreateRejectsEmptyName(t *testing.T) {
 		t.Fatal("Create with blank name should fail")
 	}
 }
+
+func TestReorderRequiresCompleteIDsWithoutGmailOwnership(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+	store := NewStore(db)
+	a, b := &Rule{ID: "a", Name: "A", OrderIndex: 4}, &Rule{ID: "b", Name: "B", OrderIndex: 9}
+	for _, r := range []*Rule{a, b} {
+		if err := store.Create(r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, ids := range [][]string{{"b"}, {}, {"b", "b"}, {"b", "unknown"}} {
+		if err := store.Reorder(ids); err == nil {
+			t.Fatal("accepted incomplete/invalid order", ids)
+		}
+		actual, err := store.List()
+		if err != nil || len(actual) != 2 || actual[0].ID != "a" || actual[0].OrderIndex != 4 || actual[1].ID != "b" || actual[1].OrderIndex != 9 {
+			t.Fatal("invalid reorder changed persisted priorities", actual, err)
+		}
+	}
+	if err := store.Reorder([]string{"b", "a"}); err != nil {
+		t.Fatal(err)
+	}
+}

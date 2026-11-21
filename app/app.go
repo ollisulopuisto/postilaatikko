@@ -210,6 +210,10 @@ func isValidEmail(email string) bool {
 
 // App struct holds the application state and dependencies
 type App struct {
+	// Optional per-client network dependency, set before startup. Nil uses the
+	// normal HTTP transport; credentials and endpoint still follow bootstrap.
+	mailboxClientTransport http.RoundTripper
+
 	attachmentRepairAttempts goSync.Map
 	shutdownOnce             goSync.Once
 	preflightOnce            goSync.Once
@@ -235,7 +239,8 @@ type App struct {
 	ctx context.Context
 	// Optional test seam for mutation/event integration tests. Production uses
 	// the Wails lifecycle context through emitRuntimeEvent.
-	runtimeEventEmitter func(string, ...interface{})
+	runtimeEventEmitter    func(string, ...interface{})
+	runtimeEventSubscriber func(string, func(...interface{})) func()
 
 	// ready is the backend-up signal the frontend polls before mounting the
 	// main app. False until Startup completes. The boot splash in
@@ -265,6 +270,10 @@ type App struct {
 	triageStore         *triage.Store
 	replyContent        *replycontent.Service
 	virtualFolderStore  *virtualfolder.Store
+	filterExecutionMu   goSync.RWMutex
+	filterMovesMu       goSync.Mutex
+	filterMoves         map[*undo.MoveCompletion]struct{}
+	filterMoveSlots     chan struct{}
 	filterStore         *mailfilter.Store
 	moveFilterHistory   *mailfilter.MoveHistory
 	filterRouter        *mailfilter.AutomaticRouter
@@ -375,8 +384,9 @@ type App struct {
 	moveMutationFlights map[string]*moveMutationFlight
 
 	// IPC for multi-window support (composer windows)
-	ipcServer   ipc.Server
-	ipcTokenMgr *ipc.TokenManager
+	ipcServer     ipc.Server
+	ipcServerDone chan struct{}
+	ipcTokenMgr   *ipc.TokenManager
 
 	// OAuth2 manager
 	oauth2Manager *oauth2.Manager
@@ -420,10 +430,12 @@ type App struct {
 	// Rapid local-first actions (Done/Archive/Trash/Spam) are coalesced so
 	// several moves to the same destination trigger one destination refresh
 	// instead of repeatedly cancelling and restarting SyncFolder.
-	moveSyncMu      goSync.Mutex
-	moveSyncRunMu   goSync.Mutex
-	moveSyncTimers  map[string]*time.Timer
-	moveSyncWaiters map[string][]*undo.MoveCompletion
+	moveSyncMu         goSync.Mutex
+	moveSyncRunMu      goSync.Mutex
+	moveSyncTimers     map[string]*time.Timer
+	moveSyncWaiters    map[string][]*undo.MoveCompletion
+	moveSyncMessageIDs map[string][]string
+	moveRecoveryIDs    map[string][]string
 
 	// Suppresses the IDLE echo of our own flag writes: when Postilaatikko STOREs a flag
 	// change it stamps the account here, so the incoming IDLE FETCH echo of that
@@ -728,7 +740,7 @@ func (a *App) Startup(ctx context.Context) {
 	}
 	db := a.db
 	a.settingsStore = settings.NewStore(a.deviceDB)
-	a.mailboxService = newMailboxServiceConnector(db)
+	a.mailboxService = newMailboxServiceConnector(db, a.mailboxClientTransport)
 	if endpoint, err := a.settingsStore.Get(settings.KeyMailboxServiceEndpoint); err != nil {
 		log.Warn().Err(err).Msg("Could not load mailbox service endpoint")
 	} else if endpoint != "" {
@@ -1031,7 +1043,7 @@ func (a *App) Startup(ctx context.Context) {
 	// the normal case, IsReady for the "event fired before listener
 	// registered" race.
 	a.ready = true
-	wailsRuntime.EventsEmit(a.ctx, "app:ready")
+	a.emitRuntimeEvent("app:ready")
 
 	// Initialize desktop notifications with click handling
 	a.initNotifications(ctx)
@@ -1292,14 +1304,18 @@ func (a *App) Shutdown(ctx context.Context) {
 }
 
 func (a *App) shutdown(ctx context.Context) {
-	a.stopPendingReceiptReconciler()
-	a.clearContactOAuth()
-	log := logging.WithComponent("app")
 	a.syncOwnerMu.Lock()
 	a.syncShutdown = true
 	cancelSyncOwnerWait := a.syncOwnerCancel
 	a.syncOwnerCancel = nil
 	a.syncOwnerMu.Unlock()
+	// Stop the remaining batch before waiting for its active message/write.
+	// Do not hold syncOwnerMu while taking the execution lock.
+	releaseBoundary := a.acquireFilterExecutionBoundary()
+	defer releaseBoundary()
+	a.stopPendingReceiptReconciler()
+	a.clearContactOAuth()
+	log := logging.WithComponent("app")
 	if cancelSyncOwnerWait != nil {
 		cancelSyncOwnerWait()
 	}
@@ -1320,6 +1336,9 @@ func (a *App) shutdown(ctx context.Context) {
 			time.Sleep(500 * time.Millisecond)
 		}
 		_ = a.ipcServer.Stop()
+		if a.ipcServerDone != nil {
+			<-a.ipcServerDone
+		}
 		log.Info().Msg("IPC server stopped")
 	}
 

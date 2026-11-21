@@ -264,6 +264,11 @@ func (m *Manager) RefreshToken(providerName, refreshToken string) (*TokenRespons
 // ProviderConfig. Used by the extension Auth Broker to refresh tokens issued
 // under non-mail client configurations (e.g., google-extensions).
 func (m *Manager) RefreshTokenWithProvider(provider ProviderConfig, refreshToken string) (*TokenResponse, error) {
+	return m.RefreshTokenWithProviderContext(context.Background(), provider, refreshToken)
+}
+
+// RefreshTokenWithProviderContext bounds the provider request by the caller budget.
+func (m *Manager) RefreshTokenWithProviderContext(ctx context.Context, provider ProviderConfig, refreshToken string) (*TokenResponse, error) {
 	data := url.Values{
 		"grant_type":    {"refresh_token"},
 		"refresh_token": {refreshToken},
@@ -275,7 +280,7 @@ func (m *Manager) RefreshTokenWithProvider(provider ProviderConfig, refreshToken
 		data.Set("client_secret", provider.ClientSecret)
 	}
 
-	req, err := http.NewRequest("POST", provider.TokenURL, strings.NewReader(data.Encode()))
+	req, err := http.NewRequestWithContext(ctx, "POST", provider.TokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -328,6 +333,9 @@ func (m *Manager) HasActiveSession() bool {
 
 // exchangeCode exchanges an authorization code for tokens
 func (m *Manager) exchangeCode(provider ProviderConfig, code, codeVerifier, redirectURI string) (*TokenResponse, error) {
+	return m.exchangeCodeContext(context.Background(), provider, code, codeVerifier, redirectURI)
+}
+func (m *Manager) exchangeCodeContext(ctx context.Context, provider ProviderConfig, code, codeVerifier, redirectURI string) (*TokenResponse, error) {
 	data := url.Values{
 		"grant_type":    {"authorization_code"},
 		"code":          {code},
@@ -341,7 +349,7 @@ func (m *Manager) exchangeCode(provider ProviderConfig, code, codeVerifier, redi
 		data.Set("client_secret", provider.ClientSecret)
 	}
 
-	req, err := http.NewRequest("POST", provider.TokenURL, strings.NewReader(data.Encode()))
+	req, err := http.NewRequestWithContext(ctx, "POST", provider.TokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}

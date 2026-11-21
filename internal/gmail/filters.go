@@ -47,6 +47,12 @@ type FilterAction struct {
 // Callers must reconcile against list/get, never automatically replay create.
 var ErrFilterOutcomeUnknown = errors.New("gmail: filter write outcome needs verification")
 
+// ErrFilterRejected identifies a definitive provider rejection, not a lost reply.
+var ErrFilterRejected = errors.New("gmail: filter write rejected")
+
+// ErrFilterNotSubmitted is emitted only before the HTTP transport is invoked.
+var ErrFilterNotSubmitted = errors.New("gmail: filter write was not submitted")
+
 func filterPath(id string) (string, error) {
 	if strings.TrimSpace(id) == "" || strings.ContainsAny(id, "/\\?#") {
 		return "", fmt.Errorf("invalid Gmail filter ID")
@@ -122,9 +128,12 @@ func (c *Client) DeleteFilter(ctx context.Context, id string) error {
 	return nil
 }
 func filterWriteError(err error) error {
+	if errors.Is(err, ErrFilterNotSubmitted) {
+		return err
+	}
 	var apiErr *APIError
 	if errors.As(err, &apiErr) && apiErr.Status >= 400 && apiErr.Status < 500 {
-		return err
+		return fmt.Errorf("%w: %w", ErrFilterRejected, err)
 	}
 	return fmt.Errorf("%w: %w", ErrFilterOutcomeUnknown, err)
 }

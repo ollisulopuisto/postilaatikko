@@ -259,23 +259,23 @@ func (c *Client) request(ctx context.Context, method, path string, query url.Val
 	refreshed := false
 	for attempt := 1; ; attempt++ {
 		if err := ctx.Err(); err != nil {
-			return err
+			return requestNotSubmitted(err, retry)
 		}
 		if c.Budget != nil {
 			if c.Budget.Paused() {
-				return ErrRateLimited
+				return requestNotSubmitted(ErrRateLimited, retry)
 			}
 			if err := c.Budget.Wait(ctx, method, path, query); err != nil {
-				return err
+				return requestNotSubmitted(err, retry)
 			}
 		}
 		token, err := c.tokenSource(ctx, force)
 		if err != nil {
-			return err
+			return requestNotSubmitted(err, retry)
 		}
 		req, err := http.NewRequestWithContext(ctx, method, target, bytes.NewReader(payload))
 		if err != nil {
-			return fmt.Errorf("gmail: build request: %w", err)
+			return requestNotSubmitted(fmt.Errorf("gmail: build request: %w", err), retry)
 		}
 		req.Header.Set("Authorization", "Bearer "+token)
 		req.Header.Set("Accept", "application/json")
@@ -465,4 +465,13 @@ func (c *Client) SetSpam(ctx context.Context, rfcMessageIDs []string, spam bool)
 		return c.Modify(ctx, ids, []string{"SPAM"}, []string{"INBOX"})
 	}
 	return c.Modify(ctx, ids, []string{"INBOX"}, []string{"SPAM"})
+}
+
+// Non-retried filter writes have a provable pre-transport boundary. Never use
+// this classification for HTTPClient.Do errors, which may follow submission.
+func requestNotSubmitted(err error, retry bool) error {
+	if !retry {
+		return fmt.Errorf("%w: %w", ErrFilterNotSubmitted, err)
+	}
+	return err
 }

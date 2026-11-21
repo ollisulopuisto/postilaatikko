@@ -2877,7 +2877,7 @@ func (s *Store) ReconcileMovedMessageUIDs(destinationFolderID string, uidsByLoca
 
 		messageIDMatch := movingAccountID == existingAccountID &&
 			movingMessageID.Valid && movingMessageID.String != "" &&
-			existingMessageID.Valid && movingMessageID.String == existingMessageID.String
+			existingMessageID.Valid && strings.Trim(movingMessageID.String, "<>") == strings.Trim(existingMessageID.String, "<>")
 		if !messageIDMatch {
 			return nil, &MovedUIDConflictError{
 				MovingLocalID:   movingLocalID,
@@ -2992,6 +2992,32 @@ func (s *Store) DeleteTempUIDs(folderID string) error {
 	}
 	if _, err = tx.Exec("DELETE FROM messages WHERE folder_id = ? AND uid < 0", folderID); err != nil {
 		return fmt.Errorf("failed to delete temp UID messages: %w", err)
+	}
+	return tx.Commit()
+}
+
+// DeleteTempUIDsForMessages cleans only placeholders owned by a completed
+// reconciliation batch. Other admitted moves may still be in flight.
+func (s *Store) DeleteTempUIDsForMessages(folderID string, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for _, id := range ids {
+		var protected int
+		if err := tx.QueryRow(`SELECT COUNT(*) FROM messages m JOIN attachment_repairs r ON r.message_id=m.id WHERE m.folder_id=? AND m.uid<0 AND m.id=?`, folderID, id).Scan(&protected); err != nil {
+			return err
+		}
+		if protected > 0 {
+			return &MovedUIDConflictError{MovingLocalID: id, RepairProtected: true}
+		}
+		if _, err := tx.Exec(`DELETE FROM messages WHERE folder_id=? AND id=? AND uid<0`, folderID, id); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }
@@ -3719,4 +3745,45 @@ func highlightMatches(text, query string) string {
 	})
 
 	return highlighted
+}
+
+// TempMoveSnapshot is captured by the sync owner before starting its workers.
+// New optimistic moves created later are not part of restart recovery.
+func (s *Store) TempMoveSnapshot() (map[string][]string, error) {
+	rows, err := s.db.Query(`SELECT folder_id,id FROM messages WHERE uid<0`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string][]string{}
+	for rows.Next() {
+		var folder, id string
+		if err := rows.Scan(&folder, &id); err != nil {
+			return nil, err
+		}
+		out[folder] = append(out[folder], id)
+	}
+	return out, rows.Err()
+}
+
+// RecoverTempMoves consolidates an unambiguous rediscovered Message-ID before
+// removing only old owned placeholders. Repair-protected data is never deleted.
+func (s *Store) RecoverTempMoves(folderID string, ids []string) error {
+	for _, id := range ids {
+		var uid sql.NullInt64
+		var matches int
+		err := s.db.QueryRow(`SELECT MIN(remote.uid),COUNT(*) FROM messages pending JOIN messages remote ON remote.folder_id=pending.folder_id AND remote.account_id=pending.account_id AND trim(remote.message_id,'<>')=trim(pending.message_id,'<>') AND remote.uid>0 WHERE pending.id=? AND pending.folder_id=? AND pending.uid<0 AND pending.message_id<>'' GROUP BY pending.id`, id, folderID).Scan(&uid, &matches)
+		if err != nil && err != sql.ErrNoRows {
+			return err
+		}
+		if matches > 1 {
+			return fmt.Errorf("interrupted move has ambiguous destination copies: %s", id)
+		}
+		if err == nil && uid.Valid {
+			if _, err := s.ReconcileMovedMessageUIDs(folderID, map[string]uint32{id: uint32(uid.Int64)}); err != nil {
+				return err
+			}
+		}
+	}
+	return s.DeleteTempUIDsForMessages(folderID, ids)
 }

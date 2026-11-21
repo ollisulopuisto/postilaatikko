@@ -234,6 +234,21 @@ type HistoryPage struct {
 	} `json:"history"`
 }
 
+// ProfileEmail reads the authenticated mailbox identity for owner checks.
+func (c *Client) ProfileEmail(ctx context.Context) (string, error) {
+	var result struct {
+		Email string `json:"emailAddress"`
+	}
+	err := c.do(ctx, http.MethodGet, "/profile", nil, nil, &result)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(result.Email) == "" {
+		return "", fmt.Errorf("Gmail profile has no mailbox identity")
+	}
+	return result.Email, nil
+}
+
 func (c *Client) ProfileHistoryID(ctx context.Context) (string, error) {
 	var r struct {
 		HistoryID string `json:"historyId"`

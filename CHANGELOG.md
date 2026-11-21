@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Standalone Gmail-filter consent now refuses to overwrite credentials replaced after its final account/grant validation.
+
 - Needs me shows unread conversations or manually marked Later conversations in the selected folder. An All folders destination excludes Spam, Sent, Drafts, Archive, Trash, All Mail and hidden folders across enabled accounts. Reading keeps Later marks; snoozed mail returns when due.
 - Add `--perf-log` for an automatic five-minute private local capture, including Go CPU, heap and goroutine profiles, desktop response-header timings, and authenticated local-helper capture/status. No manual environment setup, profiling listener, upload or helper restart is needed. Captures are private and may contain source/stack metadata; see `docs/PERFORMANCE_LOG.md` for locations, limits and cleanup.
 - Rename the executable to `postilaatikko` and the Flatpak/desktop identity to `io.github.ollisulopuisto.postilaatikko`. Native data, credentials and Windows browser preferences stay in their existing locations. Enabled legacy login entries migrate without enabling disabled startup. Linux retains an `eterno-mail` command alias; custom macOS/Windows executable paths need updating. Flatpak users must migrate or copy the old sandbox profile before using the new app; see `docs/IDENTITY_RENAME.md` for backups, portal permissions and keyring checks. No remote or installed profile is changed by this source update.
@@ -11,6 +13,10 @@
 - Settings Images now shows retryable allowlist load failures and visible removal errors instead of false empty lists or silent failures. The privacy switch stays usable in narrow windows.
 
 - Contact-source load failures show a retryable warning instead of looking like an empty list. The last good list is retained, and source controls wrap in narrow windows.
+- Add an internal standalone Gmail-publication owner adapter and direct-filter drain boundary. Delayed local callbacks respect the durable publication guard. Helper-owned workspaces refuse local publication rather than using the wrong credentials. No UI enables publication yet.
+
+- Add a durable Gmail filter publication recovery core (not connected to the UI yet): one create attempt, restart reconciliation without replay, account-qualified label-only drafts, and guards against local re-enabling or queued jobs while publication is unresolved. Additive migration 85 does not publish any rules.
+
 - Add explicit selected-account Gmail filter consent, isolated from pending mail login. Wrong identity, missing permissions, changed grants and remote workspace credentials are rejected; no filter publication or automatic consent is enabled. Ordinary login scopes remain unchanged.
 
 - Add bounded Gmail-native filter transport and explicit incremental settings-permission primitives. Ambiguous filter writes are not retried. App consent wiring and publishing UI are separate follow-ups; ordinary mail login permissions are unchanged.
