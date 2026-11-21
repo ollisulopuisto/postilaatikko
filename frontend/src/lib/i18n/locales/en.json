@@ -1852,6 +1852,7 @@
     "listIdCoverage": "List-ID preview and existing-mail application use captured headers only. Older messages may be missing until their headers are refreshed."
   },
   "gmailFilters": {
+    "rejected": "Gmail rejected this filter without creating it. Cancel this review to release the local rule, then check the query and actions before reviewing again.",
     "title": "Publish a native Gmail filter",
     "description": "Review Gmail search and label actions for this stopped Postilaatikko source.",
     "working": "Working…",

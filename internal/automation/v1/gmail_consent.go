@@ -67,7 +67,7 @@ func MountGmailConsentRoutes(mux RouteMux, ops GmailConsentOperations, clientID 
 		}
 		result, err := ops.GmailConsent(r.Context(), clientID(r), req)
 		if err != nil {
-			writeFilterRuleError(w, r, 409, CodeInvalidRequest, "Gmail consent could not be completed; reopen authorization and try again")
+			writeFilterRuleError(w, r, 409, CodeInvalidRequest, "Gmail consent could not be completed. Reopen authorization, select the Gmail account shown in this review, and approve the Gmail settings permission. If it still fails, check the account owner and connection before retrying.")
 			return
 		}
 		writeFilterRuleResponse(w, r, result)

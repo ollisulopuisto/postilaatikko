@@ -1852,6 +1852,7 @@
     "listIdCoverage": "List-ID-esikatselu ja olemassa olevan postin suodatus käyttävät vain tallennettuja otsakkeita. Vanhempia viestejä voi puuttua, kunnes otsakkeet päivitetään."
   },
   "gmailFilters": {
+    "rejected": "Gmail hylkäsi suodattimen luomatta sitä. Peru tarkistus vapauttaaksesi paikallisen säännön. Tarkista sitten haku ja toiminnot ennen uutta tarkistusta.",
     "title": "Julkaise Gmailin oma suodatin",
     "description": "Tarkista Gmail-haku ja tunnistetoiminnot pysäytetylle Postilaatikon suodattimelle.",
     "working": "Käsitellään…",

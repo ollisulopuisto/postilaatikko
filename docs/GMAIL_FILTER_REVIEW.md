@@ -45,3 +45,10 @@ Initialized desktops select standalone publication only while holding the real e
 Cancel review releases only a prepared, never-attempted plan. After an attempt, a local source remains frozen, including after confirmed publication, because the native Gmail rule runs independently. Unfreezing could double-process messages or lose the provider identity needed to recover an ambiguous create. Generic source editing, deletion and moving cannot safely imply native-rule deletion. Other rules can reorder around an unchanged frozen source.
 
 A future explicit release workflow must first verify the selected account, provider rule identity and resulting provider state, retain recovery evidence for ambiguous outcomes, and only then allow local execution again. This is a follow-up, not part of the current release or a new PR in this round. Until then, manage the native rule in Gmail and retain its frozen local ownership record.
+
+
+## Definitive provider rejection
+
+A known rejected create is terminal and cannot publish again from that plan. The review offers explicit cancellation to release the stopped local source for a new review. Ambiguous writes retain the read-only reconciliation path and cannot be cancelled or replayed. Duplicate-filter and consent errors give fixed, non-secret recovery instructions instead of a reload loop.
+
+The native Gmail browser regression runs in the existing CI Type check job's installed Chromium batch, without a new job or dependency-install step. It also exercises rejected-plan cancellation with no second Publish or Check result button. Provider refresh tests verify full, omitted and reduced returned scopes plus cancellation; these synthetic tests do not claim live Google acceptance. An actual Google refresh that omits explicit scope evidence fails closed rather than assuming it preserved settings permission.

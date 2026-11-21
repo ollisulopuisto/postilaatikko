@@ -80,6 +80,10 @@ func MountGmailPublicationRoutes(mux RouteMux, ops GmailPublicationOperations, r
 		}
 		result, err := ops.GmailPublication(r.Context(), req)
 		if err != nil {
+			if errors.Is(err, mailfilter.ErrGmailDuplicateFilter) {
+				writeFilterRuleError(w, r, 409, CodeInvalidRequest, "An identical Gmail filter already exists. Cancel this review and inspect the existing filter in Gmail settings; do not publish a duplicate.")
+				return
+			}
 			if errors.Is(err, ErrGmailAccountIneligible) {
 				writeFilterRuleError(w, r, 422, CodeInvalidRequest, "Native Gmail filters are available only for an enabled Google OAuth Gmail account. Choose a Gmail account instead.")
 				return

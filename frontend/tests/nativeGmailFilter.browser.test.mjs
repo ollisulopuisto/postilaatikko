@@ -107,6 +107,17 @@ test('native Gmail review: selected consent, preview invalidation, explicit publ
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'no horizontal overflow')
       await page.screenshot({path:join(captureDir,`native-gmail-published-${locale}-320.png`),fullPage:true})
     }
+
+    // A definitive provider rejection can release its source, but must never
+    // offer another create attempt or read-only recovery for that plan.
+    await page.evaluate(()=>{window.plan={...window.plan,state:'rejected',providerId:''};return window.show('en')})
+    await page.getByText('Gmail rejected this filter without creating it.',{exact:false}).waitFor()
+    assert.equal(await page.getByRole('button',{name:'Publish to Gmail',exact:true}).count(),0)
+    assert.equal(await page.getByRole('button',{name:'Check Gmail result'}).count(),0)
+    await page.screenshot({path:join(captureDir,'native-gmail-rejected-en-320.png'),fullPage:true})
+    await page.getByRole('button',{name:'Cancel review and release source'}).click()
+    await page.getByLabel('Gmail search query').waitFor()
+    assert.equal(await page.evaluate(()=>window.calls.filter(([n,args])=>n==='NativeGmailReview'&&args[0].operation==='publish').length),1)
     assert.deepEqual(errors,[])
   }finally{await browser.close();await server.close()}
 })

@@ -3,6 +3,7 @@ package v1
 import (
 	"context"
 	"errors"
+	"github.com/ollisulopuisto/postilaatikko/internal/mailfilter"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -84,5 +85,15 @@ func TestGmailPublicationEligibilityErrorIsSafeAndNotRetryAdvice(t *testing.T) {
 	mux.ServeHTTP(rec, httptest.NewRequest("POST", "/v1/filters/gmail", strings.NewReader(`{"operation":"status","ruleId":"outlook-rule"}`)))
 	if rec.Code != 422 || !strings.Contains(rec.Body.String(), "Choose a Gmail account") || strings.Contains(rec.Body.String(), "reload") {
 		t.Fatal("ineligible account got recovery advice", rec.Code, rec.Body.String())
+	}
+}
+
+func TestGmailDuplicateFilterExplainsRequiredAction(t *testing.T) {
+	mux := http.NewServeMux()
+	MountGmailPublicationRoutes(mux, &gmailPublicationStub{err: mailfilter.ErrGmailDuplicateFilter}, func(http.ResponseWriter, *http.Request, Capability) bool { return true })
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest("POST", "/v1/filters/gmail", strings.NewReader(`{"operation":"publish","accountId":"helper"}`)))
+	if rec.Code != 409 || !strings.Contains(rec.Body.String(), "identical Gmail filter") || !strings.Contains(rec.Body.String(), "Cancel this review") {
+		t.Fatal(rec.Code, rec.Body.String())
 	}
 }

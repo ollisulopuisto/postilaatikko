@@ -77,7 +77,7 @@
     }
   }
   async function cancelReview() {
-    if (!plan || plan.state !== 'prepared') return
+    if (!plan || !['prepared', 'rejected'].includes(plan.state)) return
     await request('cancel', {id: plan.id})
     if (alive) { plan = null; preview = null; onChanged?.() }
   }
@@ -112,6 +112,8 @@
         <p class="text-xs text-muted-foreground">{$_('gmailFilters.reserved')}</p>
         {#if plan.state === 'published'}
           <p role="status" class="text-sm">{$_('gmailFilters.published')} {plan.providerId}</p>
+        {:else if plan.state === 'rejected'}
+          <p role="status" class="text-sm">{$_('gmailFilters.rejected')}</p>
         {:else if plan.state !== 'prepared'}
           <p role="status" class="text-sm">{$_('gmailFilters.uncertain')}</p>
         {:else}
@@ -119,7 +121,9 @@
         {/if}
       </section>
       <div class="flex flex-wrap justify-end gap-2">
-        {#if plan.state === 'prepared'}
+        {#if plan.state === 'rejected'}
+          <Button disabled={busy} variant="outline" onclick={() => void run(cancelReview)}>{$_('gmailFilters.cancelReview')}</Button>
+        {:else if plan.state === 'prepared'}
           <Button disabled={busy} variant="outline" onclick={() => void run(cancelReview)}>{$_('gmailFilters.cancelReview')}</Button>
           <Button disabled={busy || context?.consentRequired} onclick={() => void run(publish)}>{$_('gmailFilters.publish')}</Button>
         {:else if plan.state !== 'published'}

@@ -64,7 +64,7 @@ func TestGmailConsentStubDoesNotExposeBackendErrors(t *testing.T) {
 	MountGmailConsentRoutes(mux, &gmailConsentStub{err: errors.New(secret)}, func(*http.Request) string { return "client" }, func(http.ResponseWriter, *http.Request, Capability) bool { return true })
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest("POST", "/v1/filters/gmail/consent", strings.NewReader(`{"operation":"start","accountId":"helper"}`)))
-	if rec.Code != 409 || strings.Contains(rec.Body.String(), secret) {
+	if rec.Code != 409 || strings.Contains(rec.Body.String(), secret) || !strings.Contains(rec.Body.String(), "select the Gmail account") || !strings.Contains(rec.Body.String(), "Gmail settings permission") {
 		t.Fatal("backend error disclosure", rec.Code, rec.Body.String())
 	}
 }
