@@ -1,6 +1,9 @@
 package oauth2
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // ProviderConfig defines OAuth2 endpoints and settings for a provider
 type ProviderConfig struct {
@@ -16,7 +19,8 @@ type ProviderConfig struct {
 	//                         providers discovered via OIDC so the account email can
 	//                         be fetched. Shipped providers (google/microsoft) leave
 	//                         this empty and use their hardcoded userinfo URLs.
-	LoginHint string // Optional: pre-fill the account picker (`login_hint`).
+	IncrementalConsent bool   // Google mail capability upgrade only, never optional-service grants.
+	LoginHint          string // Optional: pre-fill the account picker (`login_hint`).
 	//                       Used by the Contacts extension's write-access flow
 	//                       to constrain the user to a specific email address
 	//                       matching an existing read account. Empty = no hint.
@@ -214,4 +218,49 @@ func CustomProviderConfig(authURL, tokenURL, userinfoEndpoint string, scopes []s
 		ClientID:         clientID,
 		ClientSecret:     clientSecret,
 	}
+}
+
+// GoogleFilterManagementProvider requests settings access only from the explicit
+// publish flow. Existing mail scopes are retained, never guessed from defaults.
+func GoogleFilterManagementProvider(email string, grantedScopes []string) (ProviderConfig, error) {
+	if strings.TrimSpace(email) == "" || len(grantedScopes) == 0 {
+		return ProviderConfig{}, fmt.Errorf("known account identity and existing grant required")
+	}
+	p := overlayResolvedCreds(GoogleProvider(), "google-mail")
+	p.LoginHint = email
+	p.IncrementalConsent = true
+	p.Scopes = nil
+	seen := map[string]bool{}
+	for _, scope := range append(append([]string(nil), grantedScopes...), "https://www.googleapis.com/auth/gmail.settings.basic") {
+		if scope != "" && !seen[scope] {
+			p.Scopes = append(p.Scopes, scope)
+			seen[scope] = true
+		}
+	}
+	return p, nil
+}
+
+// ValidateGoogleFilterGrant refuses wrong-account or granular partial consent.
+// In particular, do not infer newly granted settings access from an omitted
+// token response scope. The caller keeps the old credentials unchanged on error.
+func ValidateGoogleFilterGrant(expectedEmail, actualEmail string, existingScopes []string, response *TokenResponse) error {
+	if expectedEmail == "" || !strings.EqualFold(strings.TrimSpace(expectedEmail), strings.TrimSpace(actualEmail)) {
+		return fmt.Errorf("Gmail filter authorization account does not match")
+	}
+	if response == nil || response.AccessToken == "" || strings.TrimSpace(response.Scope) == "" {
+		return fmt.Errorf("Gmail filter grant could not be verified")
+	}
+	got := map[string]bool{}
+	for _, scope := range strings.Fields(response.Scope) {
+		got[scope] = true
+	}
+	if !got["https://www.googleapis.com/auth/gmail.settings.basic"] {
+		return fmt.Errorf("Gmail filter settings permission was not granted")
+	}
+	for _, scope := range existingScopes {
+		if scope != "" && !got[scope] {
+			return fmt.Errorf("existing mail permission missing from new grant")
+		}
+	}
+	return nil
 }

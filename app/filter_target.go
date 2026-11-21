@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	automationclient "github.com/hkdb/aerion/internal/automation/client"
-	v1 "github.com/hkdb/aerion/internal/automation/v1"
-	"github.com/hkdb/aerion/internal/mailfilter"
+	automationclient "github.com/ollisulopuisto/postilaatikko/internal/automation/client"
+	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/mailfilter"
 )
 
 // FilterExecutionTarget describes the current workspace, not an independent

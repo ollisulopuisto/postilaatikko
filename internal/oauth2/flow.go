@@ -476,6 +476,9 @@ func buildAuthURL(provider ProviderConfig, state, codeChallenge, redirectURI str
 		params.Set("access_type", "offline")
 		// Keep Mail and optional services as separate grants.
 		params.Set("include_granted_scopes", "false")
+		if provider.IncrementalConsent {
+			params.Set("include_granted_scopes", "true")
+		}
 		params.Set("prompt", "consent")
 	case strings.HasPrefix(provider.Name, "microsoft"):
 		params.Set("prompt", "select_account")
