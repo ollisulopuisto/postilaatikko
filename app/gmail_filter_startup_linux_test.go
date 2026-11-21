@@ -38,7 +38,11 @@ func TestGmailPublicationUsesRealStartupOwnership(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				defer competing.Release()
+				defer func() {
+					if err := competing.Release(); err != nil {
+						t.Error(err)
+					}
+				}()
 			}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()

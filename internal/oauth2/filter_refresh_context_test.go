@@ -13,7 +13,10 @@ import (
 func TestFilterGrantRefreshHonorsCallerDeadline(t *testing.T) {
 	reached := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.Copy(io.Discard, r.Body)
+		if _, err := io.Copy(io.Discard, r.Body); err != nil {
+			t.Error(err)
+			return
+		}
 		close(reached)
 		<-r.Context().Done()
 	}))
