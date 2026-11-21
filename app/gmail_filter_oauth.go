@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -98,6 +99,17 @@ func (a *App) prepareGmailFilterConsent(accountID string) (string, *credentials.
 }
 
 func (a *App) persistGmailFilterConsent(accountID, expectedEmail string, previous *credentials.OAuthTokens, clientID string, response *oauth2.TokenResponse, actualEmail string) error {
+	// Keep ordinary Mail refreshes outside the entire consent verification/write/
+	// readback interval. CAS still rejects independent credential replacement.
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	releaseRefresh, err := credentials.LockOAuthRefresh(ctx, accountID)
+	if err != nil {
+		return err
+	}
+	defer releaseRefresh()
 	if previous == nil {
 		return fmt.Errorf("previous grant missing")
 	}

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -76,12 +77,14 @@ func TestConcurrentRefreshDoesNotFailScheduledDelivery(t *testing.T) {
 	first := make(chan error, 1)
 	go func() { _, err := syncTransport.tokens(context.Background(), acc.ID); first <- err }()
 	<-started
+	reached := make(chan struct{})
+	deliveryContext := &refreshLookupContext{Context: context.Background(), reached: reached}
 	delivered := make(chan error, 1)
 	go func() {
-		delivered <- transport.Deliver(context.Background(), Delivery{AccountID: acc.ID, From: acc.Email, To: []string{"recipient@example.test"}, RFC822: []byte("Subject: test\r\n\r\nbody")})
+		delivered <- transport.Deliver(deliveryContext, Delivery{AccountID: acc.ID, From: acc.Email, To: []string{"recipient@example.test"}, RFC822: []byte("Subject: test\r\n\r\nbody")})
 	}()
-	// Give the second consumer a chance to contend while the first provider request is in flight.
-	time.Sleep(100 * time.Millisecond)
+	// Done is evaluated by the refresh-lock select before it can acquire.
+	<-reached
 	close(release)
 	if err := <-first; err != nil {
 		t.Fatalf("sync refresh failed: %v", err)
@@ -136,3 +139,15 @@ func TestDeliveryRetriesCredentialReplacementBeforeSubmission(t *testing.T) {
 type refreshDeliveryRoundTrip func(*http.Request) (*http.Response, error)
 
 func (f refreshDeliveryRoundTrip) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// Marks entry to the blocking refresh-lock select, without sleeps or production hooks.
+type refreshLookupContext struct {
+	context.Context
+	once    sync.Once
+	reached chan struct{}
+}
+
+func (c *refreshLookupContext) Done() <-chan struct{} {
+	c.once.Do(func() { close(c.reached) })
+	return c.Context.Done()
+}

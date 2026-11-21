@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
 	"github.com/ollisulopuisto/postilaatikko/internal/oauth2"
@@ -214,5 +215,29 @@ func TestFilterConsentRejectsContextSwitchDuringRefreshVerification(t *testing.T
 				}
 			}
 		})
+	}
+}
+
+func TestDesktopRefreshWaiterReusesWinningGrantUnlessForced(t *testing.T) {
+	a := filterConsentFixture(t)
+	current, err := a.credStore.GetOAuthTokens("mail")
+	if err != nil {
+		t.Fatal(err)
+	}
+	current.ExpiresAt = time.Now().Add(time.Hour)
+	if err = a.credStore.SetOAuthTokens("mail", current); err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	old := http.DefaultTransport
+	http.DefaultTransport = contactsRoundTrip(func(req *http.Request) (*http.Response, error) { calls++; return old.RoundTrip(req) })
+	ops := &composeOps{credStore: a.credStore, oauth2Manager: oauth2.NewManager()}
+	// Models a waiter whose initial expiry check preceded another consumer's refresh.
+	got, err := ops.refreshStoredOAuthToken(context.Background(), "mail", false)
+	if err != nil || got.AccessToken != "mail-access" || calls != 0 {
+		t.Fatal("waiter refreshed usable grant", calls, err)
+	}
+	if _, err = ops.forceRefreshOAuthToken(context.Background(), "mail"); err != nil || calls != 1 {
+		t.Fatal("401 forced refresh was skipped", calls, err)
 	}
 }
