@@ -1,6 +1,6 @@
 module github.com/ollisulopuisto/postilaatikko
 
-go 1.26.0
+go 1.26.11
 
 require (
 	cloud.google.com/go/pubsub/v2 v2.8.1
@@ -24,11 +24,11 @@ require (
 	github.com/web-ridge/email-reply-parser v0.0.0-20230428184542-95e2a82fa6bd
 	github.com/zalando/go-keyring v0.2.6
 	go.mozilla.org/pkcs7 v0.9.0
-	golang.org/x/crypto v0.58.0
+	golang.org/x/crypto v0.59.0
 	golang.org/x/image v0.45.0
-	golang.org/x/net v0.61.0
-	golang.org/x/sys v0.49.0
-	golang.org/x/text v0.43.0
+	golang.org/x/net v0.62.0
+	golang.org/x/sys v0.50.0
+	golang.org/x/text v0.44.0
 	google.golang.org/api v0.304.0
 	modernc.org/sqlite v1.42.2
 	software.sslmate.com/src/go-pkcs12 v0.7.2
@@ -89,7 +89,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.47.0 // indirect
 	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect
 	golang.org/x/oauth2 v0.37.0 // indirect
-	golang.org/x/sync v0.24.0 // indirect
+	golang.org/x/sync v0.25.0 // indirect
 	golang.org/x/time v0.16.0 // indirect
 	google.golang.org/genproto v0.0.0-20261012220534-4341edf3f941 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20261012220534-4341edf3f941 // indirect

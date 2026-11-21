@@ -694,3 +694,8 @@ README review follow-up: qualify checksum instructions because tagged releases d
 Review: Instinct, branch `agent/security-pilot-free`, isolated security-pilot worktree. Adds report-only, pinned scanners and weekly staggered public-hosted runs. See `docs/security-pilot.md` for coverage, output and limits. No app behavior/version change, fixes, releases, private CI, or merges.
 
 Security pilot review follow-up: include merge-resolution patches, tolerate null RustSec advisory warnings, fix native Go scan tags, and conform to repository lint. Added two regressions (both failed against the old implementation). CodeQL pin resolves in hosted CI; no change based solely on an external 404 claim.
+
+## Security advisory fixes (2026-11-21)
+
+- Status: Review. Owner: Instinct. Branch: `agent/security-advisory-fixes`. Worktree: `/downloads/security-pilot/postilaatikko-fix`.
+- Scope: dependency and Go patch updates plus owner-approved scoped esbuild override; before/after scanner evidence. Implementation 40c26c0a plus follow-up in this branch. Merge authorized after own review and exact-head CI. Separate from the report-only scanner pilot; no release here.
