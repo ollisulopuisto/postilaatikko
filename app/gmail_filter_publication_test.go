@@ -149,7 +149,7 @@ func TestFilterDrainWaitsForBackgroundMoveCompletion(t *testing.T) {
 	go func() { close(waiting); a.waitForFilterMove(m); a.filterExecutionMu.RUnlock(); close(done) }()
 	<-waiting
 	acquired := make(chan struct{})
-	go func() { a.filterExecutionMu.Lock(); a.filterExecutionMu.Unlock(); close(acquired) }()
+	go func() { a.filterExecutionMu.Lock(); close(acquired); a.filterExecutionMu.Unlock() }()
 	select {
 	case <-acquired:
 		t.Fatal("publication drained before physical move")
