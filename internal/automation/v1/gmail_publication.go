@@ -76,7 +76,7 @@ func MountGmailPublicationRoutes(mux RouteMux, ops GmailPublicationOperations, r
 		}
 		result, err := ops.GmailPublication(r.Context(), req)
 		if err != nil {
-			writeFilterRuleError(w, r, 400, CodeInvalidRequest, err.Error())
+			writeFilterRuleError(w, r, 409, CodeInvalidRequest, "Gmail publication could not be verified; reload its status before taking another action")
 			return
 		}
 		writeFilterRuleResponse(w, r, result)

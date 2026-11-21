@@ -2,6 +2,7 @@ package v1
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,6 +10,7 @@ import (
 )
 
 type gmailConsentStub struct {
+	err    error
 	calls  int
 	client string
 }
@@ -16,7 +18,7 @@ type gmailConsentStub struct {
 func (s *gmailConsentStub) GmailConsent(_ context.Context, client string, _ GmailConsentRequest) (GmailConsentReply, error) {
 	s.calls++
 	s.client = client
-	return GmailConsentReply{Authorized: true}, nil
+	return GmailConsentReply{Authorized: true}, s.err
 }
 func TestHelperConsentRouteAuthorizationAndNoCredentialAcceptance(t *testing.T) {
 	for _, manage := range []bool{false, true} {
@@ -53,5 +55,16 @@ func TestHelperConsentRouteAuthorizationAndNoCredentialAcceptance(t *testing.T) 
 				t.Fatal("malformed/credential request reached helper", rec.Code)
 			}
 		}
+	}
+}
+
+func TestGmailConsentStubDoesNotExposeBackendErrors(t *testing.T) {
+	const secret = "synthetic-private-keyring-detail"
+	mux := http.NewServeMux()
+	MountGmailConsentRoutes(mux, &gmailConsentStub{err: errors.New(secret)}, func(*http.Request) string { return "client" }, func(http.ResponseWriter, *http.Request, Capability) bool { return true })
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest("POST", "/v1/filters/gmail/consent", strings.NewReader(`{"operation":"start","accountId":"helper"}`)))
+	if rec.Code != 409 || strings.Contains(rec.Body.String(), secret) {
+		t.Fatal("backend error disclosure", rec.Code, rec.Body.String())
 	}
 }

@@ -2,17 +2,21 @@ package v1
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
 
-type gmailPublicationStub struct{ calls int }
+type gmailPublicationStub struct {
+	calls int
+	err   error
+}
 
 func (s *gmailPublicationStub) GmailPublication(context.Context, GmailPublicationRequest) (GmailPublicationReply, error) {
 	s.calls++
-	return GmailPublicationReply{AccountID: "helper"}, nil
+	return GmailPublicationReply{AccountID: "helper"}, s.err
 }
 func TestGmailPublicationRouteRequiresBothWriteAndAccountAuthority(t *testing.T) {
 	for _, op := range []string{"context", "preview", "status", "reconcile", "prepare", "publish", "cancel"} {
@@ -59,5 +63,16 @@ func TestGmailPublicationRouteBoundsAndRejectsCredentialFields(t *testing.T) {
 		if rec.Code != 400 || stub.calls != 0 {
 			t.Fatal("invalid request reached helper", rec.Code, stub.calls)
 		}
+	}
+}
+
+func TestGmailPublicationStubDoesNotExposeBackendErrors(t *testing.T) {
+	const secret = "synthetic-private-keyring-detail"
+	mux := http.NewServeMux()
+	MountGmailPublicationRoutes(mux, &gmailPublicationStub{err: errors.New(secret)}, func(http.ResponseWriter, *http.Request, Capability) bool { return true })
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest("POST", "/v1/filters/gmail", strings.NewReader(`{"operation":"status","accountId":"helper"}`)))
+	if rec.Code != 409 || strings.Contains(rec.Body.String(), secret) {
+		t.Fatal("backend error disclosure", rec.Code, rec.Body.String())
 	}
 }
