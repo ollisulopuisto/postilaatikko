@@ -166,6 +166,31 @@ func (r *SyncRuntime) GmailConsent(ctx context.Context, clientID string, req v1.
 		if err = oauth2.ValidateGoogleFilterGrant(session.email, email, session.scopes, tokens); err != nil {
 			return result, err
 		}
+		previous, err := r.contacts.creds.GetOAuthTokens(session.accountID)
+		if err != nil {
+			return result, err
+		}
+		defer previous.Clear()
+		if !gmailConsentTokensMatch(session, previous) {
+			return result, fmt.Errorf("helper grant changed before refresh verification")
+		}
+		refreshGrant := tokens.RefreshToken
+		if refreshGrant == "" {
+			refreshGrant = previous.RefreshToken
+		}
+		cfg, err := oauth2.GetProvider("google")
+		if err != nil {
+			return result, err
+		}
+		if helperGmailBinding(session.email, cfg.ClientID) != session.binding {
+			return result, fmt.Errorf("helper project changed before refresh verification")
+		}
+		verified, err := oauth2.NewManager().VerifyGoogleFilterRefresh(cfg, refreshGrant, session.scopes)
+		if err != nil {
+			return result, fmt.Errorf("verify durable helper settings grant: %w", err)
+		}
+		defer verified.Clear()
+		tokens = verified
 		r.accountMutationMu.Lock()
 		defer r.accountMutationMu.Unlock()
 		if err = r.validateGmailConsentSnapshot(session); err != nil {

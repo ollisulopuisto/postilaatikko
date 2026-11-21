@@ -35,3 +35,5 @@ Old unbound prepared plans must be cancelled and reviewed again. An attempted ol
 ## Configured helper workspace
 
 The same dialog now captures the execution owner and client before review and displays its endpoint. Helper context, consent, preview and durable recovery use only that helper. Connector, endpoint or credential replacement invalidates the open review. Standalone paths remain explicit and never serve as an offline fallback. See GMAIL_FILTER_HELPER.md for the shipped routing, consent and validation boundaries. Earlier standalone-only notes above describe the initial prerequisite, not the current helper support.
+
+Durable settings consent is verified by refreshing the selected Google grant and requiring explicitly reported full scopes before desktop or helper persistence. A temporary authorization access token alone is insufficient. Mail refresh persistence uses shared snapshot compare-and-swap and rejects a concurrent credential replacement.
