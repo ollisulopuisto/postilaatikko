@@ -464,3 +464,97 @@ func TestLegacyEditableDownloadOpensOfflineWithoutBecomingOriginal(t *testing.T)
 		t.Fatal("arbitrary legacy path opened")
 	}
 }
+
+func TestCachedOpenUsesConfiguredSymlinkedStoragePath(t *testing.T) {
+	f := newFilterFixture(t, false)
+	a := f.app
+	a.syncEngine = nil
+	a.paths = &platform.Paths{Data: t.TempDir()}
+	a.attachmentStore = message.NewAttachmentStore(f.db)
+	storage := t.TempDir()
+	root := a.paths.AttachmentsPath()
+	if err := os.Symlink(storage, root); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "report.pdf")
+	mustWriteFixture(t, path, []byte("file"))
+	att := &message.Attachment{ID: "symlinked", MessageID: f.message.ID, Filename: "report.pdf", LocalPath: path, Size: 4}
+	if err := a.attachmentStore.Create(att); err != nil {
+		t.Fatal(err)
+	}
+	got, err := a.attachmentPathForOpening(att.ID)
+	if err != nil || got != path {
+		t.Fatal("configured path lost", got, err)
+	}
+	if err := a.validateOpenPath(got); err != nil {
+		t.Fatal("cached open rejected configured symlinked storage", err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside.pdf")
+	mustWriteFixture(t, outside, []byte("file"))
+	escape := filepath.Join(root, "escape.pdf")
+	if err := os.Symlink(outside, escape); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.attachmentStore.UpdateLocalPath(att.ID, escape); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := a.attachmentStore.LocalDownloadPath(root, att.ID); ok {
+		t.Fatal("symlinked root allowed escaping file")
+	}
+}
+
+func TestAccountOpenAcceptsListedLiveAttachmentsAlongsideCachedBody(t *testing.T) {
+	f := newFilterFixture(t, false)
+	a := f.app
+	a.syncEngine = nil
+	a.paths = &platform.Paths{Data: t.TempDir()}
+	a.attachmentStore = message.NewAttachmentStore(f.db)
+	if _, err := f.db.Exec(`UPDATE messages SET body_fetched=0 WHERE id=?`, f.message.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.messageStore.Create(&message.Message{ID: "outside-conversation-cache", AccountID: "acct-a", FolderID: "a-inbox", UID: ^uint32(0), MessageID: f.message.MessageID, BodyFetched: true, BodyText: "offline body", Date: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.db.Exec(`UPDATE messages SET uid=-1 WHERE id='outside-conversation-cache'`); err != nil {
+		t.Fatal(err)
+	}
+	reader, err := a.messageStore.GetReaderMessage(f.message.ID)
+	if err != nil || reader == nil || reader.CachedBodySourceID != "outside-conversation-cache" {
+		t.Fatal("fixture lacks overlay", reader, err)
+	}
+	root := a.paths.AttachmentsPath()
+	if err := os.MkdirAll(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "listed.txt")
+	mustWriteFixture(t, path, []byte("editable"))
+	for _, owner := range []string{f.message.ID, "outside-conversation-cache"} {
+		id := "att-" + owner
+		if err := a.attachmentStore.Create(&message.Attachment{ID: id, MessageID: owner, Filename: "listed.txt", LocalPath: path, Size: 8}); err != nil {
+			t.Fatal(err)
+		}
+		listed, err := a.GetMessageAttachments("acct-a", owner)
+		if err != nil || len(listed) != 1 || listed[0].ID != id {
+			t.Fatal("listing mismatch", listed, err)
+		}
+		got, err := a.localAttachmentPathForAccountOpening("acct-a", f.message.ID, id)
+		if err != nil || got != path {
+			t.Fatal("listed or overlaid attachment rejected", got, err)
+		}
+		if err := a.validateOpenPath(got); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := a.localAttachmentPathForAccountOpening("acct-b", f.message.ID, id); err == nil {
+			t.Fatal("cross-account open accepted")
+		}
+	}
+	if err := a.messageStore.Create(&message.Message{ID: "unrelated", AccountID: "acct-a", FolderID: "a-inbox", UID: 19, MessageID: "unrelated@example.test", Date: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.attachmentStore.Create(&message.Attachment{ID: "unrelated-att", MessageID: "unrelated", Filename: "listed.txt", LocalPath: path, Size: 8}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.localAttachmentPathForAccountOpening("acct-a", f.message.ID, "unrelated-att"); err == nil {
+		t.Fatal("unrelated message attachment opened")
+	}
+}

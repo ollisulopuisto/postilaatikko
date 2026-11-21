@@ -413,30 +413,40 @@ func (a *App) OpenAttachment(attachmentID string) error {
 // from its owning helper account when configured for remote-only mode.
 func (a *App) OpenAttachmentForAccount(accountID, messageID, attachmentID string) error {
 	if !a.remoteServiceMode {
-		if a.attachmentStore == nil || a.messageStore == nil {
-			return errors.New("attachment store unavailable")
-		}
-		att, err := a.attachmentStore.Get(attachmentID)
+		path, err := a.localAttachmentPathForAccountOpening(accountID, messageID, attachmentID)
 		if err != nil {
 			return err
 		}
-		if att == nil {
-			return errors.New("attachment not found in message")
-		}
-		msg, err := a.messageStore.GetReaderMessage(messageID)
-		if err != nil {
-			return err
-		}
-		if msg == nil || msg.AccountID != accountID || readerContentID(msg) != att.MessageID {
-			return errors.New("message not found in account")
-		}
-		return a.OpenAttachment(attachmentID)
+		return a.openFile(path)
 	}
 	path, err := a.DownloadAttachmentForAccount(accountID, messageID, attachmentID, "")
 	if err != nil {
 		return err
 	}
 	return a.openFile(path)
+}
+
+// Listing uses the supplied message row, while a reader overlay may additionally
+// expose a cached content row. Both belong to this reader, not unrelated rows.
+func (a *App) localAttachmentPathForAccountOpening(accountID, messageID, attachmentID string) (string, error) {
+	if a.attachmentStore == nil || a.messageStore == nil {
+		return "", errors.New("attachment store unavailable")
+	}
+	att, err := a.attachmentStore.Get(attachmentID)
+	if err != nil {
+		return "", err
+	}
+	if att == nil {
+		return "", errors.New("attachment not found in message")
+	}
+	msg, err := a.messageStore.GetReaderMessage(messageID)
+	if err != nil {
+		return "", err
+	}
+	if msg == nil || msg.AccountID != accountID || (att.MessageID != messageID && att.MessageID != readerContentID(msg)) {
+		return "", errors.New("message not found in account")
+	}
+	return a.attachmentPathForOpening(attachmentID)
 }
 
 // SaveAttachmentAs shows a Save As dialog and saves the attachment to the user-selected location

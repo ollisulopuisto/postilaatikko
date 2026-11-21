@@ -142,7 +142,18 @@ func (s *AttachmentStore) RepairFromMIME(accountID, messageID, snapshot string, 
 }
 
 func readAttachmentBackup(tx *sql.Tx, messageID string) ([]attachmentBackup, error) {
-	rows, err := tx.Query(`SELECT a.id,a.filename,COALESCE(a.content_type,''),COALESCE(a.size,0),COALESCE(a.content_id,''),COALESCE(a.is_inline,0),COALESCE(a.local_path,''),a.content,p.content,i.local_path,i.sha256,i.byte_size FROM attachments a LEFT JOIN attachment_repair_payloads p ON p.attachment_id=a.id LEFT JOIN attachment_download_integrity i ON i.attachment_id=a.id WHERE a.message_id=?`, messageID)
+	// The offline rollback utility also supports pre-integrity schemas (79-85).
+	// Such databases have no verified downloads; do not migrate them during undo.
+	var hasIntegrity bool
+	if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='attachment_download_integrity')`).Scan(&hasIntegrity); err != nil {
+		return nil, err
+	}
+	integrityColumns, integrityJoin := "NULL,NULL,NULL", ""
+	if hasIntegrity {
+		integrityColumns = "i.local_path,i.sha256,i.byte_size"
+		integrityJoin = " LEFT JOIN attachment_download_integrity i ON i.attachment_id=a.id"
+	}
+	rows, err := tx.Query(`SELECT a.id,a.filename,COALESCE(a.content_type,''),COALESCE(a.size,0),COALESCE(a.content_id,''),COALESCE(a.is_inline,0),COALESCE(a.local_path,''),a.content,p.content,`+integrityColumns+` FROM attachments a LEFT JOIN attachment_repair_payloads p ON p.attachment_id=a.id`+integrityJoin+` WHERE a.message_id=?`, messageID)
 	if err != nil {
 		return nil, err
 	}

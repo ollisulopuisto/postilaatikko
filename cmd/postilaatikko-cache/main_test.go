@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/ollisulopuisto/postilaatikko/internal/database"
 	"github.com/ollisulopuisto/postilaatikko/internal/message"
 	"os"
@@ -23,6 +24,12 @@ func TestRollbackCommandRefusesMissingOrWrongDatabase(t *testing.T) {
 }
 
 func TestRollbackCommandRestoresBackedUpCache(t *testing.T) {
+	for _, version := range []int{79, 85, 86} {
+		t.Run(fmt.Sprint(version), func(t *testing.T) { testRollbackSchema(t, version) })
+	}
+}
+
+func testRollbackSchema(t *testing.T, version int) {
 	path := filepath.Join(t.TempDir(), "mail.db")
 	db, err := database.Open(path)
 	if err != nil {
@@ -48,6 +55,15 @@ func TestRollbackCommandRestoresBackedUpCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if version < 86 {
+		// Reproduce the pre-integrity schema accepted by the offline command.
+		if _, err = db.Exec(`DROP TABLE attachment_download_integrity`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = db.Exec(`DELETE FROM migrations WHERE version>?`, version); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err = db.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -66,5 +82,30 @@ func TestRollbackCommandRestoresBackedUpCache(t *testing.T) {
 	got, err := message.NewAttachmentStore(db).GetByMessage("mail")
 	if err != nil || len(got) != 1 || got[0].ID != "legacy" {
 		t.Fatalf("CLI restore lost original: %v %v", got, err)
+	}
+	next, err := message.NewAttachmentStore(db).RepairBackupID("mail")
+	if err != nil || next == "" || next == backup {
+		t.Fatal("missing reversible generation", next, err)
+	}
+	if err = db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err = run(append(args, "--restore", next)); err != nil {
+		t.Fatal(err)
+	}
+	db, err = database.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	got, err = message.NewAttachmentStore(db).GetByMessage("mail")
+	if err != nil || len(got) != 1 || got[0].ID != "new" {
+		t.Fatal("redo lost repaired state", got, err)
+	}
+	if version < 86 {
+		var count int
+		if err = db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE name='attachment_download_integrity'`).Scan(&count); err != nil || count != 0 {
+			t.Fatal("offline rollback changed schema", count, err)
+		}
 	}
 }

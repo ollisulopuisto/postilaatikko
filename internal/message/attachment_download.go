@@ -108,5 +108,5 @@ func (s *AttachmentStore) LocalDownloadPath(root, id string) (string, bool) {
 	if err != nil || !info.Mode().IsRegular() {
 		return "", false
 	}
-	return canonicalPath, true
+	return filepath.Join(root, rel), true
 }
