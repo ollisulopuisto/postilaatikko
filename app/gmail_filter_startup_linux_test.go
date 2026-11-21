@@ -70,6 +70,7 @@ func TestGmailPublicationUsesRealStartupOwnership(t *testing.T) {
 					}
 				}()
 			}
+			sharedTransport := http.DefaultTransport
 			var helperCalls atomic.Int32
 			if helperOwns {
 				// Preserve the startup-provisioned client's endpoint, token and
@@ -95,16 +96,15 @@ func TestGmailPublicationUsesRealStartupOwnership(t *testing.T) {
 						t.Error(err)
 					}
 				}()
-				originalTransport := http.DefaultTransport
-				routedTransport := originalTransport.(*http.Transport).Clone()
+				routedTransport := http.DefaultTransport.(*http.Transport).Clone()
 				routedTransport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
 					if network != "tcp" || address != "127.0.0.1:8029" {
 						return nil, fmt.Errorf("unexpected helper destination: %s %s", network, address)
 					}
 					return (&net.Dialer{}).DialContext(ctx, network, helper.Addr())
 				}
-				http.DefaultTransport = routedTransport
-				defer func() { routedTransport.CloseIdleConnections(); http.DefaultTransport = originalTransport }()
+				a.mailboxClientTransport = routedTransport
+				defer routedTransport.CloseIdleConnections()
 			}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -126,6 +126,10 @@ func TestGmailPublicationUsesRealStartupOwnership(t *testing.T) {
 				a.Startup(ctx)
 			}()
 			defer func() { cancel(); a.Shutdown(ctx) }()
+			if http.DefaultTransport != sharedTransport {
+				t.Fatal("startup fixture mutated shared HTTP transport")
+			}
+
 			// Address is precomputed. A real connection proves Start has bound while
 			// TMPDIR remains isolated; Shutdown then joins the server before restore.
 			deadline := time.Now().Add(time.Second)
