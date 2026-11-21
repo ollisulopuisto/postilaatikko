@@ -1624,6 +1624,11 @@ func TestMoveWaitsForDestinationCacheResetBeforePromotion(t *testing.T) {
 				if err := f.db.QueryRow(`SELECT COUNT(*) FROM attachment_repair_backups WHERE message_id=?`, f.message.ID).Scan(&backups); err != nil || backups == 0 {
 					t.Fatal("date omission destroyed repair history", backups, err)
 				}
+				var proofs int
+				if err := f.db.QueryRow(`SELECT COUNT(*) FROM move_uid_evidence WHERE message_id=?`, f.message.ID).Scan(&proofs); err != nil || proofs != 0 {
+					t.Fatal("retired snapshot retained recovery proof", proofs, err)
+				}
+
 			}
 
 		})

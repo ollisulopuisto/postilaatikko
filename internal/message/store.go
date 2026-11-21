@@ -1339,6 +1339,11 @@ func (s *Store) DeleteSyncedUID(folderID string, uid uint32) error {
 	if _, err = tx.Exec(`INSERT OR IGNORE INTO quarantined_repair_messages(message_id) SELECT id FROM messages WHERE folder_id=? AND uid=? AND id IN (SELECT message_id FROM attachment_repair_backups)`, folderID, uid); err != nil {
 		return err
 	}
+	// Retirement is not an interrupted move. Discard its old copy journal so
+	// targeted recovery cannot make this snapshot addressable again later.
+	if _, err = tx.Exec(`DELETE FROM move_uid_evidence WHERE message_id IN (SELECT id FROM messages WHERE folder_id=? AND uid=? AND id IN (SELECT message_id FROM quarantined_repair_messages))`, folderID, uid); err != nil {
+		return err
+	}
 	if _, err = tx.Exec(`UPDATE messages SET uid=-rowid WHERE folder_id=? AND uid=? AND id IN (SELECT message_id FROM quarantined_repair_messages)`, folderID, uid); err != nil {
 		return err
 	}
