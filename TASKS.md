@@ -75,6 +75,22 @@
 
 - GMAIL-FILTER-004: Review. Instinct, `agent/gmail-filter-runtime`, `/tmp/pl-gmail-filter-runtime`. Quiesce direct local filtering, refuse helper-owned publication, account-bound Gmail adapter and recovery orchestration. App/mailfilter/automation suites and affected vet pass with temporary uncommitted Linux startup stub. Fake HTTP verifies selected-account token, one create/readback, direct execution draining and queued-callback guard; missing grants and every helper-owner configuration reject. No UI caller until provider-native review/preview is implemented. Native Mac/live Google unrun.
 
+## Gmail native filter review UI
+
+- GMAIL-FILTER-005: Review. Instinct, `agent/gmail-filter-ui`, `/tmp/pl-gmail-filter-ui`. Explicit standalone account-native query/label action review, bounded provider preview, payload fingerprint and durable recovery. Helper-owner paths remain blocked until helper consent/publication APIs exist; never use desktop credentials for helper rules. Ordinary filter editor semantics unchanged. App/mailfilter/Gmail/OAuth/credentials/database/automation suites, vet, binding drift, frontend check/lint/build, and actual browser review/reopen recovery test pass. Browser pixels checked EN/FI, including 320 px; Mac/live Google still unrun.
+
+## Gmail publication owner hardening
+
+- GMAIL-FILTER-006: Review. Instinct, `agent/gmail-filter-owner`, `/tmp/pl-gmail-filter-owner`. Durable email/OAuth-project binding in preview and source snapshot, authenticated Gmail profile checks, identity-token pinning per operation and frozen email display. Changed/missing owners fail closed, including reopened records. Old unbound plans do not publish. App/mailfilter/Gmail suites and affected vet pass; actual EN/FI browser recovery pixels checked. No live Google/native Mac.
+
+## Helper-owned Gmail publication
+
+- GMAIL-FILTER-007: Review. Instinct, `agent/gmail-filter-helper`, `/tmp/pl-gmail-filter-helper`. Helper-owned native publication API with capability checks, helper-only settings token source, verified owner and journal recovery. Consent exchange and desktop routing remain separate unfinished follow-up. Do not enable desktop fallback. Full helper/alwayson/automation/scheduledsend suites, affected dependencies, vet and version consistency pass. Race compilation blocked by missing native libraries, not claimed passed. No live provider or Mac acceptance.
+
+## Helper Gmail consent
+
+- GMAIL-FILTER-008: Review. Instinct, `agent/gmail-filter-consent`, `/tmp/pl-gmail-filter-consent`. Expiring client/account-bound helper PKCE exchange, loopback code forwarding only, profile/scope verification and grant preservation. Full alwayson/automation/OAuth/scheduledsend/helper tests and affected vet pass. OAuth PKCE tests pass under race detector. Desktop routing remains separate until validation, no live Google or native acceptance.
+
 ## Status and effort
 
 - **Easy:** contained UI, copy, localization, or isolated behavior change.
@@ -668,3 +684,7 @@ README review follow-up: qualify checksum instructions because tagged releases d
 - IDENTITY-RENAME-001: Review. Instinct, `agent/postilaatikko-identity-rename`, `/tmp/pl-identity-rename`, separate off main. Rename binary, Go module/import/linker paths and active package/desktop/autostart IDs, including Flatpak as explicitly requested. Preserve native data/cache paths, database, keychain/crypto names, persistent contact IDs and browser keys as documented compatibility contracts. New diagnostic env names accept legacy aliases.
 - Existing native login entries migrate only if already enabled, with old-ID cleanup. Existing Flatpak installs require distributor EOL rebase or explicit host profile-copy workflow; host script refuses running apps, existing destination and symlinked old profiles, preserves original data. Portal grants, login permission, keyring policy, pinned/default launchers need user/desktop revalidation. No extra sandbox home access, deployment, install, cloud or release action.
 - Checks: full Go suite and vet with CGO disabled and temporary startup shim removed; Windows platform cross-compile; frontend check/lint/build and 1109 tests pass (23 gated skips); version check; Linux autostart and profile-copy tests; script syntax and 29 packaging/version tests pass. One macOS credential workflow unit test needs `/usr/bin/security` on macOS and cannot run here. Native macOS/Windows execution and live Flatpak upgrade unverified. `docs/IDENTITY_RENAME.md` carries migration risks, including the unchanged legacy distribution endpoint needing verification before publishing an installation link.
+## Workspace-pinned Gmail review
+
+- GMAIL-FILTER-009: Review. Instinct, `agent/gmail-filter-routing`, `/tmp/pl-gmail-filter-routing`. Route the approved dialog through the captured execution owner and client, including helper-owned consent code forwarding and durable status discovery. No local fallback, no create or callback replay. Local fixtures only; live Google/Studio and native macOS acceptance remain outstanding.
+- GMAIL-FILTER-010: Deferred by owner on 2026-11-21. Automatic Gmail filter forwarding in PR #306 is closed without merging; branch `agent/gmail-filter-forwarding` is retained. The current release does not wait on forwarding. Resume only after a new owner decision, rebase onto completed dependencies, and fresh required CI plus exact-head Devin review.

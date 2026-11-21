@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Standalone Gmail-filter consent now refuses to overwrite credentials replaced after its final account/grant validation.
+
 - Needs me shows unread conversations or manually marked Later conversations in the selected folder. An All folders destination excludes Spam, Sent, Drafts, Archive, Trash, All Mail and hidden folders across enabled accounts. Reading keeps Later marks; snoozed mail returns when due.
 - Add `--perf-log` for an automatic five-minute private local capture, including Go CPU, heap and goroutine profiles, desktop response-header timings, and authenticated local-helper capture/status. No manual environment setup, profiling listener, upload or helper restart is needed. Captures are private and may contain source/stack metadata; see `docs/PERFORMANCE_LOG.md` for locations, limits and cleanup.
 - Rename the executable to `postilaatikko` and the Flatpak/desktop identity to `io.github.ollisulopuisto.postilaatikko`. Native data, credentials and Windows browser preferences stay in their existing locations. Enabled legacy login entries migrate without enabling disabled startup. Linux retains an `eterno-mail` command alias; custom macOS/Windows executable paths need updating. Flatpak users must migrate or copy the old sandbox profile before using the new app; see `docs/IDENTITY_RENAME.md` for backups, portal permissions and keyring checks. No remote or installed profile is changed by this source update.

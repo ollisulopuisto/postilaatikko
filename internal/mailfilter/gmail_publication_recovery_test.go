@@ -71,7 +71,11 @@ func TestGmailPublicationSurvivesActualDatabaseRestart(t *testing.T) {
 	if err = s.Create(r); err != nil {
 		t.Fatal(err)
 	}
-	plan := preparePublication(t, s, r, f, p)
+	p.ownerBinding = "mailbox-and-project"
+	plan, err := s.PrepareGmailPublication(r.ID, "account1", f, p.filters, []string{"UNREAD"}, p.ownerBinding)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// Simulate process death after request submission, before saving its ID.
 	if _, err = db.Exec(`UPDATE gmail_filter_publications SET state='attempted' WHERE id=?`, plan.ID); err != nil {
 		t.Fatal(err)
@@ -88,6 +92,11 @@ func TestGmailPublicationSurvivesActualDatabaseRestart(t *testing.T) {
 	}
 	defer db.Close()
 	s = NewStore(db)
+	p.ownerBinding = "different-mailbox-or-project"
+	if _, err = s.ReconcileGmailPublication(context.Background(), plan.ID, p); err == nil {
+		t.Fatal("restarted journal accepted wrong owner")
+	}
+	p.ownerBinding = "mailbox-and-project"
 	result, err := s.ReconcileGmailPublication(context.Background(), plan.ID, p)
 	if err != nil || result.ProviderID != "remote-created" {
 		t.Fatal(result, err)

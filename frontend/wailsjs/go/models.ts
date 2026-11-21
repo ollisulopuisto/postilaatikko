@@ -318,6 +318,182 @@ export namespace account {
 }
 
 export namespace app {
+	export class NativeGmailWorkspace {
+	    key: string;
+	    target: string;
+	    endpoint: string;
+
+	    static createFrom(source: any = {}) {
+	        return new NativeGmailWorkspace(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.target = source["target"];
+	        this.endpoint = source["endpoint"];
+	    }
+	}
+	export class NativeGmailReviewRequest {
+	    workspace: string;
+	    operation: string;
+	    accountId: string;
+	    ruleId: string;
+	    id: string;
+	    fingerprint: string;
+	    draft: NativeGmailDraft;
+
+	    static createFrom(source: any = {}) {
+	        return new NativeGmailReviewRequest(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.workspace = source["workspace"];
+	        this.operation = source["operation"];
+	        this.accountId = source["accountId"];
+	        this.ruleId = source["ruleId"];
+	        this.id = source["id"];
+	        this.fingerprint = source["fingerprint"];
+	        this.draft = this.convertValues(source["draft"], NativeGmailDraft);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class NativeGmailReviewReply {
+	    context?: NativeGmailContext;
+	    preview?: NativeGmailPreview;
+	    publication?: NativeGmailPublicationStatus;
+
+	    static createFrom(source: any = {}) {
+	        return new NativeGmailReviewReply(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.context = this.convertValues(source["context"], NativeGmailContext);
+	        this.preview = this.convertValues(source["preview"], NativeGmailPreview);
+	        this.publication = this.convertValues(source["publication"], NativeGmailPublicationStatus);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+	export class NativeGmailLabel {
+		id: string;
+		name: string;
+		static createFrom(source: any = {}) { return new NativeGmailLabel(source); }
+		constructor(source: any = {}) {
+			if (typeof source === "string") source = JSON.parse(source);
+			this.id = source["id"];
+			this.name = source["name"];
+		}
+	}
+	export class NativeGmailContext {
+		accountId: string;
+		email: string;
+		consentRequired: boolean;
+		labels: NativeGmailLabel[];
+		static createFrom(source: any = {}) { return new NativeGmailContext(source); }
+		constructor(source: any = {}) {
+			if (typeof source === "string") source = JSON.parse(source);
+			this.accountId = source["accountId"];
+			this.email = source["email"];
+			this.consentRequired = source["consentRequired"];
+			this.labels = source["labels"];
+		}
+	}
+	export class NativeGmailDraft {
+		ruleId: string;
+		query: string;
+		markRead: boolean;
+		archive: boolean;
+		trash: boolean;
+		labelIds: string[];
+		static createFrom(source: any = {}) { return new NativeGmailDraft(source); }
+		constructor(source: any = {}) {
+			if (typeof source === "string") source = JSON.parse(source);
+			this.ruleId = source["ruleId"];
+			this.query = source["query"];
+			this.markRead = source["markRead"];
+			this.archive = source["archive"];
+			this.trash = source["trash"];
+			this.labelIds = source["labelIds"];
+		}
+	}
+	export class NativeGmailPreview {
+		accountEmail: string;
+		found: number;
+		truncated: boolean;
+		fingerprint: string;
+		static createFrom(source: any = {}) { return new NativeGmailPreview(source); }
+		constructor(source: any = {}) {
+			if (typeof source === "string") source = JSON.parse(source);
+			this.accountEmail = source["accountEmail"];
+			this.found = source["found"];
+			this.truncated = source["truncated"];
+			this.fingerprint = source["fingerprint"];
+		}
+	}
+	export class NativeGmailPublicationStatus {
+		accountEmail: string;
+		ruleId: string;
+		accountId: string;
+		query: string;
+		addLabelIds: string[];
+		removeLabelIds: string[];
+		id: string;
+		state: string;
+		providerId: string;
+		fingerprint: string;
+		static createFrom(source: any = {}) { return new NativeGmailPublicationStatus(source); }
+		constructor(source: any = {}) {
+			if (typeof source === "string") source = JSON.parse(source);
+			this.accountEmail = source["accountEmail"];
+			this.ruleId = source["ruleId"];
+			this.accountId = source["accountId"];
+			this.query = source["query"];
+			this.addLabelIds = source["addLabelIds"];
+			this.removeLabelIds = source["removeLabelIds"];
+			this.id = source["id"];
+			this.state = source["state"];
+			this.providerId = source["providerId"];
+			this.fingerprint = source["fingerprint"];
+		}
+	}
+
 	export class FilterExecutionTarget {
 	    target: string;
 	    endpoint: string;

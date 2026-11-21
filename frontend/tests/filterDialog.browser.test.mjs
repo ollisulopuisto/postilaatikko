@@ -156,6 +156,17 @@ test('filter editor: prefill, literal subjects, duplicate names, explicit applic
     await page.setViewportSize({width:680,height:950})
     await page.screenshot({path:join(captureDir,'filter-create-fi.png'),fullPage:true})
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no horizontal overflow')
+    await page.evaluate(async()=>{
+      window.existing=[
+        {id:'legacy-scope',name:'Legacy account',enabled:false,accountId:'a',accountIds:[],actionMarkRead:true},
+        {id:'repeated-scope',name:'Repeated account',enabled:false,accountId:'ignored',accountIds:['a','a',''],actionMarkRead:true},
+        {id:'multiple-scope',name:'Multiple accounts',enabled:false,accountIds:['a','b'],actionMarkRead:true}
+      ]
+      await window.show(true,'en')
+    })
+    await page.getByText('Legacy account',{exact:true}).waitFor()
+    assert.equal(await page.getByTitle('Review Gmail publication',{exact:true}).count(),2,'legacy and deduplicated single-account rules offer review, multiple accounts do not')
+    await page.screenshot({path:join(captureDir,'filter-settings-legacy-gmail-scope.png'),fullPage:true})
     assert.deepEqual(errors,[])
   }finally{await browser.close();await server.close()}
 })

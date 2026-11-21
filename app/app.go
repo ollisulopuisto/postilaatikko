@@ -210,6 +210,10 @@ func isValidEmail(email string) bool {
 
 // App struct holds the application state and dependencies
 type App struct {
+	// Optional per-client network dependency, set before startup. Nil uses the
+	// normal HTTP transport; credentials and endpoint still follow bootstrap.
+	mailboxClientTransport http.RoundTripper
+
 	attachmentRepairAttempts goSync.Map
 	shutdownOnce             goSync.Once
 	preflightOnce            goSync.Once
@@ -735,7 +739,7 @@ func (a *App) Startup(ctx context.Context) {
 	}
 	db := a.db
 	a.settingsStore = settings.NewStore(a.deviceDB)
-	a.mailboxService = newMailboxServiceConnector(db)
+	a.mailboxService = newMailboxServiceConnector(db, a.mailboxClientTransport)
 	if endpoint, err := a.settingsStore.Get(settings.KeyMailboxServiceEndpoint); err != nil {
 		log.Warn().Err(err).Msg("Could not load mailbox service endpoint")
 	} else if endpoint != "" {
