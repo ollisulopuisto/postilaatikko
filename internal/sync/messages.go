@@ -156,6 +156,9 @@ func (e *Engine) SyncMessages(ctx context.Context, accountID, folderID string, s
 		timings.cleanup += time.Since(cleanupStarted)
 		f.UIDValidity = mailbox.UIDValidity
 		f.FlagsSyncModSeq = 0
+		if err := e.folderStore.Update(f); err != nil {
+			return fmt.Errorf("persist reset cache generation: %w", err)
+		}
 		// The old modseq refers to a different universe of UIDs after a
 		// mailbox recreation; treat this cycle as first-sync.
 		uidValidityChanged = true
@@ -360,6 +363,40 @@ func (e *Engine) SyncMessages(ctx context.Context, accountID, folderID string, s
 		timings.flagsPersist = flagMetrics.persist
 		timings.flagsRemote = flagMetrics.remoteCount
 		timings.flagsUpdates = flagMetrics.updateCount
+	}
+
+	// Preserve the stable local identity before header upserts can claim a
+	// newly confirmed UID, especially for repaired or Message-ID-less mail.
+	pending, err := e.messageStore.PendingProvenMoveIDs(folderID)
+	if err != nil {
+		return err
+	}
+	if len(pending) > 0 {
+		if recoveryErr := e.recoverInterruptedMovesOnConnection(ctx, accountID, f, pending, conn.Client()); recoveryErr != nil {
+			e.log.Warn().Err(recoveryErr).Msg("Some copied moves remain unresolved")
+		}
+		latest, err := conn.Client().SelectMailbox(ctx, f.Path)
+		if err != nil {
+			return err
+		}
+		if latest.UIDValidity != mailbox.UIDValidity {
+			return fmt.Errorf("destination generation changed during recovery")
+		}
+		cached, err := e.messageStore.GetAllUIDs(folderID)
+		if err != nil {
+			return err
+		}
+		cachedSet := map[uint32]bool{}
+		for _, uid := range cached {
+			cachedSet[uid] = true
+		}
+		remaining := newUIDs[:0]
+		for _, uid := range newUIDs {
+			if !cachedSet[uid] {
+				remaining = append(remaining, uid)
+			}
+		}
+		newUIDs = remaining
 	}
 
 	// Fetch new messages with incremental approach (headers first)

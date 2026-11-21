@@ -524,6 +524,18 @@ func (a *App) MoveToFolder(messageIDs []string, destFolderID string) error {
 
 // MoveToFolderWithUndo moves messages and atomically returns its undo operation.
 func (a *App) MoveToFolderWithUndo(messageIDs []string, destFolderID string) (UndoableActionResult, error) {
+	// Sample the same eligible set that execution will use. Quarantined
+	// snapshots are retained history, not examples of user routing intent.
+	if a.messageStore != nil {
+		liveIDs, err := a.messageStore.LiveMutationIDs(messageIDs)
+		if err != nil {
+			return UndoableActionResult{}, err
+		}
+		if len(messageIDs) > 0 && len(liveIDs) == 0 {
+			return UndoableActionResult{}, fmt.Errorf("selected repair snapshots have no server move target")
+		}
+		messageIDs = liveIDs
+	}
 	// Header-only samples are read before the move changes folder_id.
 	var moved []*message.Message
 	if a.moveFilterHistory != nil && a.messageStore != nil && len(messageIDs) > 0 {
@@ -626,6 +638,9 @@ func (a *App) moveToFolderWithService(messageIDs []string, destFolderID string, 
 	liveIDs, err := a.messageStore.LiveMutationIDs(messageIDs)
 	if err != nil {
 		return operationID, err
+	}
+	if operationID != "" && len(liveIDs) != len(messageIDs) {
+		return operationID, fmt.Errorf("undo requires a verified server target for every message")
 	}
 	if len(liveIDs) == 0 {
 		return operationID, fmt.Errorf("selected repair snapshots have no server move target")

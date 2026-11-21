@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/emersion/go-imap/v2"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
 	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
+	imapPkg "github.com/ollisulopuisto/postilaatikko/internal/imap"
 )
 
 // RecoverInterruptedMoves verifies only recorded destination UIDs. It neither
@@ -36,6 +38,11 @@ func (e *Engine) RecoverInterruptedMoves(ctx context.Context, accountID, folderI
 		return err
 	}
 	defer e.pool.Release(conn)
+	return e.recoverInterruptedMovesOnConnection(ctx, accountID, f, ids, conn.Client())
+}
+
+func (e *Engine) recoverInterruptedMovesOnConnection(ctx context.Context, accountID string, f *folder.Folder, ids []string, client *imapPkg.Client) error {
+	folderID := f.ID
 	var firstErr error
 	for _, id := range ids {
 		m, err := e.messageStore.Get(id)
@@ -46,7 +53,7 @@ func (e *Engine) RecoverInterruptedMoves(ctx context.Context, accountID, folderI
 			continue
 		}
 		// A previous pending item may have left the source selected.
-		mailbox, err := conn.Client().SelectMailbox(ctx, f.Path)
+		mailbox, err := client.SelectMailbox(ctx, f.Path)
 		if err != nil {
 			return err
 		}
@@ -59,7 +66,7 @@ func (e *Engine) RecoverInterruptedMoves(ctx context.Context, accountID, folderI
 			if m.MessageID != "" {
 				criteria.Header = []imap.SearchCriteriaHeaderField{{Key: "MESSAGE-ID", Value: m.MessageID}}
 			}
-			result, searchErr := conn.Client().RawClient().UIDSearch(criteria, nil).Wait()
+			result, searchErr := client.RawClient().UIDSearch(criteria, nil).Wait()
 			err = searchErr
 			if err == nil {
 				uids := result.AllUIDs()
@@ -78,14 +85,14 @@ func (e *Engine) RecoverInterruptedMoves(ctx context.Context, accountID, folderI
 					err = fmt.Errorf("source cleanup identity unavailable")
 				}
 				if err == nil {
-					selected, selectErr := conn.Client().SelectMailbox(ctx, source.Path)
+					selected, selectErr := client.SelectMailbox(ctx, source.Path)
 					err = selectErr
 					if err == nil && selected.UIDValidity != sourceValidity {
 						err = fmt.Errorf("source cleanup generation changed")
 					}
 				}
 				if err == nil {
-					result, searchErr := conn.Client().RawClient().UIDSearch(&imap.SearchCriteria{UID: []imap.UIDSet{imap.UIDSetNum(imap.UID(sourceUID))}}, nil).Wait()
+					result, searchErr := client.RawClient().UIDSearch(&imap.SearchCriteria{UID: []imap.UIDSet{imap.UIDSetNum(imap.UID(sourceUID))}}, nil).Wait()
 					err = searchErr
 					if err == nil && len(result.AllUIDs()) != 0 {
 						err = fmt.Errorf("copy confirmed but source cleanup is incomplete")
@@ -99,7 +106,7 @@ func (e *Engine) RecoverInterruptedMoves(ctx context.Context, accountID, folderI
 		if err == nil {
 			// Source verification may have changed the selected mailbox. Check
 			// the destination generation again before committing its UID.
-			latest, selectErr := conn.Client().SelectMailbox(ctx, f.Path)
+			latest, selectErr := client.SelectMailbox(ctx, f.Path)
 			err = selectErr
 			if err == nil && latest.UIDValidity != validity {
 				err = fmt.Errorf("move destination generation changed before reconcile")

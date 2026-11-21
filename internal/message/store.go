@@ -3922,3 +3922,20 @@ func (s *Store) LiveMutationIDs(ids []string) ([]string, error) {
 	}
 	return out, nil
 }
+
+func (s *Store) PendingProvenMoveIDs(folderID string) ([]string, error) {
+	rows, err := s.db.Query(`SELECT m.id FROM messages m JOIN move_uid_evidence e ON e.message_id=m.id AND e.folder_id=m.folder_id WHERE m.folder_id=? AND m.uid<0`, folderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
