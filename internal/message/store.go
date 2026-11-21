@@ -1339,6 +1339,10 @@ func (s *Store) DeleteSyncedUID(folderID string, uid uint32) error {
 	if _, err = tx.Exec(`INSERT OR IGNORE INTO quarantined_repair_messages(message_id) SELECT id FROM messages WHERE folder_id=? AND uid=? AND id IN (SELECT message_id FROM attachment_repair_backups)`, folderID, uid); err != nil {
 		return err
 	}
+	// Preserve only exact same-generation identity, separately from move proof.
+	if _, err = tx.Exec(`INSERT OR REPLACE INTO retired_repair_uids(message_id,folder_id,uid,uid_validity) SELECT m.id,m.folder_id,m.uid,f.uid_validity FROM messages m JOIN folders f ON f.id=m.folder_id WHERE m.folder_id=? AND m.uid=? AND f.uid_validity>0 AND m.id IN (SELECT message_id FROM quarantined_repair_messages)`, folderID, uid); err != nil {
+		return err
+	}
 	// Retirement is not an interrupted move. Discard its old copy journal so
 	// targeted recovery cannot make this snapshot addressable again later.
 	if _, err = tx.Exec(`DELETE FROM move_uid_evidence WHERE message_id IN (SELECT id FROM messages WHERE folder_id=? AND uid=? AND id IN (SELECT message_id FROM quarantined_repair_messages))`, folderID, uid); err != nil {
@@ -1362,6 +1366,9 @@ func (s *Store) DeleteSyncedUIDCache(folderID string) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 	if _, err = tx.Exec(`DELETE FROM messages WHERE folder_id=? AND uid>0 AND id NOT IN (SELECT message_id FROM attachment_repair_backups)`, folderID); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(`DELETE FROM retired_repair_uids WHERE folder_id=?`, folderID); err != nil {
 		return err
 	}
 	// Repaired rows keep their bodies/history but never an addressable UID from
@@ -3971,4 +3978,55 @@ func (s *Store) PendingProvenMoveIDs(folderID string) ([]string, error) {
 		ids = append(ids, id)
 	}
 	return ids, rows.Err()
+}
+
+// ReattachRetiredRepairs restores a retired row only when its exact recorded UID
+// appears in a listing from the same generation. Unknown identities stay snapshots.
+func (s *Store) ReattachRetiredRepairs(folderID string, validity uint32, remote map[uint32]bool) ([]uint32, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	rows, err := tx.Query(`SELECT r.message_id,r.uid FROM retired_repair_uids r JOIN messages m ON m.id=r.message_id JOIN folders f ON f.id=r.folder_id WHERE r.folder_id=? AND r.uid_validity=? AND f.uid_validity=? AND m.folder_id=r.folder_id AND m.uid<0 AND m.id IN(SELECT message_id FROM quarantined_repair_messages) AND NOT EXISTS(SELECT 1 FROM messages live WHERE live.folder_id=r.folder_id AND live.uid=r.uid)`, folderID, validity, validity)
+	if err != nil {
+		return nil, err
+	}
+	type candidate struct {
+		id  string
+		uid uint32
+	}
+	var candidates []candidate
+	for rows.Next() {
+		var c candidate
+		if err := rows.Scan(&c.id, &c.uid); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		if remote[c.uid] {
+			candidates = append(candidates, c)
+		}
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	var restored []uint32
+	for _, c := range candidates {
+		if _, err = tx.Exec(`UPDATE messages SET uid=? WHERE id=?`, c.uid, c.id); err != nil {
+			return nil, err
+		}
+		if _, err = tx.Exec(`DELETE FROM retired_repair_uids WHERE message_id=?`, c.id); err != nil {
+			return nil, err
+		}
+		if _, err = tx.Exec(`DELETE FROM quarantined_repair_messages WHERE message_id=?`, c.id); err != nil {
+			return nil, err
+		}
+		restored = append(restored, c.uid)
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+	return restored, nil
 }

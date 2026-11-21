@@ -249,6 +249,16 @@ func (e *Engine) SyncMessages(ctx context.Context, accountID, folderID string, s
 		remoteUIDSet[uid] = true
 	}
 
+	// A wider window can return an exact retired repair identity. Restore its
+	// stable row before header import creates another owner for the same UID.
+	restored, err := e.messageStore.ReattachRetiredRepairs(folderID, mailbox.UIDValidity, remoteUIDSet)
+	if err != nil {
+		return fmt.Errorf("reattach retired repairs: %w", err)
+	}
+	for _, uid := range restored {
+		localUIDSet[uid] = true
+	}
+
 	// Find new UIDs (on server but not local)
 	var newUIDs []uint32
 	classificationBackfill := map[uint32]bool{}

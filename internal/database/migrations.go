@@ -1995,6 +1995,12 @@ var migrations = []Migration{
  CREATE TABLE quarantined_repair_messages (
    message_id TEXT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE
  );
+ CREATE TABLE retired_repair_uids (
+   message_id TEXT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+   folder_id TEXT NOT NULL,
+   uid INTEGER NOT NULL CHECK(uid>0),
+   uid_validity INTEGER NOT NULL CHECK(uid_validity>0)
+ );
  CREATE TABLE move_uid_evidence (
    message_id TEXT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
    folder_id TEXT NOT NULL,

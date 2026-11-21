@@ -16,3 +16,15 @@ func TestDeduplicateThreadMessagesPreservesScopeAndAccountBoundaries(t *testing.
 		t.Fatal("selection mutated source copies")
 	}
 }
+
+func TestDeduplicateThreadMessagesPrefersLiveOverCachedSnapshot(t *testing.T) {
+	var snapshotUID int32 = -7
+	snapshot := &Message{ID: "snapshot", AccountID: "a", FolderID: "inbox", MessageID: "same@test", UID: uint32(snapshotUID), BodyFetched: true}
+	live := &Message{ID: "live", AccountID: "a", FolderID: "inbox", MessageID: "same@test", UID: 7}
+	for _, copies := range [][]*Message{{snapshot, live}, {live, snapshot}} {
+		got := DeduplicateThreadMessages(copies, "inbox", nil)
+		if len(got) != 1 || got[0] != live {
+			t.Fatal("cached snapshot hid live reader target", got)
+		}
+	}
+}

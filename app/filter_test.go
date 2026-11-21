@@ -1531,16 +1531,16 @@ func TestCOPYUIDUsesItsOwnGenerationNotPriorSelect(t *testing.T) {
 }
 
 func TestMoveWaitsForDestinationCacheResetBeforePromotion(t *testing.T) {
-	for _, kind := range []string{"plain", "repaired", "no-message-id"} {
+	for _, kind := range []string{"plain", "repaired", "no-message-id", "repaired-no-message-id"} {
 		t.Run(kind, func(t *testing.T) {
 			f := newFilterFixture(t, false)
-			if kind == "repaired" {
+			if strings.Contains(kind, "repaired") {
 				attachments := message.NewAttachmentStore(f.db)
 				if _, err := attachments.RepairFromMIME("acct-a", f.message.ID, "snapshot", []message.RepairPart{{Metadata: message.Attachment{ID: "fixed", MessageID: f.message.ID, Filename: "invoice.txt", Size: 3}, Payload: []byte("one")}}, ""); err != nil {
 					t.Fatal(err)
 				}
 			}
-			if kind == "no-message-id" {
+			if strings.Contains(kind, "no-message-id") {
 				if _, err := f.db.Exec(`UPDATE messages SET message_id='' WHERE id=?`, f.message.ID); err != nil {
 					t.Fatal(err)
 				}
@@ -1602,7 +1602,7 @@ func TestMoveWaitsForDestinationCacheResetBeforePromotion(t *testing.T) {
 			if err := f.db.QueryRow(`SELECT read_receipt_handled FROM messages WHERE id=?`, f.message.ID).Scan(&handled); err != nil || !handled {
 				t.Fatal("header backfill erased receipt decision", err)
 			}
-			if kind == "repaired" {
+			if strings.Contains(kind, "repaired") {
 				if _, err := f.db.Exec(`UPDATE accounts SET sync_period_days=30 WHERE id='acct-a'`); err != nil {
 					t.Fatal(err)
 				}
@@ -1627,6 +1627,45 @@ func TestMoveWaitsForDestinationCacheResetBeforePromotion(t *testing.T) {
 				var proofs int
 				if err := f.db.QueryRow(`SELECT COUNT(*) FROM move_uid_evidence WHERE message_id=?`, f.message.ID).Scan(&proofs); err != nil || proofs != 0 {
 					t.Fatal("retired snapshot retained recovery proof", proofs, err)
+				}
+				if _, err := f.db.Exec(`UPDATE accounts SET sync_period_days=0 WHERE id='acct-a'`); err != nil {
+					t.Fatal(err)
+				}
+				f.app.syncMu.Lock()
+				delete(f.app.syncLastRequest, "acct-a:a-trash")
+				f.app.syncMu.Unlock()
+				if err := f.app.SyncFolder("acct-a", "a-trash"); err != nil {
+					t.Fatal(err)
+				}
+				live, err := f.app.messageStore.Get(f.message.ID)
+				if err != nil || live == nil || live.UID != resolved[f.message.ID] {
+					t.Fatal("wider window failed to restore original repair identity", live, err)
+				}
+				var copies, quarantined int
+				if err := f.db.QueryRow(`SELECT COUNT(*) FROM messages WHERE folder_id='a-trash'`).Scan(&copies); err != nil || copies != 1 {
+					t.Fatal("returning repair has duplicate owner", copies, err)
+				}
+				if err := f.db.QueryRow(`SELECT COUNT(*) FROM quarantined_repair_messages WHERE message_id=?`, f.message.ID).Scan(&quarantined); err != nil || quarantined != 0 {
+					t.Fatal("restored repair still blocked from actions", quarantined, err)
+				}
+				// The same numeric UID in a different generation is not proof.
+				if err := f.app.messageStore.DeleteSyncedUID("a-trash", live.UID); err != nil {
+					t.Fatal(err)
+				}
+				f.serverA.sess.mailboxValidity["Trash"] = 9
+				f.app.syncMu.Lock()
+				delete(f.app.syncLastRequest, "acct-a:a-trash")
+				f.app.syncMu.Unlock()
+				if err := f.app.SyncFolder("acct-a", "a-trash"); err != nil {
+					t.Fatal(err)
+				}
+				stale, err := f.app.messageStore.Get(f.message.ID)
+				if err != nil || stale == nil || int32(stale.UID) >= 0 {
+					t.Fatal("reused UID reattached old repaired identity", stale, err)
+				}
+				var retired int
+				if err := f.db.QueryRow(`SELECT COUNT(*) FROM retired_repair_uids WHERE message_id=?`, f.message.ID).Scan(&retired); err != nil || retired != 0 {
+					t.Fatal("reset retained stale identity", retired, err)
 				}
 
 			}

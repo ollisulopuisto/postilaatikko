@@ -2,8 +2,9 @@ package message
 
 // DeduplicateThreadMessages selects one account-scoped copy per RFC Message-ID,
 // keeping its first chronological position. Folder/scope membership takes
-// priority, then cached content; ties retain the first copy. Messages without
-// an RFC ID stay distinct. A nil matched map means no additional scope ranking.
+// priority, then a live server target, then cached content. Ties retain the first
+// copy. Messages without an RFC ID stay distinct. A nil matched map means no
+// additional scope ranking.
 func DeduplicateThreadMessages(messages []*Message, folderID string, matched map[string]bool) []*Message {
 	type copyKey struct{ account, rfcID, fallbackID string }
 	indices := make(map[copyKey]int, len(messages))
@@ -16,6 +17,12 @@ func DeduplicateThreadMessages(messages []*Message, folderID string, matched map
 		}
 		if matched != nil && matched[candidate.ID] != matched[existing.ID] {
 			return matched[candidate.ID]
+		}
+		// A readable snapshot must not hide a live target for reader actions.
+		candidateLive := candidate.UID > 0 && int32(candidate.UID) > 0
+		existingLive := existing.UID > 0 && int32(existing.UID) > 0
+		if candidateLive != existingLive {
+			return candidateLive
 		}
 		if candidate.BodyFetched != existing.BodyFetched {
 			return candidate.BodyFetched
