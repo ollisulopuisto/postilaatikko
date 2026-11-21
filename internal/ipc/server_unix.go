@@ -32,11 +32,12 @@ func NewUnixServer(tokenMgr *TokenManager) *UnixServer {
 
 // Start begins listening on the Unix socket.
 func (s *UnixServer) Start(ctx context.Context) error {
-	socketPath, err := s.createSocketPath()
-	if err != nil {
-		return fmt.Errorf("failed to create socket path: %w", err)
+	// Bind the path captured by NewUnixServer, not a later process TMPDIR.
+	// Startup is asynchronous; environment restoration must not retarget it.
+	socketPath := s.socketPath
+	if socketPath == "" {
+		return fmt.Errorf("IPC socket path was not initialized")
 	}
-	s.socketPath = socketPath
 
 	// Remove existing socket if present
 	if err := os.Remove(socketPath); err != nil && !os.IsNotExist(err) {

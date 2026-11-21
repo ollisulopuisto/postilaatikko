@@ -208,20 +208,26 @@ func (s *Store) Reorder(ids []string) error {
 			s.log.Warn().Err(err).Msg("Failed to rollback filter rule reorder transaction")
 		}
 	}()
-	// Snapshot visible positions before any writes. Stored priorities can have
-	// gaps after deletion, and normalizing unrelated rows must not shift this test.
-	positions := make(map[string]int)
-	rows, err := tx.Query(`SELECT id FROM mail_filter_rules ORDER BY order_index ASC,name ASC`)
+	// Resolve the complete visible order and immutable priority anchors first.
+	type entry struct {
+		id       string
+		priority int
+		guarded  bool
+	}
+	existing := make(map[string]entry)
+	rows, err := tx.Query(`SELECT r.id,r.order_index,EXISTS(SELECT 1 FROM gmail_filter_publications p WHERE p.rule_id=r.id) FROM mail_filter_rules r ORDER BY order_index ASC,name ASC`)
 	if err != nil {
 		return err
 	}
+	positions := make(map[string]int)
 	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
+		var e entry
+		if err := rows.Scan(&e.id, &e.priority, &e.guarded); err != nil {
 			_ = rows.Close()
 			return err
 		}
-		positions[id] = len(positions)
+		positions[e.id] = len(positions)
+		existing[e.id] = e
 	}
 	if err := rows.Err(); err != nil {
 		_ = rows.Close()
@@ -230,28 +236,82 @@ func (s *Store) Reorder(ids []string) error {
 	if err := rows.Close(); err != nil {
 		return err
 	}
-	for index, id := range ids {
-		result, err := tx.Exec(`UPDATE mail_filter_rules SET order_index = ?, updated_at = ? WHERE id = ? AND NOT EXISTS(SELECT 1 FROM gmail_filter_publications p WHERE p.rule_id=mail_filter_rules.id)`, index, time.Now().UTC(), id)
-		if err != nil {
-			return fmt.Errorf("failed to reorder filter rule %s: %w", id, err)
+	if len(ids) != len(existing) {
+		return fmt.Errorf("complete filter order required")
+	}
+	seen := make(map[string]bool)
+	priorities := make([]int, len(ids))
+	for i, id := range ids {
+		e, ok := existing[id]
+		if !ok || seen[id] {
+			return fmt.Errorf("invalid filter order")
 		}
-		rows, err := result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("failed to confirm filter rule reorder: %w", err)
-		}
-		if rows == 0 {
-			var guarded, currentIndex int
-			if err := tx.QueryRow(`SELECT order_index, EXISTS(SELECT 1 FROM gmail_filter_publications p WHERE p.rule_id=r.id) FROM mail_filter_rules r WHERE id=?`, id).Scan(&currentIndex, &guarded); err != nil {
-				return fmt.Errorf("filter rule not found: %s", id)
-			}
-			// The UI sends the whole list. A frozen source staying in place must
-			// not block unrelated rules from being reordered around it.
-			if guarded == 1 && positions[id] == index {
-				continue
-			}
-			return fmt.Errorf("Gmail-owned source must keep its position; cancel its unattempted review before moving it")
+		seen[id] = true
+		if e.guarded && positions[id] != i {
+			return fmt.Errorf("Gmail-owned source must keep its position; cancel its review before moving it")
 		}
 	}
+	// Keep frozen priorities untouched; allocate each mutable run relative to
+	// its next anchor (or its previous anchor for the trailing run).
+	previousIndex, previousPriority := -1, -1
+	for i := 0; i <= len(ids); i++ {
+		if i < len(ids) && !existing[ids[i]].guarded {
+			continue
+		}
+		if i < len(ids) {
+			anchor := existing[ids[i]].priority
+			first := anchor - (i - previousIndex - 1)
+			if previousIndex >= 0 && first <= previousPriority {
+				return fmt.Errorf("frozen priorities leave no reorder space")
+			}
+			for j := previousIndex + 1; j < i; j++ {
+				priorities[j] = first + j - previousIndex - 1
+			}
+			priorities[i] = anchor
+			previousPriority = anchor
+		} else {
+			for j := previousIndex + 1; j < i; j++ {
+				priorities[j] = previousPriority + j - previousIndex
+			}
+		}
+		previousIndex = i
+	}
+	for i, id := range ids {
+		if existing[id].guarded {
+			continue
+		}
+		if _, err := tx.Exec(`UPDATE mail_filter_rules SET order_index=?,updated_at=? WHERE id=?`, priorities[i], time.Now().UTC(), id); err != nil {
+			return err
+		}
+	}
+	final, err := tx.Query(`SELECT id FROM mail_filter_rules ORDER BY order_index ASC,name ASC`)
+	if err != nil {
+		return err
+	}
+	index := 0
+	for final.Next() {
+		var id string
+		if err := final.Scan(&id); err != nil {
+			_ = final.Close()
+			return err
+		}
+		if index >= len(ids) || id != ids[index] {
+			_ = final.Close()
+			return fmt.Errorf("stored filter order differs from requested order")
+		}
+		index++
+	}
+	if err := final.Err(); err != nil {
+		_ = final.Close()
+		return err
+	}
+	if err := final.Close(); err != nil {
+		return err
+	}
+	if index != len(ids) {
+		return fmt.Errorf("filter order changed")
+	}
+
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit filter rule reorder: %w", err)
 	}

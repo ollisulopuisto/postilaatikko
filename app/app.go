@@ -380,8 +380,9 @@ type App struct {
 	moveMutationFlights map[string]*moveMutationFlight
 
 	// IPC for multi-window support (composer windows)
-	ipcServer   ipc.Server
-	ipcTokenMgr *ipc.TokenManager
+	ipcServer     ipc.Server
+	ipcServerDone chan struct{}
+	ipcTokenMgr   *ipc.TokenManager
 
 	// OAuth2 manager
 	oauth2Manager *oauth2.Manager
@@ -425,10 +426,11 @@ type App struct {
 	// Rapid local-first actions (Done/Archive/Trash/Spam) are coalesced so
 	// several moves to the same destination trigger one destination refresh
 	// instead of repeatedly cancelling and restarting SyncFolder.
-	moveSyncMu      goSync.Mutex
-	moveSyncRunMu   goSync.Mutex
-	moveSyncTimers  map[string]*time.Timer
-	moveSyncWaiters map[string][]*undo.MoveCompletion
+	moveSyncMu         goSync.Mutex
+	moveSyncRunMu      goSync.Mutex
+	moveSyncTimers     map[string]*time.Timer
+	moveSyncWaiters    map[string][]*undo.MoveCompletion
+	moveSyncMessageIDs map[string][]string
 
 	// Suppresses the IDLE echo of our own flag writes: when Postilaatikko STOREs a flag
 	// change it stamps the account here, so the incoming IDLE FETCH echo of that
@@ -1329,6 +1331,9 @@ func (a *App) shutdown(ctx context.Context) {
 			time.Sleep(500 * time.Millisecond)
 		}
 		_ = a.ipcServer.Stop()
+		if a.ipcServerDone != nil {
+			<-a.ipcServerDone
+		}
 		log.Info().Msg("IPC server stopped")
 	}
 

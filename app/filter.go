@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"sync"
 
 	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
 	"github.com/ollisulopuisto/postilaatikko/internal/folder"
@@ -261,66 +262,75 @@ func (a *App) applyFilterActions(rule *mailfilter.Rule, ids []string, snapshots 
 			continue
 		}
 		acted := false
-		_, _, _, err := a.runMoveMutationWithMode([]string{snapshot.ID}, "filter:"+rule.ID, true, func() (bool, string, error) {
-			current, err := a.messageStore.GetByIDs([]string{snapshot.ID})
-			if err != nil {
-				return false, "", err
+		err := a.withFilterMoveSlot(func(bind func(*undo.MoveCompletion)) error {
+			a.syncOwnerMu.Lock()
+			stopping := a.syncShutdown
+			a.syncOwnerMu.Unlock()
+			if stopping {
+				return fmt.Errorf("filter batch interrupted by shutdown")
 			}
-			if len(current) != 1 || current[0] == nil {
-				return false, "", nil
-			}
-			m := current[0]
-			if m.AccountID != snapshot.AccountID || m.FolderID != snapshot.FolderID || m.UID != snapshot.UID || m.IsDeleted || m.IsDraft {
-				return false, "", nil
-			}
-			m.ListID, err = a.messageStore.GetListID(m.ID)
-			if err != nil {
-				return false, "", err
-			}
-			effective := *rule
-			effective.Enabled = true
-			if !mailfilter.Match(&effective, mailfilter.FromMessage(m)) {
-				return false, "", nil
-			}
-			destID := rule.DestFolderID
-			if rule.ActionArchive || rule.ActionTrash {
-				kind := folder.TypeArchive
-				if rule.ActionArchive && a.isGmailAccount(m.AccountID) {
-					kind = folder.TypeAll
-				}
-				if rule.ActionTrash {
-					kind = folder.TypeTrash
-				}
-				dest, err := a.GetSpecialFolder(m.AccountID, kind)
+			_, _, _, err := a.runMoveMutationWithMode([]string{snapshot.ID}, "filter:"+rule.ID, true, func() (bool, string, error) {
+				current, err := a.messageStore.GetByIDs([]string{snapshot.ID})
 				if err != nil {
 					return false, "", err
 				}
-				if dest == nil || dest.Hidden {
-					return false, "", fmt.Errorf("filter destination unavailable or hidden")
+				if len(current) != 1 || current[0] == nil {
+					return false, "", nil
 				}
-				destID = dest.ID
-			}
-			if destID != "" {
-				dest, err := a.folderStore.Get(destID)
+				m := current[0]
+				if m.AccountID != snapshot.AccountID || m.FolderID != snapshot.FolderID || m.UID != snapshot.UID || m.IsDeleted || m.IsDraft {
+					return false, "", nil
+				}
+				m.ListID, err = a.messageStore.GetListID(m.ID)
 				if err != nil {
 					return false, "", err
 				}
-				if dest == nil || dest.Hidden {
-					return false, "", fmt.Errorf("filter destination unavailable or hidden")
+				effective := *rule
+				effective.Enabled = true
+				if !mailfilter.Match(&effective, mailfilter.FromMessage(m)) {
+					return false, "", nil
 				}
-			}
-			if rule.ActionMarkRead {
-				if err := a.markFilterReadSynchronously(m); err != nil {
-					return false, "", err
+				destID := rule.DestFolderID
+				if rule.ActionArchive || rule.ActionTrash {
+					kind := folder.TypeArchive
+					if rule.ActionArchive && a.isGmailAccount(m.AccountID) {
+						kind = folder.TypeAll
+					}
+					if rule.ActionTrash {
+						kind = folder.TypeTrash
+					}
+					dest, err := a.GetSpecialFolder(m.AccountID, kind)
+					if err != nil {
+						return false, "", err
+					}
+					if dest == nil || dest.Hidden {
+						return false, "", fmt.Errorf("filter destination unavailable or hidden")
+					}
+					destID = dest.ID
 				}
-			}
-			if destID != "" && m.FolderID != destID {
-				if _, err := a.moveToFolder([]string{m.ID}, destID, false, ""); err != nil {
-					return false, "", err
+				if destID != "" {
+					dest, err := a.folderStore.Get(destID)
+					if err != nil {
+						return false, "", err
+					}
+					if dest == nil || dest.Hidden {
+						return false, "", fmt.Errorf("filter destination unavailable or hidden")
+					}
 				}
-			}
-			acted = true
-			return false, "", nil
+				if rule.ActionMarkRead {
+					if err := a.markFilterReadSynchronously(m); err != nil {
+						return false, "", err
+					}
+				}
+				if destID != "" && m.FolderID != destID {
+					if _, err := a.moveToFolder([]string{m.ID}, destID, false, ""); err != nil {
+						return false, "", err
+					}
+				}
+				acted = true
+				return false, "", nil
+			}, bind)
+			return err
 		})
 		if err != nil {
 			return count, err
@@ -384,15 +394,50 @@ func (a *App) markFilterReadSynchronously(m *message.Message) error {
 // Filter-issued local-first moves retain their exact physical completion handles.
 // Publication and shutdown take the exclusive execution lease before draining,
 // so no new filter can add a handle behind the boundary.
-func (a *App) trackFilterMove(completion *undo.MoveCompletion) {
+// withFilterMoveSlot admits before any local mutation, retaining the slot until
+// both mutation scope and every exact physical completion have ended. Deferral
+// also returns an untransferred reservation if mutation code panics.
+func (a *App) withFilterMoveSlot(mutation func(func(*undo.MoveCompletion)) error) error {
+	release := a.reserveFilterMoveSlot()
+	var mu sync.Mutex
+	refs := 1
+	done := func() {
+		mu.Lock()
+		refs--
+		if refs == 0 {
+			release()
+		}
+		mu.Unlock()
+	}
+	defer done()
+	return mutation(func(completion *undo.MoveCompletion) {
+		if completion == nil {
+			return
+		}
+		mu.Lock()
+		refs++
+		mu.Unlock()
+		a.trackFilterMove(completion, done)
+	})
+}
+
+func (a *App) reserveFilterMoveSlot() func() {
 	a.filterMovesMu.Lock()
 	if a.filterMoveSlots == nil {
 		a.filterMoveSlots = make(chan struct{}, 8)
 	}
 	slots := a.filterMoveSlots
 	a.filterMovesMu.Unlock()
-	// Backpressure only when the overlap bound is full, not for every move.
 	slots <- struct{}{}
+	return func() { <-slots }
+}
+func (a *App) trackFilterMove(completion *undo.MoveCompletion, releases ...func()) {
+	release := func() {}
+	if len(releases) > 0 {
+		release = releases[0]
+	} else {
+		release = a.reserveFilterMoveSlot()
+	}
 	a.filterMovesMu.Lock()
 	if a.filterMoves == nil {
 		a.filterMoves = make(map[*undo.MoveCompletion]struct{})
@@ -401,10 +446,10 @@ func (a *App) trackFilterMove(completion *undo.MoveCompletion) {
 	a.filterMovesMu.Unlock()
 	go func() {
 		_ = completion.Wait()
-		<-slots
 		a.filterMovesMu.Lock()
 		delete(a.filterMoves, completion)
 		a.filterMovesMu.Unlock()
+		release()
 	}()
 }
 

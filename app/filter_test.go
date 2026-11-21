@@ -56,13 +56,16 @@ func (r *filterOpsRecorder) indexOf(prefix string) int {
 // messages in memory keyed by UID and records IMAP operations in the shared
 // ops log.
 type testIMAPSession struct {
-	ops          *filterOpsRecorder
-	mu           stdsync.Mutex
-	messages     map[uint32][]byte // UID -> raw RFC822
-	nextUID      uint32
-	selected     string
-	storeDelay   time.Duration
-	rejectAppend bool // when true, Append is rejected after recording the attempt
+	ops           *filterOpsRecorder
+	mu            stdsync.Mutex
+	messages      map[uint32][]byte // UID -> raw RFC822
+	nextUID       uint32
+	selected      string
+	storeDelay    time.Duration
+	copyBlock     map[uint32]<-chan struct{}
+	copyStarted   chan uint32
+	forceFallback bool
+	rejectAppend  bool // when true, Append is rejected after recording the attempt
 }
 
 func newTestIMAPSession(ops *filterOpsRecorder) *testIMAPSession {
@@ -89,7 +92,8 @@ func (s *testIMAPSession) Select(mailbox string, options *imap.SelectOptions) (*
 }
 
 func (s *testIMAPSession) Status(mailbox string, options *imap.StatusOptions) (*imap.StatusData, error) {
-	return &imap.StatusData{}, nil
+	zero := uint32(0)
+	return &imap.StatusData{Mailbox: mailbox, NumMessages: &zero, NumUnseen: &zero, NumDeleted: &zero, UIDValidity: 1, UIDNext: imap.UID(s.nextUID)}, nil
 }
 
 func (s *testIMAPSession) Append(mailbox string, r imap.LiteralReader, options *imap.AppendOptions) (*imap.AppendData, error) {
@@ -171,6 +175,15 @@ func (s *testIMAPSession) Search(kind imapserver.NumKind, criteria *imap.SearchC
 }
 
 func (s *testIMAPSession) Copy(numSet imap.NumSet, dest string) (*imap.CopyData, error) {
+	if set, ok := numSet.(imap.UIDSet); ok && len(set) > 0 {
+		uid := uint32(set[0].Start)
+		if s.copyStarted != nil {
+			s.copyStarted <- uid
+		}
+		if gate := s.copyBlock[uid]; gate != nil {
+			<-gate
+		}
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var wanted []uint32
@@ -197,6 +210,9 @@ func (s *testIMAPSession) Copy(numSet imap.NumSet, dest string) (*imap.CopyData,
 		}
 	}
 	s.ops.record("copy:" + dest)
+	if s.forceFallback {
+		return nil, nil
+	}
 	return &imap.CopyData{
 		UIDValidity: 1,
 		SourceUIDs:  sourceUIDs,
@@ -695,5 +711,194 @@ func TestReadOnlyFilterRefreshesFolderBadge(t *testing.T) {
 	folder, err := f.app.folderStore.Get("a-inbox")
 	if err != nil || folder.UnreadCount != 0 || countEvents != 1 {
 		t.Fatalf("badge not refreshed: %+v events %d error %v", folder, countEvents, err)
+	}
+}
+
+func TestBulkFilterFallbackPreservesOtherMoveLocalState(t *testing.T) {
+	for _, count := range []int{2, 9} {
+		t.Run(fmt.Sprint(count), func(t *testing.T) {
+			f := newFilterFixture(t, false)
+			f.app.ctx = context.Background()
+			f.serverA.sess.forceFallback = true
+			started := make(chan uint32, 16)
+			f.serverA.sess.copyStarted = started
+			gate := make(chan struct{})
+			var once stdsync.Once
+			release := func() { once.Do(func() { close(gate) }) }
+			defer release()
+			// Nine tests pre-mutation admission. Two tests cleanup of another admitted
+			// move while its physical provider COPY is still in flight.
+			blockedUID := uint32(100 + count - 1)
+			f.serverA.sess.copyBlock = map[uint32]<-chan struct{}{blockedUID: gate}
+			ids := make([]string, 0, count)
+			for i := 0; i < count; i++ {
+				id := fmt.Sprintf("bulk-%02d", i)
+				uid := uint32(100 + i)
+				msgID := ""
+				if i == count-1 {
+					msgID = "<preserve@example.test>"
+				}
+				if err := f.app.messageStore.Create(&message.Message{ID: id, AccountID: "acct-a", FolderID: "a-inbox", UID: uid, MessageID: msgID, FromEmail: "bulk@example.test", Subject: "bulk", Date: time.Now().UTC()}); err != nil {
+					t.Fatal(err)
+				}
+				f.serverA.sess.mu.Lock()
+				f.serverA.sess.messages[uid] = []byte("From: bulk@example.test\r\nTo: me@example.test\r\nSubject: bulk\r\n\r\nbody")
+				f.serverA.sess.mu.Unlock()
+				ids = append(ids, id)
+			}
+			last := ids[len(ids)-1]
+			if err := f.app.messageStore.MarkReadReceiptHandled(last); err != nil {
+				t.Fatal(err)
+			}
+			rule := &mailfilter.Rule{ID: "bulk", Name: "Bulk", AccountIDs: []string{"acct-a"}, FromContains: []string{"bulk@example.test"}, DestFolderID: "a-trash"}
+			if err := f.app.filterStore.Create(rule); err != nil {
+				t.Fatal(err)
+			}
+			done := make(chan error, 1)
+			go func() { _, err := f.app.ApplyFilterRuleToExisting(rule.ID); done <- err }()
+			// Wait for at least one actual provider COPY, then let its fallback sync
+			// finish while the final COPY is blocked (or still awaiting admission).
+			select {
+			case <-started:
+			case <-time.After(3 * time.Second):
+				t.Fatal("no provider COPY")
+			}
+			waitFor(t, 5*time.Second, func() bool {
+				rows, err := f.app.messageStore.GetByIDs([]string{ids[0]})
+				return err == nil && len(rows) == 0
+			})
+			rows, err := f.app.messageStore.GetByIDs([]string{last})
+			if err != nil || len(rows) != 1 {
+				t.Fatal("fallback erased another move's row", err, len(rows))
+			}
+			var handled bool
+			if err := f.db.QueryRow(`SELECT read_receipt_handled FROM messages WHERE id=?`, last).Scan(&handled); err != nil || !handled {
+				t.Fatal("read receipt dismissal lost", err)
+			}
+			if count == 9 {
+				// Slot admission must occur before even the optimistic destination write.
+				// The last COPY may enter only after one of the eight completed handles.
+				// A separate full-slot regression below checks the exact local snapshot.
+			}
+			release()
+			select {
+			case err := <-done:
+				if err != nil {
+					t.Fatal(err)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("bulk run did not finish")
+			}
+			releaseBoundary := f.app.acquireFilterExecutionBoundary()
+			releaseBoundary()
+		})
+	}
+}
+
+func TestFullFilterMoveLimitDoesNotMutateNextMessage(t *testing.T) {
+	f := newFilterFixture(t, false)
+	holds := make([]*undo.MoveCompletion, 8)
+	for i := range holds {
+		holds[i] = undo.NewMoveCompletion()
+		f.app.trackFilterMove(holds[i])
+	}
+	defer func() {
+		for _, h := range holds {
+			h.Complete(nil)
+		}
+	}()
+	rule := *f.rule
+	rule.DestFolderID = "a-trash"
+	done := make(chan struct{})
+	go func() { _, _ = f.app.applyFilterActions(&rule, []string{f.message.ID}, f.message); close(done) }()
+	select {
+	case <-done:
+		t.Fatal("admitted beyond bound")
+	case <-time.After(30 * time.Millisecond):
+	}
+	if got := f.messageFolderID(t); got != "a-inbox" {
+		t.Fatal("optimistic write occurred before slot admission", got)
+	}
+	for _, h := range holds {
+		h.Complete(nil)
+	}
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("admission never resumed")
+	}
+	releaseBoundary := f.app.acquireFilterExecutionBoundary()
+	releaseBoundary()
+}
+
+func TestFilterMoveSlotSurvivesPanicAndMultipleCompletions(t *testing.T) {
+	a := &App{}
+	func() {
+		defer func() {
+			if recover() == nil {
+				t.Error("expected panic")
+			}
+		}()
+		_ = a.withFilterMoveSlot(func(func(*undo.MoveCompletion)) error { panic("mutation") })
+	}()
+	if len(a.filterMoveSlots) != 0 {
+		t.Fatal("panic leaked reservation")
+	}
+	one, two := undo.NewMoveCompletion(), undo.NewMoveCompletion()
+	if err := a.withFilterMoveSlot(func(bind func(*undo.MoveCompletion)) error { bind(one); bind(two); return nil }); err != nil {
+		t.Fatal(err)
+	}
+	one.Complete(nil)
+	time.Sleep(10 * time.Millisecond)
+	if len(a.filterMoveSlots) != 1 {
+		t.Fatal("first completion released shared reservation")
+	}
+	two.Complete(nil)
+	deadline := time.Now().Add(time.Second)
+	for len(a.filterMoveSlots) != 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("last completion leaked reservation")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+func TestShutdownWhileFilterWaitsForAdmissionDoesNotMutate(t *testing.T) {
+	f := newFilterFixture(t, false)
+	holds := make([]*undo.MoveCompletion, 8)
+	for i := range holds {
+		holds[i] = undo.NewMoveCompletion()
+		f.app.trackFilterMove(holds[i])
+	}
+	defer func() {
+		for _, h := range holds {
+			h.Complete(nil)
+		}
+	}()
+	rule := *f.rule
+	rule.DestFolderID = "a-trash"
+	done := make(chan error, 1)
+	go func() { _, err := f.app.applyFilterActions(&rule, []string{f.message.ID}, f.message); done <- err }()
+	select {
+	case <-done:
+		t.Fatal("expected admission wait")
+	case <-time.After(30 * time.Millisecond):
+	}
+	f.app.syncOwnerMu.Lock()
+	f.app.syncShutdown = true
+	f.app.syncOwnerMu.Unlock()
+	for _, h := range holds {
+		h.Complete(nil)
+	}
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("shutdown did not stop waiting mutation")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("admission did not wake")
+	}
+	if got := f.messageFolderID(t); got != "a-inbox" {
+		t.Fatal("shutdown admitted local mutation", got)
 	}
 }

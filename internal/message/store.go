@@ -2996,6 +2996,32 @@ func (s *Store) DeleteTempUIDs(folderID string) error {
 	return tx.Commit()
 }
 
+// DeleteTempUIDsForMessages cleans only placeholders owned by a completed
+// reconciliation batch. Other admitted moves may still be in flight.
+func (s *Store) DeleteTempUIDsForMessages(folderID string, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for _, id := range ids {
+		var protected int
+		if err := tx.QueryRow(`SELECT COUNT(*) FROM messages m JOIN attachment_repairs r ON r.message_id=m.id WHERE m.folder_id=? AND m.uid<0 AND m.id=?`, folderID, id).Scan(&protected); err != nil {
+			return err
+		}
+		if protected > 0 {
+			return &MovedUIDConflictError{MovingLocalID: id, RepairProtected: true}
+		}
+		if _, err := tx.Exec(`DELETE FROM messages WHERE folder_id=? AND id=? AND uid<0`, folderID, id); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 // GetIDsByMessageIDs finds local DB message IDs by RFC822 Message-ID header and folder.
 //
 // A local move marks the row with a negative UID until the destination folder

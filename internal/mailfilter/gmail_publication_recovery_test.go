@@ -3,6 +3,7 @@ package mailfilter
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -168,7 +169,7 @@ func TestReorderOtherRulesPreservesGmailSourceSnapshot(t *testing.T) {
 func TestGuardedReorderUsesVisibleSlotAfterDeleteGap(t *testing.T) {
 	s, r, f, p := publicationFixture(t)
 	for _, id := range []string{"before", "after", "last"} {
-		if err := s.Create(&Rule{ID: id, Name: id, ActionMarkRead: true}); err != nil {
+		if err := s.Create(&Rule{ID: id, Name: strings.ToUpper(id[:1]) + id[1:], ActionMarkRead: true}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -182,6 +183,16 @@ func TestGuardedReorderUsesVisibleSlotAfterDeleteGap(t *testing.T) {
 	if err := s.Reorder([]string{r.ID, "last", "after"}); err != nil {
 		t.Fatal("same visible slot rejected after delete", err)
 	}
+	actual, err := s.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, id := range []string{r.ID, "last", "after"} {
+		if actual[i].ID != id {
+			t.Fatalf("reload order[%d]=%s want %s", i, actual[i].ID, id)
+		}
+	}
+
 	if err := s.Reorder([]string{"last", r.ID, "after"}); err == nil {
 		t.Fatal("moved frozen source")
 	}

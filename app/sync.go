@@ -13,7 +13,6 @@ import (
 	"github.com/ollisulopuisto/postilaatikko/internal/folder"
 	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 	"github.com/ollisulopuisto/postilaatikko/internal/syncowner"
-	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // maxConcurrentAccountSyncs limits only simultaneous complete account syncs
@@ -182,7 +181,7 @@ func (a *App) syncFolder(accountID, folderID string, restart bool) error {
 		var certErr *certificate.Error
 		if errors.As(err, &certErr) {
 			log.Warn().Str("folder", folderID).Str("fingerprint", certErr.Info.Fingerprint).Msg("Untrusted certificate during sync")
-			wailsRuntime.EventsEmit(a.ctx, "certificate:untrusted", map[string]interface{}{
+			a.emitRuntimeEvent("certificate:untrusted", map[string]interface{}{
 				"accountId":   accountID,
 				"certificate": certErr.Info,
 			})
@@ -191,7 +190,7 @@ func (a *App) syncFolder(accountID, folderID string, restart bool) error {
 
 		// Actual error - emit error event
 		log.Error().Err(err).Str("folder", folderID).Msg("Header sync failed")
-		wailsRuntime.EventsEmit(a.ctx, "folder:syncError", map[string]interface{}{
+		a.emitRuntimeEvent("folder:syncError", map[string]interface{}{
 			"accountId": accountID,
 			"folderId":  folderID,
 			"error":     err.Error(),

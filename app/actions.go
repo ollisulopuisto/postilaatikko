@@ -929,6 +929,7 @@ func (a *App) moveToFolderWithService(messageIDs []string, destFolderID string, 
 			messages[0].AccountID,
 			destFolderID,
 			moveCompletion,
+			messageIDs...,
 		)
 	}()
 
@@ -996,6 +997,7 @@ func (a *App) scheduleMoveDestinationSync(
 	accountID string,
 	destFolderID string,
 	completion *undo.MoveCompletion,
+	messageIDs ...string,
 ) {
 	key := accountID + ":" + destFolderID
 
@@ -1008,6 +1010,10 @@ func (a *App) scheduleMoveDestinationSync(
 		a.moveSyncWaiters = make(map[string][]*undo.MoveCompletion)
 	}
 
+	if a.moveSyncMessageIDs == nil {
+		a.moveSyncMessageIDs = make(map[string][]string)
+	}
+	a.moveSyncMessageIDs[key] = append(a.moveSyncMessageIDs[key], messageIDs...)
 	a.moveSyncWaiters[key] = append(a.moveSyncWaiters[key], completion)
 
 	if timer, ok := a.moveSyncTimers[key]; ok {
@@ -1034,6 +1040,8 @@ func (a *App) flushMoveDestinationSync(key, accountID, destFolderID string) {
 		a.moveSyncWaiters[key]...,
 	)
 
+	ids := append([]string(nil), a.moveSyncMessageIDs[key]...)
+	delete(a.moveSyncMessageIDs, key)
 	delete(a.moveSyncWaiters, key)
 	delete(a.moveSyncTimers, key)
 
@@ -1058,7 +1066,7 @@ func (a *App) flushMoveDestinationSync(key, accountID, destFolderID string) {
 	if syncErr == nil {
 		// Header synchronization has replaced the temporary negative UIDs with
 		// the actual server UIDs, so Undo can now safely reverse the move.
-		if err := a.messageStore.DeleteTempUIDs(destFolderID); err != nil {
+		if err := a.messageStore.DeleteTempUIDsForMessages(destFolderID, ids); err != nil {
 			syncErr = err
 		}
 	}

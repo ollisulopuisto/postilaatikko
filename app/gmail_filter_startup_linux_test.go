@@ -4,10 +4,12 @@ package app
 
 import (
 	"context"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ollisulopuisto/postilaatikko/internal/ipc"
 	"github.com/ollisulopuisto/postilaatikko/internal/syncowner"
@@ -82,8 +84,21 @@ func TestGmailPublicationUsesRealStartupOwnership(t *testing.T) {
 				}()
 				a.Startup(ctx)
 			}()
-			cancel()
-			defer a.Shutdown(ctx)
+			defer func() { cancel(); a.Shutdown(ctx) }()
+			// Address is precomputed. A real connection proves Start has bound while
+			// TMPDIR remains isolated; Shutdown then joins the server before restore.
+			deadline := time.Now().Add(time.Second)
+			for {
+				conn, err := net.DialTimeout("unix", a.ipcServer.Address(), 20*time.Millisecond)
+				if err == nil {
+					_ = conn.Close()
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("isolated IPC never bound", err)
+				}
+				time.Sleep(time.Millisecond)
+			}
 			if !reachedReady || a.mailboxService == nil || a.filterStore == nil {
 				t.Fatal("production startup path was not exercised")
 			}

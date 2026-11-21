@@ -194,6 +194,9 @@ func TestRepairMoveCollisionRetainsBothMessagesAndUndo(t *testing.T) {
 				}
 			}
 			if repairedID == "moving" {
+				if err := ms.DeleteTempUIDsForMessages("fld-1", []string{"moving"}); err == nil {
+					t.Fatal("batch fallback deleted protected repair")
+				}
 				if err := ms.DeleteTempUIDs("fld-1"); err == nil {
 					t.Fatal("fallback cleanup allowed repaired temp deletion")
 				}
