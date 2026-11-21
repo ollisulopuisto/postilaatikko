@@ -29,3 +29,5 @@ workflow files. Init/analyze are SHA-pinned. Results stay in the temporary runne
 filesystem with upload disabled, so this does not create code-scanning alerts or
 SARIF artifacts. Inspect Analyze logs; a failed matrix job is UNKNOWN. Existing
 GitHub default-setup status was not readable, and is not claimed absent.
+
+CodeQL debug reruns are refused before initialization because the upstream post-action can upload debug artifacts. Setup failures always leave an UNKNOWN baseline summary.
