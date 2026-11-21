@@ -1,6 +1,12 @@
 package app
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
+	"github.com/ollisulopuisto/postilaatikko/internal/credentials"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -10,6 +16,18 @@ import (
 
 func filterConsentFixture(t *testing.T) *App {
 	a, _ := contactOAuthFixture(t)
+	oldTransport := http.DefaultTransport
+	http.DefaultTransport = contactsRoundTrip(func(req *http.Request) (*http.Response, error) {
+		if err := req.ParseForm(); err != nil {
+			t.Fatal(err)
+		}
+		if req.Form.Get("client_id") != "test-google-mail" {
+			t.Fatal("wrong refresh client")
+		}
+		body, _ := json.Marshal(map[string]any{"access_token": "filter-access", "expires_in": 3600, "scope": strings.Join(append(oauth2.GoogleProvider().Scopes, gmail.ScopeSettingsBasic), " ")})
+		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(string(body)))}, nil
+	})
+	t.Cleanup(func() { http.DefaultTransport = oldTransport })
 	old := oauth2.UserOverrideLookup
 	oauth2.UserOverrideLookup = func(id string) (oauth2.ClientCredentials, bool) {
 		return oauth2.ClientCredentials{ClientID: "test-" + id, ClientSecret: "test"}, true
@@ -104,5 +122,55 @@ func TestGmailFilterConsentDoesNotConsumeMailCallback(t *testing.T) {
 	}
 	if a.pendingOAuthTokens.AccessToken != "pending-mail" {
 		t.Fatal("Mail callback consumed")
+	}
+}
+
+func TestFilterConsentRejectsUnverifiedDurableRefreshGrant(t *testing.T) {
+	for i, scope := range []string{"", "https://mail.google.com/"} {
+		t.Run([]string{"missing", "reduced"}[i], func(t *testing.T) {
+			a := filterConsentFixture(t)
+			email, previous, cfg, err := a.prepareGmailFilterConsent("mail")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer previous.Clear()
+			http.DefaultTransport = contactsRoundTrip(func(req *http.Request) (*http.Response, error) {
+				body, _ := json.Marshal(map[string]any{"access_token": "reduced", "expires_in": 3600, "scope": scope})
+				return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(string(body)))}, nil
+			})
+			response := &oauth2.TokenResponse{AccessToken: "initial", ExpiresIn: 3600, Scope: strings.Join(append(append([]string(nil), previous.Scopes...), gmail.ScopeSettingsBasic), " ")}
+			if err = a.persistGmailFilterConsent("mail", email, previous, cfg.ClientID, response, email); err == nil {
+				t.Fatal("unverified durable grant accepted")
+			}
+			stored, err := a.credStore.GetOAuthTokens("mail")
+			if err != nil || stored.AccessToken != "mail-access" {
+				t.Fatal("failed consent overwrote grant", err)
+			}
+		})
+	}
+}
+
+func TestMailRefreshCannotUndoConcurrentFilterConsent(t *testing.T) {
+	a := filterConsentFixture(t)
+	http.DefaultTransport = contactsRoundTrip(func(req *http.Request) (*http.Response, error) {
+		next, err := a.credStore.GetOAuthTokens("mail")
+		if err != nil {
+			t.Fatal(err)
+		}
+		next.AccessToken = "new-consent"
+		next.Scopes = append(next.Scopes, gmail.ScopeSettingsBasic)
+		if err = a.credStore.SetOAuthTokens("mail", next); err != nil {
+			t.Fatal(err)
+		}
+		return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"access_token":"stale-mail","expires_in":3600}`))}, nil
+	})
+	ops := &composeOps{credStore: a.credStore, oauth2Manager: oauth2.NewManager()}
+	_, err := ops.forceRefreshOAuthToken(context.Background(), "mail")
+	if !errors.Is(err, credentials.ErrOAuthTokensChanged) {
+		t.Fatal("stale refresh was not rejected", err)
+	}
+	stored, err := a.credStore.GetOAuthTokens("mail")
+	if err != nil || stored.AccessToken != "new-consent" || !gmail.ScopesCoverFilters(stored.Scopes) {
+		t.Fatal("consent lost", err)
 	}
 }

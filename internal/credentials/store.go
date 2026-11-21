@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/ollisulopuisto/postilaatikko/internal/crypto"
 	"github.com/ollisulopuisto/postilaatikko/internal/logging"
@@ -23,6 +24,10 @@ const (
 )
 
 // Store provides credential storage with OS keyring and encrypted DB fallback
+// mailOAuthMu coordinates all credential Store instances within this process.
+// The helper transport and contacts runtime intentionally use separate Stores.
+var mailOAuthMu sync.Mutex
+
 type Store struct {
 	db             *sql.DB
 	encryptor      *crypto.Encryptor

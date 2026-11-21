@@ -65,7 +65,7 @@
 
 ## Gmail filter account consent
 
-- GMAIL-FILTER-002: Review. Instinct, `agent/gmail-filter-publish`, `/tmp/pl-gmail-filter-publish`. Explicit selected-account filter consent, preserve mail grant, reject remote workspace until helper-owned authorization exists. Separate manager and no automatic authorization. Wrong-account/partial-grant/project-change/remote-switch tests, refresh preservation/rotation, callback isolation and persisted-readback checks pass. App tests use CGO disabled with a temporary uncommitted startup stub; native Mac and live Google consent unrun. Dependent on GMAIL-FILTER-001; provider preview, journal and publication UI follow separately.
+- GMAIL-FILTER-002: Review. Implementation `2565ff3`, credential-module alignment `d403d714`. Instinct, `agent/gmail-filter-publish`, `/tmp/pl-gmail-filter-publish`. Explicit selected-account filter consent, preserve mail grant, reject remote workspace until helper-owned authorization exists. Separate manager and no automatic authorization. Wrong-account/partial-grant/project-change/remote-switch tests, refresh preservation/rotation, callback isolation and persisted-readback checks pass. Review fixes verify settings scopes by refreshing the durable grant before saving; shared Mail snapshot CAS prevents stale desktop/helper refreshes from erasing consent. Deterministic missing/reduced refreshed-scope and refresh-versus-consent regression tests pass. App tests use CGO disabled with a temporary uncommitted startup stub; native Mac and live Google consent unrun. Dependent on GMAIL-FILTER-001; provider preview, journal and publication UI follow separately.
 
 ## Status and effort
 
