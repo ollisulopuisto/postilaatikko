@@ -218,7 +218,16 @@ func (s *Store) Reorder(ids []string) error {
 			return fmt.Errorf("failed to confirm filter rule reorder: %w", err)
 		}
 		if rows == 0 {
-			return fmt.Errorf("filter rule not found: %s", id)
+			var guarded, currentIndex int
+			if err := tx.QueryRow(`SELECT order_index, EXISTS(SELECT 1 FROM gmail_filter_publications p WHERE p.rule_id=r.id) FROM mail_filter_rules r WHERE id=?`, id).Scan(&currentIndex, &guarded); err != nil {
+				return fmt.Errorf("filter rule not found: %s", id)
+			}
+			// The UI sends the whole list. A frozen source staying in place must
+			// not block unrelated rules from being reordered around it.
+			if guarded == 1 && currentIndex == index {
+				continue
+			}
+			return fmt.Errorf("Gmail-owned source must keep its position; cancel its unattempted review before moving it")
 		}
 	}
 	if err := tx.Commit(); err != nil {

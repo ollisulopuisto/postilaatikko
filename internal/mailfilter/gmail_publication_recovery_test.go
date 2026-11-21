@@ -18,8 +18,11 @@ func TestPreparedGmailPublicationGuardsAndCancel(t *testing.T) {
 	if err := s.Update(r); err == nil {
 		t.Fatal("source editable while publication guarded")
 	}
-	if err := s.Reorder([]string{r.ID}); err == nil {
-		t.Fatal("guarded source reordered")
+	if err := s.Reorder([]string{r.ID}); err != nil {
+		t.Fatal("unchanged guarded source blocked reorder", err)
+	}
+	if err := s.Reorder([]string{r.ID, r.ID}); err == nil {
+		t.Fatal("guarded source moved")
 	}
 	if err := s.Delete(r.ID); err == nil {
 		t.Fatal("guarded rule deletion reported success")
@@ -132,4 +135,32 @@ func (p *lockedNativeProvider) GetFilter(c context.Context, id string) (*gmail.F
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.p.GetFilter(c, id)
+}
+
+func TestReorderOtherRulesPreservesGmailSourceSnapshot(t *testing.T) {
+	s, r, f, p := publicationFixture(t)
+	plan := preparePublication(t, s, r, f, p)
+	for _, id := range []string{"other-a", "other-b"} {
+		rule := *r
+		rule.ID = id
+		rule.Name = id
+		rule.OrderIndex = 1
+		if err := s.Create(&rule); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.Reorder([]string{r.ID, "other-b", "other-a"}); err != nil {
+		t.Fatal("unrelated reorder blocked", err)
+	}
+	source, err := s.Get(r.ID)
+	if err != nil || !SameRuleConfiguration(source, &plan.Source) {
+		t.Fatal("source snapshot changed", err)
+	}
+	if err := s.Reorder([]string{"other-b", r.ID, "other-a"}); err == nil {
+		t.Fatal("guarded source moved")
+	}
+	source, err = s.Get(r.ID)
+	if err != nil || !SameRuleConfiguration(source, &plan.Source) {
+		t.Fatal("failed reorder changed source", err)
+	}
 }
