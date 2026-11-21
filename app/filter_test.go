@@ -1,11 +1,14 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"net"
+	"net/mail"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	stdsync "sync"
@@ -56,16 +59,18 @@ func (r *filterOpsRecorder) indexOf(prefix string) int {
 // messages in memory keyed by UID and records IMAP operations in the shared
 // ops log.
 type testIMAPSession struct {
-	ops           *filterOpsRecorder
-	mu            stdsync.Mutex
-	messages      map[uint32][]byte // UID -> raw RFC822
-	nextUID       uint32
-	selected      string
-	storeDelay    time.Duration
-	copyBlock     map[uint32]<-chan struct{}
-	copyStarted   chan uint32
-	forceFallback bool
-	rejectAppend  bool // when true, Append is rejected after recording the attempt
+	ops              *filterOpsRecorder
+	mu               stdsync.Mutex
+	messages         map[uint32][]byte // UID -> raw RFC822
+	nextUID          uint32
+	selected         string
+	storeDelay       time.Duration
+	copyBlock        map[uint32]<-chan struct{}
+	copyStarted      chan uint32
+	forceFallback    bool
+	rediscoverCopies bool
+	copiedUIDs       map[uint32]bool
+	rejectAppend     bool // when true, Append is rejected after recording the attempt
 }
 
 func newTestIMAPSession(ops *filterOpsRecorder) *testIMAPSession {
@@ -92,8 +97,14 @@ func (s *testIMAPSession) Select(mailbox string, options *imap.SelectOptions) (*
 }
 
 func (s *testIMAPSession) Status(mailbox string, options *imap.StatusOptions) (*imap.StatusData, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	zero := uint32(0)
-	return &imap.StatusData{Mailbox: mailbox, NumMessages: &zero, NumUnseen: &zero, NumDeleted: &zero, UIDValidity: 1, UIDNext: imap.UID(s.nextUID)}, nil
+	count := zero
+	if s.rediscoverCopies {
+		count = uint32(len(s.copiedUIDs))
+	}
+	return &imap.StatusData{Mailbox: mailbox, NumMessages: &count, NumUnseen: &zero, NumDeleted: &zero, UIDValidity: 1, UIDNext: imap.UID(s.nextUID)}, nil
 }
 
 func (s *testIMAPSession) Append(mailbox string, r imap.LiteralReader, options *imap.AppendOptions) (*imap.AppendData, error) {
@@ -150,6 +161,13 @@ func (s *testIMAPSession) Fetch(w *imapserver.FetchWriter, numSet imap.NumSet, o
 		mw.WriteRFC822Size(int64(len(raw)))
 		mw.WriteInternalDate(fixedDate)
 		mw.WriteFlags(nil)
+		if options.Envelope {
+			msg, err := mail.ReadMessage(bytes.NewReader(raw))
+			if err != nil {
+				return err
+			}
+			mw.WriteEnvelope(&imap.Envelope{Date: fixedDate, Subject: msg.Header.Get("Subject"), MessageID: strings.Trim(msg.Header.Get("Message-ID"), "<>"), From: []imap.Address{{Mailbox: "bulk", Host: "example.test"}}, To: []imap.Address{{Mailbox: "me", Host: "example.test"}}})
+		}
 		for _, bs := range options.BodySection {
 			wc := mw.WriteBodySection(bs, int64(len(raw)))
 			if _, err := wc.Write(raw); err != nil {
@@ -169,7 +187,32 @@ func (s *testIMAPSession) Fetch(w *imapserver.FetchWriter, numSet imap.NumSet, o
 
 func (s *testIMAPSession) Search(kind imapserver.NumKind, criteria *imap.SearchCriteria, options *imap.SearchOptions) (*imap.SearchData, error) {
 	if kind == imapserver.NumKindUID {
-		return &imap.SearchData{All: imap.UIDSet{}}, nil
+		result := imap.UIDSet{}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if s.rediscoverCopies {
+			var uids []int
+			for uid := range s.copiedUIDs {
+				match := true
+				for _, header := range criteria.Header {
+					m, err := mail.ReadMessage(bytes.NewReader(s.messages[uid]))
+					if err != nil {
+						return nil, err
+					}
+					if !strings.EqualFold(m.Header.Get(header.Key), header.Value) {
+						match = false
+					}
+				}
+				if match {
+					uids = append(uids, int(uid))
+				}
+			}
+			sort.Ints(uids)
+			for _, uid := range uids {
+				result.AddNum(imap.UID(uid))
+			}
+		}
+		return &imap.SearchData{All: result}, nil
 	}
 	return &imap.SearchData{All: imap.SeqSet{}}, nil
 }
@@ -205,6 +248,12 @@ func (s *testIMAPSession) Copy(numSet imap.NumSet, dest string) (*imap.CopyData,
 		if raw, ok := s.messages[uid]; ok {
 			s.nextUID++
 			s.messages[s.nextUID] = raw
+			if s.rediscoverCopies {
+				if s.copiedUIDs == nil {
+					s.copiedUIDs = map[uint32]bool{}
+				}
+				s.copiedUIDs[s.nextUID] = true
+			}
 			sourceUIDs = append(sourceUIDs, imap.UIDRange{Start: imap.UID(uid), Stop: imap.UID(uid)})
 			destUIDs = append(destUIDs, imap.UIDRange{Start: imap.UID(s.nextUID), Stop: imap.UID(s.nextUID)})
 		}
@@ -720,6 +769,8 @@ func TestBulkFilterFallbackPreservesOtherMoveLocalState(t *testing.T) {
 			f := newFilterFixture(t, false)
 			f.app.ctx = context.Background()
 			f.serverA.sess.forceFallback = true
+			f.serverA.sess.rediscoverCopies = true
+			f.serverA.sess.nextUID = 1000
 			started := make(chan uint32, 16)
 			f.serverA.sess.copyStarted = started
 			gate := make(chan struct{})
@@ -742,7 +793,7 @@ func TestBulkFilterFallbackPreservesOtherMoveLocalState(t *testing.T) {
 					t.Fatal(err)
 				}
 				f.serverA.sess.mu.Lock()
-				f.serverA.sess.messages[uid] = []byte("From: bulk@example.test\r\nTo: me@example.test\r\nSubject: bulk\r\n\r\nbody")
+				f.serverA.sess.messages[uid] = []byte(fmt.Sprintf("From: bulk@example.test\r\nTo: me@example.test\r\nSubject: bulk-%02d\r\nMessage-ID: %s\r\n\r\nbody", i, msgID))
 				f.serverA.sess.mu.Unlock()
 				ids = append(ids, id)
 			}
@@ -786,6 +837,17 @@ func TestBulkFilterFallbackPreservesOtherMoveLocalState(t *testing.T) {
 			}
 			releaseBoundary := f.app.acquireFilterExecutionBoundary()
 			releaseBoundary()
+			var actualCount int
+			if err := f.db.QueryRow(`SELECT COUNT(*) FROM messages WHERE folder_id='a-trash' AND uid>0 AND (subject LIKE 'bulk-%' OR id=?)`, last).Scan(&actualCount); err != nil || actualCount != count {
+				t.Fatal("completed copies not rediscovered", actualCount, count, err)
+			}
+			rows, err = f.app.messageStore.GetByIDs([]string{last})
+			if err != nil || len(rows) != 1 || rows[0].FolderID != "a-trash" || rows[0].UID == 0 {
+				t.Fatal("completed copy lost original identity", rows, err)
+			}
+			if err := f.db.QueryRow(`SELECT read_receipt_handled FROM messages WHERE id=? AND uid>0`, last).Scan(&handled); err != nil || !handled {
+				t.Fatal("rediscovery lost dismissal", err)
+			}
 		})
 	}
 }

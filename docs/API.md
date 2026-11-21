@@ -116,6 +116,7 @@ For encrypted drafts, the desktop encrypts the draft body and attachments locall
 ### 5. Mail Mutations
 - `POST /v1/filters/mutations` (Requires `mail.write`)
   - Request body uses `operation` with `rule` for `create`/`update`, `id` for `delete`, or `ids` for `reorder`.
+  - Reorder requires every existing rule ID exactly once, in the requested visible order. Partial lists, unknown IDs and duplicates are rejected without changing any priorities, even when no Gmail publication owns a rule. Reload the rules after success: stored priorities can be sparse around frozen Gmail-owned rules and are not list positions.
   - Rule validation is performed by the helper against its account/folder catalog, including the cross-account destination constraint.
 - `GET /v1/reply-later` (Requires `mail.read`)
   - Returns account-qualified Reply Later queue entries and whether each conversation is present in the local message index.

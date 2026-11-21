@@ -80,7 +80,7 @@
     reordered.splice(target, 0, item)
     try {
       await ReorderFilterRules(reordered.map(rule => rule.id))
-      rules = reordered.map((rule, orderIndex) => mailfilter.Rule.createFrom({ ...rule, orderIndex }))
+      await load()
     } catch (err) {
       toasts.error(`${$_('filters.saveFailed')}: ${String(err)}`)
       await load()
