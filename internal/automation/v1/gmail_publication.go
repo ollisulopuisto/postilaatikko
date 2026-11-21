@@ -3,12 +3,16 @@ package v1
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 
 	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
 	"github.com/ollisulopuisto/postilaatikko/internal/mailfilter"
 )
+
+// ErrGmailAccountIneligible is safe to classify across the helper API boundary.
+var ErrGmailAccountIneligible = errors.New("native Gmail filters require an enabled Google OAuth Gmail account")
 
 // GmailPublicationRequest is an explicit account-owned native-filter operation.
 // It never carries credentials, translates local substring rules or applies old mail.
@@ -76,6 +80,10 @@ func MountGmailPublicationRoutes(mux RouteMux, ops GmailPublicationOperations, r
 		}
 		result, err := ops.GmailPublication(r.Context(), req)
 		if err != nil {
+			if errors.Is(err, ErrGmailAccountIneligible) {
+				writeFilterRuleError(w, r, 422, CodeInvalidRequest, "Native Gmail filters are available only for an enabled Google OAuth Gmail account. Choose a Gmail account instead.")
+				return
+			}
 			writeFilterRuleError(w, r, 409, CodeInvalidRequest, "Gmail publication could not be verified; reload its status before taking another action")
 			return
 		}

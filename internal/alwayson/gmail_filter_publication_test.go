@@ -3,6 +3,7 @@ package alwayson
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -318,5 +319,17 @@ func TestHelperNativeLostPreparationReplyRecoveredBySource(t *testing.T) {
 	}
 	if _, err = r.GmailPublication(context.Background(), v1.GmailPublicationRequest{Operation: "cancel", AccountID: "helper-google", ID: reply.Publication.ID}); err != nil {
 		t.Fatal("recovered reservation not cancellable", err)
+	}
+}
+
+func TestHelperGmailPublicationRejectsUnsupportedAccountWithEligibilityCode(t *testing.T) {
+	r := helperNativeFixture(t)
+	_, err := r.db.Exec(`UPDATE accounts SET imap_host='outlook.office365.com' WHERE id='helper-google'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = r.GmailPublication(context.Background(), v1.GmailPublicationRequest{Operation: "context", AccountID: "helper-google"})
+	if !errors.Is(err, v1.ErrGmailAccountIneligible) {
+		t.Fatal("unsupported account lost eligibility classification", err)
 	}
 }

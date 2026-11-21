@@ -76,3 +76,13 @@ func TestGmailPublicationStubDoesNotExposeBackendErrors(t *testing.T) {
 		t.Fatal("backend error disclosure", rec.Code, rec.Body.String())
 	}
 }
+
+func TestGmailPublicationEligibilityErrorIsSafeAndNotRetryAdvice(t *testing.T) {
+	mux := http.NewServeMux()
+	MountGmailPublicationRoutes(mux, &gmailPublicationStub{err: ErrGmailAccountIneligible}, func(http.ResponseWriter, *http.Request, Capability) bool { return true })
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest("POST", "/v1/filters/gmail", strings.NewReader(`{"operation":"status","ruleId":"outlook-rule"}`)))
+	if rec.Code != 422 || !strings.Contains(rec.Body.String(), "Choose a Gmail account") || strings.Contains(rec.Body.String(), "reload") {
+		t.Fatal("ineligible account got recovery advice", rec.Code, rec.Body.String())
+	}
+}

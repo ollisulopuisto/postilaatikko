@@ -38,7 +38,7 @@ func (r *SyncRuntime) gmailPublicationOwner(accountID string) (helperGmailProvid
 		return p, false, err
 	}
 	if acc == nil || !acc.Enabled || acc.AuthType != account.AuthOAuth2 || acc.IMAPHost != "imap.gmail.com" || strings.TrimSpace(acc.Email) == "" {
-		return p, false, fmt.Errorf("enabled helper-owned Google account required")
+		return p, false, v1.ErrGmailAccountIneligible
 	}
 	tokens, err := r.contacts.creds.GetOAuthTokens(accountID)
 	if err != nil {
