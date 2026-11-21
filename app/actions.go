@@ -639,7 +639,7 @@ func (a *App) moveToFolderWithService(messageIDs []string, destFolderID string, 
 	if err != nil {
 		return operationID, err
 	}
-	if operationID != "" && len(liveIDs) != len(messageIDs) {
+	if !recordUndo && operationID != "" && len(liveIDs) != len(messageIDs) {
 		return operationID, fmt.Errorf("undo requires a verified server target for every message")
 	}
 	if len(liveIDs) == 0 {

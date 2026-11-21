@@ -251,6 +251,7 @@ func (e *Engine) SyncMessages(ctx context.Context, accountID, folderID string, s
 
 	// Find new UIDs (on server but not local)
 	var newUIDs []uint32
+	classificationBackfill := map[uint32]bool{}
 	for uid := range remoteUIDSet {
 		if !localUIDSet[uid] {
 			newUIDs = append(newUIDs, uid)
@@ -264,6 +265,7 @@ func (e *Engine) SyncMessages(ctx context.Context, accountID, folderID string, s
 		for _, uid := range unclassified {
 			if remoteUIDSet[uid] {
 				newUIDs = append(newUIDs, uid)
+				classificationBackfill[uid] = true
 			}
 		}
 	}
@@ -324,7 +326,7 @@ func (e *Engine) SyncMessages(ctx context.Context, accountID, folderID string, s
 			}
 		}
 
-		if err := e.messageStore.DeleteByUID(folderID, uid); err != nil {
+		if err := e.messageStore.DeleteSyncedUID(folderID, uid); err != nil {
 			e.log.Warn().Err(err).Uint32("uid", uid).Msg("Failed to delete message")
 		}
 	}
@@ -392,7 +394,7 @@ func (e *Engine) SyncMessages(ctx context.Context, accountID, folderID string, s
 		}
 		remaining := newUIDs[:0]
 		for _, uid := range newUIDs {
-			if !cachedSet[uid] {
+			if !cachedSet[uid] || classificationBackfill[uid] {
 				remaining = append(remaining, uid)
 			}
 		}

@@ -1147,7 +1147,7 @@ func (s *Store) Upsert(m *Message) error {
 			body_text=CASE WHEN excluded.body_fetched = 1 THEN excluded.body_text ELSE messages.body_text END,
 			body_html=CASE WHEN excluded.body_fetched = 1 THEN excluded.body_html ELSE messages.body_html END,
 			body_fetched=CASE WHEN excluded.body_fetched = 1 THEN 1 ELSE messages.body_fetched END,
-			read_receipt_to=excluded.read_receipt_to, read_receipt_handled=excluded.read_receipt_handled,
+			read_receipt_to=excluded.read_receipt_to, read_receipt_handled=MAX(messages.read_receipt_handled,excluded.read_receipt_handled),
 			received_at=excluded.received_at
 	`
 
@@ -1326,6 +1326,26 @@ func (s *Store) DeleteByFolder(folderID string) error {
 		return fmt.Errorf("failed to delete messages: %w", err)
 	}
 	return nil
+}
+
+// DeleteSyncedUID preserves repaired content as a non-addressable snapshot when
+// an ordinary listing omits its UID. A date-window omission is not deletion proof.
+func (s *Store) DeleteSyncedUID(folderID string, uid uint32) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err = tx.Exec(`INSERT OR IGNORE INTO quarantined_repair_messages(message_id) SELECT id FROM messages WHERE folder_id=? AND uid=? AND id IN (SELECT message_id FROM attachment_repair_backups)`, folderID, uid); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(`UPDATE messages SET uid=-rowid WHERE folder_id=? AND uid=? AND id IN (SELECT message_id FROM quarantined_repair_messages)`, folderID, uid); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(`DELETE FROM messages WHERE folder_id=? AND uid=?`, folderID, uid); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // DeleteSyncedUIDCache preserves unresolved local moves and repaired mail when
@@ -3878,6 +3898,9 @@ func (s *Store) RecordCopiedMoveUIDs(folderID string, validity uint32, uids map[
 	}
 	return tx.Commit()
 }
+
+// MoveCleanupState reads the recorded source identity and cleanup status. A
+// copied destination is not a completed move until source cleanup is verified.
 func (s *Store) MoveCleanupState(folderID, id string) (string, uint32, uint32, bool, error) {
 	var source string
 	var uid, validity uint32
@@ -3885,6 +3908,9 @@ func (s *Store) MoveCleanupState(folderID, id string) (string, uint32, uint32, b
 	err := s.db.QueryRow(`SELECT source_folder_id,source_uid,source_validity,cleanup_complete FROM move_uid_evidence WHERE message_id=? AND folder_id=?`, id, folderID).Scan(&source, &uid, &validity, &done)
 	return source, uid, validity, done, err
 }
+
+// ConfirmMoveCleanup marks source cleanup complete only for the matching
+// destination UID and generation. It does not itself verify remote state.
 func (s *Store) ConfirmMoveCleanup(folderID string, validity uint32, uids map[string]uint32) error {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -3923,6 +3949,8 @@ func (s *Store) LiveMutationIDs(ids []string) ([]string, error) {
 	return out, nil
 }
 
+// PendingProvenMoveIDs returns recovery candidates with recorded copy evidence.
+// It does not confirm the destination exists or that source cleanup completed.
 func (s *Store) PendingProvenMoveIDs(folderID string) ([]string, error) {
 	rows, err := s.db.Query(`SELECT m.id FROM messages m JOIN move_uid_evidence e ON e.message_id=m.id AND e.folder_id=m.folder_id WHERE m.folder_id=? AND m.uid<0`, folderID)
 	if err != nil {

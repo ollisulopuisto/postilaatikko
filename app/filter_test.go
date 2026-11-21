@@ -1559,6 +1559,7 @@ func TestMoveWaitsForDestinationCacheResetBeforePromotion(t *testing.T) {
 			if _, err := f.db.Exec(`UPDATE accounts SET sync_period_days=0 WHERE id='acct-a'`); err != nil {
 				t.Fatal(err)
 			}
+			f.serverA.sess.messages[f.message.UID] = bytes.Replace(f.serverA.sess.messages[f.message.UID], []byte("Subject:"), []byte("Disposition-Notification-To: bob@example.com\r\nSubject:"), 1)
 			if err := f.app.messageStore.MarkReadReceiptHandled(f.message.ID); err != nil {
 				t.Fatal(err)
 			}
@@ -1592,6 +1593,39 @@ func TestMoveWaitsForDestinationCacheResetBeforePromotion(t *testing.T) {
 			if err := f.db.QueryRow(`SELECT read_receipt_handled FROM messages WHERE id=?`, f.message.ID).Scan(&handled); err != nil || !handled {
 				t.Fatal("receipt decision lost across cache generation", err)
 			}
+			f.app.syncMu.Lock()
+			delete(f.app.syncLastRequest, "acct-a:a-trash")
+			f.app.syncMu.Unlock()
+			if err := f.app.SyncFolder("acct-a", "a-trash"); err != nil {
+				t.Fatal(err)
+			}
+			if err := f.db.QueryRow(`SELECT read_receipt_handled FROM messages WHERE id=?`, f.message.ID).Scan(&handled); err != nil || !handled {
+				t.Fatal("header backfill erased receipt decision", err)
+			}
+			if kind == "repaired" {
+				if _, err := f.db.Exec(`UPDATE accounts SET sync_period_days=30 WHERE id='acct-a'`); err != nil {
+					t.Fatal(err)
+				}
+				f.serverA.sess.internalDate = time.Now().AddDate(0, -3, 0)
+				if _, err := f.db.Exec(`UPDATE messages SET date=? WHERE id=?`, f.serverA.sess.internalDate, f.message.ID); err != nil {
+					t.Fatal(err)
+				}
+				f.app.syncMu.Lock()
+				delete(f.app.syncLastRequest, "acct-a:a-trash")
+				f.app.syncMu.Unlock()
+				if err := f.app.SyncFolder("acct-a", "a-trash"); err != nil {
+					t.Fatal(err)
+				}
+				repaired, err := f.app.messageStore.Get(f.message.ID)
+				if err != nil || repaired == nil || int32(repaired.UID) >= 0 {
+					t.Fatal("date omission lost repair or retained addressable UID", repaired, err)
+				}
+				var backups int
+				if err := f.db.QueryRow(`SELECT COUNT(*) FROM attachment_repair_backups WHERE message_id=?`, f.message.ID).Scan(&backups); err != nil || backups == 0 {
+					t.Fatal("date omission destroyed repair history", backups, err)
+				}
+			}
+
 		})
 	}
 }
@@ -1645,5 +1679,56 @@ func TestConversationMoveSkipsOnlyQuarantinedRepairSnapshots(t *testing.T) {
 	}
 	if err := f.app.MoveToFolder([]string{f.message.ID, "unresolved"}, "a-trash"); err == nil {
 		t.Fatal("unresolved optimistic move guard was bypassed")
+	}
+}
+
+func TestUnresolvedMoveDoesNotDropClassificationBackfill(t *testing.T) {
+	f := newFilterFixture(t, false)
+	f.app.ctx = context.Background()
+	f.serverA.sess.rediscoverCopies = true
+	if err := f.app.messageStore.MoveMessages([]string{f.message.ID}, "a-trash"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.messageStore.RecordMoveUIDEvidence("a-trash", 99, map[string]uint32{f.message.ID: 701}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.messageStore.Create(&message.Message{ID: "uncategorized", AccountID: "acct-a", FolderID: "a-trash", UID: 702, MessageID: "classify@test", Date: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	f.serverA.sess.messages[702] = []byte(strings.ReplaceAll(cannedRaw, "m1@example.com", "classify@test"))
+	f.serverA.sess.copiedUIDs = map[uint32]string{702: "Trash"}
+	if err := f.app.SyncFolder("acct-a", "a-trash"); err != nil {
+		t.Fatal(err)
+	}
+	var category string
+	if err := f.db.QueryRow(`SELECT inbox_category FROM messages WHERE id='uncategorized'`).Scan(&category); err != nil || category == "" {
+		t.Fatal("unresolved proof stalled classification", category, err)
+	}
+}
+
+func TestForwardMovePartitionWithSharedOperationSkipsSnapshot(t *testing.T) {
+	f := newFilterFixture(t, false)
+	f.app.ctx = context.Background()
+	if _, err := f.db.Exec(`UPDATE messages SET uid=-rowid WHERE id=?`, f.message.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.db.Exec(`INSERT INTO quarantined_repair_messages(message_id) VALUES(?)`, f.message.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.messageStore.Create(&message.Message{ID: "live", AccountID: "acct-a", FolderID: "a-inbox", UID: 11, MessageID: "live@test", Date: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	f.serverA.sess.messages[11] = []byte(strings.ReplaceAll(cannedRaw, "m1@example.com", "live@test"))
+	if _, err := f.app.moveToFolderWithService([]string{f.message.ID, "live"}, "a-trash", true, "shared-forward-operation", false); err != nil {
+		t.Fatal("forward shared operation was mistaken for undo", err)
+	}
+	waitFor(t, time.Second, func() bool {
+		f.serverA.sess.mu.Lock()
+		defer f.serverA.sess.mu.Unlock()
+		return f.serverA.sess.copyCount == 1
+	})
+	got, err := f.app.messageStore.Get("live")
+	if err != nil || got == nil || got.FolderID != "a-trash" {
+		t.Fatal("live forward partition was skipped", got, err)
 	}
 }
