@@ -67,6 +67,19 @@ class ClassificationTests(unittest.TestCase):
             [{"kind": "yanked", "package": "demo", "id": None}],
         )
 
+    def test_go_totals_separate_reachability_levels(self):
+        findings = [
+            {"osv": "GO-demo", "trace": [{"module": "stdlib"}]},
+            {"osv": "GO-demo", "trace": [{"package": "net/http"}]},
+            {"osv": "GO-demo", "trace": [{"function": "Serve"}]},
+            {"osv": "GO-other", "trace": [{"function": "Read"}]},
+        ]
+        self.assertEqual(  # noqa: PT009 - stdlib unittest runner.
+            report.go_totals(findings),
+            "4 records; 2 unique advisories; 1 module, 1 package, 2 symbol records; "
+            "2 advisories with symbol traces. Symbol reachability is not exploitability.",
+        )
+
     def test_full_history_includes_merge_resolution_patches(self):
         git_binary = shutil.which("git")
         with tempfile.TemporaryDirectory() as tmp:

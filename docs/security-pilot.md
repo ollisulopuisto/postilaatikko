@@ -31,3 +31,5 @@ SARIF artifacts. Inspect Analyze logs; a failed matrix job is UNKNOWN. Existing
 GitHub default-setup status was not readable, and is not claimed absent.
 
 CodeQL debug reruns are refused before initialization because the upstream post-action can upload debug artifacts. Setup failures always leave an UNKNOWN baseline summary.
+
+Go totals distinguish module/package/symbol records and deduplicate advisory IDs. Symbol traces indicate static reachability, not exploitability. Go prerequisites are best-effort so a Go setup failure does not prevent unrelated scanners; failed Go coverage remains UNKNOWN.

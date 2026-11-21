@@ -62,6 +62,26 @@ def rust_warnings(warnings):
     ]
 
 
+def go_totals(findings):
+    levels = {"module": 0, "package": 0, "symbol": 0}
+    symbols = set()
+    for item in findings:
+        trace = item.get("trace", [])
+        if any(frame.get("function") for frame in trace):
+            levels["symbol"] += 1
+            symbols.add(item["osv"])
+        elif any(frame.get("package") for frame in trace):
+            levels["package"] += 1
+        else:
+            levels["module"] += 1
+    return (
+        f"{len(findings)} records; {len({x['osv'] for x in findings})} unique advisories; "
+        f"{levels['module']} module, {levels['package']} package, "
+        f"{levels['symbol']} symbol records; {len(symbols)} advisories with symbol traces. "
+        "Symbol reachability is not exploitability."
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checks", default="secrets,python,npm,go")
@@ -385,7 +405,7 @@ def main():
                         findings,
                         ["Package loading or advisory lookup failed; no clean verdict."]
                         if result.returncode not in (0, 3)
-                        else ["Reachability analysis, current runner platform."],
+                        else ["Reachability analysis, current runner platform.", go_totals(findings)],
                     )
 
                 record("govulncheck", str(mod), go)
@@ -400,7 +420,7 @@ def main():
         + x["state"]
         + "; "
         + str(len(x["findings"]))
-        + " findings"
+        + (" records. " + go_totals(x["findings"]) if x["check"] == "govulncheck" else " findings")
         for x in rows
     )
     print(summary, file=sys.stderr)
