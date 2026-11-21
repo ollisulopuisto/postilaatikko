@@ -1,11 +1,17 @@
 package app
 
 import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
 	"github.com/ollisulopuisto/postilaatikko/internal/account"
 	"github.com/ollisulopuisto/postilaatikko/internal/database"
 	"github.com/ollisulopuisto/postilaatikko/internal/email"
+	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
 	"github.com/ollisulopuisto/postilaatikko/internal/message"
 	"github.com/ollisulopuisto/postilaatikko/internal/platform"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -80,5 +86,82 @@ func TestAttachmentRepairDownloadUsesExactPartNotFilename(t *testing.T) {
 	}
 	if _, err = app.RepairMessageAttachments("a", "mail"); err == nil {
 		t.Fatal("repair accepted missing live owner engine")
+	}
+}
+
+func TestGmailCacheKeyRawFallbackAndBatchSaveResult(t *testing.T) {
+	f := newFilterFixture(t, false)
+	f.app.ctx = context.Background()
+	f.app.paths = &platform.Paths{Data: t.TempDir()}
+	f.app.attachmentStore = message.NewAttachmentStore(f.db)
+	if _, err := f.db.Exec(`UPDATE accounts SET imap_host='imap.gmail.com',auth_type='oauth2' WHERE id='acct-a'`); err != nil {
+		t.Fatal(err)
+	}
+	msg := &message.Message{AccountID: "acct-a", FolderID: "a-inbox", MessageID: "raw@test", Date: time.Now()}
+	if err := f.app.messageStore.UpsertGmail(msg, "provider"); err != nil {
+		t.Fatal(err)
+	}
+	att := &message.Attachment{ID: "no-part-reference", MessageID: msg.ID, Filename: "notes.txt"}
+	if err := f.app.attachmentStore.Create(att); err != nil {
+		t.Fatal(err)
+	}
+	raw := "MIME-Version: 1.0\r\nContent-Type: text/plain\r\nContent-Disposition: attachment; filename=notes.txt\r\n\r\nGmail raw bytes"
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.URL.Path != "/messages/provider" || r.URL.Query().Get("format") != "raw" {
+			t.Error("wrong Gmail fallback", r.URL)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"raw": base64.RawURLEncoding.EncodeToString([]byte(raw))})
+	}))
+	defer server.Close()
+	f.app.syncEngine.SetGmailTokenSource(func(context.Context, string, bool) (string, error) { return "fixture", nil })
+	f.app.syncEngine.SetGmailClientFactory(func(src gmail.TokenSource) *gmail.Client { c := gmail.NewClient(src); c.BaseURL = server.URL; return c })
+	var cached []byte
+	got, err := f.app.loadAttachmentContent(msg, att, email.NewAttachmentDownloader(""), &cached)
+	if err != nil || string(got) != "Gmail raw bytes" || calls != 1 {
+		t.Fatal("live Gmail raw fallback rejected", string(got), calls, err)
+	}
+	engine := f.app.syncEngine
+	// Both native and portal adapters share this batch result boundary.
+	for _, portal := range []bool{false, true} {
+		dir := t.TempDir()
+		var paths []string
+		if portal {
+			paths = []string{filepath.Join(dir, "notes.txt"), filepath.Join(dir, "missing.txt")}
+		}
+		missing := &message.Attachment{ID: "missing", MessageID: msg.ID, Filename: "missing.txt"}
+		folder, err := f.app.saveAttachmentBatch(msg, []*message.Attachment{att, missing}, dir, paths)
+		if err == nil || folder != "" {
+			t.Fatal("partial Save All reported success", portal, folder, err)
+		}
+		if bytes, err := os.ReadFile(filepath.Join(dir, "notes.txt")); err != nil || string(bytes) != "Gmail raw bytes" {
+			t.Fatal("partial save discarded completed file", string(bytes), err)
+		}
+		f.app.syncEngine = nil
+		folder, err = f.app.saveAttachmentBatch(msg, []*message.Attachment{missing}, t.TempDir(), nil)
+		if err == nil || folder != "" {
+			t.Fatal("zero Save All reported success", folder, err)
+		}
+		// Restore the provider for the portal iteration.
+		f.app.syncEngine = engine
+	}
+}
+
+func TestIMAPAttachmentFallbackRejectsSameNameParts(t *testing.T) {
+	f := newFilterFixture(t, false)
+	f.app.ctx = context.Background()
+	f.app.attachmentStore = message.NewAttachmentStore(f.db)
+	raw := "MIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=b\r\n\r\n--b\r\nContent-Type: text/plain\r\nContent-Disposition: attachment; filename=same.txt\r\n\r\none\r\n--b\r\nContent-Type: text/plain\r\nContent-Disposition: attachment; filename=same.txt\r\n\r\ntwo\r\n--b--\r\n"
+	f.serverA.sess.messages[f.message.UID] = []byte(raw)
+	for _, id := range []string{"first", "second"} {
+		att := &message.Attachment{ID: id, MessageID: f.message.ID, Filename: "same.txt"}
+		if err := f.app.attachmentStore.Create(att); err != nil {
+			t.Fatal(err)
+		}
+		var cached []byte
+		if got, err := f.app.loadAttachmentContent(f.message, att, email.NewAttachmentDownloader(""), &cached); err == nil {
+			t.Fatal("IMAP ambiguity returned wrong occurrence", id, string(got))
+		}
 	}
 }

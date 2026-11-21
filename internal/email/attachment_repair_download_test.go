@@ -4,6 +4,7 @@ import (
 	"github.com/ollisulopuisto/postilaatikko/internal/message"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -27,5 +28,22 @@ func TestSaveAllSameNamePartsNeverOverwrite(t *testing.T) {
 		if err != nil || string(got) != want {
 			t.Fatal("export lost real part")
 		}
+	}
+}
+
+func TestRawFallbackRejectsAmbiguousFilename(t *testing.T) {
+	d := NewAttachmentDownloader("")
+	if bytes, err := d.ExtractUniqueAttachmentContent([]byte(repairFixture()), "same.png"); err == nil {
+		t.Fatal("duplicate filename returned first payload", string(bytes))
+	}
+	raw := strings.Replace(repairFixture(), "attachment; filename=same.png", "attachment; filename=other.png", 1)
+	for name, want := range map[string]string{"same.png": "one", "other.png": "two"} {
+		got, err := d.ExtractUniqueAttachmentContent([]byte(raw), name)
+		if err != nil || string(got) != want {
+			t.Fatal("unique part missing", name, string(got), err)
+		}
+	}
+	if _, err := d.ExtractUniqueAttachmentContent([]byte(strings.TrimSuffix(raw, "--b--\r\n")), "same.png"); err == nil {
+		t.Fatal("incomplete MIME established uniqueness")
 	}
 }

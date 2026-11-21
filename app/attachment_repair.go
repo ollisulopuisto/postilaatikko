@@ -117,8 +117,8 @@ func (a *App) loadAttachmentContent(msg *message.Message, att *message.Attachmen
 	if !errors.Is(err, gmail.ErrNotCapable) {
 		return content, err
 	}
-	if msg.UID == 0 || int32(msg.UID) < 0 {
-		return nil, fmt.Errorf("snapshot attachment has no exact cached payload")
+	if err := a.messageStore.ValidateRawContentTarget(msg); err != nil {
+		return nil, err
 	}
 	if *raw == nil {
 		*raw, err = a.syncEngine.FetchRawMessage(a.ctx, msg.AccountID, msg.FolderID, msg.UID)
@@ -126,5 +126,5 @@ func (a *App) loadAttachmentContent(msg *message.Message, att *message.Attachmen
 			return nil, err
 		}
 	}
-	return downloader.ExtractAttachmentContent(*raw, att.Filename)
+	return downloader.ExtractUniqueAttachmentContent(*raw, att.Filename)
 }

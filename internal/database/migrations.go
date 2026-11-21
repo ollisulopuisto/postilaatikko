@@ -1992,6 +1992,18 @@ var migrations = []Migration{
  CREATE INDEX idx_gmail_filter_publications_account ON gmail_filter_publications(account_id,updated_at,id);
  `},
 	{Version: 86, SQL: `
+ CREATE TABLE retained_receipt_decisions (
+   folder_id TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+   uid_validity INTEGER NOT NULL CHECK(uid_validity>0),
+   uid INTEGER NOT NULL CHECK(uid>0),
+   PRIMARY KEY(folder_id,uid_validity,uid)
+ );
+ CREATE TRIGGER retain_receipt_before_prune BEFORE DELETE ON messages
+ WHEN OLD.read_receipt_handled=1 AND OLD.uid>0 AND OLD.uid<2147483648
+ BEGIN
+   INSERT OR IGNORE INTO retained_receipt_decisions(folder_id,uid_validity,uid)
+   SELECT OLD.folder_id,f.uid_validity,OLD.uid FROM folders f WHERE f.id=OLD.folder_id AND f.uid_validity>0;
+ END;
  CREATE TABLE quarantined_repair_messages (
    message_id TEXT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE
  );

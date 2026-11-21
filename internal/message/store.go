@@ -1066,6 +1066,9 @@ func (s *Store) GetByUID(folderID string, uid uint32) (*Message, error) {
 
 // Create creates a new message
 func (s *Store) Create(m *Message) error {
+	if err := s.restoreReceiptDecision(m); err != nil {
+		return err
+	}
 	if m.ID == "" {
 		m.ID = uuid.New().String()
 	}
@@ -1116,6 +1119,9 @@ func (s *Store) Create(m *Message) error {
 // This handles cases where a previous copy was deleted but the stale row remains, or where
 // the IMAP server reuses UIDs after EXPUNGE.
 func (s *Store) Upsert(m *Message) error {
+	if err := s.restoreReceiptDecision(m); err != nil {
+		return err
+	}
 	if m.ID == "" {
 		m.ID = uuid.New().String()
 	}
@@ -1328,15 +1334,15 @@ func (s *Store) DeleteByFolder(folderID string) error {
 	return nil
 }
 
-// DeleteSyncedUID preserves repaired content and receipt decisions as snapshots when
-// an ordinary listing omits its UID. A date-window omission is not deletion proof.
+// DeleteSyncedUID preserves repaired content as a snapshot when an ordinary
+// listing omits its UID. Receipt decisions survive independently of folder rows.
 func (s *Store) DeleteSyncedUID(folderID string, uid uint32) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	if _, err = tx.Exec(`INSERT OR IGNORE INTO quarantined_repair_messages(message_id) SELECT id FROM messages WHERE folder_id=? AND uid=? AND (COALESCE(read_receipt_handled,0)=1 OR id IN (SELECT message_id FROM attachment_repair_backups))`, folderID, uid); err != nil {
+	if _, err = tx.Exec(`INSERT OR IGNORE INTO quarantined_repair_messages(message_id) SELECT id FROM messages WHERE folder_id=? AND uid=? AND id IN (SELECT message_id FROM attachment_repair_backups)`, folderID, uid); err != nil {
 		return err
 	}
 	// Preserve only exact same-generation identity, separately from move proof.
@@ -1365,7 +1371,10 @@ func (s *Store) DeleteSyncedUIDCache(folderID string) error {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	if _, err = tx.Exec(`DELETE FROM messages WHERE folder_id=? AND uid>0 AND COALESCE(read_receipt_handled,0)=0 AND id NOT IN (SELECT message_id FROM attachment_repair_backups)`, folderID); err != nil {
+	if _, err = tx.Exec(`DELETE FROM messages WHERE folder_id=? AND uid>0 AND id NOT IN (SELECT message_id FROM attachment_repair_backups)`, folderID); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(`DELETE FROM retained_receipt_decisions WHERE folder_id=?`, folderID); err != nil {
 		return err
 	}
 	if _, err = tx.Exec(`DELETE FROM retired_repair_uids WHERE folder_id=?`, folderID); err != nil {
@@ -1676,7 +1685,7 @@ func (s *Store) CountByFolder(folderID string) (int, error) {
 // Returns the number of messages deleted
 func (s *Store) DeleteOlderThanInFolder(folderID string, before time.Time) (int, error) {
 	result, err := s.db.Exec(
-		"DELETE FROM messages WHERE folder_id = ? AND date < ? AND uid > 0 AND COALESCE(read_receipt_handled,0)=0 AND id NOT IN (SELECT message_id FROM attachment_repair_backups)",
+		"DELETE FROM messages WHERE folder_id = ? AND date < ? AND uid > 0 AND id NOT IN (SELECT message_id FROM attachment_repair_backups)",
 		folderID, before,
 	)
 	if err != nil {
@@ -4076,4 +4085,18 @@ func (s *Store) GetReaderMessage(id string) (*Message, error) {
 		}
 	}
 	return m, nil
+}
+
+// restoreReceiptDecision binds a pruned decision to the exact current IMAP
+// universe before inserting headers. It never restores active folder membership.
+func (s *Store) restoreReceiptDecision(m *Message) error {
+	if m.ReadReceiptHandled || m.UID == 0 || int32(m.UID) < 0 {
+		return nil
+	}
+	var found bool
+	if err := s.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM retained_receipt_decisions r JOIN folders f ON f.id=r.folder_id WHERE r.folder_id=? AND r.uid=? AND r.uid_validity=f.uid_validity)`, m.FolderID, m.UID).Scan(&found); err != nil {
+		return err
+	}
+	m.ReadReceiptHandled = found
+	return nil
 }

@@ -671,8 +671,6 @@ func (a *App) OpenFolder(path string) error {
 // SaveAllAttachments shows a folder picker and saves all attachments from a message to that folder
 // Returns the folder path where files were saved, or empty string if cancelled
 func (a *App) SaveAllAttachments(messageID string) (string, error) {
-	log := logging.WithComponent("app")
-
 	// Get all attachments for the message
 	attachments, err := a.attachmentStore.GetByMessage(messageID)
 	if err != nil {
@@ -717,29 +715,7 @@ func (a *App) SaveAllAttachments(messageID string) (string, error) {
 		return "", fmt.Errorf("message not found: %s", messageID)
 	}
 
-	var raw []byte
-
-	// Save each attachment
-	downloader := email.NewAttachmentDownloader(a.paths.AttachmentsPath())
-	savedCount := 0
-
-	for _, att := range attachments {
-		content, err := a.loadAttachmentContent(msg, att, downloader, &raw)
-		if err != nil {
-			log.Warn().Err(err).Str("filename", att.Filename).Msg("Failed to extract attachment")
-			continue
-		}
-
-		_, err = downloader.SaveAttachmentToDirectory(att, content, saveDir)
-		if err != nil {
-			log.Warn().Err(err).Str("filename", att.Filename).Msg("Failed to save attachment")
-			continue
-		}
-		savedCount++
-	}
-
-	log.Info().Int("count", savedCount).Str("folder", saveDir).Msg("Saved all attachments")
-	return saveDir, nil
+	return a.saveAttachmentBatch(msg, attachments, saveDir, nil)
 }
 
 // decryptMessageBody decrypts an encrypted message's raw body and returns the inner plaintext bytes.
@@ -983,8 +959,6 @@ func (a *App) SaveAllEncryptedAttachments(messageID string) (string, error) {
 
 // saveAllAttachmentsViaPortal saves all attachments using the XDG FileChooser portal.
 func (a *App) saveAllAttachmentsViaPortal(messageID string, attachments []*message.Attachment, defaultDir string) (string, error) {
-	log := logging.WithComponent("app")
-
 	filenames := make([]string, len(attachments))
 	for i, att := range attachments {
 		filenames[i] = att.Filename
@@ -1007,32 +981,7 @@ func (a *App) saveAllAttachmentsViaPortal(messageID string, attachments []*messa
 		return "", fmt.Errorf("message not found: %s", messageID)
 	}
 
-	var raw []byte
-
-	downloader := email.NewAttachmentDownloader(a.paths.AttachmentsPath())
-	savedCount := 0
-
-	for i, att := range attachments {
-		if i >= len(savePaths) {
-			break
-		}
-
-		content, err := a.loadAttachmentContent(msg, att, downloader, &raw)
-		if err != nil {
-			log.Warn().Err(err).Str("filename", att.Filename).Msg("Failed to extract attachment")
-			continue
-		}
-
-		_, err = downloader.SaveAttachment(att, content, savePaths[i])
-		if err != nil {
-			log.Warn().Err(err).Str("filename", att.Filename).Msg("Failed to save attachment")
-			continue
-		}
-		savedCount++
-	}
-
-	log.Info().Int("count", savedCount).Msg("Saved all attachments via portal")
-	return filepath.Dir(savePaths[0]), nil
+	return a.saveAttachmentBatch(msg, attachments, filepath.Dir(savePaths[0]), savePaths)
 }
 
 // saveAllEncryptedAttachmentsViaPortal saves all encrypted attachments using the XDG FileChooser portal.
@@ -1076,4 +1025,33 @@ func (a *App) saveAllEncryptedAttachmentsViaPortal(attachments []*message.Attach
 
 	log.Info().Int("count", savedCount).Msg("Saved all encrypted attachments via portal")
 	return filepath.Dir(savePaths[0]), nil
+}
+
+// saveAttachmentBatch preserves completed writes but never reports skipped
+// files as saved. Portal and native dialogs share this result contract.
+func (a *App) saveAttachmentBatch(msg *message.Message, attachments []*message.Attachment, dir string, paths []string) (string, error) {
+	var raw []byte
+	downloader := email.NewAttachmentDownloader(a.paths.AttachmentsPath())
+	saved := 0
+	for i, att := range attachments {
+		if paths != nil && i >= len(paths) {
+			break
+		}
+		content, err := a.loadAttachmentContent(msg, att, downloader, &raw)
+		if err != nil {
+			continue
+		}
+		if paths == nil {
+			_, err = downloader.SaveAttachmentToDirectory(att, content, dir)
+		} else {
+			_, err = downloader.SaveAttachment(att, content, paths[i])
+		}
+		if err == nil {
+			saved++
+		}
+	}
+	if saved != len(attachments) {
+		return "", fmt.Errorf("saved %d of %d attachments in %s; remaining files could not be saved", saved, len(attachments), dir)
+	}
+	return dir, nil
 }

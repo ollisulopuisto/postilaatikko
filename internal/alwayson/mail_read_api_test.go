@@ -2,9 +2,13 @@ package alwayson
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
+	"github.com/ollisulopuisto/postilaatikko/internal/folder"
+	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
 	"github.com/ollisulopuisto/postilaatikko/internal/mailservice"
+	mailSync "github.com/ollisulopuisto/postilaatikko/internal/sync"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -221,5 +225,47 @@ func TestThreadThenCachedBodyReadsSnapshotWithoutProvider(t *testing.T) {
 	raw, err := ops.runtime.messages.Get("live")
 	if err != nil || raw.BodyFetched || raw.BodyText != "" {
 		t.Fatal("reader persisted overlay", raw, err)
+	}
+}
+
+func TestHelperGmailRawFallbackKeepsProviderIdentityAndRejectsAmbiguity(t *testing.T) {
+	ops, db := setupThreadReadTest(t)
+	defer db.Close()
+	if _, err := db.Exec(`UPDATE accounts SET imap_host='imap.gmail.com',auth_type='oauth2' WHERE id='acc-1'`); err != nil {
+		t.Fatal(err)
+	}
+	msg := &message.Message{AccountID: "acc-1", FolderID: "inbox", Date: time.Now()}
+	if err := ops.runtime.messages.UpsertGmail(msg, "provider"); err != nil {
+		t.Fatal(err)
+	}
+	att := &message.Attachment{ID: "raw-part", MessageID: msg.ID, Filename: "same.txt"}
+	if err := ops.runtime.attachments.Create(att); err != nil {
+		t.Fatal(err)
+	}
+	raw := "MIME-Version: 1.0\r\nContent-Type: text/plain\r\nContent-Disposition: attachment; filename=same.txt\r\n\r\none"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/messages/provider" || r.URL.Query().Get("format") != "raw" {
+			t.Error("wrong raw fallback", r.URL)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{"raw": base64.RawURLEncoding.EncodeToString([]byte(raw))})
+	}))
+	defer server.Close()
+	e := mailSync.NewEngine(nil, account.NewStore(db), folder.NewStore(db), ops.runtime.messages, ops.runtime.attachments)
+	e.SetGmailTokenSource(func(context.Context, string, bool) (string, error) { return "fixture", nil })
+	e.SetGmailClientFactory(func(src gmail.TokenSource) *gmail.Client { c := gmail.NewClient(src); c.BaseURL = server.URL; return c })
+	ops.runtime.syncEngine = e
+	got, _, err := ops.ReadAttachmentBytes("acc-1", msg.ID, att.ID)
+	if err != nil || string(got) != "one" {
+		t.Fatal("helper rejected Gmail raw cache key", string(got), err)
+	}
+	raw = "MIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=b\r\n\r\n--b\r\nContent-Type: text/plain\r\nContent-Disposition: attachment; filename=same.txt\r\n\r\none\r\n--b\r\nContent-Type: text/plain\r\nContent-Disposition: attachment; filename=same.txt\r\n\r\ntwo\r\n--b--\r\n"
+	if got, _, err := ops.ReadAttachmentBytes("acc-1", msg.ID, att.ID); err == nil {
+		t.Fatal("helper returned first of ambiguous payloads", string(got))
+	}
+	if _, err := db.Exec(`DELETE FROM gmail_message_refs WHERE message_id=?`, msg.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := ops.ReadAttachmentBytes("acc-1", msg.ID, att.ID); err == nil {
+		t.Fatal("unbound snapshot reached provider")
 	}
 }

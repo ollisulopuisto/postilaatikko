@@ -446,8 +446,8 @@ func (o *mailboxReadOperations) readAttachmentBytes(accountID, messageID, attach
 	if !errors.Is(err, gmail.ErrNotCapable) {
 		return content, att.ContentType, err
 	}
-	if msg.UID == 0 || int32(msg.UID) < 0 {
-		return nil, "", errors.New("snapshot attachment has no exact cached payload")
+	if err := o.runtime.messages.ValidateRawContentTarget(msg); err != nil {
+		return nil, "", err
 	}
 	if *raw == nil {
 		*raw, err = o.runtime.syncEngine.FetchRawMessage(ctx, accountID, msg.FolderID, msg.UID)
@@ -455,7 +455,7 @@ func (o *mailboxReadOperations) readAttachmentBytes(accountID, messageID, attach
 			return nil, "", err
 		}
 	}
-	content, err = email.NewAttachmentDownloader("").ExtractAttachmentContent(*raw, att.Filename)
+	content, err = email.NewAttachmentDownloader("").ExtractUniqueAttachmentContent(*raw, att.Filename)
 	return content, att.ContentType, err
 }
 
