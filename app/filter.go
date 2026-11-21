@@ -45,9 +45,11 @@ func (a *App) CreateFilterRule(rule *mailfilter.Rule) error {
 	}
 	// New rules go to the end of the priority list.
 	if rule.OrderIndex == 0 {
-		if existing, listErr := a.filterStore.List(); listErr == nil {
-			rule.OrderIndex = len(existing)
+		existing, err := a.filterStore.List()
+		if err != nil {
+			return err
 		}
+		rule.OrderIndex = mailfilter.AppendOrderIndex(existing)
 	}
 	return a.filterStore.Create(rule)
 }
@@ -217,7 +219,7 @@ func (a *App) applyMatchedFilterRule(rule *mailfilter.Rule, msg *message.Message
 	if err != nil || current == nil || !current.Enabled || !current.UpdatedAt.Equal(rule.UpdatedAt) {
 		return
 	}
-	if _, err := a.applyFilterActions(current, []string{msg.ID}, msg); err != nil {
+	if _, err := a.applyFilterActionsWithValidation(current, []string{msg.ID}, true, msg); err != nil {
 		log := logging.WithComponent("app.filters")
 		log.Warn().Err(err).Str("ruleID", rule.ID).Msg("Filter actions failed")
 	}
@@ -228,6 +230,9 @@ func (a *App) applyMatchedFilterRule(rule *mailfilter.Rule, msg *message.Message
 // a user's newly relocated message based on an old sync callback. Trash is
 // always a folder move, never the permanent-delete behavior of the UI command.
 func (a *App) applyFilterActions(rule *mailfilter.Rule, ids []string, snapshots ...*message.Message) (int, error) {
+	return a.applyFilterActionsWithValidation(rule, ids, false, snapshots...)
+}
+func (a *App) applyFilterActionsWithValidation(rule *mailfilter.Rule, ids []string, automatic bool, snapshots ...*message.Message) (int, error) {
 	a.filterExecutionMu.RLock()
 	defer a.filterExecutionMu.RUnlock()
 	if rule != nil && a.filterStore != nil {
@@ -270,6 +275,15 @@ func (a *App) applyFilterActions(rule *mailfilter.Rule, ids []string, snapshots 
 				return fmt.Errorf("filter batch interrupted by shutdown")
 			}
 			_, _, _, err := a.runMoveMutationWithMode([]string{snapshot.ID}, "filter:"+rule.ID, true, func() (bool, string, error) {
+				if automatic {
+					live, err := a.filterStore.Get(rule.ID)
+					if err != nil {
+						return false, "", err
+					}
+					if live == nil || !live.Enabled || !live.UpdatedAt.Equal(rule.UpdatedAt) || !mailfilter.SameRuleConfiguration(live, rule) {
+						return false, "", nil
+					}
+				}
 				current, err := a.messageStore.GetByIDs([]string{snapshot.ID})
 				if err != nil {
 					return false, "", err

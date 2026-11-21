@@ -1071,6 +1071,9 @@ func (a *App) flushMoveDestinationSync(key, accountID, destFolderID string) {
 		}
 	}
 
+	if syncErr != nil {
+		a.retainMoveRecovery(destFolderID, ids)
+	}
 	for _, waiter := range waiters {
 		waiter.Complete(syncErr)
 		if syncErr != nil {
@@ -2642,4 +2645,30 @@ func (a *App) copyToFolderCrossAccount(messageIDs []string, destFolderID string)
 		}
 	}
 	return firstErr
+}
+
+// Capture restart leftovers before any new move workers are launched.
+func (a *App) captureInterruptedMoveRecovery() error {
+	snapshot, err := a.messageStore.TempMoveSnapshot()
+	if err != nil {
+		return err
+	}
+	a.moveSyncMu.Lock()
+	defer a.moveSyncMu.Unlock()
+	a.moveRecoveryIDs = snapshot
+	return nil
+}
+func (a *App) retainMoveRecovery(folderID string, ids []string) {
+	a.moveSyncMu.Lock()
+	defer a.moveSyncMu.Unlock()
+	if a.moveRecoveryIDs == nil {
+		a.moveRecoveryIDs = map[string][]string{}
+	}
+	a.moveRecoveryIDs[folderID] = append(a.moveRecoveryIDs[folderID], ids...)
+}
+func (a *App) recoverInterruptedMoves(folderID string, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	return a.messageStore.RecoverTempMoves(folderID, ids)
 }

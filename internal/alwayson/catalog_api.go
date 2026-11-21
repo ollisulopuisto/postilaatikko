@@ -541,9 +541,11 @@ func (r *SyncRuntime) CreateFilterRule(rule *mailfilter.Rule) error {
 		return err
 	}
 	if rule.OrderIndex == 0 {
-		if existing, err := r.rules.List(); err == nil {
-			rule.OrderIndex = len(existing)
+		existing, err := r.rules.List()
+		if err != nil {
+			return err
 		}
+		rule.OrderIndex = mailfilter.AppendOrderIndex(existing)
 	}
 	return r.rules.Create(rule)
 }

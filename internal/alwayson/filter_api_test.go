@@ -36,6 +36,14 @@ func TestExistingFilterSafetyLimitAndCapturedListID(t *testing.T) {
 	if err := r.CreateFilterRule(rule); err != nil {
 		t.Fatal(err)
 	}
+	rule.OrderIndex = 50
+	if err := r.UpdateFilterRule(rule); err != nil {
+		t.Fatal(err)
+	}
+	appended := &mailfilter.Rule{ID: "append", Name: "Append", ActionMarkRead: true, FromContains: []string{"never-match"}}
+	if err := r.CreateFilterRule(appended); err != nil || appended.OrderIndex != 51 {
+		t.Fatal("helper append precedes sparse rules", appended, err)
+	}
 	// Neither creating a rule nor previewing it is permission to change old mail.
 	n, err := r.PreviewFilterRule(rule)
 	if err != nil || n != 501 {

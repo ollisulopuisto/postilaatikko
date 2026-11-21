@@ -249,3 +249,35 @@ func TestRepairRejectsGmailAndChangedSourceWithoutTouchingEitherMessage(t *testi
 		t.Fatal("rejected source wrote backup")
 	}
 }
+
+func TestInterruptedMoveRecoveryRetainsAmbiguousAndRepairedState(t *testing.T) {
+	ms, db := setupThreadTestDB(t)
+	defer db.Close()
+	for i, id := range []string{"pending", "one", "two"} {
+		if err := ms.Create(&Message{ID: id, AccountID: "acc-1", FolderID: "fld-1", UID: uint32(i + 1), MessageID: "same@test", Date: time.Now(), ReceivedAt: time.Now()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.Exec(`UPDATE messages SET uid=-1 WHERE id='pending'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := ms.RecoverTempMoves("fld-1", []string{"pending"}); err == nil {
+		t.Fatal("ambiguous recovery allowed")
+	}
+	if got, err := ms.Get("pending"); err != nil || got == nil {
+		t.Fatal("ambiguous identity lost", err)
+	}
+	store := NewAttachmentStore(db)
+	if _, err := store.RepairFromMIME("acc-1", "pending", "snapshot", []RepairPart{{Metadata: Attachment{ID: "recovered-exact", MessageID: "pending", Filename: "one", Size: 3}, Payload: []byte("one")}}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`DELETE FROM messages WHERE id IN ('one','two')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := ms.RecoverTempMoves("fld-1", []string{"pending"}); err == nil {
+		t.Fatal("recovery deleted repair-protected placeholder")
+	}
+	if got, err := ms.Get("pending"); err != nil || got == nil {
+		t.Fatal("repair owner lost", err)
+	}
+}

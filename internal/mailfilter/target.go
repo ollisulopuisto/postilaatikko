@@ -46,7 +46,7 @@ func SaveVerifiedRule(ctx context.Context, store TargetRuleStore, rule *Rule, ex
 	normalized := normalizedRuleConfiguration(rule)
 	rule = &normalized
 	if expected == nil && rule.OrderIndex == 0 {
-		rule.OrderIndex = len(before)
+		rule.OrderIndex = AppendOrderIndex(before)
 		if existing != nil {
 			rule.OrderIndex = existing.OrderIndex
 		}
@@ -108,4 +108,15 @@ func normalizedRuleConfiguration(rule *Rule) Rule {
 		}
 	}
 	return r
+}
+
+// AppendOrderIndex keeps a newly created rule after sparse existing priorities.
+func AppendOrderIndex(rules []*Rule) int {
+	next := 0
+	for _, r := range rules {
+		if r != nil && r.OrderIndex >= next {
+			next = r.OrderIndex + 1
+		}
+	}
+	return next
 }

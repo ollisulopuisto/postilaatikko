@@ -95,6 +95,10 @@ func (a *App) startBackgroundSync(ctx context.Context) {
 		return
 	}
 	log := logging.WithComponent("app")
+	// Snapshot only after acquiring exclusive ownership and before workers.
+	if err := a.captureInterruptedMoveRecovery(); err != nil {
+		log.Warn().Err(err).Msg("Could not load interrupted move recovery")
+	}
 
 	// Initialize the sync scheduler for periodic polling
 	a.syncScheduler = sync.NewScheduler(a.syncEngine, a.accountStore, a.folderStore)
@@ -107,6 +111,20 @@ func (a *App) startBackgroundSync(ctx context.Context) {
 
 	// Set callback for sync completion (so frontend clears progress)
 	a.syncScheduler.SetSyncCompletedCallback(func(accountID, folderID string, err error) {
+		if err == nil {
+			a.moveSyncMu.Lock()
+			recovering := len(a.moveRecoveryIDs[folderID]) > 0
+			a.moveSyncMu.Unlock()
+			if recovering {
+				a.syncMu.Lock()
+				delete(a.syncLastRequest, accountID+":"+folderID)
+				a.syncMu.Unlock()
+				if recoveryErr := a.SyncFolder(accountID, folderID); recoveryErr != nil {
+					log.Warn().Err(recoveryErr).Msg("Interrupted moves still require recovery")
+					err = recoveryErr
+				}
+			}
+		}
 		if err != nil {
 			wailsRuntime.EventsEmit(a.ctx, "folder:syncError", map[string]interface{}{
 				"accountId": accountID,

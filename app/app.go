@@ -435,6 +435,7 @@ type App struct {
 	moveSyncTimers     map[string]*time.Timer
 	moveSyncWaiters    map[string][]*undo.MoveCompletion
 	moveSyncMessageIDs map[string][]string
+	moveRecoveryIDs    map[string][]string
 
 	// Suppresses the IDLE echo of our own flag writes: when Postilaatikko STOREs a flag
 	// change it stamps the account here, so the incoming IDLE FETCH echo of that
