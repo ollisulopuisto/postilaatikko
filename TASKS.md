@@ -11,6 +11,12 @@
 5. Update `ROADMAP.md` when product scope, priority, or durable decisions change. Do not rewrite its priorities just to claim a task.
 6. A task may be split into smaller tasks when investigation reveals separate backend, UI, and migration work. Record dependencies before another model claims a dependent task.
 
+## Triage tab strip overflow
+
+- Status: Review. Owner: Instinct. Branch: `agent/triage-tab-strip-wrap`.
+- Owner report 2026-11-22: the four triage tabs (Kaikki / Odottaa minua / Lukemattomat / Myöhemmin) overflow the narrow message-list pane and show a horizontal scrollbar. Both tab strips (folder pane and message list pane) now wrap to a second row instead of scrolling; labels stay full, nothing is truncated or renamed.
+- Browser regression mounts the real App in Finnish and asserts the strip fits at 320/480/640/1280 px. It fails on main (scrollWidth 351 > clientWidth 235 at 320 px) and passes with the wrap.
+- No backend, schema, i18n string or native menu change. No native macOS run; Chromium only.
 ## Reading pane drops to "select a conversation" on row actions
 
 - Status: Review. Owner: Instinct. Branch: `agent/viewer-deselect-on-actions`.
