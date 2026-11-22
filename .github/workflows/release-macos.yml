@@ -101,6 +101,9 @@ jobs:
             --info build/bin/postilaatikko.app/Contents/Info.plist \
             --entitlements "$RUNNER_TEMP/packaged-entitlements.xml"
 
+      - name: Verify packaged URL schemes stay registrable
+        run: python3 scripts/check_url_schemes.py build/bin/postilaatikko.app/Contents/Info.plist
+
       - name: Notarize and staple app
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
