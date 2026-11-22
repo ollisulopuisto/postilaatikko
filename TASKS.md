@@ -11,6 +11,15 @@
 5. Update `ROADMAP.md` when product scope, priority, or durable decisions change. Do not rewrite its priorities just to claim a task.
 6. A task may be split into smaller tasks when investigation reveals separate backend, UI, and migration work. Record dependencies before another model claims a dependent task.
 
+## Blank gaps in the message list from bad header dates
+
+- Status: Review. Owner: Instinct. Branch: `agent/list-blank-rows`.
+- Owner report 2026-11-22: Olli reported blank row-height gaps under the Eilen/Marraskuu day-group headers while old mail was loading. Investigation pinned a render-kill in the same area: one conversation with an empty or unparsable latestDate made formatRelativeDate throw "Invalid time value" inside the row render; on the initial render the whole list died (zero rows mounted) and on a sync reload the render broke mid-pass, leaving inconsistent group headers and rows. date-fns format() throws on invalid Dates; dayGroupFor had the same unguarded path through Intl.DateTimeFormat.
+- Fix: formatRelativeDate/formatMessageDate/formatFullDate return an empty string for invalid dates, and dayGroupFor buckets them with the oldest mail. Rows always render their subject/sender/snippet; the date slot just stays empty for a bad header date.
+- Regression: a node test proves dayGroupFor no longer throws for invalid input; a browser test mounts the real MessageList (Finnish, chronological grouping) with a corrupt conversation and asserts all 50 rows render on load and after a sync reload with zero "Invalid time value" page errors. Both fail on main (unit test throws; browser test: zero rows mount) and pass with the fix.
+- Olli confirms the gaps repainted after scrolling or clicking the banner: a transient broken render pass, which is exactly how a mid-render throw presents. Caveat: his exact blank-band visual was not reproduced on Linux Chromium (his build runs WKWebView), and what produced an invalid latestDate in his session is unconfirmed (the backend serializes missing dates as valid year-1 ISO). A different trigger may remain; investigation continues.
+- No backend, schema or i18n string change. Chromium only; no native macOS run.
+
 ## Needs me in every folder
 
 - NEEDS-ME-001: Review. Instinct, `agent/needs-me-every-folder`, `/tmp/pl-needs-me`. Approved option 1: unread OR manual Later within the selected folder, with All folders aggregate across enabled accounts. Exclude mapped/system Spam, Sent, Drafts, Archive, Trash, All Mail and hidden folders/descendants. Existing profiles retain saved navigation; new profiles start All folders with Needs me selected.

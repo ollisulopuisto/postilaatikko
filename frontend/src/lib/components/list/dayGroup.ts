@@ -53,7 +53,10 @@ function monthFormatterFor(lang: string): Intl.DateTimeFormat {
 }
 
 export function dayGroupFor(dateValue: Date | string | undefined, lang: string, labels: DayGroupLabels): DayGroup {
-  const date = dateValue ? new Date(dateValue) : new Date(0)
+  let date = dateValue ? new Date(dateValue) : new Date(0)
+  // An unparsable header date (e.g. a half-synced old message) must not throw
+  // inside the list render; bucket it with the oldest mail instead.
+  if (Number.isNaN(date.getTime())) date = new Date(0)
   const today = new Date()
   const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
   const startDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
