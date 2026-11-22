@@ -27,10 +27,7 @@ VALID_ROLES = ('Editor', 'Viewer', 'Shell', 'None')
 REQUIRED_SCHEME = 'mailto'
 REQUIRED_ROLE = 'Editor'
 
-URLTYPES_BLOCK_RE = re.compile(
-    r'<key>\s*CFBundleURLTypes\s*</key>\s*<array>((?:\s*<dict>.*?</dict>)*)\s*</array>',
-    re.S)
-URLTYPE_DICT_RE = re.compile(r'<dict>(.*?)</dict>', re.S)
+URLTYPES_KEY_RE = re.compile(r'<key>\s*CFBundleURLTypes\s*</key>')
 ROLE_RE = re.compile(
     r'<key>\s*CFBundleTypeRole\s*</key>\s*<string>\s*(.*?)\s*</string>', re.S)
 SCHEMES_BLOCK_RE = re.compile(
@@ -83,14 +80,43 @@ def protocol_problems(doc):
     return problems + shared_problems(entries)
 
 
+def _urltype_dict_bodies(text):
+    """Dict bodies inside the CFBundleURLTypes array, or None when absent.
+
+    Index-based scan instead of a block regex: a pattern that repeats a
+    group around a lazy quantifier backtracks exponentially (py/redos).
+    The dicts never nest, so each ends at its first </dict>.
+    """
+    key = URLTYPES_KEY_RE.search(text)
+    if not key:
+        return None
+    pos = text.find('<array>', key.end())
+    if pos == -1:
+        return None
+    pos += len('<array>')
+    bodies = []
+    while True:
+        start = text.find('<dict>', pos)
+        array_close = text.find('</array>', pos)
+        if start == -1 or (array_close != -1 and array_close < start):
+            return bodies
+        end = text.find('</dict>', start)
+        if end == -1:
+            return bodies
+        bodies.append(text[start:end])
+        pos = end + len('</dict>')
+
+
 def plist_problems(raw):
     text = raw.decode('utf-8', errors='replace')
-    block = URLTYPES_BLOCK_RE.search(text)
-    if not block:
+    bodies = _urltype_dict_bodies(text)
+    if bodies is None:
         return ['CFBundleURLTypes is missing']
+    if not bodies:
+        return ['CFBundleURLTypes has no entries']
     entries = []
     problems = []
-    for body in URLTYPE_DICT_RE.findall(block.group(1)):
+    for body in bodies:
         role_match = ROLE_RE.search(body)
         role = role_match.group(1) if role_match else ''
         schemes_block = SCHEMES_BLOCK_RE.search(body)
