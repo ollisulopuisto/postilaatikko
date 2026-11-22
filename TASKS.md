@@ -11,6 +11,12 @@
 5. Update `ROADMAP.md` when product scope, priority, or durable decisions change. Do not rewrite its priorities just to claim a task.
 6. A task may be split into smaller tasks when investigation reveals separate backend, UI, and migration work. Record dependencies before another model claims a dependent task.
 
+## App not registrable as default mailto handler on macOS
+
+- Status: In progress. Owner: Instinct. Branch: `agent/mailto-handler-registration`.
+- Olli report 2026-11-23: Postilaatikko 2026.11.22.2 (DMG) still does not appear as a mailto handler on macOS.
+- Cause: wails.json's mailto protocol entry had no role, so the rendered Info.plist ships CFBundleTypeRole as an empty string; Apple documents the role as required for CFBundleURLTypes, and LaunchServices does not register a scheme whose role is missing/invalid. Fix: role "Editor" on the mailto protocol plus scripts/check_url_schemes.py, a CI guard that every protocol keeps a valid role and mailto stays registered. Runtime receipt of mailto was already wired in #275 (Mac OnUrlOpen).
+
 ## Triage tab strip overflow
 
 - Status: Review. Owner: Instinct. Branch: `agent/triage-tab-strip-wrap`.

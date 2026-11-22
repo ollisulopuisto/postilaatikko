@@ -15,7 +15,8 @@
     "protocols": [
       {
         "scheme": "mailto",
-        "description": "Email"
+        "description": "Email",
+        "role": "Editor"
       }
     ]
   },
