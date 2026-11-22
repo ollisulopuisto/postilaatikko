@@ -55,7 +55,7 @@
   import { laterQueue as readLaterQueue, undoLaterChange } from '$lib/stores/later.svelte'
   import { getLayoutMode, hideViewer } from '$lib/stores/layout.svelte'
   import { isDialogGuardActive, onDialogGuardChange } from '$lib/stores/dialogGuard'
-  import { captureAutoSelectNext, findAutoSelectNext, flattenVisibleInboxGroups } from './autoSelectNext'
+  import { captureAutoSelectNext, findAutoSelectNext, flattenVisibleInboxGroups, openConversationAffected, threadIdsForMessageIds } from './autoSelectNext'
   import { applyReadDelta } from './readCounts'
   import { removeServerSearchResults, restoreSearchResults, serverSearchResultIdentity, ServerSearchRequestState, updateServerSearchCounts } from './serverSearchResults'
   import { publishUndoOperationCompleted, publishUndoOperationCreated, UNDO_OPERATION_COMPLETED_EVENT, UNDO_OPERATION_CREATED_EVENT, type UndoOperationCreatedDetail } from './undoMutationEvents'
@@ -72,7 +72,7 @@
     onConversationSelect?: (threadId: string, folderId: string, accountId: string, subject?: string) => void
     onOpenInTab?: (accountId: string, folderId: string, threadId: string, folderType: string, subject: string) => void
     onReply?: (mode: 'reply' | 'reply-all' | 'forward', messageId: string) => void
-    onRowActionComplete?: (autoSelectNext: boolean) => void
+    onRowActionComplete?: (autoSelectNext: boolean, openAffected?: boolean) => void
     onBulkMarkRead?: (messageIds: string[]) => void
     onBulkAction?: (actionId: string, options?: { permanent?: boolean }) => unknown
     enableCommandPalette?: boolean
@@ -2036,43 +2036,54 @@
     checkedThreadIds = newChecked
   }
 
-  export function handleActionComplete(autoSelectNext: boolean = false) {
+  /** Thread ids of the rendered rows containing the given message ids. */
+  export function threadIdsForMessages(messageIds: string[]): string[] {
+    return threadIdsForMessageIds(activeList, messageIds)
+  }
+
+  export function handleActionComplete(autoSelectNext: boolean = false, affectedThreadIds?: readonly string[], affectedMessageIds?: readonly string[]) {
     if (messageAnimations.isAnyAnimating()) {
       // Allow the exit animation to visibly conclude before the backend reload
       // removes the elements from the DOM.
       const release = messageAnimations.holdActive()
       setTimeout(() => {
         // Keep removed rows hidden until the replacement data has arrived.
-        void doHandleActionComplete(autoSelectNext).finally(release)
+        void doHandleActionComplete(autoSelectNext, affectedThreadIds, affectedMessageIds).finally(release)
       }, MESSAGE_EXIT_ANIM_DURATION_MS)
       return
     }
-    doHandleActionComplete(autoSelectNext)
+    doHandleActionComplete(autoSelectNext, affectedThreadIds, affectedMessageIds)
   }
 
-  async function doHandleActionComplete(autoSelectNext: boolean = false) {
+  async function doHandleActionComplete(autoSelectNext: boolean = false, affectedThreadIds?: readonly string[], affectedMessageIds?: readonly string[]) {
+    // The viewer closes only when the action removed the conversation it is
+    // showing; actions on other rows leave the open conversation alone.
+    // Callers holding backend message ids (the context menu) get them mapped
+    // to the rendered rows' thread ids here.
+    const affected = affectedThreadIds ?? (affectedMessageIds ? threadIdsForMessageIds(activeList, affectedMessageIds) : undefined)
+    const openAffected = autoSelectNext && openConversationAffected(selectedThreadId, affected)
     // Capture before clearing the viewer: pendingReadOnLeave may immediately
     // change the origin to read while this action reloads the list.
-    const selection = autoSelectNext
+    const selection = openAffected
       ? pendingServerActionSelection ?? captureAutoSelectNext(activeList, selectedThreadId, checkedThreadIds)
       : null
     pendingServerActionSelection = null
     releaseFrozenOrder()
     // The backend action has completed. Invalidate the current result before
     // the viewer is cleared, even if runtime event delivery is delayed.
-    if (autoSelectNext && isSearchMode && selection?.originThreadId) {
+    if (openAffected && isSearchMode && selection?.originThreadId) {
       const results = searchSource === 'server' ? serverSearchResults : searchResults
       const origin = results.find(result => result.threadId === selection.originThreadId)
       if (origin) invalidateActiveSearchResults([], [serverSearchResultIdentity(origin)])
     }
-    onRowActionComplete?.(autoSelectNext)
+    onRowActionComplete?.(autoSelectNext, openAffected)
     const scrollTop = listContainerRef?.scrollTop ?? 0
 
     // If in search mode, refresh search results instead of conversations
     if (isSearchMode) {
       // Mutations update the active result cache directly. They never issue a
       // visible local or IMAP search; explicit Refresh owns reconciliation.
-      finishAutoSelectAfterSearchAction(selection, autoSelectNext, scrollTop)
+      finishAutoSelectAfterSearchAction(selection, openAffected, scrollTop)
       return
     }
 
@@ -2081,32 +2092,39 @@
     const totalLoaded = Math.max(conversations.length, PAGE_SIZE)
     offset = 0
 
-    await loadConversations(totalLoaded, 'replace').then(() => {
-      // Restore scroll position
-      if (listContainerRef) {
-        requestAnimationFrame(() => {
-          listContainerRef!.scrollTop = scrollTop
-        })
-      }
+    try {
+      await loadConversations(totalLoaded, 'replace')
+    } catch (err) {
+      // The action succeeded but the reload failed. Without this catch the
+      // rejection went unhandled and the viewer stayed on the empty state
+      // with no feedback and no successor selection.
+      console.error('Post-action list reload failed:', err)
+      toasts.error($_('toast.failedToRefreshList'))
+      return
+    }
+    // Restore scroll position
+    if (listContainerRef) {
+      requestAnimationFrame(() => {
+        listContainerRef!.scrollTop = scrollTop
+      })
+    }
 
-      // Auto-select next message if requested (for delete/archive/spam actions)
-      // After reload, the same index now points to what was the "next" message
-      if (autoSelectNext) {
-        const isNarrow = getLayoutMode() === 'narrow'
-        // The previous thread was removed. Keep the list anchor and viewer
-        // in agreement when there is no eligible visible successor.
-        focusConversation(undefined)
-        if (isNarrow) {
-          hideViewer()
-        }
-        const conv = selection && findAutoSelectNext(activeList, selection)
-        if (conv) {
-          const newIndex = activeList.findIndex(item => item.threadId === conv.threadId)
-          if (newIndex >= 0) selectAutoSelectedConversation(conv as any, newIndex, isNarrow)
-        }
+    // Auto-select next message when the action closed the open conversation.
+    // After reload, the same index now points to what was the "next" message
+    if (openAffected) {
+      const isNarrow = getLayoutMode() === 'narrow'
+      // The previous thread was removed. Keep the list anchor and viewer
+      // in agreement when there is no eligible visible successor.
+      focusConversation(undefined)
+      if (isNarrow) {
+        hideViewer()
       }
-
-    })
+      const conv = selection && findAutoSelectNext(activeList, selection)
+      if (conv) {
+        const newIndex = activeList.findIndex(item => item.threadId === conv.threadId)
+        if (newIndex >= 0) selectAutoSelectedConversation(conv as any, newIndex, isNarrow)
+      }
+    }
   }
 
   function finishAutoSelectAfterSearchAction(
@@ -2690,8 +2708,9 @@
           publishUndoOperationCreated(operationID, messageIds, 'move-to-inbox')
           let toastId = ''
           toastId = toasts.success($_('toast.movedTo', { values: { folder: $_('sidebar.inbox') } }), operationID ? [{ label: $_('common.undo'), onClick: () => handleUndo(toastId, operationID) }] : [])
+          const affected = threadIdsForMessageIds(activeList, messageIds)
           clearChecked()
-          handleActionComplete(true)
+          handleActionComplete(true, affected)
         } finally {
           moveMutationInFlight = false
           messageAnimations.settleRemoval(messageIds)
@@ -2767,7 +2786,7 @@
       const execution = await runMessageMutation(messageIds, async () => {
         await DeletePermanently(messageIds)
         toasts.success($_('toast.permanentlyDeleted'))
-        handleActionComplete(true)
+        handleActionComplete(true, threadIdsForMessageIds(activeList, messageIds))
         clearChecked()
       })
       if (!execution.started) return
@@ -2788,7 +2807,7 @@
         await EmptyTrash(accountId, folderId)
       }
       toasts.success($_('toast.trashEmptied'))
-      handleActionComplete(true)
+      handleActionComplete(true, activeList.map(row => row.threadId))
       clearChecked()
     } catch (err) {
       console.error('Empty trash failed:', err)
@@ -2817,7 +2836,7 @@
         let toastId = ''
         const actions = operationID ? [{ label: $_('common.undo'), onClick: () => handleUndo(toastId, operationID) }] : []
         toastId = toasts.success(toastMsg, actions)
-        handleActionComplete(true)
+        handleActionComplete(true, threadIdsForMessageIds(activeList, messageIds))
         clearChecked()
       } finally {
         moveMutationInFlight = false

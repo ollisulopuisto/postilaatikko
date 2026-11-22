@@ -11,6 +11,14 @@
 5. Update `ROADMAP.md` when product scope, priority, or durable decisions change. Do not rewrite its priorities just to claim a task.
 6. A task may be split into smaller tasks when investigation reveals separate backend, UI, and migration work. Record dependencies before another model claims a dependent task.
 
+## Reading pane drops to "select a conversation" on row actions
+
+- Status: Review. Owner: Instinct. Branch: `agent/viewer-deselect-on-actions`.
+- Olli report 2026-11-22: the reading pane falls back to "Valitse keskustelu lukeaksesi sen" quite often, as if everything deselects.
+- Causes found: every archive/done/trash/spam/move completion cleared the open viewer unconditionally (App assumed the action had removed the open conversation, but hover icons and bulk actions target other rows); auto-select-next returned null when the origin was the last row or no later unread row existed, leaving the empty pane; a failed post-action reload was an unhandled rejection that stranded the empty pane silently.
+- Fix: actions pass their target thread ids (or message ids, resolved against the rendered rows) through handleActionComplete/onRowActionComplete; the viewer closes and auto-select advances only when the open conversation was among them. Covers hover quick-actions, bulk handlers, context-menu removals and empty-trash in both App and MailWindowApp; the SnoozeDialog completion path keeps the legacy always-close behavior for now. findAutoSelectNext falls back to the nearest remaining row when no preferred successor exists. A failed reload now shows a toast instead of a silent empty pane.
+- Node tests cover the successor fallback, the close-only-when-affected policy and message→thread mapping; two structural tests updated for the new callback signature. Frontend check, lint, build and 1155 tests pass (29 browser-gated skips). No backend, schema or i18n-string change beyond one new EN/FI toast; no native macOS run.
+
 ## Blank gaps in the message list from bad header dates
 
 - Status: Review. Owner: Instinct. Branch: `agent/list-blank-rows`.

@@ -652,6 +652,7 @@
     "failedToMarkAsSpam": "Failed to mark as spam.",
     "failedToMarkAsNotSpam": "Failed to mark as not spam.",
     "failedToMove": "Failed to move.",
+    "failedToRefreshList": "Failed to refresh the message list.",
     "failedToCopy": "Failed to copy.",
     "failedToUpdateStar": "Failed to update star.",
     "failedToUpdateReadStatus": "Failed to update read status.",
