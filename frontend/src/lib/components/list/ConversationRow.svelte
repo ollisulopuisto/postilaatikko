@@ -67,7 +67,7 @@
     onSelect: (e?: MouseEvent) => void
     onCheck: (checked: boolean, event?: MouseEvent) => void
     onClearSelection: () => void  // Clear multi-select when right-clicking unchecked row
-    onActionComplete?: (autoSelectNext?: boolean) => void
+    onActionComplete?: (autoSelectNext?: boolean, actedThreadIds?: string[], actedMessageIds?: string[]) => void
     onReply?: (mode: 'reply' | 'reply-all' | 'forward', messageId: string) => void
     onDelete?: (messageIds: string[]) => void  // Swipe-left delete (routes through MessageList.requestDelete)
     onOpenInTab?: (accountId: string, folderId: string, threadId: string, folderType: string, subject: string) => void
@@ -270,7 +270,7 @@
           publishUndoOperationCreated(operationID, messageIds, 'remove-from-inbox')
           let toastId = ''
           toastId = toasts.success($_('toast.archived'), operationID ? [{ label: $_('common.undo'), onClick: () => handleUndo(toastId, operationID) }] : [])
-          onActionComplete?.(true)
+          onActionComplete?.(true, [conversation.threadId])
         } finally {
           moveMutationInFlight = false
           messageAnimations.settleRemoval(ownMessageIds)

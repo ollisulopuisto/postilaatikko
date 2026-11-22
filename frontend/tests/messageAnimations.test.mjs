@@ -113,7 +113,7 @@ test('Trash quick-delete waits for confirmation without hiding its row', async (
   assert.match(row, /if \(folderType !== 'trash'\) messageAnimations.startRemoval/)
   const list = await readFile(new URL('../src/lib/components/list/MessageList.svelte', import.meta.url), 'utf8')
   assert.doesNotMatch(list, /messageAnimations.clear\(\)/)
-  assert.match(list, /doHandleActionComplete\(autoSelectNext\).finally\(release\)/)
+  assert.match(list, /doHandleActionComplete\(autoSelectNext, affectedThreadIds, affectedMessageIds\).finally\(release\)/)
 })
 
 

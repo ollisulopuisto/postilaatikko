@@ -180,7 +180,7 @@
         publishUndoOperationCompleted(operation)
         refresh()
       }) }])
-      list?.handleActionComplete(true)
+      list?.handleActionComplete(true, list?.threadIdsForMessages(ids))
     }))
   }
   async function archiveAndMarkRead(ids: string[]) {
@@ -210,8 +210,9 @@
         refresh()
       }) }])
       if (result.readFailed) toasts.error($_('toast.failedToUpdateReadStatus'))
+      const affected = list?.threadIdsForMessages(ids)
       list?.clearChecked()
-      list?.handleActionComplete(true)
+      list?.handleActionComplete(true, affected)
     }))
   }
   async function bulkAction(id: string, options?: { permanent?: boolean }, menuIds?: string[]) {
@@ -411,7 +412,7 @@
         isFocused={active && mailActive && getFocusedPane() === 'messageList'} onConversationSelect={select} onOpenInTab={(accountId, folderId, threadId, folderType, subject) => onOpenInTab?.({ ...windowState.scope, threadId, threadAccountId: accountId, threadFolderId: folderId, folderType, threadSubject: subject })} onReply={reply}
         onAllMailSearchChange={value => searchActive = value} onWidenSearch={openAllMail}
         onSearchQueryChange={searchQuery => onScopeChange?.({ ...windowState.scope, searchQuery })}
-        onRowActionComplete={auto => { if (auto) windowState = { ...windowState, thread: null } }}
+        onRowActionComplete={(auto, openAffected) => { if (auto && openAffected !== false) windowState = { ...windowState, thread: null } }}
         onBulkMarkRead={ids => void run(() => MarkAsRead(ids))} onBulkAction={bulkAction} enableCommandPalette={false} />
     </section>
     {/if}

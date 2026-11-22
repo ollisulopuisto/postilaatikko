@@ -54,7 +54,7 @@
     folderType: string
     isStarred: boolean
     isRead: boolean
-    onActionComplete?: (autoSelectNext?: boolean) => void
+    onActionComplete?: (autoSelectNext?: boolean, actedThreadIds?: string[], actedMessageIds?: string[]) => void
     onReply?: (mode: 'reply' | 'reply-all' | 'forward', messageId: string) => void
     onOpenChange?: (open: boolean) => void
     children?: Snippet
@@ -224,7 +224,7 @@
           onClick: () => { void UndoOperation(result.operationId).catch(() => toasts.error($_('toast.undoFailed'))) },
         }] : undefined)
       }
-      onActionComplete?.(true)
+      onActionComplete?.(true, undefined, messageIds)
     } catch (err) { toasts.error(`${$_('snooze.failed')}: ${String(err)}`) }
   }
 
@@ -256,7 +256,7 @@
         const result = await MoveToInboxWithUndo(targetIds)
         if (result.coalesced) return
         showTargetedUndoToast($_('toast.movedTo', { values: { folder: $_('sidebar.inbox') } }), result.operationId, 'move-to-inbox')
-        onActionComplete?.(true)
+        onActionComplete?.(true, undefined, messageIds)
       })
     } catch (err) {
       console.error('Move to inbox failed:', err)
@@ -271,7 +271,7 @@
         const result = await ArchiveWithUndo(targetIds)
         if (result.coalesced) return
         showTargetedUndoToast($_('toast.archived'), result.operationId, 'archive')
-        onActionComplete?.(true)
+        onActionComplete?.(true, undefined, messageIds)
       })
     } catch (err) {
       console.error('Archive failed:', err)
@@ -292,12 +292,12 @@
           await MarkAsRead(targetIds)
         } catch (err) {
           showTargetedUndoToast($_('toast.archived'), result.operationId, 'archive')
-          onActionComplete?.(true)
+          onActionComplete?.(true, undefined, messageIds)
           throw err
         }
 
         showTargetedUndoToast($_('toast.archived'), result.operationId, 'archive')
-        onActionComplete?.(true)
+        onActionComplete?.(true, undefined, messageIds)
       })
     } catch (err) {
       console.error('Archive and mark read failed:', err)
@@ -316,7 +316,7 @@
           if (result.coalesced) return
           const toastMsg = result.movedToTrash ? $_('toast.movedToTrash') : $_('toast.deletedFromFolder')
           showTargetedUndoToast(toastMsg, result.operationId, 'trash', result.movedToTrash)
-          onActionComplete?.(true)
+          onActionComplete?.(true, undefined, messageIds)
         })
       } catch (err) {
         console.error('Delete failed:', err)
@@ -332,7 +332,7 @@
         await DeletePermanently(targetIds)
         toasts.success($_('toast.permanentlyDeleted'))
         showDeleteConfirm = false
-        onActionComplete?.(true)
+        onActionComplete?.(true, undefined, messageIds)
       })
     } catch (err) {
       console.error('Permanent delete failed:', err)
@@ -350,7 +350,7 @@
           const result = await MarkAsNotSpamWithUndo(targetIds)
           if (result.coalesced) return
           showTargetedUndoToast($_('toast.markedAsNotSpam'), result.operationId, 'mark-as-not-spam')
-          onActionComplete?.(true)
+          onActionComplete?.(true, undefined, messageIds)
           return
         }
         // Otherwise, mark as spam
@@ -358,7 +358,7 @@
         if (result.coalesced) return
         const toastMsg = result.movedToSpam ? $_('toast.markedAsSpam') : $_('toast.deletedFromFolder')
         showTargetedUndoToast(toastMsg, result.operationId, 'mark-as-spam', result.movedToSpam)
-        onActionComplete?.(true)
+        onActionComplete?.(true, undefined, messageIds)
       })
     } catch (err) {
       console.error('Spam toggle failed:', err)
@@ -456,7 +456,7 @@
         const result = await MoveToFolderWithUndo(targetIds, destFolderId)
         if (result.coalesced) return
         showTargetedUndoToast($_('toast.movedTo', { values: { folder: folderName } }), result.operationId, 'move-to-folder')
-        onActionComplete?.(true)
+        onActionComplete?.(true, undefined, messageIds)
       })
     } catch (err) {
       console.error('Move failed:', err)

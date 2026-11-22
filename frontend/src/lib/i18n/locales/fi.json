@@ -652,6 +652,7 @@
     "failedToMarkAsSpam": "Roskapostiksi merkitseminen epäonnistui.",
     "failedToMarkAsNotSpam": "Ei-roskapostiksi merkitseminen epäonnistui.",
     "failedToMove": "Siirtäminen epäonnistui.",
+    "failedToRefreshList": "Viestilistan päivitys epäonnistui.",
     "failedToCopy": "Kopiointi epäonnistui.",
     "failedToUpdateStar": "Tähden päivittäminen epäonnistui.",
     "failedToUpdateReadStatus": "Lukutilan päivittäminen epäonnistui.",

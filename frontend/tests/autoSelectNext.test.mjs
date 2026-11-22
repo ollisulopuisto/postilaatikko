@@ -11,7 +11,7 @@ async function loadSelection() {
   return import(`data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`)
 }
 
-const { captureAutoSelectNext, findAutoSelectNext, flattenVisibleInboxGroups } = await loadSelection()
+const { captureAutoSelectNext, findAutoSelectNext, flattenVisibleInboxGroups, openConversationAffected, threadIdsForMessageIds } = await loadSelection()
 const rows = (...values) => values.map(([threadId, unreadCount]) => ({ threadId, unreadCount }))
 
 test('unread A skips read rows and opens the next visible unread row', () => {
@@ -26,9 +26,29 @@ test('unread origin remains preferred after pendingReadOnLeave changes it to rea
   assert.equal(findAutoSelectNext(rows(['A', 0], ['B', 0], ['C', 1]), snapshot)?.threadId, 'C')
 })
 
-test('unread origin never falls back to a read row or wraps to the top', () => {
+test('unread origin falls back to the nearest row when no later unread row exists', () => {
   const snapshot = captureAutoSelectNext(rows(['A', 1], ['B', 0], ['C', 0]), 'A', new Set())
-  assert.equal(findAutoSelectNext(rows(['B', 0], ['C', 0]), snapshot), null)
+  assert.equal(findAutoSelectNext(rows(['B', 0], ['C', 0]), snapshot)?.threadId, 'B')
+})
+
+test('removing the last row selects the new last row instead of nothing', () => {
+  const snapshot = captureAutoSelectNext(rows(['A', 0], ['B', 0], ['C', 1]), 'C', new Set())
+  assert.equal(findAutoSelectNext(rows(['A', 0], ['B', 0]), snapshot)?.threadId, 'B')
+})
+
+test('removing the last unread row falls back to the nearest remaining row', () => {
+  const snapshot = captureAutoSelectNext(rows(['A', 1], ['B', 0], ['C', 1]), 'C', new Set())
+  assert.equal(findAutoSelectNext(rows(['A', 1], ['B', 0]), snapshot)?.threadId, 'B')
+})
+
+test('an empty list after the action still yields no selection', () => {
+  const snapshot = captureAutoSelectNext(rows(['A', 1]), 'A', new Set())
+  assert.equal(findAutoSelectNext([], snapshot), null)
+})
+
+test('an unknown origin index still yields no selection', () => {
+  const snapshot = { originThreadId: 'missing', index: -1, preferUnread: false }
+  assert.equal(findAutoSelectNext(rows(['A', 0]), snapshot), null)
 })
 
 test('a read origin retains ordinary next-row selection', () => {
@@ -55,4 +75,26 @@ test('collapsed groups and card limits are excluded from the rendered category o
 test('search results use the same visual order and unread preference', () => {
   const snapshot = captureAutoSelectNext(rows(['A', 1], ['B', 0], ['C', 1]), 'A', new Set())
   assert.equal(findAutoSelectNext(rows(['B', 0], ['C', 1]), snapshot)?.threadId, 'C')
+})
+
+test('openConversationAffected closes the viewer only for the acted conversation', () => {
+  assert.equal(openConversationAffected('A', ['A']), true)
+  assert.equal(openConversationAffected('A', ['B', 'C']), false)
+  assert.equal(openConversationAffected('A', []), false)
+  // Callers that cannot name their targets keep the legacy always-close behavior.
+  assert.equal(openConversationAffected('A', undefined), true)
+  // Nothing open: there is no viewer to close.
+  assert.equal(openConversationAffected(null, ['A']), false)
+  assert.equal(openConversationAffected(null, undefined), false)
+})
+
+test('threadIdsForMessageIds maps message ids to their rows', () => {
+  const conversations = [
+    { threadId: 'T1', messageIds: ['m1', 'm2'] },
+    { threadId: 'T2', messages: [{ id: 'm3' }] },
+    { threadId: 'T3', messageIds: ['m4'] },
+  ]
+  assert.deepEqual(threadIdsForMessageIds(conversations, ['m2', 'm3']), ['T1', 'T2'])
+  assert.deepEqual(threadIdsForMessageIds(conversations, ['nope']), [])
+  assert.deepEqual(threadIdsForMessageIds(conversations, []), [])
 })

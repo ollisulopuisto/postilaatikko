@@ -2372,11 +2372,13 @@
     setFocusedPane(pane)
   }
 
-  function handleMessageListActionComplete(autoSelectNext: boolean) {
-    // Archive, Done, delete and spam remove the current conversation from the
-    // active folder. Clear the viewer before the list reloads so it cannot
-    // request that now-missing thread and render an empty "(No subject)" pane.
-    if (autoSelectNext) {
+  function handleMessageListActionComplete(autoSelectNext: boolean, openAffected: boolean = true) {
+    // Archive, Done, delete and spam remove their target conversations from
+    // the active folder. Clear the viewer only when the OPEN conversation was
+    // among them: it would otherwise request that now-missing thread and
+    // render an empty "(No subject)" pane. Actions on other rows leave the
+    // open conversation alone.
+    if (autoSelectNext && openAffected) {
       selectedThreadId = null
       selectedConversationFolderId = null
       selectedConversationAccountId = null
@@ -2494,8 +2496,9 @@
         const result = await ArchiveWithUndo(messageIds)
         if (result.coalesced) return
         showTargetedUndoToast($_('toast.archived'), result.operationId, messageIds, 'archive')
+        const affected = messageListRef?.threadIdsForMessages(messageIds)
         messageListRef?.clearChecked()
-        messageListRef?.handleActionComplete(true)
+        messageListRef?.handleActionComplete(true, affected)
       })
     } catch (err) {
       messageAnimations.finishRemoval(messageIds)
@@ -2526,8 +2529,9 @@
         }
         showTargetedUndoToast($_('toast.archived'), result.operationId, messageIds, 'archive')
         if (result.readFailed) addToast({ type: 'error', message: $_('toast.failedToUpdateReadStatus') })
+        const affected = messageListRef?.threadIdsForMessages(messageIds)
         messageListRef?.clearChecked()
-        messageListRef?.handleActionComplete(true)
+        messageListRef?.handleActionComplete(true, affected)
       })
     } catch (err) {
       messageAnimations.finishRemoval(messageIds)
@@ -2577,8 +2581,9 @@
           showTargetedUndoToast(toastMsg, result.operationId, messageIds, 'mark-as-spam', result.movedToSpam)
         }
 
+        const affected = messageListRef?.threadIdsForMessages(messageIds)
         messageListRef?.clearChecked()
-        messageListRef?.handleActionComplete(true)
+        messageListRef?.handleActionComplete(true, affected)
       })
     } catch (err) {
       messageAnimations.finishRemoval(messageIds)
