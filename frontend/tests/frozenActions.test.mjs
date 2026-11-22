@@ -108,6 +108,8 @@ test('Snooze undo completion cannot invalidate or advance the next active search
   const results = ['A', 'B', 'C'].map(threadId => ({ threadId }))
   const scope = { selectedThreadId: 'A', activeList: results, checkedThreadIds: new Set(), pendingServerActionSelection: null,
     affectedThreadIds: undefined,
+    affectedMessageIds: undefined,
+    threadIdsForMessageIds: () => [],
     openConversationAffected: (open, affected) => { if (!open) return false; if (!affected) return true; return affected.includes(open) },
     releaseFrozenOrder: () => {}, captureAutoSelectNext: (_, selected) => ({ originThreadId: selected }),
     isSearchMode: true, searchSource: 'local', searchResults: results, serverSearchResults: [],
