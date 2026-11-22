@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Archiving, deleting or moving conversations no longer closes the reading pane unless the open conversation was among them. Removing the open conversation now advances to the nearest remaining row instead of landing on the empty pane, and a failed list refresh after an action shows an error instead of a silent empty pane.
+
 - Standalone Gmail-filter consent now refuses to overwrite credentials replaced after its final account/grant validation.
 
 - Needs me shows unread conversations or manually marked Later conversations in the selected folder. An All folders destination excludes Spam, Sent, Drafts, Archive, Trash, All Mail and hidden folders across enabled accounts. Reading keeps Later marks; snoozed mail returns when due.
