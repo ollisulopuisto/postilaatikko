@@ -2,6 +2,13 @@ import { format, isToday, isYesterday, isThisWeek, isThisYear } from 'date-fns'
 import { get } from 'svelte/store'
 import { _ } from '$lib/i18n'
 
+// A missing or unparsable header date (seen while old mail is still syncing)
+// must never throw inside a render: date-fns format() raises RangeError on an
+// invalid Date, and one bad row would otherwise break the whole message list.
+function isValidDate(date: Date): boolean {
+  return date instanceof Date && !Number.isNaN(date.getTime())
+}
+
 /**
  * Format a date relative to now for message list display
  * - < 1 minute: "just now"
@@ -13,6 +20,7 @@ import { _ } from '$lib/i18n'
  * - Older: "Dec 15, 2023"
  */
 export function formatRelativeDate(date: Date): string {
+  if (!isValidDate(date)) return ''
   const t = get(_)
   const now = new Date()
   const diffMs = now.getTime() - date.getTime()
@@ -51,6 +59,7 @@ export function formatRelativeDate(date: Date): string {
  * Shows full date and time
  */
 export function formatMessageDate(date: Date): string {
+  if (!isValidDate(date)) return ''
   const t = get(_)
 
   if (isToday(date)) {
@@ -72,5 +81,6 @@ export function formatMessageDate(date: Date): string {
  * Format a date for full display (tooltips, etc.)
  */
 export function formatFullDate(date: Date): string {
+  if (!isValidDate(date)) return ''
   return format(date, 'EEEE, MMMM d, yyyy \'at\' h:mm:ss a')
 }

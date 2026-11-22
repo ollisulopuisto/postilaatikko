@@ -17,6 +17,14 @@
 - Owner report 2026-11-22: the four triage tabs (Kaikki / Odottaa minua / Lukemattomat / Myöhemmin) overflow the narrow message-list pane and show a horizontal scrollbar. Both tab strips (folder pane and message list pane) now wrap to a second row instead of scrolling; labels stay full, nothing is truncated or renamed.
 - Browser regression mounts the real App in Finnish and asserts the strip fits at 320/480/640/1280 px. It fails on main (scrollWidth 351 > clientWidth 235 at 320 px) and passes with the wrap.
 - No backend, schema, i18n string or native menu change. No native macOS run; Chromium only.
+## Blank gaps in the message list from bad header dates
+
+- Status: Review. Owner: Instinct. Branch: `agent/list-blank-rows`.
+- Owner report 2026-11-22: Olli reported blank row-height gaps under the Eilen/Marraskuu day-group headers while old mail was loading. Investigation pinned a render-kill in the same area: one conversation with an empty or unparsable latestDate made formatRelativeDate throw "Invalid time value" inside the row render; on the initial render the whole list died (zero rows mounted) and on a sync reload the render broke mid-pass, leaving inconsistent group headers and rows. date-fns format() throws on invalid Dates; dayGroupFor had the same unguarded path through Intl.DateTimeFormat.
+- Fix: formatRelativeDate/formatMessageDate/formatFullDate return an empty string for invalid dates, and dayGroupFor buckets them with the oldest mail. Rows always render their subject/sender/snippet; the date slot just stays empty for a bad header date.
+- Regression: a node test proves dayGroupFor no longer throws for invalid input; a browser test mounts the real MessageList (Finnish, chronological grouping) with a corrupt conversation and asserts all 50 rows render on load and after a sync reload with zero "Invalid time value" page errors. Both fail on main (unit test throws; browser test: zero rows mount) and pass with the fix.
+- Olli confirms the gaps repainted after scrolling or clicking the banner: a transient broken render pass, which is exactly how a mid-render throw presents. Caveat: his exact blank-band visual was not reproduced on Linux Chromium (his build runs WKWebView), and what produced an invalid latestDate in his session is unconfirmed (the backend serializes missing dates as valid year-1 ISO). A different trigger may remain; investigation continues.
+- No backend, schema or i18n string change. Chromium only; no native macOS run.
 
 ## Needs me in every folder
 

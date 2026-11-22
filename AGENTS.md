@@ -35,6 +35,6 @@ CI quirks:
 
 Known flaky tests: none documented as of 2026-11-17. If a test fails on an unrelated diff, check whether main passes it before changing code.
 
-Merge gate: a PR merges only when Devin review shows no open findings on the current head and the required CI checks are green (owner's standing rule). If Devin has not reviewed the current head, wait for it instead of merging on CI alone.
+Merge gate: a PR merges only when the required CI checks are green and the standing own review shows no open findings on the current head (owner's standing rule, 2026-11-22). Devin review is extra: still request it on every PR, but never wait for it before merging; address any findings it posts, before or after merge.
 
 Loop guard: if the same check fails twice with the same error, stop. Report the command, the error and what you tried instead of retrying a third time or patching blind.
