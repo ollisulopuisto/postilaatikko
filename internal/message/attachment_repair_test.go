@@ -250,34 +250,188 @@ func TestRepairRejectsGmailAndChangedSourceWithoutTouchingEitherMessage(t *testi
 	}
 }
 
-func TestInterruptedMoveRecoveryRetainsAmbiguousAndRepairedState(t *testing.T) {
+func TestInterruptedMoveEvidenceAndRepairSurviveCachePruning(t *testing.T) {
 	ms, db := setupThreadTestDB(t)
 	defer db.Close()
-	for i, id := range []string{"pending", "one", "two"} {
-		if err := ms.Create(&Message{ID: id, AccountID: "acc-1", FolderID: "fld-1", UID: uint32(i + 1), MessageID: "same@test", Date: time.Now(), ReceivedAt: time.Now()}); err != nil {
+	for i, id := range []string{"pending", "repaired", "prunable"} {
+		if err := ms.Create(&Message{ID: id, AccountID: "acc-1", FolderID: "fld-1", UID: uint32(i + 1), MessageID: id + "@test", Date: time.Now().AddDate(0, -3, 0)}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := db.Exec(`UPDATE messages SET uid=-1 WHERE id='pending'`); err != nil {
+	if err := ms.MoveMessages([]string{"pending"}, "fld-1"); err != nil {
 		t.Fatal(err)
 	}
-	if err := ms.RecoverTempMoves("fld-1", []string{"pending"}); err == nil {
-		t.Fatal("ambiguous recovery allowed")
-	}
-	if got, err := ms.Get("pending"); err != nil || got == nil {
-		t.Fatal("ambiguous identity lost", err)
+	if err := ms.RecordMoveUIDEvidence("fld-1", 1, map[string]uint32{"pending": 100}); err != nil {
+		t.Fatal(err)
 	}
 	store := NewAttachmentStore(db)
-	if _, err := store.RepairFromMIME("acc-1", "pending", "snapshot", []RepairPart{{Metadata: Attachment{ID: "recovered-exact", MessageID: "pending", Filename: "one", Size: 3}, Payload: []byte("one")}}, ""); err != nil {
+	if _, err := store.RepairFromMIME("acc-1", "repaired", "snapshot", []RepairPart{{Metadata: Attachment{ID: "recovered-exact", MessageID: "repaired", Filename: "one", Size: 3}, Payload: []byte("one")}}, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`DELETE FROM messages WHERE id IN ('one','two')`); err != nil {
+	if _, err := ms.DeleteOlderThanInFolder("fld-1", time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if err := ms.RecoverTempMoves("fld-1", []string{"pending"}); err == nil {
-		t.Fatal("recovery deleted repair-protected placeholder")
+	if err := ms.DeleteSyncedUIDCache("fld-1"); err != nil {
+		t.Fatal(err)
 	}
-	if got, err := ms.Get("pending"); err != nil || got == nil {
-		t.Fatal("repair owner lost", err)
+	for _, id := range []string{"pending", "repaired"} {
+		if got, err := ms.Get(id); err != nil || got == nil {
+			t.Fatal("prune lost protected row", id, err)
+		}
 	}
+	if uid, v, err := ms.MoveUIDEvidence("fld-1", "pending"); err != nil || uid != 100 || v != 1 {
+		t.Fatal("evidence pruned", uid, v, err)
+	}
+	if got, err := ms.Get("prunable"); err != nil || got != nil {
+		t.Fatal("ordinary age pruning stopped", err)
+	}
+	if err := ms.MoveMessages([]string{"pending"}, "fld-1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := ms.MoveUIDEvidence("fld-1", "pending"); err == nil {
+		t.Fatal("subsequent move reused stale proof")
+	}
+	if err := ms.ReconcileVerifiedMoveUID("fld-1", "pending", 100, 1); err == nil {
+		t.Fatal("stale proof committed after newer move")
+	}
+	if got, err := ms.Get("pending"); err != nil || got == nil || int32(got.UID) >= 0 {
+		t.Fatal("newer move overwritten by stale recovery", got, err)
+	}
+}
+
+func TestReceiptDecisionSurvivesWithoutDeletedFolderGhosts(t *testing.T) {
+	for _, mode := range []string{"age", "omitted", "generation"} {
+		t.Run(mode, func(t *testing.T) {
+			ms, db := setupThreadTestDB(t)
+			defer db.Close()
+			if _, err := db.Exec(`UPDATE folders SET uid_validity=7 WHERE id='fld-1'`); err != nil {
+				t.Fatal(err)
+			}
+			if err := ms.Create(&Message{ID: "receipt", AccountID: "acc-1", FolderID: "fld-1", UID: 8, MessageID: "receipt@test", Date: time.Now().AddDate(0, -3, 0), ReadReceiptHandled: true}); err != nil {
+				t.Fatal(err)
+			}
+			var err error
+			switch mode {
+			case "age":
+				_, err = ms.DeleteOlderThanInFolder("fld-1", time.Now())
+			case "omitted":
+				err = ms.DeleteSyncedUID("fld-1", 8)
+			case "generation":
+				err = ms.DeleteSyncedUIDCache("fld-1")
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if row, err := ms.Get("receipt"); err != nil || row != nil {
+				t.Fatal("deleted receipt row stayed in folder", row, err)
+			}
+			if rows, err := ms.ListConversationsByFolder("fld-1", 0, 50, "newest", ""); err != nil || len(rows) != 0 {
+				t.Fatal("ghost receipt conversation", rows, err)
+			}
+			for _, upsert := range []bool{false, true} {
+				row := &Message{ID: fmt.Sprintf("new-%t", upsert), AccountID: "acc-1", FolderID: "fld-1", UID: 8, MessageID: "receipt@test", Date: time.Now()}
+				if upsert {
+					err = ms.Upsert(row)
+				} else {
+					err = ms.Create(row)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				got, err := ms.GetByUID("fld-1", 8)
+				if err != nil || got.ReadReceiptHandled != (mode != "generation") {
+					t.Fatal("same-generation receipt decision mismatch", got, err)
+				}
+			}
+			if err := ms.DeleteSyncedUID("fld-1", 8); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := db.Exec(`UPDATE folders SET uid_validity=8 WHERE id='fld-1'`); err != nil {
+				t.Fatal(err)
+			}
+			if err := ms.Create(&Message{ID: "reused", AccountID: "acc-1", FolderID: "fld-1", UID: 8, Date: time.Now()}); err != nil {
+				t.Fatal(err)
+			}
+			got, err := ms.Get("reused")
+			if err != nil || got.ReadReceiptHandled {
+				t.Fatal("decision leaked to new generation", got, err)
+			}
+		})
+	}
+}
+
+func TestRepairReattachmentResetsFlagWatermark(t *testing.T) {
+	ms, db := setupThreadTestDB(t)
+	defer db.Close()
+	if _, err := db.Exec(`UPDATE folders SET uid_validity=7,flags_sync_modseq=100 WHERE id='fld-1'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := ms.Create(&Message{ID: "repair", AccountID: "acc-1", FolderID: "fld-1", UID: 8, Date: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewAttachmentStore(db).RepairFromMIME("acc-1", "repair", "fixture", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := ms.DeleteSyncedUID("fld-1", 8); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ms.ReattachRetiredRepairs("fld-1", 7, map[uint32]bool{8: true}); err != nil {
+		t.Fatal(err)
+	}
+	var watermark int
+	if err := db.QueryRow(`SELECT flags_sync_modseq FROM folders WHERE id='fld-1'`).Scan(&watermark); err != nil || watermark != 0 {
+		t.Fatal("restored repair can skip flags", watermark, err)
+	}
+}
+
+func TestRepairAndUndoPreserveVerifiedDownloadIntegrity(t *testing.T) {
+	ms, db := setupThreadTestDB(t)
+	defer db.Close()
+	if err := ms.Create(&Message{ID: "integrity-mail", AccountID: "acc-1", FolderID: "fld-1", UID: 22, Date: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	store := NewAttachmentStore(db)
+	root := t.TempDir()
+	path := filepath.Join(root, "file.txt")
+	if err := os.WriteFile(path, []byte("original"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"verified", "legacy"} {
+		if err := store.Create(&Attachment{ID: id, MessageID: "integrity-mail", Filename: "file.txt", LocalPath: path, Size: 8}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.SetVerifiedDownload("verified", path, []byte("original")); err != nil {
+		t.Fatal(err)
+	}
+	parts := []RepairPart{{Metadata: Attachment{ID: "replacement", MessageID: "integrity-mail", Filename: "file.txt", Size: 8}, Payload: []byte("original")}}
+	backup, err := store.RepairFromMIME("acc-1", "integrity-mail", "snapshot", parts, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertVerified := func(id string, want bool) {
+		t.Helper()
+		got, ok := store.ReadVerifiedDownload(root, id)
+		if ok != want || (want && string(got) != "original") {
+			t.Fatal("integrity wrong", id, string(got), ok, want)
+		}
+	}
+	assertVerified("replacement", true)
+	if err := store.RestoreRepair("acc-1", "integrity-mail", backup); err != nil {
+		t.Fatal(err)
+	}
+	assertVerified("verified", true)
+	assertVerified("legacy", false)
+	next, err := store.RepairBackupID("integrity-mail")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.RestoreRepair("acc-1", "integrity-mail", next); err != nil {
+		t.Fatal(err)
+	}
+	assertVerified("replacement", true)
+	if err := os.WriteFile(path, []byte("modified"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	assertVerified("replacement", false)
 }

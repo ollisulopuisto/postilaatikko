@@ -75,6 +75,9 @@ type SyncRuntime struct {
 	filterWake                  chan struct{}
 	filterStop                  chan struct{}
 	syncLockPath                string
+	attachmentCacheRoot         string
+	publicationOwnerMu          sync.RWMutex
+	publicationOwner            *syncowner.Lock
 	ctxMu                       sync.RWMutex
 	ctx                         context.Context
 	cancel                      context.CancelFunc
@@ -162,7 +165,7 @@ func OpenSyncRuntime(dataDirectory string, credentials IMAPConfigSource) (*SyncR
 	virtualFolders := virtualfolder.NewStore(db)
 	replyLater := replylater.NewStore(db)
 	triageStore := triage.NewStore(db)
-	runtime := &SyncRuntime{db: db, schemaOwner: schemaOwner, accounts: accounts, messages: messages, drafts: drafts, attachments: attachments, virtualFolders: virtualFolders, replyLater: replyLater, triage: triageStore, replyContent: replycontent.NewService(replycontent.ServiceOptions{}), ctx: context.Background(), syncLockPath: filepath.Join(dataDirectory, "mail-sync.owner.lock")}
+	runtime := &SyncRuntime{db: db, attachmentCacheRoot: filepath.Join(dataDirectory, "attachments"), schemaOwner: schemaOwner, accounts: accounts, messages: messages, drafts: drafts, attachments: attachments, virtualFolders: virtualFolders, replyLater: replyLater, triage: triageStore, replyContent: replycontent.NewService(replycontent.ServiceOptions{}), ctx: context.Background(), syncLockPath: filepath.Join(dataDirectory, "mail-sync.owner.lock")}
 	oauthManager := oauth2.NewManager()
 	runtime.oauth = oauthManager
 	contacts, contactsErr := newContactsRuntime(db, dataDirectory, accounts, oauthManager)
@@ -976,7 +979,13 @@ func (r *SyncRuntime) runSyncLifecycle(ctx context.Context) {
 		}
 		return
 	}
+	r.publicationOwnerMu.Lock()
+	r.publicationOwner = owner
+	r.publicationOwnerMu.Unlock()
 	defer func() {
+		r.publicationOwnerMu.Lock()
+		defer r.publicationOwnerMu.Unlock()
+		r.publicationOwner = nil
 		if err := owner.Release(); err != nil {
 			log.Warn().Err(err).Msg("Failed to release mailbox sync ownership")
 		}

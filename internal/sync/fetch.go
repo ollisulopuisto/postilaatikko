@@ -1073,3 +1073,16 @@ func (e *Engine) buildMessageFromStreamedData(accountID, folderID string, uid im
 
 	return m
 }
+
+// FetchRawAttachment requires an IMAP generation and a complete exact fetch.
+// Gmail cache keys resolve by provider identity and never enter the IMAP path.
+func (e *Engine) FetchRawAttachment(ctx context.Context, accountID, folderID string, uid uint32) ([]byte, error) {
+	_, err := e.GmailClient(ctx, accountID)
+	if err == nil {
+		return e.FetchRawMessage(ctx, accountID, folderID, uid)
+	}
+	if !errors.Is(err, gmail.ErrNotCapable) {
+		return nil, err
+	}
+	return e.fetchRawMessage(ctx, accountID, folderID, uid, true)
+}

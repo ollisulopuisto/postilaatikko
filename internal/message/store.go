@@ -1066,6 +1066,9 @@ func (s *Store) GetByUID(folderID string, uid uint32) (*Message, error) {
 
 // Create creates a new message
 func (s *Store) Create(m *Message) error {
+	if err := s.restoreReceiptDecision(m); err != nil {
+		return err
+	}
 	if m.ID == "" {
 		m.ID = uuid.New().String()
 	}
@@ -1116,6 +1119,9 @@ func (s *Store) Create(m *Message) error {
 // This handles cases where a previous copy was deleted but the stale row remains, or where
 // the IMAP server reuses UIDs after EXPUNGE.
 func (s *Store) Upsert(m *Message) error {
+	if err := s.restoreReceiptDecision(m); err != nil {
+		return err
+	}
 	if m.ID == "" {
 		m.ID = uuid.New().String()
 	}
@@ -1147,7 +1153,7 @@ func (s *Store) Upsert(m *Message) error {
 			body_text=CASE WHEN excluded.body_fetched = 1 THEN excluded.body_text ELSE messages.body_text END,
 			body_html=CASE WHEN excluded.body_fetched = 1 THEN excluded.body_html ELSE messages.body_html END,
 			body_fetched=CASE WHEN excluded.body_fetched = 1 THEN 1 ELSE messages.body_fetched END,
-			read_receipt_to=excluded.read_receipt_to, read_receipt_handled=excluded.read_receipt_handled,
+			read_receipt_to=excluded.read_receipt_to, read_receipt_handled=MAX(messages.read_receipt_handled,excluded.read_receipt_handled),
 			received_at=excluded.received_at
 	`
 
@@ -1326,6 +1332,63 @@ func (s *Store) DeleteByFolder(folderID string) error {
 		return fmt.Errorf("failed to delete messages: %w", err)
 	}
 	return nil
+}
+
+// DeleteSyncedUID preserves repaired content as a snapshot when an ordinary
+// listing omits its UID. Receipt decisions survive independently of folder rows.
+func (s *Store) DeleteSyncedUID(folderID string, uid uint32) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err = tx.Exec(`INSERT OR IGNORE INTO quarantined_repair_messages(message_id) SELECT id FROM messages WHERE folder_id=? AND uid=? AND id IN (SELECT message_id FROM attachment_repair_backups)`, folderID, uid); err != nil {
+		return err
+	}
+	// Preserve only exact same-generation identity, separately from move proof.
+	if _, err = tx.Exec(`INSERT OR REPLACE INTO retired_repair_uids(message_id,folder_id,uid,uid_validity) SELECT m.id,m.folder_id,m.uid,f.uid_validity FROM messages m JOIN folders f ON f.id=m.folder_id WHERE m.folder_id=? AND m.uid=? AND f.uid_validity>0 AND m.id IN (SELECT message_id FROM quarantined_repair_messages)`, folderID, uid); err != nil {
+		return err
+	}
+	// Retirement is not an interrupted move. Discard its old copy journal so
+	// targeted recovery cannot make this snapshot addressable again later.
+	if _, err = tx.Exec(`DELETE FROM move_uid_evidence WHERE message_id IN (SELECT id FROM messages WHERE folder_id=? AND uid=? AND id IN (SELECT message_id FROM quarantined_repair_messages))`, folderID, uid); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(`UPDATE messages SET uid=-rowid WHERE folder_id=? AND uid=? AND id IN (SELECT message_id FROM quarantined_repair_messages)`, folderID, uid); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(`DELETE FROM messages WHERE folder_id=? AND uid=?`, folderID, uid); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// DeleteSyncedUIDCache preserves unresolved local moves and repaired mail when
+// the server changes UID validity. Their evidence must not cascade away.
+func (s *Store) DeleteSyncedUIDCache(folderID string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err = tx.Exec(`DELETE FROM messages WHERE folder_id=? AND uid>0 AND id NOT IN (SELECT message_id FROM attachment_repair_backups)`, folderID); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(`DELETE FROM retained_receipt_decisions WHERE folder_id=?`, folderID); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(`DELETE FROM retired_repair_uids WHERE folder_id=?`, folderID); err != nil {
+		return err
+	}
+	// Retained rows keep their bodies/history but never an addressable UID from
+	// the old generation. They are not candidates for automatic reattachment.
+	if _, err = tx.Exec(`INSERT OR IGNORE INTO quarantined_repair_messages(message_id) SELECT id FROM messages WHERE folder_id=? AND uid>0`, folderID); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(`UPDATE messages SET uid=-rowid WHERE folder_id=? AND uid>0`, folderID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // ExistsInFolder checks if a message with the given RFC 822 Message-ID exists
@@ -1622,7 +1685,7 @@ func (s *Store) CountByFolder(folderID string) (int, error) {
 // Returns the number of messages deleted
 func (s *Store) DeleteOlderThanInFolder(folderID string, before time.Time) (int, error) {
 	result, err := s.db.Exec(
-		"DELETE FROM messages WHERE folder_id = ? AND date < ?",
+		"DELETE FROM messages WHERE folder_id = ? AND date < ? AND uid > 0 AND id NOT IN (SELECT message_id FROM attachment_repair_backups)",
 		folderID, before,
 	)
 	if err != nil {
@@ -2720,11 +2783,18 @@ func (s *Store) MoveMessages(ids []string, newFolderID string) error {
 		strings.Join(placeholders, ", "),
 	)
 
-	_, err := s.db.Exec(query, args...)
+	tx, err := s.db.Begin()
 	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err = tx.Exec("DELETE FROM move_uid_evidence WHERE message_id IN ("+strings.Join(placeholders, ",")+")", args[1:]...); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(query, args...); err != nil {
 		return fmt.Errorf("failed to move messages: %w", err)
 	}
-	return nil
+	return tx.Commit()
 }
 
 // MoveSourceState is the stable server identity captured immediately before a
@@ -2811,6 +2881,16 @@ func (e *MovedUIDConflictError) Error() string {
 // message while the COPY was in flight; in that case this method consolidates
 // the sync-created row into the stable locally-moved row transactionally.
 func (s *Store) ReconcileMovedMessageUIDs(destinationFolderID string, uidsByLocalID map[string]uint32) ([]MovedUIDReconcileResult, error) {
+	return s.reconcileMovedMessageUIDs(destinationFolderID, uidsByLocalID, nil)
+}
+
+// ReconcileVerifiedMoveUID rechecks the journal in the same transaction that
+// changes the pending row, so a newer move cannot inherit stale recovery proof.
+func (s *Store) ReconcileVerifiedMoveUID(folderID, id string, uid, validity uint32) error {
+	_, err := s.reconcileMovedMessageUIDs(folderID, map[string]uint32{id: uid}, &validity)
+	return err
+}
+func (s *Store) reconcileMovedMessageUIDs(destinationFolderID string, uidsByLocalID map[string]uint32, validity *uint32) ([]MovedUIDReconcileResult, error) {
 	if len(uidsByLocalID) == 0 {
 		return nil, nil
 	}
@@ -2825,6 +2905,26 @@ func (s *Store) ReconcileMovedMessageUIDs(destinationFolderID string, uidsByLoca
 			return nil, fmt.Errorf("invalid destination UID for message %s", movingLocalID)
 		}
 
+		if validity != nil {
+			var matches int
+			if err := tx.QueryRow(`SELECT COUNT(*) FROM move_uid_evidence WHERE message_id=? AND folder_id=? AND uid=? AND uid_validity=? AND cleanup_complete=1`, movingLocalID, destinationFolderID, uid, *validity).Scan(&matches); err != nil {
+				return nil, err
+			}
+			if matches != 1 {
+				return nil, fmt.Errorf("move recovery proof changed for %s", movingLocalID)
+			}
+		}
+		// A COPYUID from a newer generation cannot be promoted into an old
+		// cache. Keep it pending until ordinary sync resets that cache.
+		var proofValidity, cachedValidity int64
+		var cleanupDone bool
+		proofErr := tx.QueryRow(`SELECT e.uid_validity,COALESCE(f.uid_validity,0),e.cleanup_complete FROM move_uid_evidence e JOIN folders f ON f.id=e.folder_id WHERE e.message_id=? AND e.folder_id=? AND e.uid=?`, movingLocalID, destinationFolderID, uid).Scan(&proofValidity, &cachedValidity, &cleanupDone)
+		if proofErr != nil && proofErr != sql.ErrNoRows {
+			return nil, proofErr
+		}
+		if proofErr == nil && (!cleanupDone || (cachedValidity != 0 && cachedValidity != proofValidity)) {
+			return nil, fmt.Errorf("move awaits destination cache generation or source cleanup")
+		}
 		var movingAccountID string
 		var movingUID int64
 		var movingMessageID sql.NullString
@@ -3766,24 +3866,237 @@ func (s *Store) TempMoveSnapshot() (map[string][]string, error) {
 	return out, rows.Err()
 }
 
-// RecoverTempMoves consolidates an unambiguous rediscovered Message-ID before
-// removing only old owned placeholders. Repair-protected data is never deleted.
-func (s *Store) RecoverTempMoves(folderID string, ids []string) error {
-	for _, id := range ids {
-		var uid sql.NullInt64
-		var matches int
-		err := s.db.QueryRow(`SELECT MIN(remote.uid),COUNT(*) FROM messages pending JOIN messages remote ON remote.folder_id=pending.folder_id AND remote.account_id=pending.account_id AND trim(remote.message_id,'<>')=trim(pending.message_id,'<>') AND remote.uid>0 WHERE pending.id=? AND pending.folder_id=? AND pending.uid<0 AND pending.message_id<>'' GROUP BY pending.id`, id, folderID).Scan(&uid, &matches)
-		if err != nil && err != sql.ErrNoRows {
+// RecordMoveUIDEvidence records only a server-confirmed COPYUID or the verified
+// pre-COPY baseline difference. A Message-ID match alone is never evidence.
+func (s *Store) RecordMoveUIDEvidence(folderID string, validity uint32, uids map[string]uint32) error {
+	if validity == 0 {
+		return fmt.Errorf("missing destination UID validity")
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for id, uid := range uids {
+		if uid == 0 {
+			return fmt.Errorf("missing destination UID")
+		}
+		_, err = tx.Exec(`INSERT INTO move_uid_evidence(message_id,folder_id,uid,uid_validity) SELECT id,folder_id,?,? FROM messages WHERE id=? AND folder_id=? AND uid<0 ON CONFLICT(message_id) DO UPDATE SET folder_id=excluded.folder_id,uid=excluded.uid,uid_validity=excluded.uid_validity,source_folder_id='',source_uid=0,source_validity=0,cleanup_complete=1`, uid, validity, id, folderID)
+		if err != nil {
 			return err
 		}
-		if matches > 1 {
-			return fmt.Errorf("interrupted move has ambiguous destination copies: %s", id)
+	}
+	return tx.Commit()
+}
+
+// MoveUIDEvidence returns recorded destination identity only while id remains
+// pending in folderID. A caller must verify its generation and server presence.
+func (s *Store) MoveUIDEvidence(folderID, id string) (uint32, uint32, error) {
+	var uid, validity uint32
+	err := s.db.QueryRow(`SELECT e.uid,e.uid_validity FROM move_uid_evidence e JOIN messages m ON m.id=e.message_id WHERE m.id=? AND m.folder_id=? AND m.uid<0 AND e.folder_id=m.folder_id`, id, folderID).Scan(&uid, &validity)
+	if err != nil {
+		return 0, 0, fmt.Errorf("interrupted move outcome unresolved for %s: %w", id, err)
+	}
+	return uid, validity, nil
+}
+
+// RecordCopiedMoveUIDs runs before source cleanup, while the original source
+// identity is known. A confirmed COPY is not yet a completed MOVE.
+func (s *Store) RecordCopiedMoveUIDs(folderID string, validity uint32, uids map[string]uint32, sourceFolderID string, sourceValidity uint32, sources map[string]uint32) error {
+	if validity == 0 || sourceValidity == 0 {
+		return fmt.Errorf("missing copy generation")
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for id, uid := range uids {
+		if uid == 0 || sources[id] == 0 {
+			return fmt.Errorf("missing copy identity")
 		}
-		if err == nil && uid.Valid {
-			if _, err := s.ReconcileMovedMessageUIDs(folderID, map[string]uint32{id: uint32(uid.Int64)}); err != nil {
-				return err
-			}
+		_, err = tx.Exec(`INSERT INTO move_uid_evidence(message_id,folder_id,uid,uid_validity,source_folder_id,source_uid,source_validity,cleanup_complete) SELECT id,folder_id,?,?,?,?,?,0 FROM messages WHERE id=? AND folder_id=? AND uid<0 ON CONFLICT(message_id) DO UPDATE SET folder_id=excluded.folder_id,uid=excluded.uid,uid_validity=excluded.uid_validity,source_folder_id=excluded.source_folder_id,source_uid=excluded.source_uid,source_validity=excluded.source_validity,cleanup_complete=0`, uid, validity, sourceFolderID, sources[id], sourceValidity, id, folderID)
+		if err != nil {
+			return err
 		}
 	}
-	return s.DeleteTempUIDsForMessages(folderID, ids)
+	return tx.Commit()
+}
+
+// MoveCleanupState reads the recorded source identity and cleanup status. A
+// copied destination is not a completed move until source cleanup is verified.
+func (s *Store) MoveCleanupState(folderID, id string) (string, uint32, uint32, bool, error) {
+	var source string
+	var uid, validity uint32
+	var done bool
+	err := s.db.QueryRow(`SELECT source_folder_id,source_uid,source_validity,cleanup_complete FROM move_uid_evidence WHERE message_id=? AND folder_id=?`, id, folderID).Scan(&source, &uid, &validity, &done)
+	return source, uid, validity, done, err
+}
+
+// ConfirmMoveCleanup marks source cleanup complete only for the matching
+// destination UID and generation. It does not itself verify remote state.
+func (s *Store) ConfirmMoveCleanup(folderID string, validity uint32, uids map[string]uint32) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for id, uid := range uids {
+		result, err := tx.Exec(`UPDATE move_uid_evidence SET cleanup_complete=1 WHERE message_id=? AND folder_id=? AND uid=? AND uid_validity=?`, id, folderID, uid, validity)
+		if err != nil {
+			return err
+		}
+		n, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if n != 1 {
+			return fmt.Errorf("copy evidence changed before cleanup confirmation")
+		}
+	}
+	return tx.Commit()
+}
+
+// LiveMutationIDs excludes only explicit retained snapshots, never unresolved
+// optimistic moves. Their history remains readable but has no server target.
+func (s *Store) LiveMutationIDs(ids []string) ([]string, error) {
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		var n int
+		if err := s.db.QueryRow(`SELECT COUNT(*) FROM quarantined_repair_messages WHERE message_id=?`, id).Scan(&n); err != nil {
+			return nil, err
+		}
+		if n == 0 {
+			out = append(out, id)
+		}
+	}
+	return out, nil
+}
+
+// PendingProvenMoveIDs returns recovery candidates with recorded copy evidence.
+// It does not confirm the destination exists or that source cleanup completed.
+func (s *Store) PendingProvenMoveIDs(folderID string) ([]string, error) {
+	rows, err := s.db.Query(`SELECT m.id FROM messages m JOIN move_uid_evidence e ON e.message_id=m.id AND e.folder_id=m.folder_id WHERE m.folder_id=? AND m.uid<0`, folderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// ReattachRetiredRepairs restores a retired row only when its exact recorded UID
+// appears in a listing from the same generation. Unknown identities stay snapshots.
+func (s *Store) ReattachRetiredRepairs(folderID string, validity uint32, remote map[uint32]bool) ([]uint32, error) {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	rows, err := tx.Query(`SELECT r.message_id,r.uid FROM retired_repair_uids r JOIN messages m ON m.id=r.message_id JOIN folders f ON f.id=r.folder_id WHERE r.folder_id=? AND r.uid_validity=? AND f.uid_validity=? AND m.folder_id=r.folder_id AND m.uid<0 AND m.id IN(SELECT message_id FROM quarantined_repair_messages) AND NOT EXISTS(SELECT 1 FROM messages live WHERE live.folder_id=r.folder_id AND live.uid=r.uid)`, folderID, validity, validity)
+	if err != nil {
+		return nil, err
+	}
+	type candidate struct {
+		id  string
+		uid uint32
+	}
+	var candidates []candidate
+	for rows.Next() {
+		var c candidate
+		if err := rows.Scan(&c.id, &c.uid); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		if remote[c.uid] {
+			candidates = append(candidates, c)
+		}
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	// A retired row missed flag changes below the old folder watermark. Reset
+	// it transactionally so even a failed next fetch cannot skip reconciliation.
+	if len(candidates) > 0 {
+		if _, err = tx.Exec(`UPDATE folders SET flags_sync_modseq=0 WHERE id=?`, folderID); err != nil {
+			return nil, err
+		}
+	}
+	var restored []uint32
+	for _, c := range candidates {
+		if _, err = tx.Exec(`UPDATE messages SET uid=? WHERE id=?`, c.uid, c.id); err != nil {
+			return nil, err
+		}
+		if _, err = tx.Exec(`DELETE FROM retired_repair_uids WHERE message_id=?`, c.id); err != nil {
+			return nil, err
+		}
+		if _, err = tx.Exec(`DELETE FROM quarantined_repair_messages WHERE message_id=?`, c.id); err != nil {
+			return nil, err
+		}
+		restored = append(restored, c.uid)
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+	return restored, nil
+}
+
+// GetReaderMessage resolves cached presentation content while keeping the live
+// row's identity and flags. Callers must never persist this read-only overlay.
+func (s *Store) GetReaderMessage(id string) (*Message, error) {
+	m, err := s.Get(id)
+	if err != nil || m == nil || m.BodyFetched || m.UID == 0 || int32(m.UID) < 0 || normalizeMessageID(m.MessageID) == "" {
+		return m, err
+	}
+	rows, err := s.db.Query(`SELECT id FROM messages WHERE account_id=? AND uid<0 AND TRIM(TRIM(message_id),'< >')=? AND body_fetched=1 AND (COALESCE(body_text,'')!='' OR COALESCE(body_html,'')!='' OR smime_raw_body IS NOT NULL OR pgp_raw_body IS NOT NULL) ORDER BY date DESC`, m.AccountID, normalizeMessageID(m.MessageID))
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range ids {
+		cached, err := s.Get(id)
+		if err != nil {
+			return nil, err
+		}
+		if cached != nil && normalizeMessageID(cached.MessageID) == normalizeMessageID(m.MessageID) {
+			return DeduplicateThreadMessages([]*Message{m, cached}, m.FolderID, nil)[0], nil
+		}
+	}
+	return m, nil
+}
+
+// restoreReceiptDecision binds a pruned decision to the exact current IMAP
+// universe before inserting headers. It never restores active folder membership.
+func (s *Store) restoreReceiptDecision(m *Message) error {
+	if m.ReadReceiptHandled || m.UID == 0 || int32(m.UID) < 0 {
+		return nil
+	}
+	var found bool
+	if err := s.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM retained_receipt_decisions r JOIN folders f ON f.id=r.folder_id WHERE r.folder_id=? AND r.uid=? AND r.uid_validity=f.uid_validity)`, m.FolderID, m.UID).Scan(&found); err != nil {
+		return err
+	}
+	m.ReadReceiptHandled = found
+	return nil
 }

@@ -155,3 +155,93 @@ func TestNativeGmailEmptyCacheSyncAndOnDemandBodyWithoutIMAP(t *testing.T) {
 	}
 
 }
+
+func TestUnnamedGmailDataAttachmentUsesPartIdentity(t *testing.T) {
+	db, err := database.Open(filepath.Join(t.TempDir(), "data-part.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err = db.Migrate(); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{`INSERT INTO accounts(id,name,email,imap_host,smtp_host,username,auth_type) VALUES('g','Gmail','me@test','imap.gmail.com','smtp','me','oauth2')`, `INSERT INTO folders(id,account_id,name,path,folder_type) VALUES('f','g','Inbox','INBOX','inbox')`} {
+		if _, err = db.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ms := message.NewStore(db)
+	as := message.NewAttachmentStore(db)
+	m := &message.Message{AccountID: "g", FolderID: "f", MessageID: "same@test", Date: time.Now()}
+	if err = ms.UpsertGmail(m, "provider"); err != nil {
+		t.Fatal(err)
+	}
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if r.URL.Query().Get("format") != "full" {
+			t.Error("guessed filename/raw fallback", r.URL)
+			w.WriteHeader(500)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"payload": map[string]any{"mimeType": "multipart/mixed", "parts": []any{
+			map[string]any{"partId": "1", "mimeType": "application/octet-stream", "headers": []any{map[string]string{"name": "Content-Disposition", "value": "attachment"}}, "body": map[string]any{"size": 3, "data": base64.RawURLEncoding.EncodeToString([]byte("one"))}},
+			map[string]any{"partId": "2", "mimeType": "application/octet-stream", "headers": []any{map[string]string{"name": "Content-Disposition", "value": "attachment"}}, "body": map[string]any{"size": 3, "data": base64.RawURLEncoding.EncodeToString([]byte("two"))}},
+		}}})
+	}))
+	defer server.Close()
+	engine := NewEngine(nil, account.NewStore(db), folder.NewStore(db), ms, as)
+	engine.gmailBaseURL = server.URL
+	engine.SetGmailTokenSource(func(context.Context, string, bool) (string, error) { return "fixture", nil })
+	c, err := engine.GmailClient(context.Background(), "g")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = engine.gmailBody(context.Background(), c, m, "provider"); err != nil {
+		t.Fatal(err)
+	}
+	atts, err := as.GetByMessage(m.ID)
+	if err != nil || len(atts) != 2 {
+		t.Fatal(atts, err)
+	}
+	seen := map[string]bool{}
+	for _, att := range atts {
+		if att.Filename != "attachment" {
+			t.Fatal("fixture not unnamed", att)
+		}
+		got, err := engine.FetchGmailAttachment(context.Background(), "g", att.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		seen[string(got)] = true
+		// Legacy rows did not retain a provider reference for inline-data parts.
+		if _, err = db.Exec(`DELETE FROM gmail_attachment_refs WHERE attachment_id=?`, att.ID); err != nil {
+			t.Fatal(err)
+		}
+		legacy, err := engine.FetchGmailAttachment(context.Background(), "g", att.ID)
+		if err != nil || string(legacy) != string(got) {
+			t.Fatal("legacy data part lost", string(legacy), err)
+		}
+	}
+	if !seen["one"] || !seen["two"] || requests != 5 {
+		t.Fatal("unnamed occurrences conflated", seen, requests)
+	}
+	batch := WithGmailAttachmentCache(context.Background())
+	for _, att := range atts {
+		got, err := engine.FetchGmailAttachment(batch, "g", att.ID)
+		if err != nil || !seen[string(got)] {
+			t.Fatal("batch lost part", string(got), err)
+		}
+	}
+	if requests != 6 {
+		t.Fatal("full Gmail response fetched more than once per batch", requests)
+	}
+	for _, att := range atts {
+		if _, err := engine.FetchGmailAttachment(WithGmailAttachmentCache(context.Background()), "g", att.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if requests != 8 {
+		t.Fatal("cache escaped its request", requests)
+	}
+}

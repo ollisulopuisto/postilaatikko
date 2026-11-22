@@ -524,6 +524,18 @@ func (a *App) MoveToFolder(messageIDs []string, destFolderID string) error {
 
 // MoveToFolderWithUndo moves messages and atomically returns its undo operation.
 func (a *App) MoveToFolderWithUndo(messageIDs []string, destFolderID string) (UndoableActionResult, error) {
+	// Sample the same eligible set that execution will use. Quarantined
+	// snapshots are retained history, not examples of user routing intent.
+	if a.messageStore != nil {
+		liveIDs, err := a.messageStore.LiveMutationIDs(messageIDs)
+		if err != nil {
+			return UndoableActionResult{}, err
+		}
+		if len(messageIDs) > 0 && len(liveIDs) == 0 {
+			return UndoableActionResult{}, fmt.Errorf("selected repair snapshots have no server move target")
+		}
+		messageIDs = liveIDs
+	}
 	// Header-only samples are read before the move changes folder_id.
 	var moved []*message.Message
 	if a.moveFilterHistory != nil && a.messageStore != nil && len(messageIDs) > 0 {
@@ -622,6 +634,18 @@ func (a *App) moveToFolderWithService(messageIDs []string, destFolderID string, 
 	if len(messageIDs) == 0 {
 		return operationID, nil
 	}
+
+	liveIDs, err := a.messageStore.LiveMutationIDs(messageIDs)
+	if err != nil {
+		return operationID, err
+	}
+	if !recordUndo && operationID != "" && len(liveIDs) != len(messageIDs) {
+		return operationID, fmt.Errorf("undo requires a verified server target for every message")
+	}
+	if len(liveIDs) == 0 {
+		return operationID, fmt.Errorf("selected repair snapshots have no server move target")
+	}
+	messageIDs = liveIDs
 
 	// Cross-account selections (Unified Inbox or any mixed-account multi-
 	// select) route to a partition helper that recurses through this
@@ -842,6 +866,7 @@ func (a *App) moveToFolderWithService(messageIDs []string, destFolderID string, 
 					"folderId":  destFolderID,
 					"error":     err.Error(),
 				})
+				a.retainMoveRecovery(destFolderID, messageIDs)
 				moveCompletion.Complete(err)
 			}
 		}()
@@ -872,6 +897,9 @@ func (a *App) moveToFolderWithService(messageIDs []string, destFolderID string, 
 					"folderId":  destFolderID,
 					"error":     err.Error(),
 				})
+				if remoteStarted || groupRemoteStarted {
+					a.retainMoveRecovery(destFolderID, messageIDs)
+				}
 				moveCompletion.Complete(err)
 				return
 			}
@@ -903,6 +931,7 @@ func (a *App) moveToFolderWithService(messageIDs []string, destFolderID string, 
 				moveCompletion.Complete(nil)
 				return
 			}
+			a.retainMoveRecovery(destFolderID, messageIDs)
 			var identityConflict *message.MovedUIDConflictError
 			if errors.As(err, &identityConflict) {
 				stdlog.Printf("UNDO MOVE operationId=%s phase=uid-owner movingLocalId=%s existingLocalId=%s destFolderId=%s destinationUID=%d messageIdMatch=%t resolution=conflict", operationID, identityConflict.MovingLocalID, identityConflict.ExistingLocalID, destFolderID, identityConflict.DestinationUID, identityConflict.MessageIDMatch)
@@ -1064,9 +1093,9 @@ func (a *App) flushMoveDestinationSync(key, accountID, destFolderID string) {
 	}
 
 	if syncErr == nil {
-		// Header synchronization has replaced the temporary negative UIDs with
-		// the actual server UIDs, so Undo can now safely reverse the move.
-		if err := a.messageStore.DeleteTempUIDsForMessages(destFolderID, ids); err != nil {
+		// A normal header sync is not proof that a matching copy belongs to
+		// this move. Reconcile only recorded and freshly verified UIDs.
+		if err := a.recoverInterruptedMoves(a.actionContext(), accountID, destFolderID, ids); err != nil {
 			syncErr = err
 		}
 	}
@@ -1204,15 +1233,30 @@ func (a *App) moveMessagesToIMAP(messages []*message.Message, sourceFolderID str
 	gmailRFCIDs, gmailSpam, useGmailLabels := a.gmailSpamMove(accountID, orderedMessages, sourceFolder, destFolder)
 
 	err = a.withIMAPRetry(accountID, func(conn *imap.Client) error {
+		// Once a mutation has started, reconnecting may only verify its durable
+		// outcome. Never replay COPY/DELETE with stale source UIDs or mappings.
+		if remoteStarted {
+			return fmt.Errorf("move outcome requires recovery; refusing mutation replay")
+		}
+		clear(resolved)
+		destinationUIDs = nil
+		sourceValidity := uint32(0)
+		sources := map[string]uint32{}
+		for _, m := range orderedMessages {
+			sources[m.ID] = m.UID
+		}
+
 		// Without UIDPLUS, take the Message-ID/UID baseline from the server
 		// before COPY. The local cache may be stale and RFC822 Message-ID is not
 		// unique, so it cannot safely stand in for this remote snapshot. A Gmail
 		// label change returns no COPYUID either, so it needs the baseline too.
+		destination, err := conn.SelectMailbox(a.ctx, destFolder.Path)
+		if err != nil {
+			return fmt.Errorf("read destination UID validity: %w", err)
+		}
+		destinationValidity := destination.UIDValidity
 		preCopyUIDs := make(map[string]map[uint32]bool)
 		if !conn.Caps().Has(goImap.CapUIDPlus) || useGmailLabels {
-			if _, err := conn.SelectMailbox(a.ctx, destFolder.Path); err != nil {
-				return fmt.Errorf("failed to select destination mailbox for pre-COPY UID snapshot: %w", err)
-			}
 			for _, moved := range orderedMessages {
 				if moved.MessageID == "" {
 					continue
@@ -1255,32 +1299,40 @@ func (a *App) moveMessagesToIMAP(messages []*message.Message, sourceFolderID str
 		if !apiMoved {
 			// Select source mailbox
 			log.Debug().Str("mailbox", sourceFolder.Path).Msg("Selecting source mailbox")
-			if _, err := conn.SelectMailbox(a.ctx, sourceFolder.Path); err != nil {
+			source, err := conn.SelectMailbox(a.ctx, sourceFolder.Path)
+			if err != nil {
 				return fmt.Errorf("failed to select source mailbox: %w", err)
+			}
+			sourceValidity = source.UIDValidity
+			if sourceFolder.UIDValidity != 0 && sourceFolder.UIDValidity != sourceValidity {
+				return fmt.Errorf("source generation changed before COPY")
 			}
 
 			// COPY every selected message to the destination mailbox.
 			if len(moveUIDs) > 0 {
 				log.Debug().Str("destMailbox", destFolder.Path).Int("count", len(moveUIDs)).Msg("Copying messages to destination")
 				remoteStarted = true
-				destUIDs, copyErr := conn.CopyMessages(moveUIDs, destFolder.Path)
+				destUIDs, copyValidity, copyErr := conn.CopyMessagesWithValidity(moveUIDs, destFolder.Path)
 				if copyErr != nil {
 					return fmt.Errorf("failed to copy messages: %w", copyErr)
 				}
 				if len(destUIDs) == len(orderedMessages) {
+					if copyValidity == 0 {
+						return fmt.Errorf("COPYUID omitted destination generation")
+					}
+					destinationValidity = copyValidity
 					copyUIDUsed = true
 					for index, uid := range destUIDs {
 						resolved[orderedMessages[index].ID] = uint32(uid)
 						destinationUIDs = append(destinationUIDs, uint32(uid))
 					}
 				}
+				if len(resolved) > 0 {
+					if err := a.messageStore.RecordCopiedMoveUIDs(destFolder.ID, destinationValidity, resolved, sourceFolderID, sourceValidity, sources); err != nil {
+						return err
+					}
+				}
 				log.Debug().Msg("Messages copied successfully")
-			}
-
-			// DELETE the source copies after the destination COPY succeeds.
-			log.Debug().Int("count", len(moveUIDs)).Msg("Deleting messages from source (marking deleted + expunge)")
-			if err := conn.DeleteMessagesByUID(moveUIDs); err != nil {
-				return fmt.Errorf("failed to delete messages from source: %w", err)
 			}
 		}
 
@@ -1348,6 +1400,42 @@ func (a *App) moveMessagesToIMAP(messages []*message.Message, sourceFolderID str
 			}
 		}
 
+		if len(resolved) > 0 {
+			latest, err := conn.SelectMailbox(a.ctx, destFolder.Path)
+			if err != nil {
+				return err
+			}
+			if latest.UIDValidity != destinationValidity {
+				return fmt.Errorf("destination UID validity changed during move")
+			}
+			if !copyUIDUsed && !apiMoved {
+				if err := a.messageStore.RecordCopiedMoveUIDs(destFolder.ID, destinationValidity, resolved, sourceFolderID, sourceValidity, sources); err != nil {
+					return err
+				}
+			}
+			if apiMoved {
+				if err := a.messageStore.RecordMoveUIDEvidence(destFolder.ID, destinationValidity, resolved); err != nil {
+					return err
+				}
+			}
+		}
+		if !apiMoved {
+			source, err := conn.SelectMailbox(a.ctx, sourceFolder.Path)
+			if err != nil {
+				return err
+			}
+			if source.UIDValidity != sourceValidity {
+				return fmt.Errorf("source generation changed before cleanup")
+			}
+			if err := conn.DeleteMessagesByUID(moveUIDs); err != nil {
+				return fmt.Errorf("failed to delete messages from source: %w", err)
+			}
+			if len(resolved) > 0 {
+				if err := a.messageStore.ConfirmMoveCleanup(destFolder.ID, destinationValidity, resolved); err != nil {
+					return err
+				}
+			}
+		}
 		return nil
 	})
 
@@ -2666,9 +2754,9 @@ func (a *App) retainMoveRecovery(folderID string, ids []string) {
 	}
 	a.moveRecoveryIDs[folderID] = append(a.moveRecoveryIDs[folderID], ids...)
 }
-func (a *App) recoverInterruptedMoves(folderID string, ids []string) error {
+func (a *App) recoverInterruptedMoves(ctx context.Context, accountID, folderID string, ids []string) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	return a.messageStore.RecoverTempMoves(folderID, ids)
+	return a.syncEngine.RecoverInterruptedMoves(ctx, accountID, folderID, ids)
 }

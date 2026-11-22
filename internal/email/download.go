@@ -410,3 +410,81 @@ func (d *AttachmentDownloader) SaveAttachment(att *message.Attachment, content [
 	}
 	return savePath, nil
 }
+
+// ExtractUniqueAttachmentContent refuses filename-only fallback unless the
+// complete MIME tree contains exactly one matching payload. Persisted exact
+// repaired parts bypass this fallback and keep repeated filenames distinct.
+func (d *AttachmentDownloader) ExtractUniqueAttachmentContent(raw []byte, filename string) ([]byte, error) {
+	if len(raw) > maxAttachmentBytes {
+		return nil, fmt.Errorf("message exceeds attachment extraction limit")
+	}
+	root, err := gomessage.Read(bytes.NewReader(raw))
+	if err != nil {
+		return nil, err
+	}
+	var found [][]byte
+	parts := 0
+	var walk func(*gomessage.Entity, int) error
+	walk = func(part *gomessage.Entity, depth int) error {
+		parts++
+		if depth >= 64 || parts > 10000 {
+			return fmt.Errorf("MIME traversal limit exceeded")
+		}
+		if mr := part.MultipartReader(); mr != nil {
+			for {
+				child, err := mr.NextPart()
+				if err == io.EOF {
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				if err := walk(child, depth+1); err != nil {
+					return err
+				}
+			}
+		}
+		ct, ctParams, _ := mime.ParseMediaType(part.Header.Get("Content-Type"))
+		name := getFilename(part)
+		disposition, dispParams, _ := mime.ParseMediaType(part.Header.Get("Content-Disposition"))
+		// Match the sync parser: ordinary text is body content, while
+		// explicit attachments and non-signature binary leaves are files.
+		hasCID := part.Header.Get("Content-ID") != ""
+		named := dispParams["filename"] != "" || ctParams["name"] != ""
+		ordinaryText := strings.HasPrefix(ct, "text/") && !hasCID && !named && (ct == "text/plain" || ct == "text/html" || disposition != "inline")
+		if disposition != "attachment" && (ct == "" || ordinaryText || ct == "application/pkcs7-signature" || ct == "application/x-pkcs7-signature" || ct == "application/pgp-signature") {
+			return nil
+		}
+		if ct == "application/ms-tnef" || strings.EqualFold(name, "winmail.dat") {
+			content, err := readAttachmentContent(part.Body)
+			if err != nil {
+				return err
+			}
+			for _, inner := range DecodeTNEFAttachments(content) {
+				if inner.Filename == filename {
+					found = append(found, inner.Content)
+				}
+			}
+			if strings.EqualFold(filename, "winmail.dat") {
+				found = append(found, content)
+			}
+			return nil
+		}
+		if name != filename {
+			return nil
+		}
+		content, err := readAttachmentContent(part.Body)
+		if err != nil {
+			return err
+		}
+		found = append(found, content)
+		return nil
+	}
+	if err := walk(root, 0); err != nil {
+		return nil, err
+	}
+	if len(found) != 1 {
+		return nil, fmt.Errorf("attachment filename is missing or ambiguous: %s (%d matches)", filename, len(found))
+	}
+	return found[0], nil
+}

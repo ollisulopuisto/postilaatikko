@@ -49,10 +49,8 @@ type stubEvents struct{ v1.MailboxEventSource }
 // finding on PERF-SC-002: a hand-mirrored list stayed green when production
 // added a mount call). The point of this test is that a newly mounted route
 // fails classification until a human decides whether the read coalescer may
-// merge it. Attachment routes (/v1/messages/attachments/*) are deliberately
-// absent: MailboxReadAPIHandler mounts thread/body reads via
-// MountThreadBodyRoutes only; the attachment routes live behind
-// ReadHandler.MountRoutes, which this assembly never calls.
+// merge it. Attachment reads remain non-coalescible because a byte read may
+// contact the provider; both routes still require attachment-read capability.
 func mountAllV1Routes(mux *recordingMux) {
 	mountMailboxV1Routes(mux, &mailboxRouteDeps{
 		catalog:       stubCatalog{},
@@ -167,6 +165,8 @@ var classifiedRoutes = []routeClassification{
 	// Thread and body reads: thread rendering is read-only (see the comment
 	// on coalescibleRead); body fetches can hit providers and cache bodies,
 	// so they stay uncoalesced.
+	post("/v1/messages/attachments/list", false),
+	post("/v1/messages/attachments/read", false),
 	post("/v1/threads/read", true),
 	get("GET /v1/messages/{messageID}/header", false),
 	post("/v1/messages/body", false),

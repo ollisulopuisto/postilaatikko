@@ -28,6 +28,8 @@ import (
 	"github.com/ollisulopuisto/postilaatikko/internal/pgp"
 	"github.com/ollisulopuisto/postilaatikko/internal/smime"
 	"github.com/ollisulopuisto/postilaatikko/internal/smtp"
+	"github.com/ollisulopuisto/postilaatikko/internal/sync"
+	"github.com/ollisulopuisto/postilaatikko/internal/views"
 	"github.com/rs/zerolog"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -890,7 +892,7 @@ func (a *App) PrepareReply(messageID, mode string) (*smtp.ComposeMessage, error)
 	log.Debug().Str("message_ref", logging.ShortHash(messageID)).Str("mode", mode).Msg("Preparing reply message")
 
 	// Get the original message
-	msg, err := a.messageStore.Get(messageID)
+	msg, err := a.messageStore.GetReaderMessage(messageID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get message: %w", err)
 	}
@@ -1052,7 +1054,7 @@ func (a *App) PrepareReply(messageID, mode string) (*smtp.ComposeMessage, error)
 
 	// Fetch inline attachments so cid: references in quoted HTML render correctly
 	var attachments []smtp.Attachment
-	inlineMap, inlineErr := a.attachmentStore.GetInlineByMessage(messageID)
+	inlineMap, inlineErr := a.attachmentStore.GetInlineByMessage(readerContentID(msg))
 	if inlineErr != nil {
 		log.Warn().Err(inlineErr).Msg("Failed to get inline attachments for reply/forward")
 	}
@@ -1080,7 +1082,9 @@ func (a *App) PrepareReply(messageID, mode string) (*smtp.ComposeMessage, error)
 
 	// For forwards, also include regular (non-inline) attachments
 	if mode == "forward" {
-		a.fetchForwardAttachments(log, msg, &attachments)
+		if err := a.fetchForwardAttachments(log, msg, &attachments); err != nil {
+			return nil, err
+		}
 	}
 
 	return &smtp.ComposeMessage{
@@ -1109,13 +1113,19 @@ func (a *App) PrepareComposerReply(accountID, messageID, mode string) (*smtp.Com
 	if !useService {
 		return a.PrepareReply(messageID, mode)
 	}
-	client, err := a.composerServiceClient(ctx, v1.CapabilityMailRead, v1.CapabilityMailBodyFetch, v1.CapabilityDraftWrite)
+	client, err := a.composerServiceClient(ctx, v1.CapabilityMailRead, v1.CapabilityAttachmentRead, v1.CapabilityMailBodyFetch, v1.CapabilityDraftWrite)
 	if err != nil {
 		return nil, err
 	}
-	_, err = client.ReadBody(ctx, v1.BodyReadRequest{Ref: v1.MessageRef{AccountID: accountID, MessageID: messageID}, Mode: v1.FetchExplicit})
+	ref := v1.MessageRef{AccountID: accountID, MessageID: messageID}
+	cached, err := client.ReadBody(ctx, v1.BodyReadRequest{Ref: ref, Mode: v1.FetchCachedOnly})
 	if err != nil {
-		return nil, fmt.Errorf("fetch original message body through mailbox service: %w", err)
+		return nil, fmt.Errorf("read cached original through mailbox service: %w", err)
+	}
+	if cached.ContentState != views.ContentCached {
+		if _, err := client.ReadBody(ctx, v1.BodyReadRequest{Ref: ref, Mode: v1.FetchExplicit}); err != nil {
+			return nil, fmt.Errorf("fetch original message body through mailbox service: %w", err)
+		}
 	}
 	return client.PrepareReply(ctx, v1.ReplyPreparationRequest{AccountID: accountID, MessageID: messageID, Mode: mode})
 }
@@ -1146,12 +1156,12 @@ func quotedHTMLReferencesCID(html, cid string) bool {
 }
 
 // fetchForwardAttachments fetches regular (non-inline) attachment content from IMAP
-// and appends them to the attachments slice. Failures are logged but not fatal.
-func (a *App) fetchForwardAttachments(log zerolog.Logger, msg *message.Message, attachments *[]smtp.Attachment) {
-	allAtts, err := a.attachmentStore.GetByMessage(msg.ID)
+// and appends them to the attachments slice. Missing files abort preparation.
+func (a *App) fetchForwardAttachments(log zerolog.Logger, msg *message.Message, attachments *[]smtp.Attachment) error {
+	allAtts, err := a.attachmentStore.GetByMessage(readerContentID(msg))
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to get attachments for forward")
-		return
+		return err
 	}
 
 	// Filter to non-inline attachments only
@@ -1162,22 +1172,18 @@ func (a *App) fetchForwardAttachments(log zerolog.Logger, msg *message.Message, 
 		}
 	}
 	if len(regularAtts) == 0 {
-		return
+		return nil
 	}
 
-	// Fetch raw message from IMAP once for all attachments
-	raw, fetchErr := a.syncEngine.FetchRawMessage(a.ctx, msg.AccountID, msg.FolderID, msg.UID)
-	if fetchErr != nil {
-		log.Warn().Err(fetchErr).Msg("Failed to fetch raw message for forward attachments (offline?)")
-		return
-	}
+	var raw []byte
+	ctx := sync.WithGmailAttachmentCache(a.ctx)
 
 	downloader := email.NewAttachmentDownloader(a.paths.AttachmentsPath())
 	for _, att := range regularAtts {
-		content, extractErr := a.storedAttachmentContent(downloader, raw, att)
+		content, extractErr := a.loadAttachmentContent(msg, att, downloader, &raw, ctx)
 		if extractErr != nil {
 			log.Warn().Err(extractErr).Str("filename", att.Filename).Msg("Failed to extract attachment for forward")
-			continue
+			return fmt.Errorf("forward not prepared: original attachment %s unavailable: %w", att.Filename, extractErr)
 		}
 		*attachments = append(*attachments, smtp.Attachment{
 			Content:     content,
@@ -1186,6 +1192,7 @@ func (a *App) fetchForwardAttachments(log zerolog.Logger, msg *message.Message, 
 			Inline:      false,
 		})
 	}
+	return nil
 }
 
 // parseDataURL extracts the content type and base64 data from a data URL.
@@ -1532,4 +1539,12 @@ func (ops *composeOps) gmailClient(ctx context.Context, accountID string) (*gmai
 		return tokens.AccessToken, nil
 	})
 	return client, nil
+}
+
+// readerContentID selects cached content without changing the live action target.
+func readerContentID(msg *message.Message) string {
+	if msg.CachedBodySourceID != "" {
+		return msg.CachedBodySourceID
+	}
+	return msg.ID
 }

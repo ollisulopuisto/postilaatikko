@@ -149,13 +149,16 @@ func (e *Engine) SyncMessages(ctx context.Context, accountID, folderID string, s
 
 		// Delete all local messages and resync
 		cleanupStarted := time.Now()
-		if err := e.messageStore.DeleteByFolder(folderID); err != nil {
+		if err := e.messageStore.DeleteSyncedUIDCache(folderID); err != nil {
 			timings.cleanup += time.Since(cleanupStarted)
 			return fmt.Errorf("failed to delete messages: %w", err)
 		}
 		timings.cleanup += time.Since(cleanupStarted)
 		f.UIDValidity = mailbox.UIDValidity
 		f.FlagsSyncModSeq = 0
+		if err := e.folderStore.Update(f); err != nil {
+			return fmt.Errorf("persist reset cache generation: %w", err)
+		}
 		// The old modseq refers to a different universe of UIDs after a
 		// mailbox recreation; treat this cycle as first-sync.
 		uidValidityChanged = true
@@ -171,15 +174,9 @@ func (e *Engine) SyncMessages(ctx context.Context, accountID, folderID string, s
 			Int("syncPeriodDays", syncPeriodDays).
 			Msg("Using date-based sync filter")
 
-		// Delete local messages older than sync period
-		cleanupStarted := time.Now()
-		deleted, err := e.messageStore.DeleteOlderThanInFolder(folderID, sinceDate)
-		timings.cleanup += time.Since(cleanupStarted)
-		if err != nil {
-			e.log.Warn().Err(err).Msg("Failed to delete old messages")
-		} else if deleted > 0 {
-			e.log.Info().Int("deleted", deleted).Msg("Deleted messages older than sync period")
-		}
+		// The server window uses INTERNALDATE, not the envelope's sent date.
+		// Reconcile absent UIDs only after a successful server listing below;
+		// pre-pruning would dispatch old cached mail as a new arrival.
 	}
 
 	// Get local message UIDs
@@ -237,7 +234,7 @@ func (e *Engine) SyncMessages(ctx context.Context, accountID, folderID string, s
 		if err := e.folderStore.Update(f); err != nil {
 			e.log.Warn().Err(err).Msg("Failed to update folder sync state")
 		}
-		return fmt.Errorf("destination sync incomplete: empty remote listing conflicts with local messages")
+		return nil
 	}
 
 	compareStarted := time.Now()
@@ -246,8 +243,22 @@ func (e *Engine) SyncMessages(ctx context.Context, accountID, folderID string, s
 		remoteUIDSet[uid] = true
 	}
 
+	// A wider window can return an exact retired repair identity. Restore its
+	// stable row before header import creates another owner for the same UID.
+	restored, err := e.messageStore.ReattachRetiredRepairs(folderID, mailbox.UIDValidity, remoteUIDSet)
+	if err != nil {
+		return fmt.Errorf("reattach retired repairs: %w", err)
+	}
+	for _, uid := range restored {
+		localUIDSet[uid] = true
+	}
+	if len(restored) > 0 {
+		prevModSeq, f.FlagsSyncModSeq = 0, 0
+	}
+
 	// Find new UIDs (on server but not local)
 	var newUIDs []uint32
+	classificationBackfill := map[uint32]bool{}
 	for uid := range remoteUIDSet {
 		if !localUIDSet[uid] {
 			newUIDs = append(newUIDs, uid)
@@ -261,6 +272,7 @@ func (e *Engine) SyncMessages(ctx context.Context, accountID, folderID string, s
 		for _, uid := range unclassified {
 			if remoteUIDSet[uid] {
 				newUIDs = append(newUIDs, uid)
+				classificationBackfill[uid] = true
 			}
 		}
 	}
@@ -304,7 +316,7 @@ func (e *Engine) SyncMessages(ctx context.Context, accountID, folderID string, s
 		// Gmail hides messages from all other IMAP views when Trash/Spam label is
 		// added, so the UID disappears from this folder's server listing even though
 		// the message isn't truly deleted. Skip local deletion to preserve it.
-		if isGmail {
+		if isGmail && f.Type != folder.TypeTrash && f.Type != folder.TypeSpam {
 			msg, msgErr := e.messageStore.GetByUID(folderID, uid)
 			if msgErr == nil && msg != nil && msg.MessageID != "" {
 				inTrash, trashErr := e.messageStore.ExistsInFolder(msg.MessageID, string(folder.TypeTrash), accountID)
@@ -321,7 +333,7 @@ func (e *Engine) SyncMessages(ctx context.Context, accountID, folderID string, s
 			}
 		}
 
-		if err := e.messageStore.DeleteByUID(folderID, uid); err != nil {
+		if err := e.messageStore.DeleteSyncedUID(folderID, uid); err != nil {
 			e.log.Warn().Err(err).Uint32("uid", uid).Msg("Failed to delete message")
 		}
 	}
@@ -347,7 +359,7 @@ func (e *Engine) SyncMessages(ctx context.Context, accountID, folderID string, s
 			conn.Client().RawClient(),
 			folderID,
 			existingUIDs,
-			uidValidityChanged,
+			uidValidityChanged || len(restored) > 0,
 			prevModSeq,
 			mailbox.HighestModSeq,
 			conn.Client().SupportsCondStore(),
@@ -360,6 +372,40 @@ func (e *Engine) SyncMessages(ctx context.Context, accountID, folderID string, s
 		timings.flagsPersist = flagMetrics.persist
 		timings.flagsRemote = flagMetrics.remoteCount
 		timings.flagsUpdates = flagMetrics.updateCount
+	}
+
+	// Preserve the stable local identity before header upserts can claim a
+	// newly confirmed UID, especially for repaired or Message-ID-less mail.
+	pending, err := e.messageStore.PendingProvenMoveIDs(folderID)
+	if err != nil {
+		return err
+	}
+	if len(pending) > 0 {
+		if recoveryErr := e.recoverInterruptedMovesOnConnection(ctx, accountID, f, pending, conn.Client()); recoveryErr != nil {
+			e.log.Warn().Err(recoveryErr).Msg("Some copied moves remain unresolved")
+		}
+		latest, err := conn.Client().SelectMailbox(ctx, f.Path)
+		if err != nil {
+			return err
+		}
+		if latest.UIDValidity != mailbox.UIDValidity {
+			return fmt.Errorf("destination generation changed during recovery")
+		}
+		cached, err := e.messageStore.GetAllUIDs(folderID)
+		if err != nil {
+			return err
+		}
+		cachedSet := map[uint32]bool{}
+		for _, uid := range cached {
+			cachedSet[uid] = true
+		}
+		remaining := newUIDs[:0]
+		for _, uid := range newUIDs {
+			if !cachedSet[uid] || classificationBackfill[uid] {
+				remaining = append(remaining, uid)
+			}
+		}
+		newUIDs = remaining
 	}
 
 	// Fetch new messages with incremental approach (headers first)

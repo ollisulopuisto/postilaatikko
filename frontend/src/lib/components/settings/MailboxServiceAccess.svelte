@@ -262,15 +262,15 @@
     <div class="space-y-2 border-t border-border pt-3">
       <div class="space-y-1">
         <h4 class="text-sm font-medium">{$_('settingsGeneral.mailboxServiceDraftAccess')}</h4>
-        <p class="text-xs text-muted-foreground">{$_('settingsGeneral.mailboxServiceDraftAccessHelp')}</p>
+        <p class="text-xs text-muted-foreground">{$_('settingsGeneral.mailboxServiceDraftReplyAccessHelp')}</p>
       </div>
       {#if status.draftAccessAuthorized}
-        <p class="text-sm text-muted-foreground">{$_('settingsGeneral.mailboxServiceDraftAccessEnabled')}</p>
+        <p class="text-sm text-muted-foreground">{$_('settingsGeneral.mailboxServiceDraftReplyAccessEnabled')}</p>
       {:else if isRemote}
         <p class="text-sm text-muted-foreground">{$_('settingsGeneral.mailboxServiceRemoteGrantRequired')}</p>
       {:else}
         <Button onclick={() => enableAccess('draft.access')} disabled={saving !== null}>
-          {saving === 'draft.access' ? $_('settingsGeneral.mailboxServiceEnabling') : $_('settingsGeneral.mailboxServiceEnableDraftAccess')}
+          {saving === 'draft.access' ? $_('settingsGeneral.mailboxServiceEnabling') : $_('settingsGeneral.mailboxServiceEnableDraftReplyAccess')}
         </Button>
       {/if}
       {#if draftAccessError}

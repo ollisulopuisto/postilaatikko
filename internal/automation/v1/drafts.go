@@ -181,6 +181,10 @@ func (h *DraftsHandler) MountRoutes(mux RouteMux, requireCap func(http.ResponseW
 		writeAPIResponse(w, r, http.StatusOK, map[string]bool{"deleted": true})
 	})
 	mux.HandleFunc("POST /v1/replies", func(w http.ResponseWriter, r *http.Request) {
+		// Preparation returns private quotations and may include original files.
+		if !requireCap(w, r, CapabilityMailRead) || !requireCap(w, r, CapabilityAttachmentRead) || !requireCap(w, r, CapabilityMailBodyFetch) {
+			return
+		}
 		if !requireCap(w, r, CapabilityDraftWrite) {
 			return
 		}

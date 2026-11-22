@@ -3,6 +3,7 @@ package v1
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -103,6 +104,11 @@ func MountSearchRoute(mux RouteMux, ops SearchOperations, requireCap func(http.R
 // attachment operations to be implemented by the same backend.
 func MountThreadBodyRoutes(mux RouteMux, ops MessageReadOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
 	(&ReadHandler{messages: ops}).mountThreadBodyRoutes(mux, requireCap)
+}
+
+// MountAttachmentRoutes mounts account-qualified metadata and byte reads.
+func MountAttachmentRoutes(mux RouteMux, messages MessageReadOperations, attachments AttachmentReadOperations, requireCap func(http.ResponseWriter, *http.Request, Capability) bool) {
+	(&ReadHandler{messages: messages, attachments: attachments}).mountAttachmentRoutes(mux, requireCap)
 }
 
 // MountRoutes mounts read API endpoints onto a standard http.ServeMux.
@@ -547,7 +553,7 @@ func (h *ReadHandler) handleMessageBody(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	if shouldFetch && !msg.BodyFetched {
+	if shouldFetch {
 		fetchedMsg, fetchErr := h.messages.FetchMessageBody(r.Context(), req.Ref.AccountID, req.Ref.MessageID)
 		if fetchErr != nil {
 			h.writeError(w, r, http.StatusBadGateway, CodeProviderError, fmt.Sprintf("Provider fetch failed: %v", fetchErr), true)
@@ -604,7 +610,7 @@ func (h *ReadHandler) handleAttachmentList(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	atts, err := h.attachments.GetAttachments(req.Ref.MessageID)
+	atts, err := h.attachments.GetAttachments(bodyContentID(msg))
 	if err != nil {
 		h.writeError(w, r, http.StatusInternalServerError, CodeInternal, "Failed to retrieve attachments", true)
 		return
@@ -647,9 +653,18 @@ func (h *ReadHandler) handleAttachmentRead(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	data, contentType, err := h.attachments.ReadAttachmentBytes(req.Ref.AccountID, req.Ref.MessageID, req.AttachmentID)
+	data, contentType, err := h.attachments.ReadAttachmentBytes(req.Ref.AccountID, bodyContentID(msg), req.AttachmentID)
 	if err != nil {
-		h.writeError(w, r, http.StatusNotFound, CodeNotFound, fmt.Sprintf("Attachment read failed: %v", err), false)
+		var fault *Fault
+		if errors.As(err, &fault) {
+			status := http.StatusBadGateway
+			if fault.Code == CodeNotFound {
+				status = http.StatusNotFound
+			}
+			h.writeError(w, r, status, fault.Code, fault.Message, fault.Retryable)
+			return
+		}
+		h.writeError(w, r, http.StatusUnprocessableEntity, CodeContentNotFetched, "Attachment content unavailable", false)
 		return
 	}
 
@@ -696,4 +711,11 @@ func (h *ReadHandler) writeError(w http.ResponseWriter, r *http.Request, statusC
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(statusCode)
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func bodyContentID(msg *message.Message) string {
+	if msg.CachedBodySourceID != "" {
+		return msg.CachedBodySourceID
+	}
+	return msg.ID
 }

@@ -2,6 +2,8 @@ package client
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -63,5 +65,27 @@ func TestReadAttachmentBytesPreservesRawResponseAndContentType(t *testing.T) {
 	}
 	if string(got) != string(want) || contentType != "image/png" {
 		t.Fatalf("response = %v, %q; want %v, image/png", got, contentType, want)
+	}
+}
+
+func TestAttachmentReadPreservesTypedRetryGuidance(t *testing.T) {
+	for _, retry := range []bool{true, false} {
+		code := v1.CodeProviderError
+		status := http.StatusBadGateway
+		if !retry {
+			code = v1.CodeNotFound
+			status = http.StatusNotFound
+		}
+		client := New(Config{Endpoint: "https://mail.example.test", Token: "fixture"})
+		client.httpClient.Transport = roundTripFunc(func(*http.Request) (*http.Response, error) {
+			data, _ := json.Marshal(v1.NewFault(code, "safe message", retry, nil).Response("fixture"))
+			return &http.Response{StatusCode: status, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(string(data)))}, nil
+		})
+		_, _, err := client.ReadAttachmentBytes(context.Background(), v1.MessageRef{AccountID: "a", MessageID: "m"}, "att")
+		var api *APIError
+		var fault *v1.Fault
+		if !errors.As(err, &api) || api.StatusCode != status || !errors.As(err, &fault) || fault.Code != code || fault.Retryable != retry {
+			t.Fatal("typed retry guidance lost", err)
+		}
 	}
 }

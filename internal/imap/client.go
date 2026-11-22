@@ -955,11 +955,18 @@ func (c *Client) RemoveMessageFlags(uids []imap.UID, flags []imap.Flag) error {
 // The source mailbox must already be selected before calling this method
 // Returns the new UIDs in the destination mailbox (if server supports UIDPLUS)
 func (c *Client) CopyMessages(uids []imap.UID, destMailbox string) ([]imap.UID, error) {
+	uids, _, err := c.CopyMessagesWithValidity(uids, destMailbox)
+	return uids, err
+}
+
+// CopyMessagesWithValidity keeps COPYUID bound to the generation returned by
+// the server, rather than a separate SELECT observed before or after COPY.
+func (c *Client) CopyMessagesWithValidity(uids []imap.UID, destMailbox string) ([]imap.UID, uint32, error) {
 	if c.client == nil {
-		return nil, fmt.Errorf("not connected")
+		return nil, 0, fmt.Errorf("not connected")
 	}
 	if len(uids) == 0 {
-		return nil, nil
+		return nil, 0, nil
 	}
 
 	c.log.Debug().
@@ -975,7 +982,7 @@ func (c *Client) CopyMessages(uids []imap.UID, destMailbox string) ([]imap.UID, 
 	copyCmd := c.client.Copy(uidSet, destMailbox)
 	copyData, err := copyCmd.Wait()
 	if err != nil {
-		return nil, fmt.Errorf("failed to copy messages: %w", err)
+		return nil, 0, fmt.Errorf("failed to copy messages: %w", err)
 	}
 
 	// Extract destination UIDs if available (UIDPLUS extension)
@@ -994,7 +1001,11 @@ func (c *Client) CopyMessages(uids []imap.UID, destMailbox string) ([]imap.UID, 
 		Str("destMailbox", destMailbox).
 		Msg("Messages copied successfully")
 
-	return destUIDs, nil
+	var validity uint32
+	if copyData != nil {
+		validity = copyData.UIDValidity
+	}
+	return destUIDs, validity, nil
 }
 
 // DeleteMessagesByUID marks multiple messages as deleted and expunges them

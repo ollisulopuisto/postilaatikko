@@ -15,7 +15,6 @@ import (
 	automationclient "github.com/ollisulopuisto/postilaatikko/internal/automation/client"
 	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
 	"github.com/ollisulopuisto/postilaatikko/internal/email"
-	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
 	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 	"github.com/ollisulopuisto/postilaatikko/internal/message"
 	"github.com/ollisulopuisto/postilaatikko/internal/pgp"
@@ -233,10 +232,9 @@ func (a *App) DownloadAttachment(attachmentID, savePath string) (string, error) 
 
 	log.Debug().Int("size", att.Size).Msg("Got attachment metadata")
 
-	// Check if already downloaded (only for default location, not custom paths)
-	if savePath == "" && att.LocalPath != "" {
-		if _, err := os.Stat(att.LocalPath); err == nil {
-			log.Debug().Msg("Attachment already downloaded")
+	// Open an existing download only while its original-byte integrity holds.
+	if savePath == "" && a.paths != nil {
+		if _, ok := a.attachmentStore.ReadVerifiedDownload(a.paths.AttachmentsPath(), att.ID); ok {
 			return att.LocalPath, nil
 		}
 	}
@@ -255,27 +253,10 @@ func (a *App) DownloadAttachment(attachmentID, savePath string) (string, error) 
 	log.Debug().Uint32("uid", msg.UID).Str("folderID", msg.FolderID).Msg("Got message info")
 
 	downloader := email.NewAttachmentDownloader(a.paths.AttachmentsPath())
-	content, err := a.syncEngine.FetchGmailAttachment(a.ctx, msg.AccountID, att.ID)
-	if errors.Is(err, gmail.ErrNotCapable) {
-
-		// Fetch raw message from IMAP
-		raw, err := a.syncEngine.FetchRawMessage(a.ctx, msg.AccountID, msg.FolderID, msg.UID)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to fetch raw message from IMAP")
-			return "", fmt.Errorf("failed to fetch message: %w", err)
-		}
-
-		log.Debug().Int("rawSize", len(raw)).Msg("Fetched raw message from IMAP")
-
-		// Extract attachment content
-		content, err = a.storedAttachmentContent(downloader, raw, att)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to extract attachment content")
-			return "", fmt.Errorf("failed to extract attachment: %w", err)
-		}
-
-	} else if err != nil {
-		return "", fmt.Errorf("failed to fetch Gmail attachment: %w", err)
+	var raw []byte
+	content, err := a.loadAttachmentContent(msg, att, downloader, &raw)
+	if err != nil {
+		return "", err
 	}
 
 	log.Debug().Int("contentSize", len(content)).Msg("Extracted attachment content")
@@ -289,7 +270,7 @@ func (a *App) DownloadAttachment(attachmentID, savePath string) (string, error) 
 
 	// Update attachment record with local path (only for default location)
 	if savePath == "" {
-		if err := a.attachmentStore.UpdateLocalPath(attachmentID, localPath); err != nil {
+		if err := a.attachmentStore.SetVerifiedDownload(attachmentID, localPath, content); err != nil {
 			log.Warn().Err(err).Msg("Failed to update attachment local path")
 		}
 	}
@@ -405,10 +386,21 @@ func (a *App) SaveAllAttachmentsForAccount(accountID, messageID string) (string,
 	return saveDir, nil
 }
 
+// Explicit opening preserves editable legacy downloads without promoting their
+// bytes to verified originals. All export/forward paths still require integrity.
+func (a *App) attachmentPathForOpening(id string) (string, error) {
+	if a.attachmentStore != nil && a.paths != nil {
+		if path, ok := a.attachmentStore.LocalDownloadPath(a.paths.AttachmentsPath(), id); ok {
+			return path, nil
+		}
+	}
+	return a.DownloadAttachment(id, "")
+}
+
 // OpenAttachment downloads (if needed) and opens an attachment with the default application
 func (a *App) OpenAttachment(attachmentID string) error {
 	// Download if not already downloaded
-	localPath, err := a.DownloadAttachment(attachmentID, "")
+	localPath, err := a.attachmentPathForOpening(attachmentID)
 	if err != nil {
 		return err
 	}
@@ -420,11 +412,41 @@ func (a *App) OpenAttachment(attachmentID string) error {
 // OpenAttachmentForAccount opens an attachment after explicitly fetching it
 // from its owning helper account when configured for remote-only mode.
 func (a *App) OpenAttachmentForAccount(accountID, messageID, attachmentID string) error {
+	if !a.remoteServiceMode {
+		path, err := a.localAttachmentPathForAccountOpening(accountID, messageID, attachmentID)
+		if err != nil {
+			return err
+		}
+		return a.openFile(path)
+	}
 	path, err := a.DownloadAttachmentForAccount(accountID, messageID, attachmentID, "")
 	if err != nil {
 		return err
 	}
 	return a.openFile(path)
+}
+
+// Listing uses the supplied message row, while a reader overlay may additionally
+// expose a cached content row. Both belong to this reader, not unrelated rows.
+func (a *App) localAttachmentPathForAccountOpening(accountID, messageID, attachmentID string) (string, error) {
+	if a.attachmentStore == nil || a.messageStore == nil {
+		return "", errors.New("attachment store unavailable")
+	}
+	att, err := a.attachmentStore.Get(attachmentID)
+	if err != nil {
+		return "", err
+	}
+	if att == nil {
+		return "", errors.New("attachment not found in message")
+	}
+	msg, err := a.messageStore.GetReaderMessage(messageID)
+	if err != nil {
+		return "", err
+	}
+	if msg == nil || msg.AccountID != accountID || (att.MessageID != messageID && att.MessageID != readerContentID(msg)) {
+		return "", errors.New("message not found in account")
+	}
+	return a.attachmentPathForOpening(attachmentID)
 }
 
 // SaveAttachmentAs shows a Save As dialog and saves the attachment to the user-selected location
@@ -689,8 +711,6 @@ func (a *App) OpenFolder(path string) error {
 // SaveAllAttachments shows a folder picker and saves all attachments from a message to that folder
 // Returns the folder path where files were saved, or empty string if cancelled
 func (a *App) SaveAllAttachments(messageID string) (string, error) {
-	log := logging.WithComponent("app")
-
 	// Get all attachments for the message
 	attachments, err := a.attachmentStore.GetByMessage(messageID)
 	if err != nil {
@@ -735,33 +755,7 @@ func (a *App) SaveAllAttachments(messageID string) (string, error) {
 		return "", fmt.Errorf("message not found: %s", messageID)
 	}
 
-	// Fetch raw message from IMAP
-	raw, err := a.syncEngine.FetchRawMessage(a.ctx, msg.AccountID, msg.FolderID, msg.UID)
-	if err != nil {
-		return "", fmt.Errorf("failed to fetch message: %w", err)
-	}
-
-	// Save each attachment
-	downloader := email.NewAttachmentDownloader(a.paths.AttachmentsPath())
-	savedCount := 0
-
-	for _, att := range attachments {
-		content, err := a.storedAttachmentContent(downloader, raw, att)
-		if err != nil {
-			log.Warn().Err(err).Str("filename", att.Filename).Msg("Failed to extract attachment")
-			continue
-		}
-
-		_, err = downloader.SaveAttachmentToDirectory(att, content, saveDir)
-		if err != nil {
-			log.Warn().Err(err).Str("filename", att.Filename).Msg("Failed to save attachment")
-			continue
-		}
-		savedCount++
-	}
-
-	log.Info().Int("count", savedCount).Str("folder", saveDir).Msg("Saved all attachments")
-	return saveDir, nil
+	return a.saveAttachmentBatch(msg, attachments, saveDir, nil)
 }
 
 // decryptMessageBody decrypts an encrypted message's raw body and returns the inner plaintext bytes.
@@ -1005,8 +999,6 @@ func (a *App) SaveAllEncryptedAttachments(messageID string) (string, error) {
 
 // saveAllAttachmentsViaPortal saves all attachments using the XDG FileChooser portal.
 func (a *App) saveAllAttachmentsViaPortal(messageID string, attachments []*message.Attachment, defaultDir string) (string, error) {
-	log := logging.WithComponent("app")
-
 	filenames := make([]string, len(attachments))
 	for i, att := range attachments {
 		filenames[i] = att.Filename
@@ -1029,36 +1021,7 @@ func (a *App) saveAllAttachmentsViaPortal(messageID string, attachments []*messa
 		return "", fmt.Errorf("message not found: %s", messageID)
 	}
 
-	// Fetch raw message from IMAP
-	raw, err := a.syncEngine.FetchRawMessage(a.ctx, msg.AccountID, msg.FolderID, msg.UID)
-	if err != nil {
-		return "", fmt.Errorf("failed to fetch message: %w", err)
-	}
-
-	downloader := email.NewAttachmentDownloader(a.paths.AttachmentsPath())
-	savedCount := 0
-
-	for i, att := range attachments {
-		if i >= len(savePaths) {
-			break
-		}
-
-		content, err := a.storedAttachmentContent(downloader, raw, att)
-		if err != nil {
-			log.Warn().Err(err).Str("filename", att.Filename).Msg("Failed to extract attachment")
-			continue
-		}
-
-		_, err = downloader.SaveAttachment(att, content, savePaths[i])
-		if err != nil {
-			log.Warn().Err(err).Str("filename", att.Filename).Msg("Failed to save attachment")
-			continue
-		}
-		savedCount++
-	}
-
-	log.Info().Int("count", savedCount).Msg("Saved all attachments via portal")
-	return filepath.Dir(savePaths[0]), nil
+	return a.saveAttachmentBatch(msg, attachments, filepath.Dir(savePaths[0]), savePaths)
 }
 
 // saveAllEncryptedAttachmentsViaPortal saves all encrypted attachments using the XDG FileChooser portal.
@@ -1102,4 +1065,33 @@ func (a *App) saveAllEncryptedAttachmentsViaPortal(attachments []*message.Attach
 
 	log.Info().Int("count", savedCount).Msg("Saved all encrypted attachments via portal")
 	return filepath.Dir(savePaths[0]), nil
+}
+
+// saveAttachmentBatch preserves completed writes but never reports skipped
+// files as saved. Portal and native dialogs share this result contract.
+func (a *App) saveAttachmentBatch(msg *message.Message, attachments []*message.Attachment, dir string, paths []string) (string, error) {
+	var raw []byte
+	downloader := email.NewAttachmentDownloader(a.paths.AttachmentsPath())
+	saved := 0
+	for i, att := range attachments {
+		if paths != nil && i >= len(paths) {
+			break
+		}
+		content, err := a.loadAttachmentContent(msg, att, downloader, &raw)
+		if err != nil {
+			continue
+		}
+		if paths == nil {
+			_, err = downloader.SaveAttachmentToDirectory(att, content, dir)
+		} else {
+			_, err = downloader.SaveAttachment(att, content, paths[i])
+		}
+		if err == nil {
+			saved++
+		}
+	}
+	if saved != len(attachments) {
+		return "", fmt.Errorf("saved %d of %d attachments in %s; remaining files could not be saved", saved, len(attachments), dir)
+	}
+	return dir, nil
 }

@@ -4,7 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/ollisulopuisto/postilaatikko/internal/smtp"
+	"github.com/ollisulopuisto/postilaatikko/internal/views"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -366,4 +371,69 @@ func TestStarReconcilesProviderConfirmedPartialSuccess(t *testing.T) {
 		}
 	}
 	t.Fatal("confirmed partial star was not emitted to the desktop")
+}
+
+type grantReplyOperations struct {
+	v1.DraftOperations
+	calls int
+}
+
+func (o *grantReplyOperations) PrepareReply(v1.ReplyPreparationRequest) (*smtp.ComposeMessage, error) {
+	o.calls++
+	return &smtp.ComposeMessage{TextBody: "quoted original"}, nil
+}
+func TestDraftAccessUpgradeAuthorizesActualDesktopReply(t *testing.T) {
+	db := openMailboxMutationTestDB(t)
+	store := automation.NewSQLiteTokenStore(db)
+	old, err := store.RegisterClient(desktopMailboxClientName, []v1.Capability{v1.CapabilityMailRead, v1.CapabilityMailBodyFetch, v1.CapabilityDraftRead, v1.CapabilityDraftWrite})
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, _ := json.Marshal(desktopMailboxCredential{ClientID: old.ClientID, Token: old.Token})
+	connector := &mailboxServiceConnector{db: db, keyring: &testMailboxSecretStore{secret: string(encoded)}}
+	connector.capabilitiesFunc = func(context.Context) (*v1.Capabilities, error) {
+		grant, err := store.GetGrant(connector.credential.Token)
+		if err != nil {
+			return nil, err
+		}
+		return &v1.Capabilities{Version: v1.Version, Capabilities: grant.Capabilities}, nil
+	}
+	mux := http.NewServeMux()
+	ops := &grantReplyOperations{}
+	v1.NewDraftsHandler(ops, nil).MountRoutes(mux, func(w http.ResponseWriter, r *http.Request, cap v1.Capability) bool {
+		grant, err := store.GetGrant(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+		if err != nil || !hasCapability(grant.Capabilities, cap) {
+			w.WriteHeader(http.StatusForbidden)
+			return false
+		}
+		return true
+	})
+	mux.HandleFunc("POST /v1/messages/body", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(v1.Response[v1.MessageBody]{Data: v1.MessageBody{ContentState: views.ContentCached, Original: &v1.OriginalBody{Text: "quoted original"}}})
+	})
+	connector.transport = contactsRoundTrip(func(r *http.Request) (*http.Response, error) {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, r)
+		return rec.Result(), nil
+	})
+	app := &App{ctx: context.Background(), mailboxService: connector}
+	if status := app.GetMailboxServiceStatus(); status.DraftAccessAuthorized {
+		t.Fatal("legacy draft grant incorrectly authorizes reply", status)
+	}
+	if _, err := app.PrepareComposerReply("a", "m", "reply"); err == nil {
+		t.Fatal("legacy grant bypassed attachment read permission")
+	}
+	status, err := app.EnableMailboxServiceDraftAccess()
+	if err != nil || !status.DraftAccessAuthorized {
+		t.Fatal("explicit upgrade failed", status, err)
+	}
+	// Rebuild using the injected transport, as production uses the same loopback endpoint.
+	connector.client = nil
+	got, err := app.PrepareComposerReply("a", "m", "reply")
+	if err != nil || got.TextBody != "quoted original" || ops.calls != 1 {
+		t.Fatal("settings grant did not reach protected reply route", got, err, ops.calls)
+	}
+	if _, err := store.GetGrant(old.Token); !errors.Is(err, automation.ErrTokenRevoked) {
+		t.Fatal("legacy grant not revoked", err)
+	}
 }

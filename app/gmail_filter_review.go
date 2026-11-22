@@ -126,6 +126,9 @@ func nativeGmailPayload(draft NativeGmailDraft) (gmail.Filter, error) {
 	}
 	slices.Sort(f.Action.AddLabelIDs)
 	f.Action.AddLabelIDs = slices.Compact(f.Action.AddLabelIDs)
+	if len(f.Action.AddLabelIDs) > 1 {
+		return gmail.Filter{}, fmt.Errorf("choose at most one user label per Gmail filter")
+	}
 	if draft.MarkRead {
 		f.Action.RemoveLabelIDs = append(f.Action.RemoveLabelIDs, "UNREAD")
 	}

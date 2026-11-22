@@ -27,9 +27,16 @@ type RepairPart struct {
 	Payload  []byte
 }
 type attachmentBackup struct {
-	Metadata        Attachment
-	Payload         []byte
-	OriginalContent []byte
+	Metadata          Attachment
+	Payload           []byte
+	OriginalContent   []byte
+	DownloadIntegrity *downloadIntegrity `json:",omitempty"`
+}
+
+type downloadIntegrity struct {
+	Path   string
+	Digest []byte
+	Size   int64
 }
 
 // RepairFromMIME replaces one IMAP message's metadata transactionally and keeps
@@ -111,6 +118,12 @@ func (s *AttachmentStore) RepairFromMIME(accountID, messageID, snapshot string, 
 		if _, err = tx.Exec(`INSERT INTO attachments(id,message_id,filename,content_type,size,content_id,is_inline,local_path,content) VALUES(?,?,?,?,?,?,?,?,?)`, a.ID, messageID, a.Filename, a.ContentType, a.Size, nullString(a.ContentID), boolToInt(a.IsInline), nullString(a.LocalPath), inline); err != nil {
 			return "", err
 		}
+		if a.LocalPath != "" {
+			digest := sha256.Sum256(part.Payload)
+			if err = insertDownloadIntegrity(tx, a.ID, downloadIntegrity{Path: a.LocalPath, Digest: digest[:], Size: int64(len(part.Payload))}); err != nil {
+				return "", err
+			}
+		}
 		payload := part.Payload
 		if payload == nil {
 			payload = []byte{}
@@ -129,7 +142,18 @@ func (s *AttachmentStore) RepairFromMIME(accountID, messageID, snapshot string, 
 }
 
 func readAttachmentBackup(tx *sql.Tx, messageID string) ([]attachmentBackup, error) {
-	rows, err := tx.Query(`SELECT a.id,a.filename,COALESCE(a.content_type,''),COALESCE(a.size,0),COALESCE(a.content_id,''),COALESCE(a.is_inline,0),COALESCE(a.local_path,''),a.content,p.content FROM attachments a LEFT JOIN attachment_repair_payloads p ON p.attachment_id=a.id WHERE a.message_id=?`, messageID)
+	// The offline rollback utility also supports pre-integrity schemas (79-85).
+	// Such databases have no verified downloads; do not migrate them during undo.
+	var hasIntegrity bool
+	if err := tx.QueryRow(`SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='attachment_download_integrity')`).Scan(&hasIntegrity); err != nil {
+		return nil, err
+	}
+	integrityColumns, integrityJoin := "NULL,NULL,NULL", ""
+	if hasIntegrity {
+		integrityColumns = "i.local_path,i.sha256,i.byte_size"
+		integrityJoin = " LEFT JOIN attachment_download_integrity i ON i.attachment_id=a.id"
+	}
+	rows, err := tx.Query(`SELECT a.id,a.filename,COALESCE(a.content_type,''),COALESCE(a.size,0),COALESCE(a.content_id,''),COALESCE(a.is_inline,0),COALESCE(a.local_path,''),a.content,p.content,`+integrityColumns+` FROM attachments a LEFT JOIN attachment_repair_payloads p ON p.attachment_id=a.id`+integrityJoin+` WHERE a.message_id=?`, messageID)
 	if err != nil {
 		return nil, err
 	}
@@ -138,8 +162,14 @@ func readAttachmentBackup(tx *sql.Tx, messageID string) ([]attachmentBackup, err
 	for rows.Next() {
 		var b attachmentBackup
 		b.Metadata.MessageID = messageID
-		if err = rows.Scan(&b.Metadata.ID, &b.Metadata.Filename, &b.Metadata.ContentType, &b.Metadata.Size, &b.Metadata.ContentID, &b.Metadata.IsInline, &b.Metadata.LocalPath, &b.OriginalContent, &b.Payload); err != nil {
+		var integrityPath sql.NullString
+		var digest []byte
+		var integritySize sql.NullInt64
+		if err = rows.Scan(&b.Metadata.ID, &b.Metadata.Filename, &b.Metadata.ContentType, &b.Metadata.Size, &b.Metadata.ContentID, &b.Metadata.IsInline, &b.Metadata.LocalPath, &b.OriginalContent, &b.Payload, &integrityPath, &digest, &integritySize); err != nil {
 			return nil, err
+		}
+		if integrityPath.Valid && integritySize.Valid && integrityPath.String == b.Metadata.LocalPath && len(digest) == sha256.Size {
+			b.DownloadIntegrity = &downloadIntegrity{Path: integrityPath.String, Digest: digest, Size: integritySize.Int64}
 		}
 		result = append(result, b)
 	}
@@ -190,6 +220,11 @@ func (s *AttachmentStore) RestoreRepair(accountID, messageID, backupID string) e
 		}
 		if _, err = tx.Exec(`INSERT INTO attachments(id,message_id,filename,content_type,size,content_id,is_inline,local_path,content) VALUES(?,?,?,?,?,?,?,?,?)`, a.ID, messageID, a.Filename, a.ContentType, a.Size, nullString(a.ContentID), boolToInt(a.IsInline), nullString(a.LocalPath), b.OriginalContent); err != nil {
 			return err
+		}
+		if b.DownloadIntegrity != nil && b.DownloadIntegrity.Path == a.LocalPath {
+			if err = insertDownloadIntegrity(tx, a.ID, *b.DownloadIntegrity); err != nil {
+				return err
+			}
 		}
 		if b.Payload != nil {
 			if _, err = tx.Exec(`INSERT INTO attachment_repair_payloads(attachment_id,content) VALUES(?,?)`, a.ID, b.Payload); err != nil {
@@ -254,4 +289,12 @@ func verifiedCachePayload(root, path string, want []byte) bool {
 	}
 	a, b := sha256.Sum256(got), sha256.Sum256(want)
 	return bytes.Equal(a[:], b[:])
+}
+
+func insertDownloadIntegrity(tx *sql.Tx, id string, i downloadIntegrity) error {
+	if i.Path == "" || len(i.Digest) != sha256.Size || i.Size < 0 {
+		return fmt.Errorf("invalid download integrity")
+	}
+	_, err := tx.Exec(`INSERT INTO attachment_download_integrity(attachment_id,local_path,sha256,byte_size) VALUES(?,?,?,?)`, id, i.Path, i.Digest, i.Size)
+	return err
 }

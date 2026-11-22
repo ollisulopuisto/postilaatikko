@@ -165,10 +165,17 @@ func helperAllowedLabels(f gmail.Filter, labels []gmail.Label) ([]string, error)
 			user[label.ID] = true
 		}
 	}
+	selected := map[string]bool{}
 	for _, id := range f.Action.AddLabelIDs {
+		if user[id] {
+			selected[id] = true
+		}
 		if id != "TRASH" && !user[id] {
 			return nil, fmt.Errorf("choose user labels from the helper-owned account")
 		}
+	}
+	if len(selected) > 1 {
+		return nil, fmt.Errorf("choose at most one user label per Gmail filter")
 	}
 	for _, id := range append(slices.Clone(f.Action.AddLabelIDs), f.Action.RemoveLabelIDs...) {
 		if !slices.Contains(allowed, id) {
@@ -198,12 +205,15 @@ func (r *SyncRuntime) GmailPublication(ctx context.Context, req v1.GmailPublicat
 		req.AccountID = source.ScopeAccountIDs()[0]
 	}
 	result := v1.GmailPublicationReply{AccountID: req.AccountID}
-	p, granted, err := r.gmailPublicationOwner(req.AccountID)
-	if err != nil {
-		return result, err
+	// Hold the actual mailbox execution lease until all provider work ends.
+	// Send Later-only and waiting helpers must never publish over the desktop.
+	if req.Operation == "prepare" || req.Operation == "publish" || req.Operation == "reconcile" {
+		r.publicationOwnerMu.RLock()
+		defer r.publicationOwnerMu.RUnlock()
+		if r.publicationOwner == nil {
+			return result, fmt.Errorf("helper does not own mailbox filter execution")
+		}
 	}
-	result.Email = p.email
-	result.ConsentRequired = !granted
 	if req.Operation == "status" || req.Operation == "publish" || req.Operation == "reconcile" || req.Operation == "cancel" {
 		if req.Operation == "status" && req.ID == "" {
 			ids, err := r.rules.ListGmailPublicationIDs(req.AccountID)
@@ -244,6 +254,10 @@ func (r *SyncRuntime) GmailPublication(ctx context.Context, req v1.GmailPublicat
 			result.Fingerprint = ""
 			return result, nil
 		}
+		p, granted, err := r.gmailPublicationOwner(req.AccountID)
+		if err != nil {
+			return result, err
+		}
 		if !granted || plan.OwnerBinding == "" || plan.OwnerBinding != p.binding {
 			return result, fmt.Errorf("publication owner or explicit settings grant changed")
 		}
@@ -258,6 +272,12 @@ func (r *SyncRuntime) GmailPublication(ctx context.Context, req v1.GmailPublicat
 		}
 		return result, err
 	}
+	p, granted, err := r.gmailPublicationOwner(req.AccountID)
+	if err != nil {
+		return result, err
+	}
+	result.Email = p.email
+	result.ConsentRequired = !granted
 	source, err := r.rules.Get(req.RuleID)
 	if err != nil {
 		return result, err

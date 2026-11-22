@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/ollisulopuisto/postilaatikko/internal/platform"
 	"io"
 	"net"
 	"net/mail"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -22,9 +24,11 @@ import (
 	"github.com/ollisulopuisto/postilaatikko/internal/folder"
 	appimap "github.com/ollisulopuisto/postilaatikko/internal/imap"
 	"github.com/ollisulopuisto/postilaatikko/internal/mailfilter"
+	"github.com/ollisulopuisto/postilaatikko/internal/mailservice"
 	"github.com/ollisulopuisto/postilaatikko/internal/message"
 	syncre "github.com/ollisulopuisto/postilaatikko/internal/sync"
 	"github.com/ollisulopuisto/postilaatikko/internal/undo"
+	"github.com/ollisulopuisto/postilaatikko/internal/views"
 )
 
 // cannedRaw is the RFC822 payload served by the fake source server for the
@@ -69,9 +73,20 @@ type testIMAPSession struct {
 	copyStarted      chan uint32
 	forceFallback    bool
 	rediscoverCopies bool
+	internalDate     time.Time
 	searchError      bool
 	fetchError       bool
 	copiedUIDs       map[uint32]string
+	deleteSource     bool
+	afterExpunge     func() bool
+	copyCount        int
+	validity         uint32
+	mailboxValidity  map[string]uint32
+	resetOnCopy      uint32
+	copyValidity     uint32
+	deletedForSearch map[uint32]bool
+	listForDiscovery bool
+	selectCount      int
 	rejectAppend     bool // when true, Append is rejected after recording the attempt
 }
 
@@ -110,7 +125,14 @@ func (s *testIMAPSession) Status(mailbox string, options *imap.StatusOptions) (*
 			}
 		}
 	}
-	return &imap.StatusData{Mailbox: mailbox, NumMessages: &count, NumUnseen: &zero, NumDeleted: &zero, UIDValidity: 1, UIDNext: imap.UID(s.nextUID)}, nil
+	validity := s.mailboxValidity[mailbox]
+	if validity == 0 {
+		validity = s.validity
+	}
+	if validity == 0 {
+		validity = 1
+	}
+	return &imap.StatusData{Mailbox: mailbox, NumMessages: &count, NumUnseen: &zero, NumDeleted: &zero, UIDValidity: validity, UIDNext: imap.UID(s.nextUID)}, nil
 }
 
 func (s *testIMAPSession) Append(mailbox string, r imap.LiteralReader, options *imap.AppendOptions) (*imap.AppendData, error) {
@@ -157,7 +179,10 @@ func (s *testIMAPSession) fetchMailbox(mailbox string, w *imapserver.FetchWriter
 	}
 	s.mu.Unlock()
 
-	fixedDate := time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC)
+	fixedDate := s.internalDate
+	if fixedDate.IsZero() {
+		fixedDate = time.Now().UTC()
+	}
 
 	// Collect requested UIDs from the num set (UID FETCH or SEQ FETCH).
 	var wanted []uint32
@@ -226,6 +251,20 @@ func (s *testIMAPSession) searchMailbox(mailbox string, kind imapserver.NumKind,
 		if s.rediscoverCopies {
 			var uids []int
 			for uid, owner := range s.copiedUIDs {
+				if s.deletedForSearch[uid] && slices.Contains(criteria.NotFlag, imap.FlagDeleted) {
+					continue
+				}
+
+				date := s.internalDate
+				if date.IsZero() {
+					date = time.Now().UTC()
+				}
+				if !criteria.Since.IsZero() && criteria.Since.After(date) {
+					continue
+				}
+				if len(criteria.UID) > 0 && !criteria.UID[0].Contains(imap.UID(uid)) {
+					continue
+				}
 				if owner != mailbox {
 					continue
 				}
@@ -265,6 +304,7 @@ func (s *testIMAPSession) Copy(numSet imap.NumSet, dest string) (*imap.CopyData,
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.copyCount++
 	var wanted []uint32
 	if uidSet, ok := numSet.(imap.UIDSet); ok {
 		for _, rng := range uidSet {
@@ -298,8 +338,24 @@ func (s *testIMAPSession) Copy(numSet imap.NumSet, dest string) (*imap.CopyData,
 	if s.forceFallback {
 		return nil, nil
 	}
+	if s.resetOnCopy != 0 {
+		if s.mailboxValidity == nil {
+			s.mailboxValidity = map[string]uint32{}
+		}
+		s.mailboxValidity[dest] = s.resetOnCopy
+	}
+	validity := s.copyValidity
+	if validity == 0 {
+		validity = s.mailboxValidity[dest]
+	}
+	if validity == 0 {
+		validity = s.validity
+	}
+	if validity == 0 {
+		validity = 1
+	}
 	return &imap.CopyData{
-		UIDValidity: 1,
+		UIDValidity: validity,
 		SourceUIDs:  sourceUIDs,
 		DestUIDs:    destUIDs,
 	}, nil
@@ -324,6 +380,9 @@ func (s *testIMAPSession) Rename(mailbox, newName string, options *imap.RenameOp
 func (s *testIMAPSession) Subscribe(mailbox string) error   { return nil }
 func (s *testIMAPSession) Unsubscribe(mailbox string) error { return nil }
 func (s *testIMAPSession) List(w *imapserver.ListWriter, ref string, patterns []string, options *imap.ListOptions) error {
+	if s.listForDiscovery {
+		return w.WriteList(&imap.ListData{Mailbox: "INBOX", Delim: '/'})
+	}
 	return nil
 }
 func (s *testIMAPSession) Poll(w *imapserver.UpdateWriter, allowExpunge bool) error    { return nil }
@@ -334,12 +393,15 @@ func (s *testIMAPSession) Idle(w *imapserver.UpdateWriter, stop <-chan struct{})
 type testIMAPConnection struct {
 	*testIMAPSession
 	mailbox string
+	conn    net.Conn
+	deleted []uint32
 }
 
 func (c *testIMAPConnection) Select(mailbox string, options *imap.SelectOptions) (*imap.SelectData, error) {
 	c.mailbox = mailbox
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.selectCount++
 	count := uint32(len(c.messages))
 	if c.rediscoverCopies {
 		count = 0
@@ -349,7 +411,14 @@ func (c *testIMAPConnection) Select(mailbox string, options *imap.SelectOptions)
 			}
 		}
 	}
-	return &imap.SelectData{UIDValidity: 1, UIDNext: imap.UID(c.nextUID), NumMessages: count}, nil
+	validity := c.mailboxValidity[mailbox]
+	if validity == 0 {
+		validity = c.validity
+	}
+	if validity == 0 {
+		validity = 1
+	}
+	return &imap.SelectData{UIDValidity: validity, UIDNext: imap.UID(c.nextUID), NumMessages: count}, nil
 }
 func (c *testIMAPConnection) Fetch(w *imapserver.FetchWriter, numSet imap.NumSet, options *imap.FetchOptions) error {
 	return c.fetchMailbox(c.mailbox, w, numSet, options)
@@ -370,7 +439,7 @@ func newTestIMAPServer(t *testing.T, ops *filterOpsRecorder) *testIMAPServer {
 	sess := newTestIMAPSession(ops)
 	srv := imapserver.New(&imapserver.Options{
 		NewSession: func(conn *imapserver.Conn) (imapserver.Session, *imapserver.GreetingData, error) {
-			return &testIMAPConnection{testIMAPSession: sess}, nil, nil
+			return &testIMAPConnection{testIMAPSession: sess, conn: conn.NetConn()}, nil, nil
 		},
 		Caps:         imap.CapSet{imap.CapIMAP4rev1: {}},
 		InsecureAuth: true,
@@ -881,7 +950,12 @@ func TestBulkFilterFallbackPreservesOtherMoveLocalState(t *testing.T) {
 			}
 			waitFor(t, 5*time.Second, func() bool {
 				rows, err := f.app.messageStore.GetByIDs([]string{ids[0]})
-				return err == nil && len(rows) == 0
+				if err != nil || len(rows) != 1 || int32(rows[0].UID) >= 0 {
+					return false
+				}
+				var copies int
+				err = f.db.QueryRow(`SELECT COUNT(*) FROM messages WHERE folder_id='a-trash' AND uid>0 AND subject='bulk-00'`).Scan(&copies)
+				return err == nil && copies == 1
 			})
 			rows, err := f.app.messageStore.GetByIDs([]string{last})
 			if err != nil || len(rows) != 1 {
@@ -1108,10 +1182,9 @@ func TestCreateFilterRuleAppendsAfterSparsePriority(t *testing.T) {
 	}
 }
 
-func TestLaterSyncRecoversInterruptedMovesWithoutDeletingLiveMoves(t *testing.T) {
+func TestInterruptedMoveRecoveryRequiresServerEvidenceAndRetainsLocalState(t *testing.T) {
 	f := newFilterFixture(t, false)
 	f.app.ctx = context.Background()
-	f.serverA.sess.forceFallback = true
 	f.serverA.sess.rediscoverCopies = true
 	if err := f.app.messageStore.MoveMessages([]string{f.message.ID}, "a-trash"); err != nil {
 		t.Fatal(err)
@@ -1122,112 +1195,903 @@ func TestLaterSyncRecoversInterruptedMovesWithoutDeletingLiveMoves(t *testing.T)
 	if err := f.app.captureInterruptedMoveRecovery(); err != nil {
 		t.Fatal(err)
 	}
-	// This later placeholder represents a currently admitted physical move and
-	// must not be swept by restart recovery.
-	if err := f.app.messageStore.Create(&message.Message{ID: "live", AccountID: "acct-a", FolderID: "a-inbox", UID: 99, Subject: "live", Date: time.Now()}); err != nil {
+
+	if err := f.app.messageStore.Create(&message.Message{ID: "preexisting", AccountID: "acct-a", FolderID: "a-trash", UID: 1000, MessageID: f.message.MessageID, Date: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	f.serverA.sess.messages[1000] = []byte(cannedRaw)
+	f.serverA.sess.copiedUIDs = map[uint32]string{1000: "Trash"}
+	if err := f.app.recoverInterruptedMoves(context.Background(), "acct-a", "a-trash", []string{f.message.ID}); err == nil {
+		t.Fatal("sole preexisting copy was guessed as move result")
+	}
+	if got, err := f.app.messageStore.Get("preexisting"); err != nil || got == nil {
+		t.Fatal("preexisting copy overwritten", err)
+	}
+	if err := f.app.messageStore.RecordMoveUIDEvidence("a-trash", 99, map[string]uint32{f.message.ID: 1001}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.recoverInterruptedMoves(context.Background(), "acct-a", "a-trash", []string{f.message.ID}); err == nil {
+		t.Fatal("changed UID validity accepted")
+	}
+	if err := f.app.messageStore.RecordMoveUIDEvidence("a-trash", 1, map[string]uint32{f.message.ID: 1001}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.recoverInterruptedMoves(context.Background(), "acct-a", "a-trash", []string{f.message.ID}); err == nil {
+		t.Fatal("absent verified UID accepted")
+	}
+	if err := f.app.messageStore.Create(&message.Message{ID: "verified", AccountID: "acct-a", FolderID: "a-trash", UID: 1001, MessageID: f.message.MessageID, Date: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	f.serverA.sess.messages[1001] = []byte(cannedRaw)
+	f.serverA.sess.copiedUIDs[1001] = "Trash"
+	f.serverA.sess.searchError = true
+	if err := f.app.recoverInterruptedMoves(context.Background(), "acct-a", "a-trash", []string{f.message.ID}); err == nil {
+		t.Fatal("failed verification accepted")
+	}
+	f.serverA.sess.searchError = false
+	if err := f.app.messageStore.Create(&message.Message{ID: "live", AccountID: "acct-a", FolderID: "a-inbox", UID: 99, Date: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.app.messageStore.MoveMessages([]string{"live"}, "a-trash"); err != nil {
 		t.Fatal(err)
 	}
-	f.serverA.sess.mu.Lock()
-	f.serverA.sess.messages[1001] = []byte(cannedRaw)
-	f.serverA.sess.copiedUIDs = map[uint32]string{1001: "Trash"}
-	f.serverA.sess.nextUID = 1002
-	f.serverA.sess.mu.Unlock()
-	f.serverA.sess.mu.Lock()
-	f.serverA.sess.searchError = true
-	f.serverA.sess.mu.Unlock()
-	if err := f.app.SyncFolder("acct-a", "a-trash"); err == nil {
-		t.Fatal("expected failed sync")
-	}
-	pending, err := f.app.messageStore.Get(f.message.ID)
-	if err != nil || pending == nil || int32(pending.UID) >= 0 {
-		t.Fatal("failed sync consumed interrupted move", pending, err)
-	}
-	f.serverA.sess.mu.Lock()
-	f.serverA.sess.searchError = false
-	f.serverA.sess.fetchError = true
-	f.serverA.sess.mu.Unlock()
-	f.app.syncMu.Lock()
-	delete(f.app.syncLastRequest, "acct-a:a-trash")
-	f.app.syncMu.Unlock()
-	if err := f.app.SyncFolder("acct-a", "a-trash"); err == nil {
-		t.Fatal("expected incomplete header sync error")
-	}
-	pending, err = f.app.messageStore.Get(f.message.ID)
-	if err != nil || pending == nil || int32(pending.UID) >= 0 {
-		t.Fatal("partial header sync consumed recovery", pending, err)
-	}
-	f.serverA.sess.mu.Lock()
-	f.serverA.sess.fetchError = false
-	f.serverA.sess.mu.Unlock()
-	f.app.syncMu.Lock()
-	delete(f.app.syncLastRequest, "acct-a:a-trash")
-	f.app.syncMu.Unlock()
-	if err := f.app.SyncFolder("acct-a", "a-trash"); err != nil {
+	if err := f.app.recoverInterruptedMoves(context.Background(), "acct-a", "a-trash", []string{f.message.ID}); err != nil {
 		t.Fatal(err)
 	}
 	got, err := f.app.messageStore.Get(f.message.ID)
 	if err != nil || got == nil || got.UID != 1001 {
-		t.Fatal("restart did not recover original identity", got, err)
+		t.Fatal("verified identity not recovered", got, err)
 	}
 	var handled bool
 	if err := f.db.QueryRow(`SELECT read_receipt_handled FROM messages WHERE id=?`, f.message.ID).Scan(&handled); err != nil || !handled {
-		t.Fatal("restart lost dismissal", err)
+		t.Fatal("dismissed receipt lost", err)
 	}
 	live, err := f.app.messageStore.Get("live")
 	if err != nil || live == nil || int32(live.UID) >= 0 {
-		t.Fatal("restart swept live move", live, err)
+		t.Fatal("live move touched", live, err)
 	}
-	// A failed reconciliation's owned leftovers are retried by a later ordinary sync.
-	if err := f.app.messageStore.Create(&message.Message{ID: "failed", AccountID: "acct-a", FolderID: "a-inbox", UID: 98, Subject: "failed", Date: time.Now()}); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.app.messageStore.MoveMessages([]string{"failed"}, "a-trash"); err != nil {
-		t.Fatal(err)
-	}
-	f.app.retainMoveRecovery("a-trash", []string{"failed"})
-	f.app.syncMu.Lock()
-	delete(f.app.syncLastRequest, "acct-a:a-trash")
-	f.app.syncMu.Unlock()
-	if err := f.app.SyncFolder("acct-a", "a-trash"); err != nil {
-		t.Fatal(err)
-	}
-	gone, err := f.app.messageStore.Get("failed")
-	if err != nil || gone != nil {
-		t.Fatal("later sync retained owned failed placeholder", gone, err)
-	}
-	live, err = f.app.messageStore.Get("live")
-	if err != nil || live == nil {
-		t.Fatal("retry swept live move", live, err)
+	if got, err := f.app.messageStore.Get("preexisting"); err != nil || got == nil {
+		t.Fatal("preexisting copy overwritten", err)
 	}
 }
-
-func TestEmptyDestinationSafeguardRetainsInterruptedMove(t *testing.T) {
+func TestUnmatchedInterruptedMoveRetainsReceiptAfterOrdinarySync(t *testing.T) {
 	f := newFilterFixture(t, false)
 	f.app.ctx = context.Background()
 	f.serverA.sess.rediscoverCopies = true
 	if err := f.app.messageStore.MoveMessages([]string{f.message.ID}, "a-trash"); err != nil {
 		t.Fatal(err)
 	}
+	if err := f.app.messageStore.MarkReadReceiptHandled(f.message.ID); err != nil {
+		t.Fatal(err)
+	}
 	if err := f.app.captureInterruptedMoveRecovery(); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.app.messageStore.Create(&message.Message{ID: "previous-copy", AccountID: "acct-a", FolderID: "a-trash", UID: 88, Subject: "previous", Date: time.Now()}); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.app.SyncFolder("acct-a", "a-trash"); err == nil {
-		t.Fatal("incomplete empty listing reported success")
-	}
-	pending, err := f.app.messageStore.Get(f.message.ID)
-	if err != nil || pending == nil || int32(pending.UID) >= 0 {
-		t.Fatal("empty listing consumed interrupted move", pending, err)
+	if err := f.app.SyncFolder("acct-a", "a-trash"); err != nil {
+		t.Fatal("unresolved move blocked routine refresh", err)
 	}
 	f.app.moveSyncMu.Lock()
-	count := len(f.app.moveRecoveryIDs["a-trash"])
+	pendingCount := len(f.app.moveRecoveryIDs["a-trash"])
 	f.app.moveSyncMu.Unlock()
-	if count != 1 {
-		t.Fatal("recovery was not retained", count)
+	if pendingCount != 1 {
+		t.Fatal("unresolved move lost retry status", pendingCount)
+	}
+	if err := f.app.recoverInterruptedMoves(context.Background(), "acct-a", "a-trash", []string{f.message.ID}); err == nil {
+		t.Fatal("move-specific recovery hid incomplete outcome")
+	}
+	got, err := f.app.messageStore.Get(f.message.ID)
+	if err != nil || got == nil || int32(got.UID) >= 0 {
+		t.Fatal("unmatched row lost", got, err)
+	}
+	var handled bool
+	if err := f.db.QueryRow(`SELECT read_receipt_handled FROM messages WHERE id=?`, f.message.ID).Scan(&handled); err != nil || !handled {
+		t.Fatal("dismissed receipt lost", err)
+	}
+}
+
+func TestRecoveryDoesNotImportOrFilterHistoricalMail(t *testing.T) {
+	f := newFilterFixture(t, false)
+	f.app.ctx = context.Background()
+	f.serverA.sess.rediscoverCopies = true
+	f.serverA.sess.internalDate = time.Now().AddDate(0, -3, 0)
+	if _, err := f.db.Exec(`UPDATE accounts SET sync_period_days=30 WHERE id='acct-a'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.messageStore.MoveMessages([]string{f.message.ID}, "a-trash"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.db.Exec(`UPDATE messages SET date=? WHERE id=?`, time.Now().AddDate(0, -3, 0), f.message.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.messageStore.RecordMoveUIDEvidence("a-trash", 1, map[string]uint32{f.message.ID: 1001}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.captureInterruptedMoveRecovery(); err != nil {
+		t.Fatal(err)
+	}
+	f.serverA.sess.messages[1001] = []byte(cannedRaw)
+	f.serverA.sess.messages[1002] = []byte(strings.ReplaceAll(cannedRaw, "m1@example.com", "unrelated@example.com"))
+	f.serverA.sess.copiedUIDs = map[uint32]string{1001: "Trash", 1002: "Trash"}
+	hooks := make(chan string, 4)
+	f.app.syncEngine.SetNewMessageHandler(func(_, _ string, m *message.Message) { hooks <- m.ID })
+	if err := f.app.SyncFolder("acct-a", "a-trash"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := f.app.messageStore.Get(f.message.ID)
+	if err != nil || got == nil || got.UID != 1001 {
+		t.Fatal("old pending move pruned", got, err)
+	}
+	select {
+	case id := <-hooks:
+		t.Fatal("historical recovery dispatched automatic filter", id)
+	case <-time.After(50 * time.Millisecond):
+	}
+	var n int
+	if err := f.db.QueryRow(`SELECT COUNT(*) FROM messages WHERE folder_id='a-trash' AND uid=1002`).Scan(&n); err != nil || n != 0 {
+		t.Fatal("recovery imported unrelated old mail", n, err)
+	}
+}
+func TestEmptyMailboxSafeguardDoesNotAbortRoutineSync(t *testing.T) {
+	f := newFilterFixture(t, false)
+	f.app.ctx = context.Background()
+	f.serverA.sess.rediscoverCopies = true
+	if _, err := f.db.Exec(`UPDATE accounts SET sync_period_days=0 WHERE id='acct-a'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.SyncFolder("acct-a", "a-inbox"); err != nil {
+		t.Fatal("empty listing aborted routine sync", err)
+	}
+	if err := f.app.SyncFolder("acct-a", "a-trash"); err != nil {
+		t.Fatal("next folder sync blocked", err)
+	}
+	if got, err := f.app.messageStore.Get(f.message.ID); err != nil || got == nil {
+		t.Fatal("empty-list safety lost cache", err)
+	}
+}
+
+func (c *testIMAPConnection) Store(w *imapserver.FetchWriter, n imap.NumSet, flags *imap.StoreFlags, o *imap.StoreOptions) error {
+	c.mu.Lock()
+	enabled := c.deleteSource
+	c.mu.Unlock()
+	if enabled {
+		for _, f := range flags.Flags {
+			if f == imap.FlagDeleted {
+				if uids, ok := n.(imap.UIDSet); ok {
+					nums, _ := uids.Nums()
+					for _, uid := range nums {
+						c.deleted = append(c.deleted, uint32(uid))
+					}
+				}
+			}
+		}
+	}
+	return c.testIMAPSession.Store(w, n, flags, o)
+}
+func (c *testIMAPConnection) Expunge(w *imapserver.ExpungeWriter, uids *imap.UIDSet) error {
+	c.mu.Lock()
+	enabled := c.deleteSource
+	callback := c.afterExpunge
+	if enabled {
+		for _, uid := range c.deleted {
+			delete(c.messages, uid)
+			delete(c.copiedUIDs, uid)
+		}
+		c.deleted = nil
+	}
+	c.mu.Unlock()
+	if enabled && callback != nil && callback() {
+		_ = c.conn.Close()
+	}
+	return nil
+}
+func TestMoveCopyProofSurvivesPostExpungeDisconnectWithoutReplay(t *testing.T) {
+	for _, reset := range []bool{false, true} {
+		t.Run(fmt.Sprint(reset), func(t *testing.T) {
+			f := newFilterFixture(t, false)
+			f.app.ctx = context.Background()
+			f.serverA.sess.rediscoverCopies = true
+			f.serverA.sess.deleteSource = true
+			f.serverA.sess.copiedUIDs = map[uint32]string{f.message.UID: "INBOX"}
+			if err := f.app.messageStore.MoveMessages([]string{f.message.ID}, "a-trash"); err != nil {
+				t.Fatal(err)
+			}
+			var callbackOnce stdsync.Once
+			f.serverA.sess.afterExpunge = func() bool {
+				closeConn := false
+				callbackOnce.Do(func() {
+					uid, v, err := f.app.messageStore.MoveUIDEvidence("a-trash", f.message.ID)
+					if err != nil || uid == 0 || v != 1 {
+						t.Error("COPYUID was not durable before cleanup", uid, v, err)
+					}
+					_, _, _, done, err := f.app.messageStore.MoveCleanupState("a-trash", f.message.ID)
+					if err != nil || done {
+						t.Error("copy was reported as completed move", done, err)
+					}
+					if reset {
+						f.serverA.sess.mu.Lock()
+						f.serverA.sess.validity = 2
+						f.serverA.sess.mu.Unlock()
+					}
+					closeConn = true
+				})
+				return closeConn
+			}
+			dest, err := f.app.folderStore.Get("a-trash")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, _, err := f.app.moveMessagesToIMAP([]*message.Message{f.message}, "a-inbox", dest, ""); err == nil {
+				t.Fatal("disconnect did not interrupt local completion")
+			}
+			f.serverA.sess.mu.Lock()
+			copies := f.serverA.sess.copyCount
+			f.serverA.sess.mu.Unlock()
+			if copies != 1 {
+				t.Fatal("transport retry replayed COPY", copies)
+			}
+			if uid, v, err := f.app.messageStore.MoveUIDEvidence("a-trash", f.message.ID); err != nil || uid == 0 || v != 1 {
+				t.Fatal("retry relabelled old proof", uid, v, err)
+			}
+			err = f.app.recoverInterruptedMoves(context.Background(), "acct-a", "a-trash", []string{f.message.ID})
+			if reset {
+				if err == nil {
+					t.Fatal("new generation accepted old copy proof")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal("confirmed move not recovered after interrupted expunge response", err)
+			}
+			got, err := f.app.messageStore.Get(f.message.ID)
+			if err != nil || got == nil || int32(got.UID) < 0 {
+				t.Fatal("recovery did not restore stable identity", got, err)
+			}
+		})
+	}
+}
+func TestConfirmedCopyWithSourcePresentIsNotCompletedMove(t *testing.T) {
+	f := newFilterFixture(t, false)
+	f.app.ctx = context.Background()
+	f.serverA.sess.rediscoverCopies = true
+	if err := f.app.messageStore.MoveMessages([]string{f.message.ID}, "a-trash"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.messageStore.RecordCopiedMoveUIDs("a-trash", 1, map[string]uint32{f.message.ID: 701}, "a-inbox", 1, map[string]uint32{f.message.ID: f.message.UID}); err != nil {
+		t.Fatal(err)
+	}
+	f.serverA.sess.messages[701] = []byte(cannedRaw)
+	f.serverA.sess.copiedUIDs = map[uint32]string{701: "Trash", f.message.UID: "INBOX"}
+	if err := f.app.recoverInterruptedMoves(context.Background(), "acct-a", "a-trash", []string{f.message.ID}); err == nil {
+		t.Fatal("incomplete source cleanup was treated as successful move")
+	}
+	if got, err := f.app.messageStore.Get(f.message.ID); err != nil || got == nil || int32(got.UID) >= 0 {
+		t.Fatal("incomplete move reconciled", got, err)
+	}
+	if err := f.app.messageStore.Create(&message.Message{ID: "completed-after-unresolved", AccountID: "acct-a", FolderID: "a-inbox", UID: 88, MessageID: f.message.MessageID, Date: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.messageStore.MoveMessages([]string{"completed-after-unresolved"}, "a-trash"); err != nil {
+		t.Fatal(err)
+	}
+	f.serverA.sess.messages[702] = []byte(cannedRaw)
+	f.serverA.sess.copiedUIDs[702] = "Trash"
+	if err := f.app.messageStore.RecordMoveUIDEvidence("a-trash", 1, map[string]uint32{"completed-after-unresolved": 702}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.recoverInterruptedMoves(context.Background(), "acct-a", "a-trash", []string{f.message.ID, "completed-after-unresolved"}); err == nil {
+		t.Fatal("first incomplete outcome was hidden")
+	}
+	if got, err := f.app.messageStore.Get("completed-after-unresolved"); err != nil || got == nil || got.UID != 702 {
+		t.Fatal("prior source selection prevented next recovery", got, err)
+	}
+}
+
+func TestUIDResetQuarantinesRepairedMailBeforeReusingUID(t *testing.T) {
+	f := newFilterFixture(t, false)
+	f.app.ctx = context.Background()
+	oldUID := f.message.UID
+	attachments := message.NewAttachmentStore(f.db)
+	if _, err := attachments.RepairFromMIME("acct-a", f.message.ID, "snapshot", []message.RepairPart{{Metadata: message.Attachment{ID: "fixed", MessageID: f.message.ID, Filename: "invoice.txt", Size: 3}, Payload: []byte("one")}}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.db.Exec(`UPDATE folders SET uid_validity=1 WHERE id='a-inbox'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.db.Exec(`UPDATE accounts SET sync_period_days=0 WHERE id='acct-a'`); err != nil {
+		t.Fatal(err)
+	}
+	f.serverA.sess.validity = 2
+	f.serverA.sess.rediscoverCopies = true
+	f.serverA.sess.messages[oldUID] = []byte(strings.ReplaceAll(cannedRaw, "m1@example.com", "unrelated@example.com"))
+	f.serverA.sess.copiedUIDs = map[uint32]string{oldUID: "INBOX"}
+	if err := f.app.SyncFolder("acct-a", "a-inbox"); err != nil {
+		t.Fatal(err)
+	}
+	original, err := f.app.messageStore.Get(f.message.ID)
+	if err != nil || original == nil || int32(original.UID) >= 0 || original.MessageID != f.message.MessageID {
+		t.Fatal("repaired row retained addressable stale UID", original, err)
+	}
+	var remoteID, rfcID string
+	if err := f.db.QueryRow(`SELECT id,message_id FROM messages WHERE folder_id='a-inbox' AND uid=?`, oldUID).Scan(&remoteID, &rfcID); err != nil || remoteID == f.message.ID || !strings.Contains(rfcID, "unrelated") {
+		t.Fatal("reused UID was not fetched as distinct mail", remoteID, rfcID, err)
+	}
+	var n int
+	if err := f.db.QueryRow(`SELECT COUNT(*) FROM attachment_repair_backups WHERE message_id=?`, f.message.ID).Scan(&n); err != nil || n == 0 {
+		t.Fatal("repair history lost", n, err)
+	}
+	if _, err := f.app.syncEngine.FetchMessageBody(context.Background(), "acct-a", f.message.ID); err == nil {
+		t.Fatal("quarantined row was addressable for body fetch")
+	}
+	if err := f.app.MoveToFolder([]string{f.message.ID}, "a-trash"); err == nil {
+		t.Fatal("quarantined row was addressable for move")
+	}
+	f.serverA.sess.mu.Lock()
+	copies := f.serverA.sess.copyCount
+	f.serverA.sess.mu.Unlock()
+	if copies != 0 {
+		t.Fatal("quarantined row targeted server mail", copies)
+	}
+}
+func TestCOPYUIDUsesItsOwnGenerationNotPriorSelect(t *testing.T) {
+	f := newFilterFixture(t, false)
+	f.app.ctx = context.Background()
+	f.serverA.sess.copyValidity = 7
+	f.serverA.sess.rediscoverCopies = true
+	if err := f.app.messageStore.MoveMessages([]string{f.message.ID}, "a-trash"); err != nil {
+		t.Fatal(err)
+	}
+	dest, err := f.app.folderStore.Get("a-trash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := f.app.moveMessagesToIMAP([]*message.Message{f.message}, "a-inbox", dest, ""); err == nil {
+		t.Fatal("generation mismatch was accepted")
+	}
+	if _, v, err := f.app.messageStore.MoveUIDEvidence("a-trash", f.message.ID); err != nil || v != 7 {
+		t.Fatal("COPYUID generation was replaced by SELECT generation", v, err)
+	}
+}
+
+func TestMoveWaitsForDestinationCacheResetBeforePromotion(t *testing.T) {
+	for _, kind := range []string{"plain", "repaired", "no-message-id", "repaired-no-message-id"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newFilterFixture(t, false)
+			if strings.Contains(kind, "repaired") {
+				attachments := message.NewAttachmentStore(f.db)
+				if _, err := attachments.RepairFromMIME("acct-a", f.message.ID, "snapshot", []message.RepairPart{{Metadata: message.Attachment{ID: "fixed", MessageID: f.message.ID, Filename: "invoice.txt", Size: 3}, Payload: []byte("one")}}, ""); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if strings.Contains(kind, "no-message-id") {
+				if _, err := f.db.Exec(`UPDATE messages SET message_id='' WHERE id=?`, f.message.ID); err != nil {
+					t.Fatal(err)
+				}
+				f.message.MessageID = ""
+				f.serverA.sess.messages[f.message.UID] = []byte(strings.ReplaceAll(cannedRaw, "Message-ID: <m1@example.com>\r\n", ""))
+			}
+			f.app.ctx = context.Background()
+			f.serverA.sess.rediscoverCopies = true
+			f.serverA.sess.validity = 7
+			f.serverA.sess.resetOnCopy = 8
+			f.serverA.sess.deleteSource = true
+			f.serverA.sess.copiedUIDs = map[uint32]string{f.message.UID: "INBOX"}
+			if _, err := f.db.Exec(`UPDATE folders SET uid_validity=7 WHERE id IN ('a-inbox','a-trash')`); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := f.db.Exec(`UPDATE accounts SET sync_period_days=0 WHERE id='acct-a'`); err != nil {
+				t.Fatal(err)
+			}
+			f.serverA.sess.messages[f.message.UID] = bytes.Replace(f.serverA.sess.messages[f.message.UID], []byte("Subject:"), []byte("Disposition-Notification-To: bob@example.com\r\nSubject:"), 1)
+			if err := f.app.messageStore.MarkReadReceiptHandled(f.message.ID); err != nil {
+				t.Fatal(err)
+			}
+			if err := f.app.messageStore.MoveMessages([]string{f.message.ID}, "a-trash"); err != nil {
+				t.Fatal(err)
+			}
+			dest, err := f.app.folderStore.Get("a-trash")
+			if err != nil {
+				t.Fatal(err)
+			}
+			resolved, _, err := f.app.moveMessagesToIMAP([]*message.Message{f.message}, "a-inbox", dest, "")
+			if err != nil || len(resolved) != 1 {
+				t.Fatal("COPY and final SELECT should agree in new generation", resolved, err)
+			}
+			if _, err := f.app.reconcileMovedMessageUIDsWithRetry("a-trash", resolved); err == nil {
+				t.Fatal("copy promoted into stale generation cache")
+			}
+			pending, err := f.app.messageStore.Get(f.message.ID)
+			if err != nil || pending == nil || int32(pending.UID) >= 0 {
+				t.Fatal("pending identity was not retained", pending, err)
+			}
+			f.app.retainMoveRecovery("a-trash", []string{f.message.ID})
+			if err := f.app.SyncFolder("acct-a", "a-trash"); err != nil {
+				t.Fatal(err)
+			}
+			got, err := f.app.messageStore.Get(f.message.ID)
+			if err != nil || got == nil || got.UID != resolved[f.message.ID] {
+				t.Fatal("reset did not recover original identity", got, err)
+			}
+			var handled bool
+			if err := f.db.QueryRow(`SELECT read_receipt_handled FROM messages WHERE id=?`, f.message.ID).Scan(&handled); err != nil || !handled {
+				t.Fatal("receipt decision lost across cache generation", err)
+			}
+			f.app.syncMu.Lock()
+			delete(f.app.syncLastRequest, "acct-a:a-trash")
+			f.app.syncMu.Unlock()
+			if err := f.app.SyncFolder("acct-a", "a-trash"); err != nil {
+				t.Fatal(err)
+			}
+			if err := f.db.QueryRow(`SELECT read_receipt_handled FROM messages WHERE id=?`, f.message.ID).Scan(&handled); err != nil || !handled {
+				t.Fatal("header backfill erased receipt decision", err)
+			}
+			if strings.Contains(kind, "repaired") {
+				if _, err := f.db.Exec(`UPDATE accounts SET sync_period_days=30 WHERE id='acct-a'`); err != nil {
+					t.Fatal(err)
+				}
+				f.serverA.sess.internalDate = time.Now().AddDate(0, -3, 0)
+				if _, err := f.db.Exec(`UPDATE messages SET date=? WHERE id=?`, f.serverA.sess.internalDate, f.message.ID); err != nil {
+					t.Fatal(err)
+				}
+				f.app.syncMu.Lock()
+				delete(f.app.syncLastRequest, "acct-a:a-trash")
+				f.app.syncMu.Unlock()
+				if err := f.app.SyncFolder("acct-a", "a-trash"); err != nil {
+					t.Fatal(err)
+				}
+				repaired, err := f.app.messageStore.Get(f.message.ID)
+				if err != nil || repaired == nil || int32(repaired.UID) >= 0 {
+					t.Fatal("date omission lost repair or retained addressable UID", repaired, err)
+				}
+				var backups int
+				if err := f.db.QueryRow(`SELECT COUNT(*) FROM attachment_repair_backups WHERE message_id=?`, f.message.ID).Scan(&backups); err != nil || backups == 0 {
+					t.Fatal("date omission destroyed repair history", backups, err)
+				}
+				var proofs int
+				if err := f.db.QueryRow(`SELECT COUNT(*) FROM move_uid_evidence WHERE message_id=?`, f.message.ID).Scan(&proofs); err != nil || proofs != 0 {
+					t.Fatal("retired snapshot retained recovery proof", proofs, err)
+				}
+				if _, err := f.db.Exec(`UPDATE accounts SET sync_period_days=0 WHERE id='acct-a'`); err != nil {
+					t.Fatal(err)
+				}
+				f.app.syncMu.Lock()
+				delete(f.app.syncLastRequest, "acct-a:a-trash")
+				f.app.syncMu.Unlock()
+				if err := f.app.SyncFolder("acct-a", "a-trash"); err != nil {
+					t.Fatal(err)
+				}
+				live, err := f.app.messageStore.Get(f.message.ID)
+				if err != nil || live == nil || live.UID != resolved[f.message.ID] {
+					t.Fatal("wider window failed to restore original repair identity", live, err)
+				}
+				var copies, quarantined int
+				if err := f.db.QueryRow(`SELECT COUNT(*) FROM messages WHERE folder_id='a-trash'`).Scan(&copies); err != nil || copies != 1 {
+					t.Fatal("returning repair has duplicate owner", copies, err)
+				}
+				if err := f.db.QueryRow(`SELECT COUNT(*) FROM quarantined_repair_messages WHERE message_id=?`, f.message.ID).Scan(&quarantined); err != nil || quarantined != 0 {
+					t.Fatal("restored repair still blocked from actions", quarantined, err)
+				}
+				// The same numeric UID in a different generation is not proof.
+				if err := f.app.messageStore.DeleteSyncedUID("a-trash", live.UID); err != nil {
+					t.Fatal(err)
+				}
+				f.serverA.sess.mailboxValidity["Trash"] = 9
+				f.app.syncMu.Lock()
+				delete(f.app.syncLastRequest, "acct-a:a-trash")
+				f.app.syncMu.Unlock()
+				if err := f.app.SyncFolder("acct-a", "a-trash"); err != nil {
+					t.Fatal(err)
+				}
+				stale, err := f.app.messageStore.Get(f.message.ID)
+				if err != nil || stale == nil || int32(stale.UID) >= 0 {
+					t.Fatal("reused UID reattached old repaired identity", stale, err)
+				}
+				var retired int
+				if err := f.db.QueryRow(`SELECT COUNT(*) FROM retired_repair_uids WHERE message_id=?`, f.message.ID).Scan(&retired); err != nil || retired != 0 {
+					t.Fatal("reset retained stale identity", retired, err)
+				}
+
+			}
+
+		})
+	}
+}
+func TestConversationMoveSkipsOnlyQuarantinedRepairSnapshots(t *testing.T) {
+	f := newFilterFixture(t, false)
+	f.app.ctx = context.Background()
+	if _, err := f.db.Exec(`UPDATE messages SET thread_id='thread' WHERE id=?`, f.message.ID); err != nil {
+		t.Fatal(err)
+	}
+	attachments := message.NewAttachmentStore(f.db)
+	if _, err := attachments.RepairFromMIME("acct-a", f.message.ID, "snapshot", []message.RepairPart{{Metadata: message.Attachment{ID: "fixed", MessageID: f.message.ID, Filename: "invoice.txt", Size: 3}, Payload: []byte("one")}}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.messageStore.DeleteSyncedUIDCache("a-inbox"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.messageStore.Create(&message.Message{ID: "live-thread-mail", AccountID: "acct-a", FolderID: "a-inbox", UID: 11, MessageID: "live@test", ThreadID: "thread", Date: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	f.serverA.sess.messages[11] = []byte(strings.ReplaceAll(cannedRaw, "m1@example.com", "live@test"))
+	f.app.moveFilterHistory = mailfilter.NewMoveHistory(f.db)
+	if err := f.app.runUndoMoveMutation([]string{f.message.ID, "live-thread-mail"}, "a-trash", "old-undo"); err == nil {
+		t.Fatal("undo silently skipped quarantined snapshot")
+	}
+	before, err := f.app.messageStore.Get("live-thread-mail")
+	if err != nil || before == nil || before.FolderID != "a-inbox" {
+		t.Fatal("failed undo partially moved selection", before, err)
+	}
+	if _, err := f.app.MoveToFolderWithUndo([]string{f.message.ID, "live-thread-mail"}, "a-trash"); err != nil {
+		t.Fatal("quarantined snapshot blocked live conversation move", err)
+	}
+	var historyCount int
+	if err := f.db.QueryRow(`SELECT COUNT(*) FROM mail_filter_move_history`).Scan(&historyCount); err != nil || historyCount != 1 {
+		t.Fatal("move history included skipped snapshot", historyCount, err)
+	}
+	release := f.app.acquireFilterExecutionBoundary()
+	release()
+	snapshot, err := f.app.messageStore.Get(f.message.ID)
+	if err != nil || snapshot == nil || snapshot.FolderID != "a-inbox" || int32(snapshot.UID) >= 0 {
+		t.Fatal("snapshot moved", snapshot, err)
+	}
+	live, err := f.app.messageStore.Get("live-thread-mail")
+	if err != nil || live == nil || live.FolderID != "a-trash" {
+		t.Fatal("live conversation mail did not move", live, err)
+	}
+	if err := f.app.messageStore.Create(&message.Message{ID: "unresolved", AccountID: "acct-a", FolderID: "a-inbox", UID: 12, Date: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.messageStore.MoveMessages([]string{"unresolved"}, "a-inbox"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.MoveToFolder([]string{f.message.ID, "unresolved"}, "a-trash"); err == nil {
+		t.Fatal("unresolved optimistic move guard was bypassed")
+	}
+}
+
+func TestUnresolvedMoveDoesNotDropClassificationBackfill(t *testing.T) {
+	f := newFilterFixture(t, false)
+	f.app.ctx = context.Background()
+	f.serverA.sess.rediscoverCopies = true
+	if err := f.app.messageStore.MoveMessages([]string{f.message.ID}, "a-trash"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.messageStore.RecordMoveUIDEvidence("a-trash", 99, map[string]uint32{f.message.ID: 701}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.messageStore.Create(&message.Message{ID: "uncategorized", AccountID: "acct-a", FolderID: "a-trash", UID: 702, MessageID: "classify@test", Date: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	f.serverA.sess.messages[702] = []byte(strings.ReplaceAll(cannedRaw, "m1@example.com", "classify@test"))
+	f.serverA.sess.copiedUIDs = map[uint32]string{702: "Trash"}
+	if err := f.app.SyncFolder("acct-a", "a-trash"); err != nil {
+		t.Fatal(err)
+	}
+	var category string
+	if err := f.db.QueryRow(`SELECT inbox_category FROM messages WHERE id='uncategorized'`).Scan(&category); err != nil || category == "" {
+		t.Fatal("unresolved proof stalled classification", category, err)
+	}
+}
+
+func TestForwardMovePartitionWithSharedOperationSkipsSnapshot(t *testing.T) {
+	f := newFilterFixture(t, false)
+	f.app.ctx = context.Background()
+	if _, err := f.db.Exec(`UPDATE messages SET uid=-rowid WHERE id=?`, f.message.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.db.Exec(`INSERT INTO quarantined_repair_messages(message_id) VALUES(?)`, f.message.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.messageStore.Create(&message.Message{ID: "live", AccountID: "acct-a", FolderID: "a-inbox", UID: 11, MessageID: "live@test", Date: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	f.serverA.sess.messages[11] = []byte(strings.ReplaceAll(cannedRaw, "m1@example.com", "live@test"))
+	if _, err := f.app.moveToFolderWithService([]string{f.message.ID, "live"}, "a-trash", true, "shared-forward-operation", false); err != nil {
+		t.Fatal("forward shared operation was mistaken for undo", err)
+	}
+	waitFor(t, time.Second, func() bool {
+		f.serverA.sess.mu.Lock()
+		defer f.serverA.sess.mu.Unlock()
+		return f.serverA.sess.copyCount == 1
+	})
+	got, err := f.app.messageStore.Get("live")
+	if err != nil || got == nil || got.FolderID != "a-trash" {
+		t.Fatal("live forward partition was skipped", got, err)
+	}
+}
+
+func TestFolderDiscoveryCannotRelabelRepairedCacheGeneration(t *testing.T) {
+	f := newFilterFixture(t, false)
+	f.app.ctx = context.Background()
+	f.serverA.sess.listForDiscovery = true
+	f.serverA.sess.rediscoverCopies = true
+	f.serverA.sess.copiedUIDs = map[uint32]string{10: "INBOX"}
+	if _, err := f.db.Exec(`UPDATE folders SET uid_validity=7 WHERE id='a-inbox'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := message.NewAttachmentStore(f.db).RepairFromMIME("acct-a", f.message.ID, "snapshot", nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	f.serverA.sess.messages[10] = []byte(strings.ReplaceAll(cannedRaw, "m1@example.com", "unrelated@example.com"))
+	f.serverA.sess.validity = 8
+	f.serverA.sess.internalDate = time.Now().AddDate(0, -3, 0)
+	if err := f.app.syncEngine.SyncFolders(context.Background(), "acct-a"); err != nil {
+		t.Fatal(err)
+	}
+	cached, err := f.app.folderStore.Get("a-inbox")
+	if err != nil || cached.UIDValidity != 7 {
+		t.Fatal("discovery overwrote cached generation", cached, err)
+	}
+	if err := f.app.syncEngine.SyncMessages(context.Background(), "acct-a", "a-inbox", 30, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.syncEngine.SyncMessages(context.Background(), "acct-a", "a-inbox", 0, false); err != nil {
+		t.Fatal(err)
+	}
+	old, err := f.app.messageStore.Get(f.message.ID)
+	if err != nil || old == nil || int32(old.UID) >= 0 {
+		t.Fatal("discovery attached repaired body to reused UID", old, err)
+	}
+	var backups int
+	if err := f.db.QueryRow(`SELECT COUNT(*) FROM attachment_repair_backups WHERE message_id=?`, f.message.ID).Scan(&backups); err != nil || backups != 1 {
+		t.Fatal("repair history lost", backups, err)
+	}
+}
+
+func TestSearchImportsRestoreExactRetiredRepair(t *testing.T) {
+	for _, mode := range []string{"desktop", "helper", "desktop-reset", "helper-reset"} {
+		t.Run(mode, func(t *testing.T) {
+			f := newFilterFixture(t, false)
+			f.app.ctx = context.Background()
+			if _, err := f.db.Exec(`UPDATE folders SET uid_validity=7,flags_sync_modseq=100 WHERE id='a-inbox'`); err != nil {
+				t.Fatal(err)
+			}
+			f.serverA.sess.validity = 7
+			f.serverA.sess.rediscoverCopies = true
+			f.serverA.sess.copiedUIDs = map[uint32]string{10: "INBOX"}
+			if _, err := message.NewAttachmentStore(f.db).RepairFromMIME("acct-a", f.message.ID, "snapshot", nil, ""); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := f.db.Exec(`UPDATE messages SET body_fetched=1,body_text='downloaded',is_read=1,is_starred=1 WHERE id=?`, f.message.ID); err != nil {
+				t.Fatal(err)
+			}
+			if err := f.app.messageStore.DeleteSyncedUID("a-inbox", f.message.UID); err != nil {
+				t.Fatal(err)
+			}
+			reset := strings.HasSuffix(mode, "-reset")
+			if reset {
+				f.serverA.sess.validity = 8
+				f.serverA.sess.messages[10] = []byte(strings.ReplaceAll(cannedRaw, "m1@example.com", "unrelated@example.com"))
+			}
+			var got *message.Message
+			if strings.HasPrefix(mode, "desktop") {
+				var err error
+				got, err = f.app.syncEngine.FetchServerMessage(context.Background(), "acct-a", "a-inbox", f.message.UID)
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				page, err := f.app.syncEngine.SearchIMAPPage(context.Background(), "acct-a", "a-inbox", "", nil, 10)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ms, err := f.app.syncEngine.CacheIMAPSearchHeaders("acct-a", "a-inbox", page.Results)
+				if err != nil || len(ms) != 1 {
+					t.Fatal("cache search", len(ms), err)
+				}
+				got = ms[0]
+			}
+			if reset {
+				old, err := f.app.messageStore.Get(f.message.ID)
+				if err != nil || old == nil || int32(old.UID) >= 0 || got.ID == old.ID {
+					t.Fatal("search reused generation targeted repaired snapshot", old, got, err)
+				}
+				return
+			}
+			if got.ID != f.message.ID || got.UID != f.message.UID || got.BodyText != "downloaded" {
+				t.Fatal("search stranded repair", got)
+			}
+			if got.IsRead || got.IsStarred {
+				t.Fatal("search reattached stale flags", got)
+			}
+			var copies int
+			if err := f.db.QueryRow(`SELECT COUNT(*) FROM messages WHERE folder_id='a-inbox'`).Scan(&copies); err != nil || copies != 1 {
+				t.Fatal("duplicate search import", copies, err)
+			}
+		})
+	}
+}
+
+func TestServerSearchExcludesDeletedAndDropsRacingResult(t *testing.T) {
+	f := newFilterFixture(t, false)
+	f.app.ctx = context.Background()
+	f.serverA.sess.rediscoverCopies = true
+	f.serverA.sess.copiedUIDs = map[uint32]string{10: "INBOX"}
+	f.serverA.sess.deletedForSearch = map[uint32]bool{10: true}
+	for _, pageMode := range []bool{false, true} {
+		if pageMode {
+			p, err := f.app.syncEngine.SearchIMAPPage(context.Background(), "acct-a", "a-inbox", "", nil, 10)
+			if err != nil || len(p.Results) != 0 {
+				t.Fatal("paged search exposed deleted mail", p, err)
+			}
+		} else {
+			p, err := f.app.syncEngine.IMAPSearch(context.Background(), "acct-a", "a-inbox", "invoice", 10)
+			if err != nil || p.TotalCount != 0 {
+				t.Fatal("desktop search exposed deleted mail", p, err)
+			}
+		}
+	}
+	f.serverA.sess.deletedForSearch[10] = false
+	p, err := f.app.syncEngine.IMAPSearch(context.Background(), "acct-a", "a-inbox", "invoice", 10)
+	if err != nil || p.TotalCount != 1 {
+		t.Fatal("live result absent", p, err)
+	}
+	f.serverA.sess.deletedForSearch[10] = true
+	if _, err := f.app.syncEngine.FetchServerMessage(context.Background(), "acct-a", "a-inbox", 10); err == nil || !strings.Contains(err.Error(), "message not found on server") {
+		t.Fatal("racing deletion did not use stale-result predicate", err)
+	}
+}
+
+func TestServiceThreadAdapterUsesCachedSnapshotContent(t *testing.T) {
+	f := newFilterFixture(t, false)
+	if _, err := f.db.Exec(`UPDATE messages SET uid=-1,body_fetched=1,body_text='offline snapshot' WHERE id=?`, f.message.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.messageStore.Create(&message.Message{ID: "live", AccountID: "acct-a", FolderID: "a-inbox", UID: 8, MessageID: f.message.MessageID}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := f.app.conversationFromServiceThread(&views.ThreadView{Ref: views.ThreadRef{AccountID: "acct-a", ThreadID: "thread"}, Messages: []views.ThreadMessage{{Ref: views.MessageRef{AccountID: "acct-a", MessageID: "live"}, FolderID: "a-inbox", ContentState: views.ContentCached}}}, "a-inbox")
+	if err != nil || len(got.Messages) != 1 || got.Messages[0].ID != "live" || got.Messages[0].BodyText != "offline snapshot" || got.Messages[0].CachedBodySourceID != f.message.ID {
+		t.Fatal("desktop adapter dropped cached source", got, err)
+	}
+}
+
+func TestExplicitBodyFetchPopulatesLiveRowDespiteSnapshot(t *testing.T) {
+	f := newFilterFixture(t, false)
+	f.app.ctx = context.Background()
+	if _, err := f.db.Exec(`UPDATE messages SET uid=-1,body_fetched=1,body_text='offline snapshot' WHERE id=?`, f.message.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.messageStore.Create(&message.Message{ID: "live", AccountID: "acct-a", FolderID: "a-inbox", UID: 10, MessageID: f.message.MessageID}); err != nil {
+		t.Fatal(err)
+	}
+	service := mailservice.New(mailservice.Options{Messages: f.app.messageStore, Sync: f.app.syncEngine})
+	cached, err := service.GetMessage("acct-a", "live")
+	if err != nil || cached.BodyText != "offline snapshot" {
+		t.Fatal("reader fallback unavailable", cached, err)
+	}
+	if _, err := service.FetchMessageBody(context.Background(), "acct-a", "live"); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := f.app.messageStore.Get("live")
+	if err != nil || !stored.BodyFetched || stored.BodyText == "" || stored.BodyText == "offline snapshot" {
+		t.Fatal("explicit fetch skipped live persistence", stored, err)
+	}
+}
+
+func TestPrepareReplyUsesOfflineSnapshotForEveryMode(t *testing.T) {
+	f := newFilterFixture(t, false)
+	f.app.attachmentStore = message.NewAttachmentStore(f.db)
+	f.app.paths = &platform.Paths{Data: t.TempDir()}
+	if _, err := f.db.Exec(`UPDATE messages SET uid=-rowid,message_id='quote@test',body_fetched=1,body_text='saved original quotation' WHERE id=?`, f.message.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.messageStore.Create(&message.Message{ID: "live", AccountID: "acct-a", FolderID: "a-inbox", UID: 8, MessageID: "quote@test", ThreadID: "quote@test", Date: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	f.app.syncEngine = nil // No provider path can satisfy the quote.
+	for _, mode := range []string{"reply", "reply-all", "forward"} {
+		got, err := f.app.PrepareReply("live", mode)
+		if err != nil || !strings.Contains(got.TextBody, "saved original quotation") || !strings.Contains(got.HTMLBody, "saved original quotation") {
+			t.Fatal("offline quote lost", mode, got, err)
+		}
+	}
+}
+
+func TestRecoveryWithoutEvidenceDoesNotSelectMailbox(t *testing.T) {
+	f := newFilterFixture(t, false)
+	if err := f.app.messageStore.MoveMessages([]string{f.message.ID}, "a-trash"); err != nil {
+		t.Fatal(err)
+	}
+	err := f.app.syncEngine.RecoverInterruptedMoves(context.Background(), "acct-a", "a-trash", []string{f.message.ID})
+	if err == nil {
+		t.Fatal("unknown move outcome was treated as proven")
+	}
+	f.serverA.sess.mu.Lock()
+	count := f.serverA.sess.selectCount
+	f.serverA.sess.mu.Unlock()
+	if count != 0 {
+		t.Fatal("unproven snapshot caused mailbox selection", count)
+	}
+}
+
+func TestSyncKeepsCachedUIDInsideServerArrivalWindow(t *testing.T) {
+	for _, handled := range []bool{false, true} {
+		t.Run(fmt.Sprintf("handled-%t", handled), func(t *testing.T) {
+			f := newFilterFixture(t, false)
+			f.serverA.sess.rediscoverCopies = true
+			f.serverA.sess.internalDate = time.Now().AddDate(0, 0, -29)
+			f.serverA.sess.copiedUIDs = map[uint32]string{f.message.UID: "INBOX"}
+			if _, err := f.db.Exec(`UPDATE messages SET date=?,read_receipt_handled=?,inbox_category='personal' WHERE id=?`, time.Now().AddDate(0, 0, -31), handled, f.message.ID); err != nil {
+				t.Fatal(err)
+			}
+			hooks := make(chan string, 4)
+			f.app.syncEngine.SetNewMessageHandler(func(_, _ string, m *message.Message) { hooks <- m.ID })
+			if err := f.app.syncEngine.SyncMessages(context.Background(), "acct-a", "a-inbox", 30, false); err != nil {
+				t.Fatal(err)
+			}
+			got, err := f.app.messageStore.Get(f.message.ID)
+			if err != nil || got == nil || got.UID != f.message.UID || got.ReadReceiptHandled != handled {
+				t.Fatal("server-listed cached identity was pruned", got, err)
+			}
+			select {
+			case id := <-hooks:
+				t.Fatal("cached window member dispatched new-mail rule", id)
+			case <-time.After(50 * time.Millisecond):
+			}
+		})
+	}
+}
+
+func TestGmailIMAPWindowEvictsTrashAndSpamWithoutSelfExemption(t *testing.T) {
+	for _, kind := range []string{"trash", "spam"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newFilterFixture(t, false)
+			if _, err := f.db.Exec(`UPDATE accounts SET imap_host='imap.gmail.com' WHERE id='acct-a'`); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := f.db.Exec(`UPDATE folders SET folder_type=? WHERE id='a-trash'`, kind); err != nil {
+				t.Fatal(err)
+			}
+			if err := f.app.messageStore.MoveMessages([]string{f.message.ID}, "a-trash"); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := f.db.Exec(`UPDATE messages SET uid=10 WHERE id=?`, f.message.ID); err != nil {
+				t.Fatal(err)
+			}
+			f.serverA.sess.rediscoverCopies = true
+			f.serverA.sess.internalDate = time.Now().AddDate(0, 0, -60)
+			f.serverA.sess.copiedUIDs = map[uint32]string{10: "Trash"}
+			if err := f.app.syncEngine.SyncMessages(context.Background(), "acct-a", "a-trash", 30, false); err != nil {
+				t.Fatal(err)
+			}
+			got, err := f.app.messageStore.Get(f.message.ID)
+			if err != nil || got != nil {
+				t.Fatal("expired Gmail special-folder row preserved itself", kind, got, err)
+			}
+		})
+	}
+}
+
+func TestGmailIMAPPreservesGenuineCrossFolderTrashCopy(t *testing.T) {
+	f := newFilterFixture(t, false)
+	if _, err := f.db.Exec(`UPDATE accounts SET imap_host='imap.gmail.com' WHERE id='acct-a'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.app.messageStore.Create(&message.Message{ID: "trash-copy", AccountID: "acct-a", FolderID: "a-trash", UID: 22, MessageID: f.message.MessageID, Date: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	f.serverA.sess.rediscoverCopies = true
+	f.serverA.sess.copiedUIDs = map[uint32]string{}
+	if err := f.app.syncEngine.SyncMessages(context.Background(), "acct-a", "a-inbox", 30, false); err != nil {
+		t.Fatal(err)
+	}
+	got, err := f.app.messageStore.Get(f.message.ID)
+	if err != nil || got == nil {
+		t.Fatal("Gmail genuine cross-folder preservation lost", got, err)
+	}
+}
+
+func TestRawAttachmentRejectsReusedUIDGeneration(t *testing.T) {
+	f := newFilterFixture(t, false)
+	if _, err := f.db.Exec(`UPDATE folders SET uid_validity=7 WHERE id='a-inbox'`); err != nil {
+		t.Fatal(err)
+	}
+	f.serverA.sess.validity = 8
+	if got, err := f.app.syncEngine.FetchRawAttachment(context.Background(), "acct-a", "a-inbox", f.message.UID); err == nil {
+		t.Fatal("attachment from reused UID generation returned", string(got))
+	}
+	f.serverA.sess.validity = 7
+	if got, err := f.app.syncEngine.FetchRawAttachment(context.Background(), "acct-a", "a-inbox", f.message.UID); err != nil || len(got) == 0 {
+		t.Fatal("verified attachment source rejected", err)
 	}
 }

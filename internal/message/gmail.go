@@ -182,3 +182,22 @@ func (s *Store) BindGmailID(accountID, localID, providerID string) error {
 	}
 	return tx.Commit()
 }
+
+// ValidateRawContentTarget accepts live IMAP UIDs or explicitly bound Gmail
+// cache keys. A negative-looking key alone never establishes a provider target.
+func (s *Store) ValidateRawContentTarget(m *Message) error {
+	if m == nil || m.UID == 0 {
+		return fmt.Errorf("raw content has no provider target")
+	}
+	if int32(m.UID) > 0 {
+		return nil
+	}
+	id, err := s.GmailID(m.AccountID, m.ID)
+	if err != nil {
+		return err
+	}
+	if id == "" {
+		return fmt.Errorf("snapshot attachment has no exact cached payload")
+	}
+	return nil
+}
