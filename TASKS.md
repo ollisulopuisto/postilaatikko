@@ -11,6 +11,12 @@
 5. Update `ROADMAP.md` when product scope, priority, or durable decisions change. Do not rewrite its priorities just to claim a task.
 6. A task may be split into smaller tasks when investigation reveals separate backend, UI, and migration work. Record dependencies before another model claims a dependent task.
 
+## Test DMG tags fail the production release workflows
+
+- Status: In progress. Owner: Instinct. Branch: `agent/release-test-tag-separation`.
+- Olli instruction 2026-11-23 (Actions review item 3): separate the test-tag triggers from the production release workflows. Every nightly test DMG (macOS Build) publishes a draft prerelease tag like `v2026.11.23.1-test.45085625203.1`, which fired both Release and Release for macOS; both then failed the strict production version guard (runs 45087019892 and 45087019886).
+- Fix: release.yml and release-macos.yml tag triggers now exclude `v*-test.*`. The production include pattern `v*` and the exact `v$VERSION` check are unchanged; test tags simply never start these workflows. The test DMG flow itself (macOS Build, draft prereleases) is untouched.
+
 ## App not registrable as default mailto handler on macOS
 
 - Status: In progress. Owner: Instinct. Branch: `agent/mailto-handler-registration`.
