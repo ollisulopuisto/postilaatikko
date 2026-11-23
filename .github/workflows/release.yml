@@ -2,7 +2,12 @@ name: Release
 
 on:
   push:
-    tags: 'v*'
+    tags:
+      # Production release tags only. The nightly macOS Build test DMG
+      # publishes draft prerelease tags like v2026.11.23.1-test.<run>.1;
+      # those must not fire this workflow (version.sh check rejects them).
+      - 'v*'
+      - '!v*-test.*'
 
 permissions:
   contents: read
