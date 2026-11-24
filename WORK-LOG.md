@@ -72,3 +72,17 @@ explicit Go overlay replacing only unavailable GTK startup notification with a
 no-op; no production source shim committed. Real Ubuntu service deployment,
 real pairing/delivery and macOS keychain not claimed. Version2026.11.24.3 avoids
 326's2026.11.24.2; both independent PRs need release-note reconciliation later.
+
+
+## 2026-11-25:327 integration after326
+
+Owner approved both merges through authenticated chat.326merged7fc00fa0 first.
+Rebased327onto that main, preserving both changelog/task/log sections. No
+production conflict: main.go account dispatch and identity backend changes
+merged independently. Reconciled all current version fields to2026.11.25.1,
+preserved326AppStream history and corrected account docs to link the now
+available explicit file-identity path. Existing permission/regression fixes
+retained. Own delta review compares old/new feature source and command entry
+points; combined accountsetup/OAuth/scheduledsend/helper tests, scoped vet,
+CGO0helper build and version checker run. No actual provider/Ubuntu service
+acceptance claim. Fresh exact-head CI and independent delta review required.

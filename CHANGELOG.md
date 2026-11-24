@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-## Postilaatikko 2026.11.24.3
+## Postilaatikko 2026.11.25.1
 
 - Add an explicit Linux helper encrypted-file identity backend for headless Send Later pairing; default keyring behavior unchanged.
 
