@@ -4,6 +4,7 @@ import (
 	"errors"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/ollisulopuisto/postilaatikko/internal/account"
 	"github.com/ollisulopuisto/postilaatikko/internal/credentials"
@@ -142,5 +143,30 @@ func TestIdentityInsertFailureDoesNotLeavePartialAccount(t *testing.T) {
 	rows, err := s.accounts.List()
 	if err != nil || len(rows) != 0 {
 		t.Fatal("partial account remains")
+	}
+}
+
+func TestOAuthPersistsRefreshGrantAcrossReopenWithoutKeyring(t *testing.T) {
+	gokeyring.MockInitWithError(errors.New("no keyring"))
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := account.AccountConfig{Name: "Google", DisplayName: "Me", Email: "me@example.org", Username: "me@example.org", IMAPHost: "imap.gmail.com", SMTPHost: "smtp.gmail.com", AuthType: account.AuthOAuth2}
+	tokens := &credentials.OAuthTokens{Provider: "google", AccessToken: "access-fixture", RefreshToken: "refresh-fixture", ExpiresAt: time.Now().Add(time.Hour), Scopes: []string{"https://mail.google.com/"}}
+	a, err := s.Create(cfg, "", "", tokens)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	s, err = Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	restored, err := s.creds.GetOAuthTokens(a.ID)
+	if err != nil || restored.RefreshToken != "refresh-fixture" || restored.Provider != "google" {
+		t.Fatal("OAuth grant not restored")
 	}
 }
