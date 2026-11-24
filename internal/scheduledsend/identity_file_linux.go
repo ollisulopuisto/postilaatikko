@@ -117,17 +117,17 @@ func (s FileIdentityStore) Load(name string) (*Identity, error) {
 	if err != nil {
 		return nil, err
 	}
+	lock, err := devicecrypto.LockCredentialMigration(dir)
+	if err != nil {
+		return nil, errors.New("could not lock identity store")
+	}
+	defer lock.Close()
 	for _, p := range []string{path, filepath.Join(dir, "device.key")} {
 		info, err := os.Lstat(p)
 		if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
 			return nil, errors.New("identity and encryption key must exist as private regular files")
 		}
 	}
-	lock, err := devicecrypto.LockCredentialMigration(dir)
-	if err != nil {
-		return nil, errors.New("could not lock identity store")
-	}
-	defer lock.Close()
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, errors.New("encrypted identity unavailable")
