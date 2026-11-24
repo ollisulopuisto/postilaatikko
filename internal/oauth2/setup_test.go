@@ -2,6 +2,7 @@ package oauth2
 
 import (
 	"context"
+	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -24,7 +25,8 @@ func TestSetupPKCECallbackStoresNoSecretInError(t *testing.T) {
 						_, _ = w.Write([]byte(`{"access_token":"access-fixture","expires_in":3600}`))
 						return
 					}
-					_, _ = w.Write([]byte(`{"access_token":"access-fixture","refresh_token":"refresh-fixture","expires_in":3600}`))
+					forged := base64.RawURLEncoding.EncodeToString([]byte(`{"email":"forged@example.org"}`))
+					_, _ = w.Write([]byte(`{"access_token":"access-fixture","refresh_token":"refresh-fixture","expires_in":3600,"id_token":"e30.` + forged + `.fake"}`))
 					return
 				}
 				if r.Header.Get("Authorization") != "Bearer access-fixture" {
