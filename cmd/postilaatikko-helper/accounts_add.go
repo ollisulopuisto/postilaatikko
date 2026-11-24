@@ -15,6 +15,7 @@ import (
 	"github.com/ollisulopuisto/postilaatikko/internal/account"
 	"github.com/ollisulopuisto/postilaatikko/internal/accountsetup"
 	"github.com/ollisulopuisto/postilaatikko/internal/credentials"
+	"github.com/ollisulopuisto/postilaatikko/internal/gmail"
 	"github.com/ollisulopuisto/postilaatikko/internal/logging"
 	"github.com/ollisulopuisto/postilaatikko/internal/oauth2"
 	"golang.org/x/term"
@@ -122,9 +123,11 @@ func runAccountsAdd(args []string, dataDefault string, input *os.File, out, errO
 		}
 		tokens = &credentials.OAuthTokens{Provider: *provider, AccessToken: pending.AccessToken, RefreshToken: pending.RefreshToken, ExpiresAt: time.Now().Add(time.Duration(pending.ExpiresIn) * time.Second), Scopes: oauth2.GrantedScopes(pending, cfg.Scopes)}
 		defer func() { tokens.AccessToken = ""; tokens.RefreshToken = "" }()
+		if *provider == "google" && (!gmail.ScopesCoverSearch(tokens.Scopes) || !gmail.ScopesCoverModify(tokens.Scopes)) {
+			return errors.New("Google mail permissions were not granted; no account added")
+		}
 	}
 	acc, err := store.Create(config, password, smtpPassword, tokens)
-	password, smtpPassword = "", ""
 	if err != nil {
 		return err
 	}

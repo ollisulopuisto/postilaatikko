@@ -15,26 +15,26 @@ func TestSetupPKCECallbackStoresNoSecretInError(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == "/token" {
-					r.ParseForm()
+					_ = r.ParseForm()
 					if r.Form.Get("code_verifier") == "" || r.Form.Get("grant_type") != "authorization_code" {
 						t.Error("missing PKCE")
 					}
 					w.Header().Set("Content-Type", "application/json")
 					if mode == "no-refresh" {
-						w.Write([]byte(`{"access_token":"access-fixture","expires_in":3600}`))
+						_, _ = w.Write([]byte(`{"access_token":"access-fixture","expires_in":3600}`))
 						return
 					}
-					w.Write([]byte(`{"access_token":"access-fixture","refresh_token":"refresh-fixture","expires_in":3600}`))
+					_, _ = w.Write([]byte(`{"access_token":"access-fixture","refresh_token":"refresh-fixture","expires_in":3600}`))
 					return
 				}
 				if r.Header.Get("Authorization") != "Bearer access-fixture" {
 					t.Error("userinfo not authenticated")
 				}
 				if mode == "no-identity" {
-					w.Write([]byte(`{}`))
+					_, _ = w.Write([]byte(`{}`))
 					return
 				}
-				w.Write([]byte(`{"email":"me@example.org"}`))
+				_, _ = w.Write([]byte(`{"email":"me@example.org"}`))
 			}))
 			defer server.Close()
 			manager := NewManager()

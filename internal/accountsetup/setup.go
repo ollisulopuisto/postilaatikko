@@ -39,10 +39,10 @@ func Open(dir string) (*Store, error) {
 	}
 	db, err := database.Open(filepath.Join(dir, "aerion.db"))
 	if err != nil {
-		lock.Release()
+		_ = lock.Release()
 		return nil, err
 	}
-	fail := func(err error) (*Store, error) { db.Close(); lock.Release(); return nil, err }
+	fail := func(err error) (*Store, error) { _ = db.Close(); _ = lock.Release(); return nil, err }
 	if current, err := db.CurrentSchemaVersion(); err != nil {
 		return fail(err)
 	} else if current > database.MaxSchemaVersion() {

@@ -56,7 +56,7 @@ func TestOpenRefusesActiveSchemaReaderWithoutChangingDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer lock.Release()
+	defer func() { _ = lock.Release() }()
 	if s, err := Open(dir); err == nil {
 		s.Close()
 		t.Fatal("accepted active app/helper")
