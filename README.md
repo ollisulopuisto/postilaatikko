@@ -86,3 +86,5 @@ Never attach real mail, account tokens or unredacted logs to a public bug report
 ## License and upstream credit
 
 [Apache License 2.0](LICENSE). Postilaatikko retains the work of Eterno Mail and Aerion and aims to offer suitable changes back upstream. This fork's name does not erase their authorship or the identifiers retained for compatibility.
+
+Headless helper account setup: [docs/HEADLESS_ACCOUNTS.md](docs/HEADLESS_ACCOUNTS.md).

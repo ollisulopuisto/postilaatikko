@@ -208,13 +208,13 @@ func (m *Manager) WaitForCallback(ctx context.Context) (*TokenResponse, string, 
 	}
 
 	// Exchange code for tokens
-	tokens, err := m.exchangeCode(provider, result.Code, session.CodeVerifier, session.RedirectURI)
+	tokens, err := m.exchangeCodeContext(ctx, provider, result.Code, session.CodeVerifier, session.RedirectURI)
 	if err != nil {
 		return nil, "", fmt.Errorf("token exchange failed: %w", err)
 	}
 
 	// Get user email
-	email, err := m.getUserEmail(provider, tokens)
+	email, err := m.getUserEmailContext(ctx, provider, tokens)
 	if err != nil {
 		m.log.Warn().Err(err).Msg("Failed to get user email from tokens")
 		email = "" // Non-fatal, will need to be provided by user
@@ -385,6 +385,10 @@ func (m *Manager) exchangeCodeContext(ctx context.Context, provider ProviderConf
 
 // getUserEmail extracts the user's email from ID token or calls userinfo endpoint
 func (m *Manager) getUserEmail(provider ProviderConfig, tokens *TokenResponse) (string, error) {
+	return m.getUserEmailContext(context.Background(), provider, tokens)
+}
+
+func (m *Manager) getUserEmailContext(ctx context.Context, provider ProviderConfig, tokens *TokenResponse) (string, error) {
 	// Try to extract from ID token first (if present)
 	if tokens.IDToken != "" {
 		email, err := extractEmailFromIDToken(tokens.IDToken)
@@ -407,7 +411,7 @@ func (m *Manager) getUserEmail(provider ProviderConfig, tokens *TokenResponse) (
 		return "", fmt.Errorf("userinfo not supported for provider: %s", provider.Name)
 	}
 
-	req, err := http.NewRequest("GET", userinfoURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", userinfoURL, nil)
 	if err != nil {
 		return "", err
 	}

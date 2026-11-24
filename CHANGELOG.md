@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## Postilaatikko 2026.11.24.2
+
+- Add local helper account setup without a GUI: desktop loopback OAuth for Google/Microsoft and hidden terminal password entry for IMAP, using existing credential storage. No real-provider acceptance claim.
+
+
 - Selected mail rows now own the visible action controls: separate checked runs are outlined, bulk actions stay with the selection, and row quick actions return when selection clears.
 
 - Archiving, deleting or moving conversations no longer closes the reading pane unless the open conversation was among them. Removing the open conversation now advances to the nearest remaining row instead of landing on the empty pane, and a failed list refresh after an action shows an error instead of a silent empty pane.
