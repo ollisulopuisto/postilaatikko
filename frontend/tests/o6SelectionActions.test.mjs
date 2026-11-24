@@ -24,4 +24,5 @@ test('selection object geometry excludes unchecked gaps and handles changing row
   assert.deepEqual(selectionRuns([row(0,40,true),row(40,90,true),row(90,130,false),row(130,210,true)]),[{top:0,bottom:90},{top:130,bottom:210}])
   assert.deepEqual(selectionRuns([row(-50,30,true),row(30,100,false),row(100,180,true)]),[{top:-50,bottom:30},{top:100,bottom:180}])
   assert.deepEqual(selectionRuns([row(0,40,false)]),[])
+  assert.deepEqual(selectionRuns([row(0,40,true),row(70,110,true)]),[{top:0,bottom:40},{top:70,bottom:110}])
 })

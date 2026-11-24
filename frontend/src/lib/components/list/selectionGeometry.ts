@@ -6,7 +6,7 @@ export function selectionRuns(rows: readonly SelectionRow[]): SelectionRun[] {
   let current: SelectionRun | undefined
   for (const row of rows) {
     if (!row.checked) { current = undefined; continue }
-    if (current) current.bottom = row.bottom
+    if (current && row.top <= current.bottom + 0.5) current.bottom = row.bottom
     else { current = {top: row.top, bottom: row.bottom}; runs.push(current) }
   }
   return runs

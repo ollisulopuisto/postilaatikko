@@ -33,6 +33,8 @@ test('O6 removes quick controls from every row during selection, including unres
     for(const width of [390,760]){await page.setViewportSize({width,height:700});await page.screenshot({path:join(captures,`o6-selected-${width}.png`),fullPage:true})}
     await page.evaluate(()=>{const list=document.querySelector('[data-conversation-row]').parentElement;list.style.height='180px';list.parentElement.style.height='180px';list.scrollTop=100})
     await page.waitForFunction(()=>{const bar=document.querySelector('.selection-object-bar').getBoundingClientRect();const list=document.querySelector('[data-conversation-row]').parentElement.getBoundingClientRect();return bar.bottom<=list.bottom+1 && bar.top>=list.top})
+    await page.evaluate(()=>{const row=document.querySelector('[data-conversation-row]');row.style.paddingTop='50px'})
+    await page.waitForFunction(()=>{const outline=document.querySelector('.selection-run').getBoundingClientRect();const list=document.querySelector('[data-conversation-row]').parentElement.getBoundingClientRect();return outline.top>=list.top-1})
     const before=await page.locator('.selection-object-bar').boundingBox()
     await page.evaluate(()=>document.querySelector('[data-conversation-row]').parentElement.scrollTop=0)
     await page.waitForFunction(()=>document.querySelector('.selection-object-bar').getBoundingClientRect().bottom<=document.querySelector('[data-conversation-row]').parentElement.getBoundingClientRect().bottom+1)
