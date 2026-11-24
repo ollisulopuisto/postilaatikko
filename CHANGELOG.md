@@ -69,6 +69,10 @@
 - Hide folders locally from the folder menu or Account settings > Folders, with search and bulk hide/show. Hidden folders leave navigation and pickers and pause explicit refresh and body prefetch without deleting cached mail or changing provider subscriptions. Saved views keep cached mail with stale-source warnings; filters to hidden destinations pause until shown. Adds a folder visibility preference to the local database.
 - Create local mail filters from the message menu or Settings. Prefill sender, recipients, subject and List-ID; scope rules to all or chosen accounts; move, mark read, archive or move to Trash. Preview stored matches before saving. Applying to existing mail is opt-in, capped at 500 matches, and queued by the helper. List-ID matching on older mail is limited to captured headers until they refresh.
 
+## Postilaatikko 2026.11.24.1
+
+- Version bump for a fresh DMG build (includes O6 visible triage actions, #324).
+
 ## Postilaatikko 2026.11.23.1
 
 - Version bump for a fresh DMG build.
