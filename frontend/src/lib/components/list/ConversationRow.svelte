@@ -673,7 +673,7 @@
          fade (invisible until hover on desktop, faint on narrow). -->
     <div
       class="quick-selection-checkbox relative z-20 flex-shrink-0 flex items-center justify-center self-center {getAlwaysShowMessageCheckbox()
-        ? `${densityClasses.checkbox[density]} transition-opacity duration-200 ${checked ? 'opacity-100' : densityClasses.checkboxAlways}`
+        ? `${densityClasses.checkbox[density]} transition-opacity duration-200 ${checked || selectionActive ? 'opacity-100' : densityClasses.checkboxAlways}`
         : `overflow-hidden transition-all duration-200 ${checked || selectionActive ? densityClasses.checkbox[density] : densityClasses.checkboxHidden[density]}`}"
     >
       <button

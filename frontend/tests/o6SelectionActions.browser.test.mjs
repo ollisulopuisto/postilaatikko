@@ -66,6 +66,7 @@ test('actual MessageList wires O6 checked state and object geometry',{skip:!brow
     await rows.nth(2).getByRole('checkbox').focus();await page.keyboard.press('Space')
     await page.waitForFunction(()=>document.querySelectorAll('.selection-run').length===2)
     assert.equal(await rows.nth(1).getAttribute('data-bulk-checked'),'false')
+    await page.waitForFunction(()=>[...document.querySelectorAll('.quick-selection-checkbox')].every(el=>el.getBoundingClientRect().width>=23.5))
     await page.screenshot({path:join(captures,'o6-real-message-list.png'),fullPage:true})
     await page.getByRole('toolbar').getByRole('button',{name:'Close',exact:true}).click()
     assert.equal(await page.locator('.quick-row-action').count(),9)

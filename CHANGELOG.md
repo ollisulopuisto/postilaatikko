@@ -1,8 +1,8 @@
 # CHANGELOG
 
-- Selected mail rows now own the visible action controls: separate checked runs are outlined, bulk actions stay with the selection, and row quick actions return when selection clears.
-
 ## [Unreleased]
+
+- Selected mail rows now own the visible action controls: separate checked runs are outlined, bulk actions stay with the selection, and row quick actions return when selection clears.
 
 - Archiving, deleting or moving conversations no longer closes the reading pane unless the open conversation was among them. Removing the open conversation now advances to the nearest remaining row instead of landing on the empty pane, and a failed list refresh after an action shows an error instead of a silent empty pane.
 
