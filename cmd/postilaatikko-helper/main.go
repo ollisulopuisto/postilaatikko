@@ -66,6 +66,9 @@ func run(args []string) error {
 		}
 		return runAPIClientCommand(args[1:], dataDefault)
 	}
+	if command == "accounts" && len(args) > 1 && args[1] == "add" {
+		return runAccountsAdd(args[2:], dataDefault, os.Stdin, os.Stdout, os.Stderr)
+	}
 	identityDefault := "studio"
 	switch command {
 	case "schedule", "submit", "status", "cancel":

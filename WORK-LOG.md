@@ -27,3 +27,25 @@ Update Go's security patch floor and vulnerable dependencies while keeping appli
 
 ## O6 selection action targeting
 Approved Loki seq285 following O5/O6 sketches, under the authenticated no-repeat-confirmation grant. Checked-set state is passed through all four row render paths independently of resolved message IDs. Quick controls are removed while selection exists; contiguous checked runs are outlined separately, excluding gaps. Existing bulk callbacks and context-menu behavior remain; ActionBar anchors to a reserved final checked-row footer and clamps to viewport when offscreen. No new drag or confirmation interaction. Failing-first wiring tests 0/2 before, 2/2 after, plus geometry test. Actual row and MessageList browser regressions pass. Frontend 1129 pass, 31 browser-gated skips, lint/check/build and version check pass. No native live-mailbox run.
+
+## 2026-11-24: headless helper account add
+
+Owner requested accounts add without a GUI, then explicitly asked ready by morning.
+Read-only report traced current main f4fbd087 before implementation; no open PR
+or candidate account-add branch found in live inventory. Separate worktree.
+Adds local offline setup, exclusive schema/profile lock, existing migrations and
+credential writer. Existing PKCE loopback flow reused, timeout propagated to
+exchange/userinfo. No device-code/OOB path, scope migration, sync/send or export.
+Password input terminal-only and no echo; provider errors/logs disabled during
+setup. Mail keyring-down encrypted fallback preserved. Pairing identity remains
+a separate PR/design. Version2026.11.24.2 materialized metadata updated.
+Own adversarial review ran before push: traced credential readers, account
+identity insertion, duplicate guard, profile locks, OAuth resolver selection,
+callback/token error paths and downstream Gmail/SMTP routing. Found/fixed
+partial identity-insert orphan cleanup, explicit shipped-client selection and
+uncancelled exchange/userinfo requests. Regression tests added for each state.
+Initial missing-feature tests failed to compile; storage, OAuth and helper tests
+now pass with CGO disabled; accountsetup/oauth race tests and scoped vet pass.
+Helper binary builds with CGO disabled. Native GTK dependency unavailable locally,
+so no GUI/native build claim. No Google/Microsoft/real-mailbox/receiver testing.
+No merge. Independent post-push review requested through coordinator.

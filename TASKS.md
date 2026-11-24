@@ -737,3 +737,6 @@ Security pilot review follow-up: include merge-resolution patches, tolerate null
 
 ## TRIAGE-O6-001: Selection owns visible actions
 - In progress. Owner: Instinct. Branch: `feat/selection-hides-row-actions`, checkout `/downloads/posti-o6`. Approved Loki seq285 chooses O6. Hide row quick icons while any row is checked, preserve hover tint, restore icons at zero selection. Trace all list render paths and unresolved message-id loading. Contiguous checked runs have separate outlines, the existing bulk ActionBar is attached to the final checked row footer, quick controls are unmounted while selection is active. Current local checks pass; offscreen/collapsed-group behavior and native runtime remain verification limits. No new drag or confirm semantics.
+
+## HELPER-ACCOUNT-ADD-001: Headless account setup
+- Review. Instinct, branch `feat/helper-account-add`, isolated worktree `/downloads/posti-helper-account-add`. Owner Nov24 asks no-GUI helper account add by morning. Existing OAuth PKCE loopback and private credential store reused; no provider scope migration, export/import or plaintext store. No merge. Real provider consent remains manual acceptance.
