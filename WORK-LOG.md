@@ -49,3 +49,40 @@ now pass with CGO disabled; accountsetup/oauth race tests and scoped vet pass.
 Helper binary builds with CGO disabled. Native GTK dependency unavailable locally,
 so no GUI/native build claim. No Google/Microsoft/real-mailbox/receiver testing.
 No merge. Independent post-push review requested through coordinator.
+
+## 2026-11-24: explicit Linux file identity backend
+
+Owner requests headless pairing identity after account-add; separate PR, no merge.
+Checked main, live PRs/branches and all CreateIdentity/LoadIdentity consumers.
+326 account-add is separate; no file identity duplicate. Existing Linux
+install-agent unsupported, retained; macOS keyring/launch agent unchanged.
+Design: explicit encrypted-file flag, default keyring. Separate identity store
+uses existing AES-GCM device encryptor, private directories/files, name binding,
+process lock, no-replace atomic publication. No missing-key/corruption recovery
+or silent migration. Threat model limited to local OS-account boundary, not
+hardware-backed protection; full profile access exposes its software key.
+Pre-push own review RAN: traced init/public-key/pair/serve/client paths, keyring
+consumer separation, process publication and crash states, file/type/perms,
+name binding, lost-key behavior and current encryptor limitations. Fixed nested
+lock hazard before testing; added root private-directory validation.
+Falling-first missing-implementation compile recorded. Scheduledsend and helper
+suites pass with CGO disabled; scoped vet passes; actual helper process
+init/public-key/duplicate-init with no D-Bus passes. Race tests pass using an
+explicit Go overlay replacing only unavailable GTK startup notification with a
+no-op; no production source shim committed. Real Ubuntu service deployment,
+real pairing/delivery and macOS keychain not claimed. Version2026.11.24.3 avoids
+326's2026.11.24.2; both independent PRs need release-note reconciliation later.
+
+
+## 2026-11-25:327 integration after326
+
+Owner approved both merges through authenticated chat.326merged7fc00fa0 first.
+Rebased327onto that main, preserving both changelog/task/log sections. No
+production conflict: main.go account dispatch and identity backend changes
+merged independently. Reconciled all current version fields to2026.11.25.1,
+preserved326AppStream history and corrected account docs to link the now
+available explicit file-identity path. Existing permission/regression fixes
+retained. Own delta review compares old/new feature source and command entry
+points; combined accountsetup/OAuth/scheduledsend/helper tests, scoped vet,
+CGO0helper build and version checker run. No actual provider/Ubuntu service
+acceptance claim. Fresh exact-head CI and independent delta review required.

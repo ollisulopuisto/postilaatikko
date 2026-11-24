@@ -740,3 +740,6 @@ Security pilot review follow-up: include merge-resolution patches, tolerate null
 
 ## HELPER-ACCOUNT-ADD-001: Headless account setup
 - Review. Instinct, branch `feat/helper-account-add`, isolated worktree `/downloads/posti-helper-account-add`. Owner Nov24 asks no-GUI helper account add by morning. Existing OAuth PKCE loopback and private credential store reused; no provider scope migration, export/import or plaintext store. No merge. Real provider consent remains manual acceptance.
+
+## HELPER-IDENTITY-FILE-001: Explicit keyring-less helper identity
+- Review. Instinct, branch `feat/helper-encrypted-identity`, isolated worktree `/downloads/posti-helper-encrypted-identity` from main f4fbd087. Separate from326. Owner approved headless identity next after account-add. Explicit Linux encrypted-file choice, default keyring, no migration/silent fallback; design and threat boundary in docs/HEADLESS_IDENTITY.md. No merge.

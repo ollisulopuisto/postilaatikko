@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## Postilaatikko 2026.11.25.1
+
+- Add an explicit Linux helper encrypted-file identity backend for headless Send Later pairing; default keyring behavior unchanged.
+
 ## Postilaatikko 2026.11.24.2
 
 - Add local helper account setup without a GUI: desktop loopback OAuth for Google/Microsoft and hidden terminal password entry for IMAP, using existing credential storage. No real-provider acceptance claim.
