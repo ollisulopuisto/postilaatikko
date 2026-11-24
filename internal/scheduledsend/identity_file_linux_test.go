@@ -160,3 +160,25 @@ func TestReloadedFileIdentityDecryptsExistingCommand(t *testing.T) {
 		t.Fatal("reload cannot decrypt original queue command")
 	}
 }
+
+func TestFileCreateRejectsExposedEncryptionKeyWithoutRepair(t *testing.T) {
+	s := FileIdentityStore{Directory: privateIdentityTemp(t)}
+	if _, err := s.Create("first"); err != nil {
+		t.Fatal(err)
+	}
+	dir, second, _ := s.paths("second")
+	key := filepath.Join(dir, "device.key")
+	if err := os.Chmod(key, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Create("second"); err == nil {
+		t.Fatal("created identity with exposed encryption key")
+	}
+	if _, err := os.Stat(second); !os.IsNotExist(err) {
+		t.Fatal("published second identity")
+	}
+	info, err := os.Stat(key)
+	if err != nil || info.Mode().Perm() != 0644 {
+		t.Fatal("silently repaired exposed key")
+	}
+}

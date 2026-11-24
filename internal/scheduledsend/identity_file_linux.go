@@ -63,6 +63,13 @@ func (s FileIdentityStore) Create(name string) (*Identity, error) {
 	} else if !os.IsNotExist(err) {
 		return nil, errors.New("could not inspect identity")
 	}
+	keyInfo, keyErr := os.Lstat(filepath.Join(dir, "device.key"))
+	if keyErr == nil && (!keyInfo.Mode().IsRegular() || keyInfo.Mode().Perm()&0077 != 0) {
+		return nil, errors.New("existing encryption key must be a private regular file")
+	}
+	if keyErr != nil && !os.IsNotExist(keyErr) {
+		return nil, errors.New("could not inspect identity encryption key")
+	}
 	if _, err := os.Lstat(filepath.Join(dir, "device.key")); os.IsNotExist(err) {
 		entries, err := filepath.Glob(filepath.Join(dir, "*.identity"))
 		if err != nil || len(entries) > 0 {

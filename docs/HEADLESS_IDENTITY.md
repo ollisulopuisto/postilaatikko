@@ -24,3 +24,5 @@ If a process dies before publication, initialization may leave an unused private
 ## Verification limits
 
 Tests use isolated profiles: restart stability, absent keyring, duplicate initialization, concurrent initialization, corruption, missing key, file permissions, symlinks and name binding. A Linux helper process can initialize and show its public key without D-Bus. Real Ubuntu service-manager deployment, macOS keychain pairing and delivery to a real mailbox are not claimed. Account creation is a separate PR; this PR does not add accounts or change OAuth.
+
+The backend flag is not persisted: a service unit without `--identity-store encrypted-file` may load a different, same-named keyring identity if one exists. Always pin backend/data/name in its command and verify the public key after service changes. A hostname or UID change, including container recreation under another identity, makes the encrypted identity undecryptable and fails closed. Do not treat container rebuilds as transparent key migrations.
