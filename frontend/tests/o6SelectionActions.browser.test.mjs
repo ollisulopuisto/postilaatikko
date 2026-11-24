@@ -8,11 +8,11 @@ const browserModule=process.env.POSTI_PLAYWRIGHT_PATH
 const captures=process.env.POSTI_O6_SCREENSHOT_DIR || '/tmp/posti-o6-captures'
 test('O6 removes quick controls from every row during selection, including unresolved message IDs',{skip:!browserModule,timeout:60000},async()=>{
   const root=fileURLToPath(new URL('..',import.meta.url));mkdirSync(captures,{recursive:true})
-  const server=await createServer({root,cacheDir:join(root,'node_modules/.vite-o6'),plugins:[{name:'mount-o6',resolveId(id){if(id==='/o6-mount.js')return id},load(id){if(id==='/o6-mount.js')return `export {mount} from 'svelte'`}}],server:{host:'127.0.0.1',port:5217,strictPort:true,fs:{allow:[root,realpathSync(join(root,'node_modules'))]}},logLevel:'error'})
+  const server=await createServer({root,cacheDir:join(root,'node_modules/.vite-o6'),plugins:[{name:'mount-o6',resolveId(id){if(id==='/o6-mount.js')return id},load(id){if(id==='/o6-mount.js')return `export {mount} from 'svelte'`}}],server:{host:'127.0.0.1',port:5287,strictPort:true,fs:{allow:[root,realpathSync(join(root,'node_modules'))]}},logLevel:'error'})
   await server.listen();const {chromium}=await import(browserModule);const browser=await chromium.launch({executablePath:process.env.POSTI_CHROMIUM_BUNDLED?undefined:'/usr/bin/google-chrome-stable',headless:true,args:['--no-sandbox']})
   try {
     const page=await browser.newPage({viewport:{width:760,height:700}});const errors=[];page.on('pageerror',e=>errors.push(e.message))
-    await page.route('**/o6-fixture',r=>r.fulfill({contentType:'text/html',body:'<html class="dark"><body style="margin:0"><div id="fixture"></div></body></html>'}));await page.goto('http://127.0.0.1:5217/o6-fixture')
+    await page.route('**/o6-fixture',r=>r.fulfill({contentType:'text/html',body:'<html class="dark"><body style="margin:0"><div id="fixture"></div></body></html>'}));await page.goto('http://127.0.0.1:5287/o6-fixture')
     await page.evaluate(async()=>{
       await import('/src/app.css');await import('/src/lib/iconify-offline.ts')
       window.runtime=new Proxy({EventsOnMultiple:()=>()=>{}},{get:(t,k)=>t[k]||(()=>Promise.resolve())})
@@ -47,11 +47,11 @@ test('O6 removes quick controls from every row during selection, including unres
 
 test('actual MessageList wires O6 checked state and object geometry',{skip:!browserModule,timeout:60000},async()=>{
   const root=fileURLToPath(new URL('..',import.meta.url));mkdirSync(captures,{recursive:true})
-  const server=await createServer({root,cacheDir:join(root,'node_modules/.vite-test',String(process.pid),'o6integration'),plugins:[{name:'needs-me-mount',resolveId(id){if(id==='/needs-me-mount.js')return id},load(id){if(id==='/needs-me-mount.js')return `export {mount} from 'svelte'`}}],server:{host:'127.0.0.1',port:5218,strictPort:true,fs:{allow:[root,realpathSync(join(root,'node_modules'))]}},logLevel:'error'})
+  const server=await createServer({root,cacheDir:join(root,'node_modules/.vite-test',String(process.pid),'o6integration'),plugins:[{name:'needs-me-mount',resolveId(id){if(id==='/needs-me-mount.js')return id},load(id){if(id==='/needs-me-mount.js')return `export {mount} from 'svelte'`}}],server:{host:'127.0.0.1',port:5288,strictPort:true,fs:{allow:[root,realpathSync(join(root,'node_modules'))]}},logLevel:'error'})
   await server.listen();const {chromium}=await import(browserModule);const browser=await chromium.launch({executablePath:process.env.POSTI_CHROMIUM_BUNDLED?undefined:'/usr/bin/google-chrome-stable',headless:true,args:['--no-sandbox']})
   try{
     const page=await browser.newPage({viewport:{width:640,height:900}});const errors=[];page.on('pageerror',e=>errors.push(e.message))
-    await page.route('**/needs-me-fixture',r=>r.fulfill({contentType:'text/html',body:'<html class="dark" data-theme="dark"><body style="margin:0"><div id="fixture"></div></body></html>'}));await page.goto('http://127.0.0.1:5218/needs-me-fixture')
+    await page.route('**/needs-me-fixture',r=>r.fulfill({contentType:'text/html',body:'<html class="dark" data-theme="dark"><body style="margin:0"><div id="fixture"></div></body></html>'}));await page.goto('http://127.0.0.1:5288/needs-me-fixture')
     await page.evaluate(async()=>{
       await import('/src/app.css');await import('/src/lib/iconify-offline.ts');window.calls=[]
       window.runtime=new Proxy({EventsOnMultiple:()=>()=>{}},{get:(t,k)=>t[k]||(()=>Promise.resolve())})
