@@ -27,6 +27,7 @@
   import OnlineViewCount from './OnlineViewCount.svelte'
   import Icon from '@iconify/svelte'
   import ConversationRow from './ConversationRow.svelte'
+  import SelectionObject from './SelectionObject.svelte'
   import ReplyLaterUnavailable from './ReplyLaterUnavailable.svelte'
   import ActionBar from '../kit/ActionBar.svelte'
   import SearchOperators from '../common/SearchOperators.svelte'
@@ -2587,6 +2588,8 @@
     ;(document.activeElement as HTMLElement)?.blur?.()
   }
 
+  const selectionFooterThread = $derived(activeList.filter(row => checkedThreadIds.has(row.threadId)).at(-1)?.threadId)
+
   // Get all checked message IDs for bulk operations
   export function getCheckedMessageIds(): string[] {
     return selectedMessageIds
@@ -3295,20 +3298,6 @@
     </div>
   {/if}
 
-  {#if checkedThreadIds.size > 0}
-    <ActionBar
-      count={checkedThreadIds.size}
-      actions={(!allMailSearch && folderType === 'trash')
-        ? [{ id: 'mail.moveToInbox', label: $_('viewer.moveToInbox'), icon: 'mdi:inbox-arrow-down-outline' }, ...selectionActions]
-        : selectionActions}
-      disabled={moveMutationInFlight || laterQueueMutationInFlight}
-      onAction={runSelectedAction}
-      onMove={toggleMoveToDialog}
-      onMore={enableCommandPalette ? openCommandPalette : undefined}
-      onClear={clearSelection}
-    />
-  {/if}
-
   <!-- Empty Trash bar (only shown when viewing trash folder with messages, not in search mode) -->
   {#if (!allMailSearch && folderType === 'trash') && totalCount > 0 && !isSearchMode}
     <div class="flex items-center justify-end px-4 py-2 bg-muted/50 border-b border-border">
@@ -3355,6 +3344,24 @@
       </button>
     </div>
   {/if}
+  {#if checkedThreadIds.size > 0}
+    <SelectionObject container={listContainerRef} count={checkedThreadIds.size}>
+    <ActionBar
+      attached
+      count={checkedThreadIds.size}
+      actions={(!allMailSearch && folderType === 'trash')
+        ? [{ id: 'mail.moveToInbox', label: $_('viewer.moveToInbox'), icon: 'mdi:inbox-arrow-down-outline' }, ...selectionActions]
+        : selectionActions}
+      disabled={moveMutationInFlight || laterQueueMutationInFlight}
+      onAction={runSelectedAction}
+      onMove={toggleMoveToDialog}
+      onMore={enableCommandPalette ? openCommandPalette : undefined}
+      onClear={clearSelection}
+    />
+    </SelectionObject>
+  {/if}
+
+
   <!-- Conversation List -->
   <div bind:this={listContainerRef} tabindex="-1" style="overflow-anchor: none" class="message-list-scroll flex-1 min-h-0 overflow-y-auto scrollbar-thin" onscroll={handleListScroll}>
     <div
@@ -3435,6 +3442,8 @@
               density={getMessageListDensity()}
               selected={focusedRowIdentity === focusedRowKey(result, accountId || '', folderId || '')}
               checked={checkedThreadIds.has(result.threadId)}
+              selectionFooter={selectionFooterThread === result.threadId}
+              selectionActive={checkedThreadIds.size > 0}
               accountId={resultAccountId}
               folderId={resultFolderId}
               {folderType}
@@ -3517,6 +3526,8 @@
             density={getMessageListDensity()}
             selected={focusedRowIdentity === focusedRowKey(result, accountId || '', folderId || '')}
             checked={checkedThreadIds.has(result.threadId)}
+              selectionFooter={selectionFooterThread === result.threadId}
+              selectionActive={checkedThreadIds.size > 0}
             accountId={resultAccountId!}
             folderId={resultFolderId!}
             folderType={allMailSearch || isVirtualFolderView ? result.folderType || 'folder' : folderType}
@@ -3623,6 +3634,8 @@
                   density={getMessageListDensity()}
                   selected={focusedRowIdentity === focusedRowKey(conv, accountId || '', folderId || '')}
                   checked={checkedThreadIds.has(conv.threadId)}
+              selectionFooter={selectionFooterThread === conv.threadId}
+              selectionActive={checkedThreadIds.size > 0}
                   accountId={isUnifiedView || isVirtualFolderView ? convAccountId : accountId!}
                   folderId={isUnifiedView || isVirtualFolderView ? convFolderId : folderId!}
                   folderType={isVirtualFolderView ? folderTypesByID[convFolderId] || 'folder' : folderType}
@@ -3669,6 +3682,8 @@
           density={getMessageListDensity()}
           selected={focusedRowIdentity === focusedRowKey(conv, accountId || '', folderId || '')}
           checked={checkedThreadIds.has(conv.threadId)}
+              selectionFooter={selectionFooterThread === conv.threadId}
+              selectionActive={checkedThreadIds.size > 0}
           accountId={isUnifiedView || isVirtualFolderView ? convAccountId : accountId!}
           folderId={isUnifiedView || isVirtualFolderView ? convFolderId : folderId!}
           folderType={isVirtualFolderView ? folderTypesByID[convFolderId] || 'folder' : folderType}
