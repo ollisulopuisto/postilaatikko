@@ -12,7 +12,9 @@ import (
 func TestExplicitFileIdentityDoesNotNeedOrFallbackToKeyring(t *testing.T) {
 	keyring.MockInitWithError(errors.New("no Secret Service"))
 	dir := t.TempDir()
-	os.Chmod(dir, 0700)
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := loadHelperIdentity("encrypted-file", dir, "studio"); err == nil {
 		t.Fatal("missing file silently generated")
 	}

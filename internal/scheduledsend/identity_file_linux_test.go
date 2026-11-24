@@ -45,21 +45,35 @@ func TestFileIdentityCorruptionAndLostKeyNeverRegenerate(t *testing.T) {
 			dir, path, _ := s.paths("studio")
 			switch mode {
 			case "corrupt":
-				os.WriteFile(path, []byte("corrupt"), 0600)
+				if err := os.WriteFile(path, []byte("corrupt"), 0600); err != nil {
+					t.Fatal(err)
+				}
 			case "missing-key":
-				os.Remove(filepath.Join(dir, "device.key"))
+				if err := os.Remove(filepath.Join(dir, "device.key")); err != nil {
+					t.Fatal(err)
+				}
 			case "public-file":
-				os.Chmod(path, 0644)
+				if err := os.Chmod(path, 0644); err != nil {
+					t.Fatal(err)
+				}
 			case "symlink":
 				data, _ := os.ReadFile(path)
 				other := filepath.Join(t.TempDir(), "private")
-				os.WriteFile(other, data, 0600)
-				os.Remove(path)
-				os.Symlink(other, path)
+				if err := os.WriteFile(other, data, 0600); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Remove(path); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(other, path); err != nil {
+					t.Fatal(err)
+				}
 			case "wrong-name":
 				_, other, _ := s.paths("different")
 				data, _ := os.ReadFile(path)
-				os.WriteFile(other, data, 0600)
+				if err := os.WriteFile(other, data, 0600); err != nil {
+					t.Fatal(err)
+				}
 				path = other
 			}
 			name := "studio"
@@ -88,12 +102,18 @@ func TestFileIdentityCorruptionAndLostKeyNeverRegenerate(t *testing.T) {
 func TestFileIdentityRejectsPublicOrSymlinkDirectory(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "send-later-identities")
-	os.Mkdir(dir, 0755)
+	if err := os.Mkdir(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := (FileIdentityStore{Directory: root}).Create("studio"); err == nil {
 		t.Fatal("accepted shared directory")
 	}
-	os.Remove(dir)
-	os.Symlink(t.TempDir(), dir)
+	if err := os.Remove(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(t.TempDir(), dir); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := (FileIdentityStore{Directory: root}).Create("studio"); err == nil {
 		t.Fatal("accepted symlink directory")
 	}
