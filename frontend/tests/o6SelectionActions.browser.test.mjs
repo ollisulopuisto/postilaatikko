@@ -31,6 +31,12 @@ test('O6 removes quick controls from every row during selection, including unres
     const bar=await page.locator('.selection-object-bar').boundingBox()
     assert.ok(bar.y>=boxes[2].y+45 && bar.y+bar.height<=boxes[2].bottom+1,'bar stays in reserved final-row footer')
     for(const width of [390,760]){await page.setViewportSize({width,height:700});await page.screenshot({path:join(captures,`o6-selected-${width}.png`),fullPage:true})}
+    await page.evaluate(()=>{const list=document.querySelector('[data-conversation-row]').parentElement;list.style.height='180px';list.parentElement.style.height='180px';list.scrollTop=100})
+    await page.waitForFunction(()=>{const bar=document.querySelector('.selection-object-bar').getBoundingClientRect();const list=document.querySelector('[data-conversation-row]').parentElement.getBoundingClientRect();return bar.bottom<=list.bottom+1 && bar.top>=list.top})
+    const before=await page.locator('.selection-object-bar').boundingBox()
+    await page.evaluate(()=>document.querySelector('[data-conversation-row]').parentElement.scrollTop=0)
+    await page.waitForFunction(()=>document.querySelector('.selection-object-bar').getBoundingClientRect().bottom<=document.querySelector('[data-conversation-row]').parentElement.getBoundingClientRect().bottom+1)
+    assert.ok(before.height>0)
     await page.getByRole('toolbar').getByRole('button',{name:'Archive',exact:true}).click();assert.equal(await page.evaluate(()=>window.fixtureAction),2)
     await page.getByRole('button',{name:'Clear fixture selection'}).click();await rows.nth(1).hover();assert.equal(await page.locator('.quick-row-action').count(),12)
     await page.screenshot({path:join(captures,'o6-no-selection.png'),fullPage:true});assert.deepEqual(errors,[])
