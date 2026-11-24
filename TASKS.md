@@ -734,3 +734,6 @@ Security pilot review follow-up: include merge-resolution patches, tolerate null
 
 - Status: Review. Owner: Instinct. Branch: `agent/security-advisory-fixes`. Worktree: `/downloads/security-pilot/postilaatikko-fix`.
 - Scope: dependency and Go patch updates plus owner-approved scoped esbuild override; before/after scanner evidence. Implementation 40c26c0a plus follow-up in this branch. Merge authorized after own review and exact-head CI. Separate from the report-only scanner pilot; no release here.
+
+## TRIAGE-O6-001: Selection owns visible actions
+- In progress. Owner: Instinct. Branch: `feat/selection-hides-row-actions`, checkout `/downloads/posti-o6`. Approved Loki seq285 chooses O6. Hide row quick icons while any row is checked, preserve hover tint, restore icons at zero selection. Trace all list render paths and unresolved message-id loading. Contiguous checked runs have separate outlines, the existing bulk ActionBar is attached to the final checked row footer, quick controls are unmounted while selection is active. Current local checks pass; offscreen/collapsed-group behavior and native runtime remain verification limits. No new drag or confirm semantics.

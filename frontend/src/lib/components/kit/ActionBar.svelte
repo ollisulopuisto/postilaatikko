@@ -19,10 +19,11 @@
     onMove: () => void
     onMore?: () => void
     onClear: () => void
+    attached?: boolean
     disabled?: boolean
   }
 
-  let { count, actions, onAction, onMove, onMore, onClear, disabled = false }: Props = $props()
+  let { count, actions, onAction, onMove, onMore, onClear, attached = false, disabled = false }: Props = $props()
   const primaryActions = $derived(actions.slice(0, 3))
   const overflowActions = $derived(actions.slice(3))
   let activeIndex = $state(0)
@@ -44,7 +45,7 @@
 
 <div
   bind:this={toolbar}
-  class="flex min-w-0 items-center gap-1 border-b border-border bg-muted/40 px-2 py-1.5 sm:gap-1.5 sm:px-3"
+  class="flex min-w-0 items-center gap-1 {attached ? 'rounded-xl border border-primary bg-background shadow-lg' : 'border-b border-border bg-muted/40'} px-2 py-1.5 sm:gap-1.5 sm:px-3"
   role="toolbar"
   aria-label={$_('messageList.selectedActions')}
   tabindex="-1"
@@ -56,7 +57,7 @@
   {#each primaryActions as action, index (action.id)}
     <button
       type="button"
-      class="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm"
+      class="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground transition-colors {attached ? 'hover:bg-amber-500/20 hover:text-amber-700 focus-visible:bg-amber-500/20' : 'hover:bg-muted hover:text-foreground'} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm"
       title={action.shortcut ? `${action.label} (${formatShortcut(action.shortcut)})` : action.label}
       aria-label={action.label}
       aria-keyshortcuts={action.shortcut ? ariaKeyshortcuts(action.shortcut) : undefined}
@@ -65,7 +66,7 @@
       onclick={() => action.id === 'mail.moveTo' ? onMove() : onAction(action.id)}
     >
       <Icon icon={action.icon} class="h-4 w-4" />
-      <span class="sr-only">{action.label}</span>
+      <span class={attached ? 'hidden sm:inline' : 'sr-only'}>{action.label}</span>
     </button>
   {/each}
   <DropdownMenu.Root>

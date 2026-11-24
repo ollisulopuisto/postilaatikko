@@ -48,6 +48,8 @@
     density?: 'micro' | 'compact' | 'standard' | 'large'
     selected: boolean
     checked: boolean
+    selectionActive?: boolean
+    selectionFooter?: boolean
     accountId: string
     folderId: string
     folderType: string
@@ -79,6 +81,8 @@
     density = 'standard',
     selected,
     checked,
+    selectionActive = false,
+    selectionFooter = false,
     accountId,
     folderId,
     folderType,
@@ -565,9 +569,11 @@
 >
   <div
     data-conversation-row
+    data-bulk-checked={checked}
+    style:padding-bottom={selectionFooter ? '3.25rem' : undefined}
     data-mail-row-key={JSON.stringify([conversation.accountId || accountId || '', backendConversationId || conversation.threadId])}
     draggable={getLayoutMode() !== 'narrow'}
-    class="group relative w-full flex items-start overflow-hidden touch-pan-y {densityClasses.row[density]} text-left border-b border-border transition-colors duration-300 cursor-pointer outline-none {activeAnimationKind ? `row-anim-${activeAnimationKind}` : ''} {selected
+    class="group relative w-full flex items-start overflow-hidden touch-pan-y {densityClasses.row[density]} text-left border-b border-border transition-colors duration-300 cursor-pointer outline-none {activeAnimationKind ? `row-anim-${activeAnimationKind}` : ''} {checked ? 'bg-primary/10' : selected
       ? 'bg-primary/20'
       : 'hover:bg-muted/50'} {getAccentBarUnread() && hasUnread ? 'border-l-2 border-l-primary' : ''} {swipeAnim === 'select' ? 'swipe-select-anim' : ''} {swipeAnim === 'delete' ? 'swipe-delete-anim' : ''}"
     onmouseenter={() => onHover?.()}
@@ -621,6 +627,7 @@
       </div>
     {/if}
 
+    {#if !selectionActive}
     <!-- Quick actions replace the avatar on hover without opening the row. -->
     <div
       class="absolute inset-y-0 left-0 z-20 flex flex-col items-center justify-center gap-0.5 bg-transparent opacity-0 pointer-events-none transition-opacity duration-150 group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 focus-within:opacity-100 group-focus-within:pointer-events-auto focus-within:pointer-events-auto {densityClasses.quickActions[density]}"
@@ -658,14 +665,16 @@
       </button>
     </div>
 
+    {/if}
+
     <!-- Checkbox column. Setting OFF (default): hidden (width-clipped) until
          row hover on desktop, revealed while checked, toggled by swipe on
          narrow/touch. Setting ON: legacy always-reserved column with opacity
          fade (invisible until hover on desktop, faint on narrow). -->
     <div
-      class="quick-selection-checkbox flex-shrink-0 flex items-center justify-center self-center {getAlwaysShowMessageCheckbox()
-        ? `${densityClasses.checkbox[density]} transition-opacity duration-200 ${checked ? 'opacity-100' : densityClasses.checkboxAlways}`
-        : `overflow-hidden transition-all duration-200 ${checked ? densityClasses.checkbox[density] : densityClasses.checkboxHidden[density]}`}"
+      class="quick-selection-checkbox relative z-20 flex-shrink-0 flex items-center justify-center self-center {getAlwaysShowMessageCheckbox()
+        ? `${densityClasses.checkbox[density]} transition-opacity duration-200 ${checked || selectionActive ? 'opacity-100' : densityClasses.checkboxAlways}`
+        : `overflow-hidden transition-all duration-200 ${checked || selectionActive ? densityClasses.checkbox[density] : densityClasses.checkboxHidden[density]}`}"
     >
       <button
         type="button"
@@ -687,7 +696,7 @@
          4px container padding + 10px button centre = 18px from the row. -->
     {#if !getAlwaysShowMessageCheckbox() && !checked && hasUnread}
       <span
-        class="absolute left-[13px] top-1/2 z-10 w-2.5 h-2.5 -translate-y-1/2 rounded-full bg-primary transition-opacity duration-150 group-hover:opacity-0"
+        class="absolute left-[13px] top-1/2 z-10 w-2.5 h-2.5 -translate-y-1/2 rounded-full bg-primary transition-opacity duration-150 {selectionActive ? '' : 'group-hover:opacity-0'}"
         title={$_('contextMenu.markAsRead')}
       ></span>
     {/if}
@@ -773,7 +782,9 @@
               <Icon icon="mdi:folder-outline" class="{densityClasses.icon[density]} opacity-60" />
             </span>
           {/if}
+          {#if !selectionActive}
           <LaterQueueButton onComplete={() => onActionComplete?.(false)} {accountId} conversationId={queueActionsEnabled ? backendConversationId : ''} variant="row" />
+          {/if}
         </div>
       </div>
 
