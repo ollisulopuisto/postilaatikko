@@ -75,7 +75,8 @@ func run(args []string) error {
 		identityDefault = "client"
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
-	identityName := flags.String("identity", identityDefault, "local OS-keyring identity name")
+	identityName := flags.String("identity", identityDefault, "local identity name")
+	identityStore := flags.String("identity-store", "keyring", "keyring (default) or explicit Linux encrypted-file")
 	data := flags.String("data", dataDefault, "helper-local Postilaatikko account data directory")
 	queue := flags.String("queue", filepath.Join(dataDefault, "send-later-helper"), "dedicated private helper queue directory")
 	helperKeyText := flags.String("helper-key", "", "public key verified directly with the helper")
@@ -114,6 +115,12 @@ func run(args []string) error {
 	}
 	if flags.NArg() != 0 {
 		return errors.New("unexpected positional arguments")
+	}
+	if *identityStore != "keyring" && *identityStore != "encrypted-file" {
+		return errors.New("identity-store must be keyring or encrypted-file")
+	}
+	if *identityStore == "encrypted-file" && runtime.GOOS != "linux" {
+		return errors.New("encrypted-file identities are supported only on Linux")
 	}
 	if *withSync && *withoutSync {
 		return errors.New("--sync and --no-sync cannot be used together")
@@ -167,7 +174,7 @@ func run(args []string) error {
 		}
 	}
 	if command == "init" {
-		identity, err := scheduledsend.CreateIdentity(*identityName)
+		identity, err := createHelperIdentity(*identityStore, *data, *identityName)
 		if err != nil {
 			return err
 		}
@@ -189,7 +196,7 @@ func run(args []string) error {
 		}
 		return nil
 	}
-	identity, err := scheduledsend.LoadIdentity(*identityName)
+	identity, err := loadHelperIdentity(*identityStore, *data, *identityName)
 	if err != nil {
 		return err
 	}
