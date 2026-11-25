@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- The desktop's local mode now lists and counts conversations with the same code as the mailbox service, so the two cannot drift apart. Local folder and unified lists also get the faster first page, and unified Archive orders same-time conversations the same way in both modes.
+
 - Opening a folder no longer stalls while sync, filter moves or prefetch wait for the database write lock: message lists, counts and conversation reads use their own read-only connection pool, so queued writers can no longer take every connection.
 
 ## Postilaatikko 2026.11.25.4

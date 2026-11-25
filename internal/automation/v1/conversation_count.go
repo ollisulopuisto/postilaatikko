@@ -32,33 +32,50 @@ func MountConversationCountRoute(mux RouteMux, ops ConversationCountOperations, 
 			writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, "Malformed request body", false)
 			return
 		}
-		if err := req.Scope.Validate(); err != nil || (req.Scope.Kind != views.ScopeFolder && req.Scope.Kind != views.ScopeAllInboxes && req.Scope.Kind != views.ScopeUnifiedFolder && req.Scope.Kind != views.ScopeVirtualFolder) {
-			writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, "Invalid conversation count scope", false)
-			return
-		}
-		if req.Scope.Kind == views.ScopeVirtualFolder && req.Filter != "" {
-			writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, "Saved-view counts do not accept a separate filter", false)
-			return
-		}
-		if !validConversationListFilter(req.Filter) {
-			writeHeaderError(w, r, http.StatusBadRequest, CodeInvalidRequest, "Unsupported conversation filter", false)
-			return
-		}
-		var count int
-		var err error
-		if req.Scope.Kind == views.ScopeFolder {
-			count, err = ops.CountConversationsByFolder(req.Scope.AccountID, req.Scope.FolderID, req.Filter)
-		} else if req.Scope.Kind == views.ScopeAllInboxes {
-			count, err = ops.CountConversationsUnifiedInbox(req.Filter)
-		} else if req.Scope.Kind == views.ScopeUnifiedFolder {
-			count, err = ops.CountConversationsUnifiedFolder(req.Scope.FolderType, req.Filter)
-		} else {
-			count, err = ops.CountConversationsVirtualFolder(req.Scope.VirtualFolderID)
-		}
-		if err != nil {
-			writeHeaderError(w, r, http.StatusInternalServerError, CodeInternal, "Failed to count conversations", true)
+		count, reqErr := executeConversationCount(ops, req)
+		if reqErr != nil {
+			writeHeaderError(w, r, reqErr.status, reqErr.code, reqErr.message, reqErr.retryable)
 			return
 		}
 		writeAPIResponse(w, r, http.StatusOK, count)
 	})
+}
+
+// ExecuteConversationCount is the single implementation of an exact
+// conversation count, shared by POST /v1/conversations/count and the
+// desktop's in-process local mode.
+func ExecuteConversationCount(ops ConversationCountOperations, req ConversationCountRequest) (int, error) {
+	count, reqErr := executeConversationCount(ops, req)
+	if reqErr != nil {
+		return 0, reqErr.public()
+	}
+	return count, nil
+}
+
+func executeConversationCount(ops ConversationCountOperations, req ConversationCountRequest) (int, *requestError) {
+	if err := req.Scope.Validate(); err != nil || (req.Scope.Kind != views.ScopeFolder && req.Scope.Kind != views.ScopeAllInboxes && req.Scope.Kind != views.ScopeUnifiedFolder && req.Scope.Kind != views.ScopeVirtualFolder) {
+		return 0, &requestError{http.StatusBadRequest, CodeInvalidRequest, "Invalid conversation count scope", false}
+	}
+	if req.Scope.Kind == views.ScopeVirtualFolder && req.Filter != "" {
+		return 0, &requestError{http.StatusBadRequest, CodeInvalidRequest, "Saved-view counts do not accept a separate filter", false}
+	}
+	if !validConversationListFilter(req.Filter) {
+		return 0, &requestError{http.StatusBadRequest, CodeInvalidRequest, "Unsupported conversation filter", false}
+	}
+	var count int
+	var err error
+	switch req.Scope.Kind {
+	case views.ScopeFolder:
+		count, err = ops.CountConversationsByFolder(req.Scope.AccountID, req.Scope.FolderID, req.Filter)
+	case views.ScopeAllInboxes:
+		count, err = ops.CountConversationsUnifiedInbox(req.Filter)
+	case views.ScopeUnifiedFolder:
+		count, err = ops.CountConversationsUnifiedFolder(req.Scope.FolderType, req.Filter)
+	default:
+		count, err = ops.CountConversationsVirtualFolder(req.Scope.VirtualFolderID)
+	}
+	if err != nil {
+		return 0, &requestError{http.StatusInternalServerError, CodeInternal, "Failed to count conversations", true}
+	}
+	return count, nil
 }

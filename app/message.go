@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/ollisulopuisto/postilaatikko/internal/alwayson"
 	"strconv"
 	"strings"
 
@@ -186,7 +187,13 @@ func (a *App) GetConversations(accountID, folderID string, offset, limit int, so
 			return conversations, nil
 		}
 	}
-	conversations, err := a.messageStore.ListConversationsByFolder(folderID, offset, limit, sortOrder, filter)
+	var conversations []*message.Conversation
+	var err error
+	if strings.HasPrefix(folderID, "virtual:") {
+		conversations, err = a.messageStore.ListConversationsByFolder(folderID, offset, limit, sortOrder, filter)
+	} else {
+		conversations, err = a.listLocalConversations(views.Scope{Kind: views.ScopeFolder, AccountID: accountID, FolderID: folderID}, offset, limit, sortOrder, filter)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +225,10 @@ func (a *App) GetConversationCount(accountID, folderID, filter string) (int, err
 	if a.messageStore == nil {
 		return 0, errors.New("conversation counts require a connected mailbox service")
 	}
-	return a.messageStore.CountConversationsByFolder(folderID, filter)
+	if strings.HasPrefix(folderID, "virtual:") {
+		return a.messageStore.CountConversationsByFolder(folderID, filter)
+	}
+	return a.countLocalConversations(views.Scope{Kind: views.ScopeFolder, AccountID: accountID, FolderID: folderID}, filter)
 }
 
 func (a *App) serviceConversationCount(scope views.Scope, filter string) (int, bool, error) {
@@ -250,11 +260,7 @@ func (a *App) GetUnifiedInboxConversations(offset, limit int, sortOrder, filter 
 		go a.enqueueUnifiedInboxConversationPrefetch(conversations)
 		return conversations, nil
 	}
-	folderIDs, err := a.unifiedSpecialFolderIDs(string(folder.TypeInbox))
-	if err != nil {
-		return nil, err
-	}
-	conversations, err = a.messageStore.ListConversationsByFolderIDs(folderIDs, offset, limit, sortOrder, filter)
+	conversations, err = a.listLocalConversations(views.Scope{Kind: views.ScopeAllInboxes}, offset, limit, sortOrder, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -277,20 +283,52 @@ func (a *App) listServiceConversations(scope views.Scope, offset, limit int, sor
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	items, err := pageConversationWindow(func(req v1.ConversationListRequest) (*v1.ConversationListPage, error) {
+		return a.mailboxService.listConversations(ctx, req)
+	}, scope, offset, limit, sortOrder, filter)
+	if err != nil {
+		return nil, true, fmt.Errorf("failed to list conversations through local mailbox service: %w", err)
+	}
+	return items, true, nil
+}
+
+// listLocalConversations serves a conversation window without a mailbox
+// service by running the helper's own list implementation in-process
+// (alwayson.LocalConversationReader -> v1.ExecuteConversationList). Local
+// and service modes therefore share scope resolution, keyset/offset dispatch
+// and bounds; there is no second desktop-only query path to drift.
+func (a *App) listLocalConversations(scope views.Scope, offset, limit int, sortOrder, filter string) ([]*message.Conversation, error) {
+	reader := a.localConversationReader()
+	return pageConversationWindow(reader.ListConversations, scope, offset, limit, sortOrder, filter)
+}
+
+func (a *App) countLocalConversations(scope views.Scope, filter string) (int, error) {
+	return a.localConversationReader().CountConversations(v1.ConversationCountRequest{Scope: scope, Filter: filter})
+}
+
+func (a *App) localConversationReader() *alwayson.LocalConversationReader {
+	return alwayson.NewLocalConversationReader(a.accountStore, a.folderStore, a.virtualFolderStore, a.messageStore)
+}
+
+// pageConversationWindow turns the desktop's random-access (offset, limit)
+// window into bounded v1 pages. An offset-zero window starts with an empty
+// cursor so eligible scopes use keyset pages; nonzero windows keep numeric
+// offset semantics.
+func pageConversationWindow(fetch func(v1.ConversationListRequest) (*v1.ConversationListPage, error), scope views.Scope, offset, limit int, sortOrder, filter string) ([]*message.Conversation, error) {
 	if limit == 0 {
-		return []*message.Conversation{}, true, nil
+		return []*message.Conversation{}, nil
 	}
 	if limit < 0 || offset < 0 {
-		return nil, true, errors.New("conversation offset and limit must not be negative")
+		return nil, errors.New("conversation offset and limit must not be negative")
 	}
 	if offset > v1.MaximumMessageOffset || limit > v1.MaximumMessageOffset-offset {
-		return nil, true, fmt.Errorf("conversation window exceeds the service offset limit of %d", v1.MaximumMessageOffset)
+		return nil, fmt.Errorf("conversation window exceeds the service offset limit of %d", v1.MaximumMessageOffset)
 	}
 
 	items := make([]*message.Conversation, 0, min(limit, v1.MaximumPageSize))
 	remaining := limit
 	cursor := strconv.Itoa(offset)
-	// Empty cursor opts the first bounded window into helper keyset paging.
+	// Empty cursor opts the first bounded window into keyset paging.
 	// Arbitrary nonzero windows keep legacy random-access offset semantics.
 	if offset == 0 {
 		cursor = ""
@@ -298,7 +336,7 @@ func (a *App) listServiceConversations(scope views.Scope, offset, limit int, sor
 	seenCursors := map[string]struct{}{cursor: {}}
 	for remaining > 0 {
 		pageLimit := min(remaining, v1.MaximumPageSize)
-		page, err := a.mailboxService.listConversations(ctx, v1.ConversationListRequest{
+		page, err := fetch(v1.ConversationListRequest{
 			Scope:     scope,
 			SortOrder: sortOrder,
 			Filter:    filter,
@@ -308,13 +346,13 @@ func (a *App) listServiceConversations(scope views.Scope, offset, limit int, sor
 			},
 		})
 		if err != nil {
-			return nil, true, fmt.Errorf("failed to list conversations through local mailbox service: %w", err)
+			return nil, err
 		}
 		if page == nil {
-			return nil, true, errors.New("local mailbox service returned an empty conversation response")
+			return nil, errors.New("mailbox returned an empty conversation response")
 		}
 		if len(page.Items) > pageLimit {
-			return nil, true, errors.New("local mailbox service returned more conversations than requested")
+			return nil, errors.New("mailbox returned more conversations than requested")
 		}
 		items = append(items, page.Items...)
 		remaining -= len(page.Items)
@@ -322,24 +360,24 @@ func (a *App) listServiceConversations(scope views.Scope, offset, limit int, sor
 			break
 		}
 		if page.NextCursor == "" {
-			return nil, true, errors.New("local mailbox service omitted the next conversation cursor")
+			return nil, errors.New("mailbox omitted the next conversation cursor")
 		}
 		if _, ok := seenCursors[page.NextCursor]; ok {
-			return nil, true, errors.New("local mailbox service repeated a conversation cursor")
+			return nil, errors.New("mailbox repeated a conversation cursor")
 		}
 		seenCursors[page.NextCursor] = struct{}{}
 		cursor = page.NextCursor
 	}
-	return items, true, nil
+	return items, nil
 }
 
 // GetUnifiedInboxCount returns the total conversation count across all inbox folders
 func (a *App) GetUnifiedInboxCount(filter string) (int, error) {
-	folderIDs, err := a.unifiedSpecialFolderIDs(string(folder.TypeInbox))
-	if err != nil {
-		return 0, err
+	count, handled, err := a.serviceConversationCount(views.Scope{Kind: views.ScopeAllInboxes}, filter)
+	if handled || err != nil {
+		return count, err
 	}
-	return a.messageStore.CountConversationsByFolderIDs(folderIDs, filter)
+	return a.countLocalConversations(views.Scope{Kind: views.ScopeAllInboxes}, filter)
 }
 
 // GetUnifiedInboxUnreadCount returns the total unread count across all inbox folders
