@@ -51,3 +51,14 @@ func TestPauseServiceForMigrationFailsClosed(t *testing.T) {
 		})
 	}
 }
+
+func TestPauseServiceWithoutAgentNeedsNoUserBus(t *testing.T) {
+	inspected, stopped, checked := 0, 0, 0
+	paused, err := pauseServiceForMigrationWith("linux", func(context.Context) (helperAgentStatus, error) {
+		inspected++
+		return helperAgentStatus{Supported: true}, nil
+	}, func(context.Context) error { stopped++; return errors.New("no bus") }, func() error { checked++; return nil })
+	if err != nil || paused || inspected != 1 || stopped != 0 || checked != 1 {
+		t.Fatalf("paused=%v err=%v calls=%d/%d/%d", paused, err, inspected, stopped, checked)
+	}
+}
