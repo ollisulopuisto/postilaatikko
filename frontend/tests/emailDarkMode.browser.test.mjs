@@ -1,3 +1,4 @@
+/* global adaptEmailDarkMode */
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {readFileSync,mkdirSync} from 'node:fs'
@@ -14,7 +15,7 @@ test('D1 authored CSS or adaptive colors, photos unchanged and light untouched',
     const photo='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="240" height="100"><rect width="240" height="100" fill="#fa8128"/><circle cx="60" cy="50" r="35" fill="#2878ce"/></svg>')
     const html=`<html><head><style>body{font:18px system-ui;padding:24px;background:white;color:#111}.card{background:#fafafa;padding:18px}a{color:#2563eb}</style></head><body><h1>D1 email rendering</h1><div class="card"><h2>Newsletter</h2><p>Readable text and <a href="https://example.invalid">a link</a>.</p><img src="${photo}"></div></body></html>`
     await page.setContent(html);await page.locator('img').evaluate(img=>img.decode())
-    const before=await page.locator('img').screenshot()
+    await page.locator('img').screenshot()
     await page.addScriptTag({content:code})
     assert.equal(await page.evaluate(()=>adaptEmailDarkMode(document)),'adapted')
     assert.equal(await page.locator('body').evaluate(n=>getComputedStyle(n).backgroundColor),'rgb(32, 36, 43)')
