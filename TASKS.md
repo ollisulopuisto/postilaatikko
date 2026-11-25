@@ -749,3 +749,9 @@ Security pilot review follow-up: include merge-resolution patches, tolerate null
 - Status: Review preparation. Owner: Instinct. Branch: fix/mac-text-shortcut-ownership.
 - Approved25Nov A4: palette keeps Command-K/P on Mac, no physical Control alias. Command-Z stays with text fields; mail Undo outside text. Registry bindings remain canonical, shared predicate handles platform modifier ownership.
 - Failing-first tests reproduce both old paths. New executable actual-App-dispatch regression covers target, composed path and active-element focus. Frontend1132pass,32 browser skips; lint/check/version checks pass. No native Mac/browser claim. Version2026.11.25.2.
+
+## A4 follow-up: platform-aware registry acceptance
+
+- Review. Instinct, fix/mac-registry-test-platform, isolated worktree from main9ed1bc4. Release-only macOS failure exposes registry test incorrectly expecting physical Ctrl for every Mod binding. Reproduce on Linux with explicit navigator fixtures, then test displayed platform binding without changing app behavior or workflows.
+
+- Follow-up verification: forced Mac fixture failed before test-event fix; both Mac and Linux registry fixtures now pass. Explicit negative Ctrl/Command-Ctrl behavior remains covered by macTextOwnership. No runtime, workflow, credential or DB changes.
