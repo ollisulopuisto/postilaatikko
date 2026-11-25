@@ -129,10 +129,14 @@ export const SHORTCUTS_HELP = (e: KeyboardEvent): boolean =>
   // '/' needs Shift on several layouts (Shift+7 on Finnish).
   (ctrlOrMeta(e) && !e.altKey && e.key === '/')
 
-// Cmd+K / Ctrl+K, Cmd+P / Ctrl+P or Cmd+Shift+P / Ctrl+Shift+P — open the command palette.
+function macPalettePlatform(): boolean {
+  return typeof navigator !== 'undefined' && /mac/i.test(navigator.platform || navigator.userAgent || '')
+}
+
+// Command on Mac, Control elsewhere: K, P or Shift-P opens the palette.
 // Archive is plain `e` (archive and mark as read); no Ctrl/Cmd chord archives.
-export const COMMAND_PALETTE = (e: KeyboardEvent): boolean =>
-  ctrlOrMeta(e) && !e.altKey && (e.key === 'k' || e.key === 'K' || e.key === 'p' || e.key === 'P')
+export const COMMAND_PALETTE = (e: KeyboardEvent, mac = macPalettePlatform()): boolean =>
+  (mac ? e.metaKey && !e.ctrlKey : ctrlOrMeta(e)) && !e.altKey && (e.key === 'k' || e.key === 'K' || e.key === 'p' || e.key === 'P')
 
 // `m` — toggle read/unread of the message target. Modifiers are excluded so
 // Alt+M (move to folder) and the Ctrl/Cmd shortcuts keep their own meaning.

@@ -1804,8 +1804,10 @@
   function runRegistryShortcut(e: KeyboardEvent): boolean {
     const def = resolveShortcut(e, getFocusedPane(), Object.keys(KEY_HANDLERS))
     if (!def) return false
-    // Select-all keeps the native behaviour inside text fields.
-    if ((def.id === 'list.selectAll' || def.id === 'viewer.selectText') && isInputElement(e.target)) return false
+    // Text Undo and Select All stay with the focused editor, including
+    // retargeted/shadow events. Mail Undo must never consume a field's Cmd-Z.
+    if ((def.id === 'app.undo' || def.id === 'list.selectAll' || def.id === 'viewer.selectText') &&
+      (isInputElement(e.target) || isInputElement(e.composedPath()[0]) || isInputElement(document.activeElement))) return false
     // Reply/forward without an open conversation do nothing and keep the key.
     const needsThread = ['mail.reply', 'mail.replyAll', 'mail.forward', 'viewer.threadFocus']
     if (needsThread.includes(def.id) && selectedThreadId === null) return false
@@ -1930,8 +1932,8 @@
       return
     }
 
-    // Cmd+P / Ctrl+P opens the command palette (Alfred style).
-    if (!showComposer && KEY.COMMAND_PALETTE(e)) {
+    // Command on Mac, Control elsewhere opens the command palette.
+    if (!showComposer && KEY.COMMAND_PALETTE(e, isMacPlatform())) {
       e.preventDefault()
       openCommandPalette()
       return

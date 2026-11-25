@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## Postilaatikko 2026.11.25.2
+
+- On Mac, the command palette uses Command-K/P rather than physical Control aliases. Text fields keep their Control-K/P editing and Command-Z Undo; mail Undo still works outside text.
+
 ## Postilaatikko 2026.11.25.1
 
 - Add an explicit Linux helper encrypted-file identity backend for headless Send Later pairing; default keyring behavior unchanged.
