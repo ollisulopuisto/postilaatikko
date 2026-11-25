@@ -272,7 +272,7 @@
       });
 
       window.addEventListener('load', function() {
-        ${applyDarken ? `(${adaptEmailDarkMode.toString()})(document);` : ''}
+        ${applyDarken ? `try { (${adaptEmailDarkMode.toString()})(document); } catch (error) { console.warn("Email dark mode adaptation failed", error); }` : ''}
         decorateTextLinks();
         attachImageHandlers();
         sendHeight();

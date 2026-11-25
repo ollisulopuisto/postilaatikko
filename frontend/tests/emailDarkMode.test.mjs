@@ -29,3 +29,14 @@ test('fallback changes painted light surfaces and dark text but not image data',
   assert.ok(writes.every(row=>row[0]!=='DIV'))
   assert.ok(writes.every(row=>row[1]!=='filter'))
 })
+
+test('dark text over a CSS background image or gradient keeps its color',()=>{
+  const writes=[]
+  const node=(tag,color,bg,image='none',parentElement=null)=>({tagName:tag,parentElement,closest:()=>false,style:{setProperty:(...args)=>writes.push([tag,...args])},computed:{color,backgroundColor:bg,backgroundImage:image}})
+  const hero=node('DIV','rgb(0, 0, 0)','rgba(0, 0, 0, 0)','url(hero)')
+  const text=node('P','rgb(17, 17, 17)','rgba(0, 0, 0, 0)','none',hero)
+  const style={setProperty:()=>{}}
+  const doc={querySelectorAll:selector=>selector==='style'?[]:[hero,text],defaultView:{getComputedStyle:n=>n.computed},documentElement:{style},body:{style}}
+  assert.equal(adaptEmailDarkMode(doc),'adapted')
+  assert.ok(writes.every(row=>row[0]!=='P'))
+})

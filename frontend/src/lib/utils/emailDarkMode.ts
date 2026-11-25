@@ -33,10 +33,23 @@ export function adaptEmailDarkMode(doc: Document): 'authored' | 'adapted' {
       const style = win.getComputedStyle(node)
       return { node, background: lightness(style.backgroundColor), color: lightness(style.color), image: style.backgroundImage }
     })
+  const byNode = new Map<HTMLElement, { background: number | null; image: string }>()
+  for (const row of rows) byNode.set(row.node, row)
+  // Text over a CSS background image or gradient sits on pixels we leave alone,
+  // so its dark color must stay too. The nearest painted ancestor layer decides.
+  const overImage = (node: HTMLElement): boolean => {
+    for (let a = node.parentElement; a; a = a.parentElement) {
+      const row = byNode.get(a)
+      if (!row) return false
+      if (row.image !== 'none') return true
+      if (row.background !== null) return false
+    }
+    return false
+  }
   for (const { node, background, color, image } of rows) {
     if (image !== 'none') continue
     if (background !== null && background > 0.55) node.style.setProperty('background-color', '#20242b', 'important')
-    if (color !== null && color < 0.55) {
+    if (color !== null && color < 0.55 && (background !== null || !overImage(node))) {
       node.style.setProperty('color', node.tagName === 'A' ? '#90bcff' : '#e4e7ec', 'important')
     }
   }
