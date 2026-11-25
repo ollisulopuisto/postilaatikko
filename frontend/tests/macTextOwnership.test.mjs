@@ -47,3 +47,22 @@ test('actual App registry dispatcher never calls mail undo for focused text', as
   assert.equal(calls, 1)
   assert.equal(prevented, true)
 })
+
+test('native Edit Undo stays with focused text, including an empty history', async () => {
+  const app = await readFile(new URL('../src/App.svelte', import.meta.url), 'utf8')
+  const body = app.split("EventsOn('undo:requested', () => {")[1].split('\n    })')[0]
+  const ts = (await import('typescript')).default
+  const js = ts.transpileModule(body, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText
+  let mail = 0, text = 0, composer = 0
+  class Element { constructor(editable, inComposer = false) { this.editable = editable; this.inComposer = inComposer } closest() { return this.inComposer } }
+  const doc = { activeElement: null, focused: true, hasFocus() { return this.focused }, execCommand(command) { assert.equal(command, 'undo'); text++; return false } }
+  const handler = new Function('document', 'HTMLElement', 'showComposer', 'window', 'isInputElement', 'handleGlobalUndo', js)
+  const run = (showComposer = false) => handler(doc, Element, showComposer, { dispatchEvent() { composer++ } }, value => !!value?.editable, () => { mail++ })
+  doc.activeElement = new Element(true)
+  run(); assert.equal(text, 1); assert.equal(mail, 0)
+  doc.activeElement = new Element(true, true)
+  run(true); assert.equal(composer, 1); assert.equal(mail, 0)
+  doc.activeElement = new Element(false)
+  run(); assert.equal(mail, 1)
+  doc.focused = false; run(); assert.equal(mail, 1)
+})

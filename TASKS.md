@@ -755,3 +755,7 @@ Security pilot review follow-up: include merge-resolution patches, tolerate null
 - Review. Instinct, fix/mac-registry-test-platform, isolated worktree from main9ed1bc4. Release-only macOS failure exposes registry test incorrectly expecting physical Ctrl for every Mod binding. Reproduce on Linux with explicit navigator fixtures, then test displayed platform binding without changing app behavior or workflows.
 
 - Follow-up verification: forced Mac fixture failed before test-event fix; both Mac and Linux registry fixtures now pass. Explicit negative Ctrl/Command-Ctrl behavior remains covered by macTextOwnership. No runtime, workflow, credential or DB changes.
+
+## Native Edit Undo text ownership
+- Status: Review. Owner: Instinct. Branch: fix/native-menu-text-undo. Worktree: /downloads/posti-native-undo.
+- Scope: owner request active fields must retain Undo. Native undo:requested must not reach mail Undo with a field focused, even when native text history is empty. Preserve composer routing.

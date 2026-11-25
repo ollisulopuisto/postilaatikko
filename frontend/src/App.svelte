@@ -927,6 +927,12 @@
         window.dispatchEvent(new Event('postilaatikko:composer-undo'))
         return
       }
+      // Native Edit > Undo must stay in the active field even when its text
+      // history is empty. Never fall through to unrelated mail history.
+      if (isInputElement(active)) {
+        document.execCommand('undo')
+        return
+      }
       void handleGlobalUndo()
     })
     EventsOn('whatsnew:requested', () => {
