@@ -23,7 +23,10 @@ import (
 
 // Store provides message persistence operations
 type Store struct {
-	db  *database.DB
+	db *database.DB
+	// rdb is the read-only pool for interactive list/count/open reads; see
+	// database.DB.Reader. Writers parked on the write lock cannot starve it.
+	rdb *sql.DB
 	log zerolog.Logger
 }
 
@@ -31,6 +34,7 @@ type Store struct {
 func NewStore(db *database.DB) *Store {
 	return &Store{
 		db:  db,
+		rdb: db.Reader(),
 		log: logging.WithComponent("message-store"),
 	}
 }
@@ -502,7 +506,7 @@ func (s *Store) listConversationsByFolderIDs(folderIDs []string, offset, limit i
 		args = append(args, id)
 	}
 	args = append(args, limit, offset)
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	rows, err := s.rdb.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query unified inbox conversations: %w", err)
 	}
@@ -636,7 +640,7 @@ func (s *Store) countConversationsByFolderIDs(folderIDs []string, filter string,
 	for i, id := range folderIDs {
 		args[i] = id
 	}
-	err := s.db.QueryRowContext(ctx, query, args...).Scan(&count)
+	err := s.rdb.QueryRowContext(ctx, query, args...).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count unified inbox conversations: %w", err)
 	}
@@ -1991,7 +1995,7 @@ func (s *Store) ListConversationsByFolder(folderID string, offset, limit int, so
 	// through to the existing sender-based behavior, so the list never
 	// breaks on a metadata hiccup.
 	var folderType string
-	_ = s.db.QueryRowContext(ctx, "SELECT folder_type FROM folders WHERE id = ?", folderID).Scan(&folderType)
+	_ = s.rdb.QueryRowContext(ctx, "SELECT folder_type FROM folders WHERE id = ?", folderID).Scan(&folderType)
 	useToList := folderType == "sent" || folderType == "drafts"
 
 	// participantsExpr is byte-identical to the historical query for
@@ -2028,7 +2032,7 @@ func (s *Store) ListConversationsByFolder(folderID string, offset, limit int, so
 		LIMIT ? OFFSET ?
 	`, participantsExpr)
 
-	rows, err := s.db.QueryContext(ctx, query, folderID, limit, offset)
+	rows, err := s.rdb.QueryContext(ctx, query, folderID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query conversations: %w", err)
 	}
@@ -2158,7 +2162,7 @@ func (s *Store) CountConversationsByFolder(folderID, filter string) (int, error)
 	` + preferNativeGmailCopy + filterWhereClause(filter, "")
 
 	var count int
-	err := s.db.QueryRowContext(ctx, query, folderID).Scan(&count)
+	err := s.rdb.QueryRowContext(ctx, query, folderID).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count conversations: %w", err)
 	}
@@ -2177,7 +2181,7 @@ func (s *Store) GetConversation(threadID, folderID string) (*Conversation, error
 	// was updated by thread reconciliation after initial save.
 	if !strings.Contains(threadID, "@") && !strings.HasPrefix(threadID, "<") {
 		var actualThreadID sql.NullString
-		err := s.db.QueryRow("SELECT thread_id FROM messages WHERE id = ?", threadID).Scan(&actualThreadID)
+		err := s.rdb.QueryRow("SELECT thread_id FROM messages WHERE id = ?", threadID).Scan(&actualThreadID)
 		if err == nil && actualThreadID.Valid && actualThreadID.String != "" {
 			s.log.Debug().Str("id", threadID).Str("thread_ref", logging.ShortHash(actualThreadID.String)).Msg("Resolved UUID to thread_id")
 			threadID = actualThreadID.String
@@ -2187,7 +2191,7 @@ func (s *Store) GetConversation(threadID, folderID string) (*Conversation, error
 	// First get the account ID and folder type
 	var accountID string
 	var folderType string
-	err := s.db.QueryRow("SELECT account_id, folder_type FROM folders WHERE id = ?", folderID).Scan(&accountID, &folderType)
+	err := s.rdb.QueryRow("SELECT account_id, folder_type FROM folders WHERE id = ?", folderID).Scan(&accountID, &folderType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get account ID and folder type: %w", err)
 	}
@@ -2236,7 +2240,7 @@ func (s *Store) GetConversation(threadID, folderID string) (*Conversation, error
 	c := &Conversation{ThreadID: threadID}
 	var latestDateStr sql.NullString
 
-	err = s.db.QueryRow(summaryQuery, accountID, normalizedThreadID, normalizedThreadID, normalizedThreadID, folderID).Scan(
+	err = s.rdb.QueryRow(summaryQuery, accountID, normalizedThreadID, normalizedThreadID, normalizedThreadID, folderID).Scan(
 		&c.Subject,
 		&c.Snippet,
 		&c.MessageCount,
@@ -2280,7 +2284,7 @@ func (s *Store) GetConversation(threadID, folderID string) (*Conversation, error
 		ORDER BY m.date ASC
 	`, trashFilter, folderFilter)
 
-	rows, err := s.db.Query(messagesQuery, accountID, normalizedThreadID, normalizedThreadID, normalizedThreadID, folderID)
+	rows, err := s.rdb.Query(messagesQuery, accountID, normalizedThreadID, normalizedThreadID, normalizedThreadID, folderID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query thread messages: %w", err)
 	}

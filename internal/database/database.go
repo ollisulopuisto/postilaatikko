@@ -35,6 +35,13 @@ const (
 	// IdleConnsPerAccount is how many additional idle connections to keep per account.
 	IdleConnsPerAccount = 1
 
+	// ReaderMaxOpenConns bounds the separate read-only pool used by the
+	// interactive mailbox list/count/open queries. It is a separate pool so
+	// connections parked in BEGIN IMMEDIATE / busy_timeout waits (sync, filter
+	// moves, prefetch) cannot exhaust it and starve WAL reads, which never need
+	// the write lock.
+	ReaderMaxOpenConns = 4
+
 	// CheckpointInterval is how often to run automatic WAL checkpoints.
 	// This prevents the WAL file from growing too large.
 	CheckpointInterval = 5 * time.Minute
@@ -43,6 +50,7 @@ const (
 // DB wraps the SQL database connection
 type DB struct {
 	*sql.DB
+	reader        *sql.DB
 	path          string
 	busyTimeoutMS int
 	log           zerolog.Logger
@@ -124,8 +132,27 @@ func Open(path string, opts ...Option) (*DB, error) {
 		return nil, fmt.Errorf("failed to set database permissions: %w", err)
 	}
 
+	// Separate read-only pool for interactive reads. The main pool's
+	// connections can all be held by writers waiting on the write lock
+	// (busy_timeout is 30 s); WAL readers do not need that lock, so a
+	// dedicated pool keeps the inbox list responsive during sync.
+	readerDSN := fmt.Sprintf("%s?_pragma=busy_timeout(%d)&_pragma=query_only(1)&_pragma=cache_size(-16000)", uri.String(), options.busyTimeoutMS)
+	reader, err := sql.Open("sqlite", readerDSN)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to open read-only database pool: %w", err)
+	}
+	reader.SetMaxOpenConns(ReaderMaxOpenConns)
+	reader.SetMaxIdleConns(ReaderMaxOpenConns)
+	if err := reader.Ping(); err != nil {
+		reader.Close()
+		db.Close()
+		return nil, fmt.Errorf("failed to ping read-only database pool: %w", err)
+	}
+
 	return &DB{
 		DB:            db,
+		reader:        reader,
 		path:          path,
 		busyTimeoutMS: options.busyTimeoutMS,
 		log:           logging.WithComponent("database"),
@@ -154,9 +181,24 @@ func (db *DB) UpdateIdleConns(numAccounts int) {
 		Msg("Updated database connection pool")
 }
 
-// Close closes the database connection
+// Reader returns the read-only connection pool for interactive queries
+// (message lists, counts, conversation reads). Statements on it cannot write:
+// the connections run with query_only. It falls back to the main pool when no
+// reader was opened.
+func (db *DB) Reader() *sql.DB {
+	if db.reader != nil {
+		return db.reader
+	}
+	return db.DB
+}
+
+// Close closes the database connections
 func (db *DB) Close() error {
-	return db.DB.Close()
+	var readerErr error
+	if db.reader != nil {
+		readerErr = db.reader.Close()
+	}
+	return errors.Join(db.DB.Close(), readerErr)
 }
 
 // Checkpoint runs a WAL checkpoint to merge the write-ahead log back into
