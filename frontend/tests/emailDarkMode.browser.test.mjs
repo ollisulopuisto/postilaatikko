@@ -29,6 +29,10 @@ test('D1 authored CSS or adaptive colors, photos unchanged and light untouched',
     assert.equal(await page.locator('body').evaluate(n=>getComputedStyle(n).backgroundColor),'rgb(21, 43, 53)')
     assert.equal(await page.locator('a').evaluate(n=>getComputedStyle(n).color),'rgb(255, 206, 112)')
     await page.screenshot({path:`${captures}/d1-authored.png`})
+    await page.setContent('<body style="background:white;color:#111"><section style="background:linear-gradient(90deg,#fff7cd,#d6eaff)"><h1>Light hero, dark headline</h1></section></body>')
+    await page.addScriptTag({content:code});await page.evaluate(()=>adaptEmailDarkMode(document))
+    assert.equal(await page.locator('h1').evaluate(n=>getComputedStyle(n).color),'rgb(17, 17, 17)')
+    await page.screenshot({path:`${captures}/d1-hero.png`})
     await page.emulateMedia({colorScheme:'light'});await page.setContent(html)
     assert.equal(await page.locator('body').evaluate(n=>getComputedStyle(n).backgroundColor),'rgb(255, 255, 255)')
   }finally{await browser.close()}

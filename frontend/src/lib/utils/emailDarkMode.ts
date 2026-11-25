@@ -31,7 +31,7 @@ export function adaptEmailDarkMode(doc: Document): 'authored' | 'adapted' {
     .filter(node => !node.closest('img, picture, video, svg, canvas, iframe, [data-no-invert]'))
     .map(node => {
       const style = win.getComputedStyle(node)
-      return { node, background: lightness(style.backgroundColor), color: lightness(style.color), image: style.backgroundImage }
+      return { node, background: lightness(style.backgroundColor), color: lightness(style.color), originalColor: style.color, image: style.backgroundImage }
     })
   const byNode = new Map<HTMLElement, { background: number | null; image: string }>()
   for (const row of rows) byNode.set(row.node, row)
@@ -46,8 +46,11 @@ export function adaptEmailDarkMode(doc: Document): 'authored' | 'adapted' {
     }
     return false
   }
-  for (const { node, background, color, image } of rows) {
-    if (image !== 'none') continue
+  for (const { node, background, color, originalColor, image } of rows) {
+    if (image !== 'none' || (background === null && overImage(node))) {
+      node.style.setProperty('color', originalColor, 'important')
+      continue
+    }
     if (background !== null && background > 0.55) node.style.setProperty('background-color', '#20242b', 'important')
     if (color !== null && color < 0.55 && (background !== null || !overImage(node))) {
       node.style.setProperty('color', node.tagName === 'A' ? '#90bcff' : '#e4e7ec', 'important')
