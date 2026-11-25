@@ -11,7 +11,7 @@ postilaatikko-helper public-key --identity-store encrypted-file --data /absolute
 
 Use the same three options with `pair`, `serve`, `revoke`, `list` and other commands that load this identity. Verify public keys directly between devices before pairing, as before. Do not send private keys, passwords or tokens through chat. Only the public key is printed. Do not initialize a new backend under the assumption it will preserve an existing keyring pairing: it creates a different identity, and the remote device must be paired deliberately.
 
-Linux service installation is not implemented by `install-agent`; use your existing service manager. Its explicit command must retain `--identity-store encrypted-file`, the absolute `--data` directory and `--identity` name. Omitting the option selects keyring and fails if that keyring identity is unavailable; it does not silently load the file. macOS login-agent installation and the desktop identity path remain keyring-only and unchanged. This PR adds no system service or startup behavior.
+Linux `install-agent` supports keyring identities only; it explicitly rejects `--identity-store encrypted-file`. See [Linux helper services](LINUX_HELPER.md). For an encrypted-file identity, use your existing service manager. Its explicit command must retain `--identity-store encrypted-file`, the absolute `--data` directory and `--identity` name. Omitting the option selects keyring and fails if that keyring identity is unavailable; it does not silently load the file. macOS login-agent installation and the desktop identity path remain keyring-only and unchanged. The encrypted-file backend itself adds no system service or startup behavior.
 
 ## Storage and failure behavior
 
