@@ -341,7 +341,7 @@ func run(args []string) error {
 		}
 		transport.Close()
 		apiConfig := apiListenerConfig{address: *apiListen, cert: *apiCert, key: *apiKey, allowedHost: apiAllowedHosts}
-		return installAgent(ctx, *identityName, *data, *queue, *listen, *cert, *key, helperAllowedHosts, effectiveSync, apiConfig, pushConfig)
+		return installAgent(ctx, *identityName, *identityStore, *data, *queue, *listen, *cert, *key, helperAllowedHosts, effectiveSync, apiConfig, pushConfig)
 	default:
 		return fmt.Errorf("unknown helper command %q", command)
 	}
