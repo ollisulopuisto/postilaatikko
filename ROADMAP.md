@@ -39,6 +39,30 @@ copying), a first-class Linux helper service, and remote/local feature
 parity. Moving existing data between computers is deferred. The
 `HOSTED-SERVER-*` work continues. Queue: `HELPER-*` rows in TASKS.md.
 
+Responsibility split (same decision): the helper is the core and does the
+heavy work in its own concurrent Go process (sync, filters, moves, search,
+scheduled delivery, mailbox mutations); the desktop renders and holds device
+state (preferences, content policy, certificate trust). Undo follows that
+split: composer text edits and the composer's Undo Send countdown are
+desktop state; folder/message operations are undone through the helper's
+durable undo history, with no redo.
+
+Small slices for lighter models (Easy, one area each; details and
+dependencies in TASKS.md):
+
+- Linux helper: `HELPER-LINUX-UNIT-001` (systemd unit renderer),
+  `-INSTALL-001`, `-CONTROL-001`, `-MIGRATION-001`, `-DOCS-001`, `-SMOKE-001`.
+- Pairing groundwork: `HELPER-TLS13-001`, `HELPER-PAIRING-CODE-001` (code
+  format only), `HELPER-PAIRING-UI-001` (decode and confirm only).
+- Parity: `HELPER-PARITY-DOCS-001`, `-INVENTORY-001`, `-TEST-001`,
+  `-SNOOZED-001`, `-GUARDS-001`.
+- Always-helper: `HELPER-ALWAYS-AUTOINSTALL-001`.
+
+Keep for a stronger model and review: the pairing handshake and its
+crypto, per-account archive and S/MIME/PGP in remote mode, the
+localhost-as-remote cutover and removing the desktop's mailbox-database
+paths.
+
 
 Update 2026-11-11: the single-user, user-operated trusted service below still
 stands (first deployment: Send Later-only on the owner's Mac Studio,
