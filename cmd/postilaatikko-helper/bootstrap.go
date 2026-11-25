@@ -116,19 +116,25 @@ func ensureServiceDatabase(dataDirectory string, manageService bool) (status ser
 }
 
 func pauseServiceForMigration() (bool, error) {
-	if runtime.GOOS == "darwin" {
-		status, err := getAgentStatus(context.Background())
+	return pauseServiceForMigrationWith(runtime.GOOS, getAgentStatus, stopAgent, assertNoServiceOnDefaultPort)
+}
+
+// pauseServiceForMigrationWith keeps the platform decision testable without
+// stopping a real service or opening a mailbox database.
+func pauseServiceForMigrationWith(platform string, inspect func(context.Context) (helperAgentStatus, error), stop func(context.Context) error, checkPort func() error) (bool, error) {
+	if platform == "darwin" || platform == "linux" {
+		status, err := inspect(context.Background())
 		if err != nil {
 			return false, fmt.Errorf("inspect helper service before database upgrade: %w", err)
 		}
 		if status.Running {
-			if err := stopAgent(context.Background()); err != nil {
+			if err := stop(context.Background()); err != nil {
 				return false, fmt.Errorf("stop helper service before database upgrade: %w", err)
 			}
 			return true, nil
 		}
 	}
-	if err := assertNoServiceOnDefaultPort(); err != nil {
+	if err := checkPort(); err != nil {
 		return false, err
 	}
 	return false, nil
