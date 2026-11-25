@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## Postilaatikko 2026.11.25.3
+
+- Fix Mac release validation for Command-only palette shortcuts. Registry checks now exercise Mac and Linux explicitly; app key bindings are unchanged.
+
 ## Postilaatikko 2026.11.25.2
 
 - On Mac, the command palette uses Command-K/P rather than physical Control aliases. Text fields keep their Control-K/P editing and Command-Z Undo; mail Undo still works outside text.

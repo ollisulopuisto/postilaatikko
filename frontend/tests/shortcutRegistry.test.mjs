@@ -48,7 +48,7 @@ const NAMED_KEYS = {
 }
 
 // Each displayed combo becomes one or more events: 'Mod' expands to a Ctrl
-// variant and a Cmd variant because the overlay promises both work.
+// variant and a Cmd variant off Mac. On Mac, Mod is displayed as Command.
 function eventsFor(combo) {
   const { mods, key } = format.parseCombo(combo)
   const shift = mods.includes('Shift') || key === '?'
@@ -61,7 +61,9 @@ function eventsFor(combo) {
     metaKey: mods.includes('Meta'),
   }
   if (!mods.includes('Mod')) return [base]
-  return [{ ...base, ctrlKey: true }, { ...base, metaKey: true }]
+  return format.isMacPlatform()
+    ? [{ ...base, metaKey: true }]
+    : [{ ...base, ctrlKey: true }, { ...base, metaKey: true }]
 }
 
 // --- source scanning for inline bindings ------------------------------------
@@ -117,20 +119,29 @@ test('shortcut ids are unique and reference known groups', () => {
   }
 })
 
-test('every displayed combo satisfies one of the entry predicates (Ctrl and Cmd for Mod)', () => {
-  for (const def of SHORTCUTS) {
-    if (!def.predicates?.length) continue
-    for (const combo of def.combos) {
-      for (const ev of eventsFor(combo)) {
-        assert.ok(def.predicates.some(p => p(ev)), `${def.id}: "${combo}" (${JSON.stringify(ev)}) matches no predicate`)
+for (const platform of ['MacIntel', 'Linux x86_64']) {
+  test(`every displayed combo satisfies its predicates on ${platform}`, () => {
+    const original = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+    Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { platform } })
+    try {
+      for (const def of SHORTCUTS) {
+        if (!def.predicates?.length) continue
+        for (const combo of def.combos) {
+          for (const ev of eventsFor(combo)) {
+            assert.ok(def.predicates.some(p => p(ev)), `${def.id}: "${combo}" (${JSON.stringify(ev)}) matches no predicate`)
+          }
+        }
+        for (const [i, p] of def.predicates.entries()) {
+          const hit = def.combos.some(combo => eventsFor(combo).some(ev => p(ev)))
+          assert.ok(hit, `${def.id}: predicate #${i} accepts none of the displayed combos`)
+        }
       }
+    } finally {
+      if (original) Object.defineProperty(globalThis, 'navigator', original)
+      else delete globalThis.navigator
     }
-    for (const [i, p] of def.predicates.entries()) {
-      const hit = def.combos.some(combo => eventsFor(combo).some(ev => p(ev)))
-      assert.ok(hit, `${def.id}: predicate #${i} accepts none of the displayed combos`)
-    }
-  }
-})
+  })
+}
 
 test('every exported predicate is described in the registry', () => {
   const used = new Set(SHORTCUTS.flatMap(def => def.predicates ?? []))

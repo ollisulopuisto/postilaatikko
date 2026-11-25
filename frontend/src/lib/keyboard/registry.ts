@@ -10,8 +10,8 @@
 // `npm run check`):
 //   - `predicates`: every displayed combo is turned into a synthetic event and
 //     must satisfy one of the listed predicates (Mod combos are tried with
-//     both Ctrl and Cmd); each listed predicate must accept one displayed
-//     combo; every predicate exported from a KEY map must be described here.
+//     Command on Mac, both Ctrl and Cmd elsewhere); each predicate must
+//     accept a displayed combo; every predicate exported from a KEY map must be described here.
 //   - `inline`: bindings still written as switch cases inside App.svelte's
 //     handleGlobalKeyDown or Composer.svelte's handleKeyDown name the key
 //     literals they are bound by. Every listed literal must occur in that
@@ -35,7 +35,7 @@
 //
 // Combo syntax: modifier tokens joined with '+', key last. Modifiers:
 //   Mod   — Ctrl, or Cmd on macOS. Only use when the handler accepts
-//           `ctrlKey || metaKey` (ctrlOrMeta).
+//           the displayed platform modifier (Command on Mac, Control elsewhere).
 //   Ctrl  — Control on every platform (e.g. Ctrl+Tab, which macOS reserves
 //           as Cmd+Tab).
 //   Meta  — Cmd only (macOS-specific bindings).
