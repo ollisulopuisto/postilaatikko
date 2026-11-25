@@ -743,3 +743,9 @@ Security pilot review follow-up: include merge-resolution patches, tolerate null
 
 ## HELPER-IDENTITY-FILE-001: Explicit keyring-less helper identity
 - Review. Instinct, branch `feat/helper-encrypted-identity`, isolated worktree `/downloads/posti-helper-encrypted-identity` from main f4fbd087. Separate from326. Owner approved headless identity next after account-add. Explicit Linux encrypted-file choice, default keyring, no migration/silent fallback; design and threat boundary in docs/HEADLESS_IDENTITY.md. No merge.
+
+## A4 Mac palette aliases and focused text Undo
+
+- Status: Review preparation. Owner: Instinct. Branch: fix/mac-text-shortcut-ownership.
+- Approved25Nov A4: palette keeps Command-K/P on Mac, no physical Control alias. Command-Z stays with text fields; mail Undo outside text. Registry bindings remain canonical, shared predicate handles platform modifier ownership.
+- Failing-first tests reproduce both old paths. New executable actual-App-dispatch regression covers target, composed path and active-element focus. Frontend1132pass,32 browser skips; lint/check/version checks pass. No native Mac/browser claim. Version2026.11.25.2.

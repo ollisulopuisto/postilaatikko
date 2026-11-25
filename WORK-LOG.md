@@ -86,3 +86,21 @@ retained. Own delta review compares old/new feature source and command entry
 points; combined accountsetup/OAuth/scheduledsend/helper tests, scoped vet,
 CGO0helper build and version checker run. No actual provider/Ubuntu service
 acceptance claim. Fresh exact-head CI and independent delta review required.
+
+## 2026-11-25: A4 Mac text shortcut ownership
+
+Current mainaeedca2, open PRs empty, branch inventory inspected. No overlapping
+shortcut change found; protected312 untouched. Palette modifier predicate rejects
+physical Control on Mac while keeping Command and non-Mac Control behavior.
+App supplies its existing isMacPlatform detection explicitly. Undo and Select All
+return before preventDefault/mail handler when target, composed path or active
+focus is editable. Composer ownership and native Edit dispatch remain unchanged.
+Own adversarial review RAN: traced registry palette predicate, modifier dispatch
+before input guard, native menu text Undo, composed events, modal/composer gates,
+non-Mac behavior and displayed registry hints. No open findings. New regression
+failed on old source; actual App dispatcher executed for all three text focus
+routes and nontext mail Undo. Frontend1132pass,32browser skips; targeted tests,
+lint/check and version consistency pass. Initial source proximity test failed
+after a long platform default expression; moved detection to a helper, no test
+weakened. Native Mac/browser editing behavior and full backend tests not run.
+No workflow, dependency, schema, recipient or account changes. Not merged.
