@@ -24,7 +24,21 @@ Needs me is unread OR the manual Later mark, available within every selected fol
 
 Keep IMAP support. The app now feels faster, so the earlier CPU/memory concern is not a reason to remove a working provider path. Pause IMAP retirement, provider migration, and Gmail-only setup changes. Continue measured performance work only when it helps diagnose a reproduced issue. Gmail-native features such as server search, labels, history refresh, and filters can continue incrementally for Gmail accounts, with IMAP retained for supported accounts and fallback paths. Revisit provider retirement only after new evidence and an explicit product decision. The Gmail-only transition queue in TASKS.md is deferred, not active.
 
-### Always-on mail service (2026-11-06, updated 2026-11-11)
+### Always-on mail service (2026-11-06, updated 2026-11-11, 2026-11-25)
+
+Decision 2026-11-25 (owner), supersedes the deprecation path in the
+2026-11-11 note below for the user-operated case: the helper is always the
+mailbox owner. The DMG installs and starts it on localhost by default; the
+same helper can instead run on the user's own other computer (macOS or
+Linux), and the desktop connects to it the same way. Localhost is a
+configuration of remote mode, not a separate desktop-owned mode. The
+mailbox-service mode is therefore not deprecated for one user's own
+machines; the zero-knowledge design still governs any hosted multi-tenant
+service. Priorities: streamlined pairing (one-time code, no CLI token
+copying), a first-class Linux helper service, and remote/local feature
+parity. Moving existing data between computers is deferred. The
+`HOSTED-SERVER-*` work continues. Queue: `HELPER-*` rows in TASKS.md.
+
 
 Update 2026-11-11: the single-user, user-operated trusted service below still
 stands (first deployment: Send Later-only on the owner's Mac Studio,
