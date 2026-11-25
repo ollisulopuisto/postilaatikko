@@ -4,6 +4,8 @@
 
 Owner-approved: freeze every loaded row and its inbox card until a deliberate action changes the message set or context. Selecting, reading and incoming mail do not re-sort. Explicit mutations, compose/reply/forward, view/filter changes and refresh may reconcile. A counted pending-change pill offers immediate reconciliation; plain folders follow the same rule. This supersedes releasing the selected-row pin when another conversation is selected.
 
+O6 selection actions are implemented in PR #324 and included in the current DMG. Live-mailbox verification is still open: Olli reported that his installed Postilaatikko showed the old selection UI, so confirm which build is installed before closing that check.
+
 Planned, in flight, open questions, and parked items for this fork. Done items are marked with the version that shipped them. Suitable changes are intended to be proposed upstream to Eterno Mail after they are stable.
 
 ## Product direction
@@ -213,7 +215,7 @@ Use the [task board](TASKS.md) for current claims and integration status; the [D
 - **Gmail-style keyboard bindings and nearby buttons.** Existing shortcuts/registry/command panel are the baseline. Complete reading/iframe coverage, Finnish layouts and configurable overrides while sharing targets with visible actions; disable single keys in editable fields. See UX-016/017/029 and `docs/KEYBOARD_SHORTCUTS.md`.
 - **Gmail-native spam actions.** Existing v0.3.13 API baseline supports native spam/not-spam label operations with fallback. Verify actual provider behavior and undo; do not claim classifier-training guarantees without evidence.
 - **Quick replies and email templates.** Short snippets shipped in v0.3.13; full email templates remain P-020. Reuse them in inline/full compose while preserving sender, recipients and unsaved draft content.
-- **Calendar recognition.** Turn recognized date/time mentions in message content into an “Add to Calendar” action using the standard ICS event handoff. Open it for review/import and handle timezone ambiguity conservatively. Not started; build on `extensions/calendar`.
+- **Calendar recognition.** Finnish date/time recognition and the “Add to Calendar” ICS handoff shipped in PR #217. Four-digit years are required; ambiguous slash dates and yearless dates remain unsupported. Live-app handoff verification is still open.
 - **Tabbed mail workspaces.** Open independent mail-list/reader workspaces in tabs by default, preserving each tab’s folder, search and thread state. Allow detaching a tab into its own native mail window. Limit the number of extra live readers to keep memory bounded. P-013 provides independent mail-window support; P-043 implements the tab shell and detach action. Native lifecycle and real-mail checks remain before release.
 
 ## Planned
@@ -223,11 +225,13 @@ Use the [task board](TASKS.md) for current claims and integration status; the [D
 - **Layout/search refinements.** Related searches/save view, configurable columns/density and optional sender bundles; UX-028/033/034. Optional saved-view tabs and hiding empty views remain later decisions.
 - **macOS Contacts integration.** Start with read-only address book browsing and recipient lookup/autocomplete, with macOS privacy authorization. For edits, link to the selected person in Apple's Contacts app; do not write contact changes from Postilaatikko in the initial version.
 - **Smart notifications.** Per-sender and rule-based controls for deciding which messages produce notifications. Not started; lower priority.
-- **Snooze and reminders.** Hide or remind about a conversation at a chosen time. Not started and lower priority than the core items above.
+- **Snooze and reminders.** Snooze presets and custom time shipped in PR #216. Live-device verification is still open.
 
 ## Open questions
 
 - **Later layout options.** Whether to add saved-view tabs, hide empty views, per-view reader overrides or incoming-mail presentation schedules. Do not block the accepted core UI/API work on these decisions.
+- **Mailbox activity history UI.** The 24-hour mailbox undo history is shipped. Olli is considering U1 (history drawer grouped by day, per-row Undo and an explanation when an action cannot be undone), with row details opening the U2 affected-message page and U3 available from Cmd-K. The suggested 30-day retention is tentative. The proposal excludes send and permanent delete, records undo as an “Undone” activity, and refuses per-message undo when state has changed. No UI build is approved; branching and redo are not part of the proposal.
+- **Dark email rendering and message-list density.** Sketches only; no implementation is approved. D1 proposes honoring an email's own dark CSS, otherwise darkening background and text while leaving images unchanged. For “space reclaim,” confirm whether Olli means screen space or disk/cache; S1 proposes one-line dense rows (~20 messages instead of 7), S1+S2 as the default density, and S3 as a separate opt-in shortcut toggle. GitHub Issues are disabled in this repository, so no issue was created; keep this proposal here until the tracker can accept it and Olli confirms the choices.
 
 ## Parked
 
