@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { adaptEmailDarkMode } from '../../utils/emailDarkMode'
   import { messageFind, highlightMessageText } from './messageFind.svelte'
   import LaterQueueButton from '../common/LaterQueueButton.svelte'
   import Icon from '@iconify/svelte'
@@ -151,27 +152,6 @@
     return processed
   }
 
-  // Reads the active theme's chrome lightness so the dark-mail filter can tune
-  // its invert amount — pure black is too dark against most themes' chrome.
-  // For themes whose --background hue carries enough chromaticity that the
-  // partial-invert + hue-rotate composes into visible color shifts, declare
-  // --dark-mail-bg-l (number 0-100) to override with an explicit value.
-  function getChromeBgLightness(): number {
-    const styles = getComputedStyle(document.documentElement)
-    const override = styles.getPropertyValue('--dark-mail-bg-l').trim()
-    if (override) {
-      const n = parseFloat(override)
-      if (!Number.isNaN(n)) return Math.max(0, Math.min(1, n / 100))
-    }
-    const bg = styles.getPropertyValue('--background').trim()
-    const lMatch = bg.match(/(\d+(?:\.\d+)?)%\s*$/)
-    if (lMatch) {
-      const l = parseFloat(lMatch[1])
-      if (!Number.isNaN(l)) return Math.max(0, Math.min(1, l / 100))
-    }
-    return 0
-  }
-
   // Returns the chrome bg as `hsl(...)` for the iframe element's outer
   // background, matching the rendered dark-mail surface so the rounded
   // corner clip has no color seam.
@@ -179,34 +159,6 @@
     const styles = getComputedStyle(document.documentElement)
     const bg = styles.getPropertyValue('--background').trim()
     return bg ? `hsl(${bg})` : '#000'
-  }
-
-  // Per-theme dark-mail saturation override. <1 desaturates the inverted
-  // email surface to cancel out the warm/red chromatic shift that partial
-  // invert + hue-rotate(180deg) leaves on the residual chromaticity of
-  // most input content. Default 1 (no change).
-  function getChromeBgSaturate(): number {
-    const override = getComputedStyle(document.documentElement)
-      .getPropertyValue('--dark-mail-saturate').trim()
-    if (override) {
-      const n = parseFloat(override)
-      if (!Number.isNaN(n) && n > 0) return n
-    }
-    return 1
-  }
-
-  // Per-theme dark-mail hue rotation override (degrees, signed). Shifts the
-  // residual chromaticity of the inverted email surface toward a specific
-  // hue family — e.g., -20 to cool down a cool-toned theme's surface that
-  // would otherwise read as warm gray. Default 0 (no shift, GPU-skipped).
-  function getChromeBgHueRotate(): number {
-    const override = getComputedStyle(document.documentElement)
-      .getPropertyValue('--dark-mail-hue').trim()
-    if (override) {
-      const n = parseFloat(override)
-      if (!Number.isNaN(n)) return n
-    }
-    return 0
   }
 
   function buildIframeContent(html: string, applyDarken: boolean): string {
@@ -220,27 +172,9 @@
     // the email stay blocked; the provider only receives the link's domain.
     const imgSrc = imagesBlocked ? "'self' data: https://www.google.com" : '* data:'
 
-    // Double-invert: page-level invert + image-level re-invert keeps photos
-    // looking normal while flipping text, backgrounds, and CSS-defined colors.
-    // Blocked-image placeholders intentionally skip the re-invert so they end
-    // up dark too — they're chrome, not content.
-    // color-scheme: dark switches the UA-default iframe viewport bg to dark so
-    // the rounded-corner edge has no white sliver bleeding through.
-    // Invert amount derived from theme's chrome lightness — pure invert(1)
-    // produces stark black against themes whose chrome isn't pure black.
-    const invertAmount = applyDarken ? 1 - getChromeBgLightness() : 1
-    const saturate = applyDarken ? getChromeBgSaturate() : 1
-    const hueRotate = applyDarken ? getChromeBgHueRotate() : 0
-    // Image filter compensates so photos see net saturate(1) + hue-rotate(0) —
-    // html's saturate(S) hue-rotate(H) composed with image's saturate(1/S)
-    // hue-rotate(-H) approximately cancels for non-grayscale image content.
-    const imageSaturate = 1 / saturate
-    const darkenStyles = applyDarken && !compact ? `
-    html { filter: invert(${invertAmount}) hue-rotate(180deg) saturate(${saturate}) hue-rotate(${hueRotate}deg); background: #fff; color-scheme: dark; }
-    img:not([data-blocked-src]), video, iframe, [data-no-invert] { filter: invert(${invertAmount}) hue-rotate(180deg) saturate(${imageSaturate}) hue-rotate(${-hueRotate}deg); }
-` : `
-    html { color-scheme: light; }
-`
+    // D1 uses authored dark CSS or adapts colors after the document loads.
+    // No filter touches images, including transparent logos and inline CIDs.
+    const darkenStyles = applyDarken ? 'html { color-scheme: dark; }' : 'html { color-scheme: light; }'
 
     const iframeScript = `
       window.addEventListener('message', function(event) {
@@ -338,6 +272,7 @@
       });
 
       window.addEventListener('load', function() {
+        ${applyDarken ? `(${adaptEmailDarkMode.toString()})(document);` : ''}
         decorateTextLinks();
         attachImageHandlers();
         sendHeight();
