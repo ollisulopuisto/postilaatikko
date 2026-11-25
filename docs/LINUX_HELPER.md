@@ -75,3 +75,7 @@ This may require administrator permission. It does not keep an offline/sleeping 
 ```
 
 This disables and stops the user unit before removing its file, then reloads systemd. Stop/disable failure preserves the unit. It does not delete accounts, queues, identities or mail data. Linger is independent; if you enabled it only for this helper, review other user services before considering `loginctl disable-linger "$USER"`.
+
+## Manual VM smoke
+
+Read `scripts/linux-helper-smoke.sh --help` before running it in a disposable Ubuntu LTS VM. It requires an existing throwaway keyring identity and an unlocked Secret Service, refuses an existing service unit or profile, bootstraps a new isolated database, installs without sync, restarts, probes health and uninstalls. It retains the profile for inspection. It is not wired into CI and does not initialize/delete identities, enable linger, reboot, pair devices or send mail. It cannot validate a headless encrypted-file deployment while service forwarding is unsupported.
