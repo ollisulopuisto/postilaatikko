@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## Postilaatikko 2026.11.25.4
+
+- Keep native Edit > Undo in the focused text field, including when its history is empty, instead of undoing an unrelated mail action. Composer Undo remains separate.
+
 ## Postilaatikko 2026.11.25.3
 
 - Fix Mac release validation for Command-only palette shortcuts. Registry checks now exercise Mac and Linux explicitly; app key bindings are unchanged.

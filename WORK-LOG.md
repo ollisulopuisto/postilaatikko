@@ -104,3 +104,22 @@ lint/check and version consistency pass. Initial source proximity test failed
 after a long platform default expression; moved detection to a helper, no test
 weakened. Native Mac/browser editing behavior and full backend tests not run.
 No workflow, dependency, schema, recipient or account changes. Not merged.
+
+## 2026-11-25: Native menu Undo keeps text ownership
+Inspected current main f6da15d and live open PRs (none) before creating isolated
+fix/native-menu-text-undo worktree; protected312 untouched. Owner outbox540 asks
+active text not reach unrelated Undo. Keyboard registry already does this, but
+native undo:requested lacked the field guard outside the composer. Now native
+text undo executes and returns even when history is empty; composer-first path
+and background-window guard unchanged. Mail Undo remains available outside text.
+Own adversarial review RAN: traced native menu event emission, IPC detached
+composer routing, inline composer custom event, actual focused-field predicate,
+registry dispatch, global mail LIFO consumers and toolbar/history separate paths.
+One new failing-first test executes the actual App callback, false text-undo
+return never falls through; focus/composer/nontext/background cases pass.
+Initial registry-test alias error was running from repo root; same suite passes
+from frontend directory, without changing its assertions. Focused4pass, frontend
+check/lint/version consistency pass. No workflow/DB/credential/crypto changes.
+Version2026.11.25.4. Actual macOS native menu/text undo and browser UI acceptance
+not run, no claim those passed. PR only; no merge grant for this new follow-up.
+Full frontend suite:1134pass,32browser skips,0fail.

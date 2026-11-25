@@ -310,7 +310,7 @@
   </provides>
 
   <releases>
-    <release version="2026.11.25.3" date="2026-11-25"><description><p>Keep Mac Control palette aliases and mail Undo out of focused text.</p></description></release>
+    <release version="2026.11.25.4" date="2026-11-25"><description><p>Keep Mac Control palette aliases and mail Undo out of focused text.</p></description></release>
     <release version="2026.11.25.1" date="2026-11-25" />
     <release version="2026.11.24.2" date="2026-11-24" />
     <release version="2026.11.24.1" date="2026-11-24" />
