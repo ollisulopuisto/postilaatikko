@@ -165,7 +165,7 @@ func (s *Store) ListConversationsByFolderKeyset(folderID, cursor string, limit i
 	}
 	var kind string
 	var enabled bool
-	err := s.db.QueryRow(`SELECT f.folder_type,a.enabled FROM folders f JOIN accounts a ON a.id=f.account_id WHERE f.id=?`, folderID).Scan(&kind, &enabled)
+	err := s.rdb.QueryRow(`SELECT f.folder_type,a.enabled FROM folders f JOIN accounts a ON a.id=f.account_id WHERE f.id=?`, folderID).Scan(&kind, &enabled)
 	if err != nil {
 		return nil, "", err
 	}
@@ -199,7 +199,7 @@ func (s *Store) enabledFolderAccounts(ctx context.Context, folderIDs []string) (
 	for i, id := range folderIDs {
 		args[i] = id
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT f.id, f.account_id FROM folders f
+	rows, err := s.rdb.QueryContext(ctx, `SELECT f.id, f.account_id FROM folders f
 		INNER JOIN accounts a ON f.account_id = a.id AND a.enabled = 1
 		WHERE f.id IN (`+placeholders+`)`, args...)
 	if err != nil {
@@ -252,7 +252,7 @@ func (s *Store) collectPageKeys(ctx context.Context, folderIDs []string, folderA
     AND COALESCE(newer.thread_id,newer.id)=COALESCE(m.thread_id,m.id)
     AND newer.folder_id IN (` + scope + `) AND newer.date>m.date` + visibleNewer + `)
    ORDER BY m.date DESC,COALESCE(m.thread_id,m.id) ASC LIMIT ?`
-		rows, err := s.db.QueryContext(ctx, query, args...)
+		rows, err := s.rdb.QueryContext(ctx, query, args...)
 		if err != nil {
 			return nil, false, err
 		}
@@ -348,7 +348,7 @@ func (s *Store) loadConversationAggregates(ctx context.Context, keys []conversat
 		for _, t := range threads {
 			args = append(args, t)
 		}
-		rows, err := s.db.QueryContext(ctx, query, args...)
+		rows, err := s.rdb.QueryContext(ctx, query, args...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load conversation page: %w", err)
 		}
