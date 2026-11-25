@@ -49,6 +49,9 @@ never a remote call):
 3. Print the code once (text and QR). Never log it.
 
 At most one live code. Issuing a new one deletes any previous code.
+Every read of the code table first deletes expired rows, and the running
+helper also sweeps them at least once a minute, so the raw secret never
+outlives `expiry` on disk by more than that interval.
 
 ## Transport
 
@@ -59,7 +62,8 @@ any request is sent. Server name and chain are not trusted for identity.
 
 Both sides then derive a channel binding from the TLS session:
 
-    ekm = ExportKeyingMaterial("EXPORTER-postilaatikko-pairing-v1", nil, 32)
+    ekm = ExportKeyingMaterial("EXPORTER-postilaatikko-pairing-v1",
+                               context = version(1 byte) || lookup(16 bytes), 32)
 
 (RFC 5705/8446 exporter; Go `tls.ConnectionState.ExportKeyingMaterial`.)
 The helper reads it from `r.TLS` of the same request.
@@ -78,8 +82,13 @@ Request body:
       "deviceName": "<= 64 chars, display only",
       "deviceNonce": hex(16 random bytes),
       "proof": hex(HMAC-SHA256(key = secret,
-                 "claim-v1" || ekm || lookup || deviceNonce || len||deviceName))
+                 "claim-v1" || ekm || lookup || deviceNonce || lp(deviceName)))
     }
+
+Transcript encoding for every MAC: binary values are their raw bytes
+(`lookup` is the 16 raw bytes, not its hex form; `ekm`, `deviceNonce` and
+hashes likewise), and every variable-length field is length-prefixed as
+`lp(x) = uint16 big-endian length || x`. Labels are fixed ASCII strings.
 
 Helper checks, in order, and answers every failure with the same 403 and
 the same body shape (no oracle about which check failed):
@@ -89,10 +98,21 @@ the same body shape (no oracle about which check failed):
 3. The connection is TLS 1.3 and `ekm` is available.
 4. `proof` verifies in constant time. On mismatch increment `failures`.
 
-On success, in one database transaction: mark the code used (delete it),
+A request with an unknown `lookup` touches no code row, so an attacker who
+does not know the code cannot burn its failure counter or lock it out;
+only the global rate limit applies to such requests.
+
+On success, in one database transaction: consume the code with a
+conditional delete (`DELETE FROM pairing_codes WHERE lookup = ? AND
+expiry > now RETURNING ...`), and only if that delete removed the row,
 create an API grant (`RegisterClient`) with the default owner-device
-capabilities (below), and record the device name and pairing time with the
-grant.
+capabilities (below) and record the device name and pairing time with the
+grant. Two concurrent valid claims therefore yield exactly one grant.
+
+The helper records the pairing in its audit log and prints it to the
+running `pair-code` command if that is still open ("Paired: <device
+name> at <time>"), and `api-client list` shows the device name and
+pairing time, so the owner notices a pairing they did not make.
 
 ## Claim response and mutual confirmation
 
@@ -102,20 +122,24 @@ grant.
       "capabilities": [...],
       "sendLaterPublicKey": "<helper Send Later X25519 public key>",
       "confirm": hex(HMAC-SHA256(key = secret,
-                   "confirm-v1" || ekm || lookup || deviceNonce || clientId || sha256(token)))
+                   "confirm-v1" || ekm || lookup || deviceNonce || lp(clientId) || sha256(token)))
     }
 
-The desktop verifies `confirm` before storing anything. This proves the
-peer knew `secret` on this exact TLS connection, in addition to the
-certificate pin. It then stores the token in the OS keyring, the pinned
-certificate fingerprint and endpoint in device settings, and compares
-`sendLaterPublicKey` with the identity fingerprint from the code.
+The desktop verifies, in this order, before storing anything: `confirm`
+(the peer knew `secret` on this exact TLS connection, in addition to the
+certificate pin), then `sendLaterPublicKey` against the identity
+fingerprint from the code. If either check fails, it discards the token
+and makes a best-effort self-revoke call with it (a route that lets a grant revoke only itself, added with this work),
+and tells the user to revoke `clientId` on the helper if that call fails.
+Only after both checks pass does it store the token in the OS keyring and
+the pinned certificate fingerprint and endpoint in device settings.
 
 ## Why not a PAKE
 
 The secret is 128 random bits delivered out of band, not a human password,
 so offline guessing after observing a transcript is infeasible and online
-guessing is capped at five tries per code. HMAC with TLS channel binding
+guessing is capped at five tries per code (and unknown-lookup requests
+cannot exhaust those tries). HMAC with TLS channel binding
 gives mutual proof of the secret bound to the connection. A PAKE (CPace,
 OPAQUE) would be needed only if the code were shortened to something a
 person could guess; keep the full 128-bit secret and this stays true.
@@ -146,9 +170,23 @@ the desktop needs. Never key export or administrative crypto grants
 - The token, secret, proof and confirm values never appear in logs,
   errors, URLs or action receipts.
 
+## Residual risk: a leaked code
+
+A code read by someone else, plus network reach to the helper, gives that
+person an owner-device grant (`mail.send`, `account.manage`) until the
+owner notices. Mitigations in v1: the code lives at most 15 minutes, works
+once, is shown only on the helper host, and every pairing is announced on
+the helper (above). A confirm step on the helper host before the grant is
+issued would close this; it is a reviewer question whether v1 needs it.
+
 ## Tests required before merge of the implementation
 
 - Correct code pairs and returns a working grant; the code is then gone.
+- Two concurrent valid claims: exactly one grant is created.
+- Unknown lookup does not change the failure counter of the live code.
+- Expired codes are removed from the database by the sweep.
+- Identity-fingerprint mismatch after a valid `confirm`: the desktop
+  stores nothing and revokes the returned grant.
 - Wrong secret, expired code, used code, unknown lookup, sixth attempt:
   identical 403, and the code is deleted after five failures.
 - Certificate mismatch aborts before the request is sent.
@@ -161,8 +199,8 @@ the desktop needs. Never key export or administrative crypto grants
 
 ## Reviewer checklist
 
-- Exporter label and context, and whether the context should include the
-  code version and lookup.
+- Exporter label and context (now version and lookup).
+- Whether v1 needs a confirm step on the helper host (residual risk above).
 - Constant-time comparisons and the uniform failure response.
 - Storage of the raw secret in the helper database for its lifetime.
 - Whether five failures per code and the global rate limit are sufficient.
