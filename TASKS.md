@@ -781,3 +781,7 @@ Security pilot review follow-up: include merge-resolution patches, tolerate null
 ## Native Edit Undo text ownership
 - Status: Review. Owner: Instinct. Branch: fix/native-menu-text-undo. Worktree: /downloads/posti-native-undo.
 - Scope: owner request active fields must retain Undo. Native undo:requested must not reach mail Undo with a field focused, even when native text history is empty. Preserve composer routing.
+
+## ROADMAP-STATUS-001: Reconcile shipped roadmap notes
+- Status: In progress. Owner: Codex. Branch: `codex/roadmap-status-reconciliation`. Worktree: `/Users/dst/.codex/worktrees/roadmap-status-reconciliation/postilaatikko`.
+- Update roadmap status for shipped snooze/calendar recognition and implemented O6 selection actions; record the undo-history and dark-mode/density proposals as awaiting owner decisions, not approved implementation. GitHub issue creation for item 6 was attempted but the repository has Issues disabled.
