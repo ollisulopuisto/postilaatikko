@@ -81,6 +81,37 @@ type requestError struct {
 	retryable bool
 }
 
+// RequestError is the transport-independent failure of a shared read: the
+// HTTP routes map it to a status, and in-process callers (the desktop's local
+// mode) surface its message.
+type RequestError struct {
+	Status    int
+	Code      ErrorCode
+	Message   string
+	Retryable bool
+}
+
+func (e *RequestError) Error() string { return e.Message }
+
+func (e *requestError) public() error {
+	if e == nil {
+		return nil
+	}
+	return &RequestError{Status: e.status, Code: e.code, Message: e.message, Retryable: e.retryable}
+}
+
+// ExecuteConversationList is the single implementation of a conversation-page
+// read. POST /v1/conversations, the workspace bootstrap snapshot and the
+// desktop's in-process local mode all call it, so scope validation, keyset vs
+// offset dispatch, bounds and body stripping cannot drift between them.
+func ExecuteConversationList(ops ConversationListOperations, req ConversationListRequest) (ConversationListPage, error) {
+	page, reqErr := executeConversationList(ops, req)
+	if reqErr != nil {
+		return ConversationListPage{}, reqErr.public()
+	}
+	return page, nil
+}
+
 // executeConversationList runs the validated, bounded conversation-page read
 // behind POST /v1/conversations. The workspace bootstrap snapshot reuses it
 // so both paths apply identical scope validation, defaults, bounds, and

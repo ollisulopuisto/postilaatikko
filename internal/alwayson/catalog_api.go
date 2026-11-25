@@ -30,6 +30,12 @@ type catalogReadOperations struct {
 	messages       *message.Store
 }
 
+// newCatalogReadOperations is the one constructor for the helper's read
+// operations; the HTTP routes and LocalConversationReader both use it.
+func newCatalogReadOperations(accounts *account.Store, folders *folder.Store, virtualFolders *virtualfolder.Store, messages *message.Store) *catalogReadOperations {
+	return &catalogReadOperations{accounts: accounts, folders: folders, virtualFolders: virtualFolders, messages: messages}
+}
+
 func (o *catalogReadOperations) GetAccounts() ([]*account.Account, error) {
 	return o.accounts.List()
 }
@@ -742,12 +748,7 @@ func (r *SyncRuntime) MailboxReadAPIHandler() (http.Handler, error) {
 	if r.actionReceiptRecoveryErr != nil {
 		return nil, fmt.Errorf("recover action receipts: %w", r.actionReceiptRecoveryErr)
 	}
-	operations := &catalogReadOperations{
-		accounts:       r.accounts,
-		folders:        r.folders,
-		virtualFolders: r.virtualFolders,
-		messages:       r.messages,
-	}
+	operations := newCatalogReadOperations(r.accounts, r.folders, r.virtualFolders, r.messages)
 	readOperations := &mailboxReadOperations{runtime: r}
 	mailboxActions := &mailboxActionOperations{runtime: r}
 	deps := &mailboxRouteDeps{

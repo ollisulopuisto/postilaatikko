@@ -3,7 +3,6 @@ package app
 import (
 	"errors"
 	"fmt"
-	"sort"
 
 	v1 "github.com/ollisulopuisto/postilaatikko/internal/automation/v1"
 	"github.com/ollisulopuisto/postilaatikko/internal/folder"
@@ -105,72 +104,20 @@ func (a *App) GetUnifiedFolderConversations(folderType string, offset, limit int
 			a.syncGmailTriageQueues("read-later")
 			a.syncGmailTriageQueues("reply-later")
 		}
-		return a.messageStore.ListReadLaterConversations(offset, limit, sortOrder, filterValue)
+	}
+	// Scopes the helper serves run its implementation in-process, so local
+	// and service modes cannot drift. Snoozed and All Mail are desktop-only.
+	if scope, ok := sharedUnifiedScope(folderType); ok {
+		return a.listLocalConversations(scope, offset, limit, sortOrder, filterValue)
 	}
 	if folderType == "snoozed" {
 		return a.messageStore.ListSnoozedConversations(offset, limit, sortOrder, filterValue)
-	}
-	if folderType == string(folder.TypeArchive) {
-		return a.listUnifiedArchived(offset, limit, sortOrder, filterValue)
 	}
 	ids, err := a.unifiedSpecialFolderIDs(folderType)
 	if err != nil {
 		return nil, err
 	}
 	return a.messageStore.ListConversationsByFolderIDs(ids, offset, limit, sortOrder, filterValue)
-}
-
-func (a *App) listUnifiedArchived(offset, limit int, sortOrder, filterValue string) ([]*message.Conversation, error) {
-	accounts, err := a.accountStore.List()
-	if err != nil {
-		return nil, err
-	}
-	var physicalIDs, allMailIDs []string
-	for _, account := range accounts {
-		if !account.Enabled {
-			continue
-		}
-		physical, err := a.GetSpecialFolder(account.ID, folder.TypeArchive)
-		if err != nil {
-			return nil, err
-		}
-		if physical != nil {
-			physicalIDs = append(physicalIDs, physical.ID)
-			continue
-		}
-		allMail, err := a.GetSpecialFolder(account.ID, folder.TypeAll)
-		if err != nil {
-			return nil, err
-		}
-		if allMail != nil {
-			allMailIDs = append(allMailIDs, allMail.ID)
-		}
-	}
-	// Fetch enough rows to merge physical and virtual sources globally before
-	// applying pagination. Archive sources are normally small header lists.
-	physical, err := a.messageStore.ListConversationsByFolderIDs(physicalIDs, 0, offset+limit, sortOrder, filterValue)
-	if err != nil {
-		return nil, err
-	}
-	virtual, err := a.messageStore.ListVirtualArchivedConversations(allMailIDs, 0, offset+limit, sortOrder, filterValue)
-	if err != nil {
-		return nil, err
-	}
-	combined := append(physical, virtual...)
-	sort.SliceStable(combined, func(i, j int) bool {
-		if sortOrder == "oldest" {
-			return combined[i].LatestDate.Before(combined[j].LatestDate)
-		}
-		return combined[i].LatestDate.After(combined[j].LatestDate)
-	})
-	if offset >= len(combined) {
-		return []*message.Conversation{}, nil
-	}
-	end := offset + limit
-	if end > len(combined) {
-		end = len(combined)
-	}
-	return combined[offset:end], nil
 }
 
 func (a *App) GetUnifiedFolderCount(folderType, filterValue string) (int, error) {
@@ -194,17 +141,11 @@ func (a *App) GetUnifiedFolderCount(folderType, filterValue string) (int, error)
 		}
 		return count, nil
 	}
-	if folderType == "readLater" || folderType == "replyLater" {
-		return a.messageStore.CountReadLaterConversations(filterValue)
+	if scope, ok := sharedUnifiedScope(folderType); ok {
+		return a.countLocalConversations(scope, filterValue)
 	}
 	if folderType == "snoozed" {
 		return a.messageStore.CountSnoozedConversations(filterValue)
-	}
-	if folderType == string(folder.TypeArchive) {
-		// The list path is authoritative for mixed physical/virtual archive
-		// sources; count it without exposing synthetic folder IDs.
-		items, err := a.listUnifiedArchived(0, 100000, "newest", filterValue)
-		return len(items), err
 	}
 	ids, err := a.unifiedSpecialFolderIDs(folderType)
 	if err != nil {
@@ -245,6 +186,19 @@ func (a *App) GetSearchCountUnifiedFolder(folderType, query, filterValue string)
 	}
 	_, count, err := a.messageStore.SearchConversationsByFolderIDs(ids, query, 0, 0, filterValue)
 	return count, err
+}
+
+// sharedUnifiedScope maps a unified navigation type to the v1 scope the
+// helper serves. Local mode routes these through the helper's in-process
+// implementation; the remote service accepts exactly the same set.
+func sharedUnifiedScope(folderType string) (views.Scope, bool) {
+	if folderType == string(folder.TypeInbox) {
+		return views.Scope{Kind: views.ScopeAllInboxes}, true
+	}
+	if isRemoteUnifiedFolderType(folderType) {
+		return views.Scope{Kind: views.ScopeUnifiedFolder, FolderType: folderType}, true
+	}
+	return views.Scope{}, false
 }
 
 func isRemoteUnifiedFolderType(folderType string) bool {
