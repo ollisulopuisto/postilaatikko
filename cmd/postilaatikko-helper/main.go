@@ -122,6 +122,9 @@ func run(args []string) error {
 	if *identityStore == "encrypted-file" && runtime.GOOS != "linux" {
 		return errors.New("encrypted-file identities are supported only on Linux")
 	}
+	if command == "install-agent" && runtime.GOOS == "linux" && *identityStore == "encrypted-file" {
+		return errors.New("Linux install-agent currently supports keyring identities only; encrypted-file service forwarding is not implemented")
+	}
 	if *withSync && *withoutSync {
 		return errors.New("--sync and --no-sync cannot be used together")
 	}
