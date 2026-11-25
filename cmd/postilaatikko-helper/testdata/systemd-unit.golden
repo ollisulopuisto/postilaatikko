@@ -1,0 +1,11 @@
+[Unit]
+Description=Postilaatikko helper
+
+[Service]
+Type=simple
+ExecStart="/opt/Postilaatikko Helper/helper" "serve" "--identity" "/home/user name/identity.json" "--data" "/home/user name/mail" "--queue" "/home/user name/queue" "--listen" "127.0.0.1:8026" "--api-listen" "127.0.0.1:8027" "--sync" "--allowed-host" "mail.example.test"
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
