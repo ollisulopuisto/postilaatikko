@@ -124,24 +124,51 @@ func TestUninstallKeepsUnitWhenStopFails(t *testing.T) {
 	}
 }
 
-func TestLinuxInstallRejectsEncryptedFileBeforeSideEffects(t *testing.T) {
+func TestLinuxInstallForwardsIdentityStore(t *testing.T) {
+	for _, tc := range []struct {
+		store   string
+		forward bool
+	}{{"keyring", false}, {"", false}, {"encrypted-file", true}} {
+		calls := fakeSystemctl(t, 0)
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		if err := installAgent(context.Background(), "studio", tc.store, "/srv/mail", "/srv/mail/queue", "127.0.0.1:8028", "", "", nil, true, apiListenerConfig{address: "127.0.0.1:8029"}, alwayson.GmailPushConfig{}); err != nil {
+			t.Fatalf("store %q: %v", tc.store, err)
+		}
+		path, _ := systemdUnitPath()
+		unit, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := strings.Contains(string(unit), `"--identity-store" "encrypted-file"`)
+		if got != tc.forward {
+			t.Fatalf("store %q: forwarded=%v, unit:\n%s", tc.store, got, unit)
+		}
+		if len(*calls) != 2 {
+			t.Fatalf("store %q: calls=%v", tc.store, *calls)
+		}
+	}
+}
+
+func TestLinuxInstallRejectsUnknownIdentityStoreBeforeSideEffects(t *testing.T) {
 	calls := fakeSystemctl(t, 0)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	err := run([]string{"install-agent", "--identity-store", "encrypted-file", "--data", filepath.Join(home, "mail")})
-	if err == nil || !strings.Contains(err.Error(), "keyring identities only") {
-		t.Fatalf("error=%v", err)
+	err := installAgent(context.Background(), "studio", "plaintext", "/srv/mail", "/srv/mail/queue", "127.0.0.1:8028", "", "", nil, false, apiListenerConfig{address: "127.0.0.1:8029"}, alwayson.GmailPushConfig{})
+	if err == nil {
+		t.Fatal("accepted unknown identity store")
 	}
 	entries, _ := os.ReadDir(home)
 	if len(entries) != 0 || len(*calls) != 0 {
 		t.Fatal("side effects before rejection")
 	}
 }
+
 func TestLinuxInstallValidatesBeforeWriting(t *testing.T) {
 	calls := fakeSystemctl(t, 0)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	err := installAgent(context.Background(), "id", "data", "queue", "not-an-address", "", "", nil, false, apiListenerConfig{address: "127.0.0.1:8027"}, alwayson.GmailPushConfig{})
+	err := installAgent(context.Background(), "id", "keyring", "data", "queue", "not-an-address", "", "", nil, false, apiListenerConfig{address: "127.0.0.1:8027"}, alwayson.GmailPushConfig{})
 	if err == nil {
 		t.Fatal("accepted invalid listener")
 	}

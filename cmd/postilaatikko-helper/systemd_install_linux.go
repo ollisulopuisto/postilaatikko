@@ -29,7 +29,7 @@ func systemdUnitPath() (string, error) {
 	}
 	return filepath.Join(home, ".config", "systemd", "user", systemdServiceName), nil
 }
-func installAgent(ctx context.Context, identity, data, queue, listen, cert, key string, allowedHosts []string, withSync bool, apiConfig apiListenerConfig, gmailPush alwayson.GmailPushConfig) error {
+func installAgent(ctx context.Context, identity, identityStore, data, queue, listen, cert, key string, allowedHosts []string, withSync bool, apiConfig apiListenerConfig, gmailPush alwayson.GmailPushConfig) error {
 	if err := validateListener(listen, cert, key, allowedHosts); err != nil {
 		return err
 	}
@@ -57,6 +57,16 @@ func installAgent(ctx context.Context, identity, data, queue, listen, cert, key 
 		return err
 	}
 	args := []string{"serve", "--identity", identity, "--data", data, "--queue", queue, "--listen", listen, "--api-listen", apiConfig.address}
+	// A headless Linux host usually has no Secret Service, so the service must
+	// load the same identity store the operator initialized. encrypted-file
+	// unlocks with the profile's device key and needs no prompt at start.
+	switch identityStore {
+	case "", "keyring":
+	case "encrypted-file":
+		args = append(args, "--identity-store", "encrypted-file")
+	default:
+		return fmt.Errorf("unsupported identity store %q", identityStore)
+	}
 	if withSync {
 		args = append(args, "--sync")
 	}
