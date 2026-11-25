@@ -26,15 +26,15 @@ func getAgentStatus(ctx context.Context) (helperAgentStatus, error) {
 		}
 		status.Installed = true
 	}
+	if !status.Installed {
+		return status, nil
+	}
 	enabled, err := runSystemctl(ctx, "--user", "is-enabled", systemdServiceName)
 	if err != nil {
 		state := strings.TrimSpace(string(enabled))
 		if !(systemctlExited(err, 1) && state == "disabled") && !(systemctlExited(err, 4) && state == "not-found") {
 			return status, fmt.Errorf("inspect helper enable state: %s: %w", enabled, err)
 		}
-	}
-	if !status.Installed {
-		return status, nil
 	}
 	active, err := runSystemctl(ctx, "--user", "is-active", systemdServiceName)
 	state := strings.TrimSpace(string(active))

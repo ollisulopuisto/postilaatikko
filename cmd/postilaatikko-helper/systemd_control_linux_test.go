@@ -112,3 +112,23 @@ func TestSystemdStatusCommandFailure(t *testing.T) {
 		t.Fatal("hid stop inspection failure")
 	}
 }
+
+// systemd 249 (Ubuntu 22.04) answers is-enabled for a missing unit with exit 1
+// and "Failed to get unit file state ... No such file or directory", not
+// "not-found" with exit 4.
+func TestSystemdStatusOfMissingUnitOnSystemd249(t *testing.T) {
+	setupControl(t, false, "", "")
+	runSystemctl = func(_ context.Context, args ...string) ([]byte, error) {
+		if args[1] == "is-enabled" {
+			return []byte("Failed to get unit file state for postilaatikko-helper.service: No such file or directory\n"), systemctlExit(1)
+		}
+		return nil, errors.New("unexpected " + args[1])
+	}
+	got, err := getAgentStatus(context.Background())
+	if err != nil || got != (helperAgentStatus{Supported: true}) {
+		t.Fatalf("status=%+v err=%v", got, err)
+	}
+	if err := startAgent(context.Background()); err == nil || err.Error() != "helper user service is not installed" {
+		t.Fatalf("start error=%v", err)
+	}
+}
