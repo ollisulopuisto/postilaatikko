@@ -8,7 +8,8 @@
 
 ## Postilaatikko 2026.11.26.1
 
-- Version bump for a fresh DMG build.
+- Dark mail rendering is adaptive: it uses the sender's own dark-mode CSS when present, otherwise adapts text and painted backgrounds, and no longer filters images (#343). Light mail is unchanged and the existing dark-mail preference still applies.
+- Syncing is faster: the per-message thread lookup uses one prepared query (#344).
 
 ## Postilaatikko 2026.11.25.4
 
