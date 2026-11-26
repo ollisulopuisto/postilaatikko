@@ -6,6 +6,11 @@
 
 - Opening a folder no longer stalls while sync, filter moves or prefetch wait for the database write lock: message lists, counts and conversation reads use their own read-only connection pool, so queued writers can no longer take every connection.
 
+## Postilaatikko 2026.11.26.1
+
+- Dark mail rendering is adaptive: it uses the sender's own dark-mode CSS when present, otherwise adapts text and painted backgrounds, and no longer filters images (#343). Light mail is unchanged and the existing dark-mail preference still applies.
+- Syncing is faster: the per-message thread lookup uses one prepared query (#344).
+
 ## Postilaatikko 2026.11.25.4
 
 - Keep native Edit > Undo in the focused text field, including when its history is empty, instead of undoing an unrelated mail action. Composer Undo remains separate.
