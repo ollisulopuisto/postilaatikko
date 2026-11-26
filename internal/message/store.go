@@ -28,6 +28,13 @@ type Store struct {
 	// database.DB.Reader. Writers parked on the write lock cannot starve it.
 	rdb *sql.DB
 	log zerolog.Logger
+
+	// findThreadStmt is the fixed-shape FindThreadID lookup, prepared lazily
+	// on first use. Preparing once avoids a full SQLite parse/codegen per
+	// synced message; the statement lives as long as the store's DB.
+	findThreadStmtOnce sync.Once
+	findThreadStmt     *sql.Stmt
+	findThreadStmtErr  error
 }
 
 // NewStore creates a new message store
@@ -2494,19 +2501,26 @@ func (s *Store) FindThreadID(accountID, messageID, inReplyTo string, references 
 		}
 	}
 
-	placeholders := make([]string, len(candidateValues))
-	args := []any{accountID}
-	for i, v := range candidateValues {
-		placeholders[i] = "?"
-		args = append(args, v)
+	// Fixed-shape query: the candidate list travels as one JSON array through
+	// json_each, so the statement can be prepared once instead of being
+	// re-parsed for every distinct candidate count.
+	candidatesJSON, err := json.Marshal(candidateValues)
+	if err != nil {
+		candidatesJSON = []byte("[]")
 	}
 
-	batchQuery := fmt.Sprintf(
-		"SELECT message_id, COALESCE(thread_id, id) FROM messages WHERE account_id = ? AND message_id IN (%s)",
-		strings.Join(placeholders, ", "),
-	)
+	s.findThreadStmtOnce.Do(func() {
+		s.findThreadStmt, s.findThreadStmtErr = s.db.Prepare(
+			"SELECT message_id, COALESCE(thread_id, id) FROM messages WHERE account_id = ? AND message_id IN (SELECT value FROM json_each(?))",
+		)
+	})
 
-	rows, err := s.db.Query(batchQuery, args...)
+	var rows *sql.Rows
+	if s.findThreadStmtErr != nil {
+		err = s.findThreadStmtErr
+	} else {
+		rows, err = s.findThreadStmt.Query(accountID, string(candidatesJSON))
+	}
 	if err == nil {
 		defer rows.Close()
 
