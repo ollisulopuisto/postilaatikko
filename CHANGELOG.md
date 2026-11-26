@@ -6,6 +6,10 @@
 
 - Opening a folder no longer stalls while sync, filter moves or prefetch wait for the database write lock: message lists, counts and conversation reads use their own read-only connection pool, so queued writers can no longer take every connection.
 
+## Postilaatikko 2026.11.26.1
+
+- Version bump for a fresh DMG build.
+
 ## Postilaatikko 2026.11.25.4
 
 - Keep native Edit > Undo in the focused text field, including when its history is empty, instead of undoing an unrelated mail action. Composer Undo remains separate.
