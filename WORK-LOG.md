@@ -1,4 +1,27 @@
 
+## Bolt perf: prepared statement for FindThreadID, 2026-11-26
+
+Branch: `bolt/postilaatikko-20261126-thread-stmt`. Owner: Instinct (Bolt). Status: Review pending.
+
+FindThreadID ran once per synced message with a fresh `fmt.Sprintf` query per
+call, so SQLite paid a full parse/codegen for every message. The candidate
+list now travels as one JSON array through `json_each`, giving the lookup a
+fixed shape that is prepared once per store. BenchmarkFindThreadID
+(benchtime=500x, count=3): 48,800 -> 38,900 ns/op (-20%); steady state at
+2000x ~31,000 ns/op (-36% vs. 47,500 baseline at the same setting).
+
+<details><summary>Verification and limits</summary>
+
+- Baseline and changed benchmarks run with identical settings on the same host.
+- Behavior preserved: prepare failure falls back to the same no-match path as a
+  query error did before; candidate rank ordering unchanged; existing
+  TestFindThreadID and package tests pass (internal/message, internal/database).
+- go vet clean, gofmt clean. Full native/webkit build and `make test` not run
+  in this Linux sandbox (CGO desktop deps); CI covers them.
+
+</details>
+
+
 ## Security advisory fixes, 2026-11-21
 
 Branch: `agent/security-advisory-fixes`. Owner: Instinct. Status: Review pending.
