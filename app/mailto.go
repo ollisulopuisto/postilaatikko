@@ -152,7 +152,7 @@ func ParseMailtoURL(rawURL string) *MailtoData {
 // Header fields never carry line breaks or controls. Body is handled separately.
 func sanitizeField(s string) string {
 	return strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
+		if unicode.IsControl(r) || r == '\u2028' || r == '\u2029' || (r >= '\u202a' && r <= '\u202e') || (r >= '\u2066' && r <= '\u2069') {
 			return -1
 		}
 		return r

@@ -33,3 +33,12 @@ text/html initialization, cc/bcc, plaintext switches and existing HTML restore.
 Internal links in message bodies separately discard query in EmailBody before
 onCompose; not changed here and not the external-link bug under investigation.
 No automatic send, attachment, remote fetch, app deployment or merge.
+
+Independent review follow-up: prefilled Bcc was hidden despite being set. Added
+showBcc for initial messages and history restore; restored Cc also made visible.
+Existing real-composer fixture gained a Bcc visibility assertion, failed before
+fix and passed afterward. Actual updated pixels inspected. Header sanitizer also
+removes Unicode line/paragraph separators and bidi override/isolate controls;
+negative test covers these. Malformed query escapes or literal semicolon now
+reject the whole URL instead of returning only To. CI browser port collisions
+fixed by unique5397 (menu PR uses5396). No duplicate fixture introduced.

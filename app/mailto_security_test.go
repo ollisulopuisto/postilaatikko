@@ -53,3 +53,15 @@ func TestParseMailtoURL_OnlyFiveFieldsAndLiteralUserExample(t *testing.T) {
 		}
 	}
 }
+
+func TestParseMailtoURL_RejectMalformedAndStripVisualHeaderControls(t *testing.T) {
+	for _, raw := range []string{"mailto:to@example.com?body=%", "mailto:to@example.com?body=a;b"} {
+		if ParseMailtoURL(raw) != nil {
+			t.Fatalf("malformed accepted: %s", raw)
+		}
+	}
+	got := ParseMailtoURL("mailto:to@example.com?subject=before%E2%80%A8%E2%80%A9%E2%80%AE%E2%81%A6after")
+	if got == nil || got.Subject != "beforeafter" {
+		t.Fatalf("visual controls retained: %+v", got)
+	}
+}

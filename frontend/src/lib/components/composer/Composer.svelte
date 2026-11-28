@@ -418,6 +418,8 @@
     toRecipients = (st.to || []).map(toSmtpAddress)
     ccRecipients = (st.cc || []).map(toSmtpAddress)
     bccRecipients = (st.bcc || []).map(toSmtpAddress)
+    if (ccRecipients.length > 0) showCc = true
+    if (bccRecipients.length > 0) showBcc = true
     if (st.plain != null) {
       plainTextContent = st.plain
     } else if (st.html != null) {
@@ -1542,6 +1544,7 @@
     toRecipients = (initialMessage.to || []).map(toSmtpAddress)
     ccRecipients = (initialMessage.cc || []).map(toSmtpAddress)
     bccRecipients = (initialMessage.bcc || []).map(toSmtpAddress)
+    if (bccRecipients.length > 0) showBcc = true
 
     // Show Cc field if there are Cc recipients
     if (ccRecipients.length > 0) {
