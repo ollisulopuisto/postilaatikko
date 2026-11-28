@@ -601,11 +601,18 @@ func (c *mailboxServiceConnector) mutateAction(ctx context.Context, req v1.Actio
 	} else {
 		c.mu.Lock()
 		credential := c.credential
+		endpoint := c.endpoint
+		transport := c.transport
 		c.mu.Unlock()
 		if credential == nil || credential.Token == "" {
 			return nil, errDesktopMailboxAuthorizationRequired
 		}
-		mutationClient := newMailboxAPIClientWithTimeout(credential.Token, mailboxMutationTimeout)
+		if endpoint == "" {
+			endpoint = mailboxServiceEndpoint
+		}
+		// Use the connected endpoint. Building this client without it sent every
+		// remote mutation to the default loopback helper instead of the remote one.
+		mutationClient := newMailboxAPIClientAtWithTimeout(endpoint, credential.Token, mailboxMutationTimeout, transport)
 		response, err = mutationClient.MutateAction(ctx, req, idempotencyKey)
 	}
 	c.mu.Lock()
