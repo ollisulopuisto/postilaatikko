@@ -418,6 +418,8 @@
     toRecipients = (st.to || []).map(toSmtpAddress)
     ccRecipients = (st.cc || []).map(toSmtpAddress)
     bccRecipients = (st.bcc || []).map(toSmtpAddress)
+    if (ccRecipients.length > 0) showCc = true
+    if (bccRecipients.length > 0) showBcc = true
     if (st.plain != null) {
       plainTextContent = st.plain
     } else if (st.html != null) {
@@ -1542,6 +1544,7 @@
     toRecipients = (initialMessage.to || []).map(toSmtpAddress)
     ccRecipients = (initialMessage.cc || []).map(toSmtpAddress)
     bccRecipients = (initialMessage.bcc || []).map(toSmtpAddress)
+    if (bccRecipients.length > 0) showBcc = true
 
     // Show Cc field if there are Cc recipients
     if (ccRecipients.length > 0) {
@@ -1559,7 +1562,7 @@
     // Restore attachments and inline images from draft/reply/forward
     // Go []byte is serialized as base64 string via JSON, but TS type says number[]
     // content_base64 is used for efficient Wails RPC transfer (inline images in replies/forwards)
-    let htmlBody = initialMessage.html_body || ''
+    let htmlBody = initialMessage.html_body || plainTextToHtml(initialMessage.text_body || '')
     if (initialMessage.attachments?.length > 0) {
       for (const att of initialMessage.attachments) {
         const base64Data = att.content_base64 || (att.content as unknown as string)
