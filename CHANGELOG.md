@@ -6,6 +6,12 @@
 
 - Opening a folder no longer stalls while sync, filter moves or prefetch wait for the database write lock: message lists, counts and conversation reads use their own read-only connection pool, so queued writers can no longer take every connection.
 
+## Postilaatikko 2026.11.28.1
+
+- Message-body link menus and URL tooltips stay inside the window, including near the bottom edge and after resizing (#346).
+- Mailto links prefill text bodies in the rich composer, show prefilled Bcc recipients, and reject ambiguous duplicate fields. Only To, Cc, Bcc, Subject and plain-text Body are accepted; attachments and extra headers are ignored (#347).
+- Remote mailbox actions use the connected helper endpoint rather than the Mac's local endpoint (#348).
+
 ## Postilaatikko 2026.11.26.1
 
 - Dark mail rendering is adaptive: it uses the sender's own dark-mode CSS when present, otherwise adapts text and painted backgrounds, and no longer filters images (#343). Light mail is unchanged and the existing dark-mail preference still applies.
