@@ -157,8 +157,8 @@ func TestParseMailtoURL_PercentAndSpaces(t *testing.T) {
 	if result.Subject != "Application: Forward Deployed Engineer" {
 		t.Errorf("Subject = %q", result.Subject)
 	}
-	// sanitizeField strips the newline; the UTF-8 byte pair must decode to ä.
-	if result.Body != "Hei maailmaä" {
+	// Body preserves newlines and decoded UTF-8.
+	if result.Body != "Hei maailma\nä" {
 		t.Errorf("Body = %q", result.Body)
 	}
 }

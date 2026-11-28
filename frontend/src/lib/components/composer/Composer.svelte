@@ -1559,7 +1559,7 @@
     // Restore attachments and inline images from draft/reply/forward
     // Go []byte is serialized as base64 string via JSON, but TS type says number[]
     // content_base64 is used for efficient Wails RPC transfer (inline images in replies/forwards)
-    let htmlBody = initialMessage.html_body || ''
+    let htmlBody = initialMessage.html_body || plainTextToHtml(initialMessage.text_body || '')
     if (initialMessage.attachments?.length > 0) {
       for (const att of initialMessage.attachments) {
         const base64Data = att.content_base64 || (att.content as unknown as string)
