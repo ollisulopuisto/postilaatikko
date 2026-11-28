@@ -1036,6 +1036,10 @@
       (err) => addToast({ type: 'error', message: String(err) }),
       historyAttachmentHashes,
     )
+    // Create the editor before any awaited backend call. In the detached window
+    // every call below is an IPC round trip to the main app (and, in remote
+    // mode, to the helper); if one stalls, the body must still be usable.
+    ensureEditor()
     // Reopened draft: resume at the last committed node (survives restarts).
     // Its state is at least as fresh as the drafts-folder row, so it wins.
     try {
@@ -1090,6 +1094,9 @@
       }
     } catch (err) {
       console.error('Failed to load identities:', err)
+      // Without this the first Send only says "select a sender identity" and
+      // the real reason (for example an unreachable remote helper) is lost.
+      addToast({ type: 'error', message: String(err) })
     }
 
     // Load account's read receipt request policy (use activeAccountId which derives from selected identity)
