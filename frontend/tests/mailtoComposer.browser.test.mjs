@@ -7,11 +7,11 @@ const browserModule=process.env.POSTI_PLAYWRIGHT_PATH
 const captures=process.env.POSTI_BROWSER_CAPTURE_DIR||'/tmp/posti-mailto-captures'
 test('rich composer displays text-only mailto body literally, without loading HTML',{skip:!browserModule,timeout:60000},async()=>{
   const root=fileURLToPath(new URL('..',import.meta.url));mkdirSync(captures,{recursive:true})
-  const server=await createServer({root,plugins:[{name:'mount',resolveId:id=>id==='/test-mount.js'?id:null,load:id=>id==='/test-mount.js'?`export {mount} from 'svelte'`:null}],server:{host:'127.0.0.1',port:5199,strictPort:true},logLevel:'error'})
+  const server=await createServer({root,plugins:[{name:'mount',resolveId:id=>id==='/test-mount.js'?id:null,load:id=>id==='/test-mount.js'?`export {mount} from 'svelte'`:null}],server:{host:'127.0.0.1',port:5397,strictPort:true},logLevel:'error'})
   await server.listen();const{chromium}=await import(browserModule);const browser=await chromium.launch({executablePath:process.env.POSTI_CHROMIUM_BUNDLED?undefined:'/usr/bin/google-chrome',args:['--no-sandbox']})
   try{
     const page=await browser.newPage({viewport:{width:1100,height:800}});let remote=false;page.on('request',r=>{if(r.url().includes('evil.example'))remote=true})
-    await page.route('**/mailto-fixture',r=>r.fulfill({contentType:'text/html',body:'<html data-theme="dark" class="dark"><body class="bg-background text-foreground"><div id="fixture"></div></body></html>'}));await page.goto('http://127.0.0.1:5199/mailto-fixture')
+    await page.route('**/mailto-fixture',r=>r.fulfill({contentType:'text/html',body:'<html data-theme="dark" class="dark"><body class="bg-background text-foreground"><div id="fixture"></div></body></html>'}));await page.goto('http://127.0.0.1:5397/mailto-fixture')
     await page.evaluate(async()=>{
       window.runtime={EventsOnMultiple:()=>()=>{},EventsOff:()=>{}};window.go={app:{App:new Proxy({}, {get:()=>async()=>[]})}};await import('/src/app.css');await(await import('/src/lib/i18n/index.ts')).initI18n('en')
       const api=new Proxy({getIdentities:async()=>[],getAllAccountIdentities:async()=>[],getAccount:async()=>({}),draftHistoryTree:async()=>({nodes:[]}),draftHistoryState:async()=>'',draftHistoryCommit:async()=>'',getSendLaterSetup:async()=>({configured:false})},{get:(t,k)=>t[k]|| (async()=>[])})
