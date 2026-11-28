@@ -7,12 +7,12 @@ const browserModule=process.env.POSTI_PLAYWRIGHT_PATH
 const captures=process.env.POSTI_BROWSER_CAPTURE_DIR||'/tmp/posti-menu-captures'
 test('body link menu and URL tooltip stay within the window at edges and after resize',{skip:!browserModule,timeout:60000},async()=>{
   const root=fileURLToPath(new URL('..',import.meta.url));mkdirSync(captures,{recursive:true})
-  const server=await createServer({root,plugins:[{name:'mount',resolveId:id=>id==='/test-mount.js'?id:null,load:id=>id==='/test-mount.js'?`export {mount,unmount} from 'svelte'`:null}],server:{host:'127.0.0.1',port:5198,strictPort:true},logLevel:'error'})
+  const server=await createServer({root,plugins:[{name:'mount',resolveId:id=>id==='/test-mount.js'?id:null,load:id=>id==='/test-mount.js'?`export {mount,unmount} from 'svelte'`:null}],server:{host:'127.0.0.1',port:5396,strictPort:true},logLevel:'error'})
   await server.listen();const{chromium}=await import(browserModule);const browser=await chromium.launch({executablePath:process.env.POSTI_CHROMIUM_BUNDLED?undefined:'/usr/bin/google-chrome',args:['--no-sandbox']})
   try{
     const page=await browser.newPage({viewport:{width:940,height:700}})
     await page.route('**/menu-fixture',r=>r.fulfill({contentType:'text/html',body:'<html class="dark" data-theme="dark"><body class="bg-background text-foreground"><div id="fixture" style="position:absolute;left:450px;top:150px;width:450px"></div></body></html>'}))
-    await page.goto('http://127.0.0.1:5198/menu-fixture')
+    await page.goto('http://127.0.0.1:5396/menu-fixture')
     await page.evaluate(async()=>{
       window.go={app:{App:new Proxy({}, {get:()=>async()=>[]})}};await import('/src/app.css');await(await import('/src/lib/i18n/index.ts')).initI18n('fi');const{mount}=await import('/test-mount.js');const Body=(await import('/src/lib/components/viewer/EmailBody.svelte')).default
       window.component=mount(Body,{target:document.querySelector('#fixture'),props:{messageId:'fixture',accountId:'a',conversationId:'c',bodyHtml:'<a href="https://example.com/path?utm_source=mail">Link</a>'}})
