@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { viewportPopup } from '../../utils/viewportPopup'
   import { adaptEmailDarkMode } from '../../utils/emailDarkMode'
   import { messageFind, highlightMessageText } from './messageFind.svelte'
   import LaterQueueButton from '../common/LaterQueueButton.svelte'
@@ -571,7 +572,7 @@ ${processedHtml}
         tooltipUrl = event.data.url
         tooltipX = iframeRect.left + event.data.x
         tooltipY = iframeRect.top + event.data.y
-        tooltipVisible = true
+        tooltipVisible = !ctxMenuVisible
       }
     } else if (event.data?.type === 'link-hover-end') {
       // Hide tooltip
@@ -584,6 +585,7 @@ ${processedHtml}
         ctxMenuUrl = event.data.url || ''
         ctxMenuX = iframeRect.left + event.data.x
         ctxMenuY = iframeRect.top + event.data.y
+        tooltipVisible = false
         ctxMenuVisible = true
       }
     }
@@ -981,6 +983,7 @@ ${processedHtml}
         ctxMenuUrl = link?.href || ''
         ctxMenuX = e.clientX
         ctxMenuY = e.clientY
+        tooltipVisible = false
         ctxMenuVisible = true
       }}
       onauxclick={(e) => {
@@ -1004,10 +1007,10 @@ ${processedHtml}
   {/if}
 
   <!-- Link hover tooltip -->
-  {#if tooltipVisible && tooltipUrl}
+  {#if tooltipVisible && tooltipUrl && !ctxMenuVisible}
     <div
       class="fixed z-50 px-3 py-1.5 text-xs bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900 rounded shadow-lg max-w-md truncate pointer-events-none border border-gray-700 dark:border-gray-300"
-      style="left: {tooltipX}px; top: {tooltipY + 5}px;"
+      use:viewportPopup={{x: tooltipX, y: tooltipY + 5}}
     >
       {tooltipUrl}
     </div>
@@ -1017,7 +1020,7 @@ ${processedHtml}
   {#if ctxMenuVisible}
     <div
       class="fixed z-50 bg-white dark:bg-gray-800 rounded-md shadow-lg border border-gray-200 dark:border-gray-700 py-1 min-w-[160px]"
-      style="left: {ctxMenuX}px; top: {ctxMenuY}px;"
+      use:viewportPopup={{x: ctxMenuX, y: ctxMenuY}}
       role="menu"
     >
       {#if conversationId && accountId}
